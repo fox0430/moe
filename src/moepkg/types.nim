@@ -156,6 +156,9 @@ type
     lastAutoSave*: MonoTime # Timestamp of last auto save
     lastAutoBackup*: MonoTime # Timestamp of last auto backup
     lastInputTime*: MonoTime # Timestamp of last user input (for idle detection)
+    lastFileModCheck*: MonoTime # Timestamp of last file modification check
+    fileModCheckInterval*: int64
+      # Minimum milliseconds between file mod checks (default: 1000)
 
   JumpPosition* = object ## Represents a position in the jump list
     line*: int # Line number
@@ -390,6 +393,13 @@ type
     changeSeq*: int # Buffer changeSeq when cache was last updated
     isValid*: bool # Whether the cache is valid
 
+  SubstitutePreview* = object
+    ## State for live substitute preview (like Vim's inccommand)
+    isActive*: bool # Whether preview is currently active
+    originalLines*: seq[string] # Snapshot of original buffer content
+    lastPattern*: string # Last pattern used for preview
+    lastReplacement*: string # Last replacement used for preview
+
   EditorState* = ref object
     cursor*: BufferPosition # Actual buffer cursor position (line/column)
     screenCursor*: CursorPosition # Screen cursor position (x/y)
@@ -447,6 +457,8 @@ type
     lspCache*: LspCacheState # LSP cache and picker state
     # Temporary message display (like Vim's :jumps output)
     tempMessages*: seq[string] # Lines to display temporarily in command area
+    # Substitute preview state (live preview like Vim's inccommand)
+    substitutePreview*: SubstitutePreview
 
 proc setStatusMessage*(state: EditorState, msg: string) =
   ## Set status message and log it to message log

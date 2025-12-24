@@ -1331,6 +1331,79 @@ proc findWordBoundaries(
       )
     )
 
+proc findWideWordBoundaries(
+    buffer: TextBuffer, cursor: BufferPosition, inner: bool
+): Result[TextObjectRange, string] =
+  ## Find WORD boundaries for iW (inner WORD) or aW (a WORD)
+  ## WORD is any sequence of non-whitespace characters
+  ## inner=true: just the WORD
+  ## inner=false: WORD + trailing whitespace (or leading if no trailing)
+
+  if cursor.line < 0 or cursor.line >= buffer.len:
+    return err("Cursor position out of bounds")
+
+  let line = buffer.getLine(cursor.line)
+  let runes = line.toRunes()
+
+  if runes.len == 0:
+    return err("Empty line")
+
+  let cursorCol = min(cursor.column, runes.len - 1)
+
+  # Find start of WORD
+  var startCol = cursorCol
+  # If cursor is on whitespace, move to next WORD
+  if isWhitespace(runes[startCol]):
+    while startCol < runes.len and isWhitespace(runes[startCol]):
+      startCol.inc
+    if startCol >= runes.len:
+      return err("No WORD found")
+
+  # Find the actual WORD start (any non-whitespace)
+  while startCol > 0 and not isWhitespace(runes[startCol - 1]):
+    startCol.dec
+
+  # Find end of WORD (any non-whitespace)
+  var endCol = startCol
+  while endCol < runes.len and not isWhitespace(runes[endCol]):
+    endCol.inc
+
+  if inner:
+    # Inner WORD: just the WORD itself
+    return ok(
+      TextObjectRange(
+        start: BufferPosition(line: cursor.line, column: startCol),
+        endPos: BufferPosition(line: cursor.line, column: endCol),
+        isLinewise: false,
+      )
+    )
+  else:
+    # Around WORD: WORD + trailing whitespace
+    var extendedEnd = endCol
+    while extendedEnd < runes.len and isWhitespace(runes[extendedEnd]):
+      extendedEnd.inc
+
+    # If no trailing whitespace, try leading
+    if extendedEnd == endCol and startCol > 0:
+      var extendedStart = startCol
+      while extendedStart > 0 and isWhitespace(runes[extendedStart - 1]):
+        extendedStart.dec
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: cursor.line, column: extendedStart),
+          endPos: BufferPosition(line: cursor.line, column: endCol),
+          isLinewise: false,
+        )
+      )
+
+    return ok(
+      TextObjectRange(
+        start: BufferPosition(line: cursor.line, column: startCol),
+        endPos: BufferPosition(line: cursor.line, column: extendedEnd),
+        isLinewise: false,
+      )
+    )
+
 proc findQuotedBoundaries(
     buffer: TextBuffer, cursor: BufferPosition, quoteChar: char, inner: bool
 ): Result[TextObjectRange, string] =
@@ -1409,69 +1482,111 @@ proc findMatchingParen(
     closeChar: char,
     inner: bool,
 ): Result[TextObjectRange, string] =
-  ## Find matching parenthesis/bracket/brace boundaries
+  ## Find matching parenthesis/bracket/brace boundaries across multiple lines
   ## inner=true: content inside delimiters
   ## inner=false: content + delimiters
 
   if cursor.line < 0 or cursor.line >= buffer.len:
     return err("Cursor position out of bounds")
 
-  let line = buffer.getLine(cursor.line)
-  let runes = line.toRunes()
-
-  if runes.len == 0:
-    return err("Empty line")
-
-  let cursorCol = min(cursor.column, runes.len - 1)
-
-  # Find opening delimiter (search backward from cursor)
-  var startCol = -1
+  # Search backward for opening delimiter
   var depth = 0
-  var i = cursorCol
+  var startLine = cursor.line
+  var startCol = -1
 
-  # If cursor is on a closing delimiter, start from before it
-  if $runes[i] == $closeChar:
+  # Check if cursor is on a closing delimiter
+  let cursorLine = buffer.getLine(cursor.line)
+  let cursorRunes = cursorLine.toRunes()
+  let cursorCol = min(cursor.column, max(0, cursorRunes.len - 1))
+
+  if cursorRunes.len > 0 and cursorCol < cursorRunes.len and
+      $cursorRunes[cursorCol] == $closeChar:
     depth = 1
-    i.dec
 
-  while i >= 0:
-    if $runes[i] == $closeChar:
-      depth.inc
-    elif $runes[i] == $openChar:
-      if depth == 0:
-        startCol = i
-        break
-      else:
-        depth.dec
-    i.dec
+  # Search backward from cursor position
+  var searchLine = cursor.line
+  var searchCol = cursorCol - (if depth > 0: 1 else: 0)
+
+  block searchBackward:
+    while searchLine >= 0:
+      let line = buffer.getLine(searchLine)
+      let runes = line.toRunes()
+
+      # Adjust starting column for each line
+      if searchLine < cursor.line:
+        searchCol = runes.len - 1
+
+      while searchCol >= 0:
+        if searchCol < runes.len:
+          if $runes[searchCol] == $closeChar:
+            depth.inc
+          elif $runes[searchCol] == $openChar:
+            if depth == 0:
+              startLine = searchLine
+              startCol = searchCol
+              break searchBackward
+            else:
+              depth.dec
+        searchCol.dec
+
+      searchLine.dec
+      if searchLine >= 0:
+        let nextLine = buffer.getLine(searchLine)
+        searchCol = nextLine.toRunes().len - 1
 
   if startCol < 0:
     return err("No opening delimiter found")
 
-  # Find closing delimiter (search forward from opening)
+  # Search forward for closing delimiter
+  var endLine = -1
   var endCol = -1
   depth = 0
-  i = startCol + 1
-  while i < runes.len:
-    if $runes[i] == $openChar:
-      depth.inc
-    elif $runes[i] == $closeChar:
-      if depth == 0:
-        endCol = i
-        break
-      else:
-        depth.dec
-    i.inc
+
+  searchLine = startLine
+  searchCol = startCol + 1
+
+  block searchForward:
+    while searchLine < buffer.len:
+      let line = buffer.getLine(searchLine)
+      let runes = line.toRunes()
+
+      # Adjust starting column for each line
+      if searchLine > startLine:
+        searchCol = 0
+
+      while searchCol < runes.len:
+        if $runes[searchCol] == $openChar:
+          depth.inc
+        elif $runes[searchCol] == $closeChar:
+          if depth == 0:
+            endLine = searchLine
+            endCol = searchCol
+            break searchForward
+          else:
+            depth.dec
+        searchCol.inc
+
+      searchLine.inc
+      searchCol = 0
 
   if endCol < 0:
     return err("No closing delimiter found")
 
   if inner:
     # Inner: content only (exclude delimiters)
+    # If start and end are on the same line and adjacent, return empty range
+    if startLine == endLine and startCol + 1 >= endCol:
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: startLine, column: startCol + 1),
+          endPos: BufferPosition(line: endLine, column: startCol + 1),
+          isLinewise: false,
+        )
+      )
     return ok(
       TextObjectRange(
-        start: BufferPosition(line: cursor.line, column: startCol + 1),
-        endPos: BufferPosition(line: cursor.line, column: endCol),
+        start: BufferPosition(line: startLine, column: startCol + 1),
+        endPos: BufferPosition(line: endLine, column: endCol),
         isLinewise: false,
       )
     )
@@ -1479,8 +1594,8 @@ proc findMatchingParen(
     # Around: content + delimiters
     return ok(
       TextObjectRange(
-        start: BufferPosition(line: cursor.line, column: startCol),
-        endPos: BufferPosition(line: cursor.line, column: endCol + 1),
+        start: BufferPosition(line: startLine, column: startCol),
+        endPos: BufferPosition(line: endLine, column: endCol + 1),
         isLinewise: false,
       )
     )
@@ -1499,6 +1614,8 @@ proc calculateTextObjectRange*(
   case kind
   of toWord:
     return findWordBoundaries(buffer, cursor, inner)
+  of toWideWord:
+    return findWideWordBoundaries(buffer, cursor, inner)
   of toQuotedDouble:
     return findQuotedBoundaries(buffer, cursor, '"', inner)
   of toQuotedSingle:

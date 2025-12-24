@@ -19,7 +19,7 @@
 
 ## Main buffer interface
 
-import std/[unicode, options, strutils, deques, os]
+import std/[unicode, options, strutils, deques, os, times]
 
 import pkg/results
 
@@ -100,6 +100,8 @@ type
     lineEnding*: LineEnding
     encoding*: CharacterEncoding
     endOfLine*: bool # Whether file should end with newline
+    lastFileModTime*: Option[Time]
+      # File modification time when loaded (for external change detection)
 
     # Undo/Redo stacks (using Deque for O(1) operations at both ends)
     undoStack*: Deque[BufferChange]
@@ -1167,6 +1169,15 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 
   b.filePath = some(path)
 
+  # Record file modification time for external change detection
+  if fileExists(path):
+    try:
+      b.lastFileModTime = some(getFileInfo(path).lastWriteTime)
+    except OSError:
+      b.lastFileModTime = none(Time)
+  else:
+    b.lastFileModTime = none(Time)
+
   # Reset change tracking - file was just loaded
   b.changeSeq = 0
   b.savedSeq = 0
@@ -1248,7 +1259,44 @@ proc saveFile*(buffer: TextBuffer, path: string): Result[(), string] =
     buffer.savedSeq = buffer.changeSeq
     buffer.filePath = some(path)
 
+    # Update file modification time after saving
+    try:
+      buffer.lastFileModTime = some(getFileInfo(path).lastWriteTime)
+    except OSError:
+      buffer.lastFileModTime = none(Time)
+
   return Result[(), string].ok ()
+
+proc isExternallyModified*(b: TextBuffer): bool =
+  ## Check if the file was modified externally (outside the editor)
+  ## Returns true if:
+  ##   - Buffer has a file path
+  ##   - File exists on disk
+  ##   - File's modification time is newer than when we last loaded/saved it
+  if b.filePath.isNone:
+    return false
+
+  let path = b.filePath.get
+  if not fileExists(path):
+    return false
+
+  if b.lastFileModTime.isNone:
+    return false
+
+  try:
+    let currentModTime = getFileInfo(path).lastWriteTime
+    return currentModTime > b.lastFileModTime.get
+  except OSError:
+    return false
+
+proc reloadFile*(b: TextBuffer): Result[(), string] =
+  ## Reload file from disk, preserving the file path
+  ## Call this when external modification is detected
+  if b.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = b.filePath.get
+  b.loadFile(path)
 
 # Memory usage monitoring
 proc estimateMemoryUsage*(buffer: TextBuffer): int =

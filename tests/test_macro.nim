@@ -35,150 +35,151 @@ suite "Macro Recording":
   test "start macro recording (qa)":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.isRecordingMacro = false
-    state.waitingForMacroRegister = false
-    state.macroRegisters = initTable[char, seq[string]]()
+    state.macroState.isRecording = false
+    state.macroState.waitingForRegister = false
+    state.macroState.registers = initTable[char, seq[string]]()
 
     # Simulate: q (start recording)
-    state.waitingForMacroRegister = true
-    state.macroCommandType = "record"
+    state.macroState.waitingForRegister = true
+    state.macroState.commandType = "record"
 
     # Then: a (register name)
-    state.isRecordingMacro = true
-    state.macroRegister = 'a'
-    state.recordedKeys = @[]
+    state.macroState.isRecording = true
+    state.macroState.register = 'a'
+    state.macroState.recordedKeys = @[]
 
-    check state.isRecordingMacro == true
-    check state.macroRegister == 'a'
-    check state.recordedKeys.len == 0
+    check state.macroState.isRecording == true
+    check state.macroState.register == 'a'
+    check state.macroState.recordedKeys.len == 0
 
   test "record keys during macro recording":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.isRecordingMacro = true
-    state.macroRegister = 'a'
-    state.recordedKeys = @[]
-    state.macroRegisters = initTable[char, seq[string]]()
+    state.macroState.isRecording = true
+    state.macroState.register = 'a'
+    state.macroState.recordedKeys = @[]
+    state.macroState.registers = initTable[char, seq[string]]()
 
     # Simulate recording: d, d
-    state.recordedKeys.add("d")
-    state.recordedKeys.add("d")
+    state.macroState.recordedKeys.add("d")
+    state.macroState.recordedKeys.add("d")
 
-    check state.recordedKeys == @["d", "d"]
+    check state.macroState.recordedKeys == @["d", "d"]
 
   test "stop macro recording (q)":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.isRecordingMacro = true
-    state.macroRegister = 'a'
-    state.recordedKeys = @["d", "d"]
-    state.macroRegisters = initTable[char, seq[string]]()
+    state.macroState.isRecording = true
+    state.macroState.register = 'a'
+    state.macroState.recordedKeys = @["d", "d"]
+    state.macroState.registers = initTable[char, seq[string]]()
 
     # Simulate: q (stop recording)
-    state.macroRegisters[state.macroRegister] = state.recordedKeys
-    state.isRecordingMacro = false
-    state.recordedKeys = @[]
+    state.macroState.registers[state.macroState.register] =
+      state.macroState.recordedKeys
+    state.macroState.isRecording = false
+    state.macroState.recordedKeys = @[]
 
-    check state.isRecordingMacro == false
-    check state.macroRegisters.hasKey('a')
-    check state.macroRegisters['a'] == @["d", "d"]
-    check state.recordedKeys.len == 0
+    check state.macroState.isRecording == false
+    check state.macroState.registers.hasKey('a')
+    check state.macroState.registers['a'] == @["d", "d"]
+    check state.macroState.recordedKeys.len == 0
 
   test "record macro to different registers":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.macroRegisters = initTable[char, seq[string]]()
+    state.macroState.registers = initTable[char, seq[string]]()
 
     # Record to register 'a'
-    state.isRecordingMacro = true
-    state.macroRegister = 'a'
-    state.recordedKeys = @["d", "d"]
-    state.macroRegisters['a'] = state.recordedKeys
-    state.isRecordingMacro = false
+    state.macroState.isRecording = true
+    state.macroState.register = 'a'
+    state.macroState.recordedKeys = @["d", "d"]
+    state.macroState.registers['a'] = state.macroState.recordedKeys
+    state.macroState.isRecording = false
 
     # Record to register 'b'
-    state.isRecordingMacro = true
-    state.macroRegister = 'b'
-    state.recordedKeys = @["j", "j"]
-    state.macroRegisters['b'] = state.recordedKeys
-    state.isRecordingMacro = false
+    state.macroState.isRecording = true
+    state.macroState.register = 'b'
+    state.macroState.recordedKeys = @["j", "j"]
+    state.macroState.registers['b'] = state.macroState.recordedKeys
+    state.macroState.isRecording = false
 
-    check state.macroRegisters.hasKey('a')
-    check state.macroRegisters.hasKey('b')
-    check state.macroRegisters['a'] == @["d", "d"]
-    check state.macroRegisters['b'] == @["j", "j"]
+    check state.macroState.registers.hasKey('a')
+    check state.macroState.registers.hasKey('b')
+    check state.macroState.registers['a'] == @["d", "d"]
+    check state.macroState.registers['b'] == @["j", "j"]
 
   test "overwrite existing macro":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.macroRegisters = initTable[char, seq[string]]()
+    state.macroState.registers = initTable[char, seq[string]]()
 
     # Record first macro
-    state.macroRegisters['a'] = @["d", "d"]
+    state.macroState.registers['a'] = @["d", "d"]
 
     # Overwrite with new macro
-    state.isRecordingMacro = true
-    state.macroRegister = 'a'
-    state.recordedKeys = @["x", "x", "x"]
-    state.macroRegisters['a'] = state.recordedKeys
-    state.isRecordingMacro = false
+    state.macroState.isRecording = true
+    state.macroState.register = 'a'
+    state.macroState.recordedKeys = @["x", "x", "x"]
+    state.macroState.registers['a'] = state.macroState.recordedKeys
+    state.macroState.isRecording = false
 
-    check state.macroRegisters['a'] == @["x", "x", "x"]
+    check state.macroState.registers['a'] == @["x", "x", "x"]
 
 suite "Macro Playback":
   test "playback simple macro (@a)":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.macroRegisters = initTable[char, seq[string]]()
-    state.macroRegisters['a'] = @["d", "d"]
+    state.macroState.registers = initTable[char, seq[string]]()
+    state.macroState.registers['a'] = @["d", "d"]
 
     # Simulate: @a (playback)
-    check state.macroRegisters.hasKey('a')
-    let keys = state.macroRegisters['a']
+    check state.macroState.registers.hasKey('a')
+    let keys = state.macroState.registers['a']
     check keys == @["d", "d"]
 
   test "playback non-existent macro returns empty":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.macroRegisters = initTable[char, seq[string]]()
+    state.macroState.registers = initTable[char, seq[string]]()
 
     # Try to play back from empty register
-    check not state.macroRegisters.hasKey('z')
+    check not state.macroState.registers.hasKey('z')
 
   test "set last macro register on playback":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.macroRegisters = initTable[char, seq[string]]()
-    state.macroRegisters['a'] = @["d", "d"]
-    state.lastMacroRegister = none(char)
+    state.macroState.registers = initTable[char, seq[string]]()
+    state.macroState.registers['a'] = @["d", "d"]
+    state.macroState.lastRegister = none(char)
 
     # Simulate: @a
-    state.lastMacroRegister = some('a')
+    state.macroState.lastRegister = some('a')
 
-    check state.lastMacroRegister.isSome
-    check state.lastMacroRegister.get == 'a'
+    check state.macroState.lastRegister.isSome
+    check state.macroState.lastRegister.get == 'a'
 
   test "repeat last macro (@@)":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.macroRegisters = initTable[char, seq[string]]()
-    state.macroRegisters['a'] = @["d", "d"]
-    state.lastMacroRegister = some('a')
+    state.macroState.registers = initTable[char, seq[string]]()
+    state.macroState.registers['a'] = @["d", "d"]
+    state.macroState.lastRegister = some('a')
 
     # Simulate: @@
-    check state.lastMacroRegister.isSome
-    let reg = state.lastMacroRegister.get
-    check state.macroRegisters.hasKey(reg)
-    check state.macroRegisters[reg] == @["d", "d"]
+    check state.macroState.lastRegister.isSome
+    let reg = state.macroState.lastRegister.get
+    check state.macroState.registers.hasKey(reg)
+    check state.macroState.registers[reg] == @["d", "d"]
 
   test "repeat last macro when no previous macro":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.macroRegisters = initTable[char, seq[string]]()
-    state.lastMacroRegister = none(char)
+    state.macroState.registers = initTable[char, seq[string]]()
+    state.macroState.lastRegister = none(char)
 
     # Simulate: @@ (no previous macro)
-    check state.lastMacroRegister.isNone
+    check state.macroState.lastRegister.isNone
 
 suite "Key Serialization":
   test "keyComboToString - regular characters":
@@ -201,35 +202,35 @@ suite "Macro Edge Cases":
   test "cannot start recording while already recording":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.isRecordingMacro = true
-    state.macroRegister = 'a'
-    state.recordedKeys = @["d"]
+    state.macroState.isRecording = true
+    state.macroState.register = 'a'
+    state.macroState.recordedKeys = @["d"]
 
     # Attempt to start another recording should be ignored
-    # The implementation prevents this by checking isRecordingMacro
-    check state.isRecordingMacro == true
+    # The implementation prevents this by checking isRecording
+    check state.macroState.isRecording == true
 
   test "empty macro":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.macroRegisters = initTable[char, seq[string]]()
+    state.macroState.registers = initTable[char, seq[string]]()
 
     # Record empty macro (just qa then q immediately)
-    state.isRecordingMacro = true
-    state.macroRegister = 'a'
-    state.recordedKeys = @[]
-    state.macroRegisters['a'] = state.recordedKeys
-    state.isRecordingMacro = false
+    state.macroState.isRecording = true
+    state.macroState.register = 'a'
+    state.macroState.recordedKeys = @[]
+    state.macroState.registers['a'] = state.macroState.recordedKeys
+    state.macroState.isRecording = false
 
-    check state.macroRegisters['a'].len == 0
+    check state.macroState.registers['a'].len == 0
 
   test "macro with special keys":
     var state = EditorState()
     state.mode = EditorMode.Normal
-    state.macroRegisters = initTable[char, seq[string]]()
+    state.macroState.registers = initTable[char, seq[string]]()
 
     # Record macro with special keys
-    state.recordedKeys = @["d", "d", "<Enter>", "j"]
-    state.macroRegisters['a'] = state.recordedKeys
+    state.macroState.recordedKeys = @["d", "d", "<Enter>", "j"]
+    state.macroState.registers['a'] = state.macroState.recordedKeys
 
-    check state.macroRegisters['a'] == @["d", "d", "<Enter>", "j"]
+    check state.macroState.registers['a'] == @["d", "d", "<Enter>", "j"]

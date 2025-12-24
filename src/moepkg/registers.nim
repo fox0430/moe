@@ -89,8 +89,9 @@ proc isSmallDeleteRegisterName*(c: char): bool =
   c == '-'
 
 proc isClipboardRegisterName*(c: char): bool =
-  ## Check if character is a clipboard register name (*, +)
-  c in {'*', '+'}
+  ## Check if character is a clipboard register name (*, +, ~)
+  ## Note: All three registers point to the same system clipboard
+  c in {'*', '+', '~'}
 
 proc isValidRegisterName*(c: char): bool =
   ## Check if character is any valid register name

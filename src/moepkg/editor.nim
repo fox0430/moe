@@ -26,7 +26,7 @@ import
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
   gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
   lspintegration, completion, signaturehelp, backup, command_completion, motion,
-  logviewer, recentfilemode, color
+  logviewer, recentfilemode, color, gapbuffer
 import lsp/protocol/types as lspTypes
 import command_handlers/[handler_manager, visual_handler, insert_handler]
 
@@ -56,6 +56,7 @@ type
     commandConfig*: CommandConfig
     handlerManager*: HandlerManager
     windowManager*: EditorWindowManager # Window manager for split windows
+    buffers*: seq[TextBuffer] # Buffer list (like Vim's buffer list)
     config*: EditorConfig # TOML configuration
     lsp*: LspIntegration # LSP client integration
     lastLspChangeSeq*: int # Track buffer changes for LSP notifications
@@ -325,80 +326,196 @@ proc switchToPrevWindow*(e: Editor) =
     let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
     e.setActiveWindowScreenCursor(activeWindow)
 
+proc findBufferByPath*(e: Editor, path: string): int =
+  ## Find a buffer in the buffer list by its file path
+  ## Returns the buffer index (0-based) or -1 if not found
+  let absPath = absolutePath(path)
+  for i, buf in e.buffers:
+    if buf.filePath.isSome and absolutePath(buf.filePath.get) == absPath:
+      return i
+  return -1
+
+proc switchToBufferByIndex*(e: Editor, index: int) =
+  ## Switch the current window to display the buffer at the given index
+  logDebug("editor", "switchToBufferByIndex called with index: " & $index)
+  logDebug("editor", "windows.len: " & $e.windowManager.windows.len)
+
+  if index < 0 or index >= e.buffers.len:
+    logDebug("editor", "Invalid index, returning")
+    return
+
+  let targetBuffer = e.buffers[index]
+  let targetPath =
+    if targetBuffer.filePath.isSome: targetBuffer.filePath.get else: "No Name"
+  logDebug("editor", "Target buffer path: " & targetPath)
+
+  if e.windowManager.windows.len > 0 and
+      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+
+    # Don't switch if already on this buffer
+    if activeWindow.buffer == targetBuffer:
+      logDebug("editor", "Already on this buffer (window mode)")
+      return
+
+    activeWindow.buffer = targetBuffer
+    activeWindow.cursor = BufferPosition(line: 0, column: 0)
+    activeWindow.viewport.topLine = 0
+    activeWindow.viewport.leftColumn = 0
+
+    # Sync the executor and motion controller
+    e.syncActiveWindow()
+
+    # Update screen cursor
+    e.setActiveWindowScreenCursor(activeWindow)
+    logDebug("editor", "Switched buffer in window mode")
+  else:
+    # No windows, update the main buffer reference
+    logDebug("editor", "Switching in single buffer mode")
+    e.textBuffer = targetBuffer
+    e.executer.buffer = targetBuffer
+    e.executer.motionController.executor.buffer = targetBuffer
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+    e.viewport.topLine = 0
+    e.viewport.leftColumn = 0
+    e.state.needsFullRedraw = true
+    logDebug("editor", "Switched to buffer successfully")
+
+proc currentBufferIndex*(e: Editor): int =
+  ## Get the index of the current buffer in the buffer list
+  ## Returns -1 if not found
+  logDebug(
+    "editor",
+    "currentBufferIndex: windows.len=" & $e.windowManager.windows.len &
+      " activeWindowIndex=" & $e.windowManager.activeWindowIndex,
+  )
+  let currentBuffer = e.activeBuffer()
+  let currentPath =
+    if currentBuffer.filePath.isSome: currentBuffer.filePath.get else: "[No Name]"
+  logDebug("editor", "currentBufferIndex: activeBuffer path=" & currentPath)
+  for i, buf in e.buffers:
+    if buf == currentBuffer:
+      logDebug("editor", "currentBufferIndex: found match at index " & $i)
+      return i
+  logDebug("editor", "currentBufferIndex: no match found, returning -1")
+  return -1
+
 proc switchToNextBuffer*(e: Editor) =
-  ## Switch to the next buffer (:bnext)
-  ## In this editor, buffers are windows, so this switches to the next window
-  if e.windowManager.windows.len <= 1:
+  ## Switch to the next buffer in the buffer list (:bnext)
+  if e.buffers.len <= 1:
     e.state.statusMessage = "No more buffers"
     return
 
-  e.switchToNextWindow()
+  let currentIdx = e.currentBufferIndex()
+  let nextIdx = (currentIdx + 1) mod e.buffers.len
+  e.switchToBufferByIndex(nextIdx)
   e.state.statusMessage = ""
 
 proc switchToPrevBuffer*(e: Editor) =
-  ## Switch to the previous buffer (:bprev)
-  ## In this editor, buffers are windows, so this switches to the previous window
-  if e.windowManager.windows.len <= 1:
+  ## Switch to the previous buffer in the buffer list (:bprev)
+  if e.buffers.len <= 1:
     e.state.statusMessage = "No more buffers"
     return
 
-  e.switchToPrevWindow()
+  let currentIdx = e.currentBufferIndex()
+  let prevIdx =
+    if currentIdx == 0:
+      e.buffers.len - 1
+    else:
+      currentIdx - 1
+  e.switchToBufferByIndex(prevIdx)
   e.state.statusMessage = ""
 
 proc switchToFirstBuffer*(e: Editor) =
-  ## Switch to the first buffer (:bfirst)
-  ## In this editor, buffers are windows, so this switches to the first window
-  if e.windowManager.windows.len <= 1:
+  ## Switch to the first buffer in the buffer list (:bfirst)
+  if e.buffers.len <= 1:
     e.state.statusMessage = "Already at first buffer"
     return
 
-  if e.windowManager.activeWindowIndex == 0:
+  let currentIdx = e.currentBufferIndex()
+  if currentIdx == 0:
     e.state.statusMessage = "Already at first buffer"
     return
 
-  # Save current window state before switching
-  e.saveActiveWindowState()
-
-  # Switch to first window
-  e.windowManager.activeWindowIndex = 0
-  for i, window in e.windowManager.windows:
-    window.active = (i == 0)
-
-  # Sync and restore the new active window state
-  e.syncActiveWindow()
-
-  # Update cursor position immediately to avoid visual glitch
-  let activeWindow = e.windowManager.windows[0]
-  e.setActiveWindowScreenCursor(activeWindow)
+  e.switchToBufferByIndex(0)
   e.state.statusMessage = ""
 
 proc switchToLastBuffer*(e: Editor) =
-  ## Switch to the last buffer (:blast)
-  ## In this editor, buffers are windows, so this switches to the last window
-  if e.windowManager.windows.len <= 1:
+  ## Switch to the last buffer in the buffer list (:blast)
+  if e.buffers.len <= 1:
     e.state.statusMessage = "Already at last buffer"
     return
 
-  let lastIndex = e.windowManager.windows.len - 1
-  if e.windowManager.activeWindowIndex == lastIndex:
+  let lastIdx = e.buffers.len - 1
+  let currentIdx = e.currentBufferIndex()
+  if currentIdx == lastIdx:
     e.state.statusMessage = "Already at last buffer"
     return
 
-  # Save current window state before switching
-  e.saveActiveWindowState()
-
-  # Switch to last window
-  e.windowManager.activeWindowIndex = lastIndex
-  for i, window in e.windowManager.windows:
-    window.active = (i == lastIndex)
-
-  # Sync and restore the new active window state
-  e.syncActiveWindow()
-
-  # Update cursor position immediately to avoid visual glitch
-  let activeWindow = e.windowManager.windows[lastIndex]
-  e.setActiveWindowScreenCursor(activeWindow)
+  e.switchToBufferByIndex(lastIdx)
   e.state.statusMessage = ""
+
+proc switchToBuffer*(e: Editor, arg: string): bool =
+  ## Switch to a buffer by number or name (:b N or :b name)
+  ## Returns true if successful, false otherwise
+  ## Uses the buffer list (not windows) like Vim
+
+  logDebug("editor", "switchToBuffer called with arg: " & arg)
+  logDebug("editor", "buffers.len: " & $e.buffers.len)
+  # Log each buffer's path for debugging
+  for i, buf in e.buffers:
+    let path = if buf.filePath.isSome: buf.filePath.get else: "[No Name]"
+    logDebug("editor", "  buffer[" & $i & "]: " & path)
+
+  # Try to parse as a number first
+  try:
+    let bufNum = parseInt(arg)
+    # Buffer numbers are 1-indexed in Vim
+    let targetIndex = bufNum - 1
+
+    logDebug(
+      "editor", "Parsed buffer number: " & $bufNum & ", targetIndex: " & $targetIndex
+    )
+
+    if targetIndex < 0 or targetIndex >= e.buffers.len:
+      e.state.statusMessage = "E86: Buffer " & $bufNum & " does not exist"
+      logDebug("editor", "Buffer does not exist")
+      return false
+
+    let currentIdx = e.currentBufferIndex()
+    logDebug("editor", "currentIdx: " & $currentIdx)
+    if targetIndex == currentIdx:
+      # Already at this buffer
+      logDebug("editor", "Already at this buffer")
+      return true
+
+    # Switch to the buffer
+    logDebug("editor", "Switching to buffer at index: " & $targetIndex)
+    e.switchToBufferByIndex(targetIndex)
+    e.state.statusMessage = ""
+    return true
+  except ValueError:
+    discard # Not a number, try matching by name
+
+  # Try to match by file name in buffer list
+  for i, buf in e.buffers:
+    if buf.filePath.isSome:
+      let bufferPath = buf.filePath.get
+      # Match against full path, file name, or partial match
+      if bufferPath == arg or bufferPath.extractFilename == arg or
+          bufferPath.contains(arg):
+        let currentIdx = e.currentBufferIndex()
+        if i == currentIdx:
+          # Already at this buffer
+          return true
+
+        # Switch to the buffer
+        e.switchToBufferByIndex(i)
+        e.state.statusMessage = ""
+        return true
+
+  e.state.statusMessage = "E94: No matching buffer for " & arg
+  return false
 
 proc isBufferShared*(e: Editor, buffer: TextBuffer): bool =
   ## Check if the given buffer is shared across multiple windows
@@ -416,6 +533,12 @@ proc isBufferShared*(e: Editor, buffer: TextBuffer): bool =
 proc closeWindow*(e: Editor): bool =
   ## Close the active window
   ## Returns true if editor should quit (last window closed)
+
+  logDebug(
+    "editor",
+    "closeWindow called: windows.len=" & $e.windowManager.windows.len &
+      " activeWindowIndex=" & $e.windowManager.activeWindowIndex,
+  )
 
   let shouldQuit = e.windowManager.closeWindow(e.state.display.multiStatusLine)
 
@@ -553,12 +676,19 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
     return err(bufferResult.error)
 
   let newBuffer = bufferResult.get
-  e.executer.buffer = newBuffer
-  e.executer.motionController.executor.buffer = newBuffer
 
-  # Restore the new active window state
-  e.restoreActiveWindowState()
-  e.state.needsFullRedraw = true
+  # Add the new buffer to the buffer list if it's not already there
+  var found = false
+  for buf in e.buffers:
+    if buf == newBuffer:
+      found = true
+      break
+  if not found:
+    e.buffers.add(newBuffer)
+    logDebug("editor", "vsplit: buffer added, buffers.len: " & $e.buffers.len)
+
+  # Sync active window state (buffer, viewport, cursor) with executor
+  e.syncActiveWindow()
 
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
@@ -579,12 +709,19 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
     return err(bufferResult.error)
 
   let newBuffer = bufferResult.get
-  e.executer.buffer = newBuffer
-  e.executer.motionController.executor.buffer = newBuffer
 
-  # Restore the new active window state
-  e.restoreActiveWindowState()
-  e.state.needsFullRedraw = true
+  # Add the new buffer to the buffer list if it's not already there
+  var found = false
+  for buf in e.buffers:
+    if buf == newBuffer:
+      found = true
+      break
+  if not found:
+    e.buffers.add(newBuffer)
+    logDebug("editor", "vsplitWithBuffer: buffer added, buffers.len: " & $e.buffers.len)
+
+  # Sync active window state (buffer, viewport, cursor) with executor
+  e.syncActiveWindow()
 
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
@@ -606,12 +743,19 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
     return err(bufferResult.error)
 
   let newBuffer = bufferResult.get
-  e.executer.buffer = newBuffer
-  e.executer.motionController.executor.buffer = newBuffer
 
-  # Restore the new active window state
-  e.restoreActiveWindowState()
-  e.state.needsFullRedraw = true
+  # Add the new buffer to the buffer list if it's not already there
+  var found = false
+  for buf in e.buffers:
+    if buf == newBuffer:
+      found = true
+      break
+  if not found:
+    e.buffers.add(newBuffer)
+    logDebug("editor", "hsplit: buffer added, buffers.len: " & $e.buffers.len)
+
+  # Sync active window state (buffer, viewport, cursor) with executor
+  e.syncActiveWindow()
 
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
@@ -632,13 +776,26 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   if bufferResult.isErr:
     return err(bufferResult.error)
 
-  let newBuffer = bufferResult.get
-  e.executer.buffer = newBuffer
-  e.executer.motionController.executor.buffer = newBuffer
+  logDebug(
+    "editor",
+    "hsplitWithBuffer: after wm.hsplitWithBuffer, activeWindowIndex=" &
+      $e.windowManager.activeWindowIndex & " windows.len=" & $e.windowManager.windows.len,
+  )
 
-  # Restore the new active window state
-  e.restoreActiveWindowState()
-  e.state.needsFullRedraw = true
+  let newBuffer = bufferResult.get
+
+  # Add the new buffer to the buffer list if it's not already there
+  var found = false
+  for buf in e.buffers:
+    if buf == newBuffer:
+      found = true
+      break
+  if not found:
+    e.buffers.add(newBuffer)
+    logDebug("editor", "hsplitWithBuffer: buffer added, buffers.len: " & $e.buffers.len)
+
+  # Sync active window state (buffer, viewport, cursor) with executor
+  e.syncActiveWindow()
 
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
@@ -648,8 +805,12 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   ok(())
 
 proc enew*(e: Editor): Result[(), string] =
-  ## Create a new empty buffer and replace the current one
+  ## Create a new empty buffer and add it to the buffer list
   let newBuffer = newTextBuffer()
+
+  # Add the new buffer to the buffer list
+  e.buffers.add(newBuffer)
+  logDebug("editor", "enew: buffer added, buffers.len: " & $e.buffers.len)
 
   if e.windowManager.windows.len > 0 and
       e.windowManager.activeWindowIndex < e.windowManager.windows.len:
@@ -690,8 +851,22 @@ proc vnew*(e: Editor): Result[(), string] =
   return e.vsplitWithBuffer(newBuffer)
 
 proc editFile*(e: Editor, path: string): Result[(), string] =
-  ## Load a file and replace the current buffer (like :e in Vim)
+  ## Load a file and switch to it (like :e in Vim)
+  ## If the buffer already exists in the buffer list, switch to it
   ## If the file doesn't exist, create an empty buffer with the path set (new file)
+
+  logDebug("editor", "editFile called with path: " & path)
+  logDebug("editor", "Current buffers.len: " & $e.buffers.len)
+
+  # Check if buffer already exists in the buffer list
+  let existingIndex = e.findBufferByPath(path)
+  if existingIndex >= 0:
+    # Buffer already exists, switch to it
+    logDebug("editor", "Buffer already exists at index: " & $existingIndex)
+    e.switchToBufferByIndex(existingIndex)
+    return ok(())
+
+  # Create new buffer
   let newBuffer = newTextBuffer()
 
   if fileExists(path):
@@ -703,32 +878,12 @@ proc editFile*(e: Editor, path: string): Result[(), string] =
     # New file: set the path for saving later
     newBuffer.filePath = some(path)
 
-  if e.windowManager.windows.len > 0 and
-      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    # Replace the buffer in the active window
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    activeWindow.buffer = newBuffer
-    activeWindow.cursor = BufferPosition(line: 0, column: 0)
-    activeWindow.viewport.topLine = 0
-    activeWindow.viewport.leftColumn = 0
+  # Add new buffer to the buffer list
+  e.buffers.add(newBuffer)
+  logDebug("editor", "Added new buffer, buffers.len now: " & $e.buffers.len)
 
-    # Update executor and motion controller references
-    e.executer.buffer = newBuffer
-    e.executer.motionController.executor.buffer = newBuffer
-    e.executer.motionController.viewportManager.viewport = activeWindow.viewport
-
-    # Reset cursor
-    e.state.cursor = BufferPosition(line: 0, column: 0)
-  else:
-    # No windows, replace the main buffer
-    e.textBuffer = newBuffer
-    e.executer.buffer = newBuffer
-    e.executer.motionController.executor.buffer = newBuffer
-    e.state.cursor = BufferPosition(line: 0, column: 0)
-    e.viewport.topLine = 0
-    e.viewport.leftColumn = 0
-
-  e.state.needsFullRedraw = true
+  # Switch to the new buffer
+  e.switchToBufferByIndex(e.buffers.len - 1)
   ok(())
 
 proc newEditor*(): Editor =
@@ -806,6 +961,8 @@ proc newEditor*(): Editor =
         lastAutoSave: getMonoTime(),
         lastAutoBackup: getMonoTime(),
         lastInputTime: getMonoTime(),
+        lastFileModCheck: getMonoTime(),
+        fileModCheckInterval: 1000, # Check file modification every 1 second
       ),
       # Search state (grouped in SearchState)
       search: SearchState(
@@ -815,9 +972,9 @@ proc newEditor*(): Editor =
         history: loadSearchHistory(),
         historyIndex: -1,
         startPos: BufferPosition(line: 0, column: 0),
-        ignorecase: true,
-        smartcase: true,
-        incsearch: true,
+        ignorecase: editorConfig.standard.ignorecase,
+        smartcase: editorConfig.standard.smartcase,
+        incsearch: editorConfig.standard.incrementalSearch,
         hlsearch: true,
         hlsearchTempDisabled: false,
       ),
@@ -875,8 +1032,13 @@ proc newEditor*(): Editor =
     commandConfig: cmdConfig,
     handlerManager: nil, # Will be set after executer is created
     windowManager: newEditorWindowManager(),
+    buffers: @[], # Will be initialized below
     config: editorConfig, # Store configuration
   )
+
+  # Add initial buffer to buffer list
+  result.buffers.add(result.textBuffer)
+  logDebug("editor", "Initial buffer added, buffers.len: " & $result.buffers.len)
 
   result.executer = newCommandExecutor(
     result.textBuffer,
@@ -912,6 +1074,58 @@ proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
       e.state.timing.lastGitDiffUpdate = getMonoTime()
       e.state.timing.lastGitDiffChangeSeq = activeBuffer.changeSeq
       e.state.needsFullRedraw = true
+
+proc maybeReloadExternallyModifiedFile*(e: Editor) =
+  ## Check if files were modified externally and reload them if:
+  ##   - liveReloadOfFile is enabled in config
+  ##   - Buffer has no unsaved changes (if modified, just show a message)
+  ##   - Enough time has passed since last check (debouncing)
+
+  if not e.config.standard.liveReloadOfFile:
+    return
+
+  let now = getMonoTime()
+  let elapsed = now - e.state.timing.lastFileModCheck
+  let threshold = initDuration(milliseconds = e.state.timing.fileModCheckInterval)
+
+  if elapsed < threshold:
+    return
+
+  e.state.timing.lastFileModCheck = now
+
+  # Check the active buffer
+  let activeBuffer = e.activeBuffer()
+  if not activeBuffer.isExternallyModified():
+    return
+
+  let filePath =
+    if activeBuffer.filePath.isSome:
+      activeBuffer.filePath.get
+    else:
+      return
+
+  # If buffer has unsaved changes, warn the user instead of reloading
+  if activeBuffer.isModified:
+    e.state.setStatusMessage(
+      "Warning: " & filePath & " changed on disk (buffer has unsaved changes)"
+    )
+    # Update lastFileModTime to avoid repeated warnings
+    try:
+      activeBuffer.lastFileModTime = some(getFileInfo(filePath).lastWriteTime)
+    except OSError:
+      discard
+    return
+
+  # Reload the file
+  logInfo("editor", "File externally modified, reloading: " & filePath)
+  let reloadResult = activeBuffer.reloadFile()
+  if reloadResult.isOk:
+    e.state.setStatusMessage("File reloaded: " & filePath)
+    e.state.needsFullRedraw = true
+    # Update git diff after reload
+    e.refreshGitDiff(useBuffer = false)
+  else:
+    e.state.setStatusMessage("Failed to reload file: " & reloadResult.error)
 
 proc maybeUpdateGitDiff*(e: Editor) =
   ## Update git diff if buffer was modified and enough time has passed (debouncing)
@@ -1280,6 +1494,141 @@ proc getDocumentHighlightStyle(kind: int): Style =
   else: # Text or unknown
     documentHighlightTextStyle()
 
+proc extractSubstitutePattern*(commandText: string): string =
+  ## Extract the search pattern from a substitute command
+  ## Supports formats like :%s/pattern/replacement/flags or :s/pattern/...
+  ## Returns empty string if not a substitute command or pattern is incomplete
+  let parsed = parseSubstituteCommand(commandText)
+  if parsed.isValid:
+    # Return raw pattern without escape processing (for display/matching)
+    return parsed.pattern
+  return ""
+
+proc extractSubstituteReplacement*(
+    commandText: string
+): tuple[replacement: string, hasReplacement: bool] =
+  ## Extract the replacement text from a substitute command
+  ## Returns (replacement, true) if replacement section exists (even if empty)
+  ## Returns ("", false) if we haven't reached the replacement section yet
+  let parsed = parseSubstituteCommand(commandText)
+  if parsed.isValid and parsed.hasReplacement:
+    return (parsed.replacement, true)
+  return ("", false)
+
+proc extractSubstituteFlags*(commandText: string): string =
+  ## Extract the flags from a substitute command
+  let parsed = parseSubstituteCommand(commandText)
+  if parsed.isValid:
+    return parsed.flags
+  return ""
+
+proc startSubstitutePreview*(e: Editor) =
+  ## Start substitute preview by saving the current buffer content
+  if e.state.substitutePreview.isActive:
+    return
+
+  let buffer = e.activeBuffer()
+  e.state.substitutePreview.originalLines = @[]
+  for i in 0 ..< buffer.len:
+    e.state.substitutePreview.originalLines.add(buffer.getLine(i))
+  e.state.substitutePreview.isActive = true
+  e.state.substitutePreview.lastPattern = ""
+  e.state.substitutePreview.lastReplacement = ""
+
+proc restoreFromPreview(e: Editor) =
+  ## Restore buffer content from preview snapshot
+  if not e.state.substitutePreview.isActive:
+    return
+
+  let buffer = e.activeBuffer()
+  # Restore all lines from snapshot
+  for i in 0 ..< e.state.substitutePreview.originalLines.len:
+    if i < buffer.len:
+      buffer.gapBuffer.replaceLine(i, e.state.substitutePreview.originalLines[i])
+
+  # Handle line count differences
+  while buffer.len > e.state.substitutePreview.originalLines.len:
+    buffer.gapBuffer.deleteLine(buffer.len - 1)
+  while buffer.len < e.state.substitutePreview.originalLines.len:
+    buffer.gapBuffer.insertLine(
+      buffer.len, e.state.substitutePreview.originalLines[buffer.len]
+    )
+
+  buffer.highlightNeedsUpdate = true
+
+proc cancelSubstitutePreview*(e: Editor) =
+  ## Cancel substitute preview and restore original content
+  if not e.state.substitutePreview.isActive:
+    return
+
+  e.restoreFromPreview()
+  e.state.substitutePreview.isActive = false
+  e.state.substitutePreview.originalLines = @[]
+  e.state.needsFullRedraw = true
+
+proc commitSubstitutePreview*(e: Editor) =
+  ## Commit substitute preview (discard snapshot, keep current changes)
+  e.state.substitutePreview.isActive = false
+  e.state.substitutePreview.originalLines = @[]
+
+proc updateSubstitutePreview*(
+    e: Editor, pattern: string, replacement: string, isGlobalFlag: bool = true
+) =
+  ## Update substitute preview with new pattern and replacement
+  ## isGlobalFlag: if true, replace all occurrences per line; if false, only first occurrence
+  if not e.state.substitutePreview.isActive:
+    return
+
+  # Skip if nothing changed
+  if pattern == e.state.substitutePreview.lastPattern and
+      replacement == e.state.substitutePreview.lastReplacement:
+    return
+
+  e.state.substitutePreview.lastPattern = pattern
+  e.state.substitutePreview.lastReplacement = replacement
+
+  # Restore from snapshot first
+  e.restoreFromPreview()
+
+  if pattern.len == 0:
+    e.state.needsFullRedraw = true
+    return
+
+  # Process escape sequences in replacement using common utility
+  let processedReplacement = processEscapeSequences(replacement)
+
+  # Apply substitute to buffer
+  let buffer = e.activeBuffer()
+  for lineIdx in 0 ..< buffer.len:
+    var line = buffer.getLine(lineIdx)
+    var newLine = ""
+    var searchPos = 0
+    var modified = false
+
+    while searchPos <= line.len:
+      let idx = line.find(pattern, searchPos)
+      if idx < 0:
+        newLine.add(line[searchPos ..^ 1])
+        break
+
+      if idx > searchPos:
+        newLine.add(line[searchPos ..< idx])
+
+      newLine.add(processedReplacement)
+      modified = true
+      searchPos = idx + pattern.len
+
+      # If not global flag, only replace first occurrence per line
+      if not isGlobalFlag:
+        newLine.add(line[searchPos ..^ 1])
+        break
+
+    if modified:
+      buffer.gapBuffer.replaceLine(lineIdx, newLine)
+
+  buffer.highlightNeedsUpdate = true
+  e.state.needsFullRedraw = true
+
 proc getSelectionStyle(
     e: Editor,
     buffer: TextBuffer,
@@ -1301,6 +1650,7 @@ proc getSelectionStyle(
     # Determine which search pattern to use:
     # - In Search mode with text: use current searchText (incremental highlight)
     # - In Search mode without text: no highlight (user is starting a new search)
+    # - In Command mode with substitute command: use substitute pattern (incremental highlight)
     # - Not in Search mode: use lastSearchText (persistent highlight from previous search)
     let searchPattern =
       if e.state.mode == EditorMode.Search:
@@ -1309,6 +1659,10 @@ proc getSelectionStyle(
           e.state.search.text
         else:
           "" # No highlight when starting a new search
+      elif e.state.mode == EditorMode.Command:
+        # In Command mode: check for substitute command pattern
+        let subPattern = extractSubstitutePattern(e.state.commandText)
+        if subPattern.len > 0: subPattern else: e.state.search.lastText
       else:
         # Not in Search mode: use last search pattern
         e.state.search.lastText
@@ -3792,6 +4146,9 @@ proc render*(e: Editor, buffer: var Buffer) =
 
   # Poll for LSP completion responses
   e.pollLspCompletion()
+
+  # Check for externally modified files (with debouncing)
+  e.maybeReloadExternallyModifiedFile()
 
   # Update git diff if buffer was modified (with debouncing)
   e.maybeUpdateGitDiff()

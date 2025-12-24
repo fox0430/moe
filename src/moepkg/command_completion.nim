@@ -61,9 +61,10 @@ type
 
 const
   DefaultMaxVisible* = 10
-  MinPopupWidth* = 15
-  MaxPopupWidth* = 40
+  MinPopupWidth* = 20
+  MaxPopupWidth* = 60
   PopupPadding* = 2
+  DescriptionGap* = 2 # Gap between command and description
 
 # Command descriptions for built-in commands
 const CommandDescriptions = {
@@ -626,12 +627,30 @@ let
     bg: ColorValue(kind: Indexed, indexed: Color.Black),
     modifiers: {},
   )
+  cmdPopupDescNormalStyle* = Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
+    bg: ColorValue(kind: Indexed, indexed: Color.Black),
+    modifiers: {},
+  )
+  cmdPopupDescSelectedStyle* = Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.Black),
+    bg: ColorValue(kind: Indexed, indexed: Color.Cyan),
+    modifiers: {},
+  )
 
 proc calculateMaxCommandWidth*(entries: seq[CommandCompletionEntry]): int =
   ## Calculate the maximum command width in the entries
   result = 0
   for entry in entries:
     let width = entry.command.runeLen
+    if width > result:
+      result = width
+
+proc calculateMaxDescriptionWidth*(entries: seq[CommandCompletionEntry]): int =
+  ## Calculate the maximum description width in the entries
+  result = 0
+  for entry in entries:
+    let width = entry.description.runeLen
     if width > result:
       result = width
 
@@ -648,9 +667,17 @@ proc calculateCommandPopupPosition*(
   let visibleItems = min(entries.len, maxVisible)
   let popupHeight = visibleItems + 2 # +2 for border
 
-  # Calculate width based on longest command
+  # Calculate width based on longest command + description
   let maxCmdWidth = calculateMaxCommandWidth(entries)
-  let contentWidth = max(MinPopupWidth, min(maxCmdWidth + PopupPadding, MaxPopupWidth))
+  let maxDescWidth = calculateMaxDescriptionWidth(entries)
+
+  # Content width: command + gap + description (if descriptions exist)
+  let contentWidth =
+    if maxDescWidth > 0:
+      let fullWidth = maxCmdWidth + DescriptionGap + maxDescWidth + PopupPadding
+      max(MinPopupWidth, min(fullWidth, MaxPopupWidth))
+    else:
+      max(MinPopupWidth, min(maxCmdWidth + PopupPadding, MaxPopupWidth))
   let popupWidth = contentWidth + 2 # +2 for border
 
   # Position: above command line (which is at termHeight - 1)
@@ -720,23 +747,47 @@ proc renderCommandCompletionPopup*(
         if entryIdx < menu.entries.len:
           let entry = menu.entries[entryIdx]
           let isSelected = entryIdx == menu.selectedIndex
-          let style = if isSelected: cmdPopupSelectedStyle else: cmdPopupNormalStyle
+          let cmdStyle = if isSelected: cmdPopupSelectedStyle else: cmdPopupNormalStyle
+          let descStyle =
+            if isSelected: cmdPopupDescSelectedStyle else: cmdPopupDescNormalStyle
 
-          # Truncate command to fit
+          # Calculate max command width for alignment
+          let maxCmdWidth = calculateMaxCommandWidth(menu.entries)
+
+          # Truncate command if needed
           var displayCmd = entry.command
-          if displayCmd.len > contentWidth:
-            displayCmd = displayCmd[0 ..< contentWidth - 1] & "…"
+          let cmdDisplayWidth = min(maxCmdWidth, contentWidth - DescriptionGap - 1)
+          if displayCmd.runeLen > cmdDisplayWidth:
+            displayCmd = $displayCmd.toRunes[0 ..< cmdDisplayWidth - 1] & "…"
 
           # Draw command
           var x = contentX
           for r in displayCmd.runes:
             if x < contentX + contentWidth and x < termBuffer.area.width:
-              termBuffer[x, y] = cell($r, style)
+              termBuffer[x, y] = cell($r, cmdStyle)
               x += runeWidth(r)
+
+          # Pad command to max width for alignment
+          let cmdEndX = contentX + min(maxCmdWidth, cmdDisplayWidth) + DescriptionGap
+          while x < cmdEndX and x < contentX + contentWidth and x < termBuffer.area.width:
+            termBuffer[x, y] = cell(" ", cmdStyle)
+            inc x
+
+          # Draw description if available
+          if entry.description.len > 0:
+            let remainingWidth = contentX + contentWidth - x
+            var displayDesc = entry.description
+            if displayDesc.runeLen > remainingWidth:
+              displayDesc = $displayDesc.toRunes[0 ..< remainingWidth - 1] & "…"
+
+            for r in displayDesc.runes:
+              if x < contentX + contentWidth and x < termBuffer.area.width:
+                termBuffer[x, y] = cell($r, descStyle)
+                x += runeWidth(r)
 
           # Fill remaining space with background
           while x < contentX + contentWidth and x < termBuffer.area.width:
-            termBuffer[x, y] = cell(" ", style)
+            termBuffer[x, y] = cell(" ", cmdStyle)
             inc x
 
         # Right border

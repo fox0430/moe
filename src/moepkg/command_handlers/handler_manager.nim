@@ -62,6 +62,7 @@ type
     hrBufferPrev # Switch to previous buffer
     hrBufferFirst # Switch to first buffer
     hrBufferLast # Switch to last buffer
+    hrBuffer # Switch to buffer by number or name
     hrBufferDelete # Delete current buffer
     hrStripWhitespace # Remove trailing whitespace
     hrFilerOpenFile # Open file from filer
@@ -101,6 +102,18 @@ type
     hrBackground # Pause editor and show terminal (:bg)
     hrJumpList # Show jump list (:ju, :jump)
     hrBuild # Build current buffer (:build)
+    hrDebug # Open debug mode (:debug)
+    hrConfig # Open configuration mode (:conf)
+    hrPutConfigFile # Write sample config file (:putConfigFile)
+    hrMan # Show manual page (:man)
+    hrTheme # Change color theme (:theme)
+    hrLspLog # Open LSP log viewer (:lspLog)
+    hrLspFormat # LSP document formatting (:lspFormat)
+    hrLspRestart # Restart LSP server (:lspRestart)
+    hrLspForceRestart # Force restart LSP server (:lspForceRestart)
+    hrLspFold # LSP folding range (:lspFold)
+    hrLspExecuteCommand # LSP execute command (:lspExeCommand)
+    hrSubstitute # Search and replace (:s)
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -161,6 +174,8 @@ type
       forceQuitAfterSave*: bool
     of hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast:
       discard
+    of hrBuffer:
+      bufferArg*: string # Buffer number or name
     of hrBufferDelete:
       forceBufferDelete*: bool
     of hrStripWhitespace:
@@ -234,6 +249,30 @@ type
       discard
     of hrBuild:
       discard
+    of hrDebug:
+      discard
+    of hrConfig:
+      discard
+    of hrPutConfigFile:
+      discard
+    of hrMan:
+      hrManPage*: string
+    of hrTheme:
+      hrThemeName*: string
+    of hrLspLog:
+      discard
+    of hrLspFormat:
+      discard
+    of hrLspRestart:
+      discard
+    of hrLspForceRestart:
+      discard
+    of hrLspFold:
+      discard
+    of hrLspExecuteCommand:
+      hrLspCommand*: string
+    of hrSubstitute:
+      hrSubstituteCount*: int
     of hrUnhandled:
       discard
     of hrError:
@@ -478,11 +517,14 @@ proc handleCommandMode*(
     buffer: TextBuffer,
     commandText: string,
     isSharedBuffer: bool = false,
+    currentLine: int = 0,
 ): HandlerResult =
   ## Handle Command mode input (when Enter is pressed)
   ## isSharedBuffer: true if the buffer is shared across multiple windows
-  let r =
-    manager.commandHandler.handleCommandModeInput(buffer, commandText, isSharedBuffer)
+  ## currentLine: current cursor line (0-based), used for range substitution with '.'
+  let r = manager.commandHandler.handleCommandModeInput(
+    buffer, commandText, isSharedBuffer, currentLine
+  )
 
   case r.kind
   of cmrQuit:
@@ -542,6 +584,8 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrBufferLast)
   of cmrBufferDelete:
     return HandlerResult(kind: hrBufferDelete, forceBufferDelete: r.forceBufferDelete)
+  of cmrBuffer:
+    return HandlerResult(kind: hrBuffer, bufferArg: r.bufferArg)
   of cmrStripWhitespace:
     return
       HandlerResult(kind: hrStripWhitespace, strippedLineCount: r.strippedLineCount)
@@ -566,6 +610,30 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrJumpList)
   of cmrBuild:
     return HandlerResult(kind: hrBuild)
+  of cmrDebug:
+    return HandlerResult(kind: hrDebug)
+  of cmrConfig:
+    return HandlerResult(kind: hrConfig)
+  of cmrPutConfigFile:
+    return HandlerResult(kind: hrPutConfigFile)
+  of cmrMan:
+    return HandlerResult(kind: hrMan, hrManPage: r.manPage)
+  of cmrTheme:
+    return HandlerResult(kind: hrTheme, hrThemeName: r.themeName)
+  of cmrLspLog:
+    return HandlerResult(kind: hrLspLog)
+  of cmrLspFormat:
+    return HandlerResult(kind: hrLspFormat)
+  of cmrLspRestart:
+    return HandlerResult(kind: hrLspRestart)
+  of cmrLspForceRestart:
+    return HandlerResult(kind: hrLspForceRestart)
+  of cmrLspFold:
+    return HandlerResult(kind: hrLspFold)
+  of cmrLspExecuteCommand:
+    return HandlerResult(kind: hrLspExecuteCommand, hrLspCommand: r.lspCommand)
+  of cmrSubstitute:
+    return HandlerResult(kind: hrSubstitute, hrSubstituteCount: r.substituteCount)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -597,7 +665,7 @@ proc handleCommandMode*(
       let commandText = state.commandText
       state.commandText = ""
       state.commandCursor = 0
-      return manager.handleCommandMode(buffer, commandText, false)
+      return manager.handleCommandMode(buffer, commandText, false, state.cursor.line)
     of skBackspace:
       # Delete character (rune) before cursor - handles unicode properly
       if state.commandCursor > 1: # Keep the ":" prefix
@@ -1107,7 +1175,7 @@ proc wasHandled*(hrResult: HandlerResult): bool =
   hrResult.kind in {
     hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrNew, hrVnew,
     hrEnew, hrSave, hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst,
-    hrBufferLast, hrBufferDelete, hrStripWhitespace, hrFilerOpenFile,
+    hrBufferLast, hrBuffer, hrBufferDelete, hrStripWhitespace, hrFilerOpenFile,
     hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerQuit, hrEnterFiler,
     hrLogViewerQuit, hrEnterLogViewer, hrHelpViewerQuit, hrEnterHelpViewer,
     hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer, hrBufferManagerQuit,
@@ -1223,6 +1291,14 @@ proc shouldBufferFirst*(hrResult: HandlerResult): bool =
 proc shouldBufferLast*(hrResult: HandlerResult): bool =
   ## Check if we should switch to last buffer
   hrResult.kind == hrBufferLast
+
+proc shouldBuffer*(hrResult: HandlerResult): bool =
+  ## Check if we should switch to buffer by number or name
+  hrResult.kind == hrBuffer
+
+proc getBufferArg*(hrResult: HandlerResult): string =
+  ## Get the buffer argument (number or name)
+  if hrResult.kind == hrBuffer: hrResult.bufferArg else: ""
 
 proc shouldBufferDelete*(hrResult: HandlerResult): bool =
   ## Check if we should delete the current buffer

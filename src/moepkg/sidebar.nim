@@ -28,7 +28,7 @@ import std/options
 
 import pkg/celina
 
-import types, buffer
+import types, buffer, color
 
 # Sidebar display constants
 const DefaultSidebarWidth* = 2
@@ -61,50 +61,71 @@ var globalMarkerConfig* = SidebarMarkerConfig(
   syntaxWarning: DefaultSyntaxWarningMarker,
 )
 
-# Predefined styles for different sidebar indicators
-let
-  gitAddedStyle* = Style(
+# Helper to get theme background color
+proc themeBackground(): ColorValue =
+  let colorPair = getThemeColor(EditorColorPairIndex.default)
+  colorPair.background.rgb.toColorValue
+
+# Style getter procs for different sidebar indicators (use theme background)
+proc gitAddedStyle*(): Style =
+  Style(
     fg: ColorValue(kind: Indexed, indexed: Color.Green),
-    bg: ColorValue(kind: Default),
+    bg: themeBackground(),
     modifiers: {},
   )
-  gitChangedStyle* = Style(
+
+proc gitChangedStyle*(): Style =
+  Style(
     fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
-    bg: ColorValue(kind: Default),
+    bg: themeBackground(),
     modifiers: {},
   )
-  gitDeletedStyle* = Style(
+
+proc gitDeletedStyle*(): Style =
+  Style(
     fg: ColorValue(kind: Indexed, indexed: Color.Red),
-    bg: ColorValue(kind: Default),
+    bg: themeBackground(),
     modifiers: {},
   )
-  syntaxErrorStyle* = Style(
+
+proc syntaxErrorStyle*(): Style =
+  Style(
     fg: ColorValue(kind: Indexed, indexed: Color.Red),
-    bg: ColorValue(kind: Default),
+    bg: themeBackground(),
     modifiers: {StyleModifier.Bold},
   )
-  syntaxWarningStyle* = Style(
+
+proc syntaxWarningStyle*(): Style =
+  Style(
     fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
-    bg: ColorValue(kind: Default),
+    bg: themeBackground(),
     modifiers: {},
   )
-  emptyStyle* =
-    Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
+
+proc emptyStyle*(): Style =
+  Style(fg: ColorValue(kind: Default), bg: themeBackground(), modifiers: {})
 
 proc getStyleForKind(kind: SidebarItemKind): Style =
   ## Get the appropriate style for a sidebar item kind
   case kind
-  of GitAdded: gitAddedStyle
-  of GitChanged: gitChangedStyle
-  of GitDeleted: gitDeletedStyle
-  of GitChangedAndDeleted: gitChangedStyle
-  of SyntaxError: syntaxErrorStyle
-  of SyntaxWarning: syntaxWarningStyle
-  of Empty: emptyStyle
+  of GitAdded:
+    gitAddedStyle()
+  of GitChanged:
+    gitChangedStyle()
+  of GitDeleted:
+    gitDeletedStyle()
+  of GitChangedAndDeleted:
+    gitChangedStyle()
+  of SyntaxError:
+    syntaxErrorStyle()
+  of SyntaxWarning:
+    syntaxWarningStyle()
+  of Empty:
+    emptyStyle()
 
 proc emptySidebarItem(): SidebarItem =
   ## Create an empty sidebar item
-  SidebarItem(text: " ", kind: Empty, style: emptyStyle)
+  SidebarItem(text: " ", kind: Empty, style: emptyStyle())
 
 proc initSidebar*(height: int, width: int = DefaultSidebarWidth): Sidebar =
   ## Initialize a new sidebar with the given dimensions

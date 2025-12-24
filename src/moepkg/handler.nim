@@ -28,20 +28,19 @@ import
 import command_handlers/handler_manager
 
 proc getBufferInfos(e: Editor): seq[BufferInfo] =
-  ## Extract buffer information from the window manager for BufferManager
+  ## Extract buffer information from the buffer list for BufferManager
   result = @[]
-  if e.windowManager.windows.len > 0:
-    # Use windows from window manager
-    for window in e.windowManager.windows:
-      result.add(
-        BufferInfo(
-          filePath: window.buffer.filePath,
-          isModified: window.buffer.isModified,
-          isActive: window.active,
-        )
+  let currentBuffer = e.activeBuffer()
+  for buf in e.buffers:
+    result.add(
+      BufferInfo(
+        filePath: buf.filePath,
+        isModified: buf.isModified,
+        isActive: buf == currentBuffer,
       )
-  else:
-    # No windows - use the main textBuffer
+    )
+  # Fallback if buffer list is empty
+  if result.len == 0:
     result.add(
       BufferInfo(
         filePath: e.textBuffer.filePath,
@@ -260,6 +259,8 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
   # Handle Escape to exit Command mode and return to previous mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:
     e.state.commandCompletionManager.cancelCompletion()
+    # Cancel substitute preview and restore original content
+    e.cancelSubstitutePreview()
     e.state.mode = e.state.previousMode
     e.state.commandText = ""
     e.state.commandCursor = 0
@@ -346,13 +347,19 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
     # Cancel completion if active (no selection case)
     e.state.commandCompletionManager.cancelCompletion()
 
+    # Cancel substitute preview before executing command
+    # The command handler will apply the substitute properly with undo support
+    if e.state.substitutePreview.isActive:
+      e.cancelSubstitutePreview()
+
     if e.state.commandText.len > 1: # Must have something after :
       # Use the command handler with active buffer
       let activeBuffer = e.activeBuffer()
       # Check if the buffer is shared across multiple windows
       let isShared = e.isBufferShared(activeBuffer)
-      let r =
-        e.handlerManager.handleCommandMode(activeBuffer, e.state.commandText, isShared)
+      let r = e.handlerManager.handleCommandMode(
+        activeBuffer, e.state.commandText, isShared, e.state.cursor.line
+      )
 
       if r.shouldQuit():
         return false # Signal app should quit
@@ -489,6 +496,12 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         of bsoHlSearch:
           e.state.search.hlsearch = val
           e.state.setStatusMessage("hlsearch = " & $val)
+        of bsoBuildOnSave:
+          e.config.buildOnSave.enable = val
+          e.state.setStatusMessage("buildonsave = " & $val)
+        of bsoShowGitInactive:
+          e.config.statusLine.showGitInactive = val
+          e.state.setStatusMessage("showgitinactive = " & $val)
         e.state.needsFullRedraw = true
 
       if r.shouldSetIntOption():
@@ -499,6 +512,12 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         of isoTabStop:
           e.config.standard.tabStop = val
           e.state.setStatusMessage("tabstop = " & $val)
+        of isoScrollMinDelay:
+          e.config.smoothScroll.baseDurationMs = val
+          e.state.setStatusMessage("scrollmindelay = " & $val)
+        of isoScrollMaxDelay:
+          e.config.smoothScroll.maxDurationMs = val
+          e.state.setStatusMessage("scrollmaxdelay = " & $val)
         e.state.needsFullRedraw = true
 
       if r.shouldClearSearchHighlight():
@@ -650,6 +669,10 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         # Handle switch to last buffer
         e.switchToLastBuffer()
 
+      if r.shouldBuffer():
+        # Handle switch to buffer by number or name
+        discard e.switchToBuffer(r.getBufferArg())
+
       if r.shouldBufferDelete():
         # Handle buffer delete (close window)
         let shouldQuit = e.closeWindow()
@@ -741,6 +764,17 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             else:
               e.state.setStatusMessage("Build completed: " & filePath)
               logInfo("handler", "Build completed: " & filePath)
+        # Return to Normal mode
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.Normal
+
+      if r.kind == hrSubstitute:
+        # Handle substitute result - display count
+        let count = r.hrSubstituteCount
+        e.state.setStatusMessage(
+          $count & " substitution" & (if count == 1: "" else: "s")
+        )
+        e.state.needsFullRedraw = true
         # Return to Normal mode
         e.state.previousMode = e.state.mode
         e.state.mode = EditorMode.Normal
@@ -865,6 +899,22 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       elif mgr.isActive():
         let prefix = extractCommandPrefix(e.state.commandText)
         mgr.updateFilter(prefix)
+      # Handle substitute command preview
+      if e.state.commandText.contains("s/"):
+        let pattern = extractSubstitutePattern(e.state.commandText)
+        let (replacement, hasReplacement) =
+          extractSubstituteReplacement(e.state.commandText)
+        let flags = extractSubstituteFlags(e.state.commandText)
+        let isGlobal = "g" in flags
+        if hasReplacement and pattern.len > 0:
+          if not e.state.substitutePreview.isActive:
+            e.startSubstitutePreview()
+          e.updateSubstitutePreview(pattern, replacement, isGlobal)
+        elif e.state.substitutePreview.isActive:
+          # No longer have replacement, cancel preview
+          e.cancelSubstitutePreview()
+        else:
+          e.state.needsFullRedraw = true
     return true
 
   # Handle Delete - delete character at cursor
@@ -881,6 +931,21 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       elif mgr.isActive():
         let prefix = extractCommandPrefix(e.state.commandText)
         mgr.updateFilter(prefix)
+      # Handle substitute command preview
+      if e.state.commandText.contains("s/"):
+        let pattern = extractSubstitutePattern(e.state.commandText)
+        let (replacement, hasReplacement) =
+          extractSubstituteReplacement(e.state.commandText)
+        let flags = extractSubstituteFlags(e.state.commandText)
+        let isGlobal = "g" in flags
+        if hasReplacement and pattern.len > 0:
+          if not e.state.substitutePreview.isActive:
+            e.startSubstitutePreview()
+          e.updateSubstitutePreview(pattern, replacement, isGlobal)
+        elif e.state.substitutePreview.isActive:
+          e.cancelSubstitutePreview()
+        else:
+          e.state.needsFullRedraw = true
     return true
 
   # Handle Home - move cursor to beginning
@@ -921,6 +986,22 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
     else:
       # Auto-trigger command completion on first character
       mgr.triggerCompletion(e.commandLineParser, e.state.commandText)
+    # Handle substitute command preview
+    if e.state.commandText.contains("s/"):
+      let pattern = extractSubstitutePattern(e.state.commandText)
+      let (replacement, hasReplacement) =
+        extractSubstituteReplacement(e.state.commandText)
+      let flags = extractSubstituteFlags(e.state.commandText)
+      let isGlobal = "g" in flags
+      if hasReplacement and pattern.len > 0:
+        # Start preview if not active
+        if not e.state.substitutePreview.isActive:
+          e.startSubstitutePreview()
+        # Update preview with current pattern and replacement
+        e.updateSubstitutePreview(pattern, replacement, isGlobal)
+      else:
+        # No replacement yet, just highlight pattern
+        e.state.needsFullRedraw = true
     return true
 
   # Ignore other special keys
@@ -1354,34 +1435,37 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if r.shouldBufferManagerSelectBuffer():
     # Select the buffer and switch to it
     let bufferIndex = r.getBufferManagerSelectBufferIndex()
-    if e.windowManager.windows.len > 0:
-      # Window manager mode - switch between windows
-      if bufferIndex >= 0 and bufferIndex < e.windowManager.windows.len:
-        e.saveActiveWindowState()
-        # Deactivate all windows
-        for window in e.windowManager.windows.mitems:
-          window.active = false
-        # Activate the selected window
-        e.windowManager.activeWindowIndex = bufferIndex
-        e.windowManager.windows[bufferIndex].active = true
-        e.syncActiveWindow()
-    # else: Single buffer mode - already active, nothing to do
+    if bufferIndex >= 0 and bufferIndex < e.buffers.len:
+      e.switchToBufferByIndex(bufferIndex)
     # Close buffer manager and return to Normal mode
     e.state.bufferManagerState = none(BufferManagerState)
     e.state.mode = EditorMode.Normal
     return true
 
   if r.shouldBufferManagerDeleteBuffer():
-    # Delete the buffer (close the window)
+    # Delete the buffer from the buffer list
     let bufferIndex = r.getBufferManagerDeleteBufferIndex()
-    if e.windowManager.windows.len > 1:
-      # Window manager mode with multiple windows - can delete
-      if bufferIndex >= 0 and bufferIndex < e.windowManager.windows.len:
-        e.windowManager.windows.delete(bufferIndex)
-        # Adjust active index if needed
-        if e.windowManager.activeWindowIndex >= e.windowManager.windows.len:
-          e.windowManager.activeWindowIndex = e.windowManager.windows.len - 1
-        e.windowManager.windows[e.windowManager.activeWindowIndex].active = true
+    if e.buffers.len > 1:
+      # Can only delete if there's more than one buffer
+      if bufferIndex >= 0 and bufferIndex < e.buffers.len:
+        let deletedBuffer = e.buffers[bufferIndex]
+        e.buffers.delete(bufferIndex)
+
+        # If deleted buffer was shown in any window, switch to another buffer
+        for window in e.windowManager.windows:
+          if window.buffer == deletedBuffer:
+            # Switch to the first available buffer
+            let newIdx = min(bufferIndex, e.buffers.len - 1)
+            window.buffer = e.buffers[newIdx]
+            window.cursor = BufferPosition(line: 0, column: 0)
+            window.viewport.topLine = 0
+            window.viewport.leftColumn = 0
+
+        # Update executor if current buffer was deleted
+        if e.activeBuffer() != e.executer.buffer:
+          e.executer.buffer = e.activeBuffer()
+          e.executer.motionController.executor.buffer = e.activeBuffer()
+
         # Update buffer manager entries
         if e.state.bufferManagerState.isSome:
           e.state.bufferManagerState.get.updateEntries(e.getBufferInfos())

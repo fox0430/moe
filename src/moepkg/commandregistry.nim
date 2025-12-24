@@ -2276,7 +2276,8 @@ proc handleTextObjectAround(ctx: CommandContext): Result[(), string] =
     # Move cursor one position to the right if not at end of line
     if ctx.state.cursor.line < ctx.buffer.len:
       let currentLine = ctx.buffer.getLine(ctx.state.cursor.line)
-      if ctx.state.cursor.column < currentLine.len:
+      # Use charLen for proper multi-byte character support
+      if ctx.state.cursor.column < currentLine.charLen:
         ctx.state.cursor.column += 1
     # Enter Insert mode
     ctx.state.mode = EditorMode.Insert
@@ -3633,6 +3634,10 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     registry, "textobject.word", "Word Text Object", "Word text object (iw/aw)", toWord
   )
   registerTextObjectKind(
+    registry, "textobject.wideword", "WORD Text Object",
+    "WORD text object - space-separated (iW/aW)", toWideWord,
+  )
+  registerTextObjectKind(
     registry, "textobject.quote.double", "Double Quote Text Object",
     "Double-quoted string (i\"/a\")", toQuotedDouble,
   )
@@ -3654,6 +3659,10 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
   )
   registerTextObjectKind(
     registry, "textobject.brace", "Brace Text Object", "Curly braces (i{/a{)", toBrace
+  )
+  registerTextObjectKind(
+    registry, "textobject.angle", "Angle Bracket Text Object", "Angle brackets (i</a<)",
+    toAngleBracket,
   )
 
   # Helper proc for executing search and updating cursor/viewport

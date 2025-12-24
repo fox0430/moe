@@ -240,6 +240,56 @@ proc loadAutoBackupConfig(table: TomlTableRef, config: var AutoBackupConfig) =
     for item in table["dirToExclude"].getElems():
       config.dirToExclude.add(item.getStr())
 
+proc loadSmoothScrollConfig(table: TomlTableRef, config: var SmoothScrollConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+  if table.hasKey("minDelay"):
+    # Map minDelay (ms) to baseDurationMs
+    config.baseDurationMs = table["minDelay"].getInt()
+  if table.hasKey("maxDelay"):
+    # Map maxDelay (ms) to maxDurationMs
+    config.maxDurationMs = table["maxDelay"].getInt()
+
+proc loadHighlightConfig(table: TomlTableRef, config: var HighlightConfig) =
+  if table.hasKey("currentLine"):
+    config.currentLine = table["currentLine"].getBool()
+  if table.hasKey("reservedWord"):
+    config.reservedWord = @[]
+    for item in table["reservedWord"].getElems():
+      config.reservedWord.add(item.getStr())
+  if table.hasKey("replaceText"):
+    config.replaceText = table["replaceText"].getBool()
+  if table.hasKey("pairOfParen"):
+    config.pairOfParen = table["pairOfParen"].getBool()
+  if table.hasKey("fullWidthSpace"):
+    config.fullWidthSpace = table["fullWidthSpace"].getBool()
+  if table.hasKey("trailingSpaces"):
+    config.trailingSpaces = table["trailingSpaces"].getBool()
+  if table.hasKey("currentWord"):
+    config.currentWord = table["currentWord"].getBool()
+
+proc loadFilerConfig(table: TomlTableRef, config: var FilerConfig) =
+  if table.hasKey("showIcons"):
+    config.showIcons = table["showIcons"].getBool()
+
+proc loadAutocompleteConfig(table: TomlTableRef, config: var AutocompleteConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+  if table.hasKey("windowBorder"):
+    config.windowBorder = table["windowBorder"].getBool()
+
+proc loadPersistConfig(table: TomlTableRef, config: var PersistConfig) =
+  if table.hasKey("exCommand"):
+    config.exCommand = table["exCommand"].getBool()
+  if table.hasKey("exCommandHistoryLimit"):
+    config.exCommandHistoryLimit = table["exCommandHistoryLimit"].getInt()
+  if table.hasKey("search"):
+    config.search = table["search"].getBool()
+  if table.hasKey("searchHistoryLimit"):
+    config.searchHistoryLimit = table["searchHistoryLimit"].getInt()
+  if table.hasKey("cursorPosition"):
+    config.cursorPosition = table["cursorPosition"].getBool()
+
 proc loadConfigFromToml*(path: string): EditorConfig =
   ## Load configuration from a TOML file
   ## Returns a new EditorConfig with values loaded from the file
@@ -284,6 +334,21 @@ proc loadConfigFromToml*(path: string): EditorConfig =
 
   if toml.hasKey("AutoBackup"):
     loadAutoBackupConfig(toml["AutoBackup"].getTable(), result.autoBackup)
+
+  if toml.hasKey("SmoothScroll"):
+    loadSmoothScrollConfig(toml["SmoothScroll"].getTable(), result.smoothScroll)
+
+  if toml.hasKey("Highlight"):
+    loadHighlightConfig(toml["Highlight"].getTable(), result.highlight)
+
+  if toml.hasKey("Filer"):
+    loadFilerConfig(toml["Filer"].getTable(), result.filer)
+
+  if toml.hasKey("Autocomplete"):
+    loadAutocompleteConfig(toml["Autocomplete"].getTable(), result.autocomplete)
+
+  if toml.hasKey("Persist"):
+    loadPersistConfig(toml["Persist"].getTable(), result.persist)
 
 proc getConfigPath*(): string =
   ## Get the path to the configuration file

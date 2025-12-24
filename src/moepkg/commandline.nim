@@ -49,6 +49,7 @@ type
     claBufferFirst # :bfirst, :bf (first buffer)
     claBufferLast # :blast, :bl (last buffer)
     claBufferDelete # :bd, :bdelete (delete buffer)
+    claBuffer # :b (switch to buffer by number or name)
     claStripWhitespace # :stripwhitespace, :stripws (remove trailing whitespace)
     claFiler # :Filer (open file explorer)
     claLogViewer # :log (open log viewer)
@@ -61,6 +62,17 @@ type
     claBackground # :bg (pause editor and show terminal)
     claJumpList # :ju, :jump (show jump list)
     claBuild # :build (build current buffer)
+    claDebug # :debug (open debug mode)
+    claConfig # :conf (open configuration mode)
+    claPutConfigFile # :putConfigFile (write sample config file)
+    claMan # :man (show manual page)
+    claTheme # :theme (change color theme)
+    claLspLog # :lspLog (open LSP log viewer)
+    claLspFormat # :lspFormat (LSP document formatting)
+    claLspRestart # :lspRestart (restart LSP server)
+    claLspForceRestart # :lspForceRestart (force restart LSP server)
+    claLspFold # :lspFold (LSP folding range)
+    claLspExecuteCommand # :lspExeCommand (LSP execute command)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -100,6 +112,10 @@ type
       pattern*: string
       replacement*: string
       substituteFlags*: string
+      hasRange*: bool # Whether a line range is specified
+      isGlobal*: bool # Whether % prefix (all lines)
+      startLine*: int # Start line (1-based, 0 means current line)
+      endLine*: int # End line (1-based, 0 means current line)
     of claHelp:
       topic*: Option[string]
     of claVSplit:
@@ -114,6 +130,8 @@ type
       discard
     of claBufferDelete:
       forceBufferDelete*: bool # true for :bd!
+    of claBuffer:
+      bufferArg*: string # Buffer number or name
     of claStripWhitespace:
       discard
     of claFiler:
@@ -138,8 +156,244 @@ type
       discard
     of claBuild:
       discard
+    of claDebug:
+      discard
+    of claConfig:
+      discard
+    of claPutConfigFile:
+      discard
+    of claMan:
+      manPage*: string # Manual page name
+    of claTheme:
+      themeName*: string # Theme name
+    of claLspLog:
+      discard
+    of claLspFormat:
+      discard
+    of claLspRestart:
+      discard
+    of claLspForceRestart:
+      discard
+    of claLspFold:
+      discard
+    of claLspExecuteCommand:
+      lspCommand*: string # LSP command to execute
     of claUnknown:
       errorMessage*: string
+
+# Substitute command utilities
+
+proc processEscapeSequences*(s: string): string =
+  ## Process escape sequences in a string
+  ## Converts \n to newline, \t to tab, \\ to backslash, \/ to slash
+  var i = 0
+  while i < s.len:
+    if s[i] == '\\' and i + 1 < s.len:
+      case s[i + 1]
+      of 'n':
+        result.add('\n')
+        i += 2
+      of 't':
+        result.add('\t')
+        i += 2
+      of '\\':
+        result.add('\\')
+        i += 2
+      of '/':
+        result.add('/')
+        i += 2
+      else:
+        result.add(s[i])
+        i += 1
+    else:
+      result.add(s[i])
+      i += 1
+
+type SubstituteParseResult* = object ## Result of parsing a substitute command
+  isValid*: bool # Whether this is a valid substitute command
+  isGlobal*: bool # Whether the % prefix is present (all lines)
+  hasRange*: bool # Whether a line range is specified (e.g., 1,10)
+  startLine*: int # Start line (1-based, 0 means current line)
+  endLine*: int # End line (1-based, 0 means current line)
+  pattern*: string # Search pattern
+  replacement*: string # Replacement text
+  flags*: string # Flags (e.g., "g" for global within line)
+  hasReplacement*: bool # Whether we've reached the replacement section
+
+proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
+  ## Parse a substitute command and extract pattern, replacement, and flags
+  ## Supports formats:
+  ##   :s/pattern/replacement/flags - current line only
+  ##   :%s/pattern/replacement/flags - all lines
+  ##   :1,10s/pattern/replacement/flags - lines 1 to 10
+  ##   :.,10s/pattern/replacement/flags - current line to line 10
+  ##   :1,.s/pattern/replacement/flags - line 1 to current line
+  ## Handles escaped slashes properly (including \\/ which is backslash + end delimiter)
+  result = SubstituteParseResult(isValid: false)
+
+  if commandText.len < 2:
+    return
+
+  # Remove leading ":"
+  let cmd =
+    if commandText[0] == ':':
+      commandText[1 ..^ 1]
+    else:
+      commandText
+
+  # Check for substitute command patterns
+  var startIdx = 0
+
+  # Parse range prefix if present
+  # Formats: %, N,M, .,M, N,., .,.
+  if cmd.startsWith("%s/"):
+    startIdx = 3
+    result.isGlobal = true
+  elif cmd.startsWith("s/"):
+    startIdx = 2
+    result.isGlobal = false
+  else:
+    # Try to parse range: number/dot, comma, number/dot, then s/
+    var rangeEnd = 0
+    var foundComma = false
+    var startStr = ""
+    var endStr = ""
+
+    # Parse first part of range (before comma)
+    while rangeEnd < cmd.len:
+      let c = cmd[rangeEnd]
+      if c == ',':
+        foundComma = true
+        rangeEnd.inc
+        break
+      elif c == 's' and rangeEnd + 1 < cmd.len and cmd[rangeEnd + 1] == '/':
+        # Single line range (e.g., "5s/...")
+        break
+      elif c in {'0' .. '9', '.'}:
+        startStr.add(c)
+        rangeEnd.inc
+      else:
+        return # Invalid character in range
+
+    if not foundComma and startStr.len > 0 and rangeEnd < cmd.len and
+        cmd[rangeEnd] == 's' and rangeEnd + 1 < cmd.len and cmd[rangeEnd + 1] == '/':
+      # Single line: "5s/..."
+      result.hasRange = true
+      if startStr == ".":
+        result.startLine = 0 # 0 means current line
+        result.endLine = 0
+      else:
+        try:
+          let lineNum = parseInt(startStr)
+          result.startLine = lineNum
+          result.endLine = lineNum
+        except ValueError:
+          return
+      startIdx = rangeEnd + 2
+    elif foundComma:
+      # Parse second part of range (after comma)
+      while rangeEnd < cmd.len:
+        let c = cmd[rangeEnd]
+        if c == 's' and rangeEnd + 1 < cmd.len and cmd[rangeEnd + 1] == '/':
+          break
+        elif c in {'0' .. '9', '.'}:
+          endStr.add(c)
+          rangeEnd.inc
+        else:
+          return # Invalid character in range
+
+      if rangeEnd < cmd.len and cmd[rangeEnd] == 's' and rangeEnd + 1 < cmd.len and
+          cmd[rangeEnd + 1] == '/':
+        result.hasRange = true
+        # Parse start line
+        if startStr == "." or startStr.len == 0:
+          result.startLine = 0 # 0 means current line
+        else:
+          try:
+            result.startLine = parseInt(startStr)
+          except ValueError:
+            return
+        # Parse end line
+        if endStr == "." or endStr.len == 0:
+          result.endLine = 0 # 0 means current line
+        else:
+          try:
+            result.endLine = parseInt(endStr)
+          except ValueError:
+            return
+        startIdx = rangeEnd + 2
+      else:
+        return # No s/ found after range
+    else:
+      return # Not a valid substitute command
+
+  result.isValid = true
+
+  # Parse using state machine to properly handle escapes
+  type ParseState = enum
+    psPattern
+    psReplacement
+    psFlags
+
+  var state = psPattern
+  var escaped = false
+  var i = startIdx
+
+  while i < cmd.len:
+    let c = cmd[i]
+
+    if escaped:
+      # Previous char was backslash - add this char literally (except for special sequences)
+      case state
+      of psPattern:
+        result.pattern.add('\\')
+        result.pattern.add(c)
+      of psReplacement:
+        result.replacement.add('\\')
+        result.replacement.add(c)
+      of psFlags:
+        result.flags.add(c)
+      escaped = false
+      i += 1
+      continue
+
+    if c == '\\':
+      escaped = true
+      i += 1
+      continue
+
+    if c == '/':
+      # Unescaped slash - delimiter
+      case state
+      of psPattern:
+        state = psReplacement
+        result.hasReplacement = true
+      of psReplacement:
+        state = psFlags
+      of psFlags:
+        discard # Ignore extra slashes in flags
+      i += 1
+      continue
+
+    # Regular character
+    case state
+    of psPattern:
+      result.pattern.add(c)
+    of psReplacement:
+      result.replacement.add(c)
+    of psFlags:
+      result.flags.add(c)
+    i += 1
+
+  # Handle trailing backslash
+  if escaped:
+    case state
+    of psPattern:
+      result.pattern.add('\\')
+    of psReplacement:
+      result.replacement.add('\\')
+    of psFlags:
+      result.flags.add('\\')
 
 proc newCommandLineParser*(): CommandLineParser =
   ## Create a new command line parser.
@@ -190,6 +444,27 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
     let shellCmd = cleanInput[1 ..^ 1].strip()
     result.args = @[shellCmd]
     return
+
+  # Check if it's a substitute command (s/..., %s/..., or N,Ms/...)
+  if cleanInput.startsWith("%s/") or cleanInput.startsWith("s/"):
+    result.action = claSubstitute
+    # Store the full substitute command for parsing in execute()
+    result.args = @[cleanInput]
+    return
+
+  # Check for range-prefixed substitute command (e.g., 1,10s/..., .s/..., .,10s/...)
+  if cleanInput.len > 0 and cleanInput[0] in {'0' .. '9', '.'}:
+    # Look for "s/" pattern after range
+    var i = 0
+    while i < cleanInput.len:
+      if cleanInput[i] == 's' and i + 1 < cleanInput.len and cleanInput[i + 1] == '/':
+        result.action = claSubstitute
+        result.args = @[cleanInput]
+        return
+      elif cleanInput[i] in {'0' .. '9', '.', ','}:
+        i.inc
+      else:
+        break
 
   # Split into command and arguments
   let parts = cleanInput.split(WhiteSpace)
@@ -278,11 +553,31 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     else:
       return CommandLineResult(kind: claUnknown, errorMessage: "No option specified")
   of claSubstitute:
-    # Basic substitute command parsing
-    # TODO: Implement full regex substitute parsing
-    return CommandLineResult(
-      kind: claSubstitute, pattern: "", replacement: "", substituteFlags: ""
-    )
+    # Parse substitute command using parseSubstituteCommand
+    if cmd.args.len > 0:
+      let parsed = parseSubstituteCommand(":" & cmd.args[0])
+      if not parsed.isValid:
+        return CommandLineResult(
+          kind: claUnknown, errorMessage: "Invalid substitute command format"
+        )
+      if parsed.pattern.len == 0:
+        return CommandLineResult(
+          kind: claUnknown, errorMessage: "Pattern required for substitute"
+        )
+      return CommandLineResult(
+        kind: claSubstitute,
+        pattern: parsed.pattern,
+        replacement: parsed.replacement,
+        substituteFlags: parsed.flags,
+        hasRange: parsed.hasRange,
+        isGlobal: parsed.isGlobal,
+        startLine: parsed.startLine,
+        endLine: parsed.endLine,
+      )
+    else:
+      return CommandLineResult(
+        kind: claUnknown, errorMessage: "Invalid substitute command format"
+      )
   of claHelp:
     return CommandLineResult(
       kind: claHelp,
@@ -325,6 +620,12 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
   of claBufferDelete:
     return
       CommandLineResult(kind: claBufferDelete, forceBufferDelete: "force" in cmd.flags)
+  of claBuffer:
+    if cmd.args.len > 0:
+      return CommandLineResult(kind: claBuffer, bufferArg: cmd.args[0])
+    else:
+      return
+        CommandLineResult(kind: claUnknown, errorMessage: "E86: Buffer name required")
   of claStripWhitespace:
     return CommandLineResult(kind: claStripWhitespace)
   of claFiler:
@@ -360,6 +661,38 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claJumpList)
   of claBuild:
     return CommandLineResult(kind: claBuild)
+  of claDebug:
+    return CommandLineResult(kind: claDebug)
+  of claConfig:
+    return CommandLineResult(kind: claConfig)
+  of claPutConfigFile:
+    return CommandLineResult(kind: claPutConfigFile)
+  of claMan:
+    if cmd.args.len > 0:
+      return CommandLineResult(kind: claMan, manPage: cmd.args[0])
+    else:
+      return
+        CommandLineResult(kind: claUnknown, errorMessage: "Manual page name required")
+  of claTheme:
+    if cmd.args.len > 0:
+      return CommandLineResult(kind: claTheme, themeName: cmd.args[0])
+    else:
+      return CommandLineResult(kind: claUnknown, errorMessage: "Theme name required")
+  of claLspLog:
+    return CommandLineResult(kind: claLspLog)
+  of claLspFormat:
+    return CommandLineResult(kind: claLspFormat)
+  of claLspRestart:
+    return CommandLineResult(kind: claLspRestart)
+  of claLspForceRestart:
+    return CommandLineResult(kind: claLspForceRestart)
+  of claLspFold:
+    return CommandLineResult(kind: claLspFold)
+  of claLspExecuteCommand:
+    if cmd.args.len > 0:
+      return CommandLineResult(kind: claLspExecuteCommand, lspCommand: cmd.args[0])
+    else:
+      return CommandLineResult(kind: claUnknown, errorMessage: "LSP command required")
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

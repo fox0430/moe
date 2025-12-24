@@ -22,9 +22,9 @@ autoCloseParen = true                  # ✅ Auto-close parentheses (IMPLEMENTED
 
 autoIndent = true                      # ✅ Auto-indent (IMPLEMENTED)
 
-ignorecase = true                      # 📝 Search case insensitive (not yet applied)
+ignorecase = true                      # ✅ Search case insensitive (IMPLEMENTED)
 
-smartcase = true                       # 📝 Smart case search (not yet applied)
+smartcase = true                       # ✅ Smart case search (IMPLEMENTED)
 
 disableChangeCursor = false            # 📝 Cursor shape changes (not yet applied)
 
@@ -36,13 +36,13 @@ insertModeCursor = "blinkIbeam"        # 📝 Insert mode cursor (not yet applie
 
 liveReloadOfConf = false               # 📝 Live config reload (not yet applied)
 
-incrementalSearch = true               # 📝 Incremental search (not yet applied)
+incrementalSearch = true               # ✅ Incremental search (IMPLEMENTED)
 
 popupWindowInExmode = true             # 📝 Ex mode popup (not yet applied)
 
 autoDeleteParen = true                 # ✅ Auto-delete matching parens (IMPLEMENTED) - Set to false to disable
 
-liveReloadOfFile = false               # 📝 Live file reload (not yet applied)
+liveReloadOfFile = false               # ✅ Auto-reload when file changed externally (IMPLEMENTED)
 
 colorMode = "24bit"                    # 📝 Color mode: "8bit", "24bit", "none" (not yet applied)
 
@@ -90,19 +90,19 @@ setupText = "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} 
 
 [Highlight]
 
-currentLine = true                     # 📝 Highlight current line (not yet applied)
+currentLine = true                     # 📝 Highlight current line (loaded, not yet applied)
 
-reservedWord = ["TODO", "WIP", "NOTE"] # 📝 Highlight reserved words (not implemented)
+reservedWord = ["TODO", "WIP", "NOTE"] # 📝 Highlight reserved words (loaded, not yet applied)
 
-replaceText = true                     # 📝 Highlight replace text (not implemented)
+replaceText = true                     # 📝 Highlight replace text (loaded, not yet applied)
 
-pairOfParen = true                     # 📝 Highlight matching parens (not yet applied)
+pairOfParen = true                     # 📝 Highlight matching parens (loaded, not yet applied)
 
-fullWidthSpace = true                  # 📝 Highlight full-width spaces (not implemented)
+fullWidthSpace = true                  # ✅ Highlight full-width spaces (IMPLEMENTED)
 
-trailingSpaces = true                  # 📝 Highlight trailing spaces (not implemented)
+trailingSpaces = true                  # ✅ Highlight trailing spaces (IMPLEMENTED)
 
-currentWord = true                     # 📝 Highlight current word (not implemented)
+currentWord = true                     # 📝 Highlight current word (loaded, not yet applied)
 
 [AutoBackup]
 
@@ -188,13 +188,13 @@ lspLogNotify = true
 
 [Filer]
 
-showIcons = true                       # 📝 File browser icons (not yet applied)
+showIcons = true                       # 📝 File browser icons (loaded, not yet applied)
 
 [Autocomplete]
 
-enable = true                          # 📝 Autocomplete (not yet applied)
+enable = true                          # 📝 Autocomplete (loaded, not yet applied)
 
-windowBorder = true                    # 📝 Autocomplete window border (not yet applied)
+windowBorder = true                    # ✅ Autocomplete window border (IMPLEMENTED)
 
 [AutoSave]
 
@@ -204,15 +204,15 @@ interval = 5                           # ✅ Auto-save interval in minutes (IMPL
 
 [Persist]
 
-exCommand = true                       # 📝 Persist command history (not implemented)
+exCommand = true                       # 📝 Persist command history (loaded, not yet applied)
 
-exCommandHistoryLimit = 1000
+exCommandHistoryLimit = 1000           # 📝 History limit (loaded, not yet applied)
 
-search = true
+search = true                          # 📝 Persist search history (loaded, not yet applied)
 
-searchHistoryLimit = 1000
+searchHistoryLimit = 1000              # 📝 Search history limit (loaded, not yet applied)
 
-cursorPosition = true
+cursorPosition = true                  # 📝 Persist cursor position (loaded, not yet applied)
 
 [Git]
 
@@ -226,11 +226,11 @@ enable = false                         # ✅ Enable syntax checker in sidebar (I
 
 [SmoothScroll]
 
-enable = true                          # 📝 Smooth scrolling (not yet applied)
+enable = true                          # ✅ Smooth scrolling (IMPLEMENTED)
 
-minDelay = 5                           # 📝 Min delay in ms (not yet applied)
+minDelay = 5                           # ✅ Min delay in ms (IMPLEMENTED) - maps to baseDurationMs
 
-maxDelay = 20                          # 📝 Max delay in ms (not yet applied)
+maxDelay = 20                          # ✅ Max delay in ms (IMPLEMENTED) - maps to maxDurationMs
 
 [StartUp.FileOpen]
 autoSplit = true                       # 📝 Auto-split on startup (not implemented)

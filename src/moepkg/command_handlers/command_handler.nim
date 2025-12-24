@@ -57,10 +57,14 @@ type
     bsoSmartCase # smart case in search
     bsoIncSearch # incremental search
     bsoHlSearch # highlight search results
+    bsoBuildOnSave # build on save
+    bsoShowGitInactive # show git branch in inactive window
 
   IntSettingOption* = enum
     ## Integer setting options that can be set via :set command
     isoTabStop # tab stop width
+    isoScrollMinDelay # smooth scroll min delay
+    isoScrollMaxDelay # smooth scroll max delay
 
   CommandModeResultKind* = enum
     cmrQuit # Application should quit
@@ -82,6 +86,7 @@ type
     cmrBufferPrev # Switch to previous buffer
     cmrBufferFirst # Switch to first buffer
     cmrBufferLast # Switch to last buffer
+    cmrBuffer # Switch to buffer by number or name
     cmrBufferDelete # Delete current buffer
     cmrStripWhitespace # Remove trailing whitespace
     cmrFiler # Open file explorer
@@ -96,6 +101,18 @@ type
     cmrBackground # Pause editor and show terminal (:bg)
     cmrJumpList # Show jump list (:ju, :jump)
     cmrBuild # Build current buffer (:build)
+    cmrDebug # Open debug mode (:debug)
+    cmrConfig # Open configuration mode (:conf)
+    cmrPutConfigFile # Write sample config file (:putConfigFile)
+    cmrMan # Show manual page (:man)
+    cmrTheme # Change color theme (:theme)
+    cmrLspLog # Open LSP log viewer (:lspLog)
+    cmrLspFormat # LSP document formatting (:lspFormat)
+    cmrLspRestart # Restart LSP server (:lspRestart)
+    cmrLspForceRestart # Force restart LSP server (:lspForceRestart)
+    cmrLspFold # LSP folding range (:lspFold)
+    cmrLspExecuteCommand # LSP execute command (:lspExeCommand)
+    cmrSubstitute # Search and replace (:s)
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -140,6 +157,8 @@ type
       forceSaveAndQuit*: bool
     of cmrBufferNext, cmrBufferPrev, cmrBufferFirst, cmrBufferLast:
       discard
+    of cmrBuffer:
+      bufferArg*: string # Buffer number or name
     of cmrBufferDelete:
       forceBufferDelete*: bool
     of cmrStripWhitespace:
@@ -168,6 +187,33 @@ type
       discard
     of cmrBuild:
       discard
+    of cmrDebug:
+      discard
+    of cmrConfig:
+      discard
+    of cmrPutConfigFile:
+      discard
+    of cmrMan:
+      manPage*: string
+    of cmrTheme:
+      themeName*: string
+    of cmrLspLog:
+      discard
+    of cmrLspFormat:
+      discard
+    of cmrLspRestart:
+      discard
+    of cmrLspForceRestart:
+      discard
+    of cmrLspFold:
+      discard
+    of cmrLspExecuteCommand:
+      lspCommand*: string
+    of cmrSubstitute:
+      substitutePattern*: string
+      substituteReplacement*: string
+      substituteGlobal*: bool # true for /g flag
+      substituteCount*: int # number of replacements made
     of cmrError:
       errorMessage*: string
 
@@ -467,6 +513,24 @@ proc executeSet*(
     return CommandModeResult(
       kind: cmrSetBoolOption, boolOption: bsoHlSearch, boolValue: false
     )
+  # Build on save
+  of "buildonsave", "bos":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoBuildOnSave, boolValue: true
+    )
+  of "nobuildonsave", "nobos":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoBuildOnSave, boolValue: false
+    )
+  # Show git in inactive window
+  of "showgitinactive", "sgi":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoShowGitInactive, boolValue: true
+    )
+  of "noshowgitinactive", "nosgi":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoShowGitInactive, boolValue: false
+    )
   # Tab stop (integer option)
   of "tabstop", "ts":
     if value.isSome:
@@ -485,6 +549,50 @@ proc executeSet*(
     else:
       return CommandModeResult(
         kind: cmrError, errorMessage: "tabstop requires a value (e.g., tabstop=4)"
+      )
+  # Scroll min delay (integer option)
+  of "scrollmindelay", "smd":
+    if value.isSome:
+      try:
+        let intVal = parseInt(value.get)
+        if intVal >= 0:
+          return CommandModeResult(
+            kind: cmrSetIntOption, intOption: isoScrollMinDelay, intValue: intVal
+          )
+        else:
+          return CommandModeResult(
+            kind: cmrError, errorMessage: "scrollmindelay must be non-negative"
+          )
+      except ValueError:
+        return CommandModeResult(
+          kind: cmrError, errorMessage: "Invalid value for scrollmindelay"
+        )
+    else:
+      return CommandModeResult(
+        kind: cmrError,
+        errorMessage: "scrollmindelay requires a value (e.g., scrollmindelay=10)",
+      )
+  # Scroll max delay (integer option)
+  of "scrollmaxdelay", "sxd":
+    if value.isSome:
+      try:
+        let intVal = parseInt(value.get)
+        if intVal >= 0:
+          return CommandModeResult(
+            kind: cmrSetIntOption, intOption: isoScrollMaxDelay, intValue: intVal
+          )
+        else:
+          return CommandModeResult(
+            kind: cmrError, errorMessage: "scrollmaxdelay must be non-negative"
+          )
+      except ValueError:
+        return CommandModeResult(
+          kind: cmrError, errorMessage: "Invalid value for scrollmaxdelay"
+        )
+    else:
+      return CommandModeResult(
+        kind: cmrError,
+        errorMessage: "scrollmaxdelay requires a value (e.g., scrollmaxdelay=100)",
       )
   else:
     return CommandModeResult(kind: cmrError, errorMessage: "Unknown option: " & option)
@@ -544,6 +652,10 @@ proc executeBufferLast*(handler: CommandModeHandler): CommandModeResult =
   ## Execute blast command (:bl, :blast) - switch to last buffer
   return CommandModeResult(kind: cmrBufferLast)
 
+proc executeBuffer*(handler: CommandModeHandler, arg: string): CommandModeResult =
+  ## Execute buffer command (:b N or :b name) - switch to buffer by number or name
+  return CommandModeResult(kind: cmrBuffer, bufferArg: arg)
+
 proc executeBufferDelete*(
     handler: CommandModeHandler, buffer: TextBuffer, force: bool
 ): CommandModeResult =
@@ -572,14 +684,133 @@ proc executeQuickRun*(handler: CommandModeHandler): CommandModeResult =
   ## Execute quickrun command (:run, :quickrun, :qr)
   return CommandModeResult(kind: cmrQuickRun)
 
+proc executeSubstitute*(
+    handler: CommandModeHandler,
+    buffer: TextBuffer,
+    pattern: string,
+    replacement: string,
+    flags: string,
+    hasRange: bool = false,
+    isGlobalRange: bool = false,
+    startLine: int = 0,
+    endLine: int = 0,
+    currentLine: int = 0,
+): CommandModeResult =
+  ## Execute substitute command (:s, :%s/pattern/replacement/flags)
+  ## flags: "g" for global replacement (all occurrences), otherwise first only
+  ## hasRange: true if a line range was specified (e.g., :1,10s/...)
+  ## isGlobalRange: true if % prefix was used (all lines)
+  ## startLine/endLine: line range (1-based, 0 means current line)
+  ## currentLine: current cursor line (0-based)
+  if pattern.len == 0:
+    return CommandModeResult(kind: cmrError, errorMessage: "Pattern required")
+
+  let isGlobal = "g" in flags
+  var replaceCount = 0
+
+  # Process escape sequences in replacement string using common utility
+  let processedReplacement = processEscapeSequences(replacement)
+
+  # Determine line range
+  var rangeStart, rangeEnd: int
+  if isGlobalRange:
+    # % means all lines
+    rangeStart = 0
+    rangeEnd = buffer.len - 1
+  elif hasRange:
+    # Explicit range specified
+    # Convert 1-based to 0-based, 0 means current line
+    rangeStart =
+      if startLine == 0:
+        currentLine
+      else:
+        startLine - 1
+    rangeEnd =
+      if endLine == 0:
+        currentLine
+      else:
+        endLine - 1
+    # Validate range
+    if rangeStart < 0:
+      rangeStart = 0
+    if rangeEnd >= buffer.len:
+      rangeEnd = buffer.len - 1
+    if rangeStart > rangeEnd:
+      return CommandModeResult(
+        kind: cmrError, errorMessage: "Invalid range: start line > end line"
+      )
+  else:
+    # No range - current line only
+    rangeStart = currentLine
+    rangeEnd = currentLine
+
+  # Begin transaction for all changes
+  discard buffer.beginTransaction("substitute")
+
+  # Search and replace in specified range
+  for lineIdx in rangeStart .. rangeEnd:
+    var line = buffer.getLine(lineIdx)
+    var modified = false
+    var newLine = ""
+    var searchPos = 0
+
+    while searchPos <= line.len:
+      let idx = line.find(pattern, searchPos)
+      if idx < 0:
+        # No more matches - add rest of line
+        newLine.add(line[searchPos ..^ 1])
+        break
+
+      # Add text before match
+      if idx > searchPos:
+        newLine.add(line[searchPos ..< idx])
+
+      # Add replacement
+      newLine.add(processedReplacement)
+      replaceCount.inc
+      modified = true
+
+      # Move past the match
+      searchPos = idx + pattern.len
+
+      # If not global, only replace first occurrence per line
+      if not isGlobal:
+        newLine.add(line[searchPos ..^ 1])
+        break
+
+    # Update the line if modified
+    if modified:
+      buffer.gapBuffer.replaceLine(lineIdx, newLine)
+
+  # Mark highlight as needing update since we bypassed normal change tracking
+  if replaceCount > 0:
+    buffer.highlightNeedsUpdate = true
+    buffer.lastChangedLines = (0, buffer.len - 1) # Mark all lines as changed
+
+  discard buffer.commitTransaction()
+
+  if replaceCount == 0:
+    return
+      CommandModeResult(kind: cmrError, errorMessage: "Pattern not found: " & pattern)
+
+  return CommandModeResult(
+    kind: cmrSubstitute,
+    substitutePattern: pattern,
+    substituteReplacement: processedReplacement,
+    substituteGlobal: isGlobal,
+    substituteCount: replaceCount,
+  )
+
 proc handleCommandModeInput*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
     commandText: string,
     isSharedBuffer: bool = false,
+    currentLine: int = 0,
 ): CommandModeResult =
   ## Main entry point for handling Command mode input
   ## isSharedBuffer: true if the buffer is shared across multiple windows
+  ## currentLine: current cursor line (0-based), used for range substitution with '.'
 
   if commandText.len <= 1: # Just ":"
     return CommandModeResult(kind: cmrModeSwitch, targetMode: EditorMode.Normal)
@@ -631,6 +862,8 @@ proc handleCommandModeInput*(
     return handler.executeBufferLast()
   of claBufferDelete:
     return handler.executeBufferDelete(buffer, cmdResult.forceBufferDelete)
+  of claBuffer:
+    return handler.executeBuffer(cmdResult.bufferArg)
   of claStripWhitespace:
     return handler.executeStripWhitespace(buffer)
   of claFiler:
@@ -656,9 +889,35 @@ proc handleCommandModeInput*(
     return CommandModeResult(kind: cmrJumpList)
   of claBuild:
     return CommandModeResult(kind: cmrBuild)
+  of claDebug:
+    return CommandModeResult(kind: cmrDebug)
+  of claConfig:
+    return CommandModeResult(kind: cmrConfig)
+  of claPutConfigFile:
+    return CommandModeResult(kind: cmrPutConfigFile)
+  of claMan:
+    return CommandModeResult(kind: cmrMan, manPage: cmdResult.manPage)
+  of claTheme:
+    return CommandModeResult(kind: cmrTheme, themeName: cmdResult.themeName)
+  of claLspLog:
+    return CommandModeResult(kind: cmrLspLog)
+  of claLspFormat:
+    return CommandModeResult(kind: cmrLspFormat)
+  of claLspRestart:
+    return CommandModeResult(kind: cmrLspRestart)
+  of claLspForceRestart:
+    return CommandModeResult(kind: cmrLspForceRestart)
+  of claLspFold:
+    return CommandModeResult(kind: cmrLspFold)
+  of claLspExecuteCommand:
+    return
+      CommandModeResult(kind: cmrLspExecuteCommand, lspCommand: cmdResult.lspCommand)
   of claSubstitute:
-    # TODO: Implement search and replace
-    return CommandModeResult(kind: cmrMessage, message: "Substitute not implemented")
+    return handler.executeSubstitute(
+      buffer, cmdResult.pattern, cmdResult.replacement, cmdResult.substituteFlags,
+      cmdResult.hasRange, cmdResult.isGlobal, cmdResult.startLine, cmdResult.endLine,
+      currentLine,
+    )
   of claUnknown:
     return CommandModeResult(kind: cmrError, errorMessage: cmdResult.errorMessage)
 

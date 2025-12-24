@@ -1758,8 +1758,10 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
 
   # Normal mode to Insert mode transitions
-  registry.bindKey(EditorMode.Normal, "i", "switch-to-insert") # Enter insert mode
-  registry.bindKey(EditorMode.Normal, "a", "append") # Enter insert mode after cursor
+  # Note: 'i' and 'a' are bound to textobject-inner and textobject-around above
+  # Those handlers check for pending operator and either:
+  # - Set text object modifier (when operator is pending, e.g., after 'd')
+  # - Enter Insert/Append mode (when no operator is pending)
   registry.bindKey(EditorMode.Normal, "I", "insert-first-non-blank")
     # Enter insert mode at first non-blank character
   registry.bindKey(EditorMode.Normal, "A", "append-end") # Enter insert mode at line end

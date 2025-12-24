@@ -105,11 +105,14 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("vs", claVSplit)
   config.addAlias("vsplit", claVSplit)
   config.addAlias("sp", claHSplit)
+  config.addAlias("sv", claHSplit)
   config.addAlias("split", claHSplit)
   config.addAlias("new", claNew)
   config.addAlias("vnew", claVnew)
 
   # Buffer navigation
+  config.addAlias("b", claBuffer)
+  config.addAlias("buffer", claBuffer)
   config.addAlias("bn", claBufferNext)
   config.addAlias("bnext", claBufferNext)
   config.addAlias("bp", claBufferPrev)
@@ -126,6 +129,7 @@ proc loadDefaultConfig*(config: CommandConfig) =
   # Strip whitespace
   config.addAlias("stripwhitespace", claStripWhitespace)
   config.addAlias("stripws", claStripWhitespace)
+  config.addAlias("deleteTrailingSpaces", claStripWhitespace)
 
   # Filer (file explorer)
   config.addAlias("Filer", claFiler)
@@ -144,6 +148,7 @@ proc loadDefaultConfig*(config: CommandConfig) =
 
   # Buffer manager
   config.addAlias("buffers", claBufferManager)
+  config.addAlias("buf", claBufferManager)
   config.addAlias("ls", claBufferManager)
   config.addAlias("files", claBufferManager)
 
@@ -168,6 +173,33 @@ proc loadDefaultConfig*(config: CommandConfig) =
 
   # Build
   config.addAlias("build", claBuild)
+
+  # Debug mode
+  config.addAlias("debug", claDebug)
+
+  # Configuration mode
+  config.addAlias("conf", claConfig)
+  config.addAlias("config", claConfig)
+
+  # Put config file
+  config.addAlias("putConfigFile", claPutConfigFile)
+
+  # Manual
+  config.addAlias("man", claMan)
+
+  # Theme
+  config.addAlias("theme", claTheme)
+
+  # LSP commands
+  config.addAlias("lspLog", claLspLog)
+  config.addAlias("lspFormat", claLspFormat)
+  config.addAlias("lspRestart", claLspRestart)
+  config.addAlias("lspForceRestart", claLspForceRestart)
+  config.addAlias("lspFold", claLspFold)
+  config.addAlias("lspExeCommand", claLspExecuteCommand)
+
+  # QuickRun (Q is uppercase alias)
+  config.addAlias("Q", claQuickRun)
 
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser

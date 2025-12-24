@@ -152,8 +152,8 @@ proc calculateWrapCount*(lineCharLen: int, maxWidth: int): int =
 
 proc clearBuffer*(buffer: var Buffer) =
   ## Clear the entire buffer to prevent rendering artifacts
-  let clearStyle =
-    Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
+  ## Uses the theme's default background color for consistent appearance
+  let clearStyle = normalStyle()
 
   for y in 0 ..< buffer.area.height:
     for x in 0 ..< buffer.area.width:
