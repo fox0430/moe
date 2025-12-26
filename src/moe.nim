@@ -58,7 +58,7 @@ proc main() =
     AppConfig(
       title: "moe",
       alternateScreen: true,
-      mouseCapture: false,
+      mouseCapture: true,
       rawMode: true,
       windowMode: false,
     )

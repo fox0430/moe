@@ -24,7 +24,7 @@ import pkg/[celina, results]
 import
   editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
   filer, quickrunutils, messagelog, helpviewer, buffermanager, backupmanager, backup,
-  diffviewer, command_completion, build
+  diffviewer, command_completion, build, render_utils, sidebar
 import command_handlers/handler_manager
 
 proc getBufferInfos(e: Editor): seq[BufferInfo] =
@@ -1170,11 +1170,149 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
   e.state.needsFullRedraw = true
   return true
 
+const FilerHeaderLines = 2 ## Filer mode header: title + separator
+
+proc screenToBufferPosition(
+    vp: ViewPort,
+    buffer: TextBuffer,
+    mouseX, mouseY: int,
+    lineNumOffset, reservedLines: int,
+    lineWrap: bool,
+): Option[BufferPosition] =
+  ## Convert screen coordinates to buffer position.
+  ## Returns none if click is outside the text area.
+  ## Note: lineWrap handling is simplified; accurate wrap calculation would
+  ## require iterating through wrapped lines.
+  let
+    screenY = mouseY - vp.y
+    screenX = mouseX - vp.x - lineNumOffset
+
+  # Check if click is within the text area
+  if screenY < 0 or screenY >= vp.height - reservedLines:
+    return none(BufferPosition)
+  if screenX < 0:
+    return none(BufferPosition)
+
+  # Calculate buffer line
+  var bufferLine = vp.topLine + screenY
+  if bufferLine >= buffer.len:
+    bufferLine = max(0, buffer.len - 1)
+
+  # Calculate buffer column
+  var bufferColumn =
+    if lineWrap:
+      screenX
+    else:
+      vp.leftColumn + screenX
+
+  # Clamp column to valid range
+  if bufferLine >= 0 and bufferLine < buffer.len:
+    let lineLen = buffer[bufferLine].len
+    bufferColumn = clamp(bufferColumn, 0, max(0, lineLen - 1))
+
+  return some(BufferPosition(line: bufferLine, column: bufferColumn))
+
+proc calculateLineNumOffsetForMouse(e: Editor, buffer: TextBuffer): int =
+  ## Calculate the total offset for line numbers and sidebar
+  let sidebarWidth = if e.state.display.showSidebar: DefaultSidebarWidth else: 0
+  calculateLineNumOffset(buffer, e.state.display.showLineNumbers) + sidebarWidth +
+    LineNumberPadding
+
+proc handleMouseEvent(e: Editor, event: Event): bool =
+  ## Handle mouse events for cursor movement
+  ## Returns true if the event was handled, false otherwise
+  if event.kind != EventKind.Mouse:
+    return false
+
+  let mouse = event.mouse
+
+  # Only handle left button press (not release, move, or drag)
+  if mouse.button != celina.MouseButton.Left:
+    return false
+  if mouse.kind != celina.MouseEventKind.Press:
+    return false
+
+  # Handle mouse click in text editing modes
+  if e.state.mode in {
+    EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualLine,
+    EditorMode.VisualBlock, EditorMode.Replace,
+  }:
+    # Multiple windows mode
+    if e.windowManager.windows.len > 1:
+      for i, window in e.windowManager.windows:
+        let vp = window.viewport
+        # Check if click is within this window's viewport
+        if mouse.x >= vp.x and mouse.x < vp.x + vp.width and mouse.y >= vp.y and
+            mouse.y < vp.y + vp.height:
+          let
+            lineNumOffset = e.calculateLineNumOffsetForMouse(window.buffer)
+            # Each window has its own status line
+            reservedLines = if e.state.display.showStatusLine: 1 else: 0
+            posOpt = screenToBufferPosition(
+              vp, window.buffer, mouse.x, mouse.y, lineNumOffset, reservedLines,
+              e.state.display.lineWrap,
+            )
+
+          if posOpt.isNone:
+            return false
+
+          let pos = posOpt.get
+
+          # Switch to clicked window if not already active
+          if i != e.windowManager.activeWindowIndex:
+            e.windowManager.activeWindowIndex = i
+            for j, w in e.windowManager.windows.mpairs:
+              w.active = (j == i)
+
+          # Update cursor
+          e.windowManager.windows[i].cursor = pos
+          e.state.cursor = pos
+          e.state.needsFullRedraw = true
+          return true
+
+      return false
+
+    # Single window mode
+    let
+      activeBuffer = e.activeBuffer()
+      lineNumOffset = e.calculateLineNumOffsetForMouse(activeBuffer)
+      # Status line + command line
+      reservedLines = if e.state.display.showStatusLine: 2 else: 1
+      posOpt = screenToBufferPosition(
+        e.viewport, activeBuffer, mouse.x, mouse.y, lineNumOffset, reservedLines,
+        e.state.display.lineWrap,
+      )
+
+    if posOpt.isNone:
+      return false
+
+    e.state.cursor = posOpt.get
+    e.state.needsFullRedraw = true
+    return true
+
+  # Handle mouse click in Filer mode
+  if e.state.mode == EditorMode.Filer and e.state.filerState.isSome:
+    var filerState = e.state.filerState.get
+    let clickedIndex = filerState.topLine + (mouse.y - FilerHeaderLines)
+
+    if clickedIndex >= 0 and clickedIndex < filerState.entries.len:
+      filerState.selectedIndex = clickedIndex
+      e.state.filerState = some(filerState)
+      e.state.needsFullRedraw = true
+      return true
+
+  return false
+
 proc handleEvent*(e: Editor, event: Event): bool =
   ## Main event handler using the new handler manager system
 
   # Update last input time for auto backup idle detection
   e.updateInputTime()
+
+  # Handle mouse events first
+  if event.kind == EventKind.Mouse:
+    discard e.handleMouseEvent(event)
+    return true # Always continue running after mouse events
 
   # Handle temporary messages (like :jumps output) - dismiss on any key
   if e.state.tempMessages.len > 0 and event.kind == EventKind.Key:
