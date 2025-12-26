@@ -2640,11 +2640,15 @@ proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
     let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
     e.setActiveWindowScreenCursor(activeWindow)
 
-proc renderSingleViewSidebar(buffer: var Buffer, sidebar: Sidebar, screenY: int) =
+proc renderSingleViewSidebar(
+    buffer: var Buffer, sidebar: Sidebar, sidebarLineIndex: int, screenY: int
+) =
   ## Render a single line of the sidebar for single view mode
-  if screenY >= 0 and screenY < sidebar.buffer.len:
+  ## sidebarLineIndex: index into sidebar.buffer (logical line based)
+  ## screenY: actual screen Y coordinate for rendering
+  if sidebarLineIndex >= 0 and sidebarLineIndex < sidebar.buffer.len:
     for x in 0 ..< sidebar.width:
-      let item = sidebar.buffer[screenY][x]
+      let item = sidebar.buffer[sidebarLineIndex][x]
       if x < buffer.area.width and screenY < buffer.area.height:
         buffer.setString(x, screenY, item.text, item.style)
 
@@ -2694,14 +2698,33 @@ proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
       e.viewport.topLine = e.state.cursor.line
       e.executer.motionController.viewportManager.viewport.topLine = e.state.cursor.line
 
-  # Render sidebar if enabled
+  # Render sidebar if enabled (with line wrap support)
   if maybeSidebar.isSome:
     let sidebar = maybeSidebar.get
     var screenY = 0
     var lineIndex = e.viewport.topLine
     while screenY < buffer.area.height - reservedLines and lineIndex < e.textBuffer.len:
-      renderSingleViewSidebar(buffer, sidebar, screenY)
-      inc screenY
+      let sidebarLineIndex = lineIndex - e.viewport.topLine
+
+      if e.state.display.lineWrap:
+        let
+          line = e.textBuffer.getLine(lineIndex)
+          lineCharLen = line.charLen
+          numWraps = calculateWrapCount(lineCharLen, textAreaWidth)
+
+        # Render sidebar marker for first screen line of this logical line
+        renderSingleViewSidebar(buffer, sidebar, sidebarLineIndex, screenY)
+        inc screenY
+
+        # For wrapped continuation lines, render empty sidebar
+        for _ in 1 ..< numWraps:
+          if screenY >= buffer.area.height - reservedLines:
+            break
+          inc screenY
+      else:
+        renderSingleViewSidebar(buffer, sidebar, sidebarLineIndex, screenY)
+        inc screenY
+
       inc lineIndex
 
   # Render line numbers only if enabled
