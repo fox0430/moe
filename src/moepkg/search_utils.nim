@@ -58,8 +58,7 @@ proc prepareSearchString*(text: string, ignorecase: bool): string =
 
 # Search history persistence
 
-# TODO: Add MaxHistoryEntries to the editor config
-const MaxHistoryEntries* = 50
+const DefaultSearchHistoryLimit* = 1000
 
 proc getSearchHistoryPath*(): Result[Path, string] =
   ## Get the path to the search history file
@@ -74,7 +73,7 @@ proc getSearchHistoryPath*(): Result[Path, string] =
 
   return Result[Path, string].ok p
 
-proc loadSearchHistory*(): seq[string] =
+proc loadSearchHistory*(limit: int = DefaultSearchHistoryLimit): seq[string] =
   ## Load search history from disk
   ## Returns: sequence of search patterns (most recent first)
   ## Returns empty sequence if file doesn't exist or on error
@@ -96,17 +95,18 @@ proc loadSearchHistory*(): seq[string] =
       if trimmed.len > 0:
         result.add trimmed
         # Limit to max entries
-        if result.len >= MaxHistoryEntries:
+        if result.len >= limit:
           break
   except CatchableError as e:
     # Silently ignore read errors and return empty history
     logError("search_utils", e.msg)
     return @[]
 
-proc saveSearchHistory*(history: seq[string]): Result[(), string] =
+proc saveSearchHistory*(
+    history: seq[string], limit: int = DefaultSearchHistoryLimit
+): Result[(), string] =
   ## Save search history to disk
-  ## Saves up to MaxHistoryEntries entries (most recent first)
-  ## Silently ignores errors
+  ## Saves up to `limit` entries (most recent first)
 
   let historyPath = getSearchHistoryPath()
   if historyPath.isErr:
@@ -129,10 +129,10 @@ proc saveSearchHistory*(history: seq[string]): Result[(), string] =
     return
 
   try:
-    # Take only the most recent MaxHistoryEntries entries
+    # Take only the most recent entries
     let entriesToSave =
-      if history.len > MaxHistoryEntries:
-        history[0 ..< MaxHistoryEntries]
+      if history.len > limit:
+        history[0 ..< limit]
       else:
         history
 

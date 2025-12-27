@@ -37,6 +37,7 @@ type
     BackupManager
     DiffViewer
     RecentFile
+    Debug
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -60,3 +61,4 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.BackupManager: "BACKUPS"
   of EditorMode.DiffViewer: "DIFF"
   of EditorMode.RecentFile: "RECENT"
+  of EditorMode.Debug: "DEBUG"

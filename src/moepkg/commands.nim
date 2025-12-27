@@ -31,12 +31,14 @@ type CommandExecutor* = ref object
   commandRegistry*: CommandRegistry
   keyBindingRegistry*: KeyBindingRegistry
   clipboardConfig*: ClipboardConfig
+  notificationConfig*: NotificationConfig
 
 proc newCommandExecutor*(
     buffer: buffer.TextBuffer,
     state: EditorState,
     viewport: ViewPort,
     clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: ctXclip),
+    notificationConfig: NotificationConfig = NotificationConfig(),
     commandRegistry: Option[CommandRegistry] = none(CommandRegistry),
     keyBindingRegistry: Option[KeyBindingRegistry] = none(KeyBindingRegistry),
 ): CommandExecutor =
@@ -67,6 +69,7 @@ proc newCommandExecutor*(
     commandRegistry: cmdReg,
     keyBindingRegistry: keyReg,
     clipboardConfig: clipboardConfig,
+    notificationConfig: notificationConfig,
   )
 
 proc execute*(e: CommandExecutor, command: string): Result[(), string] =
@@ -80,6 +83,7 @@ proc execute*(e: CommandExecutor, command: string): Result[(), string] =
     motionController: e.motionController,
     keyBindingRegistry: nil, # Not available in this context
     clipboardConfig: e.clipboardConfig,
+    notificationConfig: e.notificationConfig,
   )
 
   # Execute through command registry (handles both commands and aliases)
@@ -101,6 +105,7 @@ proc executeKeybinding*(
     motionController: e.motionController,
     keyBindingRegistry: nil, # Not available in this context
     clipboardConfig: e.clipboardConfig,
+    notificationConfig: e.notificationConfig,
   )
 
   return e.commandRegistry.executeCommand(ctx, binding)

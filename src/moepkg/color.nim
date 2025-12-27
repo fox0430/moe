@@ -23,7 +23,16 @@
 ## and conversion utilities for the editor's color scheme.
 
 import std/[strutils, strformat, options]
+
 import pkg/[results, celina]
+
+type ColorModeKind* = enum
+  ## Color mode for terminal output
+  cmk24bit ## True color (24-bit RGB)
+  cmk8bit ## 256-color palette
+  cmkNone ## No colors (terminal defaults only)
+
+var globalColorMode* = cmk24bit ## Current color mode setting
 
 type
   ## RGB color with values 0-255. -1 indicates terminal default color.
@@ -323,12 +332,45 @@ proc inverseColor*(color: Rgb): Rgb =
   result.green = abs(color.green - 255)
   result.blue = abs(color.blue - 255)
 
+proc rgbTo256Color(r, g, b: int16): uint8 =
+  ## Convert RGB values to nearest 256-color palette index.
+  ## Uses the 6x6x6 color cube (indices 16-231) and grayscale ramp (232-255).
+
+  # Check if it's a grayscale color
+  if r == g and g == b:
+    if r < 8:
+      return 16 # Black
+    elif r > 248:
+      return 231 # White
+    else:
+      # Use grayscale ramp (232-255, 24 levels)
+      return uint8(((r - 8) * 24) div 240 + 232)
+
+  # Convert to 6x6x6 color cube (indices 16-231)
+  # Each component maps to 0-5
+  let
+    ri = uint8((r * 6) div 256)
+    gi = uint8((g * 6) div 256)
+    bi = uint8((b * 6) div 256)
+
+  return uint8(16 + 36 * ri + 6 * gi + bi)
+
 proc toColorValue*(rgb: Rgb): ColorValue =
-  ## Convert Rgb to celina ColorValue.
+  ## Convert Rgb to celina ColorValue, respecting globalColorMode.
 
   if rgb.isTermDefaultColor:
     return ColorValue(kind: Default)
-  else:
+
+  case globalColorMode
+  of cmkNone:
+    # No colors - use terminal default
+    return ColorValue(kind: Default)
+  of cmk8bit:
+    # Convert to 256-color palette
+    let index = rgbTo256Color(rgb.red, rgb.green, rgb.blue)
+    return ColorValue(kind: Indexed256, indexed256: index)
+  of cmk24bit:
+    # True color RGB
     return ColorValue(
       kind: ColorKind.Rgb,
       rgb: RgbColor(r: rgb.red.uint8, g: rgb.green.uint8, b: rgb.blue.uint8),

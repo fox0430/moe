@@ -124,6 +124,7 @@ type
     highlightNeedsUpdate*: bool # Flag to track if highlight needs regeneration
     incrementalHighlight*: IncrementalHighlight # Incremental highlighting cache
     lastChangedLines*: tuple[start, theEnd: int] # Last edit range for incremental update
+    reservedWords*: seq[ReservedWord] # Reserved words to highlight (TODO, NOTE, etc.)
 
     # Performance optimization
     cursorCache*: CursorPosCache # Cache for character-to-byte position conversions
@@ -197,6 +198,18 @@ proc newTextBuffer*(
       foldState: initFoldState(),
     )
 
+proc setReservedWords*(b: TextBuffer, words: seq[ReservedWord]) =
+  ## Set reserved words for syntax highlighting (e.g., TODO, NOTE, FIXME)
+  ## This will trigger a re-highlight on the next update
+  b.reservedWords = words
+  b.highlightNeedsUpdate = true
+
+proc toReservedWords*(words: seq[string]): seq[ReservedWord] =
+  ## Convert a sequence of strings to ReservedWord objects
+  ## Uses the default reservedWord color from the theme
+  for word in words:
+    result.add(ReservedWord(word: word, color: EditorColorPairIndex.reservedWord))
+
 # Core text operations
 proc getTextString*(b: TextBuffer): string =
   case b.backendKind
@@ -223,6 +236,85 @@ proc `[]`*(b: TextBuffer, lineIndex: int): string =
 
 proc getLineLen*(b: TextBuffer, lineIndex: int): int =
   b.getLine(lineIndex).len
+
+# Word detection helpers for currentWord highlighting
+proc isWordChar(r: Rune): bool =
+  ## Check if a character is part of a word (alphanumeric or underscore)
+  let c = r.int32
+  return
+    (c >= 'a'.ord and c <= 'z'.ord) or (c >= 'A'.ord and c <= 'Z'.ord) or
+    (c >= '0'.ord and c <= '9'.ord) or c == '_'.ord
+
+proc getWordAtPosition*(b: TextBuffer, pos: BufferPosition): string =
+  ## Get the word at the given buffer position
+  ## Returns empty string if cursor is not on a word character
+  if pos.line < 0 or pos.line >= b.len:
+    return ""
+
+  let line = b.getLine(pos.line)
+  var runes: seq[Rune] = @[]
+  for r in line.runes:
+    runes.add(r)
+
+  if runes.len == 0 or pos.column < 0 or pos.column >= runes.len:
+    return ""
+
+  # Check if cursor is on a word character
+  if not isWordChar(runes[pos.column]):
+    return ""
+
+  # Find start of word
+  var startCol = pos.column
+  while startCol > 0 and isWordChar(runes[startCol - 1]):
+    dec startCol
+
+  # Find end of word
+  var endCol = pos.column
+  while endCol < runes.len - 1 and isWordChar(runes[endCol + 1]):
+    inc endCol
+
+  # Build the word string
+  result = ""
+  for i in startCol .. endCol:
+    result.add($runes[i])
+
+proc isPositionInWord*(b: TextBuffer, pos: BufferPosition, word: string): bool =
+  ## Check if the position is part of a word that matches the given word
+  ## Used for currentWord highlighting
+  if word.len == 0:
+    return false
+
+  if pos.line < 0 or pos.line >= b.len:
+    return false
+
+  let line = b.getLine(pos.line)
+  var runes: seq[Rune] = @[]
+  for r in line.runes:
+    runes.add(r)
+
+  if runes.len == 0 or pos.column < 0 or pos.column >= runes.len:
+    return false
+
+  # Check if position is on a word character
+  if not isWordChar(runes[pos.column]):
+    return false
+
+  # Find word boundaries at this position
+  var startCol = pos.column
+  while startCol > 0 and isWordChar(runes[startCol - 1]):
+    dec startCol
+
+  var endCol = pos.column
+  while endCol < runes.len - 1 and isWordChar(runes[endCol + 1]):
+    inc endCol
+
+  # Build the word at this position
+  var wordAtPos = ""
+  for i in startCol .. endCol:
+    wordAtPos.add($runes[i])
+
+  # Check if it matches
+  return wordAtPos == word
 
 proc `[][]`*(b: TextBuffer, lineIndex, colIndex: int): char =
   ## Bracket operator for accessing character at (line, column)
@@ -1371,20 +1463,15 @@ proc updateHighlight*(b: TextBuffer) =
       if cacheValid:
         # Use incremental highlighting for better performance
         updateHighlightIncremental(
-          runesBuffer,
-          b.incrementalHighlight,
-          b.lastChangedLines.start,
-          b.lastChangedLines.theEnd,
-          b.changeSeq,
-          @[], # reservedWords - empty for now
-          b.language,
+          runesBuffer, b.incrementalHighlight, b.lastChangedLines.start,
+          b.lastChangedLines.theEnd, b.changeSeq, b.reservedWords, b.language,
         )
 
         # Convert IncrementalHighlight segments to Highlight
         b.highlight = Highlight(colorSegments: b.incrementalHighlight.segments)
       else:
         # Cache invalid or first time - do full parse
-        b.highlight = initHighlight(runesBuffer, @[], b.language)
+        b.highlight = initHighlight(runesBuffer, b.reservedWords, b.language)
 
         # Build initial incremental cache for next time
         if runesBuffer.len > 0:
@@ -1394,7 +1481,7 @@ proc updateHighlight*(b: TextBuffer) =
             0,
             runesBuffer.high,
             TokenizerState(), # Default initial state
-            @[],
+            b.reservedWords,
             b.language,
           )
 
@@ -1760,9 +1847,102 @@ proc isPositionInSearchMatch*(
 
   return false
 
-# ============================================================================
+# Matching Paren/Bracket Highlight
+
+const
+  openBrackets = ['(', '[', '{', '<']
+  closeBrackets = [')', ']', '}', '>']
+
+proc findMatchingParenPosition*(
+    b: TextBuffer, cursor: BufferPosition
+): Option[BufferPosition] =
+  ## Find the position of the matching parenthesis/bracket/brace
+  ## Searches across multiple lines. Returns none if cursor is not on a bracket
+  ## or no matching bracket is found.
+
+  if cursor.line < 0 or cursor.line >= b.len:
+    return none(BufferPosition)
+
+  let line = b.getLine(cursor.line)
+  let runes = line.toRunes()
+
+  if runes.len == 0 or cursor.column >= runes.len:
+    return none(BufferPosition)
+
+  let charAtCursor = ($runes[cursor.column])[0]
+
+  var openChar, closeChar: char
+  var searchForward = false
+
+  # Check if cursor is on a bracket
+  if charAtCursor in openBrackets:
+    openChar = charAtCursor
+    closeChar = closeBrackets[openBrackets.find(charAtCursor)]
+    searchForward = true
+  elif charAtCursor in closeBrackets:
+    closeChar = charAtCursor
+    openChar = openBrackets[closeBrackets.find(charAtCursor)]
+    searchForward = false
+  else:
+    return none(BufferPosition)
+
+  if searchForward:
+    # Search forward for closing bracket
+    var depth = 1
+    var searchLine = cursor.line
+    var searchCol = cursor.column + 1
+
+    while searchLine < b.len:
+      let curLine = b.getLine(searchLine)
+      let curRunes = curLine.toRunes()
+
+      while searchCol < curRunes.len:
+        let ch = ($curRunes[searchCol])[0]
+        if ch == openChar:
+          depth.inc
+        elif ch == closeChar:
+          depth.dec
+          if depth == 0:
+            return some(BufferPosition(line: searchLine, column: searchCol))
+        searchCol.inc
+
+      searchLine.inc
+      searchCol = 0
+  else:
+    # Search backward for opening bracket
+    var depth = 1
+    var searchLine = cursor.line
+    var searchCol = cursor.column - 1
+
+    while searchLine >= 0:
+      if searchCol < 0:
+        searchLine.dec
+        if searchLine >= 0:
+          let prevLine = b.getLine(searchLine)
+          searchCol = prevLine.toRunes().len - 1
+        continue
+
+      let curLine = b.getLine(searchLine)
+      let curRunes = curLine.toRunes()
+
+      while searchCol >= 0:
+        let ch = ($curRunes[searchCol])[0]
+        if ch == closeChar:
+          depth.inc
+        elif ch == openChar:
+          depth.dec
+          if depth == 0:
+            return some(BufferPosition(line: searchLine, column: searchCol))
+        searchCol.dec
+
+      searchLine.dec
+      if searchLine >= 0:
+        let prevLine = b.getLine(searchLine)
+        searchCol = prevLine.toRunes().len - 1
+
+  return none(BufferPosition)
+
 # Line Folding Operations (vim-like manual folding)
-# ============================================================================
 
 proc initFoldState*(): FoldState =
   ## Initialize an empty fold state

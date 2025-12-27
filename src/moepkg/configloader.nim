@@ -26,7 +26,7 @@ import std/[os, options, tables, strutils]
 
 import pkg/[parsetoml, results]
 
-import config, color, theme
+import config, color, theme, vscodetheme
 
 proc parseColorMode(s: string): ColorMode =
   case s
@@ -290,6 +290,256 @@ proc loadPersistConfig(table: TomlTableRef, config: var PersistConfig) =
   if table.hasKey("cursorPosition"):
     config.cursorPosition = table["cursorPosition"].getBool()
 
+proc loadQuickRunConfig(table: TomlTableRef, config: var QuickRunConfig) =
+  if table.hasKey("saveBufferWhenQuickRun"):
+    config.saveBufferWhenQuickRun = table["saveBufferWhenQuickRun"].getBool()
+  if table.hasKey("command"):
+    config.command = some(table["command"].getStr())
+  if table.hasKey("timeout"):
+    config.timeout = table["timeout"].getInt()
+  if table.hasKey("nimAdvancedCommand"):
+    config.nimAdvancedCommand = some(table["nimAdvancedCommand"].getStr())
+  if table.hasKey("ClangOptions"):
+    config.clangOptions = some(table["ClangOptions"].getStr())
+  if table.hasKey("CppOptions"):
+    config.cppOptions = some(table["CppOptions"].getStr())
+  if table.hasKey("NimOptions"):
+    config.nimOptions = some(table["NimOptions"].getStr())
+  if table.hasKey("shOptions"):
+    config.shOptions = some(table["shOptions"].getStr())
+  if table.hasKey("bashOptions"):
+    config.bashOptions = some(table["bashOptions"].getStr())
+
+proc loadStartUpFileOpenConfig(table: TomlTableRef, config: var StartUpFileOpenConfig) =
+  if table.hasKey("autoSplit"):
+    config.autoSplit = table["autoSplit"].getBool()
+  if table.hasKey("splitType"):
+    config.splitType = parseSplitType(table["splitType"].getStr())
+
+proc loadDebugWindowNodeConfig(table: TomlTableRef, config: var DebugWindowNodeConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+  if table.hasKey("currentWindow"):
+    config.currentWindow = table["currentWindow"].getBool()
+  if table.hasKey("index"):
+    config.index = table["index"].getBool()
+  if table.hasKey("windowIndex"):
+    config.windowIndex = table["windowIndex"].getBool()
+  if table.hasKey("bufferIndex"):
+    config.bufferIndex = table["bufferIndex"].getBool()
+  if table.hasKey("parentIndex"):
+    config.parentIndex = table["parentIndex"].getBool()
+  if table.hasKey("childLen"):
+    config.childLen = table["childLen"].getBool()
+  if table.hasKey("splitType"):
+    config.splitType = table["splitType"].getBool()
+  if table.hasKey("haveCursesWin"):
+    config.haveCursesWin = table["haveCursesWin"].getBool()
+  if table.hasKey("y"):
+    config.y = table["y"].getBool()
+  if table.hasKey("x"):
+    config.x = table["x"].getBool()
+  if table.hasKey("h"):
+    config.h = table["h"].getBool()
+  if table.hasKey("w"):
+    config.w = table["w"].getBool()
+  if table.hasKey("currentLine"):
+    config.currentLine = table["currentLine"].getBool()
+  if table.hasKey("currentColumn"):
+    config.currentColumn = table["currentColumn"].getBool()
+  if table.hasKey("expandedColumn"):
+    config.expandedColumn = table["expandedColumn"].getBool()
+  if table.hasKey("cursor"):
+    config.cursor = table["cursor"].getBool()
+
+proc loadDebugEditorViewConfig(table: TomlTableRef, config: var DebugEditorViewConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+  if table.hasKey("widthOfLineNum"):
+    config.widthOfLineNum = table["widthOfLineNum"].getBool()
+  if table.hasKey("height"):
+    config.height = table["height"].getBool()
+  if table.hasKey("width"):
+    config.width = table["width"].getBool()
+  if table.hasKey("originalLine"):
+    config.originalLine = table["originalLine"].getBool()
+  if table.hasKey("start"):
+    config.start = table["start"].getBool()
+  if table.hasKey("length"):
+    config.length = table["length"].getBool()
+
+proc loadDebugBufferStatusConfig(
+    table: TomlTableRef, config: var DebugBufferStatusConfig
+) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+  if table.hasKey("bufferIndex"):
+    config.bufferIndex = table["bufferIndex"].getBool()
+  if table.hasKey("path"):
+    config.path = table["path"].getBool()
+  if table.hasKey("openDir"):
+    config.openDir = table["openDir"].getBool()
+  if table.hasKey("currentMode"):
+    config.currentMode = table["currentMode"].getBool()
+  if table.hasKey("prevMode"):
+    config.prevMode = table["prevMode"].getBool()
+  if table.hasKey("language"):
+    config.language = table["language"].getBool()
+  if table.hasKey("encoding"):
+    config.encoding = table["encoding"].getBool()
+  if table.hasKey("countChange"):
+    config.countChange = table["countChange"].getBool()
+  if table.hasKey("cmdLoop"):
+    config.cmdLoop = table["cmdLoop"].getBool()
+  if table.hasKey("lastSaveTime"):
+    config.lastSaveTime = table["lastSaveTime"].getBool()
+  if table.hasKey("bufferLen"):
+    config.bufferLen = table["bufferLen"].getBool()
+
+proc loadDebugSearchConfig(table: TomlTableRef, config: var DebugSearchConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+
+proc loadDebugMacroConfig(table: TomlTableRef, config: var DebugMacroConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+
+proc loadDebugVisualConfig(table: TomlTableRef, config: var DebugVisualConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+
+proc loadDebugJumpListConfig(table: TomlTableRef, config: var DebugJumpListConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+
+proc loadDebugLspConfig(table: TomlTableRef, config: var DebugLspConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+
+proc loadDebugConfig(table: TomlTableRef, config: var DebugConfig) =
+  if table.hasKey("WindowNode"):
+    loadDebugWindowNodeConfig(table["WindowNode"].getTable(), config.windowNode)
+  if table.hasKey("EditorView"):
+    loadDebugEditorViewConfig(table["EditorView"].getTable(), config.editorView)
+  if table.hasKey("BufferStatus"):
+    loadDebugBufferStatusConfig(table["BufferStatus"].getTable(), config.bufferStatus)
+  if table.hasKey("Search"):
+    loadDebugSearchConfig(table["Search"].getTable(), config.search)
+  if table.hasKey("MacroState"):
+    loadDebugMacroConfig(table["MacroState"].getTable(), config.macroState)
+  if table.hasKey("Visual"):
+    loadDebugVisualConfig(table["Visual"].getTable(), config.visual)
+  if table.hasKey("JumpList"):
+    loadDebugJumpListConfig(table["JumpList"].getTable(), config.jumpList)
+  if table.hasKey("Lsp"):
+    loadDebugLspConfig(table["Lsp"].getTable(), config.lsp)
+
+proc parseLspTraceLevel(s: string): LspTraceLevel =
+  case s
+  of "off": ltOff
+  of "messages": ltMessages
+  of "verbose": ltVerbose
+  else: ltOff
+
+proc loadLspFeatureConfig(table: TomlTableRef, config: var LspFeatureConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+
+proc loadLspOpenWindowConfig(table: TomlTableRef, config: var LspOpenWindowConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+  if table.hasKey("openWindow"):
+    config.openWindow = table["openWindow"].getBool()
+
+proc loadLspServerConfig(table: TomlTableRef): LspServerConfig =
+  result = LspServerConfig(
+    extensions: @[],
+    command: "",
+    trace: ltOff,
+    rustAnalyzerRunSingle: false,
+    rustAnalyzerDebugSingle: false,
+  )
+  if table.hasKey("extensions"):
+    for item in table["extensions"].getElems():
+      result.extensions.add(item.getStr())
+  if table.hasKey("command"):
+    result.command = table["command"].getStr()
+  if table.hasKey("trace"):
+    result.trace = parseLspTraceLevel(table["trace"].getStr())
+  if table.hasKey("rustAnalyzerRunSingle"):
+    result.rustAnalyzerRunSingle = table["rustAnalyzerRunSingle"].getBool()
+  if table.hasKey("rustAnalyzerDebugSingle"):
+    result.rustAnalyzerDebugSingle = table["rustAnalyzerDebugSingle"].getBool()
+
+proc loadLspConfig(table: TomlTableRef, config: var LspConfig) =
+  # Main LSP settings
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+  if table.hasKey("timeout"):
+    config.timeout = table["timeout"].getInt()
+
+  # Feature configs
+  if table.hasKey("Completion"):
+    loadLspFeatureConfig(table["Completion"].getTable(), config.completion)
+  if table.hasKey("Declaration"):
+    loadLspOpenWindowConfig(table["Declaration"].getTable(), config.declaration)
+  if table.hasKey("Definition"):
+    loadLspOpenWindowConfig(table["Definition"].getTable(), config.definition)
+  if table.hasKey("TypeDefinition"):
+    loadLspOpenWindowConfig(table["TypeDefinition"].getTable(), config.typeDefinition)
+  if table.hasKey("Implementation"):
+    loadLspOpenWindowConfig(table["Implementation"].getTable(), config.implementation)
+  if table.hasKey("Diagnostics"):
+    loadLspFeatureConfig(table["Diagnostics"].getTable(), config.diagnostics)
+  if table.hasKey("SignatureHelp"):
+    loadLspFeatureConfig(table["SignatureHelp"].getTable(), config.signatureHelp)
+  if table.hasKey("DocumentFormatting"):
+    loadLspFeatureConfig(
+      table["DocumentFormatting"].getTable(), config.documentFormatting
+    )
+  if table.hasKey("FoldingRange"):
+    loadLspFeatureConfig(table["FoldingRange"].getTable(), config.foldingRange)
+  if table.hasKey("SelectionRange"):
+    loadLspFeatureConfig(table["SelectionRange"].getTable(), config.selectionRange)
+  if table.hasKey("DocumentSymbol"):
+    loadLspFeatureConfig(table["DocumentSymbol"].getTable(), config.documentSymbol)
+  if table.hasKey("Hover"):
+    loadLspFeatureConfig(table["Hover"].getTable(), config.hover)
+  if table.hasKey("InlayHint"):
+    loadLspFeatureConfig(table["InlayHint"].getTable(), config.inlayHint)
+  if table.hasKey("InlineValue"):
+    loadLspFeatureConfig(table["InlineValue"].getTable(), config.inlineValue)
+  if table.hasKey("References"):
+    loadLspFeatureConfig(table["References"].getTable(), config.references)
+  if table.hasKey("CallHierarchy"):
+    loadLspFeatureConfig(table["CallHierarchy"].getTable(), config.callHierarchy)
+  if table.hasKey("DocumentHighlight"):
+    loadLspFeatureConfig(
+      table["DocumentHighlight"].getTable(), config.documentHighlight
+    )
+  if table.hasKey("DocumentLink"):
+    loadLspFeatureConfig(table["DocumentLink"].getTable(), config.documentLink)
+  if table.hasKey("CodeLens"):
+    loadLspFeatureConfig(table["CodeLens"].getTable(), config.codeLens)
+  if table.hasKey("Rename"):
+    loadLspFeatureConfig(table["Rename"].getTable(), config.rename)
+  if table.hasKey("SemanticTokens"):
+    loadLspFeatureConfig(table["SemanticTokens"].getTable(), config.semanticTokens)
+  if table.hasKey("ExecuteCommand"):
+    loadLspFeatureConfig(table["ExecuteCommand"].getTable(), config.executeCommand)
+
+  # Language server configs (any key that's not a known feature is a language server)
+  let knownKeys = [
+    "enable", "timeout", "Completion", "Declaration", "Definition", "TypeDefinition",
+    "Implementation", "Diagnostics", "SignatureHelp", "DocumentFormatting",
+    "FoldingRange", "SelectionRange", "DocumentSymbol", "Hover", "InlayHint",
+    "InlineValue", "References", "CallHierarchy", "DocumentHighlight", "DocumentLink",
+    "CodeLens", "Rename", "SemanticTokens", "ExecuteCommand",
+  ]
+  for key, value in table:
+    if key notin knownKeys and value.kind == TomlValueKind.Table:
+      config.servers[key] = loadLspServerConfig(value.getTable())
+
 proc loadConfigFromToml*(path: string): EditorConfig =
   ## Load configuration from a TOML file
   ## Returns a new EditorConfig with values loaded from the file
@@ -332,6 +582,9 @@ proc loadConfigFromToml*(path: string): EditorConfig =
   if toml.hasKey("Notification"):
     loadNotificationConfig(toml["Notification"].getTable(), result.notification)
 
+  if toml.hasKey("QuickRun"):
+    loadQuickRunConfig(toml["QuickRun"].getTable(), result.quickRun)
+
   if toml.hasKey("AutoBackup"):
     loadAutoBackupConfig(toml["AutoBackup"].getTable(), result.autoBackup)
 
@@ -349,6 +602,17 @@ proc loadConfigFromToml*(path: string): EditorConfig =
 
   if toml.hasKey("Persist"):
     loadPersistConfig(toml["Persist"].getTable(), result.persist)
+
+  if toml.hasKey("StartUp.FileOpen"):
+    loadStartUpFileOpenConfig(
+      toml["StartUp.FileOpen"].getTable(), result.startUpFileOpen
+    )
+
+  if toml.hasKey("Lsp"):
+    loadLspConfig(toml["Lsp"].getTable(), result.lsp)
+
+  if toml.hasKey("Debug"):
+    loadDebugConfig(toml["Debug"].getTable(), result.debug)
 
 proc getConfigPath*(): string =
   ## Get the path to the configuration file
@@ -739,8 +1003,7 @@ proc loadTheme*(config: EditorConfig): Result[ThemeColors, string] =
   of tkConfig:
     return loadThemeFromToml(config.theme.path)
   of tkVscode:
-    # VSCode theme loading not yet implemented
-    return Result[ThemeColors, string].err("VSCode themes not yet supported")
+    return loadVSCodeTheme()
 
 proc initTheme*(config: EditorConfig) =
   ## Initialize the theme based on configuration

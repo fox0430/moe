@@ -22,27 +22,51 @@
 ## This module handles parsing of command line arguments and provides
 ## configuration for the editor startup.
 
-import std/[os, strutils]
+import std/[os, strutils, terminal]
+
+import appinfo
 
 type CmdLineConfig* = object ## Command line configuration
   debugEnabled*: bool ## Enable debug logging
-  filePath*: string ## File path to open
+  isReadonly*: bool ## Open files in readonly mode
+  filePaths*: seq[string] ## File paths to open (supports multiple files)
+
+proc generateVersionInfoMessage(): string =
+  const
+    VersionInfo = "moe v" & moeSemVersionStr()
+    GitHash = "Git hash: " & gitHash()
+    BuildType = "Build type: " & buildType()
+
+  result = VersionInfo & "\n\n" & GitHash & "\n" & BuildType
+
+proc showVersion() =
+  ## Display version info and exit
+  echo generateVersionInfoMessage()
+  quit(0)
 
 proc showHelp() =
   ## Display help message and exit
-  echo """
-  Usage: moe [OPTIONS] [FILE]
+  const HelpMessage =
+    """
+Usage:
+  moe [file]       Edit file
 
-  Options:"
-    -d, --debug    Enable debug logging to ./moe-debug.log"
-    -h, --help     Show this help message"
-  """
+Arguments:
+  -R               Readonly mode
+  -d, --debug      Enable debug logging
+  -h, --help       Print this help
+  -v, --version    Print version
+"""
 
+  echo generateVersionInfoMessage() & "\n\n" & HelpMessage
   quit(0)
 
 proc showUnknownArgsError(arg: string) =
-  echo "Unknown argument: \"" & arg & "\""
-  quit(0)
+  stderr.styledWriteLine(
+    ForegroundColor.fgRed, "Error: Unknown argument: \"" & arg & "\""
+  )
+  echo """Please check "moe -h""""
+  quit(1)
 
 proc parseCmdLine*(): CmdLineConfig =
   ## Parse command line arguments and return configuration
@@ -54,18 +78,21 @@ proc parseCmdLine*(): CmdLineConfig =
   ##   let config = parseCmdLine()
   ##   if config.debugEnabled:
   ##     echo "Debug mode enabled"
-  result = CmdLineConfig(debugEnabled: false, filePath: "")
+  result = CmdLineConfig(debugEnabled: false, isReadonly: false, filePaths: @[])
 
-  # TODO: Add version
   for i in 1 .. paramCount():
     let arg = paramStr(i)
     case arg
-    of "--debug", "-d":
-      result.debugEnabled = true
-    of "--help", "-h":
+    of "-v", "--version":
+      showVersion()
+    of "-h", "--help":
       showHelp()
+    of "-d", "--debug":
+      result.debugEnabled = true
+    of "-R":
+      result.isReadonly = true
     else:
       if not arg.startsWith("-"):
-        result.filePath = arg
+        result.filePaths.add(arg)
       else:
         showUnknownArgsError(arg)

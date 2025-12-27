@@ -35,6 +35,7 @@ type
     size*: int64
     modified*: Time
     isHidden*: bool
+    isExecutable*: bool # Whether the file has execute permission
     targetKind*: FileEntryKind # For symlinks: the kind of the target (fekFile if broken)
 
   FilerState* = ref object
@@ -63,6 +64,7 @@ proc newFileEntry(path: string, info: FileInfo): FileEntry =
   let name = extractFilename(path)
   var kind: FileEntryKind
   var targetKind: FileEntryKind = fekFile # Default for non-symlinks
+  var isExec = false
 
   case info.kind
   of pcDir:
@@ -77,6 +79,8 @@ proc newFileEntry(path: string, info: FileInfo): FileEntry =
   of pcFile:
     kind = fekFile
     targetKind = fekFile
+    # Check if file is executable
+    isExec = fpUserExec in info.permissions or fpGroupExec in info.permissions
 
   FileEntry(
     name: name,
@@ -84,6 +88,7 @@ proc newFileEntry(path: string, info: FileInfo): FileEntry =
     size: info.size,
     modified: info.lastWriteTime,
     isHidden: isHiddenFile(name),
+    isExecutable: isExec,
     targetKind: targetKind,
   )
 
@@ -109,6 +114,7 @@ proc refresh*(state: FilerState) =
         size: 0,
         modified: Time(),
         isHidden: false,
+        isExecutable: false,
         targetKind: fekDirectory,
       )
     )

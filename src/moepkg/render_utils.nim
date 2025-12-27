@@ -107,6 +107,14 @@ proc trailingSpacesStyle*(): Style =
   ## Get trailing spaces highlight style from theme
   getThemeStyle(EditorColorPairIndex.highlightTrailingSpaces)
 
+proc parenPairStyle*(): Style =
+  ## Get matching parenthesis pair highlight style from theme
+  getThemeStyle(EditorColorPairIndex.parenPair)
+
+proc currentWordStyle*(): Style =
+  ## Get current word highlight style from theme
+  getThemeStyle(EditorColorPairIndex.currentWord)
+
 proc codeLensStyle*(): Style =
   ## Get code lens style from theme
   getThemeStyle(EditorColorPairIndex.codeLens)

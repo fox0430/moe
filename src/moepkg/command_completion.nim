@@ -114,6 +114,7 @@ const CommandDescriptions = {
   "run": "Run current buffer",
   "quickrun": "Run current buffer",
   "qr": "Run current buffer",
+  "debug": "Open debug mode",
 }.toTable
 
 # Commands that take file path arguments

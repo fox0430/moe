@@ -17,14 +17,14 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, os, strutils]
+import std/[options, os, strutils, tables, monotimes]
 
 import pkg/[celina, results]
 
 import
   editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
   filer, quickrunutils, messagelog, helpviewer, buffermanager, backupmanager, backup,
-  diffviewer, command_completion, build, render_utils, sidebar
+  diffviewer, command_completion, build, render_utils, sidebar, debugviewer
 import command_handlers/handler_manager
 
 proc getBufferInfos(e: Editor): seq[BufferInfo] =
@@ -135,9 +135,10 @@ proc finalizeSearch(e: Editor) =
     # Add to beginning of history (most recent first)
     e.state.search.history.insert(searchTextCopy, 0)
 
-    # Limit history size to MaxHistoryEntries
-    if e.state.search.history.len > MaxHistoryEntries:
-      e.state.search.history.setLen(MaxHistoryEntries)
+    # Limit history size to configured limit
+    let historyLimit = e.config.persist.searchHistoryLimit
+    if e.state.search.history.len > historyLimit:
+      e.state.search.history.setLen(historyLimit)
 
     # If incsearch is enabled, cursor is already at the found position
     if e.state.search.incsearch:
@@ -357,9 +358,14 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       let activeBuffer = e.activeBuffer()
       # Check if the buffer is shared across multiple windows
       let isShared = e.isBufferShared(activeBuffer)
+      let commandToExecute = e.state.commandText
       let r = e.handlerManager.handleCommandMode(
-        activeBuffer, e.state.commandText, isShared, e.state.cursor.line
+        activeBuffer, commandToExecute, isShared, e.state.cursor.line
       )
+
+      # Add to command history (without the leading ":")
+      if commandToExecute.len > 1:
+        e.addCommandToHistory(commandToExecute[1 ..^ 1])
 
       if r.shouldQuit():
         return false # Signal app should quit
@@ -436,6 +442,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.setStatusMessage("currentnumber = " & $val)
         of bsoCursorLine:
           e.config.standard.cursorLine = val
+          e.state.display.showCursorLine = val
           e.state.setStatusMessage("cursorline = " & $val)
         of bsoStatusLine:
           e.config.standard.statusLine = val
@@ -445,18 +452,23 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.setStatusMessage("tabline = " & $val)
         of bsoSyntax:
           e.config.standard.syntax = val
+          e.state.display.showSyntax = val
           e.state.setStatusMessage("syntax = " & $val)
         of bsoIndentationLines:
           e.config.standard.indentationLines = val
+          e.state.display.showIndentationLines = val
           e.state.setStatusMessage("indentationlines = " & $val)
         of bsoAutoIndent:
           e.config.standard.autoIndent = val
+          e.state.display.autoIndent = val
           e.state.setStatusMessage("autoindent = " & $val)
         of bsoAutoCloseParen:
           e.config.standard.autoCloseParen = val
+          e.state.display.autoCloseParen = val
           e.state.setStatusMessage("autocloseparen = " & $val)
         of bsoAutoDeleteParen:
           e.config.standard.autoDeleteParen = val
+          e.state.display.autoDeleteParen = val
           e.state.setStatusMessage("autodeleteparen = " & $val)
         of bsoClipboard:
           e.config.clipboard.enable = val
@@ -472,6 +484,8 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.setStatusMessage("icon = " & $val)
         of bsoHighlightCurrentLine:
           e.config.highlight.currentLine = val
+          e.config.standard.cursorLine = val # Keep both settings in sync
+          e.state.display.showCursorLine = val
           e.state.setStatusMessage("highlightcurrentline = " & $val)
         of bsoHighlightCurrentWord:
           e.config.highlight.currentWord = val
@@ -596,8 +610,14 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           # Get saved file path from active buffer
           let savedPath =
             if activeBuffer.filePath.isSome: activeBuffer.filePath.get else: "file"
-          logInfo("handler", "File saved via command: " & savedPath)
-          e.state.setStatusMessage("Saved: " & savedPath)
+          # Log notification (controlled by config)
+          if e.config.notification.logNotifications and
+              e.config.notification.saveLogNotify:
+            logInfo("handler", "File saved via command: " & savedPath)
+          # Screen notification (controlled by config)
+          if e.config.notification.screenNotifications and
+              e.config.notification.saveScreenNotify:
+            e.state.setStatusMessage("Saved: " & savedPath)
 
           # Build on save if enabled
           if e.config.buildOnSave.enable:
@@ -615,12 +635,19 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
               savedPath, activeBuffer.language, customCmd, workspaceRoot
             )
             if buildResult.isErr:
+              # Always show errors
               e.state.setStatusMessage("Build error: " & buildResult.error)
               logError("handler", "Build on save failed: " & buildResult.error)
             else:
               var buildProcess = buildResult.get
-              e.state.setStatusMessage("Building: " & savedPath)
-              logInfo("handler", "Build on save started: " & savedPath)
+              # Build on save screen notification (controlled by config)
+              if e.config.notification.screenNotifications and
+                  e.config.notification.buildOnSaveScreenNotify:
+                e.state.setStatusMessage("Building: " & savedPath)
+              # Build on save log notification (controlled by config)
+              if e.config.notification.logNotifications and
+                  e.config.notification.buildOnSaveLogNotify:
+                logInfo("handler", "Build on save started: " & savedPath)
 
               # Wait for the process to finish and get the result
               let output = buildProcess.process.waitFor()
@@ -632,6 +659,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
               # Open the output in a new horizontal split window
               let splitResult = e.hsplitWithBuffer(outputBuffer)
               if splitResult.isErr:
+                # Always show errors
                 e.state.setStatusMessage(
                   "Failed to open output window: " & splitResult.error
                 )
@@ -639,8 +667,14 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
                   "handler", "Build on save window split failed: " & splitResult.error
                 )
               else:
-                e.state.setStatusMessage("Build completed: " & savedPath)
-                logInfo("handler", "Build on save completed: " & savedPath)
+                # Build on save screen notification (controlled by config)
+                if e.config.notification.screenNotifications and
+                    e.config.notification.buildOnSaveScreenNotify:
+                  e.state.setStatusMessage("Build completed: " & savedPath)
+                # Build on save log notification (controlled by config)
+                if e.config.notification.logNotifications and
+                    e.config.notification.buildOnSaveLogNotify:
+                  logInfo("handler", "Build on save completed: " & savedPath)
 
       if r.shouldSaveAndQuit():
         # Handle file save and quit
@@ -698,15 +732,20 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         # Handle QuickRun command
         let quickRunResult = startBackgroundQuickRun(activeBuffer, e.config)
         if quickRunResult.isErr:
+          # Always show errors
           e.state.setStatusMessage("QuickRun error: " & quickRunResult.error)
           logError("handler", "QuickRun failed: " & quickRunResult.error)
         else:
           var qrProcess = quickRunResult.get
-          e.state.setStatusMessage(quickRunStartupMessage(qrProcess.filePath))
+          # QuickRun screen notification (controlled by config)
+          if e.config.notification.screenNotifications and
+              e.config.notification.quickRunScreenNotify:
+            e.state.setStatusMessage(quickRunStartupMessage(qrProcess.filePath))
 
           # Wait for the process to finish and get the result
           let outputResult = qrProcess.waitForResult()
           if outputResult.isErr:
+            # Always show errors
             e.state.setStatusMessage("QuickRun error: " & outputResult.error)
           else:
             let output = outputResult.get
@@ -719,13 +758,20 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             # Open the output in a new horizontal split window
             let splitResult = e.hsplitWithBuffer(outputBuffer)
             if splitResult.isErr:
+              # Always show errors
               e.state.setStatusMessage(
                 "Failed to open output window: " & splitResult.error
               )
               logError("handler", "QuickRun window split failed: " & splitResult.error)
             else:
-              e.state.setStatusMessage("QuickRun completed: " & qrProcess.filePath)
-              logInfo("handler", "QuickRun completed: " & qrProcess.filePath)
+              # QuickRun screen notification (controlled by config)
+              if e.config.notification.screenNotifications and
+                  e.config.notification.quickRunScreenNotify:
+                e.state.setStatusMessage("QuickRun completed: " & qrProcess.filePath)
+              # QuickRun log notification (controlled by config)
+              if e.config.notification.logNotifications and
+                  e.config.notification.quickRunLogNotify:
+                logInfo("handler", "QuickRun completed: " & qrProcess.filePath)
         # Return to Normal mode
         e.state.previousMode = e.state.mode
         e.state.mode = EditorMode.Normal
@@ -843,6 +889,104 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.previousMode = e.state.mode
           e.state.mode = EditorMode.RecentFile
           e.state.statusMessage = ""
+      elif r.shouldEnterDebugViewer():
+        # Open debug info in a vertical split (like log viewer)
+        var debugLines: seq[string] = @[]
+        let debugConfig = e.config.debug
+        # Generate debug info based on config settings
+        for i, window in e.windowManager.windows:
+          generateWindowInfo(
+            debugLines,
+            i,
+            i == e.windowManager.activeWindowIndex,
+            e.buffers.find(window.buffer),
+            window.viewport.x,
+            window.viewport.y,
+            window.viewport.width,
+            window.viewport.height,
+            window.viewport.topLine,
+            window.viewport.leftColumn,
+            window.cursor.line,
+            window.cursor.column,
+            debugConfig.windowNode.enable,
+          )
+        for i, buf in e.buffers:
+          generateBufferInfo(
+            debugLines,
+            i,
+            buf.filePath,
+            buf.isModified,
+            buf.readOnly,
+            $buf.language,
+            $buf.encoding,
+            buf.len,
+            buf.changeSeq,
+            debugConfig.bufferStatus.enable,
+          )
+        generateEditorStateInfo(
+          debugLines, e.state.mode, e.state.previousMode, e.state.cursor.line,
+          e.state.cursor.column, e.state.commandText, e.state.statusMessage,
+          debugConfig.editorView.enable,
+        )
+        generateSearchInfo(
+          debugLines,
+          e.state.search.text,
+          e.state.search.lastText,
+          $e.state.search.direction,
+          e.state.search.history.len,
+          e.state.search.ignorecase,
+          e.state.search.smartcase,
+          e.state.search.incsearch,
+          e.state.search.hlsearch,
+          debugConfig.search.enable,
+        )
+        generateDisplayInfo(
+          debugLines, e.state.display.showStatusLine, e.state.display.multiStatusLine,
+          e.state.display.showLineNumbers, e.state.display.showCursorLine,
+          e.state.display.showSyntax, e.state.display.showIndentationLines,
+          e.state.display.showSidebar, e.state.display.lineWrap,
+          e.state.display.tabStop, debugConfig.editorView.enable,
+        )
+        generateMacroInfo(
+          debugLines, e.state.macroState.isRecording, e.state.macroState.register,
+          e.state.macroState.registers.len, e.state.macroState.playbackDepth,
+          debugConfig.macroState.enable,
+        )
+        generateVisualInfo(
+          debugLines,
+          e.state.visualSelection.active,
+          $e.state.visualSelection.kind,
+          e.state.visualSelection.start.line,
+          e.state.visualSelection.start.column,
+          e.state.visualSelection.current.line,
+          e.state.visualSelection.current.column,
+          debugConfig.visual.enable,
+        )
+        generateJumpListInfo(
+          debugLines, e.state.jumpList.len, e.state.jumpListIndex,
+          debugConfig.jumpList.enable,
+        )
+        generateLspInfo(
+          debugLines, e.state.lspCache.codeLensCache.itemsByLine.len,
+          e.state.lspCache.locations.isSome, e.state.lspCache.codeLensCache.isValid,
+          debugConfig.lsp.enable,
+        )
+        let debugContent = debugLines.join("\n")
+        let debugBuffer = newTextBuffer(debugContent)
+        debugBuffer.readOnly = true
+        let splitResult = e.vsplitWithBuffer(debugBuffer)
+        if splitResult.isErr:
+          e.state.setStatusMessage("Failed to open debug: " & splitResult.error)
+        else:
+          e.state.setStatusMessage("Debug info (auto-refresh)")
+          # Store debug buffer reference for auto-refresh
+          e.state.debugBuffer = debugBuffer
+          e.state.timing.lastDebugUpdate = getMonoTime()
+          if e.state.timing.debugUpdateInterval == 0:
+            e.state.timing.debugUpdateInterval = 500 # Default: 500ms
+        # Return to Normal mode
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.Normal
       else:
         # Handle mode transitions
         let modeTransition = r.getModeTransition()
@@ -906,7 +1050,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           extractSubstituteReplacement(e.state.commandText)
         let flags = extractSubstituteFlags(e.state.commandText)
         let isGlobal = "g" in flags
-        if hasReplacement and pattern.len > 0:
+        if hasReplacement and pattern.len > 0 and e.config.highlight.replaceText:
           if not e.state.substitutePreview.isActive:
             e.startSubstitutePreview()
           e.updateSubstitutePreview(pattern, replacement, isGlobal)
@@ -938,7 +1082,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           extractSubstituteReplacement(e.state.commandText)
         let flags = extractSubstituteFlags(e.state.commandText)
         let isGlobal = "g" in flags
-        if hasReplacement and pattern.len > 0:
+        if hasReplacement and pattern.len > 0 and e.config.highlight.replaceText:
           if not e.state.substitutePreview.isActive:
             e.startSubstitutePreview()
           e.updateSubstitutePreview(pattern, replacement, isGlobal)
@@ -993,7 +1137,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         extractSubstituteReplacement(e.state.commandText)
       let flags = extractSubstituteFlags(e.state.commandText)
       let isGlobal = "g" in flags
-      if hasReplacement and pattern.len > 0:
+      if hasReplacement and pattern.len > 0 and e.config.highlight.replaceText:
         # Start preview if not active
         if not e.state.substitutePreview.isActive:
           e.startSubstitutePreview()
@@ -1170,6 +1314,43 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
   e.state.needsFullRedraw = true
   return true
 
+proc handleDebugModeEvent(e: Editor, event: Event): bool =
+  ## Handle Debug mode events
+  if event.kind != EventKind.Key:
+    return true
+
+  # Convert event to key combo
+  let keyComboOpt = eventToKeyCombo(event)
+  if keyComboOpt.isNone:
+    return true
+
+  let keyCombo = keyComboOpt.get
+
+  # Get viewport height for the debug viewer
+  # Reserve: 2 lines for status/command line, 1 line for title
+  let viewportHeight = max(0, e.viewport.height - 2 - 1)
+
+  let r = handleDebugModeKey(e.state, viewportHeight, keyCombo)
+
+  case r.kind
+  of dvrQuit:
+    e.state.debugViewerState = none(DebugViewerState)
+    e.state.previousMode = e.state.mode
+    e.state.mode = EditorMode.Normal
+    e.state.statusMessage = ""
+    e.state.needsFullRedraw = true
+    return true
+  of dvrEnterCommand:
+    e.state.previousMode = e.state.mode
+    e.state.mode = EditorMode.Command
+    e.state.commandText = ":"
+    e.state.commandCursor = 0
+    e.state.needsFullRedraw = true
+    return true
+  of dvrHandled, dvrUnhandled, dvrError:
+    e.state.needsFullRedraw = true
+    return true
+
 const FilerHeaderLines = 2 ## Filer mode header: title + separator
 
 proc screenToBufferPosition(
@@ -1342,6 +1523,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Handle Recent File mode input
   if e.state.mode == EditorMode.RecentFile:
     return handleRecentFileModeEvent(e, event)
+
+  # Handle Debug mode input
+  if e.state.mode == EditorMode.Debug:
+    return handleDebugModeEvent(e, event)
 
   # Handle CodeLens picker input when active
   if e.state.lspCache.codeLensPicker.isActive and event.kind == EventKind.Key:
@@ -1526,6 +1711,13 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.state.filerState = none(FilerState)
       e.state.mode = EditorMode.Normal
       e.state.cursor = BufferPosition(line: 0, column: 0)
+      # Filer screen notification (controlled by config)
+      if e.config.notification.screenNotifications and
+          e.config.notification.filerScreenNotify:
+        e.state.setStatusMessage("Opened: " & r.filerFilePath)
+      # Filer log notification (controlled by config)
+      if e.config.notification.logNotifications and e.config.notification.filerLogNotify:
+        logInfo("filer", "Opened file: " & r.filerFilePath)
     return true
 
   if r.kind == hrFilerOpenFileVSplit:
@@ -1537,6 +1729,13 @@ proc handleEvent*(e: Editor, event: Event): bool =
       # Clear filer state and switch to Normal mode
       e.state.filerState = none(FilerState)
       e.state.mode = EditorMode.Normal
+      # Filer screen notification (controlled by config)
+      if e.config.notification.screenNotifications and
+          e.config.notification.filerScreenNotify:
+        e.state.setStatusMessage("Opened in vsplit: " & r.filerFilePath)
+      # Filer log notification (controlled by config)
+      if e.config.notification.logNotifications and e.config.notification.filerLogNotify:
+        logInfo("filer", "Opened file in vsplit: " & r.filerFilePath)
     return true
 
   if r.kind == hrFilerOpenFileHSplit:
@@ -1548,6 +1747,13 @@ proc handleEvent*(e: Editor, event: Event): bool =
       # Clear filer state and switch to Normal mode
       e.state.filerState = none(FilerState)
       e.state.mode = EditorMode.Normal
+      # Filer screen notification (controlled by config)
+      if e.config.notification.screenNotifications and
+          e.config.notification.filerScreenNotify:
+        e.state.setStatusMessage("Opened in hsplit: " & r.filerFilePath)
+      # Filer log notification (controlled by config)
+      if e.config.notification.logNotifications and e.config.notification.filerLogNotify:
+        logInfo("filer", "Opened file in hsplit: " & r.filerFilePath)
     return true
 
   if r.kind == hrFilerQuit:
@@ -1646,9 +1852,17 @@ proc handleEvent*(e: Editor, event: Event): bool =
       if bkState.restoreBackup(backupIndex):
         # Reload the buffer from the restored file
         if e.buffer.filePath.isSome:
-          let textResult = e.buffer.loadFile(e.buffer.filePath.get)
+          let filePath = e.buffer.filePath.get
+          let textResult = e.buffer.loadFile(filePath)
           if textResult.isOk:
-            e.state.setStatusMessage("Backup restored successfully")
+            # Restore screen notification (controlled by config)
+            if e.config.notification.screenNotifications and
+                e.config.notification.restoreScreenNotify:
+              e.state.setStatusMessage("Backup restored: " & filePath)
+            # Restore log notification (controlled by config)
+            if e.config.notification.logNotifications and
+                e.config.notification.restoreLogNotify:
+              logInfo("restore", "Backup restored: " & filePath)
             # Refresh the backup list to show the new backup
             bkState.refresh()
           else:
@@ -1656,7 +1870,14 @@ proc handleEvent*(e: Editor, event: Event): bool =
               "Restored but failed to reload: " & textResult.error
             )
         else:
-          e.state.setStatusMessage("Backup restored successfully")
+          # Restore screen notification (controlled by config)
+          if e.config.notification.screenNotifications and
+              e.config.notification.restoreScreenNotify:
+            e.state.setStatusMessage("Backup restored successfully")
+          # Restore log notification (controlled by config)
+          if e.config.notification.logNotifications and
+              e.config.notification.restoreLogNotify:
+            logInfo("restore", "Backup restored successfully")
       else:
         e.state.setStatusMessage("Failed to restore backup")
     return true

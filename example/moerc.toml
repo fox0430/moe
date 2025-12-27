@@ -26,15 +26,15 @@ ignorecase = true                      # ✅ Search case insensitive (IMPLEMENTE
 
 smartcase = true                       # ✅ Smart case search (IMPLEMENTED)
 
-disableChangeCursor = false            # 📝 Cursor shape changes (not yet applied)
+disableChangeCursor = false            # ✅ Disable cursor shape changes (IMPLEMENTED)
 
-defaultCursor = "terminalDefault"      # 📝 Default cursor style (not yet applied)
+defaultCursor = "terminalDefault"      # ✅ Default cursor style - restored on exit (IMPLEMENTED)
 
-normalModeCursor = "blinkBlock"        # 📝 Normal mode cursor (not yet applied)
+normalModeCursor = "blinkBlock"        # ✅ Normal mode cursor (IMPLEMENTED)
 
-insertModeCursor = "blinkIbeam"        # 📝 Insert mode cursor (not yet applied)
+insertModeCursor = "blinkIbeam"        # ✅ Insert mode cursor (IMPLEMENTED)
 
-liveReloadOfConf = false               # 📝 Live config reload (not yet applied)
+liveReloadOfConf = false               # ✅ Live config reload (IMPLEMENTED) - Set to true to auto-reload config on file change
 
 incrementalSearch = true               # ✅ Incremental search (IMPLEMENTED)
 
@@ -44,21 +44,21 @@ autoDeleteParen = true                 # ✅ Auto-delete matching parens (IMPLEM
 
 liveReloadOfFile = false               # ✅ Auto-reload when file changed externally (IMPLEMENTED)
 
-colorMode = "24bit"                    # 📝 Color mode: "8bit", "24bit", "none" (not yet applied)
+colorMode = "24bit"                    # ✅ Color mode: "8bit", "24bit", "none" (IMPLEMENTED)
 
 [Clipboard]
 
-enable = true                          # 📝 Clipboard integration (not yet applied)
+enable = true                          # ✅ Clipboard integration (IMPLEMENTED)
 
-tool = "xsel"                          # 📝 Tool: xsel, xclip, wl-clipboard, etc. (not yet applied)
+tool = "xsel"                          # ✅ Tool: xsel, xclip, wl-clipboard, etc. (IMPLEMENTED)
 
 [BuildOnSave]
 
-enable = false                         # 📝 Build on save feature (not implemented)
+enable = false                         # ✅ Build on save feature (IMPLEMENTED)
 
-# workspaceRoot = "/home/fox/git/moe"
+workspaceRoot = "/home/fox/git/moe"    # ✅ Working directory for build (IMPLEMENTED)
 
-# command = "cd /home/fox/git/moe && nimble build"
+command = "nimble build"               # ✅ Custom build command (IMPLEMENTED)
 
 [TabLine]
 
@@ -68,41 +68,56 @@ allBuffer = false                      # 📝 Show all buffers in tab line (not 
 
 multipleStatusLine = true              # ✅ Show status line per window (IMPLEMENTED)
 
-merge = false                          # 📝 Merge status lines (not yet applied)
+merge = false                          # ✅ Merge status lines (IMPLEMENTED) - single bottom status line in multi-window mode
 
-mode = true                            # 📝 Show mode in status line (not yet applied)
+mode = true                            # ✅ Show mode in status line (IMPLEMENTED)
 
-filename = true                        # 📝 Show filename in status line (not yet applied)
+filename = true                        # ✅ Show filename in status line (IMPLEMENTED)
 
-chanedMark = true                      # 📝 Show changed mark (not yet applied)
+chanedMark = true                      # ✅ Show changed mark [+] (IMPLEMENTED)
 
-directory = true                       # 📝 Show directory (not yet applied)
+directory = true                       # ✅ Show full directory path (IMPLEMENTED) - false shows just filename
 
-gitChangedLines = true                 # 📝 Show git changed lines count (not yet applied)
+gitChangedLines = true                 # ✅ Show git changed lines count +N ~N -N (IMPLEMENTED)
 
-gitBranchName = true                   # 📝 Show git branch name (not yet applied)
+gitBranchName = true                   # ✅ Show git branch name (IMPLEMENTED)
 
-showGitInactive = false                # 📝 Show git info in inactive windows (not yet applied)
+showGitInactive = false                # ✅ Show git info in inactive windows (IMPLEMENTED)
 
-showModeInactive = false               # 📝 Show mode in inactive windows (not yet applied)
+showModeInactive = false               # ✅ Show mode in inactive windows (IMPLEMENTED)
 
-setupText = "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"  # 📝 Custom format (not yet applied)
+# Custom status line format (IMPLEMENTED)
+# Supported placeholders:
+#   {lineNumber}    - Current line number
+#   {totalLines}    - Total lines in buffer
+#   {columnNumber}  - Current column number
+#   {totalColumns}  - Total columns in current line
+#   {encoding}      - File encoding (e.g., "UTF-8")
+#   {fileType}      - File type/language (e.g., "Nim", "Toml")
+#   {percentage}    - Line percentage (e.g., "50%")
+#   {mode}          - Current editor mode
+#   {filename}      - Filename only
+#   {directory}     - Directory path
+#   {filePath}      - Full file path
+#   {gitBranch}     - Git branch name
+#   {gitChanges}    - Git changes (+N ~N -N)
+setupText = "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
 
 [Highlight]
 
-currentLine = true                     # 📝 Highlight current line (loaded, not yet applied)
+currentLine = true                     # ✅ Highlight current line (IMPLEMENTED) - synced with standard.cursorLine
 
-reservedWord = ["TODO", "WIP", "NOTE"] # 📝 Highlight reserved words (loaded, not yet applied)
+reservedWord = ["TODO", "WIP", "NOTE"] # ✅ Highlight reserved words (IMPLEMENTED)
 
-replaceText = true                     # 📝 Highlight replace text (loaded, not yet applied)
+replaceText = true                     # ✅ Live substitute preview (IMPLEMENTED) - shows :s/foo/bar/ changes in real-time
 
-pairOfParen = true                     # 📝 Highlight matching parens (loaded, not yet applied)
+pairOfParen = true                     # ✅ Highlight matching parens (IMPLEMENTED) - highlights matching bracket when cursor is on one
 
 fullWidthSpace = true                  # ✅ Highlight full-width spaces (IMPLEMENTED)
 
 trailingSpaces = true                  # ✅ Highlight trailing spaces (IMPLEMENTED)
 
-currentWord = true                     # 📝 Highlight current word (loaded, not yet applied)
+currentWord = true                     # ✅ Highlight current word (IMPLEMENTED) - highlights all occurrences of word under cursor
 
 [AutoBackup]
 
@@ -120,79 +135,78 @@ dirToExclude = ["/etc"]                # ✅ Directories to exclude (IMPLEMENTED
 
 [QuickRun]
 
-saveBufferWhenQuickRun = true          # 📝 Quick run feature (not implemented)
+saveBufferWhenQuickRun = true          # ✅ Save buffer before running (IMPLEMENTED)
 
-# command = "nimble build"
+# command = "nimble build"             # ✅ Custom command override (IMPLEMENTED)
 
-# 30 second
-timeout = 30
+# 30 second timeout
+timeout = 30                           # ✅ Timeout in seconds (IMPLEMENTED)
 
-# nimAdvancedCommand = "js"
+# nimAdvancedCommand = "js"            # ✅ Nim advanced command e.g., "js" for JavaScript (IMPLEMENTED)
 
-# ClangOptions = "-Wall"
+# ClangOptions = "-Wall"               # ✅ C compiler options (IMPLEMENTED)
 
-# CppOptions = "-Wall"
+# CppOptions = "-Wall"                 # ✅ C++ compiler options (IMPLEMENTED)
 
-# NimOptions = "--debugger:native"
+# NimOptions = "--debugger:native"     # ✅ Nim compiler options (IMPLEMENTED)
 
-# shOptions = "-c"
+# shOptions = "-c"                     # ✅ sh shell options (IMPLEMENTED)
 
-# bashOptions = "-c"
+# bashOptions = "-c"                   # ✅ bash shell options (IMPLEMENTED)
 
 [Notification]
-# All notification settings are loaded but not yet applied to actual notification system
 
-screenNotifications = true             # 📝 Screen notifications (not yet applied)
+screenNotifications = true             # ✅ Global screen notifications (IMPLEMENTED)
 
-logNotifications = true
+logNotifications = true                # ✅ Global log notifications (IMPLEMENTED)
 
-autoBackupScreenNotify = true
+autoBackupScreenNotify = true          # ✅ Auto-backup screen notifications (IMPLEMENTED)
 
-autoBackupLogNotify = true
+autoBackupLogNotify = true             # ✅ Auto-backup log notifications (IMPLEMENTED)
 
-autoSaveScreenNotify = true
+autoSaveScreenNotify = true            # ✅ Auto-save screen notifications (IMPLEMENTED)
 
-autoSaveLogNotify = true
+autoSaveLogNotify = true               # ✅ Auto-save log notifications (IMPLEMENTED)
 
-yankScreenNotify = true
+yankScreenNotify = true                # ✅ Yank screen notifications (IMPLEMENTED)
 
-yankLogNotify = true
+yankLogNotify = true                   # ✅ Yank log notifications (IMPLEMENTED)
 
-deleteScreenNotify = true
+deleteScreenNotify = true              # ✅ Delete screen notifications (IMPLEMENTED)
 
-deleteLogNotify = true
+deleteLogNotify = true                 # ✅ Delete log notifications (IMPLEMENTED)
 
-saveScreenNotify = true
+saveScreenNotify = true                # ✅ Save screen notifications (IMPLEMENTED)
 
-saveLogNotify = true
+saveLogNotify = true                   # ✅ Save log notifications (IMPLEMENTED)
 
-quickRunScreenNotify = true
+quickRunScreenNotify = true            # ✅ QuickRun screen notifications (IMPLEMENTED)
 
-quickRunLogNotify = true
+quickRunLogNotify = true               # ✅ QuickRun log notifications (IMPLEMENTED)
 
-buildOnSaveScreenNotify = true
+buildOnSaveScreenNotify = true         # ✅ Build-on-save screen notifications (IMPLEMENTED)
 
-buildOnSaveLogNotify = true
+buildOnSaveLogNotify = true            # ✅ Build-on-save log notifications (IMPLEMENTED)
 
-filerScreenNotify = true
+filerScreenNotify = true               # ✅ Filer screen notifications (IMPLEMENTED)
 
-filerLogNotify = true
+filerLogNotify = true                  # ✅ Filer log notifications (IMPLEMENTED)
 
-restoreScreenNotify = true
+restoreScreenNotify = true             # ✅ Restore screen notifications (IMPLEMENTED)
 
-restoreLogNotify = true
+restoreLogNotify = true                # ✅ Restore log notifications (IMPLEMENTED)
 
-lspScreenNotify = true
+lspScreenNotify = true                 # ✅ LSP screen notifications (IMPLEMENTED)
 
-lspLogNotify = true
+lspLogNotify = true                    # ✅ LSP log notifications (IMPLEMENTED)
 
 [Filer]
 
-showIcons = true                       # 📝 File browser icons (loaded, not yet applied)
+showIcons = true                       # ✅ File browser icons (IMPLEMENTED) - emoji icons for file types
 
 [Autocomplete]
 
-enable = true                          # 📝 Autocomplete (loaded, not yet applied)
+enable = true                          # ✅ Autocomplete enable/disable (IMPLEMENTED)
 
 windowBorder = true                    # ✅ Autocomplete window border (IMPLEMENTED)
 
@@ -204,15 +218,15 @@ interval = 5                           # ✅ Auto-save interval in minutes (IMPL
 
 [Persist]
 
-exCommand = true                       # 📝 Persist command history (loaded, not yet applied)
+exCommand = true                       # ✅ Persist command history (IMPLEMENTED)
 
-exCommandHistoryLimit = 1000           # 📝 History limit (loaded, not yet applied)
+exCommandHistoryLimit = 1000           # ✅ History limit (IMPLEMENTED)
 
-search = true                          # 📝 Persist search history (loaded, not yet applied)
+search = true                          # ✅ Persist search history (IMPLEMENTED)
 
-searchHistoryLimit = 1000              # 📝 Search history limit (loaded, not yet applied)
+searchHistoryLimit = 1000              # ✅ Search history limit (IMPLEMENTED)
 
-cursorPosition = true                  # 📝 Persist cursor position (loaded, not yet applied)
+cursorPosition = true                  # ✅ Persist cursor position per file (IMPLEMENTED)
 
 [Git]
 
@@ -233,56 +247,200 @@ minDelay = 5                           # ✅ Min delay in ms (IMPLEMENTED) - map
 maxDelay = 20                          # ✅ Max delay in ms (IMPLEMENTED) - maps to maxDurationMs
 
 [StartUp.FileOpen]
-autoSplit = true                       # 📝 Auto-split on startup (not implemented)
-splitType = "vertical"                 # 📝 Split type: "vertical" or "horizontal" (not implemented)
+autoSplit = true                       # ✅ Auto-split on startup when opening multiple files (IMPLEMENTED)
+splitType = "vertical"                 # ✅ Split type: "vertical" or "horizontal" (IMPLEMENTED)
 
-# Debug sections - all settings are loaded but not yet applied
+# Debug mode settings - controls what sections are shown in :debug view
+# Use :debug command to open the debug viewer (vertical split, auto-refreshes every 500ms)
+
 [Debug.WindowNode]
-enable = true                          # 📝 Debug output (not yet applied)
-currentWindow = true
-index = true
-windowIndex = true
-bufferIndex = true
-parentIndex = true
-childLen = true
-splitType = true
-haveCursesWin = true
-y = true
-x = true
-h = true
-w = true
-currentLine = true
-currentColumn = true
-expandedColumn = true
-cursor = true
+enable = true                          # ✅ Show window info section (IMPLEMENTED)
+currentWindow = true                   # Show current window flag
+index = true                           # Show window index
+windowIndex = true                     # Show window index in manager
+bufferIndex = true                     # Show buffer index
+parentIndex = true                     # Show parent index
+childLen = true                        # Show child count
+splitType = true                       # Show split type
+haveCursesWin = true                   # Show curses window flag
+y = true                               # Show viewport Y position
+x = true                               # Show viewport X position
+h = true                               # Show viewport height
+w = true                               # Show viewport width
+currentLine = true                     # Show current line
+currentColumn = true                   # Show current column
+expandedColumn = true                  # Show expanded column
+cursor = true                          # Show cursor info
 
 [Debug.EditorView]
-enable = true
-widthOfLineNum = true
-height = true
-width = true
-originalLine = false
-start = false
-length = false
+enable = true                          # ✅ Show editor state & display settings (IMPLEMENTED)
+widthOfLineNum = true                  # Show line number width
+height = true                          # Show height
+width = true                           # Show width
+originalLine = false                   # Show original line
+start = false                          # Show start position
+length = false                         # Show length
 
 [Debug.BufferStatus]
-enable = true
-bufferIndex = true
-path = true
-openDir = true
-currentMode = true
-prevMode = true
-language = true
-encoding = true
-countChange = true
-cmdLoop = true
-lastSaveTime = true
-bufferLen = true
+enable = true                          # ✅ Show buffer info section (IMPLEMENTED)
+bufferIndex = true                     # Show buffer index
+path = true                            # Show file path
+openDir = true                         # Show open directory
+currentMode = true                     # Show current mode
+prevMode = true                        # Show previous mode
+language = true                        # Show language
+encoding = true                        # Show encoding
+countChange = true                     # Show change count
+cmdLoop = true                         # Show command loop
+lastSaveTime = true                    # Show last save time
+bufferLen = true                       # Show buffer length
+
+[Debug.Search]
+enable = true                          # ✅ Show search state section (IMPLEMENTED)
+
+[Debug.MacroState]
+enable = true                          # ✅ Show macro state section (IMPLEMENTED)
+
+[Debug.Visual]
+enable = true                          # ✅ Show visual selection section (IMPLEMENTED)
+
+[Debug.JumpList]
+enable = true                          # ✅ Show jump list section (IMPLEMENTED)
+
+[Debug.Lsp]
+enable = true                          # ✅ Show LSP state section (IMPLEMENTED)
 
 [Theme]
 
-# 📝 Theme system not yet implemented
-kind = "config"                        # 📝 Theme kind: "default", "config", "vscode" (not implemented)
+# Theme system - supports custom color themes
+kind = "config"                        # ✅ Theme kind: "default", "config" (IMPLEMENTED) - "vscode" not yet supported
 
-# 📝 Please set the path of the theme config file.
-path = "~/.config/moe/themes/dark.toml" # 📝 Theme file path (not implemented)
+# Path to custom theme file (used when kind = "config")
+# Sample themes available in example/themes/: dark.toml, light.toml, vivid.toml
+path = "~/.config/moe/themes/dark.toml" # ✅ Theme file path (IMPLEMENTED)
+
+[Lsp]
+
+enable = false                         # ✅ Enable LSP support (IMPLEMENTED)
+
+timeout = 5000                         # ✅ LSP request timeout in ms (IMPLEMENTED)
+
+[Lsp.Completion]
+
+enable = true                          # ✅ Enable completion (IMPLEMENTED)
+
+[Lsp.Declaration]
+
+enable = true                          # ✅ Enable go to declaration (IMPLEMENTED)
+
+openWindow = false                     # ✅ Open in new window (IMPLEMENTED)
+
+[Lsp.Definition]
+
+enable = true                          # ✅ Enable go to definition (IMPLEMENTED)
+
+openWindow = false                     # ✅ Open in new window (IMPLEMENTED)
+
+[Lsp.TypeDefinition]
+
+enable = true                          # ✅ Enable go to type definition (IMPLEMENTED)
+
+openWindow = false                     # ✅ Open in new window (IMPLEMENTED)
+
+[Lsp.Implementation]
+
+enable = true                          # ✅ Enable go to implementation (IMPLEMENTED)
+
+openWindow = false                     # ✅ Open in new window (IMPLEMENTED)
+
+[Lsp.Diagnostics]
+
+enable = true                          # ✅ Enable diagnostics (IMPLEMENTED)
+
+[Lsp.SignatureHelp]
+
+enable = true                          # ✅ Enable signature help (IMPLEMENTED)
+
+[Lsp.DocumentFormatting]
+
+enable = true                          # ✅ Enable document formatting (IMPLEMENTED)
+
+[Lsp.FoldingRange]
+
+enable = true                          # ✅ Enable code folding (IMPLEMENTED)
+
+[Lsp.SelectionRange]
+
+enable = true                          # ✅ Enable selection range (IMPLEMENTED)
+
+[Lsp.DocumentSymbol]
+
+enable = true                          # ✅ Enable document symbols (IMPLEMENTED)
+
+[Lsp.Hover]
+
+enable = true                          # ✅ Enable hover information (IMPLEMENTED)
+
+[Lsp.InlayHint]
+
+enable = true                          # ✅ Enable inlay hints (IMPLEMENTED)
+
+[Lsp.InlineValue]
+
+enable = false                         # ✅ Enable inline values (IMPLEMENTED)
+
+[Lsp.References]
+
+enable = true                          # ✅ Enable find references (IMPLEMENTED)
+
+[Lsp.CallHierarchy]
+
+enable = true                          # ✅ Enable call hierarchy (IMPLEMENTED)
+
+[Lsp.DocumentHighlight]
+
+enable = true                          # ✅ Enable document highlight (IMPLEMENTED)
+
+[Lsp.DocumentLink]
+
+enable = true                          # ✅ Enable document links (IMPLEMENTED)
+
+[Lsp.CodeLens]
+
+enable = false                         # ✅ Enable code lens (IMPLEMENTED)
+
+[Lsp.Rename]
+
+enable = true                          # ✅ Enable rename symbol (IMPLEMENTED)
+
+[Lsp.SemanticTokens]
+
+enable = true                          # ✅ Enable semantic tokens (IMPLEMENTED)
+
+[Lsp.ExecuteCommand]
+
+enable = true                          # ✅ Enable execute command (IMPLEMENTED)
+
+# Language server configurations
+# You can add any language by creating a section [Lsp.<language>]
+# with extensions, command, and trace settings
+
+[Lsp.nim]
+
+extensions = ["nim"]                   # ✅ File extensions for this language (IMPLEMENTED)
+
+command = "nimlangserver"              # ✅ LSP server command (IMPLEMENTED)
+
+trace = "verbose"                      # ✅ Trace level: "off", "messages", "verbose" (IMPLEMENTED)
+
+[Lsp.rust]
+
+extensions = ["rs"]                    # ✅ File extensions for this language (IMPLEMENTED)
+
+command = "rust-analyzer"              # ✅ LSP server command (IMPLEMENTED)
+
+trace = "verbose"                      # ✅ Trace level (IMPLEMENTED)
+
+rustAnalyzerRunSingle = true           # ✅ rust-analyzer specific: run single (IMPLEMENTED)
+
+rustAnalyzerDebugSingle = true         # ✅ rust-analyzer specific: debug single (IMPLEMENTED)

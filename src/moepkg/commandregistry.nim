@@ -132,6 +132,7 @@ type
     keyBindingRegistry*: keybindings.KeyBindingRegistry
     clipboardConfig*: ClipboardConfig
     smoothScrollConfig*: SmoothScrollConfig
+    notificationConfig*: NotificationConfig
 
   ## Function signature for command handlers
   CommandHandler* =
@@ -1932,7 +1933,15 @@ proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
     some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: actualCount))
 
   ctx.state.needsFullRedraw = true
-  ctx.state.statusMessage = "Deleted " & $actualCount & " line(s)"
+  # Delete screen notification (controlled by config)
+  if ctx.notificationConfig.screenNotifications and
+      ctx.notificationConfig.deleteScreenNotify:
+    ctx.state.statusMessage = "Deleted " & $actualCount & " line(s)"
+
+  # Delete log notification (controlled by config)
+  if ctx.notificationConfig.logNotifications and ctx.notificationConfig.deleteLogNotify:
+    logInfo("delete", "Deleted " & $actualCount & " line(s)")
+
   return Result[(), string].ok ()
 
 proc handleClipboardCut(ctx: CommandContext): Result[(), string] =
@@ -1994,13 +2003,21 @@ proc handleYankLine(ctx: CommandContext, count: int = 1): Result[(), string] =
   if ctx.clipboardConfig.enable:
     let writeResult = writeToClipboard(ctx.clipboardConfig.tool, yankText)
     if writeResult.isErr:
-      # Don't fail the operation if clipboard write fails
+      # Don't fail the operation if clipboard write fails, but always show clipboard errors
       ctx.state.statusMessage =
         "Yanked " & $actualCount & " line(s) (clipboard error: " & writeResult.error &
         ")"
       return Result[(), string].ok ()
 
-  ctx.state.statusMessage = "Yanked " & $actualCount & " line(s)"
+  # Yank screen notification (controlled by config)
+  if ctx.notificationConfig.screenNotifications and
+      ctx.notificationConfig.yankScreenNotify:
+    ctx.state.statusMessage = "Yanked " & $actualCount & " line(s)"
+
+  # Yank log notification (controlled by config)
+  if ctx.notificationConfig.logNotifications and ctx.notificationConfig.yankLogNotify:
+    logInfo("yank", "Yanked " & $actualCount & " line(s)")
+
   return Result[(), string].ok ()
 
 proc handleJoinLines(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -2098,7 +2115,13 @@ proc handleOperatorYank(ctx: CommandContext, count: int = 1): Result[(), string]
     # Clear operator state
     ctx.state.editState.pendingOperator = none(PendingOperator)
     let lineCount = endLine - startLine + 1
-    ctx.state.statusMessage = "Yanked " & $lineCount & " line(s)"
+    # Yank screen notification (controlled by config)
+    if ctx.notificationConfig.screenNotifications and
+        ctx.notificationConfig.yankScreenNotify:
+      ctx.state.statusMessage = "Yanked " & $lineCount & " line(s)"
+    # Yank log notification (controlled by config)
+    if ctx.notificationConfig.logNotifications and ctx.notificationConfig.yankLogNotify:
+      logInfo("yank", "Yanked " & $lineCount & " line(s)")
     return ok(())
   else:
     # Set pending operator for motion
@@ -2159,7 +2182,13 @@ proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), strin
 
     # Clear operator state
     ctx.state.editState.pendingOperator = none(PendingOperator)
-    ctx.state.statusMessage = "Deleted " & $lineCount & " line(s)"
+    # Delete screen notification (controlled by config)
+    if ctx.notificationConfig.screenNotifications and
+        ctx.notificationConfig.deleteScreenNotify:
+      ctx.state.statusMessage = "Deleted " & $lineCount & " line(s)"
+    # Delete log notification (controlled by config)
+    if ctx.notificationConfig.logNotifications and ctx.notificationConfig.deleteLogNotify:
+      logInfo("delete", "Deleted " & $lineCount & " line(s)")
     return ok(())
   else:
     # Set pending operator for motion

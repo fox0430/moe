@@ -27,7 +27,7 @@ import std/options
 
 import pkg/results
 
-import ../[buffer, cursor, modes, types, keybindings, commandregistry]
+import ../[buffer, config, cursor, modes, types, keybindings, commandregistry]
 
 type
   VisualModeResultKind* = enum
@@ -38,6 +38,7 @@ type
   VisualModeHandler* = ref object ## Handler for Visual mode operations
     keyBindingRegistry*: KeyBindingRegistry
     commandRegistry*: CommandRegistry
+    notificationConfig*: NotificationConfig
 
   VisualModeResult* = object ## Result of visual mode command execution
     case kind*: VisualModeResultKind
@@ -49,11 +50,15 @@ type
       errorMessage*: string
 
 proc newVisualModeHandler*(
-    keyBindingRegistry: KeyBindingRegistry, commandRegistry: CommandRegistry
+    keyBindingRegistry: KeyBindingRegistry,
+    commandRegistry: CommandRegistry,
+    notificationConfig: NotificationConfig = NotificationConfig(),
 ): VisualModeHandler =
   ## Create a new Visual mode handler
   VisualModeHandler(
-    keyBindingRegistry: keyBindingRegistry, commandRegistry: commandRegistry
+    keyBindingRegistry: keyBindingRegistry,
+    commandRegistry: commandRegistry,
+    notificationConfig: notificationConfig,
   )
 
 proc initSelection*(
@@ -148,6 +153,7 @@ proc executeCommand*(
     viewport: viewport,
     motionController: nil, # Visual mode doesn't use motion controller
     keyBindingRegistry: handler.keyBindingRegistry,
+    notificationConfig: handler.notificationConfig,
   )
 
   let originalMode = state.mode
@@ -202,6 +208,7 @@ proc handleVisualModeKey*(
     viewport: viewport,
     motionController: nil, # Visual mode doesn't use motion controller
     keyBindingRegistry: handler.keyBindingRegistry,
+    notificationConfig: handler.notificationConfig,
   )
 
   # Execute command through registry

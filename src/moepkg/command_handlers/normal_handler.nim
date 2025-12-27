@@ -50,6 +50,7 @@ type
     commandRegistry*: CommandRegistry
     clipboardConfig*: ClipboardConfig
     smoothScrollConfig*: SmoothScrollConfig
+    notificationConfig*: NotificationConfig
 
   NormalModeResult* = object ## Result of normal mode command execution
     case kind*: NormalModeResultKind
@@ -86,6 +87,7 @@ proc newNormalModeHandler*(
     clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: ctXclip),
     smoothScrollConfig: SmoothScrollConfig =
       SmoothScrollConfig(enable: true, baseDurationMs: 350, maxDurationMs: 650),
+    notificationConfig: NotificationConfig = NotificationConfig(),
 ): NormalModeHandler =
   ## Create a new Normal mode handler
   NormalModeHandler(
@@ -94,6 +96,7 @@ proc newNormalModeHandler*(
     commandRegistry: commandRegistry,
     clipboardConfig: clipboardConfig,
     smoothScrollConfig: smoothScrollConfig,
+    notificationConfig: notificationConfig,
   )
 
 proc executeCommand*(
@@ -113,6 +116,7 @@ proc executeCommand*(
     keyBindingRegistry: handler.keyBindingRegistry,
     clipboardConfig: handler.clipboardConfig,
     smoothScrollConfig: handler.smoothScrollConfig,
+    notificationConfig: handler.notificationConfig,
   )
 
   let r = handler.commandRegistry.execute(ctx, commandId, args)
@@ -202,6 +206,8 @@ proc handleModeSwitch*(
   of EditorMode.RecentFile:
     return
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.RecentFile))
+  of EditorMode.Debug:
+    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Debug))
   of EditorMode.Normal:
     # Already in Normal mode
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
@@ -445,6 +451,7 @@ proc handleNormalModeKey*(
           keyBindingRegistry: handler.keyBindingRegistry,
           clipboardConfig: handler.clipboardConfig,
           smoothScrollConfig: handler.smoothScrollConfig,
+          notificationConfig: handler.notificationConfig,
         )
 
         let cmdResult = handler.commandRegistry.execute(ctx, textObjectCommandId, @[])
@@ -485,6 +492,7 @@ proc handleNormalModeKey*(
       keyBindingRegistry: handler.keyBindingRegistry,
       clipboardConfig: handler.clipboardConfig,
       smoothScrollConfig: handler.smoothScrollConfig,
+      notificationConfig: handler.notificationConfig,
     )
 
     # Execute the motion command directly through CommandRegistry
@@ -539,6 +547,7 @@ proc handleNormalModeKey*(
         keyBindingRegistry: handler.keyBindingRegistry,
         clipboardConfig: handler.clipboardConfig,
         smoothScrollConfig: handler.smoothScrollConfig,
+        notificationConfig: handler.notificationConfig,
       )
       let cmdResult = handler.commandRegistry.execute(ctx, cmd.commandId, cmd.args)
       if cmdResult.isOk:
@@ -569,6 +578,7 @@ proc handleNormalModeKey*(
       keyBindingRegistry: handler.keyBindingRegistry,
       clipboardConfig: handler.clipboardConfig,
       smoothScrollConfig: handler.smoothScrollConfig,
+      notificationConfig: handler.notificationConfig,
     )
     # Use executeCommand to handle numeric prefixes properly
     let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)

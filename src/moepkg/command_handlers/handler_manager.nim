@@ -34,12 +34,12 @@ import
 import
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
   filer_handler, logviewer_handler, help_handler, buffermanager_handler,
-  backupmanager_handler, diffviewer_handler, recentfilemode_handler
+  backupmanager_handler, diffviewer_handler, recentfilemode_handler, debug_handler
 
 export
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
   filer_handler, logviewer_handler, help_handler, buffermanager_handler,
-  backupmanager_handler, diffviewer_handler, recentfilemode_handler
+  backupmanager_handler, diffviewer_handler, recentfilemode_handler, debug_handler
 
 type
   HandlerResultKind* = enum
@@ -103,6 +103,7 @@ type
     hrJumpList # Show jump list (:ju, :jump)
     hrBuild # Build current buffer (:build)
     hrDebug # Open debug mode (:debug)
+    hrDebugViewerQuit # Close debug viewer
     hrConfig # Open configuration mode (:conf)
     hrPutConfigFile # Write sample config file (:putConfigFile)
     hrMan # Show manual page (:man)
@@ -251,6 +252,8 @@ type
       discard
     of hrDebug:
       discard
+    of hrDebugViewerQuit:
+      discard
     of hrConfig:
       discard
     of hrPutConfigFile:
@@ -287,19 +290,24 @@ proc newHandlerManager*(
     clipboardConfig: ClipboardConfig,
     smoothScrollConfig: SmoothScrollConfig =
       SmoothScrollConfig(enable: true, baseDurationMs: 350, maxDurationMs: 650),
+    notificationConfig: NotificationConfig = NotificationConfig(),
     lsp: LspIntegration = nil,
+    autocompleteEnabled: bool = true,
 ): HandlerManager =
   ## Create a new handler manager with all mode handlers
 
   let normalHandler = newNormalModeHandler(
     motionController, keyBindingRegistry, commandRegistry, clipboardConfig,
-    smoothScrollConfig,
+    smoothScrollConfig, notificationConfig,
   )
-  let insertHandler =
-    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry, lsp)
+  let insertHandler = newInsertModeHandler(
+    keyBindingRegistry, motionController, commandRegistry, lsp, autocompleteEnabled,
+    notificationConfig,
+  )
   let commandHandler =
     newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
-  let visualHandler = newVisualModeHandler(keyBindingRegistry, commandRegistry)
+  let visualHandler =
+    newVisualModeHandler(keyBindingRegistry, commandRegistry, notificationConfig)
   let replaceHandler =
     newReplaceModeHandler(keyBindingRegistry, motionController, commandRegistry)
   let filerHandler = newFilerHandler()
@@ -1086,6 +1094,9 @@ proc handleKeyCombo*(
     # Recent File mode requires its own state, not EditorState
     # This should be handled at a higher level with RecentFileModeState
     return HandlerResult(kind: hrUnhandled)
+  of EditorMode.Debug:
+    # Debug mode is handled at a higher level in handler.nim
+    return HandlerResult(kind: hrUnhandled)
   of EditorMode.QuickRun:
     # QuickRun mode is not interactive - handled through command mode
     return HandlerResult(kind: hrUnhandled)
@@ -1532,3 +1543,11 @@ proc shouldPrevWindow*(hrResult: HandlerResult): bool =
 proc shouldJumpList*(hrResult: HandlerResult): bool =
   ## Check if we should show jump list
   hrResult.kind == hrJumpList
+
+proc shouldEnterDebugViewer*(hrResult: HandlerResult): bool =
+  ## Check if we should enter debug viewer mode
+  hrResult.kind == hrDebug
+
+proc shouldDebugViewerQuit*(hrResult: HandlerResult): bool =
+  ## Check if we should close debug viewer
+  hrResult.kind == hrDebugViewerQuit

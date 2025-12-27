@@ -33,8 +33,8 @@ import pkg/results
 
 import
   ../[
-    types, buffer, cursor, modes, keybindings, motion, commandregistry, unicode_utils,
-    completion, signaturehelp, lspintegration,
+    types, buffer, config, cursor, modes, keybindings, motion, commandregistry,
+    unicode_utils, completion, signaturehelp, lspintegration,
   ]
 import insert_commands
 
@@ -51,6 +51,8 @@ type
     completionManager*: CompletionManager
     signatureHelpManager*: SignatureHelpManager
     lsp*: LspIntegration ## LSP integration for completions
+    autocompleteEnabled*: bool ## Whether autocomplete is enabled
+    notificationConfig*: NotificationConfig
 
   InsertModeResult* = object ## Result of insert mode command execution
     case kind*: InsertModeResultKind
@@ -66,6 +68,8 @@ proc newInsertModeHandler*(
     motionController: MotionController,
     commandRegistry: CommandRegistry,
     lsp: LspIntegration = nil,
+    autocompleteEnabled: bool = true,
+    notificationConfig: NotificationConfig = NotificationConfig(),
 ): InsertModeHandler =
   ## Create a new Insert mode handler
   InsertModeHandler(
@@ -75,6 +79,8 @@ proc newInsertModeHandler*(
     completionManager: newCompletionManager(),
     signatureHelpManager: newSignatureHelpManager(),
     lsp: lsp,
+    autocompleteEnabled: autocompleteEnabled,
+    notificationConfig: notificationConfig,
   )
 
 proc executeCommand*(
@@ -92,6 +98,7 @@ proc executeCommand*(
     viewport: viewport,
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
+    notificationConfig: handler.notificationConfig,
   )
 
   let cmdResult = handler.commandRegistry.execute(ctx, commandId, args)
@@ -310,6 +317,10 @@ proc triggerLspCompletionRequest*(
 ) =
   ## Trigger completion with LSP support
   ## Shows buffer completions immediately, then switches to LSP when response arrives
+
+  # Skip if autocomplete is disabled
+  if not handler.autocompleteEnabled:
+    return
 
   # First, show buffer completions immediately for instant feedback
   handler.completionManager.triggerCompletion(

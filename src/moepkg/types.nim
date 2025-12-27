@@ -23,11 +23,11 @@ import pkg/celina
 
 import
   cursor, modes, buffer, registers, filer, logviewer, helpviewer, command_completion,
-  messagelog, buffermanager, backupmanager, diffviewer
+  messagelog, buffermanager, backupmanager, diffviewer, debugviewer
 
 export
   buffer.SidebarItemKind, registers, command_completion, logviewer, helpviewer,
-  buffermanager, backupmanager, diffviewer
+  buffermanager, backupmanager, diffviewer, debugviewer
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -82,6 +82,10 @@ type
     incsearch*: bool # Show search matches as you type
     hlsearch*: bool # Highlight all search matches in the buffer
     hlsearchTempDisabled*: bool # Temporarily disable highlight (like :nohlsearch)
+
+  CommandState* = object ## Command mode (ex-mode) state grouped together
+    history*: seq[string] # Command history (most recent first)
+    historyIndex*: int # Current position in command history (-1 when not navigating)
 
   MacroState* = object ## Macro recording and playback state grouped together
     isRecording*: bool # Whether currently recording a macro (was: isRecordingMacro)
@@ -159,6 +163,13 @@ type
     lastFileModCheck*: MonoTime # Timestamp of last file modification check
     fileModCheckInterval*: int64
       # Minimum milliseconds between file mod checks (default: 1000)
+    lastConfigCheck*: MonoTime # Timestamp of last config file modification check
+    lastConfigModTime*: times.Time # Last known modification time of config file
+    configCheckInterval*: int64
+      # Minimum milliseconds between config mod checks (default: 2000)
+    lastDebugUpdate*: MonoTime # Timestamp of last debug buffer update
+    debugUpdateInterval*: int64
+      # Minimum milliseconds between debug buffer updates (default: 500)
 
   JumpPosition* = object ## Represents a position in the jump list
     line*: int # Line number
@@ -403,6 +414,9 @@ type
   EditorState* = ref object
     cursor*: BufferPosition # Actual buffer cursor position (line/column)
     screenCursor*: CursorPosition # Screen cursor position (x/y)
+    matchingParenPos*: Option[BufferPosition]
+      # Position of matching paren (for highlighting)
+    currentWord*: string # Word under cursor (for currentWord highlighting)
     mode*: EditorMode
     previousMode*: EditorMode # Previous mode for ESC handling
     command*: string
@@ -410,6 +424,7 @@ type
     commandCursor*: int
       # Cursor position within commandText (0-based, after the : prefix)
     search*: SearchState # Search-related state (text, history, settings)
+    commandState*: CommandState # Command mode (ex-mode) state (history)
     statusMessage*: string # Message to display in status line
     editState*: EditState # Edit operation state (operators, motions, repeat, etc.)
     savedViewportTopLine*: int # Viewport position saved when operator starts
@@ -448,6 +463,11 @@ type
     # Diff viewer state
     diffViewerState*: Option[DiffViewerState]
       # Diff viewer state (when in DiffViewer mode)
+    # Debug viewer state
+    debugViewerState*: Option[DebugViewerState] # Debug viewer state (when in Debug mode)
+    # Debug buffer tracking for auto-refresh
+    debugBuffer*: TextBuffer
+      # Reference to the debug buffer for auto-refresh (nil if none)
     # Command mode completion
     commandCompletionManager*: CommandCompletionManager
       # Command mode auto-completion manager

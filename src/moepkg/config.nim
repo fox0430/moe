@@ -22,7 +22,7 @@
 ## This module defines all configuration structures and provides functionality
 ## for loading settings from TOML files.
 
-import std/options
+import std/[options, tables]
 
 type
   ColorMode* = enum
@@ -251,16 +251,95 @@ type
     lastSaveTime*: bool
     bufferLen*: bool
 
+  # Debug search settings
+  DebugSearchConfig* = object
+    enable*: bool
+
+  # Debug macro settings
+  DebugMacroConfig* = object
+    enable*: bool
+
+  # Debug visual selection settings
+  DebugVisualConfig* = object
+    enable*: bool
+
+  # Debug jump list settings
+  DebugJumpListConfig* = object
+    enable*: bool
+
+  # Debug LSP settings
+  DebugLspConfig* = object
+    enable*: bool
+
   # Debug settings
   DebugConfig* = object
     windowNode*: DebugWindowNodeConfig
     editorView*: DebugEditorViewConfig
     bufferStatus*: DebugBufferStatusConfig
+    search*: DebugSearchConfig
+    macroState*: DebugMacroConfig
+    visual*: DebugVisualConfig
+    jumpList*: DebugJumpListConfig
+    lsp*: DebugLspConfig
 
   # Theme settings
   ThemeConfig* = object
     kind*: ThemeKind
     path*: string
+
+  # LSP trace level
+  LspTraceLevel* = enum
+    ltOff = "off"
+    ltMessages = "messages"
+    ltVerbose = "verbose"
+
+  # LSP feature config (enable only)
+  LspFeatureConfig* = object
+    enable*: bool
+
+  # LSP feature with openWindow option
+  LspOpenWindowConfig* = object
+    enable*: bool
+    openWindow*: bool
+
+  # LSP language server config
+  LspServerConfig* = object
+    extensions*: seq[string]
+    command*: string
+    trace*: LspTraceLevel
+    # Rust-analyzer specific options
+    rustAnalyzerRunSingle*: bool
+    rustAnalyzerDebugSingle*: bool
+
+  # LSP settings
+  LspConfig* = object
+    enable*: bool
+    timeout*: int
+    # Feature configs
+    completion*: LspFeatureConfig
+    declaration*: LspOpenWindowConfig
+    definition*: LspOpenWindowConfig
+    typeDefinition*: LspOpenWindowConfig
+    implementation*: LspOpenWindowConfig
+    diagnostics*: LspFeatureConfig
+    signatureHelp*: LspFeatureConfig
+    documentFormatting*: LspFeatureConfig
+    foldingRange*: LspFeatureConfig
+    selectionRange*: LspFeatureConfig
+    documentSymbol*: LspFeatureConfig
+    hover*: LspFeatureConfig
+    inlayHint*: LspFeatureConfig
+    inlineValue*: LspFeatureConfig
+    references*: LspFeatureConfig
+    callHierarchy*: LspFeatureConfig
+    documentHighlight*: LspFeatureConfig
+    documentLink*: LspFeatureConfig
+    codeLens*: LspFeatureConfig
+    rename*: LspFeatureConfig
+    semanticTokens*: LspFeatureConfig
+    executeCommand*: LspFeatureConfig
+    # Language server configs (language name -> config)
+    servers*: Table[string, LspServerConfig]
 
   # Main configuration
   EditorConfig* = ref object
@@ -283,6 +362,7 @@ type
     startUpFileOpen*: StartUpFileOpenConfig
     debug*: DebugConfig
     theme*: ThemeConfig
+    lsp*: LspConfig
 
 proc newEditorConfig*(): EditorConfig =
   ## Create a new configuration with default values
@@ -441,6 +521,38 @@ proc newEditorConfig*(): EditorConfig =
         lastSaveTime: true,
         bufferLen: true,
       ),
+      search: DebugSearchConfig(enable: true),
+      macroState: DebugMacroConfig(enable: true),
+      visual: DebugVisualConfig(enable: true),
+      jumpList: DebugJumpListConfig(enable: true),
+      lsp: DebugLspConfig(enable: true),
     ),
     theme: ThemeConfig(kind: tkConfig, path: "~/.config/moe/themes/dark.toml"),
+    lsp: LspConfig(
+      enable: false,
+      timeout: 5000,
+      completion: LspFeatureConfig(enable: true),
+      declaration: LspOpenWindowConfig(enable: true, openWindow: false),
+      definition: LspOpenWindowConfig(enable: true, openWindow: false),
+      typeDefinition: LspOpenWindowConfig(enable: true, openWindow: false),
+      implementation: LspOpenWindowConfig(enable: true, openWindow: false),
+      diagnostics: LspFeatureConfig(enable: true),
+      signatureHelp: LspFeatureConfig(enable: true),
+      documentFormatting: LspFeatureConfig(enable: true),
+      foldingRange: LspFeatureConfig(enable: true),
+      selectionRange: LspFeatureConfig(enable: true),
+      documentSymbol: LspFeatureConfig(enable: true),
+      hover: LspFeatureConfig(enable: true),
+      inlayHint: LspFeatureConfig(enable: true),
+      inlineValue: LspFeatureConfig(enable: false),
+      references: LspFeatureConfig(enable: true),
+      callHierarchy: LspFeatureConfig(enable: true),
+      documentHighlight: LspFeatureConfig(enable: true),
+      documentLink: LspFeatureConfig(enable: true),
+      codeLens: LspFeatureConfig(enable: false),
+      rename: LspFeatureConfig(enable: true),
+      semanticTokens: LspFeatureConfig(enable: true),
+      executeCommand: LspFeatureConfig(enable: true),
+      servers: initTable[string, LspServerConfig](),
+    ),
   )

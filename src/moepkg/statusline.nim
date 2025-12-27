@@ -17,11 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, options, strutils]
+import std/[strformat, options, strutils, os, unicode]
 
-import pkg/celina
+import pkg/[celina, results]
 
-import types, buffer, modes, color
+import types, buffer, modes, color, config, gitdiff, unicode_utils, highlight
+import syntax/highlite
 
 proc toggleStatusLine*(state: var EditorState) =
   ## Toggle the visibility of the status line
@@ -99,81 +100,267 @@ proc getStatusLineModeLabelStyle(mode: EditorMode): Style =
   else:
     getThemeStyle(EditorColorPairIndex.statusLineNormalModeLabel, {StyleModifier.Bold})
 
+proc getGitBranchStyle(): Style =
+  ## Get git branch display style
+  getThemeStyle(EditorColorPairIndex.statusLineGitBranch, {StyleModifier.Bold})
+
+proc getGitChangedLinesStyle(): Style =
+  ## Get git changed lines display style
+  getThemeStyle(EditorColorPairIndex.statusLineGitChangedLines, {StyleModifier.Bold})
+
+proc buildFileDisplay(textBuffer: TextBuffer, config: StatusLineConfig): string =
+  ## Build the file display text based on config settings
+  ## Includes filename, directory, and changed mark as configured
+  if textBuffer.filePath.isNone:
+    return " [No Name]"
+
+  let filePath = textBuffer.filePath.get()
+
+  var displayText = " "
+
+  # Show directory if enabled
+  if config.directory:
+    displayText &= filePath
+  else:
+    # Show just filename if directory is disabled
+    if config.filename:
+      displayText &= filePath.extractFilename()
+    else:
+      displayText &= filePath.extractFilename()
+
+  # Add changed mark if enabled and buffer is modified
+  if config.chanedMark and textBuffer.isModified:
+    displayText &= " [+]"
+
+  return displayText
+
+proc buildGitInfo(
+    textBuffer: TextBuffer, config: StatusLineConfig, isActiveWindow: bool
+): string =
+  ## Build git info text (branch name and changed lines) for display before filename
+  var parts: seq[string] = @[]
+
+  # Git changed lines count (if enabled and active window or showGitInactive)
+  if config.gitChangedLines and (isActiveWindow or config.showGitInactive):
+    if textBuffer.filePath.isSome:
+      let diffResult = getGitDiffFromBuffer(textBuffer)
+      if not diffResult.isErr:
+        let counts = countGitChangedLines(diffResult.get())
+        # Always show +N ~N -N format
+        parts.add(
+          " +" & $counts.added & " ~" & $counts.modified & " -" & $counts.deleted
+        )
+
+  # Git branch name (if enabled and active window or showGitInactive)
+  if config.gitBranchName and (isActiveWindow or config.showGitInactive):
+    if textBuffer.filePath.isSome:
+      let branchResult = getGitBranch(textBuffer.filePath.get())
+      if not branchResult.isErr:
+        parts.add("ᚠ " & branchResult.get())
+
+  if parts.len > 0:
+    return parts.join(" ")
+  else:
+    return ""
+
+proc parseSetupText(
+    state: EditorState, textBuffer: TextBuffer, setupText: string
+): string =
+  ## Parse setupText format string and replace placeholders with actual values.
+  ## Supported placeholders:
+  ##   {lineNumber}    - Current line number (1-indexed)
+  ##   {totalLines}    - Total lines in buffer
+  ##   {columnNumber}  - Current column number (1-indexed)
+  ##   {totalColumns}  - Total columns in current line
+  ##   {encoding}      - File encoding (e.g., "UTF-8")
+  ##   {fileType}      - File type/language (e.g., "Nim", "Toml")
+  ##   {percentage}    - Line percentage (e.g., "50%")
+  ##   {mode}          - Current editor mode
+  ##   {filename}      - Filename only
+  ##   {directory}     - Directory path
+  ##   {filePath}      - Full file path
+  ##   {gitBranch}     - Git branch name
+  ##   {gitChanges}    - Git changes (+N ~N -N)
+  let
+    currentLine = state.cursor.line + 1
+    totalLines = textBuffer.len
+    currentCol = state.cursor.column + 1
+    totalCols =
+      if textBuffer.len > 0 and state.cursor.line < textBuffer.len:
+        textBuffer[state.cursor.line].len
+      else:
+        0
+    percentage =
+      if totalLines > 0:
+        int((currentLine.float / totalLines.float) * 100.0)
+      else:
+        0
+    fileType =
+      if textBuffer.language != SourceLanguage.langNone:
+        sourceLanguageToStr[textBuffer.language]
+      else:
+        ""
+    encoding = encodingToString(textBuffer.encoding)
+    modeStr = modeLabel(state.mode)
+    filePath =
+      if textBuffer.filePath.isSome:
+        textBuffer.filePath.get()
+      else:
+        ""
+    filename =
+      if filePath.len > 0:
+        filePath.extractFilename()
+      else:
+        ""
+    directory =
+      if filePath.len > 0:
+        filePath.parentDir()
+      else:
+        ""
+
+  # Get git info
+  var gitBranch = ""
+  var gitChanges = ""
+  if textBuffer.filePath.isSome:
+    let branchResult = getGitBranch(textBuffer.filePath.get())
+    if not branchResult.isErr:
+      gitBranch = branchResult.get()
+    let diffResult = getGitDiffFromBuffer(textBuffer)
+    if not diffResult.isErr:
+      let counts = countGitChangedLines(diffResult.get())
+      gitChanges =
+        "+" & $counts.added & " ~" & $counts.modified & " -" & $counts.deleted
+
+  result = setupText
+  result = result.replace("{lineNumber}", $currentLine)
+  result = result.replace("{totalLines}", $totalLines)
+  result = result.replace("{columnNumber}", $currentCol)
+  result = result.replace("{totalColumns}", $totalCols)
+  result = result.replace("{encoding}", encoding)
+  result = result.replace("{fileType}", fileType)
+  result = result.replace("{percentage}", $percentage & "%")
+  result = result.replace("{mode}", modeStr)
+  result = result.replace("{filename}", filename)
+  result = result.replace("{directory}", directory)
+  result = result.replace("{filePath}", filePath)
+  result = result.replace("{gitBranch}", gitBranch)
+  result = result.replace("{gitChanges}", gitChanges)
+
+proc buildRightSideInfo(
+    state: EditorState,
+    textBuffer: TextBuffer,
+    config: StatusLineConfig,
+    isActiveWindow: bool,
+): string =
+  ## Build the right-side status line info (file type, encoding, line count, etc.)
+  ## If setupText is configured, use custom format; otherwise use default format.
+
+  # Use custom format if setupText is configured
+  if config.setupText.len > 0:
+    let customText = parseSetupText(state, textBuffer, config.setupText)
+    if customText.len > 0:
+      return " " & customText
+    else:
+      return ""
+
+  # Default format
+  var parts: seq[string] = @[]
+
+  # File type (language)
+  if textBuffer.language != SourceLanguage.langNone:
+    parts.add(sourceLanguageToStr[textBuffer.language])
+
+  # Encoding
+  if state.display.showEncoding:
+    parts.add(encodingToString(textBuffer.encoding))
+
+  # Line percentage
+  if state.display.showLinePercentage:
+    let
+      currentLine = state.cursor.line + 1
+      totalLines = textBuffer.len
+      percentage =
+        if totalLines > 0:
+          int((currentLine.float / totalLines.float) * 100.0)
+        else:
+          0
+    parts.add(fmt"{percentage}%")
+
+  # Line count
+  if state.display.showLineCount:
+    let
+      currentLine = state.cursor.line + 1
+      totalLines = textBuffer.len
+    parts.add(fmt"{currentLine}/{totalLines}")
+
+  if parts.len > 0:
+    return " " & parts.join(" ")
+  else:
+    return ""
+
 proc renderStatusLine*(
-    state: EditorState, textBuffer: TextBuffer, buffer: var Buffer, statusLineY: int
+    state: EditorState,
+    textBuffer: TextBuffer,
+    buffer: var Buffer,
+    statusLineY: int,
+    config: StatusLineConfig,
 ) =
   ## Render the status line at the specified Y position
   if not state.display.showStatusLine:
     return
 
   let
-    modeLabel = modeLabel(state.mode)
     modeLabelStyle = getStatusLineModeLabelStyle(state.mode)
     statusLineStyle = getStatusLineModeStyle(state.mode)
 
-  # Draw mode label with white background
-  let
-    modeLabelText = fmt" {modeLabel} "
-    filePathText =
-      if textBuffer.filePath.isSome:
-        " " & textBuffer.filePath.get()
-      else:
-        " [No Name]"
-    statusLeftText = modeLabelText & filePathText
+  # Build mode label (always shown in single status line mode)
+  let modeLabelText =
+    if config.mode:
+      fmt" {modeLabel(state.mode)} "
+    else:
+      ""
 
-  buffer.setString(buffer.area.x, statusLineY, modeLabelText, modeLabelStyle)
-  buffer.setString(
-    buffer.area.x + modeLabelText.len, statusLineY, filePathText, statusLineStyle
-  )
+  # Build git info (displayed before filename)
+  let gitInfoText = buildGitInfo(textBuffer, config, true)
 
-  # Prepare line count and percentage display based on individual settings
-  let
-    lineCountText = block:
-      var parts: seq[string] = @[]
+  # Build file display text
+  let filePathText = buildFileDisplay(textBuffer, config)
 
-      if state.display.showEncoding:
-        parts.add(encodingToString(textBuffer.encoding))
+  let statusLeftWidth =
+    displayWidth(modeLabelText) + displayWidth(gitInfoText) + displayWidth(filePathText)
 
-      if state.display.showLinePercentage:
-        let
-          currentLine = state.cursor.line + 1 # Convert to 1-based
-          totalLines = textBuffer.len
-          percentage =
-            if totalLines > 0:
-              int((currentLine.float / totalLines.float) * 100.0)
-            else:
-              0
-        parts.add(fmt"{percentage}%")
+  var currentX = buffer.area.x
 
-      if state.display.showLineCount:
-        let
-          currentLine = state.cursor.line + 1 # Convert to 1-based
-          totalLines = textBuffer.len
-        parts.add(fmt"{currentLine}/{totalLines}")
+  # Draw mode label
+  if modeLabelText.len > 0:
+    buffer.setString(currentX, statusLineY, modeLabelText, modeLabelStyle)
+    currentX += displayWidth(modeLabelText)
 
-      if parts.len > 0:
-        " " & parts.join(" ")
-      else:
-        ""
-    lineCountWidth = lineCountText.len
+  # Draw git info (same style as filename)
+  if gitInfoText.len > 0:
+    buffer.setString(currentX, statusLineY, gitInfoText, statusLineStyle)
+    currentX += displayWidth(gitInfoText)
 
-  # Fill the rest of the line with blue background (full width)
-  let remainingWidth = max(0, buffer.area.width - statusLeftText.len)
+  # Draw file path
+  buffer.setString(currentX, statusLineY, filePathText, statusLineStyle)
+  currentX += displayWidth(filePathText)
+
+  # Build right side info
+  let rightSideText = buildRightSideInfo(state, textBuffer, config, true)
+  let rightSideWidth = displayWidth(rightSideText)
+
+  # Fill the rest of the line with background
+  let remainingWidth = max(0, buffer.area.width - statusLeftWidth)
   if remainingWidth > 0:
-    let blueBackground = " ".repeat(remainingWidth)
-    buffer.setString(
-      buffer.area.x + statusLeftText.len, statusLineY, blueBackground, statusLineStyle
-    )
+    let background = " ".repeat(remainingWidth)
+    buffer.setString(currentX, statusLineY, background, statusLineStyle)
 
-  # Draw encoding/line count/percentage with 1 character space from the right end if enabled and there's enough space
-  if (
-    state.display.showEncoding or state.display.showLineCount or
-    state.display.showLinePercentage
-  ) and lineCountText.len > 0 and buffer.area.width >= lineCountWidth + 1:
+  # Draw right side info
+  if rightSideText.len > 0 and buffer.area.width >= rightSideWidth + 1:
     buffer.setString(
-      buffer.area.x + buffer.area.width - lineCountWidth - 1,
+      buffer.area.x + buffer.area.width - rightSideWidth - 1,
       statusLineY,
-      lineCountText,
+      rightSideText,
       statusLineStyle,
     )
 
@@ -185,89 +372,77 @@ proc renderWindowStatusLine*(
     statusLineX: int,
     statusLineWidth: int,
     isActiveWindow: bool,
+    config: StatusLineConfig,
 ) =
   ## Render a status line for a specific window
   if not state.display.showStatusLine or not state.display.multiStatusLine:
     return
 
   let
-    modeLabel =
-      if isActiveWindow:
-        modeLabel(state.mode)
-      else:
-        ""
     modeLabelStyle = getStatusLineModeLabelStyle(state.mode)
     statusLineStyle = getStatusLineModeStyle(state.mode)
 
-  # Draw mode label with white background (only for active window)
-  var currentX = statusLineX
-  if isActiveWindow:
-    let modeLabelText = fmt" {modeLabel} "
-    buffer.setString(currentX, statusLineY, modeLabelText, modeLabelStyle)
-    currentX += modeLabelText.len
+  # Build mode label (show for active window, or inactive if showModeInactive)
+  let showMode = config.mode and (isActiveWindow or config.showModeInactive)
+  let modeLabelText =
+    if showMode:
+      fmt" {modeLabel(state.mode)} "
+    else:
+      ""
 
-  # Draw file path
+  # Build git info (displayed before filename)
+  let gitInfoText = buildGitInfo(textBuffer, config, isActiveWindow)
+
+  # Build file display text
+  let filePathText = buildFileDisplay(textBuffer, config)
+
+  # Draw mode label with white background
+  var currentX = statusLineX
+  if modeLabelText.len > 0:
+    buffer.setString(currentX, statusLineY, modeLabelText, modeLabelStyle)
+    currentX += displayWidth(modeLabelText)
+
+  # Draw git info (same style as filename)
+  if gitInfoText.len > 0:
+    buffer.setString(currentX, statusLineY, gitInfoText, statusLineStyle)
+    currentX += displayWidth(gitInfoText)
+
+  # Build and draw file path (with truncation if needed)
   let
-    filePathText =
-      if textBuffer.filePath.isSome:
-        " " & textBuffer.filePath.get()
-      else:
-        " [No Name]"
     maxFilePathWidth = statusLineWidth - (currentX - statusLineX) - 1
+    filePathWidth = displayWidth(filePathText)
     truncatedFilePath =
-      if filePathText.len > maxFilePathWidth:
-        filePathText[0 ..< maxFilePathWidth]
+      if filePathWidth > maxFilePathWidth:
+        let (charCount, _) = displayWidthSubstr(filePathText, 0, maxFilePathWidth)
+        var s = ""
+        var i = 0
+        for r in filePathText.runes:
+          if i >= charCount:
+            break
+          s.add($r)
+          i.inc
+        s
       else:
         filePathText
 
   buffer.setString(currentX, statusLineY, truncatedFilePath, statusLineStyle)
-  currentX += truncatedFilePath.len
+  currentX += displayWidth(truncatedFilePath)
 
-  # Prepare line count and percentage display
-  let
-    lineCountText = block:
-      var parts: seq[string] = @[]
+  # Build right side info
+  let rightSideText = buildRightSideInfo(state, textBuffer, config, isActiveWindow)
+  let rightSideWidth = displayWidth(rightSideText)
 
-      if state.display.showEncoding:
-        parts.add(encodingToString(textBuffer.encoding))
-
-      if state.display.showLinePercentage:
-        let
-          currentLine = state.cursor.line + 1 # Convert to 1-based
-          totalLines = textBuffer.len
-          percentage =
-            if totalLines > 0:
-              int((currentLine.float / totalLines.float) * 100.0)
-            else:
-              0
-        parts.add(fmt"{percentage}%")
-
-      if state.display.showLineCount:
-        let
-          currentLine = state.cursor.line + 1 # Convert to 1-based
-          totalLines = textBuffer.len
-        parts.add(fmt"{currentLine}/{totalLines}")
-
-      if parts.len > 0:
-        " " & parts.join(" ")
-      else:
-        ""
-    lineCountWidth = lineCountText.len
-
-  # Fill the rest of the line with blue background
+  # Fill the rest of the line with background
   let remainingWidth = max(0, (statusLineX + statusLineWidth) - currentX)
   if remainingWidth > 0:
-    let blueBackground = " ".repeat(remainingWidth)
-    buffer.setString(currentX, statusLineY, blueBackground, statusLineStyle)
+    let background = " ".repeat(remainingWidth)
+    buffer.setString(currentX, statusLineY, background, statusLineStyle)
 
-  # Draw encoding/line count/percentage with 1 character space from the right end if enabled
-  if (
-    state.display.showEncoding or state.display.showLineCount or
-    state.display.showLinePercentage
-  ) and lineCountText.len > 0 and statusLineWidth >= lineCountWidth + 1:
+  # Draw right side info
+  if rightSideText.len > 0 and statusLineWidth >= rightSideWidth + 1:
     buffer.setString(
-      statusLineX + statusLineWidth - lineCountWidth - 1,
+      statusLineX + statusLineWidth - rightSideWidth - 1,
       statusLineY,
-      lineCountText,
+      rightSideText,
       statusLineStyle,
     )

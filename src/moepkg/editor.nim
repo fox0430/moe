@@ -26,7 +26,7 @@ import
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
   gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
   lspintegration, completion, signaturehelp, backup, command_completion, motion,
-  logviewer, recentfilemode, color, gapbuffer
+  logviewer, recentfilemode, color, gapbuffer, persist, debugviewer
 import lsp/protocol/types as lspTypes
 import command_handlers/[handler_manager, visual_handler, insert_handler]
 
@@ -62,6 +62,7 @@ type
     lastLspChangeSeq*: int # Track buffer changes for LSP notifications
     recentFileModeState*: RecentFileModeState # State for Recent File mode
     app*: App # Celina application reference for suspend/resume
+    cursorPositions*: Table[string, CursorPositionEntry] # Persisted cursor positions
 
 proc buffer*(e: Editor): TextBuffer =
   e.textBuffer
@@ -685,6 +686,8 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
       break
   if not found:
     e.buffers.add(newBuffer)
+    # Set reserved words for syntax highlighting on new buffer
+    newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
     logDebug("editor", "vsplit: buffer added, buffers.len: " & $e.buffers.len)
 
   # Sync active window state (buffer, viewport, cursor) with executor
@@ -718,6 +721,8 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
       break
   if not found:
     e.buffers.add(newBuffer)
+    # Set reserved words for syntax highlighting on new buffer
+    newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
     logDebug("editor", "vsplitWithBuffer: buffer added, buffers.len: " & $e.buffers.len)
 
   # Sync active window state (buffer, viewport, cursor) with executor
@@ -752,6 +757,8 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
       break
   if not found:
     e.buffers.add(newBuffer)
+    # Set reserved words for syntax highlighting on new buffer
+    newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
     logDebug("editor", "hsplit: buffer added, buffers.len: " & $e.buffers.len)
 
   # Sync active window state (buffer, viewport, cursor) with executor
@@ -792,6 +799,8 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
       break
   if not found:
     e.buffers.add(newBuffer)
+    # Set reserved words for syntax highlighting on new buffer
+    newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
     logDebug("editor", "hsplitWithBuffer: buffer added, buffers.len: " & $e.buffers.len)
 
   # Sync active window state (buffer, viewport, cursor) with executor
@@ -810,6 +819,8 @@ proc enew*(e: Editor): Result[(), string] =
 
   # Add the new buffer to the buffer list
   e.buffers.add(newBuffer)
+  # Set reserved words for syntax highlighting on new buffer
+  newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
   logDebug("editor", "enew: buffer added, buffers.len: " & $e.buffers.len)
 
   if e.windowManager.windows.len > 0 and
@@ -890,6 +901,13 @@ proc newEditor*(): Editor =
   # Load TOML configuration
   let editorConfig = loadConfig()
 
+  # Set color mode from configuration
+  globalColorMode =
+    case editorConfig.standard.colorMode
+    of cm24bit: cmk24bit
+    of cm8bit: cmk8bit
+    of cmNone: cmkNone
+
   # Initialize theme from configuration
   initTheme(editorConfig)
 
@@ -963,13 +981,20 @@ proc newEditor*(): Editor =
         lastInputTime: getMonoTime(),
         lastFileModCheck: getMonoTime(),
         fileModCheckInterval: 1000, # Check file modification every 1 second
+        lastConfigCheck: getMonoTime(),
+        lastConfigModTime: times.Time(), # Will be set properly after initialization
+        configCheckInterval: 2000, # Check config modification every 2 seconds
       ),
       # Search state (grouped in SearchState)
       search: SearchState(
         text: "",
         lastText: "",
         direction: Forward,
-        history: loadSearchHistory(),
+        history:
+          if editorConfig.persist.search:
+            loadSearchHistory(editorConfig.persist.searchHistoryLimit)
+          else:
+            @[],
         historyIndex: -1,
         startPos: BufferPosition(line: 0, column: 0),
         ignorecase: editorConfig.standard.ignorecase,
@@ -977,6 +1002,15 @@ proc newEditor*(): Editor =
         incsearch: editorConfig.standard.incrementalSearch,
         hlsearch: true,
         hlsearchTempDisabled: false,
+      ),
+      # Command state (grouped in CommandState)
+      commandState: CommandState(
+        history:
+          if editorConfig.persist.exCommand:
+            loadCommandHistory(editorConfig.persist.exCommandHistoryLimit)
+          else:
+            @[],
+        historyIndex: -1,
       ),
       # Macro state (grouped in MacroState)
       macroState: MacroState(
@@ -1034,17 +1068,28 @@ proc newEditor*(): Editor =
     windowManager: newEditorWindowManager(),
     buffers: @[], # Will be initialized below
     config: editorConfig, # Store configuration
+    cursorPositions:
+      if editorConfig.persist.cursorPosition:
+        loadCursorPositions()
+      else:
+        initTable[string, CursorPositionEntry](),
   )
 
   # Add initial buffer to buffer list
   result.buffers.add(result.textBuffer)
   logDebug("editor", "Initial buffer added, buffers.len: " & $result.buffers.len)
 
+  # Set reserved words for syntax highlighting on initial buffer
+  result.textBuffer.setReservedWords(
+    toReservedWords(editorConfig.highlight.reservedWord)
+  )
+
   result.executer = newCommandExecutor(
     result.textBuffer,
     result.state,
     result.viewport,
     result.config.clipboard,
+    result.config.notification,
     some(cmdRegistry),
     some(keyRegistry),
   )
@@ -1052,12 +1097,21 @@ proc newEditor*(): Editor =
   # Create handler manager after executer (which creates motion controller)
   result.handlerManager = newHandlerManager(
     result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig,
-    cmdRegistry, result.config.clipboard, result.config.smoothScroll, result.lsp,
+    cmdRegistry, result.config.clipboard, result.config.smoothScroll,
+    result.config.notification, result.lsp, result.config.autocomplete.enable,
   )
 
   # Set clipboard tool for register system
   if result.config.clipboard.enable:
     result.state.registers.setClipboardTool(result.config.clipboard.tool)
+
+  # Initialize config file modification time for liveReloadOfConf
+  let configPath = getConfigPath()
+  if fileExists(configPath):
+    try:
+      result.state.timing.lastConfigModTime = getFileInfo(configPath).lastWriteTime
+    except OSError:
+      discard
 
 proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
   ## Refresh git diff information for the active buffer
@@ -1127,6 +1181,104 @@ proc maybeReloadExternallyModifiedFile*(e: Editor) =
   else:
     e.state.setStatusMessage("Failed to reload file: " & reloadResult.error)
 
+proc applyConfigSettings(e: Editor, newConfig: EditorConfig) =
+  ## Apply configuration settings to the editor
+  ## Updates display settings, search settings, and other runtime state
+  ## Note: Some settings require editor restart to take effect
+
+  # Update display settings from config
+  e.state.display.showStatusLine = newConfig.standard.statusLine
+  e.state.display.multiStatusLine = newConfig.statusLine.multipleStatusLine
+  e.state.display.showLineNumbers = newConfig.standard.number
+  e.state.display.showCurrentLineNumber = newConfig.standard.currentNumber
+  e.state.display.showCursorLine = newConfig.standard.cursorLine
+  e.state.display.showSyntax = newConfig.standard.syntax
+  e.state.display.showIndentationLines = newConfig.standard.indentationLines
+  e.state.display.showSidebar = newConfig.standard.sidebar
+  e.state.display.showGitDiff = newConfig.git.showChangedLine
+  e.state.display.showSyntaxChecker = newConfig.syntaxChecker.enable
+  e.state.display.tabStop = newConfig.standard.tabStop
+  e.state.display.expandTab = newConfig.standard.expandTab
+  e.state.display.autoIndent = newConfig.standard.autoIndent
+  e.state.display.autoCloseParen = newConfig.standard.autoCloseParen
+  e.state.display.autoDeleteParen = newConfig.standard.autoDeleteParen
+
+  # Update search settings
+  e.state.search.ignorecase = newConfig.standard.ignorecase
+  e.state.search.smartcase = newConfig.standard.smartcase
+  e.state.search.incsearch = newConfig.standard.incrementalSearch
+
+  # Update timing intervals
+  e.state.timing.gitDiffUpdateInterval = newConfig.git.updateInterval
+
+  # Update color mode
+  globalColorMode =
+    case newConfig.standard.colorMode
+    of cm24bit: cmk24bit
+    of cm8bit: cmk8bit
+    of cmNone: cmkNone
+
+  # Update clipboard tool if enabled
+  if newConfig.clipboard.enable:
+    e.state.registers.setClipboardTool(newConfig.clipboard.tool)
+
+  # Update reserved words on all buffers
+  let reservedWords = toReservedWords(newConfig.highlight.reservedWord)
+  for buf in e.buffers:
+    buf.setReservedWords(reservedWords)
+
+  # Reload theme if configured
+  initTheme(newConfig)
+
+  # Store the new config
+  e.config = newConfig
+
+proc maybeReloadConfig*(e: Editor) =
+  ## Check if config file was modified and reload if:
+  ##   - liveReloadOfConf is enabled in config
+  ##   - Enough time has passed since last check (debouncing)
+  ##   - Config file modification time has changed
+
+  if not e.config.standard.liveReloadOfConf:
+    return
+
+  let now = getMonoTime()
+  let elapsed = now - e.state.timing.lastConfigCheck
+  let threshold = initDuration(milliseconds = e.state.timing.configCheckInterval)
+
+  if elapsed < threshold:
+    return
+
+  e.state.timing.lastConfigCheck = now
+
+  # Check if config file exists and has been modified
+  let configPath = getConfigPath()
+  if not fileExists(configPath):
+    return
+
+  var currentModTime: times.Time
+  try:
+    currentModTime = getFileInfo(configPath).lastWriteTime
+  except OSError:
+    return
+
+  # Compare modification times
+  if currentModTime == e.state.timing.lastConfigModTime:
+    return
+
+  # Config file was modified, reload it
+  logInfo("editor", "Config file modified, reloading: " & configPath)
+  let newConfig = loadConfigFromToml(configPath)
+
+  # Apply the new settings
+  e.applyConfigSettings(newConfig)
+
+  # Update last known modification time
+  e.state.timing.lastConfigModTime = currentModTime
+
+  e.state.setStatusMessage("Configuration reloaded")
+  e.state.needsFullRedraw = true
+
 proc maybeUpdateGitDiff*(e: Editor) =
   ## Update git diff if buffer was modified and enough time has passed (debouncing)
   ## This should be called after buffer modifications to provide real-time updates
@@ -1166,10 +1318,26 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   logInfo("editor", "Successfully loaded file: " & path)
 
-  # Reset cursor to file start
-  e.state.cursor = BufferPosition(line: 0, column: 0)
+  # Set reserved words for syntax highlighting from config
+  e.textBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
 
-  # Reset viewport to start
+  # Restore cursor position if persisted, otherwise reset to file start
+  let absPath = absolutePath(path)
+  if e.config.persist.cursorPosition and e.cursorPositions.hasKey(absPath):
+    let savedPos = e.cursorPositions[absPath]
+    # Ensure cursor position is within buffer bounds
+    let line = min(savedPos.line, max(0, e.textBuffer.len - 1))
+    let col =
+      if line < e.textBuffer.len:
+        min(savedPos.column, max(0, e.textBuffer.getLine(line).charLen - 1))
+      else:
+        0
+    e.state.cursor = BufferPosition(line: line, column: col)
+    logDebug("editor", fmt"Restored cursor position for {path}: line={line}, col={col}")
+  else:
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+
+  # Reset viewport to start (will be adjusted by motion controller)
   e.viewport.topLine = 0
   e.viewport.leftColumn = 0
 
@@ -1194,6 +1362,60 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
       e.lastLspChangeSeq = e.textBuffer.changeSeq
 
   ok(())
+
+proc saveBufferCursorPosition*(e: Editor, buffer: TextBuffer) =
+  ## Save cursor position for a buffer if persist.cursorPosition is enabled
+  if not e.config.persist.cursorPosition:
+    return
+  if buffer.filePath.isNone:
+    return
+  let absPath = absolutePath(buffer.filePath.get)
+  e.cursorPositions[absPath] =
+    CursorPositionEntry(line: e.state.cursor.line, column: e.state.cursor.column)
+
+proc addCommandToHistory*(e: Editor, command: string) =
+  ## Add a command to the command history
+  ## Skips empty commands and duplicates of the last entry
+  if command.len == 0:
+    return
+  # Skip if same as last entry
+  if e.state.commandState.history.len > 0 and e.state.commandState.history[0] == command:
+    return
+  # Add to beginning (most recent first)
+  e.state.commandState.history.insert(command, 0)
+  # Trim to limit
+  let limit = e.config.persist.exCommandHistoryLimit
+  if e.state.commandState.history.len > limit:
+    e.state.commandState.history.setLen(limit)
+
+proc savePersistData*(e: Editor) =
+  ## Save all persist data (search history, command history, cursor positions)
+  ## Called on shutdown
+
+  # Save search history
+  if e.config.persist.search:
+    let r =
+      saveSearchHistory(e.state.search.history, e.config.persist.searchHistoryLimit)
+    if r.isErr:
+      logError("editor", "Failed to save search history: " & r.error)
+
+  # Save command history
+  if e.config.persist.exCommand:
+    let r = saveCommandHistory(
+      e.state.commandState.history, e.config.persist.exCommandHistoryLimit
+    )
+    if r.isErr:
+      logError("editor", "Failed to save command history: " & r.error)
+
+  # Save cursor positions
+  if e.config.persist.cursorPosition:
+    # Save current buffer's cursor position first
+    let activeBuffer = e.activeBuffer()
+    e.saveBufferCursorPosition(activeBuffer)
+    # Save all positions
+    let r = saveCursorPositions(e.cursorPositions)
+    if r.isErr:
+      logError("editor", "Failed to save cursor positions: " & r.error)
 
 proc saveFile*(e: Editor, path: Option[string] = none(string)): Result[(), string] =
   ## Save the active buffer to file
@@ -1317,14 +1539,15 @@ proc autoSave*(e: Editor) =
   # Show notification if any files were saved
   if savedCount > 0:
     # Log notification
-    if e.config.notification.autoSaveLogNotify:
+    if e.config.notification.logNotifications and e.config.notification.autoSaveLogNotify:
       if savedCount == 1:
         logInfo("editor", "Auto saved: " & savedPaths[0])
       else:
         logInfo("editor", "Auto saved " & $savedCount & " files")
 
     # Screen notification (status message)
-    if e.config.notification.autoSaveScreenNotify:
+    if e.config.notification.screenNotifications and
+        e.config.notification.autoSaveScreenNotify:
       if savedCount == 1:
         e.state.statusMessage = "Auto saved: " & savedPaths[0]
       else:
@@ -1405,14 +1628,16 @@ proc autoBackup*(e: Editor) =
     e.state.timing.lastAutoBackup = now
 
     # Log notification
-    if e.config.notification.autoBackupLogNotify:
+    if e.config.notification.logNotifications and
+        e.config.notification.autoBackupLogNotify:
       if backupCount == 1:
         logInfo("editor", "Auto backup: " & backupPaths[0])
       else:
         logInfo("editor", "Auto backup: " & $backupCount & " files")
 
     # Screen notification (status message)
-    if e.config.notification.autoBackupScreenNotify:
+    if e.config.notification.screenNotifications and
+        e.config.notification.autoBackupScreenNotify:
       if backupCount == 1:
         e.state.statusMessage = "Auto backup created"
       else:
@@ -1641,8 +1866,24 @@ proc getSelectionStyle(
   # Check if this is the cursor position
   let isCursorPos = (pos.line == cursorLine and pos.column == cursorCol)
 
+  # Check if this position is the matching paren (highlight matching paren)
+  let isMatchingParen =
+    e.state.matchingParenPos.isSome and e.state.matchingParenPos.get.line == pos.line and
+    e.state.matchingParenPos.get.column == pos.column
+
+  # Check if this position is part of the current word (highlight all occurrences)
+  let isInCurrentWord =
+    e.state.currentWord.len > 0 and not isCursorPos and
+    buffer.isPositionInWord(pos, e.state.currentWord)
+
   if hasSelection and e.state.visualSelection.isPositionInSelection(pos):
     visualStyle()
+  elif isMatchingParen:
+    # Highlight matching paren with special style
+    parenPairStyle()
+  elif isInCurrentWord:
+    # Highlight other occurrences of the current word
+    currentWordStyle()
   elif isCursorPos:
     # Cursor position: always use gray foreground color
     cursorCharStyle()
@@ -2623,11 +2864,13 @@ proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
     e.renderWindow(buffer, window, lineNumOffset, isBottomWindow, isActiveWindow)
 
     # Render per-window status line if multi-status line mode is enabled
-    if e.state.display.showStatusLine and e.state.display.multiStatusLine:
+    # (and merge is disabled - merge shows only one status line at bottom)
+    if e.state.display.showStatusLine and e.state.display.multiStatusLine and
+        not e.config.statusLine.merge:
       let statusLineY = calculateWindowStatusLineY(window, isBottomWindow)
       e.state.renderWindowStatusLine(
         window.buffer, buffer, statusLineY, window.viewport.x, window.viewport.width,
-        isActiveWindow,
+        isActiveWindow, e.config.statusLine,
       )
 
     # Draw separator between windows (except for last window)
@@ -2749,9 +2992,10 @@ proc renderBottomLines(e: Editor, buffer: var Buffer) =
 
   # Render status line using active buffer
   # - Single window mode: always render status line at bottom
-  # - Multi-window mode: only render if multiStatusLine is disabled (single status line mode)
-  if e.windowManager.windows.len == 0 or not e.state.display.multiStatusLine:
-    e.state.renderStatusLine(e.activeBuffer(), buffer, statusLineY)
+  # - Multi-window mode: only render if multiStatusLine is disabled OR merge is enabled
+  if e.windowManager.windows.len == 0 or not e.state.display.multiStatusLine or
+      e.config.statusLine.merge:
+    e.state.renderStatusLine(e.activeBuffer(), buffer, statusLineY, e.config.statusLine)
 
   # Handle command line
   if e.state.mode == EditorMode.Command:
@@ -2824,13 +3068,72 @@ proc renderTempMessages(e: Editor, buffer: var Buffer) =
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = promptY
 
+proc pathToIcon(entry: FileEntry): string =
+  ## Get an emoji icon for a file entry based on its type and extension
+  if entry.kind == fekDirectory or entry.targetKind == fekDirectory:
+    return "📁 "
+
+  if entry.isExecutable:
+    return "🏃 "
+
+  let filename = entry.name
+  # Check for Dockerfile
+  if filename == "Dockerfile" or filename.startsWith("Dockerfile."):
+    return "🐳 "
+
+  # Get extension
+  let dotPos = filename.rfind('.')
+  if dotPos < 0:
+    return "📄 "
+
+  let ext = filename[dotPos + 1 .. ^1].toLower()
+  case ext
+  of "nim": "👑 "
+  of "nimble", "rpm", "deb": "📦 "
+  of "py": "🐍 "
+  of "ui", "glade": "🏠 "
+  of "txt", "md", "rst": "📝 "
+  of "cpp", "cxx", "hpp", "cc": "⧺ "
+  of "c", "h": "🅒 "
+  of "java": "🍵 "
+  of "php": "🙈 "
+  of "js", "json", "mjs", "cjs": "🙉 "
+  of "ts", "tsx": "📘 "
+  of "rs": "🦀 "
+  of "go": "🐹 "
+  of "html", "xhtml", "htm": "🏄 "
+  of "css", "scss", "sass": "👚 "
+  of "xml": "༕ "
+  of "cfg", "ini", "conf": "🍳 "
+  of "sh", "bash", "zsh", "fish": "🐚 "
+  of "pdf", "doc", "docx", "odf", "ods", "odt": "🍞 "
+  of "wav", "mp3", "ogg", "flac", "m4a": "🎼 "
+  of "zip", "bz2", "xz", "gz", "tgz", "zst", "tar", "7z", "rar": "🚢 "
+  of "exe", "bin", "elf": "🏃 "
+  of "mp4", "webm", "avi", "mpeg", "mkv", "mov": "🎞 "
+  of "patch", "diff": "💊 "
+  of "lock": "🔒 "
+  of "pem", "crt", "key": "🔏 "
+  of "png", "jpeg", "jpg", "bmp", "gif", "svg", "webp", "ico": "🎨 "
+  of "toml", "yaml", "yml": "⚙ "
+  of "nix": "❄ "
+  of "hs", "lhs": "λ "
+  of "lua": "🌙 "
+  of "rb": "💎 "
+  of "pl", "pm": "🐪 "
+  of "sql": "🗃 "
+  of "vim": "📗 "
+  of "el", "lisp", "scm": "λ "
+  else: "📄 "
+
 proc renderFiler(e: Editor, buffer: var Buffer) =
   ## Render the file explorer view
   if e.state.filerState.isNone:
     return
 
   # Calculate reserved lines at bottom: status line (if shown) + command line
-  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+  let reservedBottom =
+    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
 
   let
     filerState = e.state.filerState.get
@@ -2874,10 +3177,13 @@ proc renderFiler(e: Editor, buffer: var Buffer) =
     let prefix = if isSelected: "> " else: "  "
 
     let icon =
-      case entry.kind
-      of fekDirectory: "▸ "
-      of fekSymlink: "@ "
-      of fekFile: "  "
+      if e.config.filer.showIcons:
+        pathToIcon(entry)
+      else:
+        case entry.kind
+        of fekDirectory: "▸ "
+        of fekSymlink: "@ "
+        of fekFile: "  "
 
     let name =
       if entry.isDirectory:
@@ -2931,7 +3237,8 @@ proc renderBufferManager(e: Editor, buffer: var Buffer) =
     return
 
   # Calculate reserved lines at bottom: status line (if shown) + command line
-  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+  let reservedBottom =
+    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
 
   let
     bmState = e.state.bufferManagerState.get
@@ -3013,7 +3320,8 @@ proc renderBackupManager(e: Editor, buffer: var Buffer) =
     return
 
   # Calculate reserved lines at bottom: status line (if shown) + command line
-  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+  let reservedBottom =
+    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
 
   let
     bkState = e.state.backupManagerState.get
@@ -3093,7 +3401,8 @@ proc renderDiffViewer(e: Editor, buffer: var Buffer) =
     return
 
   # Calculate reserved lines at bottom: status line (if shown) + command line
-  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+  let reservedBottom =
+    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
 
   let
     dvState = e.state.diffViewerState.get
@@ -3194,7 +3503,8 @@ proc renderDiffViewer(e: Editor, buffer: var Buffer) =
 proc renderRecentFileMode(e: Editor, buffer: var Buffer) =
   ## Render the recent file selection view
   # Calculate reserved lines at bottom: status line (if shown) + command line
-  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+  let reservedBottom =
+    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
 
   let
     state = e.recentFileModeState
@@ -3271,13 +3581,94 @@ proc renderRecentFileMode(e: Editor, buffer: var Buffer) =
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = listStartY + (state.selectedIndex - state.topLine)
 
+proc renderDebugMode(e: Editor, buffer: var Buffer) =
+  ## Render the debug viewer
+  if e.state.debugViewerState.isNone:
+    return
+
+  # Calculate reserved lines at bottom: status line (if shown) + command line
+  let reservedBottom =
+    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
+
+  let
+    debugState = e.state.debugViewerState.get
+    headerY = buffer.area.y
+    listStartY = buffer.area.y + 1
+    listEndY = buffer.area.y + buffer.area.height - reservedBottom
+    width = buffer.area.width
+    viewportHeight = listEndY - listStartY
+
+  # Get theme colors
+  let
+    defaultStyle = getThemeStyle(EditorColorPairIndex.default)
+    defaultBg = defaultStyle.bg
+
+  # Fill entire area with default background first
+  let emptyLine = spaces(width)
+  for y in buffer.area.y ..< listEndY:
+    buffer.setString(buffer.area.x, y, emptyLine, defaultStyle)
+
+  # Render header
+  let headerText = "-- DEBUG --"
+  let headerStyle =
+    Style(fg: rgb(0xff, 0xd7, 0x00), bg: defaultBg, modifiers: {StyleModifier.Bold})
+  buffer.setString(buffer.area.x, headerY, headerText, headerStyle)
+
+  # Handle empty list
+  if debugState.lines.len == 0:
+    buffer.setString(
+      buffer.area.x,
+      listStartY,
+      "No debug information available",
+      Style(fg: rgb(0x87, 0x87, 0x87), bg: defaultBg, modifiers: {}),
+    )
+    e.state.screenCursor.x = 0
+    e.state.screenCursor.y = listStartY
+    return
+
+  # Render debug lines
+  var screenY = listStartY
+  for i in debugState.topLine ..<
+      min(debugState.lines.len, debugState.topLine + viewportHeight):
+    if screenY >= listEndY:
+      break
+
+    let
+      line = debugState.lines[i]
+      isSelected = i == debugState.selectedLine
+
+    # Truncate if too long
+    var displayLine = line
+    if displayLine.len > width:
+      displayLine = displayLine[0 ..< width - 3] & "..."
+
+    # Apply style based on content
+    let style =
+      if isSelected:
+        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
+      elif line.startsWith("--"):
+        # Section headers
+        Style(fg: rgb(0x87, 0xaf, 0xff), bg: defaultBg, modifiers: {StyleModifier.Bold})
+      else:
+        defaultStyle
+
+    # Pad line to fill width for consistent background
+    let paddedLine = displayLine & spaces(max(0, width - displayLine.len))
+    buffer.setString(buffer.area.x, screenY, paddedLine, style)
+    inc screenY
+
+  # Set cursor position
+  e.state.screenCursor.x = 0
+  e.state.screenCursor.y = listStartY + (debugState.selectedLine - debugState.topLine)
+
 proc renderLogViewer(e: Editor, buffer: var Buffer) =
   ## Render the log viewer view
   if e.state.logViewerState.isNone:
     return
 
   # Calculate reserved lines at bottom: status line (if shown) + command line
-  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+  let reservedBottom =
+    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
 
   let
     logState = e.state.logViewerState.get
@@ -3341,7 +3732,8 @@ proc renderHelpViewer(e: Editor, buffer: var Buffer) =
     return
 
   # Calculate reserved lines at bottom: status line (if shown) + command line
-  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+  let reservedBottom =
+    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
 
   let
     helpState = e.state.helpViewerState.get
@@ -4140,11 +4532,145 @@ proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)
   e.lsp.shutdown()
 
-proc render*(e: Editor, buffer: var Buffer) =
-  ## Main render procedure - orchestrates the rendering of all editor components
-  # Early return if buffer area is too small
-  if buffer.area.width <= 0 or buffer.area.height <= 0:
+proc maybeUpdateDebugBuffer*(e: Editor) =
+  ## Update debug buffer content periodically if it's displayed in a window
+  ## This provides auto-refresh functionality for the debug viewer
+  if e.state.debugBuffer == nil:
     return
+
+  # Check if the debug buffer is still displayed in a window
+  var foundWindow: EditorWindow = nil
+  for window in e.windowManager.windows:
+    if window.buffer == e.state.debugBuffer:
+      foundWindow = window
+      break
+
+  if foundWindow == nil:
+    # Debug buffer is no longer displayed, clear the reference
+    e.state.debugBuffer = nil
+    return
+
+  # Check if enough time has passed since last update
+  let now = getMonoTime()
+  let elapsed = now - e.state.timing.lastDebugUpdate
+  let threshold = initDuration(milliseconds = e.state.timing.debugUpdateInterval)
+
+  if elapsed < threshold:
+    return
+
+  # Generate fresh debug info based on config settings
+  var debugLines: seq[string] = @[]
+  let debugConfig = e.config.debug
+
+  for i, window in e.windowManager.windows:
+    generateWindowInfo(
+      debugLines,
+      i,
+      i == e.windowManager.activeWindowIndex,
+      e.buffers.find(window.buffer),
+      window.viewport.x,
+      window.viewport.y,
+      window.viewport.width,
+      window.viewport.height,
+      window.viewport.topLine,
+      window.viewport.leftColumn,
+      window.cursor.line,
+      window.cursor.column,
+      debugConfig.windowNode.enable,
+    )
+
+  for i, buf in e.buffers:
+    generateBufferInfo(
+      debugLines,
+      i,
+      buf.filePath,
+      buf.isModified,
+      buf.readOnly,
+      $buf.language,
+      $buf.encoding,
+      buf.len,
+      buf.changeSeq,
+      debugConfig.bufferStatus.enable,
+    )
+
+  generateEditorStateInfo(
+    debugLines, e.state.mode, e.state.previousMode, e.state.cursor.line,
+    e.state.cursor.column, e.state.commandText, e.state.statusMessage,
+    debugConfig.editorView.enable,
+  )
+
+  generateSearchInfo(
+    debugLines,
+    e.state.search.text,
+    e.state.search.lastText,
+    $e.state.search.direction,
+    e.state.search.history.len,
+    e.state.search.ignorecase,
+    e.state.search.smartcase,
+    e.state.search.incsearch,
+    e.state.search.hlsearch,
+    debugConfig.search.enable,
+  )
+
+  generateDisplayInfo(
+    debugLines, e.state.display.showStatusLine, e.state.display.multiStatusLine,
+    e.state.display.showLineNumbers, e.state.display.showCursorLine,
+    e.state.display.showSyntax, e.state.display.showIndentationLines,
+    e.state.display.showSidebar, e.state.display.lineWrap, e.state.display.tabStop,
+    debugConfig.editorView.enable,
+  )
+
+  generateMacroInfo(
+    debugLines, e.state.macroState.isRecording, e.state.macroState.register,
+    e.state.macroState.registers.len, e.state.macroState.playbackDepth,
+    debugConfig.macroState.enable,
+  )
+
+  generateVisualInfo(
+    debugLines,
+    e.state.visualSelection.active,
+    $e.state.visualSelection.kind,
+    e.state.visualSelection.start.line,
+    e.state.visualSelection.start.column,
+    e.state.visualSelection.current.line,
+    e.state.visualSelection.current.column,
+    debugConfig.visual.enable,
+  )
+
+  generateJumpListInfo(
+    debugLines, e.state.jumpList.len, e.state.jumpListIndex, debugConfig.jumpList.enable
+  )
+
+  generateLspInfo(
+    debugLines, e.state.lspCache.codeLensCache.itemsByLine.len,
+    e.state.lspCache.locations.isSome, e.state.lspCache.codeLensCache.isValid,
+    debugConfig.lsp.enable,
+  )
+
+  # Create new buffer with updated content
+  let debugContent = debugLines.join("\n")
+  let newDebugBuffer = newTextBuffer(debugContent)
+  newDebugBuffer.readOnly = true
+
+  # Preserve scroll position
+  let savedTopLine = foundWindow.viewport.topLine
+  let savedLeftColumn = foundWindow.viewport.leftColumn
+
+  # Replace buffer in the window
+  foundWindow.buffer = newDebugBuffer
+
+  # Restore scroll position (clamped to valid range)
+  foundWindow.viewport.topLine = min(savedTopLine, max(0, newDebugBuffer.len - 1))
+  foundWindow.viewport.leftColumn = savedLeftColumn
+
+  # Update the reference in state
+  e.state.debugBuffer = newDebugBuffer
+  e.state.timing.lastDebugUpdate = now
+  e.state.needsFullRedraw = true
+
+proc tick*(e: Editor) =
+  ## Background processing: LSP, file watching, autosave, etc.
+  ## Should be called each frame before rendering.
 
   # Poll LSP for messages (non-blocking)
   e.lsp.poll(0)
@@ -4152,143 +4678,135 @@ proc render*(e: Editor, buffer: var Buffer) =
   # Display any pending LSP status messages
   let lspMessages = e.lsp.getAndClearMessages()
   if lspMessages.len > 0:
-    # Display the most recent message (last one)
-    e.state.setStatusMessage(lspMessages[^1])
+    if e.config.notification.screenNotifications and
+        e.config.notification.lspScreenNotify:
+      e.state.setStatusMessage(lspMessages[^1])
+    if e.config.notification.logNotifications and e.config.notification.lspLogNotify:
+      for msg in lspMessages:
+        logInfo("lsp", msg)
 
   # Update LSP if buffer was modified
   e.maybeUpdateLsp()
 
-  # Update CodeLens cache if needed
+  # Update LSP caches
   e.updateCodeLensCache()
-
-  # Update Document Highlight cache if needed
   e.updateDocumentHighlightCache()
-
-  # Request signature help from LSP if in insert mode
   e.requestSignatureHelpFromLsp()
-
-  # Poll for LSP completion responses
   e.pollLspCompletion()
 
-  # Check for externally modified files (with debouncing)
+  # File and config monitoring
   e.maybeReloadExternallyModifiedFile()
+  e.maybeReloadConfig()
 
-  # Update git diff if buffer was modified (with debouncing)
+  # Git and debug updates
   e.maybeUpdateGitDiff()
+  e.maybeUpdateDebugBuffer()
 
-  # Auto save if enabled and interval has passed
+  # Auto save/backup
   e.autoSave()
-
-  # Auto backup if enabled and conditions are met
   e.autoBackup()
 
-  # Clear buffer to prevent artifacts
+proc prepareFrame(e: Editor, buffer: var Buffer): bool =
+  ## Prepare for rendering: clear buffer, update animations, prepare highlights.
+  ## Returns true if viewport was resized.
+
   clearBuffer(buffer)
 
   # Update smooth scroll animation
   if e.state.scrollAnimation.active:
-    let reservedLines = if e.state.display.showStatusLine: 2 else: 1
+    let reservedLines =
+      if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
     let (active, cursorLine) = e.executer.motionController.viewportManager.updateScrollAnimation(
       e.state.scrollAnimation, e.config.smoothScroll, reservedLines
     )
-    # Update cursor line during animation
     e.state.cursor.line = cursorLine
 
-  # Reset the full redraw flag if it was set
   if e.state.needsFullRedraw:
     e.state.needsFullRedraw = false
 
-  # Update viewport size and check if resized
-  let wasResized = e.updateViewportSize(buffer)
+  # Update highlight state (skip for debug buffer)
+  let isDebugBuffer =
+    e.state.debugBuffer != nil and e.activeBuffer() == e.state.debugBuffer
 
-  # Handle Filer mode rendering separately
-  # Also render filer when in Command mode but came from Filer (filerState is active)
-  if e.state.mode == EditorMode.Filer or
-      (e.state.mode == EditorMode.Command and e.state.filerState.isSome):
-    e.renderFiler(buffer)
-    e.renderBottomLines(buffer)
-    return
+  if e.config.highlight.pairOfParen and not isDebugBuffer:
+    e.state.matchingParenPos =
+      findMatchingParenPosition(e.activeBuffer(), e.state.cursor)
+  else:
+    e.state.matchingParenPos = none(BufferPosition)
 
-  # Handle LogViewer mode rendering separately
-  # Also render log viewer when in Command mode but came from LogViewer (logViewerState is active)
-  if e.state.mode == EditorMode.LogViewer or
-      (e.state.mode == EditorMode.Command and e.state.logViewerState.isSome):
-    e.renderLogViewer(buffer)
-    e.renderBottomLines(buffer)
-    return
+  if e.config.highlight.currentWord and not isDebugBuffer:
+    e.state.currentWord = getWordAtPosition(e.activeBuffer(), e.state.cursor)
+  else:
+    e.state.currentWord = ""
 
-  # Handle Help mode rendering separately
-  # Also render help viewer when in Command mode but came from Help (helpViewerState is active)
-  if e.state.mode == EditorMode.Help or
-      (e.state.mode == EditorMode.Command and e.state.helpViewerState.isSome):
-    e.renderHelpViewer(buffer)
-    e.renderBottomLines(buffer)
-    return
+  result = e.updateViewportSize(buffer)
 
-  # Handle BufferManager mode rendering separately
-  # Also render buffer manager when in Command mode but came from BufferManager (bufferManagerState is active)
-  if e.state.mode == EditorMode.BufferManager or
-      (e.state.mode == EditorMode.Command and e.state.bufferManagerState.isSome):
-    e.renderBufferManager(buffer)
-    e.renderBottomLines(buffer)
-    return
+proc renderSpecialMode(e: Editor, buffer: var Buffer): bool =
+  ## Render special modes (Filer, LogViewer, Help, etc.).
+  ## Returns true if a special mode was rendered, false otherwise.
 
-  # Handle BackupManager mode rendering separately
-  # Also render backup manager when in Command mode but came from BackupManager (backupManagerState is active)
-  if e.state.mode == EditorMode.BackupManager or
-      (e.state.mode == EditorMode.Command and e.state.backupManagerState.isSome):
-    e.renderBackupManager(buffer)
-    e.renderBottomLines(buffer)
-    return
+  template tryRender(
+      targetMode: EditorMode, isActiveInCmd: bool, renderProc: untyped
+  ): bool =
+    if e.state.mode == targetMode or
+        (e.state.mode == EditorMode.Command and isActiveInCmd):
+      e.renderProc(buffer)
+      e.renderBottomLines(buffer)
+      true
+    else:
+      false
 
-  # Handle DiffViewer mode rendering separately
-  # Also render diff viewer when in Command mode but came from DiffViewer (diffViewerState is active)
-  if e.state.mode == EditorMode.DiffViewer or
-      (e.state.mode == EditorMode.Command and e.state.diffViewerState.isSome):
-    e.renderDiffViewer(buffer)
-    e.renderBottomLines(buffer)
-    return
+  let prev = e.state.previousMode
 
-  # Handle RecentFile mode rendering separately
-  # Also render recent files when in Command mode but came from RecentFile
-  if e.state.mode == EditorMode.RecentFile or
-      (
-        e.state.mode == EditorMode.Command and
-        e.state.previousMode == EditorMode.RecentFile
-      ):
-    e.renderRecentFileMode(buffer)
-    e.renderBottomLines(buffer)
-    return
+  if tryRender(EditorMode.Filer, e.state.filerState.isSome, renderFiler):
+    return true
+  if tryRender(EditorMode.LogViewer, e.state.logViewerState.isSome, renderLogViewer):
+    return true
+  if tryRender(EditorMode.Help, e.state.helpViewerState.isSome, renderHelpViewer):
+    return true
+  if tryRender(
+    EditorMode.BufferManager, e.state.bufferManagerState.isSome, renderBufferManager
+  ):
+    return true
+  if tryRender(
+    EditorMode.BackupManager, e.state.backupManagerState.isSome, renderBackupManager
+  ):
+    return true
+  if tryRender(EditorMode.DiffViewer, e.state.diffViewerState.isSome, renderDiffViewer):
+    return true
+  if tryRender(
+    EditorMode.RecentFile, prev == EditorMode.RecentFile, renderRecentFileMode
+  ):
+    return true
+  if tryRender(EditorMode.Debug, prev == EditorMode.Debug, renderDebugMode):
+    return true
 
-  # Render appropriate view based on window configuration
+  return false
+
+proc renderMainContent(e: Editor, buffer: var Buffer, wasResized: bool) =
+  ## Render the main editor view (single or split).
   if e.windowManager.windows.len > 0:
     e.renderSplitView(buffer, wasResized)
   else:
     e.renderSingleView(buffer, wasResized)
 
-  # Render bottom lines (status and command lines)
   e.renderBottomLines(buffer)
-
-  # Render temporary messages if any (overwrites bottom area)
   e.renderTempMessages(buffer)
 
-  # Render completion popup if active (must be after other rendering)
+proc renderOverlays(e: Editor, buffer: var Buffer) =
+  ## Render overlay popups (completion, signature help, CodeLens picker).
+
   if e.state.mode == EditorMode.Insert:
     let completionMgr = e.handlerManager.insertHandler.completionManager
     if completionMgr.isActive():
-      # Use already-calculated screen cursor position
-      # This correctly accounts for line wrapping and viewport scrolling
       let popupPos = calculatePopupPosition(
         e.state.screenCursor.x, e.state.screenCursor.y, buffer.area.width,
         buffer.area.height, completionMgr.menu.entries, completionMgr.menu.maxVisible,
       )
-
-      # Render the popup
       renderCompletionPopup(
         buffer, completionMgr.menu, popupPos, e.config.autocomplete.windowBorder
       )
 
-    # Render signature help popup if active
     let sigHelpMgr = e.handlerManager.insertHandler.signatureHelpManager
     if sigHelpMgr.isActive():
       let popupPos = calculateSignatureHelpPosition(
@@ -4297,6 +4815,18 @@ proc render*(e: Editor, buffer: var Buffer) =
       )
       renderSignatureHelpPopup(buffer, sigHelpMgr.display, popupPos, true)
 
-  # Render CodeLens picker popup if active
   if e.state.lspCache.codeLensPicker.isActive:
     e.renderCodeLensPicker(buffer)
+
+proc render*(e: Editor, buffer: var Buffer) =
+  ## Main render procedure - orchestrates the rendering of all editor components.
+  if buffer.area.width <= 0 or buffer.area.height <= 0:
+    return
+
+  e.tick()
+  let wasResized = e.prepareFrame(buffer)
+
+  if not e.renderSpecialMode(buffer):
+    e.renderMainContent(buffer, wasResized)
+
+  e.renderOverlays(buffer)

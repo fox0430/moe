@@ -28,6 +28,7 @@ import pkg/chronos/asyncproc
 
 import jsonrpc
 import protocol/types
+import ../appinfo
 import ../logger
 
 export types
@@ -400,7 +401,7 @@ proc startAsync*(client: LspClient): Result[void, string] =
   let initParams =
     %*{
       "processId": getCurrentProcessId(),
-      "clientInfo": {"name": "moe", "version": "0.3.0"},
+      "clientInfo": {"name": "moe", "version": moeSemVersionStr()},
       "rootUri": rootUri,
       "rootPath": client.workspaceRoot,
       "capabilities": buildClientCapabilities(),
