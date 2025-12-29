@@ -3314,6 +3314,191 @@ proc renderBufferManager(e: Editor, buffer: var Buffer) =
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = listStartY + (bmState.selectedIndex - bmState.topLine)
 
+proc renderConfigMode(e: Editor, buffer: var Buffer) =
+  ## Render the configuration mode view
+  if e.state.configModeState.isNone:
+    return
+
+  # Calculate reserved lines at bottom: status line (if shown) + command line
+  let reservedBottom =
+    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
+
+  let
+    configState = e.state.configModeState.get
+    headerY = buffer.area.y
+    listStartY = buffer.area.y + 1
+    listEndY = buffer.area.y + buffer.area.height - reservedBottom
+    width = buffer.area.width
+
+  # Render header
+  var headerText = "-- Configuration --"
+  if headerText.len < width:
+    headerText = headerText & ' '.repeat(width - headerText.len)
+  buffer.setString(
+    buffer.area.x,
+    headerY,
+    headerText,
+    Style(
+      fg: rgb(0xff, 0xd7, 0x00),
+      bg: ColorValue(kind: Default),
+      modifiers: {StyleModifier.Bold},
+    ),
+  )
+
+  # Calculate max name width for alignment
+  var maxNameWidth = 0
+  for item in configState.items:
+    if item.kind != cvkSection:
+      maxNameWidth = max(maxNameWidth, item.displayName.len + item.depth * 2)
+  maxNameWidth = min(maxNameWidth + 4, width div 2) # Limit to half of width
+
+  # Ensure selected entry is visible
+  let visibleLines = listEndY - listStartY
+  configState.ensureSelectedVisible(visibleLines)
+
+  # Render config entries
+  var screenY = listStartY
+  let isEditMode = configState.isEditing()
+  let editInfo = configState.getEditInfo()
+
+  for i in configState.topLine ..< configState.items.len:
+    if screenY >= listEndY:
+      break
+
+    let
+      item = configState.items[i]
+      isSelected = i == configState.selectedIndex
+      isBeingEdited = isSelected and isEditMode and item.kind in {cvkInt, cvkString}
+
+    # Build display line
+    var displayLine: string
+    if isBeingEdited:
+      # Show edit buffer
+      let indent = "  ".repeat(item.depth)
+      let name = item.displayName.alignLeft(maxNameWidth - item.depth * 2)
+      displayLine = indent & name & " : " & editInfo.buffer
+    else:
+      displayLine = formatItemForDisplay(item, maxNameWidth)
+
+    # Truncate if too long, or pad to full width for consistent background
+    if displayLine.len > width:
+      displayLine = displayLine[0 ..< width - 3] & "..."
+    elif displayLine.len < width:
+      displayLine = displayLine & ' '.repeat(width - displayLine.len)
+
+    # Apply style
+    let style =
+      if isBeingEdited:
+        # Edit mode style - yellow background
+        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xd7, 0x00), modifiers: {})
+      elif isSelected:
+        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
+      elif item.kind == cvkSection:
+        Style(
+          fg: rgb(0x5f, 0xff, 0x5f),
+          bg: ColorValue(kind: Default),
+          modifiers: {StyleModifier.Bold},
+        )
+      elif item.kind == cvkBool:
+        if item.boolValue:
+          Style(fg: rgb(0x5f, 0xaf, 0x5f), bg: ColorValue(kind: Default), modifiers: {})
+        else:
+          Style(fg: rgb(0xaf, 0x5f, 0x5f), bg: ColorValue(kind: Default), modifiers: {})
+      elif item.kind == cvkEnum:
+        Style(fg: rgb(0x87, 0xaf, 0xd7), bg: ColorValue(kind: Default), modifiers: {})
+      elif item.kind == cvkInt:
+        Style(fg: rgb(0xd7, 0xaf, 0x5f), bg: ColorValue(kind: Default), modifiers: {})
+      else:
+        Style(
+          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
+        )
+
+    buffer.setString(buffer.area.x, screenY, displayLine, style)
+    inc screenY
+
+  # Clear remaining lines (when sections are collapsed)
+  let emptyLine = ' '.repeat(width)
+  let defaultStyle =
+    Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
+  while screenY < listEndY:
+    buffer.setString(buffer.area.x, screenY, emptyLine, defaultStyle)
+    inc screenY
+
+  # Render enum popup if open
+  let isEnumPopupOpen = configState.isEnumPopupOpen()
+  if isEnumPopupOpen:
+    let enumInfo = configState.getEnumPopupInfo()
+    if enumInfo.options.len > 0:
+      # Calculate popup dimensions
+      var popupWidth = 0
+      for opt in enumInfo.options:
+        popupWidth = max(popupWidth, opt.len)
+      popupWidth += 4 # padding and border
+      let popupHeight = enumInfo.options.len + 2 # options + border
+
+      # Calculate popup position (near the value display position)
+      let selectedY = listStartY + (configState.selectedIndex - configState.topLine)
+      let selectedItem = configState.getSelectedItem()
+      var valueX = maxNameWidth + 5 # indent + name + " : "
+      if selectedItem.isSome:
+        valueX =
+          selectedItem.get.depth * 2 + maxNameWidth - selectedItem.get.depth * 2 + 3
+
+      var popupX = valueX
+      var popupY = selectedY + 1
+      # Adjust if popup goes off screen
+      if popupX + popupWidth > width:
+        popupX = max(0, width - popupWidth)
+      if popupY + popupHeight > listEndY:
+        popupY = max(listStartY, selectedY - popupHeight)
+      if popupX < 0:
+        popupX = 0
+
+      let
+        popupBg = rgb(0x30, 0x30, 0x30)
+        popupFg = rgb(0xff, 0xff, 0xff)
+        selectedBg = rgb(0x00, 0x5f, 0xaf)
+        borderStyle = Style(fg: popupFg, bg: popupBg, modifiers: {})
+        normalStyle = Style(fg: popupFg, bg: popupBg, modifiers: {})
+        selectedStyle =
+          Style(fg: popupFg, bg: selectedBg, modifiers: {StyleModifier.Bold})
+
+      # Draw top border
+      let topBorder = "┌" & "─".repeat(popupWidth - 2) & "┐"
+      buffer.setString(buffer.area.x + popupX, popupY, topBorder, borderStyle)
+
+      # Draw options
+      for i, opt in enumInfo.options:
+        let
+          y = popupY + 1 + i
+          isSelected = i == enumInfo.selectedIndex
+          style = if isSelected: selectedStyle else: normalStyle
+          line = "│ " & opt.alignLeft(popupWidth - 4) & " │"
+        buffer.setString(buffer.area.x + popupX, y, line, style)
+
+      # Draw bottom border
+      let bottomBorder = "└" & "─".repeat(popupWidth - 2) & "┘"
+      buffer.setString(
+        buffer.area.x + popupX, popupY + popupHeight - 1, bottomBorder, borderStyle
+      )
+
+  # Set cursor position - only visible in edit mode
+  if isEditMode:
+    # Position cursor within the edit buffer
+    let selectedItem = configState.getSelectedItem()
+    if selectedItem.isSome:
+      let item = selectedItem.get
+      let indent = item.depth * 2
+      let nameWidth = maxNameWidth - item.depth * 2
+      # cursor x = indent + name + " : " + edit cursor position
+      e.state.screenCursor.x = indent + nameWidth + 3 + editInfo.cursor
+      e.state.screenCursor.y =
+        listStartY + (configState.selectedIndex - configState.topLine)
+  else:
+    # Hide cursor by moving it off-screen
+    e.state.screenCursor.x = -1
+    e.state.screenCursor.y = -1
+
 proc renderBackupManager(e: Editor, buffer: var Buffer) =
   ## Render the backup manager view
   if e.state.backupManagerState.isNone:
@@ -4767,6 +4952,8 @@ proc renderSpecialMode(e: Editor, buffer: var Buffer): bool =
   if tryRender(
     EditorMode.BufferManager, e.state.bufferManagerState.isSome, renderBufferManager
   ):
+    return true
+  if tryRender(EditorMode.Config, e.state.configModeState.isSome, renderConfigMode):
     return true
   if tryRender(
     EditorMode.BackupManager, e.state.backupManagerState.isSome, renderBackupManager

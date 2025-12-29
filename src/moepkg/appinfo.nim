@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[strformat, strutils, os, pegs]
+
 import pkg/results
 
 type VersionInfo* = object

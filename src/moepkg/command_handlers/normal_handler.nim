@@ -208,6 +208,8 @@ proc handleModeSwitch*(
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.RecentFile))
   of EditorMode.Debug:
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Debug))
+  of EditorMode.Config:
+    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Config))
   of EditorMode.Normal:
     # Already in Normal mode
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))

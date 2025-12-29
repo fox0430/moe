@@ -23,11 +23,11 @@ import pkg/celina
 
 import
   cursor, modes, buffer, registers, filer, logviewer, helpviewer, command_completion,
-  messagelog, buffermanager, backupmanager, diffviewer, debugviewer
+  messagelog, buffermanager, backupmanager, diffviewer, debugviewer, configmode
 
 export
   buffer.SidebarItemKind, registers, command_completion, logviewer, helpviewer,
-  buffermanager, backupmanager, diffviewer, debugviewer
+  buffermanager, backupmanager, diffviewer, debugviewer, configmode
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -465,6 +465,9 @@ type
       # Diff viewer state (when in DiffViewer mode)
     # Debug viewer state
     debugViewerState*: Option[DebugViewerState] # Debug viewer state (when in Debug mode)
+    # Configuration mode state
+    configModeState*: Option[ConfigModeState]
+      # Configuration mode state (when in Config mode)
     # Debug buffer tracking for auto-refresh
     debugBuffer*: TextBuffer
       # Reference to the debug buffer for auto-refresh (nil if none)

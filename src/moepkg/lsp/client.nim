@@ -319,6 +319,7 @@ proc buildClientCapabilities(): JsonNode =
       "inlayHint": {"dynamicRegistration": false},
       "inlineValue": {"dynamicRegistration": false},
       "selectionRange": {"dynamicRegistration": false},
+      "callHierarchy": {"dynamicRegistration": false},
       "codeLens": {"dynamicRegistration": false},
       "foldingRange": {
         "dynamicRegistration": false,

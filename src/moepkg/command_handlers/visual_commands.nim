@@ -27,6 +27,7 @@ import std/[options, strutils]
 import pkg/results
 
 import ../[buffer, types, cursor, registers]
+import insert_commands
 
 proc visualMoveLeft*(buffer: TextBuffer, state: EditorState) =
   ## Move left in visual mode and update selection
@@ -305,4 +306,358 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
     state.needsFullRedraw = true
     state.statusMessage = ""
     # Return to previous mode (before entering Visual mode)
+    state.mode = state.previousMode
+
+proc visualIndent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
+  ## Indent all lines in visual selection and return to previous mode
+  if state.visualSelection.active:
+    # Begin transaction for undo support
+    let transactionResult = buffer.beginTransaction("Visual indent")
+    if transactionResult.isErr:
+      state.visualSelection.active = false
+      state.mode = state.previousMode
+      return
+
+    # Get line range
+    let
+      startLine =
+        min(state.visualSelection.start.line, state.visualSelection.current.line)
+      endLine =
+        max(state.visualSelection.start.line, state.visualSelection.current.line)
+
+    # Save original cursor
+    let origCursor = state.cursor
+
+    # Indent each line in the selection
+    for lineNum in startLine .. endLine:
+      state.cursor.line = lineNum
+      state.cursor.column = 0
+      indentLine(buffer, state, count)
+
+    # Restore cursor to start of selection
+    state.cursor.line = startLine
+    state.cursor.column = 0
+
+    # Commit transaction
+    discard buffer.commitTransaction()
+
+    state.visualSelection.active = false
+    state.needsFullRedraw = true
+    state.statusMessage = ""
+    state.mode = state.previousMode
+
+proc visualDedent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
+  ## Dedent all lines in visual selection and return to previous mode
+  if state.visualSelection.active:
+    # Begin transaction for undo support
+    let transactionResult = buffer.beginTransaction("Visual dedent")
+    if transactionResult.isErr:
+      state.visualSelection.active = false
+      state.mode = state.previousMode
+      return
+
+    # Get line range
+    let
+      startLine =
+        min(state.visualSelection.start.line, state.visualSelection.current.line)
+      endLine =
+        max(state.visualSelection.start.line, state.visualSelection.current.line)
+
+    # Save original cursor
+    let origCursor = state.cursor
+
+    # Dedent each line in the selection
+    for lineNum in startLine .. endLine:
+      state.cursor.line = lineNum
+      state.cursor.column = 0
+      dedentLine(buffer, state, count)
+
+    # Restore cursor to start of selection
+    state.cursor.line = startLine
+    state.cursor.column = 0
+
+    # Commit transaction
+    discard buffer.commitTransaction()
+
+    state.visualSelection.active = false
+    state.needsFullRedraw = true
+    state.statusMessage = ""
+    state.mode = state.previousMode
+
+proc visualLowercase*(buffer: TextBuffer, state: EditorState) =
+  ## Convert visual selection to lowercase and return to previous mode
+  if state.visualSelection.active:
+    # Begin transaction for undo support
+    let transactionResult = buffer.beginTransaction("Visual lowercase")
+    if transactionResult.isErr:
+      state.visualSelection.active = false
+      state.mode = state.previousMode
+      return
+
+    # Get normalized selection range
+    let (selStart, selEnd) =
+      if state.visualSelection.start.line < state.visualSelection.current.line:
+        (state.visualSelection.start, state.visualSelection.current)
+      elif state.visualSelection.start.line > state.visualSelection.current.line:
+        (state.visualSelection.current, state.visualSelection.start)
+      else:
+        # Same line - compare columns
+        if state.visualSelection.start.column <= state.visualSelection.current.column:
+          (state.visualSelection.start, state.visualSelection.current)
+        else:
+          (state.visualSelection.current, state.visualSelection.start)
+
+    # Get the selected text based on selection kind
+    let selectedText =
+      case state.visualSelection.kind
+      of vskBlock:
+        getBlockText(buffer, state.visualSelection)
+      of vskLine:
+        getLineText(buffer, state.visualSelection)
+      of vskChar:
+        buffer.getTextInRange(selStart, selEnd)
+
+    # Convert to lowercase
+    let lowercaseText = selectedText.toLowerAscii()
+
+    # Replace the selection with lowercase text
+    case state.visualSelection.kind
+    of vskBlock:
+      # For block selection, convert each line's portion
+      let
+        startLine =
+          min(state.visualSelection.start.line, state.visualSelection.current.line)
+        endLine =
+          max(state.visualSelection.start.line, state.visualSelection.current.line)
+        startCol =
+          min(state.visualSelection.start.column, state.visualSelection.current.column)
+        endCol =
+          max(state.visualSelection.start.column, state.visualSelection.current.column)
+
+      for lineNum in startLine .. endLine:
+        let line = buffer.getLine(lineNum)
+        let lineLen = line.charLen
+        if startCol < lineLen:
+          let actualEndCol = min(endCol, lineLen - 1)
+          let startPos = BufferPosition(line: lineNum, column: startCol)
+          let endPos = BufferPosition(line: lineNum, column: actualEndCol)
+          let blockText = buffer.getTextInRange(startPos, endPos)
+          let lowerText = blockText.toLowerAscii()
+          discard buffer.deleteRange(startPos, endPos)
+          discard buffer.insertText(startPos, lowerText)
+    of vskLine:
+      # For line selection, replace entire lines
+      let
+        startLine =
+          min(state.visualSelection.start.line, state.visualSelection.current.line)
+        endLine =
+          max(state.visualSelection.start.line, state.visualSelection.current.line)
+
+      for lineNum in startLine .. endLine:
+        let lineText = $buffer.getLine(lineNum)
+        let lowerText = lineText.toLowerAscii()
+        # Delete and replace the line content
+        let startPos = BufferPosition(line: lineNum, column: 0)
+        let endPos = BufferPosition(line: lineNum, column: max(0, lineText.len - 1))
+        if lineText.len > 0:
+          discard buffer.deleteRange(startPos, endPos)
+          discard buffer.insertText(startPos, lowerText)
+    of vskChar:
+      # Delete and insert lowercase text
+      discard buffer.deleteRange(selStart, selEnd)
+      discard buffer.insertText(selStart, lowercaseText)
+
+    # Move cursor to start of selection
+    state.cursor = selStart
+
+    # Commit transaction
+    discard buffer.commitTransaction()
+
+    state.visualSelection.active = false
+    state.needsFullRedraw = true
+    state.statusMessage = ""
+    state.mode = state.previousMode
+
+proc visualUppercase*(buffer: TextBuffer, state: EditorState) =
+  ## Convert visual selection to uppercase and return to previous mode
+  if state.visualSelection.active:
+    # Begin transaction for undo support
+    let transactionResult = buffer.beginTransaction("Visual uppercase")
+    if transactionResult.isErr:
+      state.visualSelection.active = false
+      state.mode = state.previousMode
+      return
+
+    # Get normalized selection range
+    let (selStart, selEnd) =
+      if state.visualSelection.start.line < state.visualSelection.current.line:
+        (state.visualSelection.start, state.visualSelection.current)
+      elif state.visualSelection.start.line > state.visualSelection.current.line:
+        (state.visualSelection.current, state.visualSelection.start)
+      else:
+        # Same line - compare columns
+        if state.visualSelection.start.column <= state.visualSelection.current.column:
+          (state.visualSelection.start, state.visualSelection.current)
+        else:
+          (state.visualSelection.current, state.visualSelection.start)
+
+    # Get the selected text based on selection kind
+    let selectedText =
+      case state.visualSelection.kind
+      of vskBlock:
+        getBlockText(buffer, state.visualSelection)
+      of vskLine:
+        getLineText(buffer, state.visualSelection)
+      of vskChar:
+        buffer.getTextInRange(selStart, selEnd)
+
+    # Convert to uppercase
+    let uppercaseText = selectedText.toUpperAscii()
+
+    # Replace the selection with uppercase text
+    case state.visualSelection.kind
+    of vskBlock:
+      # For block selection, convert each line's portion
+      let
+        startLine =
+          min(state.visualSelection.start.line, state.visualSelection.current.line)
+        endLine =
+          max(state.visualSelection.start.line, state.visualSelection.current.line)
+        startCol =
+          min(state.visualSelection.start.column, state.visualSelection.current.column)
+        endCol =
+          max(state.visualSelection.start.column, state.visualSelection.current.column)
+
+      for lineNum in startLine .. endLine:
+        let line = buffer.getLine(lineNum)
+        let lineLen = line.charLen
+        if startCol < lineLen:
+          let actualEndCol = min(endCol, lineLen - 1)
+          let startPos = BufferPosition(line: lineNum, column: startCol)
+          let endPos = BufferPosition(line: lineNum, column: actualEndCol)
+          let blockText = buffer.getTextInRange(startPos, endPos)
+          let upperText = blockText.toUpperAscii()
+          discard buffer.deleteRange(startPos, endPos)
+          discard buffer.insertText(startPos, upperText)
+    of vskLine:
+      # For line selection, replace entire lines
+      let
+        startLine =
+          min(state.visualSelection.start.line, state.visualSelection.current.line)
+        endLine =
+          max(state.visualSelection.start.line, state.visualSelection.current.line)
+
+      for lineNum in startLine .. endLine:
+        let lineText = $buffer.getLine(lineNum)
+        let upperText = lineText.toUpperAscii()
+        # Delete and replace the line content
+        let startPos = BufferPosition(line: lineNum, column: 0)
+        let endPos = BufferPosition(line: lineNum, column: max(0, lineText.len - 1))
+        if lineText.len > 0:
+          discard buffer.deleteRange(startPos, endPos)
+          discard buffer.insertText(startPos, upperText)
+    of vskChar:
+      # Delete and insert uppercase text
+      discard buffer.deleteRange(selStart, selEnd)
+      discard buffer.insertText(selStart, uppercaseText)
+
+    # Move cursor to start of selection
+    state.cursor = selStart
+
+    # Commit transaction
+    discard buffer.commitTransaction()
+
+    state.visualSelection.active = false
+    state.needsFullRedraw = true
+    state.statusMessage = ""
+    state.mode = state.previousMode
+
+proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: char) =
+  ## Replace all characters in visual selection with specified character
+  if state.visualSelection.active:
+    # Begin transaction for undo support
+    let transactionResult = buffer.beginTransaction("Visual replace")
+    if transactionResult.isErr:
+      state.visualSelection.active = false
+      state.mode = state.previousMode
+      return
+
+    # Get normalized selection range
+    let (selStart, selEnd) =
+      if state.visualSelection.start.line < state.visualSelection.current.line:
+        (state.visualSelection.start, state.visualSelection.current)
+      elif state.visualSelection.start.line > state.visualSelection.current.line:
+        (state.visualSelection.current, state.visualSelection.start)
+      else:
+        # Same line - compare columns
+        if state.visualSelection.start.column <= state.visualSelection.current.column:
+          (state.visualSelection.start, state.visualSelection.current)
+        else:
+          (state.visualSelection.current, state.visualSelection.start)
+
+    # Replace selection based on kind
+    case state.visualSelection.kind
+    of vskBlock:
+      # For block selection, replace each line's portion
+      let
+        startLine =
+          min(state.visualSelection.start.line, state.visualSelection.current.line)
+        endLine =
+          max(state.visualSelection.start.line, state.visualSelection.current.line)
+        startCol =
+          min(state.visualSelection.start.column, state.visualSelection.current.column)
+        endCol =
+          max(state.visualSelection.start.column, state.visualSelection.current.column)
+
+      for lineNum in startLine .. endLine:
+        let line = buffer.getLine(lineNum)
+        let lineLen = line.charLen
+        if startCol < lineLen:
+          let actualEndCol = min(endCol, lineLen - 1)
+          let startPos = BufferPosition(line: lineNum, column: startCol)
+          let endPos = BufferPosition(line: lineNum, column: actualEndCol)
+          let blockText = buffer.getTextInRange(startPos, endPos)
+          # Create replacement string with same length
+          let replaceText = $ch.repeat(blockText.len)
+          discard buffer.deleteRange(startPos, endPos)
+          discard buffer.insertText(startPos, replaceText)
+    of vskLine:
+      # For line selection, replace all non-newline characters on each line
+      let
+        startLine =
+          min(state.visualSelection.start.line, state.visualSelection.current.line)
+        endLine =
+          max(state.visualSelection.start.line, state.visualSelection.current.line)
+
+      for lineNum in startLine .. endLine:
+        let lineText = $buffer.getLine(lineNum)
+        if lineText.len > 0:
+          # Create replacement string with same length
+          let replaceText = $ch.repeat(lineText.len)
+          let startPos = BufferPosition(line: lineNum, column: 0)
+          let endPos = BufferPosition(line: lineNum, column: max(0, lineText.len - 1))
+          discard buffer.deleteRange(startPos, endPos)
+          discard buffer.insertText(startPos, replaceText)
+    of vskChar:
+      # Get the text and create replacement
+      let selectedText = buffer.getTextInRange(selStart, selEnd)
+      # Replace all non-newline characters with the replacement char
+      var replaceText = ""
+      for c in selectedText:
+        if c == '\n':
+          replaceText.add('\n')
+        else:
+          replaceText.add(ch)
+      discard buffer.deleteRange(selStart, selEnd)
+      discard buffer.insertText(selStart, replaceText)
+
+    # Move cursor to start of selection
+    state.cursor = selStart
+
+    # Commit transaction
+    discard buffer.commitTransaction()
+
+    state.visualSelection.active = false
+    state.needsFullRedraw = true
+    state.statusMessage = ""
     state.mode = state.previousMode

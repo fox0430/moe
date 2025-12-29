@@ -38,6 +38,7 @@ type
     DiffViewer
     RecentFile
     Debug
+    Config
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -62,3 +63,4 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.DiffViewer: "DIFF"
   of EditorMode.RecentFile: "RECENT"
   of EditorMode.Debug: "DEBUG"
+  of EditorMode.Config: "CONFIG"

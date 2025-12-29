@@ -34,12 +34,14 @@ import
 import
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
   filer_handler, logviewer_handler, help_handler, buffermanager_handler,
-  backupmanager_handler, diffviewer_handler, recentfilemode_handler, debug_handler
+  backupmanager_handler, diffviewer_handler, recentfilemode_handler, debug_handler,
+  config_handler
 
 export
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
   filer_handler, logviewer_handler, help_handler, buffermanager_handler,
-  backupmanager_handler, diffviewer_handler, recentfilemode_handler, debug_handler
+  backupmanager_handler, diffviewer_handler, recentfilemode_handler, debug_handler,
+  config_handler
 
 type
   HandlerResultKind* = enum
@@ -105,6 +107,8 @@ type
     hrDebug # Open debug mode (:debug)
     hrDebugViewerQuit # Close debug viewer
     hrConfig # Open configuration mode (:conf)
+    hrConfigQuit # Close config mode and return to previous mode
+    hrConfigSaveConfig # Save configuration to file
     hrPutConfigFile # Write sample config file (:putConfigFile)
     hrMan # Show manual page (:man)
     hrTheme # Change color theme (:theme)
@@ -131,6 +135,7 @@ type
     backupManagerHandler*: BackupManagerHandler
     diffViewerHandler*: DiffViewerHandler
     recentFileModeHandler*: RecentFileModeHandler
+    configModeHandler*: ConfigModeHandler
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandLineParser*: CommandLineParser
@@ -256,6 +261,10 @@ type
       discard
     of hrConfig:
       discard
+    of hrConfigQuit:
+      discard
+    of hrConfigSaveConfig:
+      discard
     of hrPutConfigFile:
       discard
     of hrMan:
@@ -317,6 +326,7 @@ proc newHandlerManager*(
   let backupManagerHandler = newBackupManagerHandler()
   let diffViewerHandler = newDiffViewerHandler()
   let recentFileModeHandler = newRecentFileModeHandler()
+  let configModeHandler = newConfigModeHandler()
 
   HandlerManager(
     normalHandler: normalHandler,
@@ -331,6 +341,7 @@ proc newHandlerManager*(
     backupManagerHandler: backupManagerHandler,
     diffViewerHandler: diffViewerHandler,
     recentFileModeHandler: recentFileModeHandler,
+    configModeHandler: configModeHandler,
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,
@@ -1009,6 +1020,32 @@ proc handleDiffViewerMode*(
   of dvrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleConfigMode*(
+    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+): HandlerResult =
+  ## Handle Configuration mode input
+  let r = manager.configModeHandler.handleConfigModeKey(state, viewportHeight, keyCombo)
+  case r.kind
+  of cmrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of cmrEnterCommand:
+    # Enter command mode from config mode
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+    )
+  of cmrQuit:
+    return HandlerResult(kind: hrConfigQuit)
+  of cmrSaveConfig:
+    return HandlerResult(kind: hrConfigSaveConfig)
+  of cmrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of cmrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
 proc handleRecentFileMode*(
     manager: HandlerManager,
     state: recentfilemode.RecentFileModeState,
@@ -1090,6 +1127,8 @@ proc handleKeyCombo*(
     return manager.handleBackupManagerMode(state, viewport.height, keyCombo)
   of EditorMode.DiffViewer:
     return manager.handleDiffViewerMode(state, viewport.height, keyCombo)
+  of EditorMode.Config:
+    return manager.handleConfigMode(state, viewport.height, keyCombo)
   of EditorMode.RecentFile:
     # Recent File mode requires its own state, not EditorState
     # This should be handled at a higher level with RecentFileModeState
@@ -1551,3 +1590,15 @@ proc shouldEnterDebugViewer*(hrResult: HandlerResult): bool =
 proc shouldDebugViewerQuit*(hrResult: HandlerResult): bool =
   ## Check if we should close debug viewer
   hrResult.kind == hrDebugViewerQuit
+
+proc shouldEnterConfigMode*(hrResult: HandlerResult): bool =
+  ## Check if we should enter config mode
+  hrResult.kind == hrConfig
+
+proc shouldConfigQuit*(hrResult: HandlerResult): bool =
+  ## Check if we should close config mode
+  hrResult.kind == hrConfigQuit
+
+proc shouldConfigSaveConfig*(hrResult: HandlerResult): bool =
+  ## Check if we should save config
+  hrResult.kind == hrConfigSaveConfig

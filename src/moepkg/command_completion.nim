@@ -68,31 +68,47 @@ const
 
 # Command descriptions for built-in commands
 const CommandDescriptions = {
+  # Quit commands
   "q": "Quit (close window)",
   "quit": "Quit (close window)",
   "qa": "Quit all windows",
+  "qall": "Quit all windows",
+  # Save commands
   "w": "Write (save) file",
   "write": "Write (save) file",
   "wa": "Write all files",
+  "wall": "Write all files",
+  # Combined commands
   "wq": "Write and quit",
   "x": "Write and quit",
   "xit": "Write and quit",
   "wqa": "Write all and quit",
   "xa": "Write all and quit",
+  # Edit commands
   "e": "Edit file",
   "edit": "Edit file",
   "ene": "Create new empty buffer",
   "enew": "Create new empty buffer",
+  # Settings
   "set": "Set option",
   "se": "Set option",
+  # Help
   "h": "Show help",
   "help": "Show help",
+  # Substitute
   "s": "Substitute",
   "substitute": "Substitute",
+  # Window split
   "vs": "Vertical split",
   "vsplit": "Vertical split",
   "sp": "Horizontal split",
+  "sv": "Horizontal split",
   "split": "Horizontal split",
+  "new": "New horizontal split",
+  "vnew": "New vertical split",
+  # Buffer navigation
+  "b": "Switch to buffer",
+  "buffer": "Switch to buffer",
   "bn": "Next buffer",
   "bnext": "Next buffer",
   "bp": "Previous buffer",
@@ -105,16 +121,62 @@ const CommandDescriptions = {
   "blast": "Last buffer",
   "bd": "Delete buffer",
   "bdelete": "Delete buffer",
+  # Strip whitespace
   "stripwhitespace": "Strip trailing whitespace",
   "stripws": "Strip trailing whitespace",
+  "deleteTrailingSpaces": "Strip trailing whitespace",
+  # Filer (file explorer)
   "Filer": "Open file explorer",
   "filer": "Open file explorer",
   "Ex": "Open file explorer",
   "Explore": "Open file explorer",
+  # Log viewer
+  "log": "Open log viewer",
+  "messages": "Open log viewer",
+  # QuickRun
   "run": "Run current buffer",
   "quickrun": "Run current buffer",
   "qr": "Run current buffer",
+  "Q": "Run current buffer",
+  # Buffer manager
+  "buffers": "Open buffer manager",
+  "buf": "Open buffer manager",
+  "ls": "Open buffer manager",
+  "files": "Open buffer manager",
+  # Backup manager
+  "backups": "Open backup manager",
+  "backup": "Open backup manager",
+  # Recent file
+  "recent": "Open recent files",
+  # Clear search highlight
+  "noh": "Clear search highlight",
+  "nohlsearch": "Clear search highlight",
+  # Background
+  "bg": "Suspend editor",
+  # Jump list
+  "ju": "Show jump list",
+  "jump": "Show jump list",
+  "jumps": "Show jump list",
+  # Build
+  "build": "Build project",
+  # Debug mode
   "debug": "Open debug mode",
+  # Configuration mode
+  "conf": "Open configuration",
+  "config": "Open configuration",
+  # Put config file
+  "putConfigFile": "Create config file",
+  # Manual
+  "man": "Show manual",
+  # Theme
+  "theme": "Select theme",
+  # LSP commands
+  "lspLog": "Open LSP log",
+  "lspFormat": "Format with LSP",
+  "lspRestart": "Restart LSP",
+  "lspForceRestart": "Force restart LSP",
+  "lspFold": "Fold with LSP",
+  "lspExeCommand": "Execute LSP command",
 }.toTable
 
 # Commands that take file path arguments
@@ -163,6 +225,7 @@ const NoArgumentCommands* = [
   "messages",
   # Buffer manager
   "buffers",
+  "buf",
   "ls",
   "files",
   # Backup manager
@@ -176,10 +239,28 @@ const NoArgumentCommands* = [
   # Strip whitespace
   "stripwhitespace",
   "stripws",
+  "deleteTrailingSpaces",
   # QuickRun
   "run",
   "quickrun",
   "qr",
+  "Q",
+  # Clear search highlight
+  "noh",
+  "nohlsearch",
+  # Background
+  "bg",
+  # Jump list
+  "ju",
+  "jump",
+  "jumps",
+  # Build
+  "build",
+  # Debug mode
+  "debug",
+  # Configuration mode
+  "conf",
+  "config",
 ]
 
 proc isNoArgumentCommand*(command: string): bool =

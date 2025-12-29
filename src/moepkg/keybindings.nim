@@ -44,6 +44,7 @@ type
     skNone
     skEnter
     skTab
+    skBackTab
     skBackspace
     skDelete
     skEscape
@@ -253,6 +254,8 @@ proc keyComboToString*(keyCombo: KeyCombo): string =
       return "<Enter>"
     of skTab:
       return "<Tab>"
+    of skBackTab:
+      return "<S-Tab>"
     of skBackspace:
       return "<Backspace>"
     of skDelete:
@@ -1883,6 +1886,53 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       args: @[],
     )
   )
+  registry.registerCommand(
+    Command(
+      name: "visual-indent",
+      description: "Indent visual selection",
+      kind: ctAction,
+      commandId: "visual.indent",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-dedent",
+      description: "Dedent visual selection",
+      kind: ctAction,
+      commandId: "visual.dedent",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-lowercase",
+      description: "Convert visual selection to lowercase",
+      kind: ctAction,
+      commandId: "visual.lowercase",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-uppercase",
+      description: "Convert visual selection to uppercase",
+      kind: ctAction,
+      commandId: "visual.uppercase",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "visual-replace-char",
+      description: "Replace visual selection with character",
+      kind: ctOperatorPending,
+      operatorType: "visual-replace",
+      reverse: false,
+      targetChar: "", # Will be filled when user presses a key
+    )
+  )
 
   # Visual mode key bindings (character-wise)
   registry.bindKey(EditorMode.Visual, "h", "visual-move-left")
@@ -1892,6 +1942,11 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Visual, "d", "visual-delete")
   registry.bindKey(EditorMode.Visual, "x", "visual-delete")
   registry.bindKey(EditorMode.Visual, "y", "visual-yank")
+  registry.bindKey(EditorMode.Visual, ">", "visual-indent")
+  registry.bindKey(EditorMode.Visual, "<", "visual-dedent")
+  registry.bindKey(EditorMode.Visual, "u", "visual-lowercase")
+  registry.bindKey(EditorMode.Visual, "U", "visual-uppercase")
+  registry.bindKey(EditorMode.Visual, "r", "visual-replace-char")
   registry.bindKey(EditorMode.Visual, "z f", "fold-create") # Create fold from selection
   registry.bindKey(EditorMode.Visual, "Escape", "switch-to-normal") # Exit to normal mode
 
@@ -1903,6 +1958,11 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualBlock, "d", "visual-delete")
   registry.bindKey(EditorMode.VisualBlock, "x", "visual-delete")
   registry.bindKey(EditorMode.VisualBlock, "y", "visual-yank")
+  registry.bindKey(EditorMode.VisualBlock, ">", "visual-indent")
+  registry.bindKey(EditorMode.VisualBlock, "<", "visual-dedent")
+  registry.bindKey(EditorMode.VisualBlock, "u", "visual-lowercase")
+  registry.bindKey(EditorMode.VisualBlock, "U", "visual-uppercase")
+  registry.bindKey(EditorMode.VisualBlock, "r", "visual-replace-char")
   registry.bindKey(EditorMode.VisualBlock, "z f", "fold-create")
     # Create fold from selection
   registry.bindKey(EditorMode.VisualBlock, "Escape", "switch-to-normal")
@@ -1915,6 +1975,11 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualLine, "d", "visual-delete")
   registry.bindKey(EditorMode.VisualLine, "x", "visual-delete")
   registry.bindKey(EditorMode.VisualLine, "y", "visual-yank")
+  registry.bindKey(EditorMode.VisualLine, ">", "visual-indent")
+  registry.bindKey(EditorMode.VisualLine, "<", "visual-dedent")
+  registry.bindKey(EditorMode.VisualLine, "u", "visual-lowercase")
+  registry.bindKey(EditorMode.VisualLine, "U", "visual-uppercase")
+  registry.bindKey(EditorMode.VisualLine, "r", "visual-replace-char")
   registry.bindKey(EditorMode.VisualLine, "z f", "fold-create")
     # Create fold from selection
   registry.bindKey(EditorMode.VisualLine, "Escape", "switch-to-normal")
@@ -1941,8 +2006,10 @@ proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
     case event.key.code
     of celina.KeyCode.Enter:
       combo = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0)
-    of celina.KeyCode.Tab, celina.KeyCode.BackTab:
+    of celina.KeyCode.Tab:
       combo = KeyCombo(isSpecial: true, special: skTab, fnNum: 0)
+    of celina.KeyCode.BackTab:
+      combo = KeyCombo(isSpecial: true, special: skBackTab, fnNum: 0)
     of celina.KeyCode.Backspace:
       combo = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0)
     of celina.KeyCode.Delete:

@@ -94,6 +94,10 @@ type
     bcVisualMoveDown = "visual.move.down"
     bcVisualDelete = "visual.delete"
     bcVisualYank = "visual.yank"
+    bcVisualIndent = "visual.indent"
+    bcVisualDedent = "visual.dedent"
+    bcVisualLowercase = "visual.lowercase"
+    bcVisualUppercase = "visual.uppercase"
     # Filer operations
     bcFiler = "filer.open"
     # LSP operations
@@ -823,6 +827,24 @@ proc executeCommand*(
 
       ctx.state.needsFullRedraw = true
       return ok(())
+    of "visual-replace":
+      # Execute visual replace action (r command in visual mode)
+      if cmd.targetChar.len == 0:
+        return err("No character specified for replace")
+
+      # Check if we're in visual mode with active selection
+      if not ctx.state.visualSelection.active:
+        return err("No visual selection active")
+
+      # Call visualReplace with the target character
+      visualReplace(ctx.buffer, ctx.state, cmd.targetChar[0])
+
+      # Clear the numeric prefix after using it
+      if ctx.keyBindingRegistry != nil:
+        ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
+        ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
+
+      return ok(())
     else:
       return Result[(), string].err "Unknown operator type: " & cmd.operatorType
   of ctAction, ctTextObject, ctOperator, ctCustom:
@@ -1152,6 +1174,26 @@ proc handleVisualDelete(ctx: CommandContext): Result[(), string] =
 proc handleVisualYank(ctx: CommandContext): Result[(), string] =
   ## Yank (copy) visual selection
   visualYank(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
+proc handleVisualIndent(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Indent visual selection
+  visualIndent(ctx.buffer, ctx.state, count)
+  Result[(), string].ok ()
+
+proc handleVisualDedent(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Dedent visual selection
+  visualDedent(ctx.buffer, ctx.state, count)
+  Result[(), string].ok ()
+
+proc handleVisualLowercase(ctx: CommandContext): Result[(), string] =
+  ## Convert visual selection to lowercase
+  visualLowercase(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
+proc handleVisualUppercase(ctx: CommandContext): Result[(), string] =
+  ## Convert visual selection to uppercase
+  visualUppercase(ctx.buffer, ctx.state)
   Result[(), string].ok ()
 
 ## Clipboard command handlers
@@ -2946,6 +2988,48 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Yank (copy) visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualYank(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualIndent),
+    "Visual Indent",
+    "Indent visual selection (> command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleVisualIndent(ctx, count),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
+    builtin(bcVisualDedent),
+    "Visual Dedent",
+    "Dedent visual selection (< command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleVisualDedent(ctx, count),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
+    builtin(bcVisualLowercase),
+    "Visual Lowercase",
+    "Convert visual selection to lowercase (u command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualLowercase(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualUppercase),
+    "Visual Uppercase",
+    "Convert visual selection to uppercase (U command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualUppercase(ctx),
     0,
     0,
   )

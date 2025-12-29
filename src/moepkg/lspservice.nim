@@ -1350,14 +1350,50 @@ proc hasInlineValueSupport*(svc: LspService, langId: string): bool =
 proc requestSelectionRange*(
     svc: LspService, path: string, positions: seq[Position]
 ): Result[seq[SelectionRange], string] =
-  ## Request selection ranges for given positions in a file (not yet implemented)
-  err("Selection range not yet supported with worker model")
+  ## Request selection ranges for given positions in a file
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let uri = pathToUri(path)
+  var posArray = newJArray()
+  for pos in positions:
+    posArray.add(%*{"line": pos.line, "character": pos.character})
+
+  let params = %*{"textDocument": {"uri": uri}, "positions": posArray}
+
+  let requestId = svc.startTrackedRequest(worker, "textDocument/selectionRange", params)
+  let respResult = svc.waitForResponse(requestId)
+
+  if respResult.isErr:
+    return err(respResult.error)
+
+  let resp = respResult.get
+  var ranges: seq[SelectionRange] = @[]
+  if resp.kind == JArray:
+    for item in resp:
+      ranges.add(parseSelectionRange(item))
+
+  return ok(ranges)
 
 proc requestSelectionRange*(
     svc: LspService, path: string, line, character: int
 ): Result[Option[SelectionRange], string] =
-  ## Request selection range for a single position in a file (not yet implemented)
-  err("Selection range not yet supported with worker model")
+  ## Request selection range for a single position in a file
+  let positions = @[Position(line: line, character: character)]
+  let rangesResult = svc.requestSelectionRange(path, positions)
+  if rangesResult.isErr:
+    return err(rangesResult.error)
+
+  let ranges = rangesResult.get
+  if ranges.len == 0:
+    return ok(none(SelectionRange))
+
+  return ok(some(ranges[0]))
 
 # Status information
 proc getRunningLanguages*(svc: LspService): seq[string] =
@@ -1380,8 +1416,45 @@ proc requestInlineValues*(
     frameId: int,
     stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar: int,
 ): Result[seq[InlineValue], string] =
-  ## Request inline values for a range in a file during debugging (not yet implemented)
-  err("Inline values not yet supported with worker model")
+  ## Request inline values for a range in a file during debugging
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let uri = pathToUri(path)
+  let params =
+    %*{
+      "textDocument": {"uri": uri},
+      "viewPort": {
+        "start": {"line": startLine, "character": startChar},
+        "end": {"line": endLine, "character": endChar},
+      },
+      "context": {
+        "frameId": frameId,
+        "stoppedLocation": {
+          "start": {"line": stoppedLine, "character": stoppedStartChar},
+          "end": {"line": stoppedEndLine, "character": stoppedEndChar},
+        },
+      },
+    }
+
+  let requestId = svc.startTrackedRequest(worker, "textDocument/inlineValue", params)
+  let respResult = svc.waitForResponse(requestId)
+
+  if respResult.isErr:
+    return err(respResult.error)
+
+  let resp = respResult.get
+  var values: seq[InlineValue] = @[]
+  if resp.kind == JArray:
+    for item in resp:
+      values.add(parseInlineValue(item))
+
+  return ok(values)
 
 # CodeLens support
 proc hasCodeLensSupport*(svc: LspService, langId: string): bool =
@@ -1493,20 +1566,89 @@ proc hasFoldingRangeSupport*(svc: LspService, langId: string): bool =
 proc requestCallHierarchyPrepare*(
     svc: LspService, path: string, line, character: int
 ): Result[seq[CallHierarchyItem], string] =
-  ## Prepare call hierarchy at a given position (not yet implemented)
-  err("Call hierarchy not yet supported with worker model")
+  ## Prepare call hierarchy at a given position
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let uri = pathToUri(path)
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let requestId =
+    svc.startTrackedRequest(worker, "textDocument/prepareCallHierarchy", params)
+  let respResult = svc.waitForResponse(requestId)
+
+  if respResult.isErr:
+    return err(respResult.error)
+
+  let resp = respResult.get
+  var items: seq[CallHierarchyItem] = @[]
+  if resp.kind == JArray:
+    for item in resp:
+      items.add(parseCallHierarchyItem(item))
+
+  return ok(items)
 
 proc requestCallHierarchyIncomingCalls*(
     svc: LspService, path: string, item: CallHierarchyItem
 ): Result[seq[CallHierarchyIncomingCall], string] =
-  ## Request incoming calls for a CallHierarchyItem (not yet implemented)
-  err("Call hierarchy not yet supported with worker model")
+  ## Request incoming calls for a CallHierarchyItem
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let params = %*{"item": callHierarchyItemToJson(item)}
+
+  let requestId = svc.startTrackedRequest(worker, "callHierarchy/incomingCalls", params)
+  let respResult = svc.waitForResponse(requestId)
+
+  if respResult.isErr:
+    return err(respResult.error)
+
+  let resp = respResult.get
+  var calls: seq[CallHierarchyIncomingCall] = @[]
+  if resp.kind == JArray:
+    for c in resp:
+      calls.add(parseCallHierarchyIncomingCall(c))
+
+  return ok(calls)
 
 proc requestCallHierarchyOutgoingCalls*(
     svc: LspService, path: string, item: CallHierarchyItem
 ): Result[seq[CallHierarchyOutgoingCall], string] =
-  ## Request outgoing calls for a CallHierarchyItem (not yet implemented)
-  err("Call hierarchy not yet supported with worker model")
+  ## Request outgoing calls for a CallHierarchyItem
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let params = %*{"item": callHierarchyItemToJson(item)}
+
+  let requestId = svc.startTrackedRequest(worker, "callHierarchy/outgoingCalls", params)
+  let respResult = svc.waitForResponse(requestId)
+
+  if respResult.isErr:
+    return err(respResult.error)
+
+  let resp = respResult.get
+  var calls: seq[CallHierarchyOutgoingCall] = @[]
+  if resp.kind == JArray:
+    for c in resp:
+      calls.add(parseCallHierarchyOutgoingCall(c))
+
+  return ok(calls)
 
 proc requestFoldingRange*(
     svc: LspService, path: string

@@ -24,7 +24,8 @@ import pkg/[celina, results]
 import
   editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
   filer, quickrunutils, messagelog, helpviewer, buffermanager, backupmanager, backup,
-  diffviewer, command_completion, build, render_utils, sidebar, debugviewer
+  diffviewer, command_completion, build, render_utils, sidebar, debugviewer,
+  configloader
 import command_handlers/handler_manager
 
 proc getBufferInfos(e: Editor): seq[BufferInfo] =
@@ -987,6 +988,11 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         # Return to Normal mode
         e.state.previousMode = e.state.mode
         e.state.mode = EditorMode.Normal
+      elif r.shouldEnterConfigMode():
+        # Enter configuration mode
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.Config
+        e.state.configModeState = some(newConfigModeState(e.config))
       else:
         # Handle mode transitions
         let modeTransition = r.getModeTransition()
@@ -1834,6 +1840,25 @@ proc handleEvent*(e: Editor, event: Event): bool =
     #  would incorrectly stay in DiffViewer if we used previousMode)
     e.state.diffViewerState = none(DiffViewerState)
     e.state.mode = EditorMode.BackupManager
+    return true
+
+  # Handle Config mode results
+  if r.shouldConfigQuit():
+    # Close config mode and return to previous mode
+    e.state.configModeState = none(ConfigModeState)
+    e.state.mode = e.state.previousMode
+    return true
+
+  if r.shouldConfigSaveConfig():
+    # Save configuration to TOML file
+    let saveResult = saveConfig(e.config)
+    if saveResult.isOk:
+      let configPath = getConfigPath()
+      e.state.setStatusMessage("Config saved: " & configPath)
+      logInfo("config", "Configuration saved to: " & configPath)
+    else:
+      e.state.setStatusMessage("Error: " & saveResult.error)
+      logError("config", "Failed to save config: " & saveResult.error)
     return true
 
   if r.shouldBackupManagerRefresh():

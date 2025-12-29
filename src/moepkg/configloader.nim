@@ -1015,3 +1015,169 @@ proc initTheme*(config: EditorConfig) =
   else:
     # Log error and use default
     initDefaultTheme()
+
+# ============================================================================
+# Configuration saving
+# ============================================================================
+
+proc toTomlBool(val: bool): string =
+  if val: "true" else: "false"
+
+proc toTomlString(val: string): string =
+  "\"" & val & "\""
+
+proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string] =
+  ## Save configuration to a TOML file
+  ## This saves only the settings that are editable in Configuration mode
+  var lines: seq[string] = @[]
+
+  # Standard section
+  lines.add "[Standard]"
+  lines.add "number = " & toTomlBool(config.standard.number)
+  lines.add "currentNumber = " & toTomlBool(config.standard.currentNumber)
+  lines.add "cursorLine = " & toTomlBool(config.standard.cursorLine)
+  lines.add "statusLine = " & toTomlBool(config.standard.statusLine)
+  lines.add "tabLine = " & toTomlBool(config.standard.tabLine)
+  lines.add "syntax = " & toTomlBool(config.standard.syntax)
+  lines.add "indentationLines = " & toTomlBool(config.standard.indentationLines)
+  lines.add "tabStop = " & $config.standard.tabStop
+  lines.add "expandTab = " & toTomlBool(config.standard.expandTab)
+  lines.add "sidebar = " & toTomlBool(config.standard.sidebar)
+  lines.add "autoCloseParen = " & toTomlBool(config.standard.autoCloseParen)
+  lines.add "autoIndent = " & toTomlBool(config.standard.autoIndent)
+  lines.add "ignorecase = " & toTomlBool(config.standard.ignorecase)
+  lines.add "smartcase = " & toTomlBool(config.standard.smartcase)
+  lines.add "disableChangeCursor = " & toTomlBool(config.standard.disableChangeCursor)
+  lines.add "defaultCursor = " & toTomlString($config.standard.defaultCursor)
+  lines.add "normalModeCursor = " & toTomlString($config.standard.normalModeCursor)
+  lines.add "insertModeCursor = " & toTomlString($config.standard.insertModeCursor)
+  lines.add "liveReloadOfConf = " & toTomlBool(config.standard.liveReloadOfConf)
+  lines.add "incrementalSearch = " & toTomlBool(config.standard.incrementalSearch)
+  lines.add "popupWindowInExmode = " & toTomlBool(config.standard.popupWindowInExmode)
+  lines.add "autoDeleteParen = " & toTomlBool(config.standard.autoDeleteParen)
+  lines.add "liveReloadOfFile = " & toTomlBool(config.standard.liveReloadOfFile)
+  lines.add "colorMode = " & toTomlString($config.standard.colorMode)
+  lines.add ""
+
+  # Clipboard section
+  lines.add "[Clipboard]"
+  lines.add "enable = " & toTomlBool(config.clipboard.enable)
+  lines.add "tool = " & toTomlString($config.clipboard.tool)
+  lines.add ""
+
+  # TabLine section
+  lines.add "[TabLine]"
+  lines.add "allBuffer = " & toTomlBool(config.tabLine.allBuffer)
+  lines.add ""
+
+  # StatusLine section
+  lines.add "[StatusLine]"
+  lines.add "multipleStatusLine = " & toTomlBool(config.statusLine.multipleStatusLine)
+  lines.add "merge = " & toTomlBool(config.statusLine.merge)
+  lines.add "mode = " & toTomlBool(config.statusLine.mode)
+  lines.add "filename = " & toTomlBool(config.statusLine.filename)
+  lines.add "chanedMark = " & toTomlBool(config.statusLine.chanedMark)
+  lines.add "directory = " & toTomlBool(config.statusLine.directory)
+  lines.add "gitChangedLines = " & toTomlBool(config.statusLine.gitChangedLines)
+  lines.add "gitBranchName = " & toTomlBool(config.statusLine.gitBranchName)
+  lines.add "showGitInactive = " & toTomlBool(config.statusLine.showGitInactive)
+  lines.add "showModeInactive = " & toTomlBool(config.statusLine.showModeInactive)
+  lines.add ""
+
+  # Highlight section
+  lines.add "[Highlight]"
+  lines.add "currentLine = " & toTomlBool(config.highlight.currentLine)
+  lines.add "replaceText = " & toTomlBool(config.highlight.replaceText)
+  lines.add "pairOfParen = " & toTomlBool(config.highlight.pairOfParen)
+  lines.add "fullWidthSpace = " & toTomlBool(config.highlight.fullWidthSpace)
+  lines.add "trailingSpaces = " & toTomlBool(config.highlight.trailingSpaces)
+  lines.add "currentWord = " & toTomlBool(config.highlight.currentWord)
+  lines.add ""
+
+  # AutoBackup section
+  lines.add "[AutoBackup]"
+  lines.add "enable = " & toTomlBool(config.autoBackup.enable)
+  lines.add "idleTime = " & $config.autoBackup.idleTime
+  lines.add "interval = " & $config.autoBackup.interval
+  lines.add ""
+
+  # Notification section
+  lines.add "[Notification]"
+  lines.add "screenNotifications = " &
+    toTomlBool(config.notification.screenNotifications)
+  lines.add "logNotifications = " & toTomlBool(config.notification.logNotifications)
+  lines.add "autoBackupScreenNotify = " &
+    toTomlBool(config.notification.autoBackupScreenNotify)
+  lines.add "autoBackupLogNotify = " &
+    toTomlBool(config.notification.autoBackupLogNotify)
+  lines.add "autoSaveScreenNotify = " &
+    toTomlBool(config.notification.autoSaveScreenNotify)
+  lines.add "autoSaveLogNotify = " & toTomlBool(config.notification.autoSaveLogNotify)
+  lines.add "yankScreenNotify = " & toTomlBool(config.notification.yankScreenNotify)
+  lines.add "yankLogNotify = " & toTomlBool(config.notification.yankLogNotify)
+  lines.add "deleteScreenNotify = " & toTomlBool(config.notification.deleteScreenNotify)
+  lines.add "deleteLogNotify = " & toTomlBool(config.notification.deleteLogNotify)
+  lines.add "saveScreenNotify = " & toTomlBool(config.notification.saveScreenNotify)
+  lines.add "saveLogNotify = " & toTomlBool(config.notification.saveLogNotify)
+  lines.add ""
+
+  # Filer section
+  lines.add "[Filer]"
+  lines.add "showIcons = " & toTomlBool(config.filer.showIcons)
+  lines.add ""
+
+  # Autocomplete section
+  lines.add "[Autocomplete]"
+  lines.add "enable = " & toTomlBool(config.autocomplete.enable)
+  lines.add "windowBorder = " & toTomlBool(config.autocomplete.windowBorder)
+  lines.add ""
+
+  # AutoSave section
+  lines.add "[AutoSave]"
+  lines.add "enable = " & toTomlBool(config.autoSave.enable)
+  lines.add "interval = " & $config.autoSave.interval
+  lines.add ""
+
+  # Git section
+  lines.add "[Git]"
+  lines.add "showChangedLine = " & toTomlBool(config.git.showChangedLine)
+  lines.add "updateInterval = " & $config.git.updateInterval
+  lines.add ""
+
+  # SyntaxChecker section
+  lines.add "[SyntaxChecker]"
+  lines.add "enable = " & toTomlBool(config.syntaxChecker.enable)
+  lines.add ""
+
+  # SmoothScroll section
+  lines.add "[SmoothScroll]"
+  lines.add "enable = " & toTomlBool(config.smoothScroll.enable)
+  lines.add "baseDurationMs = " & $config.smoothScroll.baseDurationMs
+  lines.add "maxDurationMs = " & $config.smoothScroll.maxDurationMs
+  lines.add ""
+
+  # Lsp section
+  lines.add "[Lsp]"
+  lines.add "enable = " & toTomlBool(config.lsp.enable)
+  lines.add "timeout = " & $config.lsp.timeout
+  lines.add ""
+
+  # Ensure directory exists
+  let dir = parentDir(path)
+  if not dirExists(dir):
+    try:
+      createDir(dir)
+    except CatchableError as e:
+      return Result[void, string].err("Failed to create directory: " & e.msg)
+
+  # Write to file
+  try:
+    writeFile(path, lines.join("\n"))
+    return Result[void, string].ok()
+  except CatchableError as e:
+    return Result[void, string].err("Failed to write config file: " & e.msg)
+
+proc saveConfig*(config: EditorConfig): Result[void, string] =
+  ## Save configuration to the default location
+  let configPath = getConfigPath()
+  return saveConfigToToml(config, configPath)
