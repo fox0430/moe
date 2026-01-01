@@ -160,16 +160,13 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("recent", claRecentFile)
 
   # Clear search highlight
-  config.addAlias("noh", claClearSearchHighlight)
   config.addAlias("nohlsearch", claClearSearchHighlight)
 
   # Background (pause editor and show terminal)
   config.addAlias("bg", claBackground)
 
   # Jump list
-  config.addAlias("ju", claJumpList)
   config.addAlias("jump", claJumpList)
-  config.addAlias("jumps", claJumpList)
 
   # Build
   config.addAlias("build", claBuild)
@@ -178,7 +175,6 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("debug", claDebug)
 
   # Configuration mode
-  config.addAlias("conf", claConfig)
   config.addAlias("config", claConfig)
 
   # Put config file
@@ -197,6 +193,8 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("lspForceRestart", claLspForceRestart)
   config.addAlias("lspFold", claLspFold)
   config.addAlias("lspExeCommand", claLspExecuteCommand)
+  config.addAlias("lspCallHierarchyIncoming", claLspCallHierarchyIncoming)
+  config.addAlias("lspCallHierarchyOutgoing", claLspCallHierarchyOutgoing)
 
   # QuickRun (Q is uppercase alias)
   config.addAlias("Q", claQuickRun)

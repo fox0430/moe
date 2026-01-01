@@ -25,7 +25,7 @@ import
   editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
   filer, quickrunutils, messagelog, helpviewer, buffermanager, backupmanager, backup,
   diffviewer, command_completion, build, render_utils, sidebar, debugviewer,
-  configloader
+  configloader, references_viewer, documentsymbol_viewer
 import command_handlers/handler_manager
 
 proc getBufferInfos(e: Editor): seq[BufferInfo] =
@@ -448,9 +448,6 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         of bsoStatusLine:
           e.config.standard.statusLine = val
           e.state.setStatusMessage("statusline = " & $val)
-        of bsoTabLine:
-          e.config.standard.tabLine = val
-          e.state.setStatusMessage("tabline = " & $val)
         of bsoSyntax:
           e.config.standard.syntax = val
           e.state.display.showSyntax = val
@@ -1664,9 +1661,16 @@ proc handleEvent*(e: Editor, event: Event): bool =
       else:
         # No status line: only bottom has command line
         if isBottomWindow: 1 else: 0
+
+    # Add extra lines for multi-line status messages (only for bottom window)
+    if isBottomWindow:
+      e.state.viewportReservedLines += e.state.statusMessageExtraLines()
   else:
     # Single window mode - use default calculation
     e.state.viewportReservedLines = if e.state.display.showStatusLine: 2 else: 1
+
+    # Add extra lines for multi-line status messages
+    e.state.viewportReservedLines += e.state.statusMessageExtraLines()
     # Sync the motion controller's viewport with the editor's viewport
     e.executer.motionController.viewportManager.viewport = e.viewport
 
@@ -1773,6 +1777,39 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # Close help viewer and return to Normal mode
     e.state.helpViewerState = none(HelpViewerState)
     e.state.mode = EditorMode.Normal
+    return true
+
+  if r.shouldReferencesQuit():
+    # Close references viewer and return to Normal mode
+    e.state.referencesViewerState = none(ReferencesViewerState)
+    e.state.mode = EditorMode.Normal
+    return true
+
+  if r.shouldReferencesJumpTo():
+    # Jump to selected reference
+    let target = r.getReferencesJumpTarget()
+    # Close references viewer first
+    e.state.referencesViewerState = none(ReferencesViewerState)
+    e.state.mode = EditorMode.Normal
+    # Open file and jump to location
+    discard e.openFileAndJumpTo(target.path, target.line, target.column)
+    return true
+
+  if r.shouldDocumentSymbolQuit():
+    # Close document symbol viewer and return to Normal mode
+    e.state.documentSymbolViewerState = none(DocumentSymbolViewerState)
+    e.state.mode = EditorMode.Normal
+    return true
+
+  if r.shouldDocumentSymbolJumpTo():
+    # Jump to selected symbol (same file)
+    let target = r.getDocumentSymbolJumpTarget()
+    let filePath = e.state.documentSymbolViewerState.get.filePath
+    # Close document symbol viewer first
+    e.state.documentSymbolViewerState = none(DocumentSymbolViewerState)
+    e.state.mode = EditorMode.Normal
+    # Open file and jump to location (adds to jump list)
+    discard e.openFileAndJumpTo(filePath, target.line, target.column)
     return true
 
   # Handle Buffer Manager mode results

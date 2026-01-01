@@ -110,15 +110,21 @@ proc syncActiveWindow*(e: Editor) =
 
 proc calculateReservedLines(e: Editor, isBottomWindow: bool = true): int =
   ## Calculate number of reserved lines based on status line configuration
-  if e.state.display.showStatusLine:
-    if e.state.display.multiStatusLine:
-      if isBottomWindow: StatusAndCommandReserve else: StatusLineReserve
-    elif isBottomWindow:
-      StatusAndCommandReserve
+  ## and multi-line status messages
+  result =
+    if e.state.display.showStatusLine:
+      if e.state.display.multiStatusLine:
+        if isBottomWindow: StatusAndCommandReserve else: StatusLineReserve
+      elif isBottomWindow:
+        StatusAndCommandReserve
+      else:
+        0
     else:
-      0
-  else:
-    if isBottomWindow: CommandLineReserve else: 0
+      if isBottomWindow: CommandLineReserve else: 0
+
+  # Add extra lines for multi-line status messages (only for bottom window)
+  if isBottomWindow:
+    result += e.state.statusMessageExtraLines()
 
 proc calculateWindowCursor(
     e: Editor,
@@ -1105,6 +1111,9 @@ proc newEditor*(): Editor =
   if result.config.clipboard.enable:
     result.state.registers.setClipboardTool(result.config.clipboard.tool)
 
+  # Apply LSP enable setting from config
+  result.lsp.setEnabled(result.config.lsp.enable)
+
   # Initialize config file modification time for liveReloadOfConf
   let configPath = getConfigPath()
   if fileExists(configPath):
@@ -1229,6 +1238,9 @@ proc applyConfigSettings(e: Editor, newConfig: EditorConfig) =
 
   # Reload theme if configured
   initTheme(newConfig)
+
+  # Update LSP enable/disable
+  e.lsp.setEnabled(newConfig.lsp.enable)
 
   # Store the new config
   e.config = newConfig
@@ -3022,10 +3034,39 @@ proc renderBottomLines(e: Editor, buffer: var Buffer) =
     e.state.screenCursor.x = searchPrompt.len
     e.state.screenCursor.y = buffer.area.height - 1
   else:
-    if e.state.statusMessage.len > 0:
+    let lineCount = e.state.statusMessageLineCount()
+    if lineCount == 1:
+      # Single line: render as before
       buffer.setString(
         buffer.area.x, commandLineY, e.state.statusMessage, commandStyle()
       )
+    elif lineCount > 1:
+      # Multi-line: move status line up, expand command line area
+      let
+        allLines = e.state.statusMessage.split('\n')
+        # Limit to MaxStatusMessageLines, show last N lines if exceeded
+        lines =
+          if allLines.len > MaxStatusMessageLines:
+            allLines[allLines.len - MaxStatusMessageLines .. ^1]
+          else:
+            allLines
+        extraLines = lines.len - 1
+        newStatusLineY = max(0, statusLineY - extraLines)
+        messageStartY = newStatusLineY + 1
+
+      # Re-render status line at new position
+      e.state.renderStatusLine(
+        e.activeBuffer(), buffer, newStatusLineY, e.config.statusLine
+      )
+
+      # Render message lines from messageStartY to commandLineY
+      for i, line in lines:
+        let y = messageStartY + i
+        if y >= messageStartY and y <= commandLineY:
+          buffer.setString(
+            buffer.area.x, y, " ".repeat(buffer.area.width), commandStyle()
+          )
+          buffer.setString(buffer.area.x, y, line, commandStyle())
 
 proc renderTempMessages(e: Editor, buffer: var Buffer) =
   ## Render temporary messages at the bottom of screen (like Vim's :jumps output)
@@ -3911,6 +3952,137 @@ proc renderLogViewer(e: Editor, buffer: var Buffer) =
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = listStartY + (logState.selectedIndex - logState.topLine)
 
+proc renderReferencesViewer(e: Editor, buffer: var Buffer) =
+  ## Render the references viewer view
+  if e.state.referencesViewerState.isNone:
+    return
+
+  # Calculate reserved lines at bottom: status line (if shown) + command line
+  let reservedBottom =
+    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
+
+  let
+    refState = e.state.referencesViewerState.get
+    headerY = buffer.area.y
+    listStartY = buffer.area.y + 1
+    listEndY = buffer.area.y + buffer.area.height - reservedBottom
+    width = buffer.area.width
+
+  # Render header with title
+  let headerText =
+    "-- " & refState.title.toUpperAscii() & " (" & $refState.itemCount() & ") --"
+  buffer.setString(
+    buffer.area.x,
+    headerY,
+    headerText,
+    Style(
+      fg: rgb(0x00, 0xaf, 0xff),
+      bg: ColorValue(kind: Default),
+      modifiers: {StyleModifier.Bold},
+    ),
+  )
+
+  # Ensure selected line is visible
+  refState.ensureSelectedVisible(buffer.area.height - 1 - reservedBottom)
+
+  # Render reference lines
+  var screenY = listStartY
+  for i in refState.topLine ..< refState.itemCount:
+    if screenY >= listEndY:
+      break
+
+    let
+      line = refState.getLine(i)
+      isSelected = i == refState.selectedIndex
+
+    # Truncate if too long
+    var displayLine =
+      if line.len > width:
+        line[0 ..< width - 3] & "..."
+      else:
+        line
+
+    # Apply style
+    let style =
+      if isSelected:
+        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
+      else:
+        Style(
+          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
+        )
+
+    buffer.setString(buffer.area.x, screenY, displayLine, style)
+    inc screenY
+
+  # Set cursor position (hidden in references viewer mode, but set to selected line)
+  e.state.screenCursor.x = 0
+  e.state.screenCursor.y = listStartY + (refState.selectedIndex - refState.topLine)
+
+proc renderDocumentSymbolViewer(e: Editor, buffer: var Buffer) =
+  ## Render the document symbol viewer view
+  if e.state.documentSymbolViewerState.isNone:
+    return
+
+  # Calculate reserved lines at bottom: status line (if shown) + command line
+  let reservedBottom =
+    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
+
+  let
+    symState = e.state.documentSymbolViewerState.get
+    headerY = buffer.area.y
+    listStartY = buffer.area.y + 1
+    listEndY = buffer.area.y + buffer.area.height - reservedBottom
+    width = buffer.area.width
+
+  # Render header with title
+  let headerText = "-- SYMBOLS (" & $symState.itemCount() & ") --"
+  buffer.setString(
+    buffer.area.x,
+    headerY,
+    headerText,
+    Style(
+      fg: rgb(0xaf, 0xd7, 0x00),
+      bg: ColorValue(kind: Default),
+      modifiers: {StyleModifier.Bold},
+    ),
+  )
+
+  # Ensure selected line is visible
+  symState.ensureSelectedVisible(buffer.area.height - 1 - reservedBottom)
+
+  # Render symbol lines
+  var screenY = listStartY
+  for i in symState.topLine ..< symState.itemCount:
+    if screenY >= listEndY:
+      break
+
+    let
+      line = symState.getLine(i)
+      isSelected = i == symState.selectedIndex
+
+    # Truncate if too long
+    var displayLine =
+      if line.len > width:
+        line[0 ..< width - 3] & "..."
+      else:
+        line
+
+    # Apply style
+    let style =
+      if isSelected:
+        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
+      else:
+        Style(
+          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
+        )
+
+    buffer.setString(buffer.area.x, screenY, displayLine, style)
+    inc screenY
+
+  # Set cursor position (hidden in document symbol viewer mode, but set to selected line)
+  e.state.screenCursor.x = 0
+  e.state.screenCursor.y = listStartY + (symState.selectedIndex - symState.topLine)
+
 proc renderHelpViewer(e: Editor, buffer: var Buffer) =
   ## Render the help viewer view
   if e.state.helpViewerState.isNone:
@@ -4128,27 +4300,66 @@ proc handleLspLocations(
     # Single location - jump directly
     return e.jumpToLspLocation(locations[0], singularName)
   else:
-    # Multiple locations - jump to first and store all for reference
-    var items: seq[LspLocationItem] = @[]
+    # Multiple locations - open References viewer mode
+    var items: seq[ReferenceItem] = @[]
     for loc in locations:
       let path = lspservice.uriToPath(loc.uri)
       items.add(
-        LspLocationItem(
-          uri: loc.uri,
+        ReferenceItem(
           path: path,
           line: loc.range.start.line,
           column: loc.range.start.character,
           text: "",
         )
       )
-    e.state.lspCache.locations =
-      some(LspLocationsResult(items: items, selectedIndex: 0, title: title))
 
-    # Jump to the first location
-    discard e.jumpToLspLocation(locations[0], singularName)
-    e.state.statusMessage =
-      $locations.len & " " & title.toLowerAscii() & " found (showing first)"
+    # Enter References mode
+    e.state.previousMode = e.state.mode
+    e.state.mode = EditorMode.References
+    e.state.referencesViewerState = some(newReferencesViewerState(items, title))
+    e.state.statusMessage = $locations.len & " " & title.toLowerAscii() & " found"
     return true
+
+proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
+  ## Open a file and jump to a specific location
+  ## Returns true if successful
+  let activeBuffer = e.activeBuffer()
+
+  # Add current position to jump list before jumping
+  e.addToJumpList()
+
+  # Check if it's the same file
+  if activeBuffer.filePath.isSome and activeBuffer.filePath.get == path:
+    # Same file - just move cursor with boundary checks
+    let targetLine = min(line, max(0, activeBuffer.len - 1))
+    let lineLen =
+      if activeBuffer.len > 0:
+        activeBuffer[targetLine].len
+      else:
+        0
+    let targetCol = min(column, max(0, lineLen - 1))
+    e.state.cursor.line = targetLine
+    e.state.cursor.column = max(0, targetCol)
+  else:
+    # Different file - open it
+    let loadResult = e.loadFile(path)
+    if loadResult.isErr:
+      e.state.statusMessage = "Failed to open file: " & loadResult.error
+      return false
+    # Set cursor with boundary checks (loadFile already loaded into e.textBuffer)
+    let targetLine = min(line, max(0, e.textBuffer.len - 1))
+    let lineLen =
+      if e.textBuffer.len > 0:
+        e.textBuffer[targetLine].len
+      else:
+        0
+    let targetCol = min(column, max(0, lineLen - 1))
+    e.state.cursor.line = targetLine
+    e.state.cursor.column = max(0, targetCol)
+
+  # Update viewport to follow cursor
+  e.state.needsFullRedraw = true
+  return true
 
 proc requestLspGotoDefinition*(e: Editor): bool =
   ## Request LSP goto definition at current cursor position
@@ -4210,6 +4421,10 @@ proc requestLspCallHierarchyIncoming*(e: Editor): bool =
 
   let activeBuffer = e.activeBuffer()
 
+  if not e.lsp.hasCallHierarchySupport(activeBuffer):
+    e.state.statusMessage = "Call hierarchy not supported"
+    return false
+
   # First, prepare call hierarchy to get the item at cursor
   let prepareResult = e.lsp.requestCallHierarchyPrepare(
     activeBuffer, e.state.cursor.line, e.state.cursor.column
@@ -4254,6 +4469,10 @@ proc requestLspCallHierarchyOutgoing*(e: Editor): bool =
 
   let activeBuffer = e.activeBuffer()
 
+  if not e.lsp.hasCallHierarchySupport(activeBuffer):
+    e.state.statusMessage = "Call hierarchy not supported"
+    return false
+
   # First, prepare call hierarchy to get the item at cursor
   let prepareResult = e.lsp.requestCallHierarchyPrepare(
     activeBuffer, e.state.cursor.line, e.state.cursor.column
@@ -4286,6 +4505,47 @@ proc requestLspCallHierarchyOutgoing*(e: Editor): bool =
     locations.add(lspTypes.Location(uri: call.to.uri, range: call.to.selectionRange))
 
   return e.handleLspLocations(locations, "Outgoing Calls", "Callee")
+
+proc requestDocumentSymbols*(e: Editor): bool =
+  ## Request document symbols (outline) for the current file
+  ## Opens the document symbol viewer if symbols are found
+  ## Returns true if successful
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    e.state.statusMessage = "No file path for current buffer"
+    return false
+
+  let path = activeBuffer.filePath.get
+
+  # Check if document symbol is supported
+  if not e.lsp.hasDocumentSymbolSupport(activeBuffer):
+    e.state.statusMessage = "Document symbols not supported"
+    return false
+
+  # Request document symbols from LSP
+  let symbolsResult = e.lsp.requestDocumentSymbols(activeBuffer)
+  if symbolsResult.isErr:
+    e.state.statusMessage = "LSP document symbols request failed"
+    return false
+
+  let symResult = symbolsResult.get
+  let viewerState = newDocumentSymbolViewerState(symResult, path)
+  let symbolCount = viewerState.itemCount()
+
+  if symbolCount == 0:
+    e.state.statusMessage = "No symbols found"
+    return false
+
+  # Enter DocumentSymbol mode
+  e.state.previousMode = e.state.mode
+  e.state.mode = EditorMode.DocumentSymbol
+  e.state.documentSymbolViewerState = some(viewerState)
+  e.state.statusMessage = $symbolCount & " symbols found"
+  return true
 
 proc hasCodeLensSupport*(e: Editor): bool =
   ## Check if CodeLens is supported for the current buffer
@@ -4946,6 +5206,15 @@ proc renderSpecialMode(e: Editor, buffer: var Buffer): bool =
   if tryRender(EditorMode.Filer, e.state.filerState.isSome, renderFiler):
     return true
   if tryRender(EditorMode.LogViewer, e.state.logViewerState.isSome, renderLogViewer):
+    return true
+  if tryRender(
+    EditorMode.References, e.state.referencesViewerState.isSome, renderReferencesViewer
+  ):
+    return true
+  if tryRender(
+    EditorMode.DocumentSymbol, e.state.documentSymbolViewerState.isSome,
+    renderDocumentSymbolViewer,
+  ):
     return true
   if tryRender(EditorMode.Help, e.state.helpViewerState.isSome, renderHelpViewer):
     return true

@@ -35,13 +35,13 @@ import
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
   filer_handler, logviewer_handler, help_handler, buffermanager_handler,
   backupmanager_handler, diffviewer_handler, recentfilemode_handler, debug_handler,
-  config_handler
+  config_handler, references_handler, documentsymbol_handler
 
 export
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
   filer_handler, logviewer_handler, help_handler, buffermanager_handler,
   backupmanager_handler, diffviewer_handler, recentfilemode_handler, debug_handler,
-  config_handler
+  config_handler, references_handler, documentsymbol_handler
 
 type
   HandlerResultKind* = enum
@@ -119,6 +119,12 @@ type
     hrLspFold # LSP folding range (:lspFold)
     hrLspExecuteCommand # LSP execute command (:lspExeCommand)
     hrSubstitute # Search and replace (:s)
+    hrReferencesQuit # Close references viewer and return to previous mode
+    hrReferencesJumpTo # Jump to the selected reference
+    hrEnterReferences # Enter references viewer mode
+    hrDocumentSymbolQuit # Close document symbol viewer and return to previous mode
+    hrDocumentSymbolJumpTo # Jump to the selected symbol
+    hrEnterDocumentSymbol # Enter document symbol viewer mode
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -136,6 +142,8 @@ type
     diffViewerHandler*: DiffViewerHandler
     recentFileModeHandler*: RecentFileModeHandler
     configModeHandler*: ConfigModeHandler
+    referencesHandler*: ReferencesHandler
+    documentSymbolHandler*: DocumentSymbolHandler
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandLineParser*: CommandLineParser
@@ -285,6 +293,21 @@ type
       hrLspCommand*: string
     of hrSubstitute:
       hrSubstituteCount*: int
+    of hrReferencesQuit:
+      discard
+    of hrReferencesJumpTo:
+      jumpToPath*: string
+      jumpToLine*: int
+      jumpToColumn*: int
+    of hrEnterReferences:
+      discard
+    of hrDocumentSymbolQuit:
+      discard
+    of hrDocumentSymbolJumpTo:
+      symbolLine*: int
+      symbolColumn*: int
+    of hrEnterDocumentSymbol:
+      discard
     of hrUnhandled:
       discard
     of hrError:
@@ -327,6 +350,8 @@ proc newHandlerManager*(
   let diffViewerHandler = newDiffViewerHandler()
   let recentFileModeHandler = newRecentFileModeHandler()
   let configModeHandler = newConfigModeHandler()
+  let referencesHandler = newReferencesHandler()
+  let documentSymbolHandler = newDocumentSymbolHandler()
 
   HandlerManager(
     normalHandler: normalHandler,
@@ -342,6 +367,8 @@ proc newHandlerManager*(
     diffViewerHandler: diffViewerHandler,
     recentFileModeHandler: recentFileModeHandler,
     configModeHandler: configModeHandler,
+    referencesHandler: referencesHandler,
+    documentSymbolHandler: documentSymbolHandler,
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,
@@ -651,6 +678,10 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrLspFold)
   of cmrLspExecuteCommand:
     return HandlerResult(kind: hrLspExecuteCommand, hrLspCommand: r.lspCommand)
+  of cmrLspCallHierarchyIncoming:
+    return HandlerResult(kind: hrLspCallHierarchyIncoming)
+  of cmrLspCallHierarchyOutgoing:
+    return HandlerResult(kind: hrLspCallHierarchyOutgoing)
   of cmrSubstitute:
     return HandlerResult(kind: hrSubstitute, hrSubstituteCount: r.substituteCount)
   of cmrError:
@@ -902,6 +933,70 @@ proc handleLogViewerMode*(
   of lvrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleReferencesMode*(
+    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+): HandlerResult =
+  ## Handle References Viewer mode input
+  let r =
+    manager.referencesHandler.handleReferencesModeKey(state, viewportHeight, keyCombo)
+  case r.kind
+  of rvrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of rvrEnterCommand:
+    # Enter command mode from references viewer
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+    )
+  of rvrQuit:
+    return HandlerResult(kind: hrReferencesQuit)
+  of rvrJumpToReference:
+    return HandlerResult(
+      kind: hrReferencesJumpTo,
+      jumpToPath: r.targetItem.path,
+      jumpToLine: r.targetItem.line,
+      jumpToColumn: r.targetItem.column,
+    )
+  of rvrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of rvrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
+proc handleDocumentSymbolMode*(
+    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+): HandlerResult =
+  ## Handle Document Symbol Viewer mode input
+  let r = manager.documentSymbolHandler.handleDocumentSymbolModeKey(
+    state, viewportHeight, keyCombo
+  )
+  case r.kind
+  of dsvrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of dsvrEnterCommand:
+    # Enter command mode from document symbol viewer
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+    )
+  of dsvrQuit:
+    return HandlerResult(kind: hrDocumentSymbolQuit)
+  of dsvrJumpToSymbol:
+    return HandlerResult(
+      kind: hrDocumentSymbolJumpTo,
+      symbolLine: r.targetItem.line,
+      symbolColumn: r.targetItem.column,
+    )
+  of dsvrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of dsvrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
 proc handleHelpViewerMode*(
     manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
 ): HandlerResult =
@@ -1129,6 +1224,10 @@ proc handleKeyCombo*(
     return manager.handleDiffViewerMode(state, viewport.height, keyCombo)
   of EditorMode.Config:
     return manager.handleConfigMode(state, viewport.height, keyCombo)
+  of EditorMode.References:
+    return manager.handleReferencesMode(state, viewport.height, keyCombo)
+  of EditorMode.DocumentSymbol:
+    return manager.handleDocumentSymbolMode(state, viewport.height, keyCombo)
   of EditorMode.RecentFile:
     # Recent File mode requires its own state, not EditorState
     # This should be handled at a higher level with RecentFileModeState
@@ -1228,12 +1327,13 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrBufferLast, hrBuffer, hrBufferDelete, hrStripWhitespace, hrFilerOpenFile,
     hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerQuit, hrEnterFiler,
     hrLogViewerQuit, hrEnterLogViewer, hrHelpViewerQuit, hrEnterHelpViewer,
-    hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer, hrBufferManagerQuit,
-    hrEnterBufferManager, hrBackupManagerRestore, hrBackupManagerDelete,
-    hrBackupManagerOpenDiff, hrBackupManagerRefresh, hrBackupManagerQuit,
-    hrEnterBackupManager, hrDiffViewerQuit, hrRecentFile, hrRecentFileOpenFile,
-    hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrEnterDiffViewer,
-    hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
+    hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences, hrDocumentSymbolQuit,
+    hrDocumentSymbolJumpTo, hrEnterDocumentSymbol, hrBufferManagerSelectBuffer,
+    hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrEnterBufferManager,
+    hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
+    hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit,
+    hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
+    hrEnterDiffViewer, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
     hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
     hrJumpList,
   }
@@ -1384,6 +1484,48 @@ proc shouldEnterLogViewer*(hrResult: HandlerResult): bool =
 proc shouldLogViewerQuit*(hrResult: HandlerResult): bool =
   ## Check if we should close log viewer
   hrResult.kind == hrLogViewerQuit
+
+proc shouldEnterReferences*(hrResult: HandlerResult): bool =
+  ## Check if we should enter references viewer mode
+  hrResult.kind == hrEnterReferences
+
+proc shouldReferencesQuit*(hrResult: HandlerResult): bool =
+  ## Check if we should close references viewer
+  hrResult.kind == hrReferencesQuit
+
+proc shouldReferencesJumpTo*(hrResult: HandlerResult): bool =
+  ## Check if we should jump to a reference
+  hrResult.kind == hrReferencesJumpTo
+
+proc getReferencesJumpTarget*(
+    hrResult: HandlerResult
+): tuple[path: string, line: int, column: int] =
+  ## Get the jump target for references
+  if hrResult.kind == hrReferencesJumpTo:
+    (hrResult.jumpToPath, hrResult.jumpToLine, hrResult.jumpToColumn)
+  else:
+    ("", 0, 0)
+
+proc shouldEnterDocumentSymbol*(hrResult: HandlerResult): bool =
+  ## Check if we should enter document symbol viewer mode
+  hrResult.kind == hrEnterDocumentSymbol
+
+proc shouldDocumentSymbolQuit*(hrResult: HandlerResult): bool =
+  ## Check if we should close document symbol viewer
+  hrResult.kind == hrDocumentSymbolQuit
+
+proc shouldDocumentSymbolJumpTo*(hrResult: HandlerResult): bool =
+  ## Check if we should jump to a symbol
+  hrResult.kind == hrDocumentSymbolJumpTo
+
+proc getDocumentSymbolJumpTarget*(
+    hrResult: HandlerResult
+): tuple[line: int, column: int] =
+  ## Get the jump target for document symbol
+  if hrResult.kind == hrDocumentSymbolJumpTo:
+    (hrResult.symbolLine, hrResult.symbolColumn)
+  else:
+    (0, 0)
 
 proc shouldEnterHelpViewer*(hrResult: HandlerResult): bool =
   ## Check if we should enter help viewer mode

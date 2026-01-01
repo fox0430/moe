@@ -314,6 +314,8 @@ lspLog- Open a log viewer for LSP log
 
 lspRestart - Restart the current LSP server
 lspForceRestart - Force restart the current LSP server
+lspCallHierarchyIncoming - Show incoming calls (callers) at cursor
+lspCallHierarchyOutgoing - Show outgoing calls (callees) at cursor
 
 help - Open this help
 

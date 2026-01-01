@@ -38,7 +38,6 @@ type
     bsoCurrentNumber # current line number
     bsoCursorLine # cursor line highlight
     bsoStatusLine # status line
-    bsoTabLine # tab line
     bsoSyntax # syntax highlighting
     bsoIndentationLines # indentation guide lines
     bsoAutoIndent # auto indent
@@ -112,6 +111,8 @@ type
     cmrLspForceRestart # Force restart LSP server (:lspForceRestart)
     cmrLspFold # LSP folding range (:lspFold)
     cmrLspExecuteCommand # LSP execute command (:lspExeCommand)
+    cmrLspCallHierarchyIncoming # LSP incoming calls (:lspCallHierarchyIncoming)
+    cmrLspCallHierarchyOutgoing # LSP outgoing calls (:lspCallHierarchyOutgoing)
     cmrSubstitute # Search and replace (:s)
     cmrError # Command error
 
@@ -209,6 +210,10 @@ type
       discard
     of cmrLspExecuteCommand:
       lspCommand*: string
+    of cmrLspCallHierarchyIncoming:
+      discard
+    of cmrLspCallHierarchyOutgoing:
+      discard
     of cmrSubstitute:
       substitutePattern*: string
       substituteReplacement*: string
@@ -344,14 +349,6 @@ proc executeSet*(
   of "nostatusline", "nostl":
     return CommandModeResult(
       kind: cmrSetBoolOption, boolOption: bsoStatusLine, boolValue: false
-    )
-  # Tab line
-  of "tabline", "tal":
-    return
-      CommandModeResult(kind: cmrSetBoolOption, boolOption: bsoTabLine, boolValue: true)
-  of "notabline", "notal":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoTabLine, boolValue: false
     )
   # Syntax highlighting
   of "syntax", "syn":
@@ -912,6 +909,10 @@ proc handleCommandModeInput*(
   of claLspExecuteCommand:
     return
       CommandModeResult(kind: cmrLspExecuteCommand, lspCommand: cmdResult.lspCommand)
+  of claLspCallHierarchyIncoming:
+    return CommandModeResult(kind: cmrLspCallHierarchyIncoming)
+  of claLspCallHierarchyOutgoing:
+    return CommandModeResult(kind: cmrLspCallHierarchyOutgoing)
   of claSubstitute:
     return handler.executeSubstitute(
       buffer, cmdResult.pattern, cmdResult.replacement, cmdResult.substituteFlags,

@@ -73,6 +73,8 @@ type
     claLspForceRestart # :lspForceRestart (force restart LSP server)
     claLspFold # :lspFold (LSP folding range)
     claLspExecuteCommand # :lspExeCommand (LSP execute command)
+    claLspCallHierarchyIncoming # :lspCallHierarchyIncoming (LSP incoming calls)
+    claLspCallHierarchyOutgoing # :lspCallHierarchyOutgoing (LSP outgoing calls)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -178,6 +180,10 @@ type
       discard
     of claLspExecuteCommand:
       lspCommand*: string # LSP command to execute
+    of claLspCallHierarchyIncoming:
+      discard
+    of claLspCallHierarchyOutgoing:
+      discard
     of claUnknown:
       errorMessage*: string
 
@@ -693,6 +699,10 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       return CommandLineResult(kind: claLspExecuteCommand, lspCommand: cmd.args[0])
     else:
       return CommandLineResult(kind: claUnknown, errorMessage: "LSP command required")
+  of claLspCallHierarchyIncoming:
+    return CommandLineResult(kind: claLspCallHierarchyIncoming)
+  of claLspCallHierarchyOutgoing:
+    return CommandLineResult(kind: claLspCallHierarchyOutgoing)
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

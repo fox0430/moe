@@ -39,6 +39,8 @@ type
     RecentFile
     Debug
     Config
+    References
+    DocumentSymbol
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -64,3 +66,5 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.RecentFile: "RECENT"
   of EditorMode.Debug: "DEBUG"
   of EditorMode.Config: "CONFIG"
+  of EditorMode.References: "REFERENCES"
+  of EditorMode.DocumentSymbol: "SYMBOLS"

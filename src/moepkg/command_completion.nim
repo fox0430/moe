@@ -177,6 +177,8 @@ const CommandDescriptions = {
   "lspForceRestart": "Force restart LSP",
   "lspFold": "Fold with LSP",
   "lspExeCommand": "Execute LSP command",
+  "lspCallHierarchyIncoming": "Show incoming calls",
+  "lspCallHierarchyOutgoing": "Show outgoing calls",
 }.toTable
 
 # Commands that take file path arguments

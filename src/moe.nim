@@ -62,17 +62,19 @@ proc main() =
   if config.debugEnabled:
     logInfo("moe", "Editor starting with debug logging enabled")
 
+  # Create editor first to load configuration
+  var editor = newEditor()
+
+  # Create app with config-based mouse setting
   var app = newApp(
     AppConfig(
       title: "moe",
       alternateScreen: true,
-      mouseCapture: true,
+      mouseCapture: editor.config.standard.mouse,
       rawMode: true,
       windowMode: false,
     )
   )
-
-  var editor = newEditor()
   editor.app = app
 
   # Set up LSP diagnostics callback to update buffer markers

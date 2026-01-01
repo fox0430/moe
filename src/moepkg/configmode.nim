@@ -143,15 +143,6 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
   )
   result.add ConfigItemDescriptor(
     kind: cvkBool,
-    displayName: "tabLine",
-    section: "Standard",
-    boolGet: proc(c: EditorConfig): bool =
-      c.standard.tabLine,
-    boolSet: proc(c: EditorConfig, v: bool) =
-      c.standard.tabLine = v,
-  )
-  result.add ConfigItemDescriptor(
-    kind: cvkBool,
     displayName: "syntax",
     section: "Standard",
     boolGet: proc(c: EditorConfig): bool =
@@ -353,20 +344,6 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
     enumSet: proc(c: EditorConfig, v: string) =
       c.clipboard.tool = parseEnum[ClipboardTool](v),
     enumOptions: @["xsel", "xclip", "wl-clipboard", "win32yank", "pbcopy"],
-  )
-
-  # TabLine section
-  result.add ConfigItemDescriptor(
-    kind: cvkSection, displayName: "TabLine", section: "TabLine"
-  )
-  result.add ConfigItemDescriptor(
-    kind: cvkBool,
-    displayName: "allBuffer",
-    section: "TabLine",
-    boolGet: proc(c: EditorConfig): bool =
-      c.tabLine.allBuffer,
-    boolSet: proc(c: EditorConfig, v: bool) =
-      c.tabLine.allBuffer = v,
   )
 
   # StatusLine section

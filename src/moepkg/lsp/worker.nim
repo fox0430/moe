@@ -399,13 +399,24 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     outputFuture = serverStreams.output.read()
 
     # Send initialize request
-    # Use null rootUri/rootPath to let server determine project per-file
+    # Use workspaceRoot if provided, otherwise null
+    let rootUri =
+      if cmd.workspaceRoot.len > 0:
+        newJString("file://" & cmd.workspaceRoot)
+      else:
+        newJNull()
+    let rootPath =
+      if cmd.workspaceRoot.len > 0:
+        newJString(cmd.workspaceRoot)
+      else:
+        newJNull()
+
     let initParams =
       %*{
         "processId": getCurrentProcessId(),
         "clientInfo": {"name": "moe", "version": "0.3.0"},
-        "rootUri": newJNull(),
-        "rootPath": newJNull(),
+        "rootUri": rootUri,
+        "rootPath": rootPath,
         "workspaceFolders": newJNull(),
         "capabilities": buildClientCapabilities(),
         "trace": "verbose",

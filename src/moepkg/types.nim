@@ -17,17 +17,19 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, monotimes, times, tables]
+import std/[options, monotimes, times, tables, strutils]
 
 import pkg/celina
 
 import
   cursor, modes, buffer, registers, filer, logviewer, helpviewer, command_completion,
-  messagelog, buffermanager, backupmanager, diffviewer, debugviewer, configmode
+  messagelog, buffermanager, backupmanager, diffviewer, debugviewer, configmode,
+  references_viewer, documentsymbol_viewer
 
 export
   buffer.SidebarItemKind, registers, command_completion, logviewer, helpviewer,
-  buffermanager, backupmanager, diffviewer, debugviewer, configmode
+  buffermanager, backupmanager, diffviewer, debugviewer, configmode, references_viewer,
+  documentsymbol_viewer
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -454,6 +456,12 @@ type
     logViewerState*: Option[LogViewerState] # Log viewer state (when in LogViewer mode)
     # Help viewer state
     helpViewerState*: Option[HelpViewerState] # Help viewer state (when in Help mode)
+    # References viewer state
+    referencesViewerState*: Option[ReferencesViewerState]
+      # References viewer state (when in References mode)
+    # Document symbol viewer state
+    documentSymbolViewerState*: Option[DocumentSymbolViewerState]
+      # Document symbol viewer state (when in DocumentSymbol mode)
     # Buffer manager state
     bufferManagerState*: Option[BufferManagerState]
       # Buffer manager state (when in BufferManager mode)
@@ -488,3 +496,23 @@ proc setStatusMessage*(state: EditorState, msg: string) =
   state.statusMessage = msg
   if msg.len > 0:
     addMessageLog(msg)
+
+const MaxStatusMessageLines* = 10
+  ## Maximum lines for multi-line status messages to prevent viewport from disappearing
+
+proc statusMessageLineCount*(state: EditorState): int =
+  ## Count the number of lines in the status message
+  ## Returns 0 if empty, otherwise count of lines (newlines + 1)
+  if state.statusMessage.len == 0:
+    0
+  else:
+    min(state.statusMessage.count('\n') + 1, MaxStatusMessageLines)
+
+proc statusMessageExtraLines*(state: EditorState): int =
+  ## Get extra lines needed beyond the default command line
+  ## Returns 0 for single-line or empty messages
+  let lineCount = state.statusMessageLineCount()
+  if lineCount > 1:
+    lineCount - 1
+  else:
+    0

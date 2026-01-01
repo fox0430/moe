@@ -75,8 +75,6 @@ proc loadStandardConfig(table: TomlTableRef, config: var StandardConfig) =
     config.cursorLine = table["cursorLine"].getBool()
   if table.hasKey("statusLine"):
     config.statusLine = table["statusLine"].getBool()
-  if table.hasKey("tabLine"):
-    config.tabLine = table["tabLine"].getBool()
   if table.hasKey("syntax"):
     config.syntax = table["syntax"].getBool()
   if table.hasKey("indentationLines"):
@@ -115,6 +113,8 @@ proc loadStandardConfig(table: TomlTableRef, config: var StandardConfig) =
     config.liveReloadOfFile = table["liveReloadOfFile"].getBool()
   if table.hasKey("colorMode"):
     config.colorMode = parseColorMode(table["colorMode"].getStr())
+  if table.hasKey("mouse"):
+    config.mouse = table["mouse"].getBool()
 
 proc loadClipboardConfig(table: TomlTableRef, config: var ClipboardConfig) =
   if table.hasKey("enable"):
@@ -129,10 +129,6 @@ proc loadBuildOnSaveConfig(table: TomlTableRef, config: var BuildOnSaveConfig) =
     config.workspaceRoot = some(table["workspaceRoot"].getStr())
   if table.hasKey("command"):
     config.command = some(table["command"].getStr())
-
-proc loadTabLineConfig(table: TomlTableRef, config: var TabLineConfig) =
-  if table.hasKey("allBuffer"):
-    config.allBuffer = table["allBuffer"].getBool()
 
 proc loadStatusLineConfig(table: TomlTableRef, config: var StatusLineConfig) =
   if table.hasKey("multipleStatusLine"):
@@ -548,7 +544,15 @@ proc loadConfigFromToml*(path: string): EditorConfig =
   if not fileExists(path):
     return newEditorConfig()
 
-  let toml = parseFile(path)
+  var toml: TomlValueRef
+  try:
+    toml = parseFile(path)
+  except CatchableError as e:
+    stderr.writeLine "Failed to parse config file: " & path
+    stderr.writeLine "Error: " & e.msg
+    stderr.writeLine "Using default configuration"
+    return newEditorConfig()
+
   result = newEditorConfig()
 
   # Load each section
@@ -560,9 +564,6 @@ proc loadConfigFromToml*(path: string): EditorConfig =
 
   if toml.hasKey("BuildOnSave"):
     loadBuildOnSaveConfig(toml["BuildOnSave"].getTable(), result.buildOnSave)
-
-  if toml.hasKey("TabLine"):
-    loadTabLineConfig(toml["TabLine"].getTable(), result.tabLine)
 
   if toml.hasKey("StatusLine"):
     loadStatusLineConfig(toml["StatusLine"].getTable(), result.statusLine)
@@ -1037,7 +1038,6 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "currentNumber = " & toTomlBool(config.standard.currentNumber)
   lines.add "cursorLine = " & toTomlBool(config.standard.cursorLine)
   lines.add "statusLine = " & toTomlBool(config.standard.statusLine)
-  lines.add "tabLine = " & toTomlBool(config.standard.tabLine)
   lines.add "syntax = " & toTomlBool(config.standard.syntax)
   lines.add "indentationLines = " & toTomlBool(config.standard.indentationLines)
   lines.add "tabStop = " & $config.standard.tabStop
@@ -1063,11 +1063,6 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "[Clipboard]"
   lines.add "enable = " & toTomlBool(config.clipboard.enable)
   lines.add "tool = " & toTomlString($config.clipboard.tool)
-  lines.add ""
-
-  # TabLine section
-  lines.add "[TabLine]"
-  lines.add "allBuffer = " & toTomlBool(config.tabLine.allBuffer)
   lines.add ""
 
   # StatusLine section

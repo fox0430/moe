@@ -59,7 +59,6 @@ type
     currentNumber*: bool
     cursorLine*: bool
     statusLine*: bool
-    tabLine*: bool
     syntax*: bool
     indentationLines*: bool
     tabStop*: int
@@ -79,6 +78,7 @@ type
     autoDeleteParen*: bool
     liveReloadOfFile*: bool
     colorMode*: ColorMode
+    mouse*: bool
 
   # Clipboard settings
   ClipboardConfig* = object
@@ -90,10 +90,6 @@ type
     enable*: bool
     workspaceRoot*: Option[string]
     command*: Option[string]
-
-  # Tab line settings
-  TabLineConfig* = object
-    allBuffer*: bool
 
   # Status line settings
   StatusLineConfig* = object
@@ -346,7 +342,6 @@ type
     standard*: StandardConfig
     clipboard*: ClipboardConfig
     buildOnSave*: BuildOnSaveConfig
-    tabLine*: TabLineConfig
     statusLine*: StatusLineConfig
     highlight*: HighlightConfig
     autoBackup*: AutoBackupConfig
@@ -372,7 +367,6 @@ proc newEditorConfig*(): EditorConfig =
       currentNumber: true,
       cursorLine: false,
       statusLine: true,
-      tabLine: true,
       syntax: true,
       indentationLines: true,
       tabStop: 2,
@@ -392,12 +386,12 @@ proc newEditorConfig*(): EditorConfig =
       autoDeleteParen: true,
       liveReloadOfFile: false,
       colorMode: cm24bit,
+      mouse: true,
     ),
     clipboard: ClipboardConfig(enable: true, tool: ctXsel),
     buildOnSave: BuildOnSaveConfig(
       enable: false, workspaceRoot: none(string), command: none(string)
     ),
-    tabLine: TabLineConfig(allBuffer: false),
     statusLine: StatusLineConfig(
       multipleStatusLine: true,
       merge: false,

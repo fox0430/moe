@@ -928,6 +928,36 @@ proc hasCodeLensResolveSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
 
   return lsp.service.hasCodeLensResolveSupport(langIdOpt.get)
 
+proc hasDocumentSymbolSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if document symbol is supported for a buffer's language
+  if not lsp.enabled:
+    return false
+
+  if buffer.filePath.isNone:
+    return false
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return false
+
+  return lsp.service.hasDocumentSymbolSupport(langIdOpt.get)
+
+proc hasCallHierarchySupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if call hierarchy is supported for a buffer's language
+  if not lsp.enabled:
+    return false
+
+  if buffer.filePath.isNone:
+    return false
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return false
+
+  return lsp.service.hasCallHierarchySupport(langIdOpt.get)
+
 proc requestCodeLens*(
     lsp: LspIntegration, buffer: TextBuffer
 ): Result[seq[CodeLens], string] =
