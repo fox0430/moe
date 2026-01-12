@@ -1043,8 +1043,21 @@ proc executeMotion*(
   ## Execute a motion command - main entry point
   ## Returns the new cursor position
   ## If updateViewport=false, skip viewport updates (useful for operator+motion combinations)
+
+  # Check if this is a vertical motion (preserves preferred column)
+  let isVerticalMotion =
+    cmd.motion in {
+      Motion.Up, Motion.Down, Motion.PageUp, Motion.PageDown, Motion.HalfPageUp,
+      Motion.HalfPageDown,
+    }
+
+  # For vertical motion, use preferredColumn if set (>= 0)
+  var effectiveX = currentCursorPos.column
+  if isVerticalMotion and controller.cursorManager.state.preferredColumn >= 0:
+    effectiveX = controller.cursorManager.state.preferredColumn
+
   # Convert to CursorPosition for internal calculations
-  let currentPos = CursorPosition(x: currentCursorPos.column, y: currentCursorPos.line)
+  let currentPos = CursorPosition(x: effectiveX, y: currentCursorPos.line)
 
   # Calculate reserved lines (same logic as updateViewport)
   let actualReservedLines =
@@ -1092,6 +1105,17 @@ proc executeMotion*(
 
   # Store last motion for repeat
   controller.cursorManager.state.editState.lastMotion = some(cmd.motion)
+
+  # Update preferredColumn based on motion type
+  if isVerticalMotion:
+    # For vertical motion: preserve preferred column
+    # If not set yet, initialize from original cursor position
+    if controller.cursorManager.state.preferredColumn < 0:
+      controller.cursorManager.state.preferredColumn = currentCursorPos.column
+  else:
+    # For non-vertical motion: reset preferred column to -1
+    # Next vertical motion will initialize from current position
+    controller.cursorManager.state.preferredColumn = -1
 
   # Return the new cursor position
   return ok(BufferPosition(line: newPos.y, column: newPos.x))

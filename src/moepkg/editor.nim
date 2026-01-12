@@ -947,6 +947,8 @@ proc newEditor*(): Editor =
     recentFileModeState: newRecentFileModeState(),
     state: EditorState(
       cursor: BufferPosition(line: 0, column: 0),
+      preferredColumn: -1,
+        # -1 means not set, will be initialized on first vertical move
       screenCursor: CursorPosition(x: 0, y: 0),
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,

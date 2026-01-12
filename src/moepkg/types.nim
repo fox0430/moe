@@ -415,6 +415,7 @@ type
 
   EditorState* = ref object
     cursor*: BufferPosition # Actual buffer cursor position (line/column)
+    preferredColumn*: int # Preferred column for vertical movement (vim's $ behavior)
     screenCursor*: CursorPosition # Screen cursor position (x/y)
     matchingParenPos*: Option[BufferPosition]
       # Position of matching paren (for highlighting)
