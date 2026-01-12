@@ -1454,14 +1454,37 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  registry.registerCommand(
+    Command(
+      name: "fold-delete-all",
+      description: "Delete all folds",
+      kind: ctCustom,
+      commandId: "fold.delete.all",
+      args: @[],
+    )
+  )
+
   # Bind z commands (fold)
   registry.bindKey(EditorMode.Normal, "z o", "fold-open")
   registry.bindKey(EditorMode.Normal, "z c", "fold-close")
   registry.bindKey(EditorMode.Normal, "z a", "fold-toggle")
   registry.bindKey(EditorMode.Normal, "z d", "fold-delete")
+  registry.bindKey(EditorMode.Normal, "z D", "fold-delete-all")
   registry.bindKey(EditorMode.Normal, "z R", "fold-open-all")
   registry.bindKey(EditorMode.Normal, "z M", "fold-close-all")
   # zf is bound in visual mode below
+
+  # QuickRun command
+  registry.registerCommand(
+    Command(
+      name: "quickrun",
+      description: "Run current buffer",
+      kind: ctCustom,
+      commandId: "quickrun",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "\\ r", "quickrun")
 
   # Operator commands
   registry.registerCommand(

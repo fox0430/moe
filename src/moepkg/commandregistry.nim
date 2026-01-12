@@ -114,6 +114,9 @@ type
     bcFoldCloseAll = "fold.close.all" # zM - close all folds
     bcFoldCreate = "fold.create" # zf - create fold from selection
     bcFoldDelete = "fold.delete" # zd - delete fold at cursor
+    bcFoldDeleteAll = "fold.delete.all" # zD - delete all folds
+    # QuickRun
+    bcQuickRun = "quickrun" # \r - run current buffer
 
   ## Command ID can be builtin or custom
   CommandIdKind* = enum
@@ -2501,6 +2504,23 @@ proc handleFoldDelete(ctx: CommandContext, args: seq[string]): Result[(), string
     ctx.state.statusMessage = "No fold found"
     return ok(())
 
+proc handleFoldDeleteAll(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Delete all folds (zD command)
+  let foldCount = ctx.buffer.foldState.folds.len
+  if foldCount > 0:
+    ctx.buffer.foldState.deleteAllFolds()
+    ctx.state.statusMessage = $foldCount & " fold(s) deleted"
+    ctx.state.needsFullRedraw = true
+  else:
+    ctx.state.statusMessage = "No folds to delete"
+  return ok(())
+
+proc handleQuickRun(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Run current buffer (\r command)
+  ## Sets requestQuickRun flag which is handled by the main event loop
+  ctx.state.requestQuickRun = true
+  return ok(())
+
 proc findNumberAtOrAfterColumn(
     line: string, startCol: int
 ): tuple[found: bool, startPos: int, endPos: int, value: int] =
@@ -2808,6 +2828,20 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     handleFoldDelete,
     0,
     0,
+  )
+
+  registry.register(
+    builtin(bcFoldDeleteAll),
+    "Fold Delete All",
+    "Delete all folds (zD)",
+    handleFoldDeleteAll,
+    0,
+    0,
+  )
+
+  # QuickRun command
+  registry.register(
+    builtin(bcQuickRun), "QuickRun", "Run current buffer (\\r)", handleQuickRun, 0, 0
   )
 
   # Mode switching commands

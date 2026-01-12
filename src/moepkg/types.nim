@@ -480,6 +480,8 @@ type
     # Debug buffer tracking for auto-refresh
     debugBuffer*: TextBuffer
       # Reference to the debug buffer for auto-refresh (nil if none)
+    # QuickRun request flag
+    requestQuickRun*: bool # Set by keybinding to request QuickRun execution
     # Command mode completion
     commandCompletionManager*: CommandCompletionManager
       # Command mode auto-completion manager

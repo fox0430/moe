@@ -2058,6 +2058,10 @@ proc closeAllFolds*(state: var FoldState) =
   for i in 0 ..< state.folds.len:
     state.folds[i].collapsed = true
 
+proc deleteAllFolds*(state: var FoldState) =
+  ## Delete all folds (zD command)
+  state.folds = @[]
+
 proc getNextVisibleLine*(state: FoldState, line: int, maxLine: int): int =
   ## Get the next visible line after a folded region
   ## If line is inside a collapsed fold, skip to the line after the fold

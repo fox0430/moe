@@ -726,7 +726,9 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         else:
           e.state.setStatusMessage("No trailing whitespace found")
 
-      if r.shouldQuickRun():
+      if r.shouldQuickRun() or e.state.requestQuickRun:
+        # Reset request flag if set
+        e.state.requestQuickRun = false
         # Handle QuickRun command
         let quickRunResult = startBackgroundQuickRun(activeBuffer, e.config)
         if quickRunResult.isErr:
