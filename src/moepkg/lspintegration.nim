@@ -420,6 +420,19 @@ proc requestRename*(
   let path = buffer.filePath.get
   return lsp.service.requestRename(path, line, column, newName)
 
+proc requestSelectionRange*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[Option[SelectionRange], string] =
+  ## Request selection range at cursor position
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestSelectionRange(path, line, column)
+
 proc requestFormatting*(
     lsp: LspIntegration, buffer: TextBuffer, tabSize: int = 2, insertSpaces: bool = true
 ): Result[seq[TextEdit], string] =

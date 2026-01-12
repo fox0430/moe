@@ -100,6 +100,11 @@ type
     hrLspCodeLensExecute # Execute CodeLens on current line
     hrLspCallHierarchyIncoming # Execute LSP incoming calls
     hrLspCallHierarchyOutgoing # Execute LSP outgoing calls
+    hrLspTypeDefinition # Execute LSP goto type definition
+    hrLspImplementation # Execute LSP goto implementation
+    hrLspHover # Execute LSP hover
+    hrLspRename # Execute LSP rename
+    hrLspSelectionRange # Execute LSP selection range
     hrShellCommand # Execute shell command
     hrBackground # Pause editor and show terminal (:bg)
     hrJumpList # Show jump list (:ju, :jump)
@@ -254,6 +259,16 @@ type
     of hrLspCallHierarchyIncoming:
       discard
     of hrLspCallHierarchyOutgoing:
+      discard
+    of hrLspTypeDefinition:
+      discard
+    of hrLspImplementation:
+      discard
+    of hrLspHover:
+      discard
+    of hrLspRename:
+      hrLspNewName*: string
+    of hrLspSelectionRange:
       discard
     of hrShellCommand:
       shellCommand*: string
@@ -500,6 +515,21 @@ proc handleNormalMode*(
   of nmrLspCallHierarchyOutgoing:
     # Signal to editor to execute LSP outgoing calls
     return HandlerResult(kind: hrLspCallHierarchyOutgoing)
+  of nmrLspTypeDefinition:
+    # Signal to editor to execute LSP goto type definition
+    return HandlerResult(kind: hrLspTypeDefinition)
+  of nmrLspImplementation:
+    # Signal to editor to execute LSP goto implementation
+    return HandlerResult(kind: hrLspImplementation)
+  of nmrLspHover:
+    # Signal to editor to execute LSP hover
+    return HandlerResult(kind: hrLspHover)
+  of nmrLspRename:
+    # Signal to editor to execute LSP rename
+    return HandlerResult(kind: hrLspRename, hrLspNewName: r.nmrLspNewName)
+  of nmrLspSelectionRange:
+    # Signal to editor to execute LSP selection range
+    return HandlerResult(kind: hrLspSelectionRange)
 
 proc handleInsertMode*(
     manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
@@ -1335,7 +1365,8 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
     hrEnterDiffViewer, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
     hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
-    hrJumpList,
+    hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
+    hrLspSelectionRange, hrJumpList,
   }
 
 proc shouldQuit*(hrResult: HandlerResult): bool =
@@ -1620,6 +1651,30 @@ proc shouldLspCallHierarchyIncoming*(hrResult: HandlerResult): bool =
 proc shouldLspCallHierarchyOutgoing*(hrResult: HandlerResult): bool =
   ## Check if we should execute LSP outgoing calls
   hrResult.kind == hrLspCallHierarchyOutgoing
+
+proc shouldLspTypeDefinition*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP goto type definition
+  hrResult.kind == hrLspTypeDefinition
+
+proc shouldLspImplementation*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP goto implementation
+  hrResult.kind == hrLspImplementation
+
+proc shouldLspHover*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP hover
+  hrResult.kind == hrLspHover
+
+proc shouldLspRename*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP rename
+  hrResult.kind == hrLspRename
+
+proc getLspRenameNewName*(hrResult: HandlerResult): string =
+  ## Get the new name for LSP rename
+  if hrResult.kind == hrLspRename: hrResult.hrLspNewName else: ""
+
+proc shouldLspSelectionRange*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP selection range
+  hrResult.kind == hrLspSelectionRange
 
 proc shouldEnterBufferManager*(hrResult: HandlerResult): bool =
   ## Check if we should enter buffer manager mode

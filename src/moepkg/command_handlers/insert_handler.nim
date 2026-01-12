@@ -324,7 +324,7 @@ proc triggerLspCompletionRequest*(
 
   # First, show buffer completions immediately for instant feedback
   handler.completionManager.triggerCompletion(
-    buffer, state.cursor.line, state.cursor.column
+    buffer, state.cursor.line, state.cursor.column, buffer.language
   )
 
   # If LSP is available, start async request in background

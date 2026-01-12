@@ -2001,6 +2001,31 @@ proc handleEvent*(e: Editor, event: Event): bool =
     discard e.requestLspCallHierarchyOutgoing()
     return true
 
+  # Handle LSP Type Definition
+  if r.shouldLspTypeDefinition():
+    discard e.requestLspTypeDefinition()
+    return true
+
+  # Handle LSP Implementation
+  if r.shouldLspImplementation():
+    discard e.requestLspImplementation()
+    return true
+
+  # Handle LSP Hover
+  if r.shouldLspHover():
+    discard e.requestLspHover()
+    return true
+
+  # Handle LSP Rename - for now just show status message, rename requires user input
+  if r.shouldLspRename():
+    e.state.statusMessage = "Rename: Use :lspRename <newname> command"
+    return true
+
+  # Handle LSP Selection Range
+  if r.shouldLspSelectionRange():
+    discard e.requestLspSelectionRange()
+    return true
+
   # Handle mode transitions
   let modeTransition = r.getModeTransition()
   if modeTransition.isSome:

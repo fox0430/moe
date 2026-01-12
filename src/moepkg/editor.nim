@@ -4508,6 +4508,115 @@ proc requestLspCallHierarchyOutgoing*(e: Editor): bool =
 
   return e.handleLspLocations(locations, "Outgoing Calls", "Callee")
 
+proc requestLspTypeDefinition*(e: Editor): bool =
+  ## Request LSP goto type definition at current cursor position
+  ## Returns true if successful and location was found
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+  let typeDefResult = e.lsp.requestTypeDefinition(
+    activeBuffer, e.state.cursor.line, e.state.cursor.column
+  )
+
+  if typeDefResult.isErr:
+    e.state.statusMessage = "LSP goto type definition failed: " & typeDefResult.error
+    return false
+
+  return e.handleLspLocations(typeDefResult.get, "Type Definitions", "Type Definition")
+
+proc requestLspImplementation*(e: Editor): bool =
+  ## Request LSP goto implementation at current cursor position
+  ## Returns true if successful and location was found
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+  let implResult = e.lsp.requestImplementation(
+    activeBuffer, e.state.cursor.line, e.state.cursor.column
+  )
+
+  if implResult.isErr:
+    e.state.statusMessage = "LSP goto implementation failed: " & implResult.error
+    return false
+
+  return e.handleLspLocations(implResult.get, "Implementations", "Implementation")
+
+proc requestLspHover*(e: Editor): bool =
+  ## Request LSP hover information at current cursor position
+  ## Returns true if successful and hover info was found
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+  let hoverResult =
+    e.lsp.requestHover(activeBuffer, e.state.cursor.line, e.state.cursor.column)
+
+  if hoverResult.isErr:
+    e.state.statusMessage = "LSP hover failed: " & hoverResult.error
+    return false
+
+  let hoverOpt = hoverResult.get
+  if hoverOpt.isNone:
+    e.state.statusMessage = "No hover information available"
+    return false
+
+  let hoverText = getHoverText(hoverOpt.get)
+  if hoverText.len == 0:
+    e.state.statusMessage = "No hover information available"
+    return false
+
+  # Display hover info in status message (truncated if too long)
+  let maxLen = 200
+  if hoverText.len > maxLen:
+    e.state.statusMessage = hoverText[0 ..< maxLen] & "..."
+  else:
+    e.state.statusMessage = hoverText
+  return true
+
+proc requestLspSelectionRange*(e: Editor): bool =
+  ## Request LSP selection range expansion at current cursor position
+  ## Returns true if successful and selection was expanded
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+  let selResult = e.lsp.requestSelectionRange(
+    activeBuffer, e.state.cursor.line, e.state.cursor.column
+  )
+
+  if selResult.isErr:
+    e.state.statusMessage = "LSP selection range failed: " & selResult.error
+    return false
+
+  let selOpt = selResult.get
+  if selOpt.isNone:
+    e.state.statusMessage = "No selection range available"
+    return false
+
+  let selRange = selOpt.get
+  # Enter visual mode and set selection to the range
+  e.state.previousMode = e.state.mode
+  e.state.mode = EditorMode.Visual
+  e.state.visualSelection = VisualSelection(
+    kind: vskChar,
+    start: BufferPosition(
+      line: selRange.range.start.line, column: selRange.range.start.character
+    ),
+    current: BufferPosition(
+      line: selRange.range.`end`.line, column: selRange.range.`end`.character
+    ),
+    active: true,
+  )
+  e.state.cursor = BufferPosition(
+    line: selRange.range.`end`.line, column: selRange.range.`end`.character
+  )
+  return true
+
 proc requestDocumentSymbols*(e: Editor): bool =
   ## Request document symbols (outline) for the current file
   ## Opens the document symbol viewer if symbols are found

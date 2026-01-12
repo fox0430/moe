@@ -43,6 +43,11 @@ type
     nmrLspCodeLensExecute # Signal to handler_manager to execute CodeLens on current line
     nmrLspCallHierarchyIncoming # Signal to handler_manager to show incoming calls
     nmrLspCallHierarchyOutgoing # Signal to handler_manager to show outgoing calls
+    nmrLspTypeDefinition # Signal to handler_manager to execute LSP goto type definition
+    nmrLspImplementation # Signal to handler_manager to execute LSP goto implementation
+    nmrLspHover # Signal to handler_manager to execute LSP hover
+    nmrLspRename # Signal to handler_manager to execute LSP rename
+    nmrLspSelectionRange # Signal to handler_manager to execute LSP selection range
 
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
     motionController*: MotionController
@@ -78,6 +83,16 @@ type
     of nmrLspCallHierarchyIncoming:
       discard
     of nmrLspCallHierarchyOutgoing:
+      discard
+    of nmrLspTypeDefinition:
+      discard
+    of nmrLspImplementation:
+      discard
+    of nmrLspHover:
+      discard
+    of nmrLspRename:
+      nmrLspNewName*: string
+    of nmrLspSelectionRange:
       discard
 
 proc newNormalModeHandler*(
@@ -577,6 +592,21 @@ proc handleNormalModeKey*(
       return NormalModeResult(kind: nmrLspCallHierarchyIncoming)
     elif cmd.commandId == "lsp.callhierarchy.outgoing":
       return NormalModeResult(kind: nmrLspCallHierarchyOutgoing)
+    elif cmd.commandId == "lsp.goto.type.definition":
+      return NormalModeResult(kind: nmrLspTypeDefinition)
+    elif cmd.commandId == "lsp.goto.implementation":
+      return NormalModeResult(kind: nmrLspImplementation)
+    elif cmd.commandId == "lsp.hover":
+      return NormalModeResult(kind: nmrLspHover)
+    elif cmd.commandId == "lsp.rename":
+      return NormalModeResult(kind: nmrLspRename, nmrLspNewName: "")
+    elif cmd.commandId == "lsp.selection.range":
+      return NormalModeResult(kind: nmrLspSelectionRange)
+    elif cmd.commandId == "lsp.document.symbol":
+      # Transition to DocumentSymbol mode
+      return NormalModeResult(
+        kind: nmrHandled, modeTransition: some(EditorMode.DocumentSymbol)
+      )
 
     # Execute custom commands and operators through command registry
     let ctx = CommandContext(

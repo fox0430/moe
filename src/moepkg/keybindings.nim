@@ -1195,6 +1195,106 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.bindKey(EditorMode.Normal, "g l", "lsp-codelens-execute")
 
+  # LSP - Go to declaration (gc)
+  registry.registerCommand(
+    Command(
+      name: "lsp-goto-declaration",
+      description: "Go to declaration (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.goto.declaration",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g c", "lsp-goto-declaration")
+
+  # LSP - Go to type definition (gy)
+  registry.registerCommand(
+    Command(
+      name: "lsp-goto-type-definition",
+      description: "Go to type definition (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.goto.type.definition",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g y", "lsp-goto-type-definition")
+
+  # LSP - Go to implementation (gi)
+  registry.registerCommand(
+    Command(
+      name: "lsp-goto-implementation",
+      description: "Go to implementation (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.goto.implementation",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g i", "lsp-goto-implementation")
+
+  # LSP - Call hierarchy (gh)
+  registry.registerCommand(
+    Command(
+      name: "lsp-call-hierarchy",
+      description: "Show call hierarchy (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.callhierarchy.incoming",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g h", "lsp-call-hierarchy")
+
+  # LSP - Hover (K)
+  registry.registerCommand(
+    Command(
+      name: "lsp-hover",
+      description: "Show hover information (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.hover",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "K", "lsp-hover")
+
+  # LSP - Rename (Space r)
+  registry.registerCommand(
+    Command(
+      name: "lsp-rename",
+      description: "Rename symbol (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.rename",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "Space r", "lsp-rename")
+
+  # LSP - Document symbol (Space o)
+  registry.registerCommand(
+    Command(
+      name: "lsp-document-symbol",
+      description: "Show document symbols (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.document.symbol",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "Space o", "lsp-document-symbol")
+
+  # LSP - Selection range (Ctrl-S)
+  registry.registerCommand(
+    Command(
+      name: "lsp-selection-range",
+      description: "Expand selection range (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.selection.range",
+      args: @[],
+    )
+  )
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: false, char: "s", modifiers: {kmCtrl}),
+    registry.commandRegistry["lsp-selection-range"],
+  )
+
   # ZZ - Save and quit
   registry.registerCommand(
     Command(

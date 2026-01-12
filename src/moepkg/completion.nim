@@ -27,7 +27,8 @@ import std/[algorithm, sequtils, strutils, unicode, sets, options, json]
 
 import pkg/celina
 
-import buffer, cursor
+import buffer, cursor, worddictionary
+import syntax/highlite
 import lsp/protocol/types as lspTypes
 
 export lspTypes
@@ -41,6 +42,7 @@ type
   CompletionSource* = enum
     csBuffer ## From buffer words
     csLsp ## From LSP server
+    csKeyword ## From language keywords
 
   CompletionEntry* = object ## A single completion entry
     word*: string ## The word to insert
@@ -64,6 +66,9 @@ type
     state*: CompletionState
     menu*: CompletionMenu
     allWords*: seq[string] ## All collected words from buffer
+    wordDictionary*: WordDictionary
+      ## Dictionary for language keywords and usage tracking
+    currentLanguage*: SourceLanguage ## Current buffer's language
     lspRequestId*: Option[int] ## Pending LSP request ID
     lspItems*: seq[CompletionItem] ## Raw LSP completion items
 
@@ -244,6 +249,8 @@ proc newCompletionManager*(): CompletionManager =
       triggerCol: 0,
     ),
     allWords: @[],
+    wordDictionary: WordDictionary(),
+    currentLanguage: langNone,
     lspRequestId: none(int),
     lspItems: @[],
   )
@@ -347,9 +354,13 @@ proc updateFilter*(mgr: CompletionManager, prefix: string) =
   mgr.menu.scrollOffset = 0
 
 proc triggerCompletion*(
-    mgr: CompletionManager, buffer: TextBuffer, cursorLine, cursorCol: int
+    mgr: CompletionManager,
+    buffer: TextBuffer,
+    cursorLine, cursorCol: int,
+    language: SourceLanguage = langNone,
 ) =
   ## Trigger completion at current cursor position
+  ## Optionally includes language-specific keywords
   let line = buffer.getLine(cursorLine)
   let prefix = extractPrefixBeforeCursor(line, cursorCol)
 
@@ -360,6 +371,18 @@ proc triggerCompletion*(
   # Collect words from buffer
   mgr.allWords =
     collectBufferWords(buffer, BufferPosition(line: cursorLine, column: cursorCol))
+
+  # Update word dictionary with buffer content and language keywords
+  mgr.currentLanguage = language
+  mgr.wordDictionary.clear()
+  mgr.wordDictionary.update(buffer.getTextString(), prefix, language)
+
+  # Add language keywords to allWords if not already present
+  var wordSet = mgr.allWords.toHashSet
+  for keyword in getLanguageKeywords(language):
+    if keyword notin wordSet:
+      mgr.allWords.add(keyword)
+      wordSet.incl(keyword)
 
   # Set trigger position
   mgr.menu.triggerLine = cursorLine
@@ -608,7 +631,10 @@ proc setLspItems*(mgr: CompletionManager, items: seq[CompletionItem]) =
     mgr.state = csIdle
 
 proc triggerLspCompletion*(
-    mgr: CompletionManager, buffer: TextBuffer, cursorLine, cursorCol: int
+    mgr: CompletionManager,
+    buffer: TextBuffer,
+    cursorLine, cursorCol: int,
+    language: SourceLanguage = langNone,
 ) =
   ## Initialize completion state for LSP request
   ## Call this before starting the LSP request
@@ -618,6 +644,18 @@ proc triggerLspCompletion*(
   # Collect buffer words as fallback
   mgr.allWords =
     collectBufferWords(buffer, BufferPosition(line: cursorLine, column: cursorCol))
+
+  # Update word dictionary with buffer content and language keywords
+  mgr.currentLanguage = language
+  mgr.wordDictionary.clear()
+  mgr.wordDictionary.update(buffer.getTextString(), prefix, language)
+
+  # Add language keywords to allWords if not already present
+  var wordSet = mgr.allWords.toHashSet
+  for keyword in getLanguageKeywords(language):
+    if keyword notin wordSet:
+      mgr.allWords.add(keyword)
+      wordSet.incl(keyword)
 
   # Clear previous LSP items
   mgr.lspItems = @[]
