@@ -36,6 +36,7 @@ type
     nmrError
     nmrSaveAndQuit
     nmrQuitWithoutSave
+    nmrCloseWindow # Signal to handler_manager to close current window (Ctrl-W c)
     nmrPlaybackMacro # Signal to handler_manager to playback a macro
     nmrLspGotoDefinition # Signal to handler_manager to execute LSP goto definition
     nmrLspGotoDeclaration # Signal to handler_manager to execute LSP goto declaration
@@ -68,6 +69,8 @@ type
     of nmrSaveAndQuit:
       discard
     of nmrQuitWithoutSave:
+      discard
+    of nmrCloseWindow:
       discard
     of nmrPlaybackMacro:
       macroKeys*: seq[string] # Keys to playback
@@ -561,6 +564,9 @@ proc handleNormalModeKey*(
     of "file.quit.force":
       # ZQ command - Quit without saving
       return NormalModeResult(kind: nmrQuitWithoutSave)
+    of "window.close":
+      # Ctrl-W c command - Close current window
+      return NormalModeResult(kind: nmrCloseWindow)
     else:
       # Try to execute using command registry for other actions
       let ctx = CommandContext(

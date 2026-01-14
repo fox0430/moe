@@ -34,7 +34,7 @@ import pkg/results
 import
   ../[
     types, buffer, config, cursor, modes, keybindings, motion, commandregistry,
-    unicode_utils, completion, signaturehelp, lspintegration,
+    unicode_utils, completion, signaturehelp, lspintegration, registers,
   ]
 import insert_commands
 
@@ -53,6 +53,7 @@ type
     lsp*: LspIntegration ## LSP integration for completions
     autocompleteEnabled*: bool ## Whether autocomplete is enabled
     notificationConfig*: NotificationConfig
+    waitingForRegister*: bool ## Whether we're waiting for register name (Ctrl-R)
 
   InsertModeResult* = object ## Result of insert mode command execution
     case kind*: InsertModeResultKind
@@ -81,6 +82,7 @@ proc newInsertModeHandler*(
     lsp: lsp,
     autocompleteEnabled: autocompleteEnabled,
     notificationConfig: notificationConfig,
+    waitingForRegister: false,
   )
 
 proc executeCommand*(
@@ -378,6 +380,41 @@ proc isCtrlSpace(keyCombo: KeyCombo): bool =
   ## Check if key is Ctrl+Space (manual completion trigger)
   not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char == " "
 
+proc isCtrlW(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+W (delete word backward)
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+    keyCombo.char.toLowerAscii == "w"
+
+proc isCtrlU(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+U (delete to line start)
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+    keyCombo.char.toLowerAscii == "u"
+
+proc isCtrlT(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+T (indent line)
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+    keyCombo.char.toLowerAscii == "t"
+
+proc isCtrlD(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+D (dedent line)
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+    keyCombo.char.toLowerAscii == "d"
+
+proc isCtrlE(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+E (insert char from below)
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+    keyCombo.char.toLowerAscii == "e"
+
+proc isCtrlY(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+Y (insert char from above)
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+    keyCombo.char.toLowerAscii == "y"
+
+proc isCtrlR(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+R (insert from register)
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+    keyCombo.char.toLowerAscii == "r"
+
 proc shouldTriggerSignatureHelp*(keyCombo: KeyCombo): bool =
   ## Check if the typed character should trigger signature help
   not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char.len == 1 and
@@ -399,6 +436,37 @@ proc handleInsertModeKey*(
   # Record key for macro if recording is active
   if state.macroState.isRecording:
     state.macroState.recordedKeys.add(keyComboToString(keyCombo))
+
+  # Handle Ctrl-R register input (waiting for register name)
+  if handler.waitingForRegister:
+    handler.waitingForRegister = false
+
+    # Escape cancels register input
+    if keyCombo.isSpecial and keyCombo.special == skEscape:
+      return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+    # Get register name from key
+    if not keyCombo.isSpecial and keyCombo.char.len == 1:
+      let regName = keyCombo.char[0]
+      if isValidRegisterName(regName):
+        let content = state.registers.getRegisterContent(regName)
+        if content.len > 0:
+          # Insert register content at cursor
+          discard buffer.insertText(state.cursor, content)
+          # Calculate new cursor position after insertion
+          # Content may contain newlines, so we need to handle multiline
+          let lines = content.split('\n')
+          if lines.len == 1:
+            # Single line: just move column
+            state.cursor.column += content.runeLen
+          else:
+            # Multiple lines: move to end of last inserted line
+            state.cursor.line += lines.len - 1
+            state.cursor.column = lines[^1].runeLen
+        return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+    # Invalid register name - ignore
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   let completionActive = handler.completionManager.isActive()
 
@@ -484,6 +552,48 @@ proc handleInsertModeKey*(
   if keyCombo.isCtrlSpace and not completionActive:
     # Show buffer completions immediately, LSP will update when ready
     handler.triggerLspCompletionRequest(buffer, state)
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  # Ctrl+W - delete word backward
+  if keyCombo.isCtrlW:
+    handler.completionManager.cancelCompletion()
+    deleteWordBackward(buffer, state)
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  # Ctrl+U - delete to line start
+  if keyCombo.isCtrlU:
+    handler.completionManager.cancelCompletion()
+    deleteToLineStart(buffer, state)
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  # Ctrl+T - indent line
+  if keyCombo.isCtrlT:
+    handler.completionManager.cancelCompletion()
+    indentLine(buffer, state)
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  # Ctrl+D - dedent line
+  if keyCombo.isCtrlD:
+    handler.completionManager.cancelCompletion()
+    dedentLine(buffer, state)
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  # Ctrl+E - insert character from line below
+  if keyCombo.isCtrlE:
+    handler.completionManager.cancelCompletion()
+    discard insertCharFromBelow(buffer, state)
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  # Ctrl+Y - insert character from line above
+  if keyCombo.isCtrlY:
+    handler.completionManager.cancelCompletion()
+    discard insertCharFromAbove(buffer, state)
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  # Ctrl+R - insert from register (wait for register name)
+  if keyCombo.isCtrlR:
+    handler.completionManager.cancelCompletion()
+    handler.waitingForRegister = true
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   # Check for mode switch keys (like Escape)

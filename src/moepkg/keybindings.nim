@@ -1014,6 +1014,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
 
   registry.bindKey(EditorMode.Normal, "0", "line-home")
   registry.bindKey(EditorMode.Normal, "^", "line-first-non-blank")
+  registry.bindKey(EditorMode.Normal, "_", "line-first-non-blank")
   registry.bindKey(EditorMode.Normal, "$", "line-end")
 
   # Arrow key bindings for Normal mode
@@ -1321,6 +1322,19 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   # Bind ZQ key sequence to quit-force
   registry.bindKey(EditorMode.Normal, "Z Q", "quit-force")
 
+  # Ctrl-W c - Close current window
+  registry.registerCommand(
+    Command(
+      name: "close-window",
+      description: "Close current window",
+      kind: ctAction,
+      commandId: "window.close",
+      args: @[],
+    )
+  )
+  # Bind Ctrl-W c key sequence to close-window
+  registry.bindKey(EditorMode.Normal, "C-w c", "close-window")
+
   # Indent/dedent commands
   registry.registerCommand(
     Command(
@@ -1345,6 +1359,18 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   # Bind >> and << sequences for indent/dedent
   registry.bindKey(EditorMode.Normal, "> >", "indent-line")
   registry.bindKey(EditorMode.Normal, "< <", "dedent-line")
+
+  # Auto indent command (==)
+  registry.registerCommand(
+    Command(
+      name: "autoindent-line",
+      description: "Auto indent current line",
+      kind: ctCustom,
+      commandId: "autoindent.line",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "= =", "autoindent-line")
 
   # Scroll commands
   registry.registerCommand(
@@ -2048,6 +2074,16 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
 
   registry.registerCommand(
     Command(
+      name: "visual-toggle-case",
+      description: "Toggle case of visual selection",
+      kind: ctAction,
+      commandId: "visual.togglecase",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
       name: "visual-replace-char",
       description: "Replace visual selection with character",
       kind: ctOperatorPending,
@@ -2056,12 +2092,160 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       targetChar: "", # Will be filled when user presses a key
     )
   )
+  registry.registerCommand(
+    Command(
+      name: "visual-joinlines",
+      description: "Join lines in visual selection",
+      kind: ctAction,
+      commandId: "visual.joinlines",
+      args: @[],
+    )
+  )
+
+  # Visual mode motion commands
+  registry.registerCommand(
+    Command(
+      name: "visual-move-home",
+      description: "Move to beginning of line in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.home",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-move-end",
+      description: "Move to end of line in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.end",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-move-firstnonblank",
+      description: "Move to first non-blank character in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.firstnonblank",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-move-firstline",
+      description: "Move to first line in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.firstline",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-move-lastline",
+      description: "Move to last line in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.lastline",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-move-word",
+      description: "Move to next word in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.word",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-move-word-back",
+      description: "Move to previous word in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.word.back",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-move-word-end",
+      description: "Move to end of word in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.word.end",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-move-paragraph-forward",
+      description: "Move to next paragraph in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.paragraph.forward",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-move-paragraph-backward",
+      description: "Move to previous paragraph in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.paragraph.backward",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-swap-selection",
+      description: "Swap cursor to other end of selection",
+      kind: ctAction,
+      commandId: "visual.swap.selection",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-to-insert",
+      description: "Enter insert mode from visual selection",
+      kind: ctAction,
+      commandId: "visual.to.insert",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-change",
+      description: "Delete selection and enter insert mode",
+      kind: ctAction,
+      commandId: "visual.change",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-paste",
+      description: "Delete selection and paste register content",
+      kind: ctAction,
+      commandId: "visual.paste",
+      args: @[],
+    )
+  )
 
   # Visual mode key bindings (character-wise)
   registry.bindKey(EditorMode.Visual, "h", "visual-move-left")
   registry.bindKey(EditorMode.Visual, "l", "visual-move-right")
   registry.bindKey(EditorMode.Visual, "j", "visual-move-down")
   registry.bindKey(EditorMode.Visual, "k", "visual-move-up")
+  registry.bindKey(EditorMode.Visual, "0", "visual-move-home")
+  registry.bindKey(EditorMode.Visual, "$", "visual-move-end")
+  registry.bindKey(EditorMode.Visual, "^", "visual-move-firstnonblank")
+  registry.bindKey(EditorMode.Visual, "g g", "visual-move-firstline")
+  registry.bindKey(EditorMode.Visual, "G", "visual-move-lastline")
+  registry.bindKey(EditorMode.Visual, "w", "visual-move-word")
+  registry.bindKey(EditorMode.Visual, "b", "visual-move-word-back")
+  registry.bindKey(EditorMode.Visual, "e", "visual-move-word-end")
+  registry.bindKey(EditorMode.Visual, "}", "visual-move-paragraph-forward")
+  registry.bindKey(EditorMode.Visual, "{", "visual-move-paragraph-backward")
+  registry.bindKey(EditorMode.Visual, "I", "visual-to-insert")
   registry.bindKey(EditorMode.Visual, "d", "visual-delete")
   registry.bindKey(EditorMode.Visual, "x", "visual-delete")
   registry.bindKey(EditorMode.Visual, "y", "visual-yank")
@@ -2069,15 +2253,47 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Visual, "<", "visual-dedent")
   registry.bindKey(EditorMode.Visual, "u", "visual-lowercase")
   registry.bindKey(EditorMode.Visual, "U", "visual-uppercase")
+  registry.bindKey(EditorMode.Visual, "~", "visual-toggle-case")
   registry.bindKey(EditorMode.Visual, "r", "visual-replace-char")
+  registry.bindKey(EditorMode.Visual, "J", "visual-joinlines")
+  registry.bindKey(EditorMode.Visual, "c", "visual-change")
+  registry.bindKey(EditorMode.Visual, "o", "visual-swap-selection")
+  registry.bindKey(EditorMode.Visual, "p", "visual-paste")
+  registry.bindKey(EditorMode.Visual, "P", "visual-paste")
   registry.bindKey(EditorMode.Visual, "z f", "fold-create") # Create fold from selection
   registry.bindKey(EditorMode.Visual, "Escape", "switch-to-normal") # Exit to normal mode
+  registry.bindKey(EditorMode.Visual, "Ctrl+c", "switch-to-normal") # Exit to normal mode
+  registry.bindKey(
+    EditorMode.Visual,
+    KeyCombo(isSpecial: false, char: "s", modifiers: {kmCtrl}),
+    registry.commandRegistry["lsp-selection-range"],
+  ) # LSP selection range
+  # Arrow keys and other navigation aliases
+  registry.bindKey(EditorMode.Visual, "Left", "visual-move-left")
+  registry.bindKey(EditorMode.Visual, "Right", "visual-move-right")
+  registry.bindKey(EditorMode.Visual, "Up", "visual-move-up")
+  registry.bindKey(EditorMode.Visual, "Down", "visual-move-down")
+  registry.bindKey(EditorMode.Visual, "Home", "visual-move-home")
+  registry.bindKey(EditorMode.Visual, "End", "visual-move-end")
+  registry.bindKey(EditorMode.Visual, "Backspace", "visual-move-left")
+  registry.bindKey(EditorMode.Visual, "Enter", "visual-move-down")
 
   # Visual block mode key bindings (share most bindings with Visual mode via fallback)
   registry.bindKey(EditorMode.VisualBlock, "h", "visual-move-left")
   registry.bindKey(EditorMode.VisualBlock, "l", "visual-move-right")
   registry.bindKey(EditorMode.VisualBlock, "j", "visual-move-down")
   registry.bindKey(EditorMode.VisualBlock, "k", "visual-move-up")
+  registry.bindKey(EditorMode.VisualBlock, "0", "visual-move-home")
+  registry.bindKey(EditorMode.VisualBlock, "$", "visual-move-end")
+  registry.bindKey(EditorMode.VisualBlock, "^", "visual-move-firstnonblank")
+  registry.bindKey(EditorMode.VisualBlock, "g g", "visual-move-firstline")
+  registry.bindKey(EditorMode.VisualBlock, "G", "visual-move-lastline")
+  registry.bindKey(EditorMode.VisualBlock, "w", "visual-move-word")
+  registry.bindKey(EditorMode.VisualBlock, "b", "visual-move-word-back")
+  registry.bindKey(EditorMode.VisualBlock, "e", "visual-move-word-end")
+  registry.bindKey(EditorMode.VisualBlock, "}", "visual-move-paragraph-forward")
+  registry.bindKey(EditorMode.VisualBlock, "{", "visual-move-paragraph-backward")
+  registry.bindKey(EditorMode.VisualBlock, "I", "visual-to-insert")
   registry.bindKey(EditorMode.VisualBlock, "d", "visual-delete")
   registry.bindKey(EditorMode.VisualBlock, "x", "visual-delete")
   registry.bindKey(EditorMode.VisualBlock, "y", "visual-yank")
@@ -2085,16 +2301,48 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualBlock, "<", "visual-dedent")
   registry.bindKey(EditorMode.VisualBlock, "u", "visual-lowercase")
   registry.bindKey(EditorMode.VisualBlock, "U", "visual-uppercase")
+  registry.bindKey(EditorMode.VisualBlock, "~", "visual-toggle-case")
   registry.bindKey(EditorMode.VisualBlock, "r", "visual-replace-char")
+  registry.bindKey(EditorMode.VisualBlock, "J", "visual-joinlines")
+  registry.bindKey(EditorMode.VisualBlock, "c", "visual-change")
+  registry.bindKey(EditorMode.VisualBlock, "o", "visual-swap-selection")
+  registry.bindKey(EditorMode.VisualBlock, "p", "visual-paste")
+  registry.bindKey(EditorMode.VisualBlock, "P", "visual-paste")
   registry.bindKey(EditorMode.VisualBlock, "z f", "fold-create")
     # Create fold from selection
   registry.bindKey(EditorMode.VisualBlock, "Escape", "switch-to-normal")
+  registry.bindKey(EditorMode.VisualBlock, "Ctrl+c", "switch-to-normal")
+  registry.bindKey(
+    EditorMode.VisualBlock,
+    KeyCombo(isSpecial: false, char: "s", modifiers: {kmCtrl}),
+    registry.commandRegistry["lsp-selection-range"],
+  ) # LSP selection range
+  # Arrow keys and other navigation aliases
+  registry.bindKey(EditorMode.VisualBlock, "Left", "visual-move-left")
+  registry.bindKey(EditorMode.VisualBlock, "Right", "visual-move-right")
+  registry.bindKey(EditorMode.VisualBlock, "Up", "visual-move-up")
+  registry.bindKey(EditorMode.VisualBlock, "Down", "visual-move-down")
+  registry.bindKey(EditorMode.VisualBlock, "Home", "visual-move-home")
+  registry.bindKey(EditorMode.VisualBlock, "End", "visual-move-end")
+  registry.bindKey(EditorMode.VisualBlock, "Backspace", "visual-move-left")
+  registry.bindKey(EditorMode.VisualBlock, "Enter", "visual-move-down")
 
   # Visual line mode key bindings
   registry.bindKey(EditorMode.VisualLine, "h", "visual-move-left")
   registry.bindKey(EditorMode.VisualLine, "l", "visual-move-right")
   registry.bindKey(EditorMode.VisualLine, "j", "visual-move-down")
   registry.bindKey(EditorMode.VisualLine, "k", "visual-move-up")
+  registry.bindKey(EditorMode.VisualLine, "0", "visual-move-home")
+  registry.bindKey(EditorMode.VisualLine, "$", "visual-move-end")
+  registry.bindKey(EditorMode.VisualLine, "^", "visual-move-firstnonblank")
+  registry.bindKey(EditorMode.VisualLine, "g g", "visual-move-firstline")
+  registry.bindKey(EditorMode.VisualLine, "G", "visual-move-lastline")
+  registry.bindKey(EditorMode.VisualLine, "w", "visual-move-word")
+  registry.bindKey(EditorMode.VisualLine, "b", "visual-move-word-back")
+  registry.bindKey(EditorMode.VisualLine, "e", "visual-move-word-end")
+  registry.bindKey(EditorMode.VisualLine, "}", "visual-move-paragraph-forward")
+  registry.bindKey(EditorMode.VisualLine, "{", "visual-move-paragraph-backward")
+  registry.bindKey(EditorMode.VisualLine, "I", "visual-to-insert")
   registry.bindKey(EditorMode.VisualLine, "d", "visual-delete")
   registry.bindKey(EditorMode.VisualLine, "x", "visual-delete")
   registry.bindKey(EditorMode.VisualLine, "y", "visual-yank")
@@ -2102,10 +2350,31 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualLine, "<", "visual-dedent")
   registry.bindKey(EditorMode.VisualLine, "u", "visual-lowercase")
   registry.bindKey(EditorMode.VisualLine, "U", "visual-uppercase")
+  registry.bindKey(EditorMode.VisualLine, "~", "visual-toggle-case")
   registry.bindKey(EditorMode.VisualLine, "r", "visual-replace-char")
+  registry.bindKey(EditorMode.VisualLine, "J", "visual-joinlines")
+  registry.bindKey(EditorMode.VisualLine, "c", "visual-change")
+  registry.bindKey(EditorMode.VisualLine, "o", "visual-swap-selection")
+  registry.bindKey(EditorMode.VisualLine, "p", "visual-paste")
+  registry.bindKey(EditorMode.VisualLine, "P", "visual-paste")
   registry.bindKey(EditorMode.VisualLine, "z f", "fold-create")
     # Create fold from selection
   registry.bindKey(EditorMode.VisualLine, "Escape", "switch-to-normal")
+  registry.bindKey(EditorMode.VisualLine, "Ctrl+c", "switch-to-normal")
+  registry.bindKey(
+    EditorMode.VisualLine,
+    KeyCombo(isSpecial: false, char: "s", modifiers: {kmCtrl}),
+    registry.commandRegistry["lsp-selection-range"],
+  ) # LSP selection range
+  # Arrow keys and other navigation aliases
+  registry.bindKey(EditorMode.VisualLine, "Left", "visual-move-left")
+  registry.bindKey(EditorMode.VisualLine, "Right", "visual-move-right")
+  registry.bindKey(EditorMode.VisualLine, "Up", "visual-move-up")
+  registry.bindKey(EditorMode.VisualLine, "Down", "visual-move-down")
+  registry.bindKey(EditorMode.VisualLine, "Home", "visual-move-home")
+  registry.bindKey(EditorMode.VisualLine, "End", "visual-move-end")
+  registry.bindKey(EditorMode.VisualLine, "Backspace", "visual-move-left")
+  registry.bindKey(EditorMode.VisualLine, "Enter", "visual-move-down")
 
   # Insert mode key bindings
   registry.bindKey(EditorMode.Insert, "Escape", "switch-to-normal") # Exit to normal mode

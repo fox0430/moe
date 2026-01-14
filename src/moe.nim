@@ -155,7 +155,17 @@ proc main() =
     # Set cursor position from calculated screen coordinates
     app.showCursorAt(editor.state.screenCursor.x, editor.state.screenCursor.y)
 
+  # Enable Bracketed Paste Mode before starting the main loop
+  # This makes the terminal wrap pasted text with special escape sequences
+  # so we can detect paste events and handle them without auto-indentation
+  stdout.write("\x1b[?2004h")
+  stdout.flushFile()
+
   app.run()
+
+  # Disable Bracketed Paste Mode on exit
+  stdout.write("\x1b[?2004l")
+  stdout.flushFile()
 
   # Restore cursor to default style on exit
   if not editor.config.standard.disableChangeCursor:

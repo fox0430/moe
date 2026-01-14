@@ -22,7 +22,7 @@
 ## This module provides Insert mode specific command implementations
 ## that are independent of CommandContext for better testability
 
-import std/strutils
+import std/[strutils, unicode]
 import ../[buffer, types, modes, cursor]
 
 proc getLineIndent*(line: string): string =
@@ -247,3 +247,123 @@ proc dedentLine*(buffer: TextBuffer, state: EditorState, count: int = 1) =
     state.cursor.column -= removeCount
   else:
     state.cursor.column = 0
+
+# Helper functions for word detection (same as motion.nim)
+proc isWordChar(r: Rune): bool =
+  ## Check if a character is part of a word (alphanumeric or underscore)
+  let c = r.int32
+  return
+    (c >= 'a'.ord and c <= 'z'.ord) or (c >= 'A'.ord and c <= 'Z'.ord) or
+    (c >= '0'.ord and c <= '9'.ord) or c == '_'.ord
+
+proc isWhitespace(r: Rune): bool =
+  ## Check if a character is whitespace
+  let c = r.int32
+  return c == ' '.ord or c == '\t'.ord or c == '\n'.ord or c == '\r'.ord
+
+proc deleteWordBackward*(buffer: TextBuffer, state: EditorState) =
+  ## Delete word before cursor (Ctrl-W in insert mode)
+  ## Deletes backward from cursor to start of previous word
+  ## At start of line, does nothing (matches Vim behavior)
+  let pos = state.cursor
+
+  if pos.column == 0:
+    # At start of line, do nothing (Vim behavior)
+    return
+
+  # Get current line as runes
+  let line = buffer.getLine(pos.line)
+  let runes = line.toRunes()
+
+  # Clamp column to valid range
+  var newCol = min(pos.column, runes.len)
+
+  # Skip whitespace backwards first
+  while newCol > 0 and isWhitespace(runes[newCol - 1]):
+    newCol -= 1
+
+  # Then skip the word/symbol sequence
+  if newCol > 0:
+    if isWordChar(runes[newCol - 1]):
+      # Skip word characters backwards
+      while newCol > 0 and isWordChar(runes[newCol - 1]):
+        newCol -= 1
+    elif not isWhitespace(runes[newCol - 1]):
+      # Skip symbol characters backwards
+      while newCol > 0 and not isWordChar(runes[newCol - 1]) and
+          not isWhitespace(runes[newCol - 1]):
+        newCol -= 1
+
+  # Delete characters from newCol to pos.column
+  let deleteCount = min(pos.column, runes.len) - newCol
+  for _ in 0 ..< deleteCount:
+    state.cursor.column -= 1
+    discard buffer.deleteChar(state.cursor)
+
+proc deleteToLineStart*(buffer: TextBuffer, state: EditorState) =
+  ## Delete from cursor to beginning of line (Ctrl-U in insert mode)
+  let pos = state.cursor
+
+  if pos.column == 0:
+    return # Nothing to delete
+
+  # Get line length to clamp column
+  let line = buffer.getLine(pos.line)
+  let lineLen = line.toRunes().len
+
+  # Delete all characters from column 0 to cursor position
+  let deleteCount = min(pos.column, lineLen)
+  state.cursor.column = 0
+
+  for _ in 0 ..< deleteCount:
+    discard buffer.deleteChar(state.cursor)
+
+proc insertCharFromAbove*(buffer: TextBuffer, state: EditorState): bool =
+  ## Insert character from the line above at the same column (Ctrl-Y in insert mode)
+  ## Returns true if a character was inserted, false otherwise
+  let pos = state.cursor
+
+  if pos.line == 0:
+    return false # No line above
+
+  let aboveLine = buffer.getLine(pos.line - 1)
+  # Strip trailing newline if present
+  let lineContent =
+    if aboveLine.len > 0 and aboveLine[^1] == '\n':
+      aboveLine[0 ..< ^1]
+    else:
+      aboveLine
+  let aboveRunes = lineContent.toRunes()
+
+  if pos.column >= aboveRunes.len:
+    return false # No character at this column in the line above
+
+  let ch = $aboveRunes[pos.column]
+  discard buffer.insertText(pos, ch)
+  state.cursor.column += 1
+  return true
+
+proc insertCharFromBelow*(buffer: TextBuffer, state: EditorState): bool =
+  ## Insert character from the line below at the same column (Ctrl-E in insert mode)
+  ## Returns true if a character was inserted, false otherwise
+  let pos = state.cursor
+
+  if pos.line >= buffer.len - 1:
+    return false # No line below
+
+  let belowLine = buffer.getLine(pos.line + 1)
+  # Strip trailing newline if present
+  let lineContent =
+    if belowLine.len > 0 and belowLine[^1] == '\n':
+      belowLine[0 ..< ^1]
+    else:
+      belowLine
+  let belowRunes = lineContent.toRunes()
+
+  if pos.column >= belowRunes.len:
+    return false # No character at this column in the line below
+
+  let ch = $belowRunes[pos.column]
+  discard buffer.insertText(pos, ch)
+  state.cursor.column += 1
+  return true

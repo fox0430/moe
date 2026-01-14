@@ -98,6 +98,22 @@ type
     bcVisualDedent = "visual.dedent"
     bcVisualLowercase = "visual.lowercase"
     bcVisualUppercase = "visual.uppercase"
+    bcVisualToggleCase = "visual.togglecase"
+    bcVisualJoinLines = "visual.joinlines"
+    bcVisualMoveHome = "visual.move.home"
+    bcVisualMoveEnd = "visual.move.end"
+    bcVisualMoveFirstNonBlank = "visual.move.firstnonblank"
+    bcVisualMoveFirstLine = "visual.move.firstline"
+    bcVisualMoveLastLine = "visual.move.lastline"
+    bcVisualMoveWord = "visual.move.word"
+    bcVisualMoveWordBack = "visual.move.word.back"
+    bcVisualMoveWordEnd = "visual.move.word.end"
+    bcVisualMoveParagraphForward = "visual.move.paragraph.forward"
+    bcVisualMoveParagraphBackward = "visual.move.paragraph.backward"
+    bcVisualToInsertMode = "visual.to.insert"
+    bcVisualChange = "visual.change"
+    bcVisualSwapSelection = "visual.swap.selection"
+    bcVisualPaste = "visual.paste"
     # Filer operations
     bcFiler = "filer.open"
     # LSP operations
@@ -1197,6 +1213,90 @@ proc handleVisualLowercase(ctx: CommandContext): Result[(), string] =
 proc handleVisualUppercase(ctx: CommandContext): Result[(), string] =
   ## Convert visual selection to uppercase
   visualUppercase(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
+proc handleVisualToggleCase(ctx: CommandContext): Result[(), string] =
+  ## Toggle case of visual selection
+  visualToggleCase(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
+proc handleVisualJoinLines(ctx: CommandContext): Result[(), string] =
+  ## Join lines in visual selection
+  visualJoinLines(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
+proc handleVisualMoveHome(ctx: CommandContext): Result[(), string] =
+  ## Move to beginning of line in visual mode
+  visualMoveHome(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
+proc handleVisualMoveEnd(ctx: CommandContext): Result[(), string] =
+  ## Move to end of line in visual mode
+  visualMoveEnd(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
+proc handleVisualMoveFirstNonBlank(ctx: CommandContext): Result[(), string] =
+  ## Move to first non-blank character in visual mode
+  visualMoveFirstNonBlank(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
+proc handleVisualMoveFirstLine(ctx: CommandContext): Result[(), string] =
+  ## Move to first line in visual mode
+  visualMoveFirstLine(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
+proc handleVisualMoveLastLine(ctx: CommandContext, count: int = 0): Result[(), string] =
+  ## Move to last line (or specific line number) in visual mode
+  visualMoveLastLine(ctx.buffer, ctx.state, count)
+  Result[(), string].ok ()
+
+proc handleVisualMoveWord(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Move to next word in visual mode
+  visualMoveWord(ctx.buffer, ctx.state, count)
+  Result[(), string].ok ()
+
+proc handleVisualMoveWordBack(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Move to previous word in visual mode
+  visualMoveWordBack(ctx.buffer, ctx.state, count)
+  Result[(), string].ok ()
+
+proc handleVisualMoveWordEnd(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Move to end of word in visual mode
+  visualMoveWordEnd(ctx.buffer, ctx.state, count)
+  Result[(), string].ok ()
+
+proc handleVisualMoveParagraphForward(
+    ctx: CommandContext, count: int = 1
+): Result[(), string] =
+  ## Move to next paragraph in visual mode
+  visualMoveParagraphForward(ctx.buffer, ctx.state, count)
+  Result[(), string].ok ()
+
+proc handleVisualMoveParagraphBackward(
+    ctx: CommandContext, count: int = 1
+): Result[(), string] =
+  ## Move to previous paragraph in visual mode
+  visualMoveParagraphBackward(ctx.buffer, ctx.state, count)
+  Result[(), string].ok ()
+
+proc handleVisualToInsertMode(ctx: CommandContext): Result[(), string] =
+  ## Switch from visual mode to insert mode
+  visualToInsertMode(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
+proc handleVisualChange(ctx: CommandContext): Result[(), string] =
+  ## Delete selection and enter insert mode
+  visualChange(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
+proc handleVisualSwapSelection(ctx: CommandContext): Result[(), string] =
+  ## Swap cursor between start and end of selection
+  visualSwapSelection(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
+proc handleVisualPaste(ctx: CommandContext): Result[(), string] =
+  ## Paste over selection
+  visualPaste(ctx.buffer, ctx.state)
   Result[(), string].ok ()
 
 ## Clipboard command handlers
@@ -3068,6 +3168,172 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     0,
   )
 
+  registry.register(
+    builtin(bcVisualToggleCase),
+    "Visual Toggle Case",
+    "Toggle case of visual selection (~ command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualToggleCase(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualJoinLines),
+    "Visual Join Lines",
+    "Join lines in visual selection (J command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualJoinLines(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveHome),
+    "Visual Move Home",
+    "Move to beginning of line in visual mode (0 command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualMoveHome(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveEnd),
+    "Visual Move End",
+    "Move to end of line in visual mode ($ command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualMoveEnd(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveFirstNonBlank),
+    "Visual Move First Non-Blank",
+    "Move to first non-blank character in visual mode (^ command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualMoveFirstNonBlank(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveFirstLine),
+    "Visual Move First Line",
+    "Move to first line in visual mode (gg command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualMoveFirstLine(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveLastLine),
+    "Visual Move Last Line",
+    "Move to last line in visual mode (G command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 0)
+      handleVisualMoveLastLine(ctx, count),
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveWord),
+    "Visual Move Word",
+    "Move to next word in visual mode (w command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleVisualMoveWord(ctx, count),
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveWordBack),
+    "Visual Move Word Back",
+    "Move to previous word in visual mode (b command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleVisualMoveWordBack(ctx, count),
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveWordEnd),
+    "Visual Move Word End",
+    "Move to end of word in visual mode (e command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleVisualMoveWordEnd(ctx, count),
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveParagraphForward),
+    "Visual Move Paragraph Forward",
+    "Move to next paragraph in visual mode (} command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleVisualMoveParagraphForward(ctx, count),
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveParagraphBackward),
+    "Visual Move Paragraph Backward",
+    "Move to previous paragraph in visual mode ({ command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleVisualMoveParagraphBackward(ctx, count),
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcVisualToInsertMode),
+    "Visual to Insert Mode",
+    "Switch from visual mode to insert mode (I command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualToInsertMode(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualChange),
+    "Visual Change",
+    "Delete selection and enter insert mode (c command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualChange(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualSwapSelection),
+    "Visual Swap Selection",
+    "Swap cursor between start and end of selection (o command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualSwapSelection(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualPaste),
+    "Visual Paste",
+    "Paste over selection (p/P command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualPaste(ctx),
+    0,
+    0,
+  )
+
   # Note: delete.word is now handled by operator+motion system (d+w)
   # The operator.delete handler sets pendingOperator, then Motion.WordForward
   # is executed, and executeOperatorOnRange is called automatically
@@ -3199,6 +3465,84 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       return Result[(), string].ok (),
     0,
     1, # Accept optional count argument
+  )
+
+  registry.register(
+    custom("autoindent.line"),
+    "Auto Indent Line",
+    "Auto indent current line to match previous line (== command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let currentLine = ctx.state.cursor.line
+
+      # Can't auto indent first line or empty line
+      if currentLine == 0:
+        return Result[(), string].ok ()
+
+      let lineContent = ctx.buffer.getLine(currentLine)
+      if lineContent.len == 0:
+        return Result[(), string].ok ()
+
+      # Get previous line indent (count leading spaces)
+      let prevLine = ctx.buffer.getLine(currentLine - 1)
+      var prevIndent = 0
+      for i in 0 ..< prevLine.len:
+        if prevLine[i] == ' ':
+          inc prevIndent
+        else:
+          break
+
+      # Count current line's leading spaces
+      var currentIndent = 0
+      for i in 0 ..< lineContent.len:
+        if lineContent[i] == ' ':
+          inc currentIndent
+        else:
+          break
+
+      # No change needed if indents are equal
+      if prevIndent == currentIndent:
+        return Result[(), string].ok ()
+
+      # Create new line with correct indent
+      var newContent = ""
+      for i in 0 ..< prevIndent:
+        newContent.add(' ')
+
+      # Add non-whitespace content from current line
+      for i in currentIndent ..< lineContent.len:
+        newContent.add(lineContent[i])
+
+      # Begin transaction
+      let txnResult = ctx.buffer.beginTransaction("auto indent line")
+      if txnResult.isErr:
+        return err(txnResult.error)
+
+      # Delete current line content and insert new
+      let lineStart = BufferPosition(line: currentLine, column: 0)
+      let lineEnd = BufferPosition(line: currentLine, column: lineContent.charLen - 1)
+
+      let delResult = ctx.buffer.deleteRange(lineStart, lineEnd)
+      if delResult.isErr:
+        discard ctx.buffer.rollbackTransaction()
+        return err(delResult.error)
+
+      if newContent.len > 0:
+        let insResult = ctx.buffer.insertText(lineStart, newContent)
+        if insResult.isErr:
+          discard ctx.buffer.rollbackTransaction()
+          return err(insResult.error)
+
+      let commitResult = ctx.buffer.commitTransaction()
+      if commitResult.isErr:
+        return err(commitResult.error)
+
+      # Move cursor to first non-blank character
+      ctx.state.cursor.column = prevIndent
+      ctx.state.needsFullRedraw = true
+
+      return Result[(), string].ok (),
+    0,
+    0, # No arguments
   )
 
   registry.register(

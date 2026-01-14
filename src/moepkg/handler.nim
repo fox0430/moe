@@ -1358,6 +1358,82 @@ proc handleDebugModeEvent(e: Editor, event: Event): bool =
 
 const FilerHeaderLines = 2 ## Filer mode header: title + separator
 
+proc handlePasteEvent*(e: Editor, event: Event): bool =
+  ## Handle paste events from Bracketed Paste Mode
+  ## Inserts pasted text without triggering auto-indentation
+  if event.kind != EventKind.Paste:
+    return true
+
+  let pastedText = event.pastedText
+  if pastedText.len == 0:
+    return true
+
+  let activeBuffer = e.activeBuffer()
+
+  # Handle paste differently based on mode
+  case e.state.mode
+  of EditorMode.Insert:
+    # In Insert mode: Insert text directly without auto-indentation
+    # Split the pasted text into lines and insert each
+    var pos = e.state.cursor
+
+    # Insert the entire text at once - this bypasses auto-indent
+    # because we're not going through insertNewline()
+    discard activeBuffer.insertText(pos, pastedText)
+
+    # Calculate new cursor position after paste
+    # Count newlines and find position on last line
+    var newLine = pos.line
+    var newColumn = pos.column
+    for ch in pastedText:
+      if ch == '\n':
+        newLine += 1
+        newColumn = 0
+      else:
+        newColumn += 1
+
+    e.state.cursor.line = newLine
+    e.state.cursor.column = newColumn
+    e.state.needsFullRedraw = true
+  of EditorMode.Normal:
+    # In Normal mode: Enter Insert mode first, then paste
+    # Begin a transaction for undo support
+    let transactionResult = activeBuffer.beginTransaction("Paste")
+    if transactionResult.isErr:
+      e.state.setStatusMessage("Paste failed: " & transactionResult.error)
+      return true
+
+    # Record insert start position for text tracking
+    e.state.editState.insertModeStartPos = some(e.state.cursor)
+
+    # Insert the pasted text
+    var pos = e.state.cursor
+    discard activeBuffer.insertText(pos, pastedText)
+
+    # Calculate new cursor position
+    var newLine = pos.line
+    var newColumn = pos.column
+    for ch in pastedText:
+      if ch == '\n':
+        newLine += 1
+        newColumn = 0
+      else:
+        newColumn += 1
+
+    e.state.cursor.line = newLine
+    e.state.cursor.column = newColumn
+
+    # Commit the transaction
+    discard activeBuffer.commitTransaction()
+
+    e.state.needsFullRedraw = true
+    e.state.setStatusMessage("Pasted " & $pastedText.len & " characters")
+  else:
+    # For other modes, just show a message
+    e.state.setStatusMessage("Paste not supported in this mode")
+
+  return true
+
 proc screenToBufferPosition(
     vp: ViewPort,
     buffer: TextBuffer,
@@ -1499,6 +1575,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if event.kind == EventKind.Mouse:
     discard e.handleMouseEvent(event)
     return true # Always continue running after mouse events
+
+  # Handle paste events (Bracketed Paste Mode)
+  if event.kind == EventKind.Paste:
+    return e.handlePasteEvent(event)
 
   # Handle temporary messages (like :jumps output) - dismiss on any key
   if e.state.tempMessages.len > 0 and event.kind == EventKind.Key:

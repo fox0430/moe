@@ -26,8 +26,28 @@ import std/[options, strutils]
 
 import pkg/results
 
-import ../[buffer, types, cursor, registers]
+import ../[buffer, types, cursor, registers, motion, modes]
 import insert_commands
+
+proc getSelectionRange*(
+    selection: VisualSelection
+): tuple[start, endPos: BufferPosition] {.inline.} =
+  ## Get the normalized selection range (start is always before end)
+  ## Returns (start, end) where start <= end
+  if not selection.active:
+    return (selection.start, selection.start)
+
+  # Normalize so start is always before end
+  if selection.start.line < selection.current.line:
+    return (selection.start, selection.current)
+  elif selection.start.line > selection.current.line:
+    return (selection.current, selection.start)
+  else:
+    # Same line - compare columns
+    if selection.start.column <= selection.current.column:
+      return (selection.start, selection.current)
+    else:
+      return (selection.current, selection.start)
 
 proc visualMoveLeft*(buffer: TextBuffer, state: EditorState) =
   ## Move left in visual mode and update selection
@@ -104,17 +124,7 @@ proc visualYank*(buffer: TextBuffer, state: EditorState) =
   ## Yank (copy) visual selection to the yank register and return to previous mode
   if state.visualSelection.active:
     # Get normalized selection range
-    let (selStart, selEnd) =
-      if state.visualSelection.start.line < state.visualSelection.current.line:
-        (state.visualSelection.start, state.visualSelection.current)
-      elif state.visualSelection.start.line > state.visualSelection.current.line:
-        (state.visualSelection.current, state.visualSelection.start)
-      else:
-        # Same line - compare columns
-        if state.visualSelection.start.column <= state.visualSelection.current.column:
-          (state.visualSelection.start, state.visualSelection.current)
-        else:
-          (state.visualSelection.current, state.visualSelection.start)
+    let (selStart, selEnd) = state.visualSelection.getSelectionRange()
 
     # Get the selected text based on selection kind
     let selectedText =
@@ -256,17 +266,7 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
       deleteLineSelection(buffer, state)
     of vskChar:
       # Get normalized selection range
-      let (selStart, selEnd) =
-        if state.visualSelection.start.line < state.visualSelection.current.line:
-          (state.visualSelection.start, state.visualSelection.current)
-        elif state.visualSelection.start.line > state.visualSelection.current.line:
-          (state.visualSelection.current, state.visualSelection.start)
-        else:
-          # Same line - compare columns
-          if state.visualSelection.start.column <= state.visualSelection.current.column:
-            (state.visualSelection.start, state.visualSelection.current)
-          else:
-            (state.visualSelection.current, state.visualSelection.start)
+      let (selStart, selEnd) = state.visualSelection.getSelectionRange()
 
       # Get the text before deleting (Vim behavior)
       let selectedText = buffer.getTextInRange(selStart, selEnd)
@@ -395,17 +395,7 @@ proc visualLowercase*(buffer: TextBuffer, state: EditorState) =
       return
 
     # Get normalized selection range
-    let (selStart, selEnd) =
-      if state.visualSelection.start.line < state.visualSelection.current.line:
-        (state.visualSelection.start, state.visualSelection.current)
-      elif state.visualSelection.start.line > state.visualSelection.current.line:
-        (state.visualSelection.current, state.visualSelection.start)
-      else:
-        # Same line - compare columns
-        if state.visualSelection.start.column <= state.visualSelection.current.column:
-          (state.visualSelection.start, state.visualSelection.current)
-        else:
-          (state.visualSelection.current, state.visualSelection.start)
+    let (selStart, selEnd) = state.visualSelection.getSelectionRange()
 
     # Get the selected text based on selection kind
     let selectedText =
@@ -489,17 +479,7 @@ proc visualUppercase*(buffer: TextBuffer, state: EditorState) =
       return
 
     # Get normalized selection range
-    let (selStart, selEnd) =
-      if state.visualSelection.start.line < state.visualSelection.current.line:
-        (state.visualSelection.start, state.visualSelection.current)
-      elif state.visualSelection.start.line > state.visualSelection.current.line:
-        (state.visualSelection.current, state.visualSelection.start)
-      else:
-        # Same line - compare columns
-        if state.visualSelection.start.column <= state.visualSelection.current.column:
-          (state.visualSelection.start, state.visualSelection.current)
-        else:
-          (state.visualSelection.current, state.visualSelection.start)
+    let (selStart, selEnd) = state.visualSelection.getSelectionRange()
 
     # Get the selected text based on selection kind
     let selectedText =
@@ -572,6 +552,90 @@ proc visualUppercase*(buffer: TextBuffer, state: EditorState) =
     state.statusMessage = ""
     state.mode = state.previousMode
 
+proc toggleCase(s: string): string =
+  ## Toggle case of each character in the string
+  result = ""
+  for c in s:
+    if c.isUpperAscii:
+      result.add(c.toLowerAscii)
+    elif c.isLowerAscii:
+      result.add(c.toUpperAscii)
+    else:
+      result.add(c)
+
+proc visualToggleCase*(buffer: TextBuffer, state: EditorState) =
+  ## Toggle case of visual selection and return to previous mode
+  if state.visualSelection.active:
+    # Begin transaction for undo support
+    let transactionResult = buffer.beginTransaction("Visual toggle case")
+    if transactionResult.isErr:
+      state.visualSelection.active = false
+      state.mode = state.previousMode
+      return
+
+    # Get normalized selection range
+    let (selStart, selEnd) = state.visualSelection.getSelectionRange()
+
+    # Replace the selection with toggled case text
+    case state.visualSelection.kind
+    of vskBlock:
+      # For block selection, toggle each line's portion
+      let
+        startLine =
+          min(state.visualSelection.start.line, state.visualSelection.current.line)
+        endLine =
+          max(state.visualSelection.start.line, state.visualSelection.current.line)
+        startCol =
+          min(state.visualSelection.start.column, state.visualSelection.current.column)
+        endCol =
+          max(state.visualSelection.start.column, state.visualSelection.current.column)
+
+      for lineNum in startLine .. endLine:
+        let line = buffer.getLine(lineNum)
+        let lineLen = line.charLen
+        if startCol < lineLen:
+          let actualEndCol = min(endCol, lineLen - 1)
+          let startPos = BufferPosition(line: lineNum, column: startCol)
+          let endPos = BufferPosition(line: lineNum, column: actualEndCol)
+          let blockText = buffer.getTextInRange(startPos, endPos)
+          let toggledText = toggleCase(blockText)
+          discard buffer.deleteRange(startPos, endPos)
+          discard buffer.insertText(startPos, toggledText)
+    of vskLine:
+      # For line selection, replace entire lines
+      let
+        startLine =
+          min(state.visualSelection.start.line, state.visualSelection.current.line)
+        endLine =
+          max(state.visualSelection.start.line, state.visualSelection.current.line)
+
+      for lineNum in startLine .. endLine:
+        let lineText = $buffer.getLine(lineNum)
+        let toggledText = toggleCase(lineText)
+        # Delete and replace the line content
+        let startPos = BufferPosition(line: lineNum, column: 0)
+        let endPos = BufferPosition(line: lineNum, column: max(0, lineText.len - 1))
+        if lineText.len > 0:
+          discard buffer.deleteRange(startPos, endPos)
+          discard buffer.insertText(startPos, toggledText)
+    of vskChar:
+      # Get selected text and toggle case
+      let selectedText = buffer.getTextInRange(selStart, selEnd)
+      let toggledText = toggleCase(selectedText)
+      discard buffer.deleteRange(selStart, selEnd)
+      discard buffer.insertText(selStart, toggledText)
+
+    # Move cursor to start of selection
+    state.cursor = selStart
+
+    # Commit transaction
+    discard buffer.commitTransaction()
+
+    state.visualSelection.active = false
+    state.needsFullRedraw = true
+    state.statusMessage = ""
+    state.mode = state.previousMode
+
 proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: char) =
   ## Replace all characters in visual selection with specified character
   if state.visualSelection.active:
@@ -583,17 +647,7 @@ proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: char) =
       return
 
     # Get normalized selection range
-    let (selStart, selEnd) =
-      if state.visualSelection.start.line < state.visualSelection.current.line:
-        (state.visualSelection.start, state.visualSelection.current)
-      elif state.visualSelection.start.line > state.visualSelection.current.line:
-        (state.visualSelection.current, state.visualSelection.start)
-      else:
-        # Same line - compare columns
-        if state.visualSelection.start.column <= state.visualSelection.current.column:
-          (state.visualSelection.start, state.visualSelection.current)
-        else:
-          (state.visualSelection.current, state.visualSelection.start)
+    let (selStart, selEnd) = state.visualSelection.getSelectionRange()
 
     # Replace selection based on kind
     case state.visualSelection.kind
@@ -653,6 +707,330 @@ proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: char) =
 
     # Move cursor to start of selection
     state.cursor = selStart
+
+    # Commit transaction
+    discard buffer.commitTransaction()
+
+    state.visualSelection.active = false
+    state.needsFullRedraw = true
+    state.statusMessage = ""
+    state.mode = state.previousMode
+
+proc visualJoinLines*(buffer: TextBuffer, state: EditorState) =
+  ## Join all lines in visual selection into one line (J command)
+  if state.visualSelection.active:
+    # Get line range
+    let
+      startLine =
+        min(state.visualSelection.start.line, state.visualSelection.current.line)
+      endLine =
+        max(state.visualSelection.start.line, state.visualSelection.current.line)
+
+    # Need at least 2 lines to join
+    if startLine == endLine:
+      # Only one line selected, nothing to join
+      state.visualSelection.active = false
+      state.needsFullRedraw = true
+      state.statusMessage = ""
+      state.mode = state.previousMode
+      return
+
+    # Calculate number of joins needed (lines - 1)
+    let joinCount = endLine - startLine
+
+    # Use buffer's joinLines which handles the transaction
+    let result = buffer.joinLines(startLine, joinCount)
+    if result.isErr:
+      state.statusMessage = result.error
+    else:
+      state.statusMessage = $joinCount & " lines joined"
+
+    # Move cursor to the start line
+    state.cursor.line = startLine
+    state.cursor.column = 0
+
+    state.visualSelection.active = false
+    state.needsFullRedraw = true
+    state.mode = state.previousMode
+
+# Visual mode movement commands using motion executor
+
+proc visualMoveHome*(buffer: TextBuffer, state: EditorState) =
+  ## Move to beginning of line (0/Home) and update selection
+  state.cursor.column = 0
+  state.visualSelection.current = state.cursor
+  state.needsFullRedraw = true
+
+proc visualMoveEnd*(buffer: TextBuffer, state: EditorState) =
+  ## Move to end of line ($) and update selection
+  let lineLen = buffer.getLine(state.cursor.line).charLen
+  if lineLen > 0:
+    state.cursor.column = lineLen - 1
+  else:
+    state.cursor.column = 0
+  state.visualSelection.current = state.cursor
+  state.needsFullRedraw = true
+
+proc visualMoveFirstNonBlank*(buffer: TextBuffer, state: EditorState) =
+  ## Move to first non-whitespace character (^) and update selection
+  let executor = newMotionExecutor(buffer)
+  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
+  let cmd = MotionCommand(motion: Motion.FirstNonBlank, count: 1)
+  let newPos = executor.calculateNewPosition(currentPos, cmd)
+  state.cursor.line = newPos.y
+  state.cursor.column = newPos.x
+  state.visualSelection.current = state.cursor
+  state.needsFullRedraw = true
+
+proc visualMoveFirstLine*(buffer: TextBuffer, state: EditorState) =
+  ## Move to first line (gg) and update selection
+  state.cursor.line = 0
+  state.cursor.column = 0
+  state.visualSelection.current = state.cursor
+  state.needsFullRedraw = true
+
+proc visualMoveLastLine*(buffer: TextBuffer, state: EditorState, count: int = 0) =
+  ## Move to last line (G) or specific line number and update selection
+  if count > 0:
+    # Go to specific line (1-indexed)
+    state.cursor.line = min(count - 1, buffer.len - 1)
+  else:
+    # Go to last line
+    state.cursor.line = max(0, buffer.len - 1)
+  state.cursor.column = 0
+  state.visualSelection.current = state.cursor
+  state.needsFullRedraw = true
+
+proc visualMoveWord*(buffer: TextBuffer, state: EditorState, count: int = 1) =
+  ## Move to next word (w) and update selection
+  let executor = newMotionExecutor(buffer)
+  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
+  let cmd = MotionCommand(motion: Motion.WordForward, count: count)
+  let newPos = executor.calculateNewPosition(currentPos, cmd)
+  state.cursor.line = newPos.y
+  state.cursor.column = newPos.x
+  state.visualSelection.current = state.cursor
+  state.needsFullRedraw = true
+
+proc visualMoveWordBack*(buffer: TextBuffer, state: EditorState, count: int = 1) =
+  ## Move to previous word (b) and update selection
+  let executor = newMotionExecutor(buffer)
+  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
+  let cmd = MotionCommand(motion: Motion.WordBackward, count: count)
+  let newPos = executor.calculateNewPosition(currentPos, cmd)
+  state.cursor.line = newPos.y
+  state.cursor.column = newPos.x
+  state.visualSelection.current = state.cursor
+  state.needsFullRedraw = true
+
+proc visualMoveWordEnd*(buffer: TextBuffer, state: EditorState, count: int = 1) =
+  ## Move to end of word (e) and update selection
+  let executor = newMotionExecutor(buffer)
+  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
+  let cmd = MotionCommand(motion: Motion.WordEnd, count: count)
+  let newPos = executor.calculateNewPosition(currentPos, cmd)
+  state.cursor.line = newPos.y
+  state.cursor.column = newPos.x
+  state.visualSelection.current = state.cursor
+  state.needsFullRedraw = true
+
+proc visualMoveParagraphForward*(
+    buffer: TextBuffer, state: EditorState, count: int = 1
+) =
+  ## Move to next paragraph (}) and update selection
+  let executor = newMotionExecutor(buffer)
+  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
+  let cmd = MotionCommand(motion: Motion.ParagraphForward, count: count)
+  let newPos = executor.calculateNewPosition(currentPos, cmd)
+  state.cursor.line = newPos.y
+  state.cursor.column = newPos.x
+  state.visualSelection.current = state.cursor
+  state.needsFullRedraw = true
+
+proc visualMoveParagraphBackward*(
+    buffer: TextBuffer, state: EditorState, count: int = 1
+) =
+  ## Move to previous paragraph ({) and update selection
+  let executor = newMotionExecutor(buffer)
+  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
+  let cmd = MotionCommand(motion: Motion.ParagraphBackward, count: count)
+  let newPos = executor.calculateNewPosition(currentPos, cmd)
+  state.cursor.line = newPos.y
+  state.cursor.column = newPos.x
+  state.visualSelection.current = state.cursor
+  state.needsFullRedraw = true
+
+proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
+  ## Switch from visual mode to insert mode (I command)
+  ## Moves cursor to the start of the selection (first line, column 0)
+
+  # Move cursor to the start line of selection, column 0
+  if state.visualSelection.active:
+    let startLine =
+      min(state.visualSelection.start.line, state.visualSelection.current.line)
+    state.cursor.line = startLine
+    state.cursor.column = 0
+
+  # Clear visual selection
+  state.visualSelection.active = false
+  state.needsFullRedraw = true
+
+  # Save current mode for returning with ESC
+  state.previousMode = state.mode
+
+  # Switch to insert mode
+  state.mode = EditorMode.Insert
+
+proc visualChange*(buffer: TextBuffer, state: EditorState) =
+  ## Delete visual selection and enter insert mode (c command)
+  if state.visualSelection.active:
+    # Begin transaction for undo support
+    let transactionResult = buffer.beginTransaction("Visual change")
+    if transactionResult.isErr:
+      state.visualSelection.active = false
+      state.mode = state.previousMode
+      return
+
+    case state.visualSelection.kind
+    of vskBlock:
+      deleteBlockSelection(buffer, state)
+      # Position cursor at the start of the block
+      let startCol =
+        min(state.visualSelection.start.column, state.visualSelection.current.column)
+      let startLine =
+        min(state.visualSelection.start.line, state.visualSelection.current.line)
+      state.cursor.line = startLine
+      state.cursor.column = startCol
+    of vskLine:
+      # For line change, delete lines and leave one empty line
+      let
+        startLine =
+          min(state.visualSelection.start.line, state.visualSelection.current.line)
+        endLine =
+          max(state.visualSelection.start.line, state.visualSelection.current.line)
+
+      # Delete all lines in the selection
+      for _ in startLine .. endLine:
+        discard buffer.deleteLine(startLine)
+
+      # Insert an empty line where the selection was
+      discard buffer.insert(startLine, "")
+      state.cursor.line = startLine
+      state.cursor.column = 0
+    of vskChar:
+      # Get normalized selection range
+      let (selStart, selEnd) = state.visualSelection.getSelectionRange()
+
+      # Delete the selected text
+      discard buffer.deleteRange(selStart, selEnd)
+
+      # Move cursor to start of deleted range
+      state.cursor = selStart
+
+    # Commit transaction
+    discard buffer.commitTransaction()
+
+    # Clear selection and enter insert mode
+    state.visualSelection.active = false
+    state.needsFullRedraw = true
+    state.previousMode = EditorMode.Normal # c always returns to Normal on ESC
+    state.mode = EditorMode.Insert
+
+proc visualSwapSelection*(buffer: TextBuffer, state: EditorState) =
+  ## Swap the cursor between the start and end of the selection (o command)
+  if state.visualSelection.active:
+    let temp = state.visualSelection.start
+    state.visualSelection.start = state.visualSelection.current
+    state.visualSelection.current = temp
+    state.cursor = state.visualSelection.current
+    state.needsFullRedraw = true
+
+proc visualPaste*(buffer: TextBuffer, state: EditorState) =
+  ## Delete selection and paste register content (p/P command)
+  if state.visualSelection.active:
+    # Get register content
+    let regName =
+      if state.pendingRegister.isSome and state.pendingRegister.get != '\0':
+        state.pendingRegister.get
+      else:
+        '"' # Default unnamed register
+
+    let pasteText = state.registers.getRegisterContent(regName)
+    let isLinewise = state.registers.isRegisterLinewise(regName)
+
+    if pasteText.len == 0:
+      # Nothing to paste, just exit visual mode
+      state.visualSelection.active = false
+      state.needsFullRedraw = true
+      state.pendingRegister = none(char)
+      state.mode = state.previousMode
+      return
+
+    # Begin transaction for undo support
+    let transactionResult = buffer.beginTransaction("Visual paste")
+    if transactionResult.isErr:
+      state.visualSelection.active = false
+      state.mode = state.previousMode
+      return
+
+    case state.visualSelection.kind
+    of vskBlock:
+      # For block selection, delete block first then insert
+      deleteBlockSelection(buffer, state)
+      let startCol =
+        min(state.visualSelection.start.column, state.visualSelection.current.column)
+      let startLine =
+        min(state.visualSelection.start.line, state.visualSelection.current.line)
+      state.cursor.line = startLine
+      state.cursor.column = startCol
+      discard buffer.insertText(state.cursor, pasteText)
+    of vskLine:
+      # For line selection, delete lines and insert paste content
+      let
+        startLine =
+          min(state.visualSelection.start.line, state.visualSelection.current.line)
+        endLine =
+          max(state.visualSelection.start.line, state.visualSelection.current.line)
+
+      # Store deleted text in register
+      let deletedText = getLineText(buffer, state.visualSelection)
+      state.registers.setDeletedRegister(deletedText, true)
+
+      # Delete all selected lines
+      for _ in startLine .. endLine:
+        discard buffer.deleteLine(startLine)
+
+      # Insert paste content
+      if isLinewise:
+        # Insert as new lines
+        let lines = pasteText.split('\n')
+        for i, line in lines:
+          discard buffer.insert(startLine + i, line)
+        state.cursor.line = startLine
+        state.cursor.column = 0
+      else:
+        # Insert paste text as a single line
+        discard buffer.insert(startLine, pasteText)
+        state.cursor.line = startLine
+        state.cursor.column = 0
+    of vskChar:
+      # Get normalized selection range
+      let (selStart, selEnd) = state.visualSelection.getSelectionRange()
+
+      # Store deleted text in register
+      let deletedText = buffer.getTextInRange(selStart, selEnd)
+      let isMultiLine = selStart.line != selEnd.line
+      state.registers.setDeletedRegister(deletedText, isMultiLine)
+
+      # Delete selection
+      discard buffer.deleteRange(selStart, selEnd)
+
+      # Insert paste content at cursor
+      state.cursor = selStart
+      discard buffer.insertText(state.cursor, pasteText)
+
+    # Clear pending register
+    state.pendingRegister = none(char)
 
     # Commit transaction
     discard buffer.commitTransaction()

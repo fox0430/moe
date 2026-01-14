@@ -27,17 +27,20 @@ import std/options
 
 import pkg/results
 
-import ../[buffer, config, cursor, modes, types, keybindings, commandregistry]
+import ../[buffer, config, cursor, modes, motion, types, keybindings, commandregistry]
 
 type
   VisualModeResultKind* = enum
     vmrHandled
     vmrUnhandled
+    vmrWaitingForInput ## Waiting for additional input (e.g., replace char)
+    vmrLspSelectionRange ## Execute LSP selection range
     vmrError
 
   VisualModeHandler* = ref object ## Handler for Visual mode operations
     keyBindingRegistry*: KeyBindingRegistry
     commandRegistry*: CommandRegistry
+    motionController*: MotionController
     notificationConfig*: NotificationConfig
 
   VisualModeResult* = object ## Result of visual mode command execution
@@ -46,18 +49,24 @@ type
       modeTransition*: Option[EditorMode]
     of vmrUnhandled:
       discard
+    of vmrWaitingForInput:
+      discard
+    of vmrLspSelectionRange:
+      discard
     of vmrError:
       errorMessage*: string
 
 proc newVisualModeHandler*(
     keyBindingRegistry: KeyBindingRegistry,
     commandRegistry: CommandRegistry,
+    motionController: MotionController,
     notificationConfig: NotificationConfig = NotificationConfig(),
 ): VisualModeHandler =
   ## Create a new Visual mode handler
   VisualModeHandler(
     keyBindingRegistry: keyBindingRegistry,
     commandRegistry: commandRegistry,
+    motionController: motionController,
     notificationConfig: notificationConfig,
   )
 
@@ -151,7 +160,7 @@ proc executeCommand*(
     buffer: buffer,
     state: state,
     viewport: viewport,
-    motionController: nil, # Visual mode doesn't use motion controller
+    motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
     notificationConfig: handler.notificationConfig,
   )
@@ -197,16 +206,24 @@ proc handleVisualModeKey*(
     binding = handler.keyBindingRegistry.findBinding(EditorMode.Visual, keyCombo)
 
   if binding.isNone:
+    # Check if we're waiting for character input (e.g., after pressing 'r')
+    if handler.keyBindingRegistry.sequenceState.waitingForChar:
+      return VisualModeResult(kind: vmrWaitingForInput)
     return VisualModeResult(kind: vmrUnhandled)
 
   let cmd = binding.get
+
+  # Check for LSP commands that need special handling
+  if cmd.kind in {ctAction, ctTextObject, ctOperator, ctCustom}:
+    if cmd.commandId == "lsp.selection.range":
+      return VisualModeResult(kind: vmrLspSelectionRange)
 
   # Create command context
   let ctx = CommandContext(
     buffer: buffer,
     state: state,
     viewport: viewport,
-    motionController: nil, # Visual mode doesn't use motion controller
+    motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
     notificationConfig: handler.notificationConfig,
   )

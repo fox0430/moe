@@ -1162,8 +1162,22 @@ proc calculateOperatorRange*(
   # For exclusive motions in characterwise mode, exclude the endPos character
   # by moving endPos back by 1 column (this matches Vim's behavior)
   if isExclusive and not isLinewise:
+    # For WordForward (dw), if the motion crosses lines, stop at end of current line
+    # Vim's dw does NOT delete the newline - it only deletes to end of line
+    if motion == Motion.WordForward and range.endPos.line > range.start.line:
+      # Clamp to end of start line (without newline)
+      range.endPos.line = range.start.line
+      if range.start.line < buffer.len:
+        let startLine = buffer.getLine(range.start.line)
+        let startLineContent =
+          if startLine.len > 0 and startLine[^1] == '\n':
+            startLine[0 ..< ^1]
+          else:
+            startLine
+        range.endPos.column = max(range.start.column, startLineContent.charLen - 1)
     # Only adjust if we're not at the start of the range
-    if range.endPos.line == range.start.line and range.endPos.column > range.start.column:
+    elif range.endPos.line == range.start.line and
+        range.endPos.column > range.start.column:
       # Same line - just move column back
       range.endPos.column -= 1
     elif range.endPos.line > range.start.line and range.endPos.column > 0:

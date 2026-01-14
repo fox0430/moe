@@ -353,8 +353,9 @@ proc newHandlerManager*(
   )
   let commandHandler =
     newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
-  let visualHandler =
-    newVisualModeHandler(keyBindingRegistry, commandRegistry, notificationConfig)
+  let visualHandler = newVisualModeHandler(
+    keyBindingRegistry, commandRegistry, motionController, notificationConfig
+  )
   let replaceHandler =
     newReplaceModeHandler(keyBindingRegistry, motionController, commandRegistry)
   let filerHandler = newFilerHandler()
@@ -486,6 +487,9 @@ proc handleNormalMode*(
   of nmrQuitWithoutSave:
     # ZQ command - Quit without saving (force quit)
     return HandlerResult(kind: hrQuit, shouldQuit: true)
+  of nmrCloseWindow:
+    # Ctrl-W c command - Close current window
+    return HandlerResult(kind: hrCloseWindow, forceClose: false)
   of nmrPlaybackMacro:
     # Playback the macro through handler_manager which can dispatch to any mode
     # Loop for the specified count (e.g., 3@a plays macro 3 times)
@@ -871,6 +875,14 @@ proc handleVisualMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )
+  of vmrWaitingForInput:
+    # Waiting for additional character input (e.g., visual replace char)
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of vmrLspSelectionRange:
+    # Execute LSP selection range
+    return HandlerResult(kind: hrLspSelectionRange)
   of vmrUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of vmrError:
