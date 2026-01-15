@@ -52,13 +52,12 @@ type
     y*: int # Screen position Y
 
   ScrollAnimation* = object
+    # Physics-based smooth scrolling (comfortable-motion compatible)
     active*: bool
-    startTopLine*: float # Scroll position at animation start
-    targetTopLine*: int # Target scroll position
-    startCursorLine*: int # Cursor line at animation start
+    velocity*: float # Current scroll velocity (lines per second)
+    currentCursorLine*: float # Current cursor line (fractional for smooth animation)
     targetCursorLine*: int # Target cursor line
-    startTime*: MonoTime # Animation start time
-    duration*: times.Duration # Total animation duration
+    lastUpdateTime*: MonoTime # Last physics update time
 
   EditorWindow* = ref object
     ## Represents a split window with its own buffer and viewport

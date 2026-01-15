@@ -62,8 +62,11 @@ type
   IntSettingOption* = enum
     ## Integer setting options that can be set via :set command
     isoTabStop # tab stop width
-    isoScrollMinDelay # smooth scroll min delay
-    isoScrollMaxDelay # smooth scroll max delay
+
+  FloatSettingOption* = enum
+    ## Float setting options that can be set via :set command
+    fsoScrollFriction # smooth scroll friction (comfortable-motion compatible)
+    fsoScrollAirDrag # smooth scroll air drag (comfortable-motion compatible)
 
   CommandModeResultKind* = enum
     cmrQuit # Application should quit
@@ -79,6 +82,7 @@ type
     cmrEdit # Edit/open file in current window
     cmrSetBoolOption # Set boolean option
     cmrSetIntOption # Set integer option
+    cmrSetFloatOption # Set float option
     cmrSave # Save file
     cmrSaveAndQuit # Save file and quit
     cmrBufferNext # Switch to next buffer
@@ -151,6 +155,9 @@ type
     of cmrSetIntOption:
       intOption*: IntSettingOption
       intValue*: int
+    of cmrSetFloatOption:
+      floatOption*: FloatSettingOption
+      floatValue*: float
     of cmrSave:
       saveFilename*: Option[string]
     of cmrSaveAndQuit:
@@ -547,49 +554,51 @@ proc executeSet*(
       return CommandModeResult(
         kind: cmrError, errorMessage: "tabstop requires a value (e.g., tabstop=4)"
       )
-  # Scroll min delay (integer option)
-  of "scrollmindelay", "smd":
+  # Scroll friction (float option, comfortable-motion compatible)
+  of "scrollfriction", "sfr":
     if value.isSome:
       try:
-        let intVal = parseInt(value.get)
-        if intVal >= 0:
+        let floatVal = parseFloat(value.get)
+        if floatVal >= 0:
           return CommandModeResult(
-            kind: cmrSetIntOption, intOption: isoScrollMinDelay, intValue: intVal
+            kind: cmrSetFloatOption,
+            floatOption: fsoScrollFriction,
+            floatValue: floatVal,
           )
         else:
           return CommandModeResult(
-            kind: cmrError, errorMessage: "scrollmindelay must be non-negative"
+            kind: cmrError, errorMessage: "scrollfriction must be non-negative"
           )
       except ValueError:
         return CommandModeResult(
-          kind: cmrError, errorMessage: "Invalid value for scrollmindelay"
+          kind: cmrError, errorMessage: "Invalid value for scrollfriction"
         )
     else:
       return CommandModeResult(
         kind: cmrError,
-        errorMessage: "scrollmindelay requires a value (e.g., scrollmindelay=10)",
+        errorMessage: "scrollfriction requires a value (e.g., scrollfriction=80.0)",
       )
-  # Scroll max delay (integer option)
-  of "scrollmaxdelay", "sxd":
+  # Scroll air drag (float option, comfortable-motion compatible)
+  of "scrollairdrag", "sad":
     if value.isSome:
       try:
-        let intVal = parseInt(value.get)
-        if intVal >= 0:
+        let floatVal = parseFloat(value.get)
+        if floatVal >= 0:
           return CommandModeResult(
-            kind: cmrSetIntOption, intOption: isoScrollMaxDelay, intValue: intVal
+            kind: cmrSetFloatOption, floatOption: fsoScrollAirDrag, floatValue: floatVal
           )
         else:
           return CommandModeResult(
-            kind: cmrError, errorMessage: "scrollmaxdelay must be non-negative"
+            kind: cmrError, errorMessage: "scrollairdrag must be non-negative"
           )
       except ValueError:
         return CommandModeResult(
-          kind: cmrError, errorMessage: "Invalid value for scrollmaxdelay"
+          kind: cmrError, errorMessage: "Invalid value for scrollairdrag"
         )
     else:
       return CommandModeResult(
         kind: cmrError,
-        errorMessage: "scrollmaxdelay requires a value (e.g., scrollmaxdelay=100)",
+        errorMessage: "scrollairdrag requires a value (e.g., scrollairdrag=2.0)",
       )
   else:
     return CommandModeResult(kind: cmrError, errorMessage: "Unknown option: " & option)

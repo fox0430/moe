@@ -32,6 +32,7 @@ type
     ## Types of configuration values
     cvkBool # true/false
     cvkInt # integer
+    cvkFloat # floating point
     cvkString # string
     cvkEnum # enumerated value
     cvkSection # section header (not editable)
@@ -41,6 +42,8 @@ type
   BoolSetter = proc(cfg: EditorConfig, val: bool)
   IntGetter = proc(cfg: EditorConfig): int {.noSideEffect.}
   IntSetter = proc(cfg: EditorConfig, val: int)
+  FloatGetter = proc(cfg: EditorConfig): float {.noSideEffect.}
+  FloatSetter = proc(cfg: EditorConfig, val: float)
   EnumGetter = proc(cfg: EditorConfig): string {.noSideEffect.}
   EnumSetter = proc(cfg: EditorConfig, val: string)
 
@@ -56,6 +59,11 @@ type
       intGet: IntGetter
       intSet: IntSetter
       intMin, intMax: int
+    of cvkFloat:
+      floatGet: FloatGetter
+      floatSet: FloatSetter
+      floatMin, floatMax: float
+      floatStep: float # Increment/decrement step
     of cvkEnum:
       enumGet: EnumGetter
       enumSet: EnumSetter
@@ -75,6 +83,11 @@ type
       intValue*: int
       intMin*: int
       intMax*: int
+    of cvkFloat:
+      floatValue*: float
+      floatMin*: float
+      floatMax*: float
+      floatStep*: float
     of cvkString:
       stringValue*: string
     of cvkEnum:
@@ -762,26 +775,28 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
       c.smoothScroll.enable = v,
   )
   result.add ConfigItemDescriptor(
-    kind: cvkInt,
-    displayName: "baseDurationMs",
+    kind: cvkFloat,
+    displayName: "friction",
     section: "SmoothScroll",
-    intGet: proc(c: EditorConfig): int =
-      c.smoothScroll.baseDurationMs,
-    intSet: proc(c: EditorConfig, v: int) =
-      c.smoothScroll.baseDurationMs = v,
-    intMin: 50,
-    intMax: 2000,
+    floatGet: proc(c: EditorConfig): float =
+      c.smoothScroll.friction,
+    floatSet: proc(c: EditorConfig, v: float) =
+      c.smoothScroll.friction = v,
+    floatMin: 0.0,
+    floatMax: 500.0,
+    floatStep: 10.0,
   )
   result.add ConfigItemDescriptor(
-    kind: cvkInt,
-    displayName: "maxDurationMs",
+    kind: cvkFloat,
+    displayName: "airDrag",
     section: "SmoothScroll",
-    intGet: proc(c: EditorConfig): int =
-      c.smoothScroll.maxDurationMs,
-    intSet: proc(c: EditorConfig, v: int) =
-      c.smoothScroll.maxDurationMs = v,
-    intMin: 50,
-    intMax: 5000,
+    floatGet: proc(c: EditorConfig): float =
+      c.smoothScroll.airDrag,
+    floatSet: proc(c: EditorConfig, v: float) =
+      c.smoothScroll.airDrag = v,
+    floatMin: 0.0,
+    floatMax: 20.0,
+    floatStep: 0.5,
   )
 
   # LSP section
@@ -847,6 +862,18 @@ proc buildItemList*(state: ConfigModeState) =
         intMin: desc.intMin,
         intMax: desc.intMax,
       )
+    of cvkFloat:
+      state.items.add ConfigItem(
+        kind: cvkFloat,
+        displayName: desc.displayName,
+        section: desc.section,
+        depth: 1,
+        descriptorIndex: i,
+        floatValue: desc.floatGet(cfg),
+        floatMin: desc.floatMin,
+        floatMax: desc.floatMax,
+        floatStep: desc.floatStep,
+      )
     of cvkEnum:
       state.items.add ConfigItem(
         kind: cvkEnum,
@@ -877,6 +904,8 @@ proc applyChange*(state: ConfigModeState, itemIndex: int) =
     desc.boolSet(cfg, item.boolValue)
   of cvkInt:
     desc.intSet(cfg, item.intValue)
+  of cvkFloat:
+    desc.floatSet(cfg, item.floatValue)
   of cvkEnum:
     desc.enumSet(cfg, item.enumValue)
   else:
@@ -986,6 +1015,26 @@ proc decrementIntValue*(state: ConfigModeState) =
       state.items[itemIndex].intValue = item.intValue - 1
       state.applyChange(itemIndex)
 
+proc incrementFloatValue*(state: ConfigModeState) =
+  ## Increment float value by step
+  let itemIndex = state.getSelectedItemIndex()
+  if itemIndex >= 0 and state.items[itemIndex].kind == cvkFloat:
+    let item = state.items[itemIndex]
+    let newValue = item.floatValue + item.floatStep
+    if newValue <= item.floatMax:
+      state.items[itemIndex].floatValue = newValue
+      state.applyChange(itemIndex)
+
+proc decrementFloatValue*(state: ConfigModeState) =
+  ## Decrement float value by step
+  let itemIndex = state.getSelectedItemIndex()
+  if itemIndex >= 0 and state.items[itemIndex].kind == cvkFloat:
+    let item = state.items[itemIndex]
+    let newValue = item.floatValue - item.floatStep
+    if newValue >= item.floatMin:
+      state.items[itemIndex].floatValue = newValue
+      state.applyChange(itemIndex)
+
 # Display formatting
 
 proc formatItemForDisplay*(item: ConfigItem, maxNameWidth: int): string =
@@ -1000,6 +1049,8 @@ proc formatItemForDisplay*(item: ConfigItem, maxNameWidth: int): string =
     return indent & name & " : " & (if item.boolValue: "true" else: "false")
   of cvkInt:
     return indent & name & " : " & $item.intValue
+  of cvkFloat:
+    return indent & name & " : " & $item.floatValue
   of cvkString:
     return indent & name & " : " & item.stringValue
   of cvkEnum:
@@ -1018,6 +1069,10 @@ proc startEdit*(state: ConfigModeState) =
   of cvkInt:
     state.editMode = true
     state.editBuffer = $item.intValue
+    state.editCursor = state.editBuffer.len
+  of cvkFloat:
+    state.editMode = true
+    state.editBuffer = $item.floatValue
     state.editCursor = state.editBuffer.len
   of cvkString:
     state.editMode = true
@@ -1047,6 +1102,18 @@ proc confirmEdit*(state: ConfigModeState): bool =
       let newValue = parseInt(state.editBuffer)
       if newValue >= item.intMin and newValue <= item.intMax:
         state.items[itemIndex].intValue = newValue
+        state.applyChange(itemIndex)
+        state.cancelEdit()
+        return true
+      else:
+        return false # Value out of range
+    except ValueError:
+      return false # Invalid number
+  of cvkFloat:
+    try:
+      let newValue = parseFloat(state.editBuffer)
+      if newValue >= item.floatMin and newValue <= item.floatMax:
+        state.items[itemIndex].floatValue = newValue
         state.applyChange(itemIndex)
         state.cancelEdit()
         return true

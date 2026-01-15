@@ -22,11 +22,40 @@
 ## This module handles loading configuration from TOML files and converting
 ## them into EditorConfig structures.
 
-import std/[os, options, tables, strutils]
+import std/[os, options, tables, strutils, sequtils]
 
 import pkg/[parsetoml, results]
 
 import config, color, theme, vscodetheme
+
+# Configuration validation types and utilities
+
+type
+  InvalidItem* = object ## Represents a validation error for a configuration item
+    name*: string # The key name that has an invalid value
+    val*: string # The invalid value as a string
+    expected*: string # Description of expected value
+
+  ValidationResult* = object ## Result of validating a configuration table
+    errors*: seq[InvalidItem]
+
+proc newValidationResult*(): ValidationResult =
+  ValidationResult(errors: @[])
+
+proc addError*(vr: var ValidationResult, name, val, expected: string) =
+  vr.errors.add(InvalidItem(name: name, val: val, expected: expected))
+
+proc hasErrors*(vr: ValidationResult): bool =
+  vr.errors.len > 0
+
+proc toErrorMessage*(item: InvalidItem): string =
+  ## Convert an InvalidItem to a human-readable error message
+  "Invalid value for '" & item.name & "': got '" & item.val & "', expected " &
+    item.expected
+
+proc toErrorMessages*(vr: ValidationResult): seq[string] =
+  ## Convert all validation errors to human-readable messages
+  vr.errors.mapIt(it.toErrorMessage)
 
 proc parseColorMode(s: string): ColorMode =
   case s
@@ -66,370 +95,6 @@ proc parseSplitType(s: string): SplitType =
   of "vertical": stVertical
   else: stVertical
 
-proc loadStandardConfig(table: TomlTableRef, config: var StandardConfig) =
-  if table.hasKey("number"):
-    config.number = table["number"].getBool()
-  if table.hasKey("currentNumber"):
-    config.currentNumber = table["currentNumber"].getBool()
-  if table.hasKey("cursorLine"):
-    config.cursorLine = table["cursorLine"].getBool()
-  if table.hasKey("statusLine"):
-    config.statusLine = table["statusLine"].getBool()
-  if table.hasKey("syntax"):
-    config.syntax = table["syntax"].getBool()
-  if table.hasKey("indentationLines"):
-    config.indentationLines = table["indentationLines"].getBool()
-  if table.hasKey("tabStop"):
-    config.tabStop = table["tabStop"].getInt()
-  if table.hasKey("expandTab"):
-    config.expandTab = table["expandTab"].getBool()
-  if table.hasKey("sidebar"):
-    config.sidebar = table["sidebar"].getBool()
-  if table.hasKey("autoCloseParen"):
-    config.autoCloseParen = table["autoCloseParen"].getBool()
-  if table.hasKey("autoIndent"):
-    config.autoIndent = table["autoIndent"].getBool()
-  if table.hasKey("ignorecase"):
-    config.ignorecase = table["ignorecase"].getBool()
-  if table.hasKey("smartcase"):
-    config.smartcase = table["smartcase"].getBool()
-  if table.hasKey("disableChangeCursor"):
-    config.disableChangeCursor = table["disableChangeCursor"].getBool()
-  if table.hasKey("defaultCursor"):
-    config.defaultCursor = parseCursorType(table["defaultCursor"].getStr())
-  if table.hasKey("normalModeCursor"):
-    config.normalModeCursor = parseCursorType(table["normalModeCursor"].getStr())
-  if table.hasKey("insertModeCursor"):
-    config.insertModeCursor = parseCursorType(table["insertModeCursor"].getStr())
-  if table.hasKey("liveReloadOfConf"):
-    config.liveReloadOfConf = table["liveReloadOfConf"].getBool()
-  if table.hasKey("incrementalSearch"):
-    config.incrementalSearch = table["incrementalSearch"].getBool()
-  if table.hasKey("popupWindowInExmode"):
-    config.popupWindowInExmode = table["popupWindowInExmode"].getBool()
-  if table.hasKey("autoDeleteParen"):
-    config.autoDeleteParen = table["autoDeleteParen"].getBool()
-  if table.hasKey("liveReloadOfFile"):
-    config.liveReloadOfFile = table["liveReloadOfFile"].getBool()
-  if table.hasKey("colorMode"):
-    config.colorMode = parseColorMode(table["colorMode"].getStr())
-  if table.hasKey("mouse"):
-    config.mouse = table["mouse"].getBool()
-
-proc loadClipboardConfig(table: TomlTableRef, config: var ClipboardConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-  if table.hasKey("tool"):
-    config.tool = parseClipboardTool(table["tool"].getStr())
-
-proc loadBuildOnSaveConfig(table: TomlTableRef, config: var BuildOnSaveConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-  if table.hasKey("workspaceRoot"):
-    config.workspaceRoot = some(table["workspaceRoot"].getStr())
-  if table.hasKey("command"):
-    config.command = some(table["command"].getStr())
-
-proc loadStatusLineConfig(table: TomlTableRef, config: var StatusLineConfig) =
-  if table.hasKey("multipleStatusLine"):
-    config.multipleStatusLine = table["multipleStatusLine"].getBool()
-  if table.hasKey("merge"):
-    config.merge = table["merge"].getBool()
-  if table.hasKey("mode"):
-    config.mode = table["mode"].getBool()
-  if table.hasKey("filename"):
-    config.filename = table["filename"].getBool()
-  if table.hasKey("chanedMark"):
-    config.chanedMark = table["chanedMark"].getBool()
-  if table.hasKey("directory"):
-    config.directory = table["directory"].getBool()
-  if table.hasKey("gitChangedLines"):
-    config.gitChangedLines = table["gitChangedLines"].getBool()
-  if table.hasKey("gitBranchName"):
-    config.gitBranchName = table["gitBranchName"].getBool()
-  if table.hasKey("showGitInactive"):
-    config.showGitInactive = table["showGitInactive"].getBool()
-  if table.hasKey("showModeInactive"):
-    config.showModeInactive = table["showModeInactive"].getBool()
-  if table.hasKey("setupText"):
-    config.setupText = table["setupText"].getStr()
-
-proc loadGitConfig(table: TomlTableRef, config: var GitConfig) =
-  if table.hasKey("showChangedLine"):
-    config.showChangedLine = table["showChangedLine"].getBool()
-  if table.hasKey("updateInterval"):
-    config.updateInterval = table["updateInterval"].getInt()
-
-proc loadSyntaxCheckerConfig(table: TomlTableRef, config: var SyntaxCheckerConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-
-proc loadThemeConfig(table: TomlTableRef, config: var ThemeConfig) =
-  if table.hasKey("kind"):
-    config.kind = parseThemeKind(table["kind"].getStr())
-  if table.hasKey("path"):
-    config.path = table["path"].getStr()
-
-proc loadAutoSaveConfig(table: TomlTableRef, config: var AutoSaveConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-  if table.hasKey("interval"):
-    config.interval = table["interval"].getInt()
-
-proc loadNotificationConfig(table: TomlTableRef, config: var NotificationConfig) =
-  if table.hasKey("screenNotifications"):
-    config.screenNotifications = table["screenNotifications"].getBool()
-  if table.hasKey("logNotifications"):
-    config.logNotifications = table["logNotifications"].getBool()
-  if table.hasKey("autoBackupScreenNotify"):
-    config.autoBackupScreenNotify = table["autoBackupScreenNotify"].getBool()
-  if table.hasKey("autoBackupLogNotify"):
-    config.autoBackupLogNotify = table["autoBackupLogNotify"].getBool()
-  if table.hasKey("autoSaveScreenNotify"):
-    config.autoSaveScreenNotify = table["autoSaveScreenNotify"].getBool()
-  if table.hasKey("autoSaveLogNotify"):
-    config.autoSaveLogNotify = table["autoSaveLogNotify"].getBool()
-  if table.hasKey("yankScreenNotify"):
-    config.yankScreenNotify = table["yankScreenNotify"].getBool()
-  if table.hasKey("yankLogNotify"):
-    config.yankLogNotify = table["yankLogNotify"].getBool()
-  if table.hasKey("deleteScreenNotify"):
-    config.deleteScreenNotify = table["deleteScreenNotify"].getBool()
-  if table.hasKey("deleteLogNotify"):
-    config.deleteLogNotify = table["deleteLogNotify"].getBool()
-  if table.hasKey("saveScreenNotify"):
-    config.saveScreenNotify = table["saveScreenNotify"].getBool()
-  if table.hasKey("saveLogNotify"):
-    config.saveLogNotify = table["saveLogNotify"].getBool()
-  if table.hasKey("quickRunScreenNotify"):
-    config.quickRunScreenNotify = table["quickRunScreenNotify"].getBool()
-  if table.hasKey("quickRunLogNotify"):
-    config.quickRunLogNotify = table["quickRunLogNotify"].getBool()
-  if table.hasKey("buildOnSaveScreenNotify"):
-    config.buildOnSaveScreenNotify = table["buildOnSaveScreenNotify"].getBool()
-  if table.hasKey("buildOnSaveLogNotify"):
-    config.buildOnSaveLogNotify = table["buildOnSaveLogNotify"].getBool()
-  if table.hasKey("filerScreenNotify"):
-    config.filerScreenNotify = table["filerScreenNotify"].getBool()
-  if table.hasKey("filerLogNotify"):
-    config.filerLogNotify = table["filerLogNotify"].getBool()
-  if table.hasKey("restoreScreenNotify"):
-    config.restoreScreenNotify = table["restoreScreenNotify"].getBool()
-  if table.hasKey("restoreLogNotify"):
-    config.restoreLogNotify = table["restoreLogNotify"].getBool()
-  if table.hasKey("lspScreenNotify"):
-    config.lspScreenNotify = table["lspScreenNotify"].getBool()
-  if table.hasKey("lspLogNotify"):
-    config.lspLogNotify = table["lspLogNotify"].getBool()
-
-proc loadAutoBackupConfig(table: TomlTableRef, config: var AutoBackupConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-  if table.hasKey("backupDir"):
-    config.backupDir = some(table["backupDir"].getStr())
-  if table.hasKey("idleTime"):
-    config.idleTime = table["idleTime"].getInt()
-  if table.hasKey("interval"):
-    config.interval = table["interval"].getInt()
-  if table.hasKey("dirToExclude"):
-    config.dirToExclude = @[]
-    for item in table["dirToExclude"].getElems():
-      config.dirToExclude.add(item.getStr())
-
-proc loadSmoothScrollConfig(table: TomlTableRef, config: var SmoothScrollConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-  if table.hasKey("minDelay"):
-    # Map minDelay (ms) to baseDurationMs
-    config.baseDurationMs = table["minDelay"].getInt()
-  if table.hasKey("maxDelay"):
-    # Map maxDelay (ms) to maxDurationMs
-    config.maxDurationMs = table["maxDelay"].getInt()
-
-proc loadHighlightConfig(table: TomlTableRef, config: var HighlightConfig) =
-  if table.hasKey("currentLine"):
-    config.currentLine = table["currentLine"].getBool()
-  if table.hasKey("reservedWord"):
-    config.reservedWord = @[]
-    for item in table["reservedWord"].getElems():
-      config.reservedWord.add(item.getStr())
-  if table.hasKey("replaceText"):
-    config.replaceText = table["replaceText"].getBool()
-  if table.hasKey("pairOfParen"):
-    config.pairOfParen = table["pairOfParen"].getBool()
-  if table.hasKey("fullWidthSpace"):
-    config.fullWidthSpace = table["fullWidthSpace"].getBool()
-  if table.hasKey("trailingSpaces"):
-    config.trailingSpaces = table["trailingSpaces"].getBool()
-  if table.hasKey("currentWord"):
-    config.currentWord = table["currentWord"].getBool()
-
-proc loadFilerConfig(table: TomlTableRef, config: var FilerConfig) =
-  if table.hasKey("showIcons"):
-    config.showIcons = table["showIcons"].getBool()
-
-proc loadAutocompleteConfig(table: TomlTableRef, config: var AutocompleteConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-  if table.hasKey("windowBorder"):
-    config.windowBorder = table["windowBorder"].getBool()
-
-proc loadPersistConfig(table: TomlTableRef, config: var PersistConfig) =
-  if table.hasKey("exCommand"):
-    config.exCommand = table["exCommand"].getBool()
-  if table.hasKey("exCommandHistoryLimit"):
-    config.exCommandHistoryLimit = table["exCommandHistoryLimit"].getInt()
-  if table.hasKey("search"):
-    config.search = table["search"].getBool()
-  if table.hasKey("searchHistoryLimit"):
-    config.searchHistoryLimit = table["searchHistoryLimit"].getInt()
-  if table.hasKey("cursorPosition"):
-    config.cursorPosition = table["cursorPosition"].getBool()
-
-proc loadQuickRunConfig(table: TomlTableRef, config: var QuickRunConfig) =
-  if table.hasKey("saveBufferWhenQuickRun"):
-    config.saveBufferWhenQuickRun = table["saveBufferWhenQuickRun"].getBool()
-  if table.hasKey("command"):
-    config.command = some(table["command"].getStr())
-  if table.hasKey("timeout"):
-    config.timeout = table["timeout"].getInt()
-  if table.hasKey("nimAdvancedCommand"):
-    config.nimAdvancedCommand = some(table["nimAdvancedCommand"].getStr())
-  if table.hasKey("ClangOptions"):
-    config.clangOptions = some(table["ClangOptions"].getStr())
-  if table.hasKey("CppOptions"):
-    config.cppOptions = some(table["CppOptions"].getStr())
-  if table.hasKey("NimOptions"):
-    config.nimOptions = some(table["NimOptions"].getStr())
-  if table.hasKey("shOptions"):
-    config.shOptions = some(table["shOptions"].getStr())
-  if table.hasKey("bashOptions"):
-    config.bashOptions = some(table["bashOptions"].getStr())
-
-proc loadStartUpFileOpenConfig(table: TomlTableRef, config: var StartUpFileOpenConfig) =
-  if table.hasKey("autoSplit"):
-    config.autoSplit = table["autoSplit"].getBool()
-  if table.hasKey("splitType"):
-    config.splitType = parseSplitType(table["splitType"].getStr())
-
-proc loadDebugWindowNodeConfig(table: TomlTableRef, config: var DebugWindowNodeConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-  if table.hasKey("currentWindow"):
-    config.currentWindow = table["currentWindow"].getBool()
-  if table.hasKey("index"):
-    config.index = table["index"].getBool()
-  if table.hasKey("windowIndex"):
-    config.windowIndex = table["windowIndex"].getBool()
-  if table.hasKey("bufferIndex"):
-    config.bufferIndex = table["bufferIndex"].getBool()
-  if table.hasKey("parentIndex"):
-    config.parentIndex = table["parentIndex"].getBool()
-  if table.hasKey("childLen"):
-    config.childLen = table["childLen"].getBool()
-  if table.hasKey("splitType"):
-    config.splitType = table["splitType"].getBool()
-  if table.hasKey("haveCursesWin"):
-    config.haveCursesWin = table["haveCursesWin"].getBool()
-  if table.hasKey("y"):
-    config.y = table["y"].getBool()
-  if table.hasKey("x"):
-    config.x = table["x"].getBool()
-  if table.hasKey("h"):
-    config.h = table["h"].getBool()
-  if table.hasKey("w"):
-    config.w = table["w"].getBool()
-  if table.hasKey("currentLine"):
-    config.currentLine = table["currentLine"].getBool()
-  if table.hasKey("currentColumn"):
-    config.currentColumn = table["currentColumn"].getBool()
-  if table.hasKey("expandedColumn"):
-    config.expandedColumn = table["expandedColumn"].getBool()
-  if table.hasKey("cursor"):
-    config.cursor = table["cursor"].getBool()
-
-proc loadDebugEditorViewConfig(table: TomlTableRef, config: var DebugEditorViewConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-  if table.hasKey("widthOfLineNum"):
-    config.widthOfLineNum = table["widthOfLineNum"].getBool()
-  if table.hasKey("height"):
-    config.height = table["height"].getBool()
-  if table.hasKey("width"):
-    config.width = table["width"].getBool()
-  if table.hasKey("originalLine"):
-    config.originalLine = table["originalLine"].getBool()
-  if table.hasKey("start"):
-    config.start = table["start"].getBool()
-  if table.hasKey("length"):
-    config.length = table["length"].getBool()
-
-proc loadDebugBufferStatusConfig(
-    table: TomlTableRef, config: var DebugBufferStatusConfig
-) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-  if table.hasKey("bufferIndex"):
-    config.bufferIndex = table["bufferIndex"].getBool()
-  if table.hasKey("path"):
-    config.path = table["path"].getBool()
-  if table.hasKey("openDir"):
-    config.openDir = table["openDir"].getBool()
-  if table.hasKey("currentMode"):
-    config.currentMode = table["currentMode"].getBool()
-  if table.hasKey("prevMode"):
-    config.prevMode = table["prevMode"].getBool()
-  if table.hasKey("language"):
-    config.language = table["language"].getBool()
-  if table.hasKey("encoding"):
-    config.encoding = table["encoding"].getBool()
-  if table.hasKey("countChange"):
-    config.countChange = table["countChange"].getBool()
-  if table.hasKey("cmdLoop"):
-    config.cmdLoop = table["cmdLoop"].getBool()
-  if table.hasKey("lastSaveTime"):
-    config.lastSaveTime = table["lastSaveTime"].getBool()
-  if table.hasKey("bufferLen"):
-    config.bufferLen = table["bufferLen"].getBool()
-
-proc loadDebugSearchConfig(table: TomlTableRef, config: var DebugSearchConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-
-proc loadDebugMacroConfig(table: TomlTableRef, config: var DebugMacroConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-
-proc loadDebugVisualConfig(table: TomlTableRef, config: var DebugVisualConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-
-proc loadDebugJumpListConfig(table: TomlTableRef, config: var DebugJumpListConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-
-proc loadDebugLspConfig(table: TomlTableRef, config: var DebugLspConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-
-proc loadDebugConfig(table: TomlTableRef, config: var DebugConfig) =
-  if table.hasKey("WindowNode"):
-    loadDebugWindowNodeConfig(table["WindowNode"].getTable(), config.windowNode)
-  if table.hasKey("EditorView"):
-    loadDebugEditorViewConfig(table["EditorView"].getTable(), config.editorView)
-  if table.hasKey("BufferStatus"):
-    loadDebugBufferStatusConfig(table["BufferStatus"].getTable(), config.bufferStatus)
-  if table.hasKey("Search"):
-    loadDebugSearchConfig(table["Search"].getTable(), config.search)
-  if table.hasKey("MacroState"):
-    loadDebugMacroConfig(table["MacroState"].getTable(), config.macroState)
-  if table.hasKey("Visual"):
-    loadDebugVisualConfig(table["Visual"].getTable(), config.visual)
-  if table.hasKey("JumpList"):
-    loadDebugJumpListConfig(table["JumpList"].getTable(), config.jumpList)
-  if table.hasKey("Lsp"):
-    loadDebugLspConfig(table["Lsp"].getTable(), config.lsp)
-
 proc parseLspTraceLevel(s: string): LspTraceLevel =
   case s
   of "off": ltOff
@@ -437,17 +102,541 @@ proc parseLspTraceLevel(s: string): LspTraceLevel =
   of "verbose": ltVerbose
   else: ltOff
 
-proc loadLspFeatureConfig(table: TomlTableRef, config: var LspFeatureConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
+# Integrated load+validate helper functions
+# These functions validate and load in one step.
+# Invalid values are skipped (keeping defaults) and errors are collected.
 
-proc loadLspOpenWindowConfig(table: TomlTableRef, config: var LspOpenWindowConfig) =
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-  if table.hasKey("openWindow"):
-    config.openWindow = table["openWindow"].getBool()
+proc fullKey(section, key: string): string {.inline.} =
+  if section.len > 0:
+    section & "." & key
+  else:
+    key
 
-proc loadLspServerConfig(table: TomlTableRef): LspServerConfig =
+proc loadBool(
+    table: TomlTableRef,
+    key: string,
+    target: var bool,
+    vr: var ValidationResult,
+    section: string = "",
+) =
+  ## Load a boolean value if valid. Invalid values are skipped.
+  if table.hasKey(key):
+    let val = table[key]
+    if val.kind == TomlValueKind.Bool:
+      target = val.getBool()
+    else:
+      vr.addError(fullKey(section, key), $val, "boolean (true/false)")
+
+proc loadInt(
+    table: TomlTableRef,
+    key: string,
+    target: var int,
+    vr: var ValidationResult,
+    section: string = "",
+    minVal: int = int.low,
+    maxVal: int = int.high,
+) =
+  ## Load an integer value if valid and within range. Invalid values are skipped.
+  if table.hasKey(key):
+    let val = table[key]
+    if val.kind != TomlValueKind.Int:
+      vr.addError(fullKey(section, key), $val, "integer")
+    else:
+      let intVal = val.getInt
+      if intVal < minVal or intVal > maxVal:
+        let rangeDesc =
+          if minVal == int.low:
+            "integer <= " & $maxVal
+          elif maxVal == int.high:
+            "integer >= " & $minVal
+          else:
+            "integer between " & $minVal & " and " & $maxVal
+        vr.addError(fullKey(section, key), $intVal, rangeDesc)
+      else:
+        target = intVal
+
+proc loadFloat(
+    table: TomlTableRef,
+    key: string,
+    target: var float,
+    vr: var ValidationResult,
+    section: string = "",
+    minVal: float = float.low,
+    maxVal: float = float.high,
+) =
+  ## Load a float value if valid and within range. Invalid values are skipped.
+  if table.hasKey(key):
+    let val = table[key]
+    if val.kind != TomlValueKind.Float and val.kind != TomlValueKind.Int:
+      vr.addError(fullKey(section, key), $val, "number")
+    else:
+      let floatVal =
+        if val.kind == TomlValueKind.Float:
+          val.getFloat
+        else:
+          float(val.getInt)
+      if floatVal < minVal or floatVal > maxVal:
+        let rangeDesc =
+          if minVal == float.low:
+            "number <= " & $maxVal
+          elif maxVal == float.high:
+            "number >= " & $minVal
+          else:
+            "number between " & $minVal & " and " & $maxVal
+        vr.addError(fullKey(section, key), $floatVal, rangeDesc)
+      else:
+        target = floatVal
+
+proc loadString(
+    table: TomlTableRef,
+    key: string,
+    target: var string,
+    vr: var ValidationResult,
+    section: string = "",
+) =
+  ## Load a string value if valid. Invalid values are skipped.
+  if table.hasKey(key):
+    let val = table[key]
+    if val.kind == TomlValueKind.String:
+      target = val.getStr()
+    else:
+      vr.addError(fullKey(section, key), $val, "string")
+
+proc loadOptionString(
+    table: TomlTableRef,
+    key: string,
+    target: var Option[string],
+    vr: var ValidationResult,
+    section: string = "",
+) =
+  ## Load an optional string value if valid. Invalid values are skipped.
+  if table.hasKey(key):
+    let val = table[key]
+    if val.kind == TomlValueKind.String:
+      target = some(val.getStr())
+    else:
+      vr.addError(fullKey(section, key), $val, "string")
+
+proc loadStringArray(
+    table: TomlTableRef,
+    key: string,
+    target: var seq[string],
+    vr: var ValidationResult,
+    section: string = "",
+) =
+  ## Load a string array if valid. Invalid values are skipped.
+  if table.hasKey(key):
+    let val = table[key]
+    if val.kind != TomlValueKind.Array:
+      vr.addError(fullKey(section, key), $val, "array of strings")
+    else:
+      var valid = true
+      var result: seq[string] = @[]
+      for i, item in val.getElems:
+        if item.kind != TomlValueKind.String:
+          vr.addError(fullKey(section, key) & "[" & $i & "]", $item, "string")
+          valid = false
+        else:
+          result.add(item.getStr())
+      if valid:
+        target = result
+
+proc loadEnum[T](
+    table: TomlTableRef,
+    key: string,
+    target: var T,
+    vr: var ValidationResult,
+    section: string = "",
+    parseFunc: proc(s: string): T,
+    validValues: openArray[string],
+) =
+  ## Load an enum value if valid. Invalid values are skipped.
+  if table.hasKey(key):
+    let val = table[key]
+    if val.kind != TomlValueKind.String:
+      vr.addError(fullKey(section, key), $val, "one of: " & validValues.join(", "))
+    else:
+      let strVal = val.getStr
+      if strVal in validValues:
+        target = parseFunc(strVal)
+      else:
+        vr.addError(fullKey(section, key), strVal, "one of: " & validValues.join(", "))
+
+# Valid enum values for validation
+const
+  ValidColorModes* = ["8bit", "24bit", "none"]
+  ValidCursorTypes* =
+    ["terminalDefault", "blinkBlock", "blinkIbeam", "nonBlinkBlock", "nonBlinkIbeam"]
+  ValidThemeKinds* = ["default", "config", "vscode"]
+  ValidClipboardTools* = ["xsel", "xclip", "wl-clipboard", "win32yank", "pbcopy"]
+  ValidSplitTypes* = ["horizontal", "vertical"]
+  ValidLspTraceLevels* = ["off", "messages", "verbose"]
+
+# ============================================================================
+# Integrated load functions (validate + load in one step)
+# ============================================================================
+
+proc loadStandardConfig(
+    table: TomlTableRef, config: var StandardConfig, vr: var ValidationResult
+) =
+  const section = "Standard"
+  loadBool(table, "number", config.number, vr, section)
+  loadBool(table, "currentNumber", config.currentNumber, vr, section)
+  loadBool(table, "cursorLine", config.cursorLine, vr, section)
+  loadBool(table, "statusLine", config.statusLine, vr, section)
+  loadBool(table, "syntax", config.syntax, vr, section)
+  loadBool(table, "indentationLines", config.indentationLines, vr, section)
+  loadInt(table, "tabStop", config.tabStop, vr, section, minVal = 1)
+  loadBool(table, "expandTab", config.expandTab, vr, section)
+  loadBool(table, "sidebar", config.sidebar, vr, section)
+  loadBool(table, "autoCloseParen", config.autoCloseParen, vr, section)
+  loadBool(table, "autoIndent", config.autoIndent, vr, section)
+  loadBool(table, "ignorecase", config.ignorecase, vr, section)
+  loadBool(table, "smartcase", config.smartcase, vr, section)
+  loadBool(table, "disableChangeCursor", config.disableChangeCursor, vr, section)
+  loadEnum(
+    table, "defaultCursor", config.defaultCursor, vr, section, parseCursorType,
+    ValidCursorTypes,
+  )
+  loadEnum(
+    table, "normalModeCursor", config.normalModeCursor, vr, section, parseCursorType,
+    ValidCursorTypes,
+  )
+  loadEnum(
+    table, "insertModeCursor", config.insertModeCursor, vr, section, parseCursorType,
+    ValidCursorTypes,
+  )
+  loadBool(table, "liveReloadOfConf", config.liveReloadOfConf, vr, section)
+  loadBool(table, "incrementalSearch", config.incrementalSearch, vr, section)
+  loadBool(table, "popupWindowInExmode", config.popupWindowInExmode, vr, section)
+  loadBool(table, "autoDeleteParen", config.autoDeleteParen, vr, section)
+  loadBool(table, "liveReloadOfFile", config.liveReloadOfFile, vr, section)
+  loadEnum(
+    table, "colorMode", config.colorMode, vr, section, parseColorMode, ValidColorModes
+  )
+  loadBool(table, "mouse", config.mouse, vr, section)
+
+proc loadClipboardConfig(
+    table: TomlTableRef, config: var ClipboardConfig, vr: var ValidationResult
+) =
+  const section = "Clipboard"
+  loadBool(table, "enable", config.enable, vr, section)
+  loadEnum(
+    table, "tool", config.tool, vr, section, parseClipboardTool, ValidClipboardTools
+  )
+
+proc loadBuildOnSaveConfig(
+    table: TomlTableRef, config: var BuildOnSaveConfig, vr: var ValidationResult
+) =
+  const section = "BuildOnSave"
+  loadBool(table, "enable", config.enable, vr, section)
+  loadOptionString(table, "workspaceRoot", config.workspaceRoot, vr, section)
+  loadOptionString(table, "command", config.command, vr, section)
+
+proc loadStatusLineConfig(
+    table: TomlTableRef, config: var StatusLineConfig, vr: var ValidationResult
+) =
+  const section = "StatusLine"
+  loadBool(table, "multipleStatusLine", config.multipleStatusLine, vr, section)
+  loadBool(table, "merge", config.merge, vr, section)
+  loadBool(table, "mode", config.mode, vr, section)
+  loadBool(table, "filename", config.filename, vr, section)
+  loadBool(table, "chanedMark", config.chanedMark, vr, section)
+  loadBool(table, "directory", config.directory, vr, section)
+  loadBool(table, "gitChangedLines", config.gitChangedLines, vr, section)
+  loadBool(table, "gitBranchName", config.gitBranchName, vr, section)
+  loadBool(table, "showGitInactive", config.showGitInactive, vr, section)
+  loadBool(table, "showModeInactive", config.showModeInactive, vr, section)
+  loadString(table, "setupText", config.setupText, vr, section)
+
+proc loadGitConfig(
+    table: TomlTableRef, config: var GitConfig, vr: var ValidationResult
+) =
+  const section = "Git"
+  loadBool(table, "showChangedLine", config.showChangedLine, vr, section)
+  loadInt(table, "updateInterval", config.updateInterval, vr, section, minVal = 1)
+
+proc loadSyntaxCheckerConfig(
+    table: TomlTableRef, config: var SyntaxCheckerConfig, vr: var ValidationResult
+) =
+  const section = "SyntaxChecker"
+  loadBool(table, "enable", config.enable, vr, section)
+
+proc loadThemeConfig(
+    table: TomlTableRef, config: var ThemeConfig, vr: var ValidationResult
+) =
+  const section = "Theme"
+  loadEnum(table, "kind", config.kind, vr, section, parseThemeKind, ValidThemeKinds)
+  loadString(table, "path", config.path, vr, section)
+
+proc loadAutoSaveConfig(
+    table: TomlTableRef, config: var AutoSaveConfig, vr: var ValidationResult
+) =
+  const section = "AutoSave"
+  loadBool(table, "enable", config.enable, vr, section)
+  loadInt(table, "interval", config.interval, vr, section, minVal = 1)
+
+proc loadNotificationConfig(
+    table: TomlTableRef, config: var NotificationConfig, vr: var ValidationResult
+) =
+  const section = "Notification"
+  loadBool(table, "screenNotifications", config.screenNotifications, vr, section)
+  loadBool(table, "logNotifications", config.logNotifications, vr, section)
+  loadBool(table, "autoBackupScreenNotify", config.autoBackupScreenNotify, vr, section)
+  loadBool(table, "autoBackupLogNotify", config.autoBackupLogNotify, vr, section)
+  loadBool(table, "autoSaveScreenNotify", config.autoSaveScreenNotify, vr, section)
+  loadBool(table, "autoSaveLogNotify", config.autoSaveLogNotify, vr, section)
+  loadBool(table, "yankScreenNotify", config.yankScreenNotify, vr, section)
+  loadBool(table, "yankLogNotify", config.yankLogNotify, vr, section)
+  loadBool(table, "deleteScreenNotify", config.deleteScreenNotify, vr, section)
+  loadBool(table, "deleteLogNotify", config.deleteLogNotify, vr, section)
+  loadBool(table, "saveScreenNotify", config.saveScreenNotify, vr, section)
+  loadBool(table, "saveLogNotify", config.saveLogNotify, vr, section)
+  loadBool(table, "quickRunScreenNotify", config.quickRunScreenNotify, vr, section)
+  loadBool(table, "quickRunLogNotify", config.quickRunLogNotify, vr, section)
+  loadBool(
+    table, "buildOnSaveScreenNotify", config.buildOnSaveScreenNotify, vr, section
+  )
+  loadBool(table, "buildOnSaveLogNotify", config.buildOnSaveLogNotify, vr, section)
+  loadBool(table, "filerScreenNotify", config.filerScreenNotify, vr, section)
+  loadBool(table, "filerLogNotify", config.filerLogNotify, vr, section)
+  loadBool(table, "restoreScreenNotify", config.restoreScreenNotify, vr, section)
+  loadBool(table, "restoreLogNotify", config.restoreLogNotify, vr, section)
+  loadBool(table, "lspScreenNotify", config.lspScreenNotify, vr, section)
+  loadBool(table, "lspLogNotify", config.lspLogNotify, vr, section)
+
+proc loadAutoBackupConfig(
+    table: TomlTableRef, config: var AutoBackupConfig, vr: var ValidationResult
+) =
+  const section = "AutoBackup"
+  loadBool(table, "enable", config.enable, vr, section)
+  loadOptionString(table, "backupDir", config.backupDir, vr, section)
+  loadInt(table, "idleTime", config.idleTime, vr, section, minVal = 1)
+  loadInt(table, "interval", config.interval, vr, section, minVal = 1)
+  loadStringArray(table, "dirToExclude", config.dirToExclude, vr, section)
+
+proc loadSmoothScrollConfig(
+    table: TomlTableRef, config: var SmoothScrollConfig, vr: var ValidationResult
+) =
+  const section = "SmoothScroll"
+  loadBool(table, "enable", config.enable, vr, section)
+  loadFloat(table, "friction", config.friction, vr, section, minVal = 0.0)
+  loadFloat(table, "airDrag", config.airDrag, vr, section, minVal = 0.0)
+
+proc loadHighlightConfig(
+    table: TomlTableRef, config: var HighlightConfig, vr: var ValidationResult
+) =
+  const section = "Highlight"
+  loadBool(table, "currentLine", config.currentLine, vr, section)
+  loadStringArray(table, "reservedWord", config.reservedWord, vr, section)
+  loadBool(table, "replaceText", config.replaceText, vr, section)
+  loadBool(table, "pairOfParen", config.pairOfParen, vr, section)
+  loadBool(table, "fullWidthSpace", config.fullWidthSpace, vr, section)
+  loadBool(table, "trailingSpaces", config.trailingSpaces, vr, section)
+  loadBool(table, "currentWord", config.currentWord, vr, section)
+
+proc loadFilerConfig(
+    table: TomlTableRef, config: var FilerConfig, vr: var ValidationResult
+) =
+  const section = "Filer"
+  loadBool(table, "showIcons", config.showIcons, vr, section)
+
+proc loadAutocompleteConfig(
+    table: TomlTableRef, config: var AutocompleteConfig, vr: var ValidationResult
+) =
+  const section = "Autocomplete"
+  loadBool(table, "enable", config.enable, vr, section)
+  loadBool(table, "windowBorder", config.windowBorder, vr, section)
+
+proc loadPersistConfig(
+    table: TomlTableRef, config: var PersistConfig, vr: var ValidationResult
+) =
+  const section = "Persist"
+  loadBool(table, "exCommand", config.exCommand, vr, section)
+  loadInt(
+    table,
+    "exCommandHistoryLimit",
+    config.exCommandHistoryLimit,
+    vr,
+    section,
+    minVal = 1,
+  )
+  loadBool(table, "search", config.search, vr, section)
+  loadInt(
+    table, "searchHistoryLimit", config.searchHistoryLimit, vr, section, minVal = 1
+  )
+  loadBool(table, "cursorPosition", config.cursorPosition, vr, section)
+
+proc loadQuickRunConfig(
+    table: TomlTableRef, config: var QuickRunConfig, vr: var ValidationResult
+) =
+  const section = "QuickRun"
+  loadBool(table, "saveBufferWhenQuickRun", config.saveBufferWhenQuickRun, vr, section)
+  loadOptionString(table, "command", config.command, vr, section)
+  loadInt(table, "timeout", config.timeout, vr, section, minVal = 1)
+  loadOptionString(table, "nimAdvancedCommand", config.nimAdvancedCommand, vr, section)
+  loadOptionString(table, "ClangOptions", config.clangOptions, vr, section)
+  loadOptionString(table, "CppOptions", config.cppOptions, vr, section)
+  loadOptionString(table, "NimOptions", config.nimOptions, vr, section)
+  loadOptionString(table, "shOptions", config.shOptions, vr, section)
+  loadOptionString(table, "bashOptions", config.bashOptions, vr, section)
+
+proc loadStartUpFileOpenConfig(
+    table: TomlTableRef, config: var StartUpFileOpenConfig, vr: var ValidationResult
+) =
+  const section = "StartUp.FileOpen"
+  loadBool(table, "autoSplit", config.autoSplit, vr, section)
+  loadEnum(
+    table, "splitType", config.splitType, vr, section, parseSplitType, ValidSplitTypes
+  )
+
+proc loadDebugWindowNodeConfig(
+    table: TomlTableRef,
+    config: var DebugWindowNodeConfig,
+    vr: var ValidationResult,
+    section: string,
+) =
+  loadBool(table, "enable", config.enable, vr, section)
+  loadBool(table, "currentWindow", config.currentWindow, vr, section)
+  loadBool(table, "index", config.index, vr, section)
+  loadBool(table, "windowIndex", config.windowIndex, vr, section)
+  loadBool(table, "bufferIndex", config.bufferIndex, vr, section)
+  loadBool(table, "parentIndex", config.parentIndex, vr, section)
+  loadBool(table, "childLen", config.childLen, vr, section)
+  loadBool(table, "splitType", config.splitType, vr, section)
+  loadBool(table, "haveCursesWin", config.haveCursesWin, vr, section)
+  loadBool(table, "y", config.y, vr, section)
+  loadBool(table, "x", config.x, vr, section)
+  loadBool(table, "h", config.h, vr, section)
+  loadBool(table, "w", config.w, vr, section)
+  loadBool(table, "currentLine", config.currentLine, vr, section)
+  loadBool(table, "currentColumn", config.currentColumn, vr, section)
+  loadBool(table, "expandedColumn", config.expandedColumn, vr, section)
+  loadBool(table, "cursor", config.cursor, vr, section)
+
+proc loadDebugEditorViewConfig(
+    table: TomlTableRef,
+    config: var DebugEditorViewConfig,
+    vr: var ValidationResult,
+    section: string,
+) =
+  loadBool(table, "enable", config.enable, vr, section)
+  loadBool(table, "widthOfLineNum", config.widthOfLineNum, vr, section)
+  loadBool(table, "height", config.height, vr, section)
+  loadBool(table, "width", config.width, vr, section)
+  loadBool(table, "originalLine", config.originalLine, vr, section)
+  loadBool(table, "start", config.start, vr, section)
+  loadBool(table, "length", config.length, vr, section)
+
+proc loadDebugBufferStatusConfig(
+    table: TomlTableRef,
+    config: var DebugBufferStatusConfig,
+    vr: var ValidationResult,
+    section: string,
+) =
+  loadBool(table, "enable", config.enable, vr, section)
+  loadBool(table, "bufferIndex", config.bufferIndex, vr, section)
+  loadBool(table, "path", config.path, vr, section)
+  loadBool(table, "openDir", config.openDir, vr, section)
+  loadBool(table, "currentMode", config.currentMode, vr, section)
+  loadBool(table, "prevMode", config.prevMode, vr, section)
+  loadBool(table, "language", config.language, vr, section)
+  loadBool(table, "encoding", config.encoding, vr, section)
+  loadBool(table, "countChange", config.countChange, vr, section)
+  loadBool(table, "cmdLoop", config.cmdLoop, vr, section)
+  loadBool(table, "lastSaveTime", config.lastSaveTime, vr, section)
+  loadBool(table, "bufferLen", config.bufferLen, vr, section)
+
+proc loadDebugSearchConfig(
+    table: TomlTableRef,
+    config: var DebugSearchConfig,
+    vr: var ValidationResult,
+    section: string,
+) =
+  loadBool(table, "enable", config.enable, vr, section)
+
+proc loadDebugMacroConfig(
+    table: TomlTableRef,
+    config: var DebugMacroConfig,
+    vr: var ValidationResult,
+    section: string,
+) =
+  loadBool(table, "enable", config.enable, vr, section)
+
+proc loadDebugVisualConfig(
+    table: TomlTableRef,
+    config: var DebugVisualConfig,
+    vr: var ValidationResult,
+    section: string,
+) =
+  loadBool(table, "enable", config.enable, vr, section)
+
+proc loadDebugJumpListConfig(
+    table: TomlTableRef,
+    config: var DebugJumpListConfig,
+    vr: var ValidationResult,
+    section: string,
+) =
+  loadBool(table, "enable", config.enable, vr, section)
+
+proc loadDebugLspConfig(
+    table: TomlTableRef,
+    config: var DebugLspConfig,
+    vr: var ValidationResult,
+    section: string,
+) =
+  loadBool(table, "enable", config.enable, vr, section)
+
+proc loadDebugConfig(
+    table: TomlTableRef, config: var DebugConfig, vr: var ValidationResult
+) =
+  if table.hasKey("WindowNode"):
+    loadDebugWindowNodeConfig(
+      table["WindowNode"].getTable(), config.windowNode, vr, "Debug.WindowNode"
+    )
+  if table.hasKey("EditorView"):
+    loadDebugEditorViewConfig(
+      table["EditorView"].getTable(), config.editorView, vr, "Debug.EditorView"
+    )
+  if table.hasKey("BufferStatus"):
+    loadDebugBufferStatusConfig(
+      table["BufferStatus"].getTable(), config.bufferStatus, vr, "Debug.BufferStatus"
+    )
+  if table.hasKey("Search"):
+    loadDebugSearchConfig(table["Search"].getTable(), config.search, vr, "Debug.Search")
+  if table.hasKey("MacroState"):
+    loadDebugMacroConfig(
+      table["MacroState"].getTable(), config.macroState, vr, "Debug.MacroState"
+    )
+  if table.hasKey("Visual"):
+    loadDebugVisualConfig(table["Visual"].getTable(), config.visual, vr, "Debug.Visual")
+  if table.hasKey("JumpList"):
+    loadDebugJumpListConfig(
+      table["JumpList"].getTable(), config.jumpList, vr, "Debug.JumpList"
+    )
+  if table.hasKey("Lsp"):
+    loadDebugLspConfig(table["Lsp"].getTable(), config.lsp, vr, "Debug.Lsp")
+
+proc loadLspFeatureConfig(
+    table: TomlTableRef,
+    config: var LspFeatureConfig,
+    vr: var ValidationResult,
+    section: string,
+) =
+  loadBool(table, "enable", config.enable, vr, section)
+
+proc loadLspOpenWindowConfig(
+    table: TomlTableRef,
+    config: var LspOpenWindowConfig,
+    vr: var ValidationResult,
+    section: string,
+) =
+  loadBool(table, "enable", config.enable, vr, section)
+  loadBool(table, "openWindow", config.openWindow, vr, section)
+
+proc loadLspServerConfig(
+    table: TomlTableRef, vr: var ValidationResult, section: string
+): LspServerConfig =
   result = LspServerConfig(
     extensions: @[],
     command: "",
@@ -455,74 +644,133 @@ proc loadLspServerConfig(table: TomlTableRef): LspServerConfig =
     rustAnalyzerRunSingle: false,
     rustAnalyzerDebugSingle: false,
   )
-  if table.hasKey("extensions"):
-    for item in table["extensions"].getElems():
-      result.extensions.add(item.getStr())
-  if table.hasKey("command"):
-    result.command = table["command"].getStr()
-  if table.hasKey("trace"):
-    result.trace = parseLspTraceLevel(table["trace"].getStr())
-  if table.hasKey("rustAnalyzerRunSingle"):
-    result.rustAnalyzerRunSingle = table["rustAnalyzerRunSingle"].getBool()
-  if table.hasKey("rustAnalyzerDebugSingle"):
-    result.rustAnalyzerDebugSingle = table["rustAnalyzerDebugSingle"].getBool()
+  loadStringArray(table, "extensions", result.extensions, vr, section)
+  loadString(table, "command", result.command, vr, section)
+  loadEnum(
+    table, "trace", result.trace, vr, section, parseLspTraceLevel, ValidLspTraceLevels
+  )
+  loadBool(table, "rustAnalyzerRunSingle", result.rustAnalyzerRunSingle, vr, section)
+  loadBool(
+    table, "rustAnalyzerDebugSingle", result.rustAnalyzerDebugSingle, vr, section
+  )
 
-proc loadLspConfig(table: TomlTableRef, config: var LspConfig) =
+proc loadLspConfig(
+    table: TomlTableRef, config: var LspConfig, vr: var ValidationResult
+) =
+  const section = "Lsp"
   # Main LSP settings
-  if table.hasKey("enable"):
-    config.enable = table["enable"].getBool()
-  if table.hasKey("timeout"):
-    config.timeout = table["timeout"].getInt()
+  loadBool(table, "enable", config.enable, vr, section)
+  loadInt(table, "timeout", config.timeout, vr, section, minVal = 1)
 
   # Feature configs
   if table.hasKey("Completion"):
-    loadLspFeatureConfig(table["Completion"].getTable(), config.completion)
+    loadLspFeatureConfig(
+      table["Completion"].getTable(), config.completion, vr, "Lsp.Completion"
+    )
   if table.hasKey("Declaration"):
-    loadLspOpenWindowConfig(table["Declaration"].getTable(), config.declaration)
+    loadLspOpenWindowConfig(
+      table["Declaration"].getTable(), config.declaration, vr, "Lsp.Declaration"
+    )
   if table.hasKey("Definition"):
-    loadLspOpenWindowConfig(table["Definition"].getTable(), config.definition)
+    loadLspOpenWindowConfig(
+      table["Definition"].getTable(), config.definition, vr, "Lsp.Definition"
+    )
   if table.hasKey("TypeDefinition"):
-    loadLspOpenWindowConfig(table["TypeDefinition"].getTable(), config.typeDefinition)
+    loadLspOpenWindowConfig(
+      table["TypeDefinition"].getTable(),
+      config.typeDefinition,
+      vr,
+      "Lsp.TypeDefinition",
+    )
   if table.hasKey("Implementation"):
-    loadLspOpenWindowConfig(table["Implementation"].getTable(), config.implementation)
+    loadLspOpenWindowConfig(
+      table["Implementation"].getTable(),
+      config.implementation,
+      vr,
+      "Lsp.Implementation",
+    )
   if table.hasKey("Diagnostics"):
-    loadLspFeatureConfig(table["Diagnostics"].getTable(), config.diagnostics)
+    loadLspFeatureConfig(
+      table["Diagnostics"].getTable(), config.diagnostics, vr, "Lsp.Diagnostics"
+    )
   if table.hasKey("SignatureHelp"):
-    loadLspFeatureConfig(table["SignatureHelp"].getTable(), config.signatureHelp)
+    loadLspFeatureConfig(
+      table["SignatureHelp"].getTable(), config.signatureHelp, vr, "Lsp.SignatureHelp"
+    )
   if table.hasKey("DocumentFormatting"):
     loadLspFeatureConfig(
-      table["DocumentFormatting"].getTable(), config.documentFormatting
+      table["DocumentFormatting"].getTable(),
+      config.documentFormatting,
+      vr,
+      "Lsp.DocumentFormatting",
     )
   if table.hasKey("FoldingRange"):
-    loadLspFeatureConfig(table["FoldingRange"].getTable(), config.foldingRange)
+    loadLspFeatureConfig(
+      table["FoldingRange"].getTable(), config.foldingRange, vr, "Lsp.FoldingRange"
+    )
   if table.hasKey("SelectionRange"):
-    loadLspFeatureConfig(table["SelectionRange"].getTable(), config.selectionRange)
+    loadLspFeatureConfig(
+      table["SelectionRange"].getTable(),
+      config.selectionRange,
+      vr,
+      "Lsp.SelectionRange",
+    )
   if table.hasKey("DocumentSymbol"):
-    loadLspFeatureConfig(table["DocumentSymbol"].getTable(), config.documentSymbol)
+    loadLspFeatureConfig(
+      table["DocumentSymbol"].getTable(),
+      config.documentSymbol,
+      vr,
+      "Lsp.DocumentSymbol",
+    )
   if table.hasKey("Hover"):
-    loadLspFeatureConfig(table["Hover"].getTable(), config.hover)
+    loadLspFeatureConfig(table["Hover"].getTable(), config.hover, vr, "Lsp.Hover")
   if table.hasKey("InlayHint"):
-    loadLspFeatureConfig(table["InlayHint"].getTable(), config.inlayHint)
+    loadLspFeatureConfig(
+      table["InlayHint"].getTable(), config.inlayHint, vr, "Lsp.InlayHint"
+    )
   if table.hasKey("InlineValue"):
-    loadLspFeatureConfig(table["InlineValue"].getTable(), config.inlineValue)
+    loadLspFeatureConfig(
+      table["InlineValue"].getTable(), config.inlineValue, vr, "Lsp.InlineValue"
+    )
   if table.hasKey("References"):
-    loadLspFeatureConfig(table["References"].getTable(), config.references)
+    loadLspFeatureConfig(
+      table["References"].getTable(), config.references, vr, "Lsp.References"
+    )
   if table.hasKey("CallHierarchy"):
-    loadLspFeatureConfig(table["CallHierarchy"].getTable(), config.callHierarchy)
+    loadLspFeatureConfig(
+      table["CallHierarchy"].getTable(), config.callHierarchy, vr, "Lsp.CallHierarchy"
+    )
   if table.hasKey("DocumentHighlight"):
     loadLspFeatureConfig(
-      table["DocumentHighlight"].getTable(), config.documentHighlight
+      table["DocumentHighlight"].getTable(),
+      config.documentHighlight,
+      vr,
+      "Lsp.DocumentHighlight",
     )
   if table.hasKey("DocumentLink"):
-    loadLspFeatureConfig(table["DocumentLink"].getTable(), config.documentLink)
+    loadLspFeatureConfig(
+      table["DocumentLink"].getTable(), config.documentLink, vr, "Lsp.DocumentLink"
+    )
   if table.hasKey("CodeLens"):
-    loadLspFeatureConfig(table["CodeLens"].getTable(), config.codeLens)
+    loadLspFeatureConfig(
+      table["CodeLens"].getTable(), config.codeLens, vr, "Lsp.CodeLens"
+    )
   if table.hasKey("Rename"):
-    loadLspFeatureConfig(table["Rename"].getTable(), config.rename)
+    loadLspFeatureConfig(table["Rename"].getTable(), config.rename, vr, "Lsp.Rename")
   if table.hasKey("SemanticTokens"):
-    loadLspFeatureConfig(table["SemanticTokens"].getTable(), config.semanticTokens)
+    loadLspFeatureConfig(
+      table["SemanticTokens"].getTable(),
+      config.semanticTokens,
+      vr,
+      "Lsp.SemanticTokens",
+    )
   if table.hasKey("ExecuteCommand"):
-    loadLspFeatureConfig(table["ExecuteCommand"].getTable(), config.executeCommand)
+    loadLspFeatureConfig(
+      table["ExecuteCommand"].getTable(),
+      config.executeCommand,
+      vr,
+      "Lsp.ExecuteCommand",
+    )
 
   # Language server configs (any key that's not a known feature is a language server)
   let knownKeys = [
@@ -534,86 +782,93 @@ proc loadLspConfig(table: TomlTableRef, config: var LspConfig) =
   ]
   for key, value in table:
     if key notin knownKeys and value.kind == TomlValueKind.Table:
-      config.servers[key] = loadLspServerConfig(value.getTable())
+      config.servers[key] = loadLspServerConfig(value.getTable(), vr, "Lsp." & key)
 
-proc loadConfigFromToml*(path: string): EditorConfig =
-  ## Load configuration from a TOML file
-  ## Returns a new EditorConfig with values loaded from the file
-  ## Falls back to defaults for any missing values
+proc loadConfigFromToml*(
+    path: string
+): Result[(EditorConfig, ValidationResult), string] =
+  ## Load configuration from a TOML file with integrated validation
+  ## Returns (EditorConfig, ValidationResult) on success
+  ## Invalid values are skipped (keeping defaults) and recorded in ValidationResult
+  ## Returns error if file cannot be parsed
 
   if not fileExists(path):
-    return newEditorConfig()
+    return Result[(EditorConfig, ValidationResult), string].ok(
+      (newEditorConfig(), newValidationResult())
+    )
 
   var toml: TomlValueRef
   try:
     toml = parseFile(path)
   except CatchableError as e:
-    stderr.writeLine "Failed to parse config file: " & path
-    stderr.writeLine "Error: " & e.msg
-    stderr.writeLine "Using default configuration"
-    return newEditorConfig()
+    return Result[(EditorConfig, ValidationResult), string].err(
+      "Failed to parse config file: " & e.msg
+    )
 
-  result = newEditorConfig()
+  var config = newEditorConfig()
+  var vr = newValidationResult()
 
-  # Load each section
+  # Load each section (validation integrated into loading)
   if toml.hasKey("Standard"):
-    loadStandardConfig(toml["Standard"].getTable(), result.standard)
+    loadStandardConfig(toml["Standard"].getTable(), config.standard, vr)
 
   if toml.hasKey("Clipboard"):
-    loadClipboardConfig(toml["Clipboard"].getTable(), result.clipboard)
+    loadClipboardConfig(toml["Clipboard"].getTable(), config.clipboard, vr)
 
   if toml.hasKey("BuildOnSave"):
-    loadBuildOnSaveConfig(toml["BuildOnSave"].getTable(), result.buildOnSave)
+    loadBuildOnSaveConfig(toml["BuildOnSave"].getTable(), config.buildOnSave, vr)
 
   if toml.hasKey("StatusLine"):
-    loadStatusLineConfig(toml["StatusLine"].getTable(), result.statusLine)
+    loadStatusLineConfig(toml["StatusLine"].getTable(), config.statusLine, vr)
 
   if toml.hasKey("Git"):
-    loadGitConfig(toml["Git"].getTable(), result.git)
+    loadGitConfig(toml["Git"].getTable(), config.git, vr)
 
   if toml.hasKey("SyntaxChecker"):
-    loadSyntaxCheckerConfig(toml["SyntaxChecker"].getTable(), result.syntaxChecker)
+    loadSyntaxCheckerConfig(toml["SyntaxChecker"].getTable(), config.syntaxChecker, vr)
 
   if toml.hasKey("Theme"):
-    loadThemeConfig(toml["Theme"].getTable(), result.theme)
+    loadThemeConfig(toml["Theme"].getTable(), config.theme, vr)
 
   if toml.hasKey("AutoSave"):
-    loadAutoSaveConfig(toml["AutoSave"].getTable(), result.autoSave)
+    loadAutoSaveConfig(toml["AutoSave"].getTable(), config.autoSave, vr)
 
   if toml.hasKey("Notification"):
-    loadNotificationConfig(toml["Notification"].getTable(), result.notification)
+    loadNotificationConfig(toml["Notification"].getTable(), config.notification, vr)
 
   if toml.hasKey("QuickRun"):
-    loadQuickRunConfig(toml["QuickRun"].getTable(), result.quickRun)
+    loadQuickRunConfig(toml["QuickRun"].getTable(), config.quickRun, vr)
 
   if toml.hasKey("AutoBackup"):
-    loadAutoBackupConfig(toml["AutoBackup"].getTable(), result.autoBackup)
+    loadAutoBackupConfig(toml["AutoBackup"].getTable(), config.autoBackup, vr)
 
   if toml.hasKey("SmoothScroll"):
-    loadSmoothScrollConfig(toml["SmoothScroll"].getTable(), result.smoothScroll)
+    loadSmoothScrollConfig(toml["SmoothScroll"].getTable(), config.smoothScroll, vr)
 
   if toml.hasKey("Highlight"):
-    loadHighlightConfig(toml["Highlight"].getTable(), result.highlight)
+    loadHighlightConfig(toml["Highlight"].getTable(), config.highlight, vr)
 
   if toml.hasKey("Filer"):
-    loadFilerConfig(toml["Filer"].getTable(), result.filer)
+    loadFilerConfig(toml["Filer"].getTable(), config.filer, vr)
 
   if toml.hasKey("Autocomplete"):
-    loadAutocompleteConfig(toml["Autocomplete"].getTable(), result.autocomplete)
+    loadAutocompleteConfig(toml["Autocomplete"].getTable(), config.autocomplete, vr)
 
   if toml.hasKey("Persist"):
-    loadPersistConfig(toml["Persist"].getTable(), result.persist)
+    loadPersistConfig(toml["Persist"].getTable(), config.persist, vr)
 
   if toml.hasKey("StartUp.FileOpen"):
     loadStartUpFileOpenConfig(
-      toml["StartUp.FileOpen"].getTable(), result.startUpFileOpen
+      toml["StartUp.FileOpen"].getTable(), config.startUpFileOpen, vr
     )
 
   if toml.hasKey("Lsp"):
-    loadLspConfig(toml["Lsp"].getTable(), result.lsp)
+    loadLspConfig(toml["Lsp"].getTable(), config.lsp, vr)
 
   if toml.hasKey("Debug"):
-    loadDebugConfig(toml["Debug"].getTable(), result.debug)
+    loadDebugConfig(toml["Debug"].getTable(), config.debug, vr)
+
+  return Result[(EditorConfig, ValidationResult), string].ok((config, vr))
 
 proc getConfigPath*(): string =
   ## Get the path to the configuration file
@@ -633,7 +888,7 @@ proc getConfigPath*(): string =
   # Return the default location even if it doesn't exist
   return getConfigDir() / "moe" / "moerc.toml"
 
-proc loadConfig*(): EditorConfig =
+proc loadConfig*(): Result[(EditorConfig, ValidationResult), string] =
   ## Load configuration from the default location
   let configPath = getConfigPath()
   return loadConfigFromToml(configPath)
@@ -1017,9 +1272,7 @@ proc initTheme*(config: EditorConfig) =
     # Log error and use default
     initDefaultTheme()
 
-# ============================================================================
 # Configuration saving
-# ============================================================================
 
 proc toTomlBool(val: bool): string =
   if val: "true" else: "false"
@@ -1147,8 +1400,8 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   # SmoothScroll section
   lines.add "[SmoothScroll]"
   lines.add "enable = " & toTomlBool(config.smoothScroll.enable)
-  lines.add "baseDurationMs = " & $config.smoothScroll.baseDurationMs
-  lines.add "maxDurationMs = " & $config.smoothScroll.maxDurationMs
+  lines.add "friction = " & $config.smoothScroll.friction
+  lines.add "airDrag = " & $config.smoothScroll.airDrag
   lines.add ""
 
   # Lsp section

@@ -104,7 +104,7 @@ proc newNormalModeHandler*(
     commandRegistry: CommandRegistry,
     clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: ctXclip),
     smoothScrollConfig: SmoothScrollConfig =
-      SmoothScrollConfig(enable: true, baseDurationMs: 350, maxDurationMs: 650),
+      SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
     notificationConfig: NotificationConfig = NotificationConfig(),
 ): NormalModeHandler =
   ## Create a new Normal mode handler
@@ -431,7 +431,6 @@ proc handleNormalModeKey*(
       let registerChar = keyCombo.char[0]
       if isValidRegisterName(registerChar):
         state.pendingRegister = some(registerChar)
-        state.statusMessage = "\"" & $registerChar
         # Now wait for the actual command (y, d, p, etc.)
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
@@ -448,7 +447,6 @@ proc handleNormalModeKey*(
   # Handle '"' key to start register selection
   if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == "\"":
     state.pendingRegister = some('\0') # Placeholder - next key will be actual register
-    state.statusMessage = "\""
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
   # Handle pending text object - waiting for text object kind (w, ", (, etc.)

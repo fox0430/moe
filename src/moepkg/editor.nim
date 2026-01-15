@@ -905,7 +905,17 @@ proc editFile*(e: Editor, path: string): Result[(), string] =
 
 proc newEditor*(): Editor =
   # Load TOML configuration
-  let editorConfig = loadConfig()
+  let loadResult = loadConfig()
+  var editorConfig: EditorConfig
+  if loadResult.isOk:
+    let (config, vr) = loadResult.get
+    editorConfig = config
+    if vr.hasErrors:
+      for msg in vr.toErrorMessages:
+        stderr.writeLine "Config warning: " & msg
+  else:
+    stderr.writeLine "Config error: " & loadResult.error
+    editorConfig = newEditorConfig()
 
   # Set color mode from configuration
   globalColorMode =
@@ -1282,7 +1292,15 @@ proc maybeReloadConfig*(e: Editor) =
 
   # Config file was modified, reload it
   logInfo("editor", "Config file modified, reloading: " & configPath)
-  let newConfig = loadConfigFromToml(configPath)
+  let loadResult = loadConfigFromToml(configPath)
+  if loadResult.isErr:
+    logError("editor", "Failed to reload config: " & loadResult.error)
+    return
+
+  let (newConfig, vr) = loadResult.get
+  if vr.hasErrors:
+    for msg in vr.toErrorMessages:
+      logWarn("editor", "Config warning: " & msg)
 
   # Apply the new settings
   e.applyConfigSettings(newConfig)
@@ -5272,8 +5290,9 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
   if e.state.scrollAnimation.active:
     let reservedLines =
       if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
+    let bufferLen = e.activeBuffer().len
     let (active, cursorLine) = e.executer.motionController.viewportManager.updateScrollAnimation(
-      e.state.scrollAnimation, e.config.smoothScroll, reservedLines
+      e.state.scrollAnimation, e.config.smoothScroll, reservedLines, bufferLen
     )
     e.state.cursor.line = cursorLine
 

@@ -57,6 +57,7 @@ type
     hrEdit # Edit/open file in current window
     hrSetBoolOption # Set boolean option
     hrSetIntOption # Set integer option
+    hrSetFloatOption # Set float option
     hrClearSearchHighlight # Clear search highlighting
     hrSave # Save file
     hrSaveAndQuit # Save file and quit
@@ -184,6 +185,9 @@ type
     of hrSetIntOption:
       intOption*: IntSettingOption
       intValue*: int
+    of hrSetFloatOption:
+      floatOption*: FloatSettingOption
+      floatValue*: float
     of hrClearSearchHighlight:
       discard
     of hrSave:
@@ -336,7 +340,7 @@ proc newHandlerManager*(
     commandRegistry: CommandRegistry,
     clipboardConfig: ClipboardConfig,
     smoothScrollConfig: SmoothScrollConfig =
-      SmoothScrollConfig(enable: true, baseDurationMs: 350, maxDurationMs: 650),
+      SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
     notificationConfig: NotificationConfig = NotificationConfig(),
     lsp: LspIntegration = nil,
     autocompleteEnabled: bool = true,
@@ -640,6 +644,10 @@ proc handleCommandMode*(
   of cmrSetIntOption:
     return
       HandlerResult(kind: hrSetIntOption, intOption: r.intOption, intValue: r.intValue)
+  of cmrSetFloatOption:
+    return HandlerResult(
+      kind: hrSetFloatOption, floatOption: r.floatOption, floatValue: r.floatValue
+    )
   of cmrClearSearchHighlight:
     return HandlerResult(kind: hrClearSearchHighlight)
   of cmrShellCommand:
@@ -1230,11 +1238,10 @@ proc handleKeyCombo*(
 
   # Complete any active scroll animation on key input (instant jump to target)
   if state.scrollAnimation.active:
-    let (completed, cursorLine, topLine) =
-      completeScrollAnimation(state.scrollAnimation)
+    let (completed, cursorLine) = completeScrollAnimation(state.scrollAnimation)
     if completed:
       state.cursor.line = cursorLine
-      manager.motionController.viewportManager.viewport.topLine = topLine
+      # Viewport will be updated by updateViewport after cursor is set
 
   # Delegate to appropriate mode handler
   case state.mode
@@ -1460,6 +1467,18 @@ proc getIntOption*(hrResult: HandlerResult): IntSettingOption =
 proc getIntValue*(hrResult: HandlerResult): int =
   ## Get the integer value to set
   if hrResult.kind == hrSetIntOption: hrResult.intValue else: 0
+
+proc shouldSetFloatOption*(hrResult: HandlerResult): bool =
+  ## Check if we should set a float option
+  hrResult.kind == hrSetFloatOption
+
+proc getFloatOption*(hrResult: HandlerResult): FloatSettingOption =
+  ## Get the float option to set
+  if hrResult.kind == hrSetFloatOption: hrResult.floatOption else: fsoScrollFriction
+
+proc getFloatValue*(hrResult: HandlerResult): float =
+  ## Get the float value to set
+  if hrResult.kind == hrSetFloatOption: hrResult.floatValue else: 0.0
 
 proc shouldSave*(hrResult: HandlerResult): bool =
   ## Check if we should save the file

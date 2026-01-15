@@ -179,8 +179,8 @@ proc handleConfigModeKey*(
           configState.toggleBoolValue()
         of cvkEnum:
           configState.openEnumPopup()
-        of cvkInt, cvkString:
-          # Start edit mode for Int and String
+        of cvkInt, cvkFloat, cvkString:
+          # Start edit mode for Int, Float and String
           configState.startEdit()
       return ConfigModeResult(kind: cmrHandled)
     of skUp:
@@ -192,7 +192,7 @@ proc handleConfigModeKey*(
       configState.ensureSelectedVisible(viewportHeight)
       return ConfigModeResult(kind: cmrHandled)
     of skLeft:
-      # Cycle enum backward or decrement int
+      # Cycle enum backward or decrement int/float
       let item = configState.getSelectedItem()
       if item.isSome:
         case item.get.kind
@@ -200,11 +200,13 @@ proc handleConfigModeKey*(
           configState.cycleEnumValue(false)
         of cvkInt:
           configState.decrementIntValue()
+        of cvkFloat:
+          configState.decrementFloatValue()
         else:
           discard
       return ConfigModeResult(kind: cmrHandled)
     of skRight:
-      # Cycle enum forward or increment int
+      # Cycle enum forward or increment int/float
       let item = configState.getSelectedItem()
       if item.isSome:
         case item.get.kind
@@ -212,6 +214,8 @@ proc handleConfigModeKey*(
           configState.cycleEnumValue(true)
         of cvkInt:
           configState.incrementIntValue()
+        of cvkFloat:
+          configState.incrementFloatValue()
         of cvkBool:
           configState.toggleBoolValue()
         else:
@@ -267,8 +271,8 @@ proc handleConfigModeKey*(
           configState.toggleBoolValue()
         of cvkEnum:
           configState.openEnumPopup()
-        of cvkInt, cvkString:
-          # Start edit mode for Int and String
+        of cvkInt, cvkFloat, cvkString:
+          # Start edit mode for Int, Float and String
           configState.startEdit()
       return ConfigModeResult(kind: cmrHandled)
     of "h":
@@ -280,6 +284,8 @@ proc handleConfigModeKey*(
           configState.cycleEnumValue(false)
         of cvkInt:
           configState.decrementIntValue()
+        of cvkFloat:
+          configState.decrementFloatValue()
         else:
           discard
       return ConfigModeResult(kind: cmrHandled)

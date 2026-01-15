@@ -191,11 +191,11 @@ type
   SyntaxCheckerConfig* = object
     enable*: bool
 
-  # Smooth scroll settings
+  # Smooth scroll settings (physics-based, compatible with vim comfortable-motion)
   SmoothScrollConfig* = object
     enable*: bool
-    baseDurationMs*: int # Base animation duration in milliseconds
-    maxDurationMs*: int # Maximum animation duration in milliseconds
+    friction*: float # Friction coefficient (velocity decay rate). Default: 80.0
+    airDrag*: float # Air drag coefficient (velocity resistance). Default: 2.0
 
   # Startup file open settings
   StartUpFileOpenConfig* = object
@@ -469,8 +469,7 @@ proc newEditorConfig*(): EditorConfig =
     ),
     git: GitConfig(showChangedLine: true, updateInterval: 1000),
     syntaxChecker: SyntaxCheckerConfig(enable: false),
-    smoothScroll:
-      SmoothScrollConfig(enable: true, baseDurationMs: 350, maxDurationMs: 650),
+    smoothScroll: SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
     startUpFileOpen: StartUpFileOpenConfig(autoSplit: true, splitType: stVertical),
     debug: DebugConfig(
       windowNode: DebugWindowNodeConfig(

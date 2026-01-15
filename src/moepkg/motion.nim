@@ -899,129 +899,176 @@ proc updateViewport*(
     elif clampedCursorX >= mgr.viewport.leftColumn + visibleTextWidth:
       mgr.viewport.leftColumn = clampedCursorX - visibleTextWidth + 1
 
-# Smooth scrolling functions
+# Smooth scrolling functions (physics-based, compatible with vim comfortable-motion)
+#
+# Physics model from comfortable-motion.vim:
+# - velocity += impulse (initial kick)
+# - Each frame:
+#   - velocity -= friction * dt (constant deceleration)
+#   - velocity *= (1 - air_drag * dt) (velocity-proportional resistance)
+#   - position += velocity * dt
+#
+# Default values (same as comfortable-motion):
+# - friction: 80.0
+# - air_drag: 2.0
+# - interval: ~16.67ms (60 FPS)
 
-proc easeInOutQuart(t: float): float =
-  ## Easing function with pronounced acceleration and deceleration
-  ## t: 0.0 to 1.0 progress
-  if t < 0.5:
-    result = 8.0 * t * t * t * t
-  else:
-    let t1 = -2.0 * t + 2.0
-    result = 1.0 - t1 * t1 * t1 * t1 / 2.0
+const
+  ScrollPhysicsInterval = 1000.0 / 60.0 # ~16.67ms per physics step (60 FPS)
+  VelocityThreshold = 0.5 # Stop when velocity drops below this
+  DefaultFriction = 80.0 # comfortable-motion default friction
+  # Impulse multiplier calibrated to match comfortable-motion feel.
+  # comfortable-motion uses flick(100) for ~15 lines (half page),
+  # so impulse = distance * 7.0 gives similar behavior.
+  ImpulseMultiplier = 7.0
 
 proc cancelScrollAnimation*(anim: var ScrollAnimation) =
   ## Cancel any active scroll animation
   anim.active = false
+  anim.velocity = 0.0
 
 proc completeScrollAnimation*(
     anim: var ScrollAnimation
-): tuple[completed: bool, cursorLine: int, topLine: int] =
-  ## Complete a scroll animation immediately, returning the target positions
-  ## Returns (completed=false, 0, 0) if no animation was active
+): tuple[completed: bool, cursorLine: int] =
+  ## Complete a scroll animation immediately, returning the target position
+  ## Returns (completed=false, 0) if no animation was active
   if not anim.active:
-    return (false, 0, 0)
-  result = (true, anim.targetCursorLine, anim.targetTopLine)
+    return (false, 0)
+  result = (true, anim.targetCursorLine)
   anim.active = false
+  anim.velocity = 0.0
 
 proc startScrollAnimation*(
     anim: var ScrollAnimation,
-    currentTopLine: int,
-    targetTopLine: int,
     currentCursorLine: int,
     targetCursorLine: int,
     config: SmoothScrollConfig,
 ) =
-  ## Start a smooth scroll animation from currentTopLine to targetTopLine
-  ## Uses config.minDelay as base duration and config.maxDelay as maximum additional duration
-  ## If an animation is already active, it will be cancelled and replaced
+  ## Start a physics-based smooth scroll animation
+  ## Compatible with vim comfortable-motion plugin
+  ##
+  ## The impulse is calculated to reach the target distance with the given
+  ## friction and air_drag values.
 
-  # Cancel any existing animation (new scroll takes over from current position)
-  # If already animating, the new animation starts from current interpolated position
-
-  let cursorDistance = abs(targetCursorLine - currentCursorLine)
-  if cursorDistance == 0:
+  let distance = targetCursorLine - currentCursorLine
+  if distance == 0:
     anim.active = false
     return
 
-  # Calculate duration based on cursor distance using config values
-  # Duration scales from baseDurationMs to maxDurationMs based on distance
-  let additionalDuration = config.maxDurationMs - config.baseDurationMs
-  let distanceFactor = min(1.0, cursorDistance.float / 50.0)
-  let duration = config.baseDurationMs + int(additionalDuration.float * distanceFactor)
+  # Calculate initial impulse to reach target.
+  # Unlike comfortable-motion where flick and friction are independent,
+  # we scale impulse by friction ratio to maintain consistent scroll distance
+  # when friction is adjusted (higher friction = higher impulse needed).
+  let frictionRatio = config.friction / DefaultFriction
+  let impulse = distance.float * ImpulseMultiplier * frictionRatio
 
   anim.active = true
-  anim.startTopLine = currentTopLine.float
-  anim.targetTopLine = targetTopLine
-  anim.startCursorLine = currentCursorLine
+  anim.velocity = impulse
+  anim.currentCursorLine = currentCursorLine.float
   anim.targetCursorLine = targetCursorLine
-  anim.startTime = getMonoTime()
-  anim.duration = initDuration(milliseconds = duration)
+  anim.lastUpdateTime = getMonoTime()
 
 proc updateScrollAnimation*(
     mgr: ViewportManager,
     anim: var ScrollAnimation,
     config: SmoothScrollConfig,
     reservedLines: int = 2,
+    bufferLen: int = int.high,
 ): tuple[active: bool, cursorLine: int] =
-  ## Update scroll animation each frame. Returns (active, currentCursorLine).
-  ## Cursor moves first, viewport scrolls when cursor reaches screen edge.
+  ## Update physics-based scroll animation each frame.
+  ## Returns (active, currentCursorLine).
+  ## Uses friction and air_drag for comfortable-motion compatible physics.
+  ## bufferLen is used to clamp cursor position within valid buffer bounds.
   if not anim.active:
     return (false, anim.targetCursorLine)
 
   if not config.enable:
     # Smooth scroll disabled, jump to target immediately
-    mgr.viewport.topLine = anim.targetTopLine
     anim.active = false
     return (false, anim.targetCursorLine)
 
   let now = getMonoTime()
-  let elapsed = now - anim.startTime
-  let durationMs = anim.duration.inMilliseconds
-  let progress =
-    if durationMs > 0:
-      min(1.0, elapsed.inMilliseconds.float / durationMs.float)
-    else:
-      1.0
+  let elapsedMs = (now - anim.lastUpdateTime).inMicroseconds.float / 1000.0
+  anim.lastUpdateTime = now
 
-  let easedProgress = easeInOutQuart(progress)
+  # Physics simulation with fixed timestep for consistency
+  # Always run at least one physics step per frame
+  var remainingMs = max(elapsedMs, ScrollPhysicsInterval)
+  let dt = ScrollPhysicsInterval / 1000.0 # Convert to seconds
 
-  # Update cursor line first (linear interpolation with easing)
-  let cursorDelta = anim.targetCursorLine - anim.startCursorLine
-  var newCursorLine = anim.startCursorLine + int(cursorDelta.float * easedProgress)
+  while remainingMs >= ScrollPhysicsInterval:
+    # Apply friction (constant deceleration)
+    if anim.velocity > 0:
+      anim.velocity -= config.friction * dt
+      if anim.velocity < 0:
+        anim.velocity = 0
+    elif anim.velocity < 0:
+      anim.velocity += config.friction * dt
+      if anim.velocity > 0:
+        anim.velocity = 0
+
+    # Apply air drag (velocity-proportional resistance)
+    anim.velocity *= (1.0 - config.airDrag * dt)
+
+    # Update position
+    anim.currentCursorLine += anim.velocity * dt
+
+    remainingMs -= ScrollPhysicsInterval
+
+  # Clamp cursor position to valid buffer bounds
+  let maxLine = max(0, bufferLen - 1).float
+  if anim.currentCursorLine < 0:
+    anim.currentCursorLine = 0
+    anim.velocity = 0 # Stop at boundary
+  elif anim.currentCursorLine > maxLine:
+    anim.currentCursorLine = maxLine
+    anim.velocity = 0 # Stop at boundary
+
+  # Check if animation should end
+  # Use distance to target instead of velocity direction
+  let distanceToTarget = abs(anim.targetCursorLine.float - anim.currentCursorLine)
+  let velocityStopped = abs(anim.velocity) < VelocityThreshold
+  let closeEnough = distanceToTarget < 1.0
+
+  if velocityStopped or closeEnough:
+    # Animation complete - use current position, don't jump
+    anim.active = false
+    anim.velocity = 0.0
+    # Use target if close enough, otherwise use current rounded position
+    var finalCursorLine =
+      if closeEnough: anim.targetCursorLine else: anim.currentCursorLine.int
+
+    # Clamp final position to valid bounds
+    finalCursorLine = clamp(finalCursorLine, 0, max(0, bufferLen - 1))
+
+    # Update viewport to ensure cursor is visible
+    let visibleHeight = max(1, mgr.viewport.height - reservedLines)
+    if finalCursorLine > mgr.viewport.topLine + visibleHeight - 1:
+      mgr.viewport.topLine = finalCursorLine - visibleHeight + 1
+    elif finalCursorLine < mgr.viewport.topLine:
+      mgr.viewport.topLine = finalCursorLine
+
+    return (false, finalCursorLine)
+
+  # Calculate current cursor line (rounded and clamped)
+  let newCursorLine = clamp(anim.currentCursorLine.int, 0, max(0, bufferLen - 1))
 
   # Calculate viewport bounds
   let visibleHeight = max(1, mgr.viewport.height - reservedLines)
 
-  # Viewport scrolls only when cursor goes beyond screen edges
+  # Viewport scrolls when cursor goes beyond screen edges
   var newTopLine = mgr.viewport.topLine
-  if anim.targetCursorLine > anim.startCursorLine:
-    # Scrolling down: viewport follows when cursor exceeds bottom
-    let bottomEdge = newTopLine + visibleHeight - 1
-    if newCursorLine > bottomEdge:
-      # Cursor passed bottom edge, scroll viewport to keep cursor at bottom
-      newTopLine = newCursorLine - visibleHeight + 1
-  else:
-    # Scrolling up: viewport follows when cursor goes above top
-    if newCursorLine < newTopLine:
-      # Cursor passed top edge, scroll viewport to keep cursor at top
-      newTopLine = newCursorLine
+  let bottomEdge = newTopLine + visibleHeight - 1
 
-  # Clamp topLine to valid range
-  newTopLine = max(0, newTopLine)
+  # Keep cursor visible - scroll viewport if cursor is outside visible area
+  if newCursorLine > bottomEdge:
+    # Cursor below viewport bottom - scroll down
+    newTopLine = newCursorLine - visibleHeight + 1
+  elif newCursorLine < newTopLine:
+    # Cursor above viewport top - scroll up
+    newTopLine = newCursorLine
 
-  mgr.viewport.topLine = newTopLine
-
-  if progress >= 1.0:
-    # Animation complete - use final cursor position, topLine follows naturally
-    newCursorLine = anim.targetCursorLine
-    # Ensure cursor is visible at the end
-    if newCursorLine > mgr.viewport.topLine + visibleHeight - 1:
-      mgr.viewport.topLine = newCursorLine - visibleHeight + 1
-    elif newCursorLine < mgr.viewport.topLine:
-      mgr.viewport.topLine = newCursorLine
-    anim.active = false
-    return (false, anim.targetCursorLine)
+  mgr.viewport.topLine = max(0, newTopLine)
 
   return (true, newCursorLine)
 

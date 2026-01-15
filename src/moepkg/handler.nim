@@ -524,18 +524,24 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         of isoTabStop:
           e.config.standard.tabStop = val
           e.state.setStatusMessage("tabstop = " & $val)
-        of isoScrollMinDelay:
-          e.config.smoothScroll.baseDurationMs = val
-          e.state.setStatusMessage("scrollmindelay = " & $val)
-        of isoScrollMaxDelay:
-          e.config.smoothScroll.maxDurationMs = val
-          e.state.setStatusMessage("scrollmaxdelay = " & $val)
+        e.state.needsFullRedraw = true
+
+      if r.shouldSetFloatOption():
+        # Handle float option setting
+        let opt = r.getFloatOption()
+        let val = r.getFloatValue()
+        case opt
+        of fsoScrollFriction:
+          e.config.smoothScroll.friction = val
+          e.state.setStatusMessage("scrollfriction = " & $val)
+        of fsoScrollAirDrag:
+          e.config.smoothScroll.airDrag = val
+          e.state.setStatusMessage("scrollairdrag = " & $val)
         e.state.needsFullRedraw = true
 
       if r.shouldClearSearchHighlight():
         # Handle clear search highlight (:noh)
         e.state.search.hlsearch = false
-        e.state.setStatusMessage("Search highlighting cleared")
         e.state.needsFullRedraw = true
 
       if r.shouldShellCommand():
@@ -1666,14 +1672,47 @@ proc handleEvent*(e: Editor, event: Event): bool =
     if keyComboOpt.isSome:
       let keyCombo = keyComboOpt.get
 
-      # Handle Escape key to clear search highlight (like :nohlsearch in Vim)
-      # Requires double-Escape (two consecutive Escape presses)
+      # Handle Escape key to cancel pending multi-key commands
       if keyCombo.isSpecial and keyCombo.special == skEscape:
+        # Check if any pending state needs to be cancelled
+        var cancelled = false
+
+        # Cancel macro register waiting (q, @)
+        if e.state.macroState.waitingForRegister:
+          e.state.macroState.waitingForRegister = false
+          e.state.macroState.commandType = ""
+          e.state.macroState.pendingCount = 0
+          cancelled = true
+
+        # Cancel pending operator (d, c, y, etc.)
+        if e.state.editState.pendingOperator.isSome:
+          e.state.editState.pendingOperator = none(PendingOperator)
+          cancelled = true
+
+        # Cancel pending text object (i, a)
+        if e.state.editState.pendingTextObject.isSome:
+          e.state.editState.pendingTextObject = none(PendingTextObject)
+          cancelled = true
+
+        # Cancel pending register (")
+        if e.state.pendingRegister.isSome:
+          e.state.pendingRegister = none(char)
+          cancelled = true
+
+        # Cancel window command mode (Ctrl-w)
+        if e.state.command.len > 0:
+          e.state.command = ""
+          cancelled = true
+
+        if cancelled:
+          e.state.statusMessage = ""
+          return true
+
+        # No pending state - handle double-Escape to clear search highlight
         if e.state.lastKeyWasEscape:
           # Second Escape press - clear highlight
           e.state.search.hlsearchTempDisabled = true
           e.state.needsFullRedraw = true
-          e.state.setStatusMessage("Search highlight cleared")
           e.state.lastKeyWasEscape = false
         else:
           # First Escape press - just mark it
@@ -1703,7 +1742,6 @@ proc handleEvent*(e: Editor, event: Event): bool =
       if not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers:
         if keyCombo.char == "w":
           e.state.command = "window_cmd"
-          e.state.statusMessage = "-- (window) --"
           return true
 
   # For other modes, use the unified handler manager with active buffer

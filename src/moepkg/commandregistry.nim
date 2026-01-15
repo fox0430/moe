@@ -569,7 +569,12 @@ proc executeCommand*(
       let prevTopLine = ctx.motionController.viewportManager.viewport.topLine
       let prevCursorLine = ctx.state.cursor.line
 
-      let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
+      # For smooth scroll motions, don't update viewport in executeMotion
+      # The animation will handle viewport updates
+      let skipViewportUpdate = isScrollMotion and ctx.smoothScrollConfig.enable
+      let r = ctx.motionController.executeMotion(
+        motionCmd, ctx.state.cursor, updateViewport = not skipViewportUpdate
+      )
       if r.isErr:
         return err(r.error)
       logDebug(
@@ -607,13 +612,12 @@ proc executeCommand*(
         else:
           discard
 
-        if targetTopLine != prevTopLine:
-          # Restore original positions - animation will interpolate from here
-          ctx.motionController.viewportManager.viewport.topLine = prevTopLine
+        if targetCursorLine != prevCursorLine:
+          # Restore original cursor position - animation will interpolate from here
           ctx.state.cursor.line = prevCursorLine
           startScrollAnimation(
-            ctx.state.scrollAnimation, prevTopLine, targetTopLine, prevCursorLine,
-            targetCursorLine, ctx.smoothScrollConfig,
+            ctx.state.scrollAnimation, prevCursorLine, targetCursorLine,
+            ctx.smoothScrollConfig,
           )
         else:
           # No scroll needed, just update cursor
