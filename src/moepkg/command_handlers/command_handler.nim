@@ -160,6 +160,7 @@ type
       floatValue*: float
     of cmrSave:
       saveFilename*: Option[string]
+      forceSave*: bool
     of cmrSaveAndQuit:
       saveAndQuitFilename*: Option[string]
       forceSaveAndQuit*: bool
@@ -261,7 +262,7 @@ proc executeSave*(
   ## Execute save command (:w, :w!)
   ## Returns cmrSave to signal that the file should be saved
   ## The actual save operation is performed by the editor
-  return CommandModeResult(kind: cmrSave, saveFilename: filename)
+  return CommandModeResult(kind: cmrSave, saveFilename: filename, forceSave: force)
 
 proc executeSaveAndQuit*(
     handler: CommandModeHandler,
@@ -830,12 +831,14 @@ proc handleCommandModeInput*(
   of claQuitAll:
     return handler.executeQuitAll(buffer, cmdResult.forceQuitAll)
   of claSave:
-    return handler.executeSave(buffer, cmdResult.filename, false)
+    return handler.executeSave(buffer, cmdResult.filename, cmdResult.forceSave)
   of claSaveAll:
     # TODO: Handle save all (multiple buffers)
     return handler.executeSave(buffer, none(string), cmdResult.forceSaveAll)
   of claSaveAndQuit:
-    return handler.executeSaveAndQuit(buffer, cmdResult.saveFilename, false)
+    return handler.executeSaveAndQuit(
+      buffer, cmdResult.saveFilename, cmdResult.forceSaveAndQuit
+    )
   of claSaveAllAndQuit:
     # TODO: Handle save all and quit
     return

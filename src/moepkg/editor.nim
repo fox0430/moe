@@ -26,7 +26,7 @@ import
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
   gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
   lspintegration, completion, signaturehelp, backup, command_completion, motion,
-  logviewer, recentfilemode, color, gapbuffer, persist, debugviewer
+  recentfilemode, color, gapbuffer, persist, debugviewer, messagelog
 import lsp/protocol/types as lspTypes
 import command_handlers/[handler_manager, visual_handler, insert_handler]
 
@@ -1449,9 +1449,12 @@ proc savePersistData*(e: Editor) =
     if r.isErr:
       logError("editor", "Failed to save cursor positions: " & r.error)
 
-proc saveFile*(e: Editor, path: Option[string] = none(string)): Result[(), string] =
+proc saveFile*(
+    e: Editor, path: Option[string] = none(string), force: bool = false
+): Result[(), string] =
   ## Save the active buffer to file
   ## If path is provided, save to that path, otherwise use buffer's current file path
+  ## If force is false, check if file was modified externally and refuse to save
   let activeBuffer = e.activeBuffer()
 
   # Determine the file path to save to
@@ -1463,6 +1466,11 @@ proc saveFile*(e: Editor, path: Option[string] = none(string)): Result[(), strin
     else:
       logError("editor", "Save failed: No file path specified")
       return err("No file path specified")
+
+  # Check for external modification (unless force is true)
+  if not force and activeBuffer.isExternallyModified():
+    logError("editor", "Save failed: File was modified externally: " & savePath)
+    return err("File was modified externally. Use :w! to force save, or :e! to reload.")
 
   # Save the file
   logDebug("editor", "Saving file: " & savePath)
@@ -1528,6 +1536,14 @@ proc autoSave*(e: Editor) =
       # Check if buffer is modified and has a file path
       if buffer.isModified and buffer.filePath.isSome:
         let savePath = buffer.filePath.get
+
+        # Skip externally modified files to avoid overwriting external changes
+        if buffer.isExternallyModified():
+          logDebug(
+            "editor", "Skipping auto save for externally modified file: " & savePath
+          )
+          continue
+
         let saveResult = buffer.saveFile(savePath)
 
         if saveResult.isOk:
@@ -1550,6 +1566,14 @@ proc autoSave*(e: Editor) =
     # Single window mode: check the main buffer
     if e.textBuffer.isModified and e.textBuffer.filePath.isSome:
       let savePath = e.textBuffer.filePath.get
+
+      # Skip externally modified files to avoid overwriting external changes
+      if e.textBuffer.isExternallyModified():
+        logDebug(
+          "editor", "Skipping auto save for externally modified file: " & savePath
+        )
+        return
+
       let saveResult = e.textBuffer.saveFile(savePath)
 
       if saveResult.isOk:
@@ -1904,21 +1928,28 @@ proc getSelectionStyle(
     e.state.matchingParenPos.get.column == pos.column
 
   # Check if this position is part of the current word (highlight all occurrences)
-  let isInCurrentWord =
-    e.state.currentWord.len > 0 and not isCursorPos and
+  # Skip the word under cursor itself - only highlight other occurrences
+  # Also skip in Search mode to avoid interfering with search highlighting
+  let isInSameWordAsCursor =
+    pos.line == cursorLine and e.state.currentWord.len > 0 and
     buffer.isPositionInWord(pos, e.state.currentWord)
+
+  let isInCurrentWord =
+    e.state.mode != EditorMode.Search and e.state.currentWord.len > 0 and
+    not isInSameWordAsCursor and buffer.isPositionInWord(pos, e.state.currentWord)
 
   if hasSelection and e.state.visualSelection.isPositionInSelection(pos):
     visualStyle()
   elif isMatchingParen:
     # Highlight matching paren with special style
     parenPairStyle()
-  elif isInCurrentWord:
-    # Highlight other occurrences of the current word
-    currentWordStyle()
   elif isCursorPos:
     # Cursor position: always use gray foreground color
     cursorCharStyle()
+  elif isInCurrentWord:
+    # Highlight other occurrences of the current word
+    # (disabled in Search mode to avoid interfering with search highlighting)
+    currentWordStyle()
   elif e.state.search.hlsearch and not e.state.search.hlsearchTempDisabled:
     # Determine which search pattern to use:
     # - In Search mode with text: use current searchText (incremental highlight)
@@ -1947,7 +1978,9 @@ proc getSelectionStyle(
         searchPattern, e.state.search.ignorecase, e.state.search.smartcase
       )
 
-      if buffer.isPositionInSearchMatch(pos, searchPattern, shouldIgnoreCase):
+      if buffer.isPositionInSearchMatch(
+        pos, searchPattern, shouldIgnoreCase, e.state.search.wholeWord
+      ):
         searchHighlightStyle()
       elif e.state.display.showSyntax and not buffer.highlight.isNil:
         # Apply syntax highlighting from buffer
@@ -2893,6 +2926,7 @@ proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
       isBottomWindow = (windowBottomY == maxBottomY)
       isActiveWindow = (i == e.windowManager.activeWindowIndex)
 
+    # Render window (LogViewer uses normal buffer rendering now)
     e.renderWindow(buffer, window, lineNumOffset, isBottomWindow, isActiveWindow)
 
     # Render per-window status line if multi-status line mode is enabled
@@ -3105,10 +3139,11 @@ proc renderTempMessages(e: Editor, buffer: var Buffer) =
       bg: ColorValue(kind: Indexed, indexed: Color.White),
       modifiers: {},
     )
+    theNormalStyle = normalStyle()
 
   # Clear the area where messages will be displayed
   for y in startY ..< buffer.area.height:
-    buffer.setString(buffer.area.x, y, " ".repeat(buffer.area.width), defaultStyle)
+    buffer.setString(buffer.area.x, y, " ".repeat(buffer.area.width), theNormalStyle)
 
   # Render border line at top (white background)
   buffer.setString(buffer.area.x, startY, borderLine, whiteBorderStyle)
@@ -3117,7 +3152,7 @@ proc renderTempMessages(e: Editor, buffer: var Buffer) =
   for i, msg in e.state.tempMessages:
     let y = startY + 1 + i # +1 to skip border
     if y < buffer.area.height - 1: # Leave last line for prompt
-      buffer.setString(buffer.area.x, y, msg, defaultStyle)
+      buffer.setString(buffer.area.x, y, msg, theNormalStyle)
 
   # Render the prompt on the last line
   let promptY = buffer.area.height - 1
@@ -3214,9 +3249,7 @@ proc renderFiler(e: Editor, buffer: var Buffer) =
     headerY,
     headerText,
     Style(
-      fg: rgb(0xff, 0xd7, 0x00),
-      bg: ColorValue(kind: Default),
-      modifiers: {StyleModifier.Bold},
+      fg: rgb(0xff, 0xd7, 0x00), bg: normalStyle().bg, modifiers: {StyleModifier.Bold}
     ),
   )
 
@@ -3258,32 +3291,27 @@ proc renderFiler(e: Editor, buffer: var Buffer) =
     if displayLine.len > width:
       displayLine = displayLine[0 ..< width - 3] & "..."
 
-    # Apply style
+    # Pad to full width for selected line (so background color fills entire line)
+    if isSelected and displayLine.len < width:
+      displayLine = displayLine & " ".repeat(width - displayLine.len)
+
+    # Apply style (use theme background color to match clearBuffer)
+    let themeBg = normalStyle().bg
     let style =
       if isSelected:
         Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
       elif entry.kind == fekDirectory:
-        Style(
-          fg: rgb(0x5f, 0x87, 0xff),
-          bg: ColorValue(kind: Default),
-          modifiers: {StyleModifier.Bold},
-        )
+        Style(fg: rgb(0x5f, 0x87, 0xff), bg: themeBg, modifiers: {StyleModifier.Bold})
       elif entry.kind == fekSymlink:
         # Symlinks: cyan for files, magenta for directories
         if entry.targetKind == fekDirectory:
-          Style(
-            fg: rgb(0xaf, 0x5f, 0xff),
-            bg: ColorValue(kind: Default),
-            modifiers: {StyleModifier.Bold},
-          )
+          Style(fg: rgb(0xaf, 0x5f, 0xff), bg: themeBg, modifiers: {StyleModifier.Bold})
         else:
-          Style(fg: rgb(0x00, 0xff, 0xff), bg: ColorValue(kind: Default), modifiers: {})
+          Style(fg: rgb(0x00, 0xff, 0xff), bg: themeBg, modifiers: {})
       elif entry.isHidden:
-        Style(fg: rgb(0x80, 0x80, 0x80), bg: ColorValue(kind: Default), modifiers: {})
+        Style(fg: rgb(0x80, 0x80, 0x80), bg: themeBg, modifiers: {})
       else:
-        Style(
-          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
-        )
+        normalStyle()
 
     buffer.setString(buffer.area.x, screenY, displayLine, style)
     inc screenY
@@ -3315,9 +3343,7 @@ proc renderBufferManager(e: Editor, buffer: var Buffer) =
     headerY,
     headerText,
     Style(
-      fg: rgb(0xff, 0xd7, 0x00),
-      bg: ColorValue(kind: Default),
-      modifiers: {StyleModifier.Bold},
+      fg: rgb(0xff, 0xd7, 0x00), bg: normalStyle().bg, modifiers: {StyleModifier.Bold}
     ),
   )
 
@@ -3351,22 +3377,21 @@ proc renderBufferManager(e: Editor, buffer: var Buffer) =
     if displayLine.len > width:
       displayLine = displayLine[0 ..< width - 3] & "..."
 
-    # Apply style
+    # Pad to full width for selected line (so background color fills entire line)
+    if isSelected and displayLine.len < width:
+      displayLine = displayLine & " ".repeat(width - displayLine.len)
+
+    # Apply style (use theme background color to match clearBuffer)
+    let themeBg = normalStyle().bg
     let style =
       if isSelected:
         Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
       elif entry.active:
-        Style(
-          fg: rgb(0x5f, 0xff, 0x5f),
-          bg: ColorValue(kind: Default),
-          modifiers: {StyleModifier.Bold},
-        )
+        Style(fg: rgb(0x5f, 0xff, 0x5f), bg: themeBg, modifiers: {StyleModifier.Bold})
       elif entry.modified:
-        Style(fg: rgb(0xff, 0x87, 0x00), bg: ColorValue(kind: Default), modifiers: {})
+        Style(fg: rgb(0xff, 0x87, 0x00), bg: themeBg, modifiers: {})
       else:
-        Style(
-          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
-        )
+        normalStyle()
 
     buffer.setString(buffer.area.x, screenY, displayLine, style)
     inc screenY
@@ -3400,9 +3425,7 @@ proc renderConfigMode(e: Editor, buffer: var Buffer) =
     headerY,
     headerText,
     Style(
-      fg: rgb(0xff, 0xd7, 0x00),
-      bg: ColorValue(kind: Default),
-      modifiers: {StyleModifier.Bold},
+      fg: rgb(0xff, 0xd7, 0x00), bg: normalStyle().bg, modifiers: {StyleModifier.Bold}
     ),
   )
 
@@ -3421,6 +3444,7 @@ proc renderConfigMode(e: Editor, buffer: var Buffer) =
   var screenY = listStartY
   let isEditMode = configState.isEditing()
   let editInfo = configState.getEditInfo()
+  let themeBg = normalStyle().bg
 
   for i in configState.topLine ..< configState.items.len:
     if screenY >= listEndY:
@@ -3447,7 +3471,7 @@ proc renderConfigMode(e: Editor, buffer: var Buffer) =
     elif displayLine.len < width:
       displayLine = displayLine & ' '.repeat(width - displayLine.len)
 
-    # Apply style
+    # Apply style (use theme background color to match clearBuffer)
     let style =
       if isBeingEdited:
         # Edit mode style - yellow background
@@ -3455,34 +3479,26 @@ proc renderConfigMode(e: Editor, buffer: var Buffer) =
       elif isSelected:
         Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
       elif item.kind == cvkSection:
-        Style(
-          fg: rgb(0x5f, 0xff, 0x5f),
-          bg: ColorValue(kind: Default),
-          modifiers: {StyleModifier.Bold},
-        )
+        Style(fg: rgb(0x5f, 0xff, 0x5f), bg: themeBg, modifiers: {StyleModifier.Bold})
       elif item.kind == cvkBool:
         if item.boolValue:
-          Style(fg: rgb(0x5f, 0xaf, 0x5f), bg: ColorValue(kind: Default), modifiers: {})
+          Style(fg: rgb(0x5f, 0xaf, 0x5f), bg: themeBg, modifiers: {})
         else:
-          Style(fg: rgb(0xaf, 0x5f, 0x5f), bg: ColorValue(kind: Default), modifiers: {})
+          Style(fg: rgb(0xaf, 0x5f, 0x5f), bg: themeBg, modifiers: {})
       elif item.kind == cvkEnum:
-        Style(fg: rgb(0x87, 0xaf, 0xd7), bg: ColorValue(kind: Default), modifiers: {})
+        Style(fg: rgb(0x87, 0xaf, 0xd7), bg: themeBg, modifiers: {})
       elif item.kind == cvkInt:
-        Style(fg: rgb(0xd7, 0xaf, 0x5f), bg: ColorValue(kind: Default), modifiers: {})
+        Style(fg: rgb(0xd7, 0xaf, 0x5f), bg: themeBg, modifiers: {})
       else:
-        Style(
-          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
-        )
+        normalStyle()
 
     buffer.setString(buffer.area.x, screenY, displayLine, style)
     inc screenY
 
   # Clear remaining lines (when sections are collapsed)
   let emptyLine = ' '.repeat(width)
-  let defaultStyle =
-    Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
   while screenY < listEndY:
-    buffer.setString(buffer.area.x, screenY, emptyLine, defaultStyle)
+    buffer.setString(buffer.area.x, screenY, emptyLine, normalStyle())
     inc screenY
 
   # Render enum popup if open
@@ -3586,9 +3602,7 @@ proc renderBackupManager(e: Editor, buffer: var Buffer) =
     else:
       headerText,
     Style(
-      fg: rgb(0xff, 0xd7, 0x00),
-      bg: ColorValue(kind: Default),
-      modifiers: {StyleModifier.Bold},
+      fg: rgb(0xff, 0xd7, 0x00), bg: normalStyle().bg, modifiers: {StyleModifier.Bold}
     ),
   )
 
@@ -3598,7 +3612,7 @@ proc renderBackupManager(e: Editor, buffer: var Buffer) =
       buffer.area.x,
       listStartY,
       "No backup files found",
-      Style(fg: rgb(0x87, 0x87, 0x87), bg: ColorValue(kind: Default), modifiers: {}),
+      Style(fg: rgb(0x87, 0x87, 0x87), bg: normalStyle().bg, modifiers: {}),
     )
     e.state.screenCursor.x = 0
     e.state.screenCursor.y = listStartY
@@ -3625,14 +3639,12 @@ proc renderBackupManager(e: Editor, buffer: var Buffer) =
     let prefix = if isSelected: "> " else: "  "
     let displayLine = prefix & formatEntry(entry)
 
-    # Apply style
+    # Apply style (use theme background color to match clearBuffer)
     let style =
       if isSelected:
         Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
       else:
-        Style(
-          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
-        )
+        normalStyle()
 
     buffer.setString(buffer.area.x, screenY, displayLine, style)
     inc screenY
@@ -3660,6 +3672,7 @@ proc renderDiffViewer(e: Editor, buffer: var Buffer) =
   # Render header
   let headerText =
     "-- Diff: " & extractFilename(dvState.sourceFilePath) & " vs backup --"
+  let themeBg = normalStyle().bg
   buffer.setString(
     buffer.area.x,
     headerY,
@@ -3667,11 +3680,7 @@ proc renderDiffViewer(e: Editor, buffer: var Buffer) =
       headerText[0 ..< width]
     else:
       headerText,
-    Style(
-      fg: rgb(0xff, 0xd7, 0x00),
-      bg: ColorValue(kind: Default),
-      modifiers: {StyleModifier.Bold},
-    ),
+    Style(fg: rgb(0xff, 0xd7, 0x00), bg: themeBg, modifiers: {StyleModifier.Bold}),
   )
 
   # Handle empty diff
@@ -3680,7 +3689,7 @@ proc renderDiffViewer(e: Editor, buffer: var Buffer) =
       buffer.area.x,
       listStartY,
       "No diff content",
-      Style(fg: rgb(0x87, 0x87, 0x87), bg: ColorValue(kind: Default), modifiers: {}),
+      Style(fg: rgb(0x87, 0x87, 0x87), bg: themeBg, modifiers: {}),
     )
     e.state.screenCursor.x = 0
     e.state.screenCursor.y = listStartY
@@ -3710,7 +3719,7 @@ proc renderDiffViewer(e: Editor, buffer: var Buffer) =
       else:
         line.text
 
-    # Apply style based on diff line kind and selection
+    # Apply style based on diff line kind and selection (use theme background)
     let style =
       if isSelected:
         # Highlighted/selected line
@@ -3719,25 +3728,19 @@ proc renderDiffViewer(e: Editor, buffer: var Buffer) =
         case line.kind
         of dlkAdded:
           # Added lines in green
-          Style(fg: rgb(0x00, 0xd7, 0x00), bg: ColorValue(kind: Default), modifiers: {})
+          Style(fg: rgb(0x00, 0xd7, 0x00), bg: themeBg, modifiers: {})
         of dlkDeleted:
           # Deleted lines in red
-          Style(fg: rgb(0xff, 0x5f, 0x5f), bg: ColorValue(kind: Default), modifiers: {})
+          Style(fg: rgb(0xff, 0x5f, 0x5f), bg: themeBg, modifiers: {})
         of dlkHeader:
           # Header lines (@@, ---, +++) in cyan/bold
-          Style(
-            fg: rgb(0x00, 0xd7, 0xff),
-            bg: ColorValue(kind: Default),
-            modifiers: {StyleModifier.Bold},
-          )
+          Style(fg: rgb(0x00, 0xd7, 0xff), bg: themeBg, modifiers: {StyleModifier.Bold})
         of dlkMeta:
           # Meta lines (diff --git, index) in yellow
-          Style(fg: rgb(0xff, 0xd7, 0x00), bg: ColorValue(kind: Default), modifiers: {})
+          Style(fg: rgb(0xff, 0xd7, 0x00), bg: themeBg, modifiers: {})
         of dlkNormal:
           # Normal context lines
-          Style(
-            fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
-          )
+          normalStyle()
 
     buffer.setString(buffer.area.x, screenY, displayText, style)
     inc screenY
@@ -3762,15 +3765,12 @@ proc renderRecentFileMode(e: Editor, buffer: var Buffer) =
 
   # Render header
   let headerText = "-- Recent Files --"
+  let themeBg = normalStyle().bg
   buffer.setString(
     buffer.area.x,
     headerY,
     headerText,
-    Style(
-      fg: rgb(0xff, 0xd7, 0x00),
-      bg: ColorValue(kind: Default),
-      modifiers: {StyleModifier.Bold},
-    ),
+    Style(fg: rgb(0xff, 0xd7, 0x00), bg: themeBg, modifiers: {StyleModifier.Bold}),
   )
 
   # Handle empty list
@@ -3779,7 +3779,7 @@ proc renderRecentFileMode(e: Editor, buffer: var Buffer) =
       buffer.area.x,
       listStartY,
       "No recent files found",
-      Style(fg: rgb(0x87, 0x87, 0x87), bg: ColorValue(kind: Default), modifiers: {}),
+      Style(fg: rgb(0x87, 0x87, 0x87), bg: themeBg, modifiers: {}),
     )
     e.state.screenCursor.x = 0
     e.state.screenCursor.y = listStartY
@@ -3807,18 +3807,16 @@ proc renderRecentFileMode(e: Editor, buffer: var Buffer) =
     if displayLine.len > width:
       displayLine = displayLine[0 ..< width - 3] & "..."
 
-    # Apply style - check if file exists
+    # Apply style - check if file exists (use theme background)
     let exists = fileExists(entry.path)
     let style =
       if isSelected:
         Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
       elif not exists:
         # Non-existent files in dim gray
-        Style(fg: rgb(0x60, 0x60, 0x60), bg: ColorValue(kind: Default), modifiers: {})
+        Style(fg: rgb(0x60, 0x60, 0x60), bg: themeBg, modifiers: {})
       else:
-        Style(
-          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
-        )
+        normalStyle()
 
     buffer.setString(buffer.area.x, screenY, displayLine, style)
     inc screenY
@@ -3907,71 +3905,6 @@ proc renderDebugMode(e: Editor, buffer: var Buffer) =
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = listStartY + (debugState.selectedLine - debugState.topLine)
 
-proc renderLogViewer(e: Editor, buffer: var Buffer) =
-  ## Render the log viewer view
-  if e.state.logViewerState.isNone:
-    return
-
-  # Calculate reserved lines at bottom: status line (if shown) + command line
-  let reservedBottom =
-    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
-
-  let
-    logState = e.state.logViewerState.get
-    headerY = buffer.area.y
-    listStartY = buffer.area.y + 1
-    listEndY = buffer.area.y + buffer.area.height - reservedBottom
-    width = buffer.area.width
-
-  # Render header
-  let headerText = "-- LOG --"
-  buffer.setString(
-    buffer.area.x,
-    headerY,
-    headerText,
-    Style(
-      fg: rgb(0xff, 0xd7, 0x00),
-      bg: ColorValue(kind: Default),
-      modifiers: {StyleModifier.Bold},
-    ),
-  )
-
-  # Ensure selected line is visible
-  logState.ensureSelectedVisible(buffer.area.height - 1 - reservedBottom)
-
-  # Render log lines
-  var screenY = listStartY
-  for i in logState.topLine ..< logState.lineCount:
-    if screenY >= listEndY:
-      break
-
-    let
-      line = logState.getLine(i)
-      isSelected = i == logState.selectedIndex
-
-    # Truncate if too long
-    var displayLine =
-      if line.len > width:
-        line[0 ..< width - 3] & "..."
-      else:
-        line
-
-    # Apply style
-    let style =
-      if isSelected:
-        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
-      else:
-        Style(
-          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
-        )
-
-    buffer.setString(buffer.area.x, screenY, displayLine, style)
-    inc screenY
-
-  # Set cursor position (hidden in log viewer mode, but set to selected line)
-  e.state.screenCursor.x = 0
-  e.state.screenCursor.y = listStartY + (logState.selectedIndex - logState.topLine)
-
 proc renderReferencesViewer(e: Editor, buffer: var Buffer) =
   ## Render the references viewer view
   if e.state.referencesViewerState.isNone:
@@ -3996,9 +3929,7 @@ proc renderReferencesViewer(e: Editor, buffer: var Buffer) =
     headerY,
     headerText,
     Style(
-      fg: rgb(0x00, 0xaf, 0xff),
-      bg: ColorValue(kind: Default),
-      modifiers: {StyleModifier.Bold},
+      fg: rgb(0x00, 0xaf, 0xff), bg: normalStyle().bg, modifiers: {StyleModifier.Bold}
     ),
   )
 
@@ -4022,14 +3953,12 @@ proc renderReferencesViewer(e: Editor, buffer: var Buffer) =
       else:
         line
 
-    # Apply style
+    # Apply style (use theme background)
     let style =
       if isSelected:
         Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
       else:
-        Style(
-          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
-        )
+        normalStyle()
 
     buffer.setString(buffer.area.x, screenY, displayLine, style)
     inc screenY
@@ -4061,9 +3990,7 @@ proc renderDocumentSymbolViewer(e: Editor, buffer: var Buffer) =
     headerY,
     headerText,
     Style(
-      fg: rgb(0xaf, 0xd7, 0x00),
-      bg: ColorValue(kind: Default),
-      modifiers: {StyleModifier.Bold},
+      fg: rgb(0xaf, 0xd7, 0x00), bg: normalStyle().bg, modifiers: {StyleModifier.Bold}
     ),
   )
 
@@ -4087,14 +4014,12 @@ proc renderDocumentSymbolViewer(e: Editor, buffer: var Buffer) =
       else:
         line
 
-    # Apply style
+    # Apply style (use theme background)
     let style =
       if isSelected:
         Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
       else:
-        Style(
-          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
-        )
+        normalStyle()
 
     buffer.setString(buffer.area.x, screenY, displayLine, style)
     inc screenY
@@ -4121,15 +4046,12 @@ proc renderHelpViewer(e: Editor, buffer: var Buffer) =
 
   # Render header
   let headerText = "-- HELP --"
+  let themeBg = normalStyle().bg
   buffer.setString(
     buffer.area.x,
     headerY,
     headerText,
-    Style(
-      fg: rgb(0xff, 0xd7, 0x00),
-      bg: ColorValue(kind: Default),
-      modifiers: {StyleModifier.Bold},
-    ),
+    Style(fg: rgb(0xff, 0xd7, 0x00), bg: themeBg, modifiers: {StyleModifier.Bold}),
   )
 
   # Ensure selected line is visible
@@ -4153,20 +4075,14 @@ proc renderHelpViewer(e: Editor, buffer: var Buffer) =
       else:
         line
 
-    # Apply style
+    # Apply style (use theme background)
     let style =
       if isSelected:
         Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
       elif isHeader:
-        Style(
-          fg: rgb(0x5f, 0xaf, 0xff),
-          bg: ColorValue(kind: Default),
-          modifiers: {StyleModifier.Bold},
-        )
+        Style(fg: rgb(0x5f, 0xaf, 0xff), bg: themeBg, modifiers: {StyleModifier.Bold})
       else:
-        Style(
-          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
-        )
+        normalStyle()
 
     buffer.setString(buffer.area.x, screenY, displayLine, style)
     inc screenY
@@ -5252,6 +5168,8 @@ proc tick*(e: Editor) =
   # Display any pending LSP status messages
   let lspMessages = e.lsp.getAndClearMessages()
   if lspMessages.len > 0:
+    # Store LSP messages for the log viewer
+    addLspMessageLog(lspMessages)
     if e.config.notification.screenNotifications and
         e.config.notification.lspScreenNotify:
       e.state.setStatusMessage(lspMessages[^1])
@@ -5335,8 +5253,7 @@ proc renderSpecialMode(e: Editor, buffer: var Buffer): bool =
 
   if tryRender(EditorMode.Filer, e.state.filerState.isSome, renderFiler):
     return true
-  if tryRender(EditorMode.LogViewer, e.state.logViewerState.isSome, renderLogViewer):
-    return true
+  # LogViewer uses split window with actual TextBuffer, rendered via renderSplitView
   if tryRender(
     EditorMode.References, e.state.referencesViewerState.isSome, renderReferencesViewer
   ):

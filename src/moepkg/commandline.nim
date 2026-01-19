@@ -95,10 +95,12 @@ type
       forceQuitAll*: bool # true for :qa!
     of claSave:
       filename*: Option[string]
+      forceSave*: bool # true for :w!
     of claSaveAll:
       forceSaveAll*: bool # true for :wa!
     of claSaveAndQuit:
       saveFilename*: Option[string]
+      forceSaveAndQuit*: bool # true for :wq!
     of claSaveAllAndQuit:
       forceSaveAllAndQuit*: bool # true for :wqa!
     of claEdit:
@@ -186,6 +188,32 @@ type
       discard
     of claUnknown:
       errorMessage*: string
+
+# Actions that require arguments (cannot be executed immediately)
+# All other actions are considered no-argument actions
+const ArgumentRequiredActions* = {
+  claEdit, # requires filename
+  claGoto, # requires line number
+  claSet, # requires option name
+  claSubstitute, # requires pattern
+  claBuffer, # requires buffer number/name
+  claShellCommand, # requires command
+  claMan, # requires page name
+  claTheme, # requires theme name
+  claLspExecuteCommand, # requires command
+  claHelp, # optional but user may want to specify topic
+  claVSplit, # optional but user may want to specify file
+  claHSplit, # optional but user may want to specify file
+  claFiler, # optional but user may want to specify path
+  claUnknown, # invalid command
+}
+
+proc isNoArgumentAction*(parser: CommandLineParser, command: string): bool =
+  ## Check if a command requires no arguments based on its action
+  ## Returns true for actions not in ArgumentRequiredActions
+  if command in parser.aliases:
+    return parser.aliases[command] notin ArgumentRequiredActions
+  return false
 
 # Substitute command utilities
 
@@ -514,6 +542,7 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
           some(cmd.args[0])
         else:
           none(string),
+      forceSave: "force" in cmd.flags,
     )
   of claSaveAll:
     return CommandLineResult(kind: claSaveAll, forceSaveAll: "force" in cmd.flags)
@@ -525,6 +554,7 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
           some(cmd.args[0])
         else:
           none(string),
+      forceSaveAndQuit: "force" in cmd.flags,
     )
   of claSaveAllAndQuit:
     return CommandLineResult(

@@ -1382,10 +1382,13 @@ proc findWordBoundaries(
 
   if inner:
     # Inner word: just the word itself
+    # endCol points to one past the last character, so use endCol - 1 for inclusive range
+    if endCol <= startCol:
+      return err("Empty word")
     return ok(
       TextObjectRange(
         start: BufferPosition(line: cursor.line, column: startCol),
-        endPos: BufferPosition(line: cursor.line, column: endCol),
+        endPos: BufferPosition(line: cursor.line, column: endCol - 1),
         isLinewise: false,
       )
     )
@@ -1403,7 +1406,7 @@ proc findWordBoundaries(
       return ok(
         TextObjectRange(
           start: BufferPosition(line: cursor.line, column: extendedStart),
-          endPos: BufferPosition(line: cursor.line, column: endCol),
+          endPos: BufferPosition(line: cursor.line, column: endCol - 1),
           isLinewise: false,
         )
       )
@@ -1411,7 +1414,7 @@ proc findWordBoundaries(
     return ok(
       TextObjectRange(
         start: BufferPosition(line: cursor.line, column: startCol),
-        endPos: BufferPosition(line: cursor.line, column: extendedEnd),
+        endPos: BufferPosition(line: cursor.line, column: extendedEnd - 1),
         isLinewise: false,
       )
     )
@@ -1455,10 +1458,13 @@ proc findWideWordBoundaries(
 
   if inner:
     # Inner WORD: just the WORD itself
+    # endCol points to one past the last character, so use endCol - 1 for inclusive range
+    if endCol <= startCol:
+      return err("Empty WORD")
     return ok(
       TextObjectRange(
         start: BufferPosition(line: cursor.line, column: startCol),
-        endPos: BufferPosition(line: cursor.line, column: endCol),
+        endPos: BufferPosition(line: cursor.line, column: endCol - 1),
         isLinewise: false,
       )
     )
@@ -1476,7 +1482,7 @@ proc findWideWordBoundaries(
       return ok(
         TextObjectRange(
           start: BufferPosition(line: cursor.line, column: extendedStart),
-          endPos: BufferPosition(line: cursor.line, column: endCol),
+          endPos: BufferPosition(line: cursor.line, column: endCol - 1),
           isLinewise: false,
         )
       )
@@ -1484,10 +1490,20 @@ proc findWideWordBoundaries(
     return ok(
       TextObjectRange(
         start: BufferPosition(line: cursor.line, column: startCol),
-        endPos: BufferPosition(line: cursor.line, column: extendedEnd),
+        endPos: BufferPosition(line: cursor.line, column: extendedEnd - 1),
         isLinewise: false,
       )
     )
+
+proc isEscaped(runes: seq[Rune], idx: int): bool =
+  ## Check if the character at idx is escaped by counting preceding backslashes
+  var backslashCount = 0
+  var i = idx - 1
+  while i >= 0 and $runes[i] == "\\":
+    backslashCount.inc
+    i.dec
+  # Odd number of backslashes means the character is escaped
+  return backslashCount mod 2 == 1
 
 proc findQuotedBoundaries(
     buffer: TextBuffer, cursor: BufferPosition, quoteChar: char, inner: bool
@@ -1495,6 +1511,11 @@ proc findQuotedBoundaries(
   ## Find quoted string boundaries for i" or a"
   ## inner=true: content inside quotes
   ## inner=false: content + quotes
+  ##
+  ## Vim behavior:
+  ## - If cursor is inside quotes, select that quoted region
+  ## - If cursor is on a quote, select the region containing that quote
+  ## - If cursor is outside quotes, search forward for next quote pair on the line
 
   if cursor.line < 0 or cursor.line >= buffer.len:
     return err("Cursor position out of bounds")
@@ -1507,55 +1528,60 @@ proc findQuotedBoundaries(
 
   let cursorCol = min(cursor.column, runes.len - 1)
 
-  # Find opening quote (search backward from cursor)
+  # Collect all unescaped quote positions on the line
+  var quotePositions: seq[int] = @[]
+  for i in 0 ..< runes.len:
+    if $runes[i] == $quoteChar and not isEscaped(runes, i):
+      quotePositions.add(i)
+
+  if quotePositions.len < 2:
+    return err("No quote pair found")
+
+  # Find which quote pair contains the cursor, or the next pair after cursor
   var startCol = -1
-  var i = cursorCol
-  while i >= 0:
-    if $runes[i] == $quoteChar:
-      # Check if it's escaped
-      var escaped = false
-      if i > 0 and $runes[i - 1] == "\\":
-        escaped = true
-      if not escaped:
-        startCol = i
-        break
-    i.dec
-
-  if startCol < 0:
-    return err("No opening quote found")
-
-  # Find closing quote (search forward from opening quote)
   var endCol = -1
-  i = startCol + 1
-  while i < runes.len:
-    if $runes[i] == $quoteChar:
-      # Check if it's escaped
-      var escaped = false
-      if i > 0 and $runes[i - 1] == "\\":
-        escaped = true
-      if not escaped:
-        endCol = i
-        break
-    i.inc
 
-  if endCol < 0:
-    return err("No closing quote found")
+  # Check each consecutive pair (0-1, 2-3, 4-5, ...)
+  var pairIdx = 0
+  while pairIdx + 1 < quotePositions.len:
+    let pairStart = quotePositions[pairIdx]
+    let pairEnd = quotePositions[pairIdx + 1]
+
+    # Cursor is inside or on this pair
+    if cursorCol >= pairStart and cursorCol <= pairEnd:
+      startCol = pairStart
+      endCol = pairEnd
+      break
+
+    # Cursor is before this pair - use this pair (Vim forward search behavior)
+    if cursorCol < pairStart:
+      startCol = pairStart
+      endCol = pairEnd
+      break
+
+    pairIdx += 2
+
+  if startCol < 0 or endCol < 0:
+    return err("No quote pair found for cursor position")
 
   if inner:
     # Inner: content only (exclude quotes)
+    # For empty quotes like "", there's nothing to select
+    if endCol <= startCol + 1:
+      return err("Empty quoted string")
     return ok(
       TextObjectRange(
         start: BufferPosition(line: cursor.line, column: startCol + 1),
-        endPos: BufferPosition(line: cursor.line, column: endCol),
+        endPos: BufferPosition(line: cursor.line, column: endCol - 1),
         isLinewise: false,
       )
     )
   else:
-    # Around: content + quotes
+    # Around: content + quotes (deleteRange is inclusive, so endCol is correct)
     return ok(
       TextObjectRange(
         start: BufferPosition(line: cursor.line, column: startCol),
-        endPos: BufferPosition(line: cursor.line, column: endCol + 1),
+        endPos: BufferPosition(line: cursor.line, column: endCol),
         isLinewise: false,
       )
     )
@@ -1659,28 +1685,22 @@ proc findMatchingParen(
 
   if inner:
     # Inner: content only (exclude delimiters)
-    # If start and end are on the same line and adjacent, return empty range
-    if startLine == endLine and startCol + 1 >= endCol:
-      return ok(
-        TextObjectRange(
-          start: BufferPosition(line: startLine, column: startCol + 1),
-          endPos: BufferPosition(line: endLine, column: startCol + 1),
-          isLinewise: false,
-        )
-      )
+    # If start and end are on the same line and adjacent or empty, nothing to delete
+    if startLine == endLine and endCol <= startCol + 1:
+      return err("Empty delimited content")
     return ok(
       TextObjectRange(
         start: BufferPosition(line: startLine, column: startCol + 1),
-        endPos: BufferPosition(line: endLine, column: endCol),
+        endPos: BufferPosition(line: endLine, column: endCol - 1),
         isLinewise: false,
       )
     )
   else:
-    # Around: content + delimiters
+    # Around: content + delimiters (deleteRange is inclusive, so endCol is correct)
     return ok(
       TextObjectRange(
         start: BufferPosition(line: startLine, column: startCol),
-        endPos: BufferPosition(line: endLine, column: endCol + 1),
+        endPos: BufferPosition(line: endLine, column: endCol),
         isLinewise: false,
       )
     )

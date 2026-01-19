@@ -92,8 +92,8 @@ proc logLevelToStr(level: LogLevel): string =
   ## Convert log level to string representation
   case level
   of LogLevel.Debug: "DEBUG"
-  of LogLevel.Info: "INFO "
-  of LogLevel.Warn: "WARN "
+  of LogLevel.Info: "INFO"
+  of LogLevel.Warn: "WARN"
   of LogLevel.Error: "ERROR"
 
 proc log*(logger: Logger, level: LogLevel, module: string, message: string) =

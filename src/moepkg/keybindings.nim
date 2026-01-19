@@ -1605,6 +1605,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
   registry.bindKey(EditorMode.Normal, "s", "substitute-char")
+  # Note: "c u" sequence removed because it conflicts with operator+motion
+  # In Vim, "cu" is change operator + u motion, not substitute-char
 
   # S - Substitute line
   registry.registerCommand(

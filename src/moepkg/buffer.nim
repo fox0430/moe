@@ -1765,10 +1765,16 @@ proc findPrev*(
   return none(BufferPosition)
 
 proc isPositionInSearchMatch*(
-    b: TextBuffer, pos: BufferPosition, searchText: string, ignorecase = false
+    b: TextBuffer,
+    pos: BufferPosition,
+    searchText: string,
+    ignorecase = false,
+    wholeWord = false,
 ): bool =
   ## Check if the given position is within a search match
   ## Returns true if pos is at the start of a match or within a match
+  ##
+  ## If wholeWord is true, only matches that are at word boundaries are considered
   ##
   ## Optimized: only converts strings to lowercase once
   ##
@@ -1814,6 +1820,30 @@ proc isPositionInSearchMatch*(
   if pos.column < firstPossibleMatchChar:
     return false
 
+  # Helper proc to check if a rune is a word character
+  proc isWordChar(r: Rune): bool =
+    let code = int(r)
+    r.isAlpha or (code >= ord('0') and code <= ord('9')) or r == Rune('_')
+
+  # Helper to check word boundary at a match position
+  proc isWholeWordMatch(runes: seq[Rune], matchCol: int, matchLen: int): bool =
+    # Check character before match (must not be word char or at start)
+    if matchCol > 0:
+      if isWordChar(runes[matchCol - 1]):
+        return false
+    # Check character after match (must not be word char or at end)
+    let endCol = matchCol + matchLen
+    if endCol < runes.len:
+      if isWordChar(runes[endCol]):
+        return false
+    return true
+
+  let runes =
+    if wholeWord:
+      line.toRunes()
+    else:
+      @[]
+
   # Find all matches in the line and check if pos is within any match
   var searchCharPos = 0
   while searchCharPos <= lineCharLen:
@@ -1837,7 +1867,13 @@ proc isPositionInSearchMatch*(
 
     # Check if pos.column is within this match [charIdx, charIdx + searchTextCharLen)
     if pos.column >= charIdx and pos.column < charIdx + searchTextCharLen:
-      return true
+      # If whole word matching, check word boundaries
+      if wholeWord:
+        if isWholeWordMatch(runes, charIdx, searchTextCharLen):
+          return true
+        # Not a whole word match, continue searching
+      else:
+        return true
 
     # Early exit: if we've passed the position, no need to continue
     if charIdx > pos.column:

@@ -97,6 +97,11 @@ type
     levServerInfo # Server info after init
     levCapabilities # Server capabilities after init
     levResponse # Response to a request
+    levRawJson # Raw JSON sent/received for debugging
+
+  LspJsonDirection* = enum
+    ljdSent # JSON sent to server
+    ljdReceived # JSON received from server
 
   LspEvent* = object
     case kind*: LspEventKind
@@ -119,6 +124,9 @@ type
       requestId*: int
       responseResult*: Option[JsonNode]
       responseError*: Option[string]
+    of levRawJson:
+      jsonDirection*: LspJsonDirection
+      rawJson*: string
 
   # Thread-safe queues using locks and deques for O(1) operations
   CommandQueue = object
@@ -307,6 +315,10 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     )
     ctx.eventQueue[].push(evt)
 
+  proc sendRawJson(direction: LspJsonDirection, json: string) =
+    var evt = LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: json)
+    ctx.eventQueue[].push(evt)
+
   proc handleNotification(meth: string, params: JsonNode) =
     case meth
     of "textDocument/publishDiagnostics":
@@ -341,6 +353,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
     lastId.inc
     let req = %*{"jsonrpc": "2.0", "id": lastId, "method": meth, "params": params}
+    # Log outgoing request JSON (pretty formatted)
+    sendRawJson(ljdSent, req.pretty)
     let sendResult = await serverStreams.input.sendRequest(req)
     if sendResult.isErr:
       return Result[int, string].err(sendResult.error)
@@ -353,6 +367,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       return Result[void, string].err("Server not running")
 
     let notify = %*{"jsonrpc": "2.0", "method": meth, "params": params}
+    # Log outgoing notification JSON (pretty formatted)
+    sendRawJson(ljdSent, notify.pretty)
     return await serverStreams.input.sendNotify(notify)
 
   proc sendNotificationLog(meth: string, params: JsonNode): Future[void] {.async.} =
@@ -439,6 +455,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         return
 
       let response = respResult.get
+      # Log received JSON (pretty formatted)
+      sendRawJson(ljdReceived, response.pretty)
 
       # Handle notification
       if response.hasKey("method") and not response.hasKey("id"):
@@ -620,6 +638,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       return
 
     let response = respResult.get
+    # Log received JSON (pretty formatted)
+    sendRawJson(ljdReceived, response.pretty)
 
     # Check if this is a notification (has "method", no "id")
     if response.hasKey("method") and not response.hasKey("id"):

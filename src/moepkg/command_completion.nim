@@ -137,7 +137,6 @@ const CommandDescriptions = {
   "run": "Run current buffer",
   "quickrun": "Run current buffer",
   "qr": "Run current buffer",
-  "Q": "Run current buffer",
   # Buffer manager
   "buffers": "Open buffer manager",
   "buf": "Open buffer manager",
@@ -183,91 +182,6 @@ const CommandDescriptions = {
 
 # Commands that take file path arguments
 const FilePathCommands* = ["e", "edit", "w", "write", "vs", "vsplit", "sp", "split"]
-
-# Commands that require no arguments and can be executed immediately
-const NoArgumentCommands* = [
-  # Quit commands
-  "q",
-  "quit",
-  "qa",
-  "qall",
-  # Save and quit
-  "wq",
-  "x",
-  "xit",
-  "wqa",
-  "xa",
-  # Save all
-  "wa",
-  "wall",
-  # Buffer navigation
-  "bn",
-  "bnext",
-  "bp",
-  "bprev",
-  "bprevious",
-  "bf",
-  "bfirst",
-  "brewind",
-  "bl",
-  "blast",
-  # Buffer delete
-  "bd",
-  "bdelete",
-  # New buffer
-  "ene",
-  "enew",
-  # Filer
-  "filer",
-  "Filer",
-  "Ex",
-  "Explore",
-  # Log viewer
-  "log",
-  "messages",
-  # Buffer manager
-  "buffers",
-  "buf",
-  "ls",
-  "files",
-  # Backup manager
-  "backups",
-  "backup",
-  # Recent file
-  "recent",
-  # Help
-  "h",
-  "help",
-  # Strip whitespace
-  "stripwhitespace",
-  "stripws",
-  "deleteTrailingSpaces",
-  # QuickRun
-  "run",
-  "quickrun",
-  "qr",
-  "Q",
-  # Clear search highlight
-  "noh",
-  "nohlsearch",
-  # Background
-  "bg",
-  # Jump list
-  "ju",
-  "jump",
-  "jumps",
-  # Build
-  "build",
-  # Debug mode
-  "debug",
-  # Configuration mode
-  "conf",
-  "config",
-]
-
-proc isNoArgumentCommand*(command: string): bool =
-  ## Check if a command requires no arguments and can be executed immediately
-  command in NoArgumentCommands
 
 # Set options
 const SetOptions* = {

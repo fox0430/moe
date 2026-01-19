@@ -21,6 +21,7 @@
 ## These messages are stored for later viewing in the log viewer.
 
 var messageLog {.threadvar.}: seq[string]
+var lspMessageLog {.threadvar.}: seq[string]
 
 proc addMessageLog*(message: string) =
   ## Add a message to the log.
@@ -42,3 +43,26 @@ proc clearMessageLog*() =
 proc messageLogLen*(): int =
   ## Returns the number of messages in the log.
   messageLog.len
+
+# LSP message log functions
+
+proc addLspMessageLog*(message: string) =
+  ## Add a message to the LSP log.
+  lspMessageLog.add(message)
+
+proc addLspMessageLog*(messages: seq[string]) =
+  ## Add multiple messages to the LSP log.
+  for m in messages:
+    lspMessageLog.add(m)
+
+proc getLspMessageLog*(): seq[string] =
+  ## Return all messages in the LSP log.
+  lspMessageLog
+
+proc clearLspMessageLog*() =
+  ## Clear all messages from the LSP log.
+  lspMessageLog = @[]
+
+proc lspMessageLogLen*(): int =
+  ## Returns the number of messages in the LSP log.
+  lspMessageLog.len

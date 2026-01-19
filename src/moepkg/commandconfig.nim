@@ -196,9 +196,6 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("lspCallHierarchyIncoming", claLspCallHierarchyIncoming)
   config.addAlias("lspCallHierarchyOutgoing", claLspCallHierarchyOutgoing)
 
-  # QuickRun (Q is uppercase alias)
-  config.addAlias("Q", claQuickRun)
-
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser
   # Clear existing aliases

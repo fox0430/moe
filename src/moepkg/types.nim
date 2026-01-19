@@ -83,6 +83,7 @@ type
     incsearch*: bool # Show search matches as you type
     hlsearch*: bool # Highlight all search matches in the buffer
     hlsearchTempDisabled*: bool # Temporarily disable highlight (like :nohlsearch)
+    wholeWord*: bool # Search for whole words only (* and # commands)
 
   CommandState* = object ## Command mode (ex-mode) state grouped together
     history*: seq[string] # Command history (most recent first)

@@ -23,9 +23,9 @@ import pkg/[celina, results]
 
 import
   editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
-  filer, quickrunutils, messagelog, helpviewer, buffermanager, backupmanager, backup,
-  diffviewer, command_completion, build, render_utils, sidebar, debugviewer,
-  configloader, references_viewer, documentsymbol_viewer
+  filer, quickrunutils, helpviewer, buffermanager, backupmanager, backup, diffviewer,
+  command_completion, build, render_utils, sidebar, debugviewer, configloader,
+  references_viewer, documentsymbol_viewer, messagelog, commandline
 import command_handlers/handler_manager
 
 proc getBufferInfos(e: Editor): seq[BufferInfo] =
@@ -125,6 +125,8 @@ proc finalizeSearch(e: Editor) =
     e.state.search.lastText = e.state.search.text
     # Re-enable highlight for new search
     e.state.search.hlsearchTempDisabled = false
+    # Reset whole word mode (/ and ? are substring searches)
+    e.state.search.wholeWord = false
 
     # Add to search history (avoid duplicates)
     # Remove if already exists in history
@@ -149,9 +151,14 @@ proc finalizeSearch(e: Editor) =
       # If incsearch is disabled, perform search now
       discard e.executeSearchFromCurrentPosition()
 
-  # Return to Normal mode
+  # Return to previous mode (Normal or LogViewer)
+  let targetMode =
+    if e.state.previousMode == EditorMode.LogViewer:
+      EditorMode.LogViewer
+    else:
+      EditorMode.Normal
   e.state.previousMode = e.state.mode
-  e.state.mode = EditorMode.Normal
+  e.state.mode = targetMode
   e.state.search.text = ""
   # Reset history navigation index
   e.state.search.historyIndex = -1
@@ -231,8 +238,10 @@ proc handleSearchCharacterInput(e: Editor, ch: string) =
   ## Behavior:
   ## - Append character to searchText
   ## - If incsearch enabled: Trigger incremental search
+  ## - Always trigger redraw to update search highlight
   e.state.search.text.add(ch)
   e.performIncrementalSearch()
+  e.state.needsFullRedraw = true
 
 proc handleSearchBackspace(e: Editor) =
   ## Handle Backspace key in Search mode
@@ -242,9 +251,11 @@ proc handleSearchBackspace(e: Editor) =
   ## Behavior:
   ## - Remove last character from searchText (if any)
   ## - If incsearch enabled: Trigger incremental search with updated text
+  ## - Always trigger redraw to update search highlight
   if e.state.search.text.len > 0:
     e.state.search.text = e.state.search.text[0 ..^ 2]
     e.performIncrementalSearch()
+  e.state.needsFullRedraw = true
 
 proc handleCommandModeEvent(e: Editor, event: Event): bool =
   ## Handle Command mode events (special handling for text input)
@@ -269,7 +280,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
     return true
 
   # Handle Tab key for command completion
-  if keyCombo.isSpecial and keyCombo.special == skTab:
+  if keyCombo.isSpecial and (keyCombo.special == skTab or keyCombo.special == skBackTab):
     let mgr = e.state.commandCompletionManager
     let hasSpace = ' ' in e.state.commandText
 
@@ -299,8 +310,8 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         e.state.commandCursor = cmd.len + 1 + selected.len
         return false
 
-    if kmShift in keyCombo.modifiers:
-      # Shift+Tab: select previous item
+    if kmShift in keyCombo.modifiers or keyCombo.special == skBackTab:
+      # Shift+Tab (or BackTab): select previous item
       if mgr.isActive():
         mgr.selectPrevious()
         # Apply if something is now selected
@@ -335,7 +346,8 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       let isDir = mgr.mode == cmFilePath and mgr.getSelectedCommand().endsWith("/")
       # Check if it's a no-argument command that should execute immediately
       let shouldExecuteNow =
-        mgr.mode == cmCommand and isNoArgumentCommand(mgr.getSelectedCommand())
+        mgr.mode == cmCommand and
+        e.commandLineParser.isNoArgumentAction(mgr.getSelectedCommand())
       mgr.cancelCompletion()
       # If directory was confirmed, re-trigger completion for its contents
       if isDir:
@@ -373,6 +385,10 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
 
       if r.shouldCloseWindow():
         # Handle window close - may also quit if last window
+        # If we're closing from LogViewer mode, clear LogViewer state
+        if e.state.previousMode == EditorMode.LogViewer:
+          e.state.logViewerState = none(LogViewerState)
+          e.state.previousMode = EditorMode.Normal
         let shouldQuit = e.closeWindow
         if shouldQuit:
           return false # Last window closed, quit editor
@@ -606,7 +622,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
 
       if r.shouldSave():
         # Handle file save
-        let saveResult = e.saveFile(r.getSaveFilename())
+        let saveResult = e.saveFile(r.getSaveFilename(), r.getForceSave())
         if saveResult.isErr:
           logError("handler", "Save command failed: " & saveResult.error)
           e.state.setStatusMessage("Error: " & saveResult.error)
@@ -682,7 +698,8 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
 
       if r.shouldSaveAndQuit():
         # Handle file save and quit
-        let saveResult = e.saveFile(r.getSaveAndQuitFilename())
+        let saveResult =
+          e.saveFile(r.getSaveAndQuitFilename(), r.getForceQuitAfterSave())
         if saveResult.isErr:
           logError("handler", "Save and quit failed: " & saveResult.error)
           e.state.setStatusMessage("Error: " & saveResult.error)
@@ -845,23 +862,37 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             getCurrentDir()
         e.state.filerState = some(newFilerState(startPath))
       elif r.shouldEnterLogViewer():
-        # Open log viewer in a horizontal split
-        let logs = getMessageLog()
+        # Open LogViewer in a new split window for editor messages
+        let logLines = getMessageLog()
         let logContent =
-          if logs.len == 0:
-            "(No messages)"
+          if logLines.len > 0:
+            logLines.join("\n")
           else:
-            logs.join("\n")
+            ""
         let logBuffer = newTextBuffer(logContent)
         logBuffer.readOnly = true
         let splitResult = e.hsplitWithBuffer(logBuffer)
         if splitResult.isErr:
           e.state.setStatusMessage("Failed to open log: " & splitResult.error)
         else:
-          e.state.setStatusMessage("Log: " & $logs.len & " messages")
-        # Return to Normal mode
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.Normal
+          e.state.mode = EditorMode.LogViewer
+          e.state.logViewerState = some(newLogViewerState(lckEditor))
+      elif r.shouldLspLog():
+        # Open LogViewer in a new split window for LSP messages
+        let logLines = getLspMessageLog()
+        let logContent =
+          if logLines.len > 0:
+            logLines.join("\n")
+          else:
+            ""
+        let logBuffer = newTextBuffer(logContent)
+        logBuffer.readOnly = true
+        let splitResult = e.hsplitWithBuffer(logBuffer)
+        if splitResult.isErr:
+          e.state.setStatusMessage("Failed to open LSP log: " & splitResult.error)
+        else:
+          e.state.mode = EditorMode.LogViewer
+          e.state.logViewerState = some(newLogViewerState(lckLsp))
       elif r.shouldEnterHelpViewer():
         # Enter help viewer mode
         e.state.previousMode = e.state.mode
@@ -1002,11 +1033,11 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         # Handle mode transitions
         let modeTransition = r.getModeTransition()
         if modeTransition.isSome:
-          e.state.previousMode = e.state.mode
+          # Entering a new mode (e.g., Filer) - previousMode already set when entering Command
           e.state.mode = modeTransition.get
         else:
-          e.state.previousMode = e.state.mode
-          e.state.mode = EditorMode.Normal # Default back to normal
+          # Return to the mode we were in before entering Command mode
+          e.state.mode = e.state.previousMode
 
       # Set status message if any
       let statusMsg = r.getStatusMessage()
@@ -1726,13 +1757,19 @@ proc handleEvent*(e: Editor, event: Event): bool =
       if e.state.command == "window_cmd":
         e.state.command = "" # Reset command state
 
-        # Handle second key: j (down/prev) or k (up/next)
+        # Handle second key: j (down/prev), k (up/next), c (close)
         if not keyCombo.isSpecial:
           if keyCombo.char == "j":
             e.switchToPrevWindow
             return true
           elif keyCombo.char == "k":
             e.switchToNextWindow
+            return true
+          elif keyCombo.char == "c":
+            # Close current window
+            let shouldQuit = e.closeWindow()
+            if shouldQuit:
+              return false # Last window closed, quit editor
             return true
           else:
             # Unknown window command, just cancel
@@ -1796,6 +1833,11 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   let r = e.handlerManager.handleEvent(activeBuffer, e.state, activeViewport, event)
 
+  # For LogViewer mode, update viewport to follow cursor
+  # (LogViewer handles cursor directly without using MotionController)
+  if e.state.mode == EditorMode.LogViewer:
+    e.updateViewportForCursor(e.state.cursor)
+
   # Sync viewport and cursor back from state to active window
   if e.windowManager.windows.len > 0 and
       e.windowManager.activeWindowIndex < e.windowManager.windows.len:
@@ -1812,7 +1854,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   if r.shouldSaveAndQuit():
     # Handle file save and quit
-    let saveResult = e.saveFile(r.getSaveAndQuitFilename())
+    let saveResult = e.saveFile(r.getSaveAndQuitFilename(), r.getForceQuitAfterSave())
     if saveResult.isErr:
       logError("handler", "Save and quit failed: " & saveResult.error)
       e.state.setStatusMessage("Error: " & saveResult.error)
@@ -1891,6 +1933,42 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # (previousMode may be Filer if we went Command->Filer, so always use Normal)
     e.state.filerState = none(FilerState)
     e.state.mode = EditorMode.Normal
+    return true
+
+  if r.kind == hrLogViewerQuit:
+    # Close log viewer window and return to Normal mode
+    e.state.logViewerState = none(LogViewerState)
+    e.state.mode = EditorMode.Normal
+    # Close the window if we're in split view
+    if e.windowManager.windows.len > 1:
+      discard e.closeWindow()
+    return true
+
+  if r.kind == hrLogViewerRefresh:
+    # Refresh log viewer content by creating new buffer with updated content
+    if e.state.logViewerState.isSome and
+        e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+      let logLines =
+        case e.state.logViewerState.get.contentKind
+        of lckEditor:
+          getMessageLog()
+        of lckLsp:
+          getLspMessageLog()
+      let logContent =
+        if logLines.len > 0:
+          logLines.join("\n")
+        else:
+          ""
+      # Create new buffer with updated content
+      let newBuffer = newTextBuffer(logContent)
+      newBuffer.readOnly = true
+      # Replace the window's buffer
+      e.windowManager.windows[e.windowManager.activeWindowIndex].buffer = newBuffer
+      # Clamp cursor if needed
+      let maxLine = max(0, newBuffer.len - 1)
+      if e.state.cursor.line > maxLine:
+        e.state.cursor.line = maxLine
+      e.state.setStatusMessage("Log refreshed")
     return true
 
   if r.kind == hrHelpViewerQuit:

@@ -312,6 +312,19 @@ proc poll*(svc: LspService, timeoutMs: int = 0) =
       of levResponse:
         svc.pendingResponses[evt.requestId] =
           (result: evt.responseResult, error: evt.responseError)
+      of levRawJson:
+        if svc.onLogMessage != nil:
+          let timestamp = now().format("HH:mm:ss'.'fff")
+          let direction = if evt.jsonDirection == ljdSent: ">>> " else: "<<< "
+          # Split multi-line JSON into separate log entries
+          let lines = evt.rawJson.splitLines()
+          for i, line in lines:
+            if i == 0:
+              svc.onLogMessage(langId, mtLog, "[" & timestamp & "] " & direction & line)
+            else:
+              svc.onLogMessage(langId, mtLog, "    " & line)
+          # Add blank line after each JSON block
+          svc.onLogMessage(langId, mtLog, "")
 
 # Non-blocking response checking
 proc checkResponse*(

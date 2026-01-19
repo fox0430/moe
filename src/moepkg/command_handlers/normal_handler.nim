@@ -444,13 +444,10 @@ proc handleNormalModeKey*(
       state.statusMessage = ""
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
-  # Handle '"' key to start register selection
-  if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == "\"":
-    state.pendingRegister = some('\0') # Placeholder - next key will be actual register
-    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-
   # Handle pending text object - waiting for text object kind (w, ", (, etc.)
   # This handles the second part of commands like 'diw', 'da"', 'ci(' etc.
+  # IMPORTANT: This must be checked BEFORE the '"' register selection handling below,
+  # so that ci" works correctly (the " is the text object, not a register selection)
   if state.editState.pendingTextObject.isSome:
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
       # Map key to text object kind command
@@ -496,6 +493,12 @@ proc handleNormalModeKey*(
       state.editState.pendingOperator = none(PendingOperator)
       state.statusMessage = ""
       # Fall through to process the key normally
+
+  # Handle '"' key to start register selection
+  # This must come AFTER pendingTextObject check so ci" works correctly
+  if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == "\"":
+    state.pendingRegister = some('\0') # Placeholder - next key will be actual register
+    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
   # Process the key (handles numeric prefixes, sequences, etc.)
   let cmdOption = handler.keyBindingRegistry.processKey(EditorMode.Normal, keyCombo)
@@ -582,7 +585,24 @@ proc handleNormalModeKey*(
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
-  of ctCustom, ctTextObject, ctOperator, ctOperatorPending:
+  of ctOperatorPending:
+    # Handle operators that require additional input (f, t, r, etc)
+    let ctx = CommandContext(
+      buffer: buffer,
+      state: state,
+      viewport: viewport,
+      motionController: handler.motionController,
+      keyBindingRegistry: handler.keyBindingRegistry,
+      clipboardConfig: handler.clipboardConfig,
+      smoothScrollConfig: handler.smoothScrollConfig,
+      notificationConfig: handler.notificationConfig,
+    )
+    let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
+    if cmdResult.isOk:
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+    else:
+      return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
+  of ctCustom, ctTextObject, ctOperator:
     # Check for LSP commands first
     if cmd.commandId == "lsp.goto.definition":
       return NormalModeResult(kind: nmrLspGotoDefinition)

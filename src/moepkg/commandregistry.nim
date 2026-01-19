@@ -177,7 +177,7 @@ type
       ## Fast access for builtins
     aliases*: Table[string, CommandId] ## Alias -> command ID mapping
 
-## Helper functions for CommandId
+# Helper functions for CommandId
 proc `$`*(id: CommandId): string =
   case id.kind
   of ckBuiltin:
@@ -504,12 +504,14 @@ proc executeCommand*(
   ## Execute a keybinding command
   case cmd.kind
   of ctMotion:
-    # Handle motion commands directly - use count from command object
-    let motionCmd = MotionCommand(motion: cmd.motion, count: cmd.count)
-
     # Check if we have a pending operator
     if ctx.state.editState.pendingOperator.isSome:
       let op = ctx.state.editState.pendingOperator.get
+
+      # Multiply motion count by operator count for correct Vim behavior
+      # e.g., 3dw = d3w (delete 3 words), 2d3w = 6 words
+      let effectiveCount = cmd.count * op.operatorCount
+      let motionCmd = MotionCommand(motion: cmd.motion, count: effectiveCount)
 
       # Execute motion to get end position
       # Suppress viewport updates to prevent visual scrolling during operator+motion
@@ -546,6 +548,7 @@ proc executeCommand*(
       return ok(())
     else:
       # No pending operator - just move cursor
+      let motionCmd = MotionCommand(motion: cmd.motion, count: cmd.count)
       logDebug(
         "command",
         "Executing motion, current cursor=(" & $ctx.state.cursor.line & "," &
@@ -747,16 +750,46 @@ proc executeCommand*(
           ctx.state.editState.pendingOperator = none(PendingOperator)
           return err(r.error)
 
-        # Check if motion actually moved the cursor
-        # If not (e.g., character not found), don't execute the operator
+        # For till motion, the result may be the same as start position when the
+        # target character is adjacent (e.g., cursor at pos 0, target at pos 1).
+        # In this case, tillChar returns pos 0 (before pos 1), but we still need
+        # to execute the operator. We check with findChar to see if the character
+        # was actually found.
+        var endPos = r.value
         if r.value.line == op.startPos.line and r.value.column == op.startPos.column:
-          # Motion didn't move - clear operator and do nothing
-          ctx.state.editState.pendingOperator = none(PendingOperator)
-          return ok(())
+          # tillChar returned start position - check if character was actually found
+          let findMotionCmd =
+            if cmd.reverse:
+              MotionCommand(
+                motion: Motion.FindCharBackward,
+                targetChar: cmd.targetChar,
+                count: count,
+              )
+            else:
+              MotionCommand(
+                motion: Motion.FindChar, targetChar: cmd.targetChar, count: count
+              )
+          let findResult = ctx.motionController.executeMotion(
+            findMotionCmd, op.startPos, updateViewport = false
+          )
+          if findResult.isErr or (
+            findResult.value.line == op.startPos.line and
+            findResult.value.column == op.startPos.column
+          ):
+            # Character truly not found - clear operator and do nothing
+            ctx.state.editState.pendingOperator = none(PendingOperator)
+            return ok(())
+          # Character was found at adjacent position - use findChar result as endPos
+          # but adjust for till semantics (stop before the target character)
+          endPos = findResult.value
+          if not cmd.reverse and endPos.column > op.startPos.column:
+            endPos.column -= 1
+          elif cmd.reverse and endPos.column < op.startPos.column:
+            endPos.column += 1
 
         # Calculate the range affected by this operator+motion
         let motion = if cmd.reverse: Motion.TillCharBackward else: Motion.TillChar
-        let range = calculateOperatorRange(ctx.buffer, op.startPos, r.value, motion)
+        let range = calculateOperatorRange(ctx.buffer, op.startPos, endPos, motion)
 
         # Execute the operator on the range
         let opResult =
@@ -898,7 +931,7 @@ proc executeCommand*(
       # Try as custom command
       return registry.execute(ctx, custom(cmd.commandId), finalArgs)
 
-## Helper function to parse count from arguments safely
+# Helper function to parse count from arguments safely
 proc parseCount(
     args: seq[string], default: int = 1, minVal: int = 1, maxVal: int = 999999
 ): int =
@@ -927,7 +960,7 @@ proc parseCount(
     logDebug("parse", "parseCount returning default (no args): " & $default)
     return default
 
-## Helper function to parse optional string argument
+# Helper function to parse optional string argument
 proc parseStringArg(args: seq[string], index: int = 0, default: string = ""): string =
   ## Safely get string argument at index, return default if not available
   if args.len > index:
@@ -935,7 +968,7 @@ proc parseStringArg(args: seq[string], index: int = 0, default: string = ""): st
   else:
     return default
 
-## Helper function to parse boolean argument
+# Helper function to parse boolean argument
 proc parseBoolArg(args: seq[string], index: int = 0, default: bool = false): bool =
   ## Parse boolean argument (true/false, yes/no, 1/0)
   if args.len > index:
@@ -1070,7 +1103,7 @@ proc handleJumpForward(ctx: CommandContext, args: seq[string]): Result[(), strin
 
   return ok(())
 
-## Helper function to register motion commands
+# Helper function to register motion commands
 proc registerMotionCommand(
     registry: CommandRegistry,
     id: BuiltinCommandId,
@@ -1622,6 +1655,13 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
             # Store in yank register
             ctx.state.yankRegister = charAtCursor & nextChar
             ctx.state.yankIsLine = false
+
+            # Adjust cursor if it's now past the end of the line (Vim behavior)
+            let updatedLineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+            let updatedLineLen = updatedLineContent.charLen
+            if updatedLineLen > 0 and ctx.state.cursor.column >= updatedLineLen:
+              ctx.state.cursor.column = updatedLineLen - 1
+
             ctx.state.needsFullRedraw = true
 
             return Result[(), string].ok ()
@@ -1680,6 +1720,12 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
       kind: lecDeleteChar, deleteCount: charsToDelete, deleteForward: true
     )
   )
+
+  # Adjust cursor if it's now past the end of the line (Vim behavior)
+  let newLineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+  let newLineLen = newLineContent.charLen
+  if newLineLen > 0 and ctx.state.cursor.column >= newLineLen:
+    ctx.state.cursor.column = newLineLen - 1
 
   ctx.state.needsFullRedraw = true
   return Result[(), string].ok ()
@@ -2351,63 +2397,11 @@ proc handleOperatorChange(ctx: CommandContext, count: int = 1): Result[(), strin
   # Check if same operator was pressed (cc for change line)
   if ctx.state.editState.pendingOperator.isSome and
       ctx.state.editState.pendingOperator.get.operatorType == OpChange:
-    # Execute line change
-    let startLine = ctx.state.cursor.line
+    # Execute line change using handleSubstituteLine (same as S command)
     let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
-    let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
-    let lineCount = endLine - startLine + 1
-
-    # Extract lines for yank register
-    var text = ""
-    for lineIdx in startLine .. endLine:
-      if lineIdx < ctx.buffer.len:
-        let lineContent = ctx.buffer.getLine(lineIdx)
-        text.add(lineContent)
-        if lineContent.len == 0 or lineContent[^1] != '\n':
-          text.add("\n")
-
-    ctx.state.yankRegister = text
-    ctx.state.yankIsLine = true
-
-    # Begin transaction for all change operations (delete + insert mode input)
-    let transactionResult =
-      ctx.buffer.beginTransaction("Change " & $lineCount & " line(s)")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
-
-    # Delete all but first line
-    for i in 0 ..< (endLine - startLine):
-      if startLine + 1 < ctx.buffer.len:
-        let deleteResult = ctx.buffer.deleteLine(startLine + 1)
-        if deleteResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err("Failed to delete line: " & deleteResult.error)
-
-    # Clear the first line
-    if startLine < ctx.buffer.len:
-      let line = ctx.buffer.getLine(startLine)
-      for i in 0 ..< line.charLen:
-        let deleteResult = ctx.buffer.deleteRange(
-          BufferPosition(line: startLine, column: 0),
-          BufferPosition(line: startLine, column: 1),
-        )
-        if deleteResult.isErr:
-          discard ctx.buffer.rollbackTransaction()
-          return err("Failed to clear line: " & deleteResult.error)
-
-    # Move cursor to beginning of line and enter Insert mode (transaction remains open)
-    ctx.state.cursor.line = startLine
-    ctx.state.cursor.column = 0
-    ctx.state.mode = EditorMode.Insert
-
-    # Record substitute context so Insert mode exit can properly record the command
-    ctx.state.editState.substituteContext =
-      some(SubstituteContext(kind: skLine, deleteCount: lineCount))
-
-    # Clear operator state
+    # Clear operator state before calling handleSubstituteLine
     ctx.state.editState.pendingOperator = none(PendingOperator)
-    ctx.state.statusMessage = "-- INSERT --"
-    return ok(())
+    return handleSubstituteLine(ctx, operatorCount)
   else:
     # Set pending operator for motion
     setPendingOperator(ctx, OpChange, count, "c")
@@ -3678,9 +3672,9 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         ctx.state.savedViewportTopLine =
           ctx.motionController.viewportManager.viewport.topLine
 
-        # Execute the motion
-        let motionCmd =
-          MotionCommand(motion: lastCmd.motion, count: lastCmd.motionCount)
+        # Execute the motion with combined count (motionCount * operatorCount)
+        let effectiveCount = lastCmd.motionCount * lastCmd.operatorCount
+        let motionCmd = MotionCommand(motion: lastCmd.motion, count: effectiveCount)
         let r = ctx.motionController.executeMotion(
           motionCmd, ctx.state.cursor, updateViewport = false
         )
@@ -4005,7 +3999,14 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       # Calculate range from cursor to end of line
       let startPos = ctx.state.cursor
       let line = ctx.buffer.getLine(startPos.line)
-      let endPos = BufferPosition(line: startPos.line, column: line.charLen)
+      let lineLen = line.charLen
+
+      # Empty line or cursor at/past end: nothing to delete
+      if lineLen == 0 or startPos.column >= lineLen:
+        return ok(())
+
+      # End at last character (same as d$ / Motion.End)
+      let endPos = BufferPosition(line: startPos.line, column: lineLen - 1)
 
       let range = OperatorRange(start: startPos, endPos: endPos, isLinewise: false)
 
@@ -4036,7 +4037,15 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       # Calculate range from cursor to end of line
       let startPos = ctx.state.cursor
       let line = ctx.buffer.getLine(startPos.line)
-      let endPos = BufferPosition(line: startPos.line, column: line.charLen)
+      let lineLen = line.charLen
+
+      # Empty line or cursor at/past end: just enter insert mode without deleting
+      if lineLen == 0 or startPos.column >= lineLen:
+        ctx.state.mode = EditorMode.Insert
+        return ok(())
+
+      # End at last character (same as c$ / Motion.End)
+      let endPos = BufferPosition(line: startPos.line, column: lineLen - 1)
 
       let range = OperatorRange(start: startPos, endPos: endPos, isLinewise: false)
 
@@ -4243,22 +4252,30 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
   )
 
   # Helper proc to get the word under cursor
-  proc getWordUnderCursor(buffer: TextBuffer, cursor: BufferPosition): string =
+  # Helper type for word bounds
+  type WordInfo = object
+    word: string
+    startCol: int
+    endCol: int
+
+  proc getWordInfoUnderCursor(
+      buffer: TextBuffer, cursor: BufferPosition
+  ): Option[WordInfo] =
     if cursor.line < 0 or cursor.line >= buffer.len:
-      return ""
+      return none(WordInfo)
 
     let line = buffer.getLine(cursor.line)
     if line.len == 0 or cursor.column >= line.charLen:
-      return ""
+      return none(WordInfo)
 
     let runes = line.toRunes()
     if cursor.column >= runes.len:
-      return ""
+      return none(WordInfo)
 
     # Check if cursor is on a word character
     let charAtCursor = $runes[cursor.column]
     if not (charAtCursor[0].isAlphaNumeric or charAtCursor[0] == '_'):
-      return ""
+      return none(WordInfo)
 
     # Find word start
     var startCol = cursor.column
@@ -4281,12 +4298,48 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     for i in startCol ..< endCol:
       word.add($runes[i])
 
-    return word
+    return some(WordInfo(word: word, startCol: startCol, endCol: endCol))
 
-  # Helper proc to find matching bracket at cursor
+  proc getWordUnderCursor(buffer: TextBuffer, cursor: BufferPosition): string =
+    let info = getWordInfoUnderCursor(buffer, cursor)
+    if info.isSome:
+      return info.get.word
+    return ""
+
+  # Helper proc to check if a rune is a word character
+  proc isWordChar(r: Rune): bool =
+    let code = int(r)
+    r.isAlpha or (code >= ord('0') and code <= ord('9')) or r == Rune('_')
+
+  proc isWholeWordMatch(buffer: TextBuffer, pos: BufferPosition, wordLen: int): bool =
+    ## Helper proc to check if a match is at word boundary
+    if pos.line < 0 or pos.line >= buffer.len:
+      return false
+
+    let line = buffer.getLine(pos.line)
+    let runes = line.toRunes()
+
+    # Check bounds
+    if pos.column < 0 or pos.column >= runes.len:
+      return false
+
+    # Check character before match (must not be word char or at start)
+    if pos.column > 0:
+      if isWordChar(runes[pos.column - 1]):
+        return false
+
+    # Check character after match (must not be word char or at end)
+    let endCol = pos.column + wordLen
+    if endCol < runes.len:
+      if isWordChar(runes[endCol]):
+        return false
+
+    return true
+
   proc findMatchingBracketAtCursor(
       buffer: TextBuffer, cursor: BufferPosition
   ): Result[BufferPosition, string] =
+    ## Helper proc to find matching bracket at cursor
     if cursor.line < 0 or cursor.line >= buffer.len:
       return err("Invalid cursor position")
 
@@ -4373,19 +4426,75 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Search Word Forward",
     "Search for word under cursor forward (*)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let word = getWordUnderCursor(ctx.buffer, ctx.state.cursor)
-      if word.len == 0:
+      let wordInfo = getWordInfoUnderCursor(ctx.buffer, ctx.state.cursor)
+      if wordInfo.isNone:
         return err("No word under cursor")
+
+      let info = wordInfo.get
+      let wordLen = info.word.runeLen
 
       # Record jump before searching
       recordJump(ctx.state)
 
-      # Update last search text
-      ctx.state.search.lastText = word
+      # Update last search text and set whole word mode
+      ctx.state.search.lastText = info.word
       ctx.state.search.hlsearchTempDisabled = false
+      ctx.state.search.wholeWord = true
 
-      # Search for next occurrence
-      return executeSearch(ctx, word, findNext),
+      # Remember original word position to skip it after wrap-around
+      let originalWordPos =
+        BufferPosition(line: ctx.state.cursor.line, column: info.startCol)
+
+      # Search from word end position to skip current word
+      var searchPos = BufferPosition(line: ctx.state.cursor.line, column: info.endCol)
+      let ignoreCase = shouldIgnoreCase(
+        info.word, ctx.state.search.ignorecase, ctx.state.search.smartcase
+      )
+      var wrapped = false
+
+      # Loop until we find a whole word match
+      while true:
+        let searchResult = findNext(ctx.buffer, info.word, searchPos, ignoreCase)
+        if searchResult.isNone:
+          ctx.state.statusMessage = "Pattern not found: " & info.word
+          return err("Pattern not found")
+
+        let newPos = searchResult.get
+
+        # Check if we've wrapped back to start
+        if newPos.line < searchPos.line or
+            (newPos.line == searchPos.line and newPos.column < searchPos.column):
+          wrapped = true
+
+        # Skip if this is the original word position (after wrap-around)
+        if wrapped and newPos.line == originalWordPos.line and
+            newPos.column == originalWordPos.column:
+          ctx.state.statusMessage = "Pattern not found: " & info.word
+          return err("Pattern not found")
+
+        # Check if this is a whole word match
+        if isWholeWordMatch(ctx.buffer, newPos, wordLen):
+          ctx.state.cursor = newPos
+
+          # Update viewport to follow cursor
+          let lineCount = ctx.buffer.len
+          let cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
+
+          ctx.motionController.viewportManager.updateViewport(
+            cursorPos, lineCount, ctx.state.display.showStatusLine,
+            ctx.state.viewportReservedLines, false, ctx.buffer, 0,
+          )
+
+          ctx.state.statusMessage = "Found: " & info.word
+          ctx.state.needsFullRedraw = true
+          return Result[(), string].ok ()
+
+        # Continue searching from after this match
+        searchPos = BufferPosition(line: newPos.line, column: newPos.column + 1)
+
+      # No whole word match found
+      ctx.state.statusMessage = "Pattern not found: " & info.word
+      return err("Pattern not found"),
     0,
     0,
   )
@@ -4396,19 +4505,75 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Search Word Backward",
     "Search for word under cursor backward (#)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let word = getWordUnderCursor(ctx.buffer, ctx.state.cursor)
-      if word.len == 0:
+      let wordInfo = getWordInfoUnderCursor(ctx.buffer, ctx.state.cursor)
+      if wordInfo.isNone:
         return err("No word under cursor")
+
+      let info = wordInfo.get
+      let wordLen = info.word.runeLen
 
       # Record jump before searching
       recordJump(ctx.state)
 
-      # Update last search text
-      ctx.state.search.lastText = word
+      # Update last search text and set whole word mode
+      ctx.state.search.lastText = info.word
       ctx.state.search.hlsearchTempDisabled = false
+      ctx.state.search.wholeWord = true
 
-      # Search for previous occurrence
-      return executeSearch(ctx, word, findPrev),
+      # Remember original word position to skip it after wrap-around
+      let originalWordPos =
+        BufferPosition(line: ctx.state.cursor.line, column: info.startCol)
+
+      # Search from word start position to skip current word
+      var searchPos = BufferPosition(line: ctx.state.cursor.line, column: info.startCol)
+      let ignoreCase = shouldIgnoreCase(
+        info.word, ctx.state.search.ignorecase, ctx.state.search.smartcase
+      )
+      var wrapped = false
+
+      # Loop until we find a whole word match
+      while true:
+        let searchResult = findPrev(ctx.buffer, info.word, searchPos, ignoreCase)
+        if searchResult.isNone:
+          ctx.state.statusMessage = "Pattern not found: " & info.word
+          return err("Pattern not found")
+
+        let newPos = searchResult.get
+
+        # Check if we've wrapped back to start
+        if newPos.line > searchPos.line or
+            (newPos.line == searchPos.line and newPos.column > searchPos.column):
+          wrapped = true
+
+        # Skip if this is the original word position (after wrap-around)
+        if wrapped and newPos.line == originalWordPos.line and
+            newPos.column == originalWordPos.column:
+          ctx.state.statusMessage = "Pattern not found: " & info.word
+          return err("Pattern not found")
+
+        # Check if this is a whole word match
+        if isWholeWordMatch(ctx.buffer, newPos, wordLen):
+          ctx.state.cursor = newPos
+
+          # Update viewport to follow cursor
+          let lineCount = ctx.buffer.len
+          let cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
+
+          ctx.motionController.viewportManager.updateViewport(
+            cursorPos, lineCount, ctx.state.display.showStatusLine,
+            ctx.state.viewportReservedLines, false, ctx.buffer, 0,
+          )
+
+          ctx.state.statusMessage = "Found: " & info.word
+          ctx.state.needsFullRedraw = true
+          return Result[(), string].ok ()
+
+        # Continue searching from before this match
+        searchPos = BufferPosition(line: newPos.line, column: newPos.column)
+
+      # No whole word match found
+      ctx.state.statusMessage = "Pattern not found: " & info.word
+      return err("Pattern not found"),
     0,
     0,
   )

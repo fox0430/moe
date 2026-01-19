@@ -73,7 +73,8 @@ type
     hrFilerOpenFileHSplit # Open file from filer in horizontal split
     hrFilerQuit # Close filer and return to previous mode
     hrEnterFiler # Enter filer mode with optional path
-    hrLogViewerQuit # Close log viewer and return to previous mode
+    hrLogViewerQuit # Close log viewer window
+    hrLogViewerRefresh # Refresh log viewer content
     hrEnterLogViewer # Enter log viewer mode
     hrHelpViewerQuit # Close help viewer and return to previous mode
     hrEnterHelpViewer # Enter help viewer mode
@@ -192,6 +193,7 @@ type
       discard
     of hrSave:
       saveFilename*: Option[string]
+      forceSave*: bool
     of hrSaveAndQuit:
       saveAndQuitFilename*: Option[string]
       forceQuitAfterSave*: bool
@@ -210,6 +212,8 @@ type
     of hrEnterFiler:
       enterFilerPath*: Option[string]
     of hrLogViewerQuit:
+      discard
+    of hrLogViewerRefresh:
       discard
     of hrEnterLogViewer:
       discard
@@ -655,7 +659,8 @@ proc handleCommandMode*(
   of cmrBackground:
     return HandlerResult(kind: hrBackground)
   of cmrSave:
-    return HandlerResult(kind: hrSave, saveFilename: r.saveFilename)
+    return
+      HandlerResult(kind: hrSave, saveFilename: r.saveFilename, forceSave: r.forceSave)
   of cmrSaveAndQuit:
     return HandlerResult(
       kind: hrSaveAndQuit,
@@ -959,11 +964,16 @@ proc handleFilerMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleLogViewerMode*(
-    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+    manager: HandlerManager,
+    buffer: TextBuffer,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Log Viewer mode input
-  let r =
-    manager.logViewerHandler.handleLogViewerModeKey(state, viewportHeight, keyCombo)
+  let r = manager.logViewerHandler.handleLogViewerModeKey(
+    buffer, state, viewportHeight, keyCombo
+  )
   case r.kind
   of lvrHandled:
     return HandlerResult(
@@ -976,8 +986,30 @@ proc handleLogViewerMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
     )
+  of lvrEnterSearchForward:
+    # Enter search mode (forward) from log viewer
+    state.previousMode = EditorMode.LogViewer
+    state.search.text = ""
+    state.search.startPos = state.cursor
+    state.search.direction = Forward
+    state.search.historyIndex = -1
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Search), statusMessage: ""
+    )
+  of lvrEnterSearchBackward:
+    # Enter search mode (backward) from log viewer
+    state.previousMode = EditorMode.LogViewer
+    state.search.text = ""
+    state.search.startPos = state.cursor
+    state.search.direction = Backward
+    state.search.historyIndex = -1
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Search), statusMessage: ""
+    )
   of lvrQuit:
     return HandlerResult(kind: hrLogViewerQuit)
+  of lvrRefresh:
+    return HandlerResult(kind: hrLogViewerRefresh)
   of lvrUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of lvrError:
@@ -1262,7 +1294,7 @@ proc handleKeyCombo*(
   of EditorMode.Filer:
     return manager.handleFilerMode(state, viewport.height, keyCombo)
   of EditorMode.LogViewer:
-    return manager.handleLogViewerMode(state, viewport.height, keyCombo)
+    return manager.handleLogViewerMode(buffer, state, viewport.height, keyCombo)
   of EditorMode.Help:
     return manager.handleHelpViewerMode(state, viewport.height, keyCombo)
   of EditorMode.BufferManager:
@@ -1385,7 +1417,7 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrEnterDiffViewer, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
     hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
     hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
-    hrLspSelectionRange, hrJumpList,
+    hrLspSelectionRange, hrJumpList, hrLspLog,
   }
 
 proc shouldQuit*(hrResult: HandlerResult): bool =
@@ -1547,6 +1579,10 @@ proc shouldLogViewerQuit*(hrResult: HandlerResult): bool =
   ## Check if we should close log viewer
   hrResult.kind == hrLogViewerQuit
 
+proc shouldLspLog*(hrResult: HandlerResult): bool =
+  ## Check if we should open LSP log viewer
+  hrResult.kind == hrLspLog
+
 proc shouldEnterReferences*(hrResult: HandlerResult): bool =
   ## Check if we should enter references viewer mode
   hrResult.kind == hrEnterReferences
@@ -1647,6 +1683,10 @@ proc getSaveFilename*(hrResult: HandlerResult): Option[string] =
     hrResult.saveFilename
   else:
     none(string)
+
+proc getForceSave*(hrResult: HandlerResult): bool =
+  ## Get force save flag for save operation
+  if hrResult.kind == hrSave: hrResult.forceSave else: false
 
 proc getSaveAndQuitFilename*(hrResult: HandlerResult): Option[string] =
   ## Get filename for save and quit operation

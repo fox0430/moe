@@ -22,7 +22,7 @@
 ## This module defines all configuration structures and provides functionality
 ## for loading settings from TOML files.
 
-import std/[options, tables]
+import std/[options, tables, os, osproc]
 
 type
   ColorMode* = enum
@@ -359,6 +359,36 @@ type
     theme*: ThemeConfig
     lsp*: LspConfig
 
+proc isToolAvailable(toolCommand: string): bool =
+  ## Check if a command-line tool is available in PATH
+  let checkResult = execCmdEx("command -v " & toolCommand)
+  return checkResult.exitCode == 0
+
+proc isWaylandSession(): bool =
+  ## Check if running in a Wayland session
+  getEnv("WAYLAND_DISPLAY").len > 0 or getEnv("XDG_SESSION_TYPE") == "wayland"
+
+proc detectClipboardTool*(): ClipboardTool =
+  ## Detect the best available clipboard tool for the current environment
+  ## Prioritizes Wayland tools on Wayland, then X11 tools, then platform-specific
+  if isWaylandSession():
+    # Wayland: prefer wl-clipboard
+    if isToolAvailable("wl-copy"):
+      return ctWlClipboard
+  # X11 or Wayland fallback: try xsel, then xclip
+  if isToolAvailable("xsel"):
+    return ctXsel
+  if isToolAvailable("xclip"):
+    return ctXclip
+  # macOS
+  if isToolAvailable("pbcopy"):
+    return ctPbcopy
+  # WSL/Windows
+  if isToolAvailable("win32yank.exe"):
+    return ctWin32yank
+  # Default fallback
+  return ctXsel
+
 proc newEditorConfig*(): EditorConfig =
   ## Create a new configuration with default values
   EditorConfig(
@@ -388,7 +418,7 @@ proc newEditorConfig*(): EditorConfig =
       colorMode: cm24bit,
       mouse: true,
     ),
-    clipboard: ClipboardConfig(enable: true, tool: ctXsel),
+    clipboard: ClipboardConfig(enable: true, tool: detectClipboardTool()),
     buildOnSave: BuildOnSaveConfig(
       enable: false, workspaceRoot: none(string), command: none(string)
     ),

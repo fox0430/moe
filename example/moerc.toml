@@ -46,6 +46,8 @@ liveReloadOfFile = false               # Auto-reload when file changed externall
 
 colorMode = "24bit"                    # Color mode: "8bit", "24bit", "none"
 
+mouse = true                           # Enable mouse support
+
 [Clipboard]
 
 enable = true                          # Clipboard integration

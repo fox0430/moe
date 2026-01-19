@@ -22,7 +22,7 @@
 ## This module provides clipboard read/write functionality using external
 ## clipboard tools like xclip, xsel, wl-clipboard, etc.
 
-import std/[osproc, strutils, options, streams]
+import std/[osproc, options, streams]
 
 import pkg/results
 
@@ -66,7 +66,7 @@ proc getClipboardCommand*(tool: ClipboardTool, operation: string): Option[seq[st
       return none(seq[string])
     case operation
     of "read":
-      return some(@["wl-paste"])
+      return some(@["wl-paste", "-n"])
     of "write":
       return some(@["wl-copy"])
     else:
@@ -102,7 +102,11 @@ proc readFromClipboard*(tool: ClipboardTool): Result[string, string] =
 
   let cmd = cmdOpt.get()
   try:
-    let (output, exitCode) = execCmdEx(cmd.join(" "))
+    # Use startProcess instead of execCmdEx to avoid shell adding newline
+    let p = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
+    let output = p.outputStream.readAll()
+    let exitCode = p.waitForExit()
+    p.close()
 
     if exitCode == 0:
       return Result[string, string].ok(output)

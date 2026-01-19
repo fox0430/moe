@@ -168,7 +168,7 @@ proc getClipboardCommand(tool: ClipboardTool, operation: string): Option[seq[str
   of ctWlClipboard:
     case operation
     of "read":
-      return some(@["wl-paste"])
+      return some(@["wl-paste", "-n"])
     of "write":
       return some(@["wl-copy"])
     else:
@@ -227,7 +227,12 @@ proc getFromClipboard(r: Registers): Result[string, string] =
 
   let cmd = cmdOpt.get()
   try:
-    let (output, exitCode) = execCmdEx(cmd.join(" "))
+    # Use startProcess instead of execCmdEx to avoid shell adding newline
+    let p = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
+    let output = p.outputStream.readAll()
+    let exitCode = p.waitForExit()
+    p.close()
+
     if exitCode == 0:
       return ok(output)
     else:
