@@ -3268,7 +3268,6 @@ proc renderFiler(e: Editor, buffer: var Buffer) =
 
     # Build display line
     var displayLine: string
-    let prefix = if isSelected: "> " else: "  "
 
     let icon =
       if e.config.filer.showIcons:
@@ -3285,7 +3284,7 @@ proc renderFiler(e: Editor, buffer: var Buffer) =
       else:
         entry.name
 
-    displayLine = prefix & icon & name
+    displayLine = " " & icon & name
 
     # Truncate if too long
     if displayLine.len > width:
