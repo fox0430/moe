@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -34,7 +34,7 @@ import pkg/results
 import
   ../[
     types, buffer, config, cursor, modes, keybindings, motion, commandregistry,
-    unicode_utils, completion, signaturehelp, lspintegration, registers,
+    unicode_utils, completion, signaturehelp, lspintegration,
   ]
 import insert_commands
 
@@ -53,7 +53,6 @@ type
     lsp*: LspIntegration ## LSP integration for completions
     autocompleteEnabled*: bool ## Whether autocomplete is enabled
     notificationConfig*: NotificationConfig
-    waitingForRegister*: bool ## Whether we're waiting for register name (Ctrl-R)
 
   InsertModeResult* = object ## Result of insert mode command execution
     case kind*: InsertModeResultKind
@@ -82,7 +81,6 @@ proc newInsertModeHandler*(
     lsp: lsp,
     autocompleteEnabled: autocompleteEnabled,
     notificationConfig: notificationConfig,
-    waitingForRegister: false,
   )
 
 proc executeCommand*(
@@ -411,7 +409,7 @@ proc isCtrlY(keyCombo: KeyCombo): bool =
     keyCombo.char.toLowerAscii == "y"
 
 proc isCtrlR(keyCombo: KeyCombo): bool =
-  ## Check if key is Ctrl+R (insert from register)
+  ## Check if key is Ctrl+R (signature help)
   not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
     keyCombo.char.toLowerAscii == "r"
 
@@ -436,37 +434,6 @@ proc handleInsertModeKey*(
   # Record key for macro if recording is active
   if state.macroState.isRecording:
     state.macroState.recordedKeys.add(keyComboToString(keyCombo))
-
-  # Handle Ctrl-R register input (waiting for register name)
-  if handler.waitingForRegister:
-    handler.waitingForRegister = false
-
-    # Escape cancels register input
-    if keyCombo.isSpecial and keyCombo.special == skEscape:
-      return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
-
-    # Get register name from key
-    if not keyCombo.isSpecial and keyCombo.char.len == 1:
-      let regName = keyCombo.char[0]
-      if isValidRegisterName(regName):
-        let content = state.registers.getRegisterContent(regName)
-        if content.len > 0:
-          # Insert register content at cursor
-          discard buffer.insertText(state.cursor, content)
-          # Calculate new cursor position after insertion
-          # Content may contain newlines, so we need to handle multiline
-          let lines = content.split('\n')
-          if lines.len == 1:
-            # Single line: just move column
-            state.cursor.column += content.runeLen
-          else:
-            # Multiple lines: move to end of last inserted line
-            state.cursor.line += lines.len - 1
-            state.cursor.column = lines[^1].runeLen
-        return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
-
-    # Invalid register name - ignore
-    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   let completionActive = handler.completionManager.isActive()
 
@@ -590,10 +557,16 @@ proc handleInsertModeKey*(
     discard insertCharFromAbove(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  # Ctrl+R - insert from register (wait for register name)
+  # Ctrl+R - trigger signature help (LSP)
   if keyCombo.isCtrlR:
     handler.completionManager.cancelCompletion()
-    handler.waitingForRegister = true
+    # Request signature help from LSP if available
+    if not handler.lsp.isNil and handler.lsp.isEnabled:
+      let reqResult = handler.lsp.startSignatureHelpRequest(
+        buffer, state.cursor.line, state.cursor.column
+      )
+      if reqResult.isOk:
+        state.lspCache.pendingSignatureHelpRequestId = reqResult.get
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   # Check for mode switch keys (like Escape)

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -191,3 +191,16 @@ type
     frkComment = "comment" ## Folding range for a comment
     frkImports = "imports" ## Folding range for imports or includes
     frkRegion = "region" ## Folding range for a region (e.g., #region in C#)
+
+  CodeActionKind* = enum
+    ## Code action kinds (LSP 3.16+)
+    ## These are hierarchical identifiers (e.g., "quickfix.extract.function")
+    cakEmpty = "" ## Empty kind
+    cakQuickFix = "quickfix" ## Base kind for quickfix actions
+    cakRefactor = "refactor" ## Base kind for refactoring actions
+    cakRefactorExtract = "refactor.extract" ## Extract actions (method, function, etc.)
+    cakRefactorInline = "refactor.inline" ## Inline actions
+    cakRefactorRewrite = "refactor.rewrite" ## Rewrite actions
+    cakSource = "source" ## Base kind for source actions
+    cakSourceOrganizeImports = "source.organizeImports" ## Organize imports
+    cakSourceFixAll = "source.fixAll" ## Fix all actions

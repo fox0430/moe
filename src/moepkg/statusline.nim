@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -349,11 +349,25 @@ proc renderStatusLine*(
   let rightSideText = buildRightSideInfo(state, textBuffer, config, true)
   let rightSideWidth = displayWidth(rightSideText)
 
+  # Build LSP progress text (displayed in the middle section)
+  let progressText =
+    if state.lspProgressText.len > 0:
+      " " & state.lspProgressText & " "
+    else:
+      ""
+  let progressWidth = displayWidth(progressText)
+
   # Fill the rest of the line with background
   let remainingWidth = max(0, buffer.area.width - statusLeftWidth)
   if remainingWidth > 0:
     let background = " ".repeat(remainingWidth)
     buffer.setString(currentX, statusLineY, background, statusLineStyle)
+
+  # Draw LSP progress (in the middle, after left side content)
+  if progressText.len > 0:
+    let progressX = currentX + 1 # Add some padding after file path
+    if progressX + progressWidth < buffer.area.x + buffer.area.width - rightSideWidth - 2:
+      buffer.setString(progressX, statusLineY, progressText, statusLineStyle)
 
   # Draw right side info
   if rightSideText.len > 0 and buffer.area.width >= rightSideWidth + 1:
@@ -432,11 +446,25 @@ proc renderWindowStatusLine*(
   let rightSideText = buildRightSideInfo(state, textBuffer, config, isActiveWindow)
   let rightSideWidth = displayWidth(rightSideText)
 
+  # Build LSP progress text (displayed in the middle section, only for active window)
+  let progressText =
+    if isActiveWindow and state.lspProgressText.len > 0:
+      " " & state.lspProgressText & " "
+    else:
+      ""
+  let progressWidth = displayWidth(progressText)
+
   # Fill the rest of the line with background
   let remainingWidth = max(0, (statusLineX + statusLineWidth) - currentX)
   if remainingWidth > 0:
     let background = " ".repeat(remainingWidth)
     buffer.setString(currentX, statusLineY, background, statusLineStyle)
+
+  # Draw LSP progress (in the middle, after left side content)
+  if progressText.len > 0:
+    let progressX = currentX + 1 # Add some padding after file path
+    if progressX + progressWidth < statusLineX + statusLineWidth - rightSideWidth - 2:
+      buffer.setString(progressX, statusLineY, progressText, statusLineStyle)
 
   # Draw right side info
   if rightSideText.len > 0 and statusLineWidth >= rightSideWidth + 1:

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -25,8 +25,8 @@ import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
   gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
-  lspintegration, completion, signaturehelp, backup, command_completion, motion,
-  recentfilemode, color, gapbuffer, persist, debugviewer, messagelog
+  lspintegration, completion, signaturehelp, hoverpopup, backup, command_completion,
+  motion, recentfilemode, color, gapbuffer, persist, debugviewer, messagelog
 import lsp/protocol/types as lspTypes
 import command_handlers/[handler_manager, visual_handler, insert_handler]
 
@@ -1070,11 +1070,15 @@ proc newEditor*(): Editor =
         codeLensCache: CodeLensCache(isValid: false),
         codeLensPicker: CodeLensPicker(isActive: false),
         documentHighlightCache: DocumentHighlightCache(isValid: false),
+        semanticTokensCache: SemanticTokensCache(isValid: false),
+        hoverPopup: newHoverPopupManager(),
         locations: none(LspLocationsResult),
         lastCodeLensUpdate: getMonoTime(),
         codeLensUpdateInterval: 1000, # 1 second debounce
         lastDocumentHighlightUpdate: getMonoTime(),
         documentHighlightUpdateInterval: 200, # 200ms debounce
+        lastSemanticTokensUpdate: getMonoTime(),
+        semanticTokensUpdateInterval: 500, # 500ms debounce for semantic tokens
       ),
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
@@ -4296,264 +4300,454 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
   e.state.needsFullRedraw = true
   return true
 
-proc requestLspGotoDefinition*(e: Editor): bool =
-  ## Request LSP goto definition at current cursor position
-  ## Returns true if successful and location was found
+proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =
+  ## Start an async LSP location request (definition, declaration, references, etc.)
+  ## Returns true if request was started successfully
   if not e.lsp.enabled:
     e.state.statusMessage = "LSP is not enabled"
     return false
 
-  let activeBuffer = e.activeBuffer()
-  let defResult =
-    e.lsp.requestDefinition(activeBuffer, e.state.cursor.line, e.state.cursor.column)
+  # Cancel any pending location request
+  e.state.lspCache.pendingLocationRequestId = 0
+  e.state.lspCache.pendingLocationRequestKind = lrkNone
 
-  if defResult.isErr:
-    e.state.statusMessage = "LSP goto definition failed: " & defResult.error
+  let activeBuffer = e.activeBuffer()
+  let line = e.state.cursor.line
+  let col = e.state.cursor.column
+
+  let reqResult =
+    case kind
+    of lrkDefinition:
+      e.lsp.startDefinitionRequest(activeBuffer, line, col)
+    of lrkDeclaration:
+      e.lsp.startDeclarationRequest(activeBuffer, line, col)
+    of lrkReferences:
+      e.lsp.startReferencesRequest(activeBuffer, line, col)
+    of lrkTypeDefinition:
+      e.lsp.startTypeDefinitionRequest(activeBuffer, line, col)
+    of lrkImplementation:
+      e.lsp.startImplementationRequest(activeBuffer, line, col)
+    of lrkNone:
+      return false
+
+  if reqResult.isErr:
+    let kindName =
+      case kind
+      of lrkDefinition: "definition"
+      of lrkDeclaration: "declaration"
+      of lrkReferences: "references"
+      of lrkTypeDefinition: "type definition"
+      of lrkImplementation: "implementation"
+      of lrkNone: ""
+    e.state.statusMessage = "LSP " & kindName & " failed: " & reqResult.error
     return false
 
-  return e.handleLspLocations(defResult.get, "Definitions", "Definition")
+  e.state.lspCache.pendingLocationRequestId = reqResult.get
+  e.state.lspCache.pendingLocationRequestKind = kind
+  return true
+
+proc pollLspLocationRequest*(e: Editor) =
+  ## Poll for pending LSP location request response
+  ## This should be called from the main event loop (tick function)
+  if not e.lsp.enabled:
+    return
+
+  let requestId = e.state.lspCache.pendingLocationRequestId
+  if requestId == 0:
+    return
+
+  let kind = e.state.lspCache.pendingLocationRequestKind
+  if kind == lrkNone:
+    return
+
+  # Poll LSP service for events
+  e.lsp.poll(0)
+
+  # Check for response
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+
+  case status
+  of lrsPending:
+    discard # Still waiting
+  of lrsSuccess:
+    e.state.lspCache.pendingLocationRequestId = 0
+    e.state.lspCache.pendingLocationRequestKind = lrkNone
+    if resultOpt.isSome:
+      let locations = parseLocationsResponse(resultOpt.get)
+      let (pluralName, singularName) =
+        case kind
+        of lrkDefinition:
+          ("Definitions", "Definition")
+        of lrkDeclaration:
+          ("Declarations", "Declaration")
+        of lrkReferences:
+          ("References", "Reference")
+        of lrkTypeDefinition:
+          ("Type Definitions", "Type Definition")
+        of lrkImplementation:
+          ("Implementations", "Implementation")
+        of lrkNone:
+          ("", "")
+      discard e.handleLspLocations(locations, pluralName, singularName)
+    else:
+      e.state.statusMessage = "No results found"
+  of lrsError:
+    e.state.lspCache.pendingLocationRequestId = 0
+    e.state.lspCache.pendingLocationRequestKind = lrkNone
+    if errorOpt.isSome:
+      e.state.statusMessage = "LSP request failed: " & errorOpt.get
+  of lrsTimeout:
+    e.state.lspCache.pendingLocationRequestId = 0
+    e.state.lspCache.pendingLocationRequestKind = lrkNone
+    e.state.statusMessage = "LSP request timed out"
+
+proc requestLspGotoDefinition*(e: Editor): bool =
+  ## Request LSP goto definition at current cursor position (async)
+  ## Returns true if request was started
+  e.startLspLocationRequest(lrkDefinition)
 
 proc requestLspGotoDeclaration*(e: Editor): bool =
-  ## Request LSP goto declaration at current cursor position
-  ## Returns true if successful and location was found
-  if not e.lsp.enabled:
-    e.state.statusMessage = "LSP is not enabled"
-    return false
-
-  let activeBuffer = e.activeBuffer()
-  let declResult =
-    e.lsp.requestDeclaration(activeBuffer, e.state.cursor.line, e.state.cursor.column)
-
-  if declResult.isErr:
-    e.state.statusMessage = "LSP goto declaration failed: " & declResult.error
-    return false
-
-  return e.handleLspLocations(declResult.get, "Declarations", "Declaration")
+  ## Request LSP goto declaration at current cursor position (async)
+  ## Returns true if request was started
+  e.startLspLocationRequest(lrkDeclaration)
 
 proc requestLspReferences*(e: Editor): bool =
-  ## Request LSP find references at current cursor position
-  ## Returns true if successful and references were found
+  ## Request LSP find references at current cursor position (async)
+  ## Returns true if request was started
+  e.startLspLocationRequest(lrkReferences)
+
+proc startCallHierarchyRequest(e: Editor, kind: CallHierarchyRequestKind): bool =
+  ## Start an async call hierarchy request (2-stage: prepare -> incoming/outgoing)
+  ## Returns true if request was started
   if not e.lsp.enabled:
     e.state.statusMessage = "LSP is not enabled"
     return false
 
   let activeBuffer = e.activeBuffer()
-  let refsResult =
-    e.lsp.requestReferences(activeBuffer, e.state.cursor.line, e.state.cursor.column)
 
-  if refsResult.isErr:
-    e.state.statusMessage = "LSP find references failed: " & refsResult.error
+  if not e.lsp.hasCallHierarchySupport(activeBuffer):
+    e.state.statusMessage = "Call hierarchy not supported"
     return false
 
-  return e.handleLspLocations(refsResult.get, "References", "Reference")
+  # Cancel any pending call hierarchy request
+  e.state.lspCache.pendingCallHierarchyRequestId = 0
+  e.state.lspCache.pendingCallHierarchyKind = chrkNone
+  e.state.lspCache.pendingCallHierarchyPrepareResult = none(JsonNode)
+
+  # Start with prepare request
+  let reqResult = e.lsp.startCallHierarchyPrepareRequest(
+    activeBuffer, e.state.cursor.line, e.state.cursor.column
+  )
+
+  if reqResult.isErr:
+    e.state.statusMessage = "LSP call hierarchy failed: " & reqResult.error
+    return false
+
+  e.state.lspCache.pendingCallHierarchyRequestId = reqResult.get
+  e.state.lspCache.pendingCallHierarchyKind = kind
+  return true
+
+proc pollLspCallHierarchy*(e: Editor) =
+  ## Poll for pending call hierarchy request response
+  ## Handles 2-stage request: prepare -> incoming/outgoing
+  if not e.lsp.enabled:
+    return
+
+  let requestId = e.state.lspCache.pendingCallHierarchyRequestId
+  if requestId == 0:
+    return
+
+  let kind = e.state.lspCache.pendingCallHierarchyKind
+  if kind == chrkNone:
+    return
+
+  # Poll LSP service for events
+  e.lsp.poll(0)
+
+  # Check for response
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+
+  case status
+  of lrsPending:
+    discard # Still waiting
+  of lrsSuccess:
+    let activeBuffer = e.activeBuffer()
+
+    case kind
+    of chrkPrepareIncoming, chrkPrepareOutgoing:
+      # First stage complete - parse prepare result and start second stage
+      if resultOpt.isSome:
+        let prepareItems = parseCallHierarchyPrepareResponse(resultOpt.get)
+        if prepareItems.len == 0:
+          e.state.lspCache.pendingCallHierarchyRequestId = 0
+          e.state.lspCache.pendingCallHierarchyKind = chrkNone
+          e.state.statusMessage = "No callable symbol at cursor"
+          return
+
+        # Start second stage request
+        let item = prepareItems[0]
+        let secondReqResult =
+          if kind == chrkPrepareIncoming:
+            e.lsp.startCallHierarchyIncomingCallsRequest(activeBuffer, item)
+          else:
+            e.lsp.startCallHierarchyOutgoingCallsRequest(activeBuffer, item)
+
+        if secondReqResult.isErr:
+          e.state.lspCache.pendingCallHierarchyRequestId = 0
+          e.state.lspCache.pendingCallHierarchyKind = chrkNone
+          e.state.statusMessage = "LSP call hierarchy failed: " & secondReqResult.error
+          return
+
+        e.state.lspCache.pendingCallHierarchyRequestId = secondReqResult.get
+        e.state.lspCache.pendingCallHierarchyKind =
+          if kind == chrkPrepareIncoming: chrkIncomingCalls else: chrkOutgoingCalls
+      else:
+        e.state.lspCache.pendingCallHierarchyRequestId = 0
+        e.state.lspCache.pendingCallHierarchyKind = chrkNone
+        e.state.statusMessage = "No callable symbol at cursor"
+    of chrkIncomingCalls:
+      # Second stage complete - show incoming calls
+      e.state.lspCache.pendingCallHierarchyRequestId = 0
+      e.state.lspCache.pendingCallHierarchyKind = chrkNone
+
+      if resultOpt.isSome:
+        let calls = parseCallHierarchyIncomingCallsResponse(resultOpt.get)
+        if calls.len == 0:
+          e.state.statusMessage = "No incoming calls found"
+          return
+
+        var locations: seq[lspTypes.Location] = @[]
+        for call in calls:
+          locations.add(
+            lspTypes.Location(uri: call.`from`.uri, range: call.`from`.selectionRange)
+          )
+        discard e.handleLspLocations(locations, "Incoming Calls", "Caller")
+      else:
+        e.state.statusMessage = "No incoming calls found"
+    of chrkOutgoingCalls:
+      # Second stage complete - show outgoing calls
+      e.state.lspCache.pendingCallHierarchyRequestId = 0
+      e.state.lspCache.pendingCallHierarchyKind = chrkNone
+
+      if resultOpt.isSome:
+        let calls = parseCallHierarchyOutgoingCallsResponse(resultOpt.get)
+        if calls.len == 0:
+          e.state.statusMessage = "No outgoing calls found"
+          return
+
+        var locations: seq[lspTypes.Location] = @[]
+        for call in calls:
+          locations.add(
+            lspTypes.Location(uri: call.to.uri, range: call.to.selectionRange)
+          )
+        discard e.handleLspLocations(locations, "Outgoing Calls", "Callee")
+      else:
+        e.state.statusMessage = "No outgoing calls found"
+    of chrkNone:
+      discard
+  of lrsError:
+    e.state.lspCache.pendingCallHierarchyRequestId = 0
+    e.state.lspCache.pendingCallHierarchyKind = chrkNone
+    if errorOpt.isSome:
+      e.state.statusMessage = "LSP call hierarchy failed: " & errorOpt.get
+  of lrsTimeout:
+    e.state.lspCache.pendingCallHierarchyRequestId = 0
+    e.state.lspCache.pendingCallHierarchyKind = chrkNone
+    e.state.statusMessage = "LSP call hierarchy timed out"
 
 proc requestLspCallHierarchyIncoming*(e: Editor): bool =
-  ## Request LSP incoming calls (callers) at current cursor position
-  ## Returns true if successful and callers were found
-  if not e.lsp.enabled:
-    e.state.statusMessage = "LSP is not enabled"
-    return false
-
-  let activeBuffer = e.activeBuffer()
-
-  if not e.lsp.hasCallHierarchySupport(activeBuffer):
-    e.state.statusMessage = "Call hierarchy not supported"
-    return false
-
-  # First, prepare call hierarchy to get the item at cursor
-  let prepareResult = e.lsp.requestCallHierarchyPrepare(
-    activeBuffer, e.state.cursor.line, e.state.cursor.column
-  )
-
-  if prepareResult.isErr:
-    e.state.statusMessage = "LSP call hierarchy failed: " & prepareResult.error
-    return false
-
-  let items = prepareResult.get
-  if items.len == 0:
-    e.state.statusMessage = "No callable symbol at cursor"
-    return false
-
-  # Get incoming calls for the first item
-  let incomingResult = e.lsp.requestCallHierarchyIncomingCalls(activeBuffer, items[0])
-
-  if incomingResult.isErr:
-    e.state.statusMessage = "LSP incoming calls failed: " & incomingResult.error
-    return false
-
-  let calls = incomingResult.get
-  if calls.len == 0:
-    e.state.statusMessage = "No incoming calls found"
-    return false
-
-  # Convert CallHierarchyIncomingCall to Location for display
-  var locations: seq[lspTypes.Location] = @[]
-  for call in calls:
-    locations.add(
-      lspTypes.Location(uri: call.`from`.uri, range: call.`from`.selectionRange)
-    )
-
-  return e.handleLspLocations(locations, "Incoming Calls", "Caller")
+  ## Request LSP incoming calls at current cursor position (async)
+  ## Returns true if request was started
+  e.startCallHierarchyRequest(chrkPrepareIncoming)
 
 proc requestLspCallHierarchyOutgoing*(e: Editor): bool =
-  ## Request LSP outgoing calls (callees) at current cursor position
-  ## Returns true if successful and callees were found
-  if not e.lsp.enabled:
-    e.state.statusMessage = "LSP is not enabled"
-    return false
-
-  let activeBuffer = e.activeBuffer()
-
-  if not e.lsp.hasCallHierarchySupport(activeBuffer):
-    e.state.statusMessage = "Call hierarchy not supported"
-    return false
-
-  # First, prepare call hierarchy to get the item at cursor
-  let prepareResult = e.lsp.requestCallHierarchyPrepare(
-    activeBuffer, e.state.cursor.line, e.state.cursor.column
-  )
-
-  if prepareResult.isErr:
-    e.state.statusMessage = "LSP call hierarchy failed: " & prepareResult.error
-    return false
-
-  let items = prepareResult.get
-  if items.len == 0:
-    e.state.statusMessage = "No callable symbol at cursor"
-    return false
-
-  # Get outgoing calls for the first item
-  let outgoingResult = e.lsp.requestCallHierarchyOutgoingCalls(activeBuffer, items[0])
-
-  if outgoingResult.isErr:
-    e.state.statusMessage = "LSP outgoing calls failed: " & outgoingResult.error
-    return false
-
-  let calls = outgoingResult.get
-  if calls.len == 0:
-    e.state.statusMessage = "No outgoing calls found"
-    return false
-
-  # Convert CallHierarchyOutgoingCall to Location for display
-  var locations: seq[lspTypes.Location] = @[]
-  for call in calls:
-    locations.add(lspTypes.Location(uri: call.to.uri, range: call.to.selectionRange))
-
-  return e.handleLspLocations(locations, "Outgoing Calls", "Callee")
+  ## Request LSP outgoing calls at current cursor position (async)
+  ## Returns true if request was started
+  e.startCallHierarchyRequest(chrkPrepareOutgoing)
 
 proc requestLspTypeDefinition*(e: Editor): bool =
-  ## Request LSP goto type definition at current cursor position
-  ## Returns true if successful and location was found
-  if not e.lsp.enabled:
-    e.state.statusMessage = "LSP is not enabled"
-    return false
-
-  let activeBuffer = e.activeBuffer()
-  let typeDefResult = e.lsp.requestTypeDefinition(
-    activeBuffer, e.state.cursor.line, e.state.cursor.column
-  )
-
-  if typeDefResult.isErr:
-    e.state.statusMessage = "LSP goto type definition failed: " & typeDefResult.error
-    return false
-
-  return e.handleLspLocations(typeDefResult.get, "Type Definitions", "Type Definition")
+  ## Request LSP goto type definition at current cursor position (async)
+  ## Returns true if request was started
+  e.startLspLocationRequest(lrkTypeDefinition)
 
 proc requestLspImplementation*(e: Editor): bool =
-  ## Request LSP goto implementation at current cursor position
-  ## Returns true if successful and location was found
+  ## Request LSP goto implementation at current cursor position (async)
+  ## Returns true if request was started
+  e.startLspLocationRequest(lrkImplementation)
+
+proc startLspHover*(e: Editor): bool =
+  ## Start async LSP hover request at current cursor position
+  ## Returns true if request was started successfully
+  ## Results will be polled by pollLspHover in the tick function
   if not e.lsp.enabled:
     e.state.statusMessage = "LSP is not enabled"
     return false
 
-  let activeBuffer = e.activeBuffer()
-  let implResult = e.lsp.requestImplementation(
-    activeBuffer, e.state.cursor.line, e.state.cursor.column
-  )
+  # Cancel any pending hover request
+  e.state.lspCache.pendingHoverRequestId = 0
 
-  if implResult.isErr:
-    e.state.statusMessage = "LSP goto implementation failed: " & implResult.error
+  let activeBuffer = e.activeBuffer()
+  let reqResult =
+    e.lsp.startHoverRequest(activeBuffer, e.state.cursor.line, e.state.cursor.column)
+
+  if reqResult.isErr:
+    e.state.statusMessage = "LSP hover failed: " & reqResult.error
     return false
 
-  return e.handleLspLocations(implResult.get, "Implementations", "Implementation")
+  e.state.lspCache.pendingHoverRequestId = reqResult.get
+  return true
+
+proc pollLspHover*(e: Editor) =
+  ## Poll for pending LSP hover response
+  ## This should be called from the main event loop (tick function)
+  if not e.lsp.enabled:
+    return
+
+  let requestId = e.state.lspCache.pendingHoverRequestId
+  if requestId == 0:
+    return
+
+  # Poll LSP service for events
+  e.lsp.poll(0)
+
+  # Check for response
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+
+  case status
+  of lrsPending:
+    discard # Still waiting
+  of lrsSuccess:
+    e.state.lspCache.pendingHoverRequestId = 0
+    if resultOpt.isSome:
+      let hoverOpt = parseHoverResponse(resultOpt.get)
+      if hoverOpt.isSome:
+        let hoverText = getHoverText(hoverOpt.get)
+        if hoverText.len > 0:
+          e.state.lspCache.hoverPopup.show(
+            hoverText, e.state.cursor.line, e.state.cursor.column
+          )
+        else:
+          e.state.statusMessage = "No hover information available"
+      else:
+        e.state.statusMessage = "No hover information available"
+    else:
+      e.state.statusMessage = "No hover information available"
+  of lrsError:
+    e.state.lspCache.pendingHoverRequestId = 0
+    if errorOpt.isSome:
+      e.state.statusMessage = "LSP hover failed: " & errorOpt.get
+  of lrsTimeout:
+    e.state.lspCache.pendingHoverRequestId = 0
+    e.state.statusMessage = "LSP hover timed out"
 
 proc requestLspHover*(e: Editor): bool =
-  ## Request LSP hover information at current cursor position
-  ## Returns true if successful and hover info was found
+  ## Request LSP hover information at current cursor position (async)
+  ## Returns true if request was started
+  ## The hover popup will be shown when the response arrives
+  e.startLspHover()
+
+proc hideHoverPopup*(e: Editor) =
+  ## Hide the hover popup
+  e.state.lspCache.hoverPopup.hide()
+
+proc hoverPopupScrollDown*(e: Editor) =
+  ## Scroll hover popup down
+  e.state.lspCache.hoverPopup.scrollDown()
+
+proc hoverPopupScrollUp*(e: Editor) =
+  ## Scroll hover popup up
+  e.state.lspCache.hoverPopup.scrollUp()
+
+proc hoverPopupScrollRight*(e: Editor) =
+  ## Scroll hover popup right
+  e.state.lspCache.hoverPopup.scrollRight()
+
+proc hoverPopupScrollLeft*(e: Editor) =
+  ## Scroll hover popup left
+  e.state.lspCache.hoverPopup.scrollLeft()
+
+proc startLspSelectionRange*(e: Editor): bool =
+  ## Start async LSP selection range request at current cursor position
+  ## Returns true if request was started
   if not e.lsp.enabled:
     e.state.statusMessage = "LSP is not enabled"
     return false
 
-  let activeBuffer = e.activeBuffer()
-  let hoverResult =
-    e.lsp.requestHover(activeBuffer, e.state.cursor.line, e.state.cursor.column)
-
-  if hoverResult.isErr:
-    e.state.statusMessage = "LSP hover failed: " & hoverResult.error
-    return false
-
-  let hoverOpt = hoverResult.get
-  if hoverOpt.isNone:
-    e.state.statusMessage = "No hover information available"
-    return false
-
-  let hoverText = getHoverText(hoverOpt.get)
-  if hoverText.len == 0:
-    e.state.statusMessage = "No hover information available"
-    return false
-
-  # Display hover info in status message (truncated if too long)
-  let maxLen = 200
-  if hoverText.len > maxLen:
-    e.state.statusMessage = hoverText[0 ..< maxLen] & "..."
-  else:
-    e.state.statusMessage = hoverText
-  return true
-
-proc requestLspSelectionRange*(e: Editor): bool =
-  ## Request LSP selection range expansion at current cursor position
-  ## Returns true if successful and selection was expanded
-  if not e.lsp.enabled:
-    e.state.statusMessage = "LSP is not enabled"
-    return false
+  # Cancel any pending selection range request
+  e.state.lspCache.pendingSelectionRangeRequestId = 0
 
   let activeBuffer = e.activeBuffer()
-  let selResult = e.lsp.requestSelectionRange(
+  let reqResult = e.lsp.startSelectionRangeRequest(
     activeBuffer, e.state.cursor.line, e.state.cursor.column
   )
 
-  if selResult.isErr:
-    e.state.statusMessage = "LSP selection range failed: " & selResult.error
+  if reqResult.isErr:
+    e.state.statusMessage = "LSP selection range failed: " & reqResult.error
     return false
 
-  let selOpt = selResult.get
-  if selOpt.isNone:
-    e.state.statusMessage = "No selection range available"
-    return false
-
-  let selRange = selOpt.get
-  # Enter visual mode and set selection to the range
-  e.state.previousMode = e.state.mode
-  e.state.mode = EditorMode.Visual
-  e.state.visualSelection = VisualSelection(
-    kind: vskChar,
-    start: BufferPosition(
-      line: selRange.range.start.line, column: selRange.range.start.character
-    ),
-    current: BufferPosition(
-      line: selRange.range.`end`.line, column: selRange.range.`end`.character
-    ),
-    active: true,
-  )
-  e.state.cursor = BufferPosition(
-    line: selRange.range.`end`.line, column: selRange.range.`end`.character
-  )
+  e.state.lspCache.pendingSelectionRangeRequestId = reqResult.get
   return true
 
-proc requestDocumentSymbols*(e: Editor): bool =
-  ## Request document symbols (outline) for the current file
-  ## Opens the document symbol viewer if symbols are found
-  ## Returns true if successful
+proc pollLspSelectionRange*(e: Editor) =
+  ## Poll for pending selection range response
+  if not e.lsp.enabled:
+    return
+
+  let requestId = e.state.lspCache.pendingSelectionRangeRequestId
+  if requestId == 0:
+    return
+
+  # Poll LSP service for events
+  e.lsp.poll(0)
+
+  # Check for response
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+
+  case status
+  of lrsPending:
+    discard # Still waiting
+  of lrsSuccess:
+    e.state.lspCache.pendingSelectionRangeRequestId = 0
+    if resultOpt.isSome:
+      let ranges = parseSelectionRangeResponse(resultOpt.get)
+      if ranges.len > 0:
+        let selRange = ranges[0]
+        # Enter visual mode and set selection to the range
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.Visual
+        e.state.visualSelection = VisualSelection(
+          kind: vskChar,
+          start: BufferPosition(
+            line: selRange.range.start.line, column: selRange.range.start.character
+          ),
+          current: BufferPosition(
+            line: selRange.range.`end`.line, column: selRange.range.`end`.character
+          ),
+          active: true,
+        )
+        e.state.cursor = BufferPosition(
+          line: selRange.range.`end`.line, column: selRange.range.`end`.character
+        )
+      else:
+        e.state.statusMessage = "No selection range available"
+    else:
+      e.state.statusMessage = "No selection range available"
+  of lrsError:
+    e.state.lspCache.pendingSelectionRangeRequestId = 0
+    if errorOpt.isSome:
+      e.state.statusMessage = "LSP selection range failed: " & errorOpt.get
+  of lrsTimeout:
+    e.state.lspCache.pendingSelectionRangeRequestId = 0
+    e.state.statusMessage = "LSP selection range timed out"
+
+proc requestLspSelectionRange*(e: Editor): bool =
+  ## Request LSP selection range at current cursor position (async)
+  ## Returns true if request was started
+  e.startLspSelectionRange()
+
+proc startLspDocumentSymbols*(e: Editor): bool =
+  ## Start async document symbols request
+  ## Returns true if request was started
   if not e.lsp.enabled:
     e.state.statusMessage = "LSP is not enabled"
     return false
@@ -4563,33 +4757,75 @@ proc requestDocumentSymbols*(e: Editor): bool =
     e.state.statusMessage = "No file path for current buffer"
     return false
 
-  let path = activeBuffer.filePath.get
-
   # Check if document symbol is supported
   if not e.lsp.hasDocumentSymbolSupport(activeBuffer):
     e.state.statusMessage = "Document symbols not supported"
     return false
 
-  # Request document symbols from LSP
-  let symbolsResult = e.lsp.requestDocumentSymbols(activeBuffer)
-  if symbolsResult.isErr:
-    e.state.statusMessage = "LSP document symbols request failed"
+  # Cancel any pending request
+  e.state.lspCache.pendingDocumentSymbolsRequestId = 0
+
+  let reqResult = e.lsp.startDocumentSymbolsRequest(activeBuffer)
+  if reqResult.isErr:
+    e.state.statusMessage = "LSP document symbols failed: " & reqResult.error
     return false
 
-  let symResult = symbolsResult.get
-  let viewerState = newDocumentSymbolViewerState(symResult, path)
-  let symbolCount = viewerState.itemCount()
-
-  if symbolCount == 0:
-    e.state.statusMessage = "No symbols found"
-    return false
-
-  # Enter DocumentSymbol mode
-  e.state.previousMode = e.state.mode
-  e.state.mode = EditorMode.DocumentSymbol
-  e.state.documentSymbolViewerState = some(viewerState)
-  e.state.statusMessage = $symbolCount & " symbols found"
+  e.state.lspCache.pendingDocumentSymbolsRequestId = reqResult.get
   return true
+
+proc pollLspDocumentSymbols*(e: Editor) =
+  ## Poll for pending document symbols response
+  if not e.lsp.enabled:
+    return
+
+  let requestId = e.state.lspCache.pendingDocumentSymbolsRequestId
+  if requestId == 0:
+    return
+
+  # Poll LSP service for events
+  e.lsp.poll(0)
+
+  # Check for response
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+
+  case status
+  of lrsPending:
+    discard # Still waiting
+  of lrsSuccess:
+    e.state.lspCache.pendingDocumentSymbolsRequestId = 0
+    if resultOpt.isSome:
+      let activeBuffer = e.activeBuffer()
+      if activeBuffer.filePath.isNone:
+        return
+
+      let path = activeBuffer.filePath.get
+      let symResult = parseDocumentSymbolsResponse(resultOpt.get)
+      let viewerState = newDocumentSymbolViewerState(symResult, path)
+      let symbolCount = viewerState.itemCount()
+
+      if symbolCount == 0:
+        e.state.statusMessage = "No symbols found"
+        return
+
+      # Enter DocumentSymbol mode
+      e.state.previousMode = e.state.mode
+      e.state.mode = EditorMode.DocumentSymbol
+      e.state.documentSymbolViewerState = some(viewerState)
+      e.state.statusMessage = $symbolCount & " symbols found"
+    else:
+      e.state.statusMessage = "No symbols found"
+  of lrsError:
+    e.state.lspCache.pendingDocumentSymbolsRequestId = 0
+    if errorOpt.isSome:
+      e.state.statusMessage = "LSP document symbols failed: " & errorOpt.get
+  of lrsTimeout:
+    e.state.lspCache.pendingDocumentSymbolsRequestId = 0
+    e.state.statusMessage = "LSP document symbols timed out"
+
+proc requestDocumentSymbols*(e: Editor): bool =
+  ## Request document symbols (async)
+  ## Returns true if request was started
+  e.startLspDocumentSymbols()
 
 proc hasCodeLensSupport*(e: Editor): bool =
   ## Check if CodeLens is supported for the current buffer
@@ -4884,6 +5120,115 @@ proc updateDocumentHighlightCache*(e: Editor) =
   if elapsed >= threshold:
     e.doUpdateDocumentHighlightCache()
 
+# =============================================================================
+# Semantic Tokens (LSP-based syntax highlighting)
+# =============================================================================
+
+proc invalidateSemanticTokensCache*(e: Editor) =
+  ## Invalidate the semantic tokens cache, forcing re-request on next update
+  e.state.lspCache.semanticTokensCache = SemanticTokensCache(isValid: false)
+  e.state.lspCache.pendingSemanticTokensRequestId = 0
+
+proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
+  ## Process semantic tokens response and apply to buffer's highlight
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.isNil or activeBuffer.highlight.isNil:
+    return
+
+  let legendOpt = e.lsp.getSemanticTokensLegend(activeBuffer)
+  if legendOpt.isNone:
+    logDebug("editor", "Semantic tokens: no legend available")
+    return
+
+  # Parse and apply semantic tokens
+  let tokens = parseSemanticTokens(resp)
+  applySemanticTokens(activeBuffer.highlight, tokens, legendOpt.get)
+
+  # Mark cache as valid
+  e.state.lspCache.semanticTokensCache = SemanticTokensCache(
+    changeSeq: activeBuffer.changeSeq,
+    filePath: activeBuffer.filePath.get(""),
+    isValid: true,
+    topLine: e.viewport.topLine,
+    bottomLine: e.viewport.topLine + e.viewport.height,
+  )
+  e.state.lspCache.lastSemanticTokensUpdate = getMonoTime()
+
+proc doUpdateSemanticTokensCache(e: Editor) =
+  ## Internal: Start an async semantic tokens request (non-blocking)
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    e.invalidateSemanticTokensCache()
+    return
+
+  # Request semantic tokens for visible range (with margin)
+  let topLine = max(0, e.viewport.topLine - 10)
+  let bottomLine =
+    min(e.viewport.topLine + e.viewport.height + 10, activeBuffer.len - 1)
+
+  # Start async request
+  let reqResult = e.lsp.startSemanticTokensRequest(activeBuffer, topLine, bottomLine)
+  if reqResult.isOk:
+    e.state.lspCache.pendingSemanticTokensRequestId = reqResult.get
+  else:
+    logDebug("editor", "Semantic tokens request failed: " & reqResult.error)
+    e.invalidateSemanticTokensCache()
+
+proc updateSemanticTokensCache*(e: Editor) =
+  ## Update the semantic tokens cache (with debouncing)
+  ## Called during render to update LSP-based syntax highlighting
+  ## Uses non-blocking async pattern to avoid freezing the UI
+  if not e.lsp.enabled:
+    return
+
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    return
+
+  let path = activeBuffer.filePath.get
+  let langIdOpt = e.lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return
+
+  # Check if semantic tokens is supported
+  if not e.lsp.service.hasSemanticTokensSupport(langIdOpt.get):
+    return
+
+  # Check if there's a pending request - try to get response
+  if e.state.lspCache.pendingSemanticTokensRequestId != 0:
+    let (status, resultOpt, _) =
+      e.lsp.checkResponse(e.state.lspCache.pendingSemanticTokensRequestId)
+    case status
+    of lrsPending:
+      # Still waiting for response, don't start a new request
+      return
+    of lrsSuccess:
+      # Got response, process it
+      e.state.lspCache.pendingSemanticTokensRequestId = 0
+      if resultOpt.isSome and resultOpt.get.kind != JNull:
+        e.processSemanticTokensResponse(resultOpt.get)
+      # Continue to check if we need to start a new request
+    of lrsError, lrsTimeout:
+      # Request failed or timed out, clear and continue
+      logDebug("editor", "Semantic tokens request failed or timed out")
+      e.state.lspCache.pendingSemanticTokensRequestId = 0
+
+  # Check if cache is still valid
+  let cache = e.state.lspCache.semanticTokensCache
+  if cache.isValid and cache.changeSeq == activeBuffer.changeSeq and
+      cache.filePath == path and cache.topLine <= e.viewport.topLine and
+      cache.bottomLine >= e.viewport.topLine + e.viewport.height:
+    # Cache is valid and covers current viewport
+    return
+
+  # Debounce - only update if enough time has passed since last update
+  let now = getMonoTime()
+  let elapsed = now - e.state.lspCache.lastSemanticTokensUpdate
+  let threshold =
+    initDuration(milliseconds = e.state.lspCache.semanticTokensUpdateInterval)
+  if elapsed >= threshold:
+    e.doUpdateSemanticTokensCache()
+
 proc getCodeLensDisplayText*(e: Editor, line: int): string =
   ## Get display text for CodeLens on a specific line
   ## Returns empty string if no CodeLens on this line
@@ -5164,6 +5509,16 @@ proc tick*(e: Editor) =
   # Poll LSP for messages (non-blocking)
   e.lsp.poll(0)
 
+  # Cleanup stale progress entries (handles missing 'end' notifications)
+  e.lsp.cleanupStaleProgress()
+
+  # Update LSP progress display
+  let progressOpt = e.lsp.getLatestActiveProgress()
+  if progressOpt.isSome:
+    e.state.lspProgressText = getProgressText(progressOpt.get)
+  else:
+    e.state.lspProgressText = ""
+
   # Display any pending LSP status messages
   let lspMessages = e.lsp.getAndClearMessages()
   if lspMessages.len > 0:
@@ -5182,8 +5537,14 @@ proc tick*(e: Editor) =
   # Update LSP caches
   e.updateCodeLensCache()
   e.updateDocumentHighlightCache()
+  # Note: updateSemanticTokensCache is called in prepareFrame after updateHighlight
   e.requestSignatureHelpFromLsp()
   e.pollLspCompletion()
+  e.pollLspHover()
+  e.pollLspLocationRequest()
+  e.pollLspCallHierarchy()
+  e.pollLspSelectionRange()
+  e.pollLspDocumentSymbols()
 
   # File and config monitoring
   e.maybeReloadExternallyModifiedFile()
@@ -5230,6 +5591,17 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
     e.state.currentWord = getWordAtPosition(e.activeBuffer(), e.state.cursor)
   else:
     e.state.currentWord = ""
+
+  # Update syntax highlight before rendering (so semantic tokens can be applied on top)
+  if not isDebugBuffer:
+    let activeBuffer = e.activeBuffer()
+    let needsHighlightUpdate = activeBuffer.highlightNeedsUpdate
+    activeBuffer.updateHighlight()
+    # If highlight was regenerated, we need to re-apply semantic tokens
+    if needsHighlightUpdate:
+      e.invalidateSemanticTokensCache()
+    # Apply semantic tokens after local highlight is ready
+    e.updateSemanticTokensCache()
 
   result = e.updateViewportSize(buffer)
 
@@ -5296,7 +5668,7 @@ proc renderMainContent(e: Editor, buffer: var Buffer, wasResized: bool) =
   e.renderTempMessages(buffer)
 
 proc renderOverlays(e: Editor, buffer: var Buffer) =
-  ## Render overlay popups (completion, signature help, CodeLens picker).
+  ## Render overlay popups (completion, signature help, CodeLens picker, hover popup).
 
   if e.state.mode == EditorMode.Insert:
     let completionMgr = e.handlerManager.insertHandler.completionManager
@@ -5319,6 +5691,15 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
 
   if e.state.lspCache.codeLensPicker.isActive:
     e.renderCodeLensPicker(buffer)
+
+  # Render hover popup (Normal mode)
+  if e.state.lspCache.hoverPopup.isActive():
+    let hoverMgr = e.state.lspCache.hoverPopup
+    let popupPos = calculateHoverPopupPosition(
+      e.state.screenCursor.x, e.state.screenCursor.y, buffer.area.width,
+      buffer.area.height, hoverMgr,
+    )
+    renderHoverPopup(buffer, hoverMgr, popupPos, true)
 
 proc render*(e: Editor, buffer: var Buffer) =
   ## Main render procedure - orchestrates the rendering of all editor components.

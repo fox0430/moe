@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -20,29 +20,65 @@
 ## LSP Integration with Editor
 ## Connects LspService to Editor, TextBuffer, and UI components
 
-import std/[options, json, strutils, algorithm]
+import std/[options, json, strutils, algorithm, tables, times, unicode]
 
 import pkg/results
 
-import buffer, cursor, types, lspservice, messagelog
+import buffer, cursor, types, lspservice, messagelog, unicode_utils
 import lsp/protocol/types as lspTypes
 
 export lspservice
+export lspTypes.WorkDoneProgress, lspTypes.WorkDoneProgressKind
+export lspTypes.WorkDoneProgressBegin, lspTypes.WorkDoneProgressReport
+export lspTypes.WorkDoneProgressEnd
+export worker.ServerHealth, worker.LspEventKind
 
-type LspIntegration* = ref object ## Integration layer between LSP and Editor
-  service*: LspService
-  enabled*: bool
-  # Buffer tracking (path -> version)
-  openBuffers: seq[string]
-  # Pending status messages to display in the editor
-  pendingMessages*: seq[string]
+const MaxProgressTextLen* = 50 ## Maximum display width for progress text
+
+type
+  LspProgressState* = object ## State of an active LSP progress operation
+    token*: string ## Progress token (unique identifier)
+    langId*: string ## Language ID of the server
+    title*: string ## Title of the operation (from begin)
+    message*: Option[string] ## Current status message
+    percentage*: Option[int] ## Progress percentage (0-100)
+    cancellable*: bool ## Whether the operation can be cancelled
+    startTime*: float ## Start time (epochTime) for ordering
+
+  LspStatusState* = object ## Server status from experimental/serverStatus
+    health*: ServerHealth ## Server health: ok, warning, or error
+    quiescent*: bool ## True when no background work pending
+    message*: Option[string] ## Explanatory message
+
+  LspIntegration* = ref object ## Integration layer between LSP and Editor
+    service*: LspService
+    enabled*: bool
+    # Buffer tracking (path -> version)
+    openBuffers: seq[string]
+    # Pending status messages to display in the editor
+    pendingMessages*: seq[string]
+    # Active progress operations (token -> state)
+    activeProgress*: Table[string, LspProgressState]
+    # Last time stale progress cleanup was performed
+    lastProgressCleanupTime: float
+    # Server status per language (langId -> status)
+    serverStatus*: Table[string, LspStatusState]
+
+const ProgressCleanupIntervalSeconds* = 1.0 ## Interval between stale progress checks
 
 proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
   ## Create a new LSP integration
   let svc = newLspService(workspaceRoot)
 
-  result =
-    LspIntegration(service: svc, enabled: true, openBuffers: @[], pendingMessages: @[])
+  result = LspIntegration(
+    service: svc,
+    enabled: true,
+    openBuffers: @[],
+    pendingMessages: @[],
+    activeProgress: initTable[string, LspProgressState](),
+    lastProgressCleanupTime: 0.0,
+    serverStatus: initTable[string, LspStatusState](),
+  )
 
   # Set up internal callback to collect LSP log messages for display
   let lsp = result
@@ -61,10 +97,189 @@ proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
         of mtLog: "[LSP] "
       lsp.pendingMessages.add(prefix & langId & ": " & message)
 
+  # Set up progress callback to track active progress operations
+  svc.onProgress = proc(
+      langId: string, token: string, progress: WorkDoneProgress
+  ) {.gcsafe.} =
+    case progress.kind
+    of wdpkBegin:
+      let state = LspProgressState(
+        token: token,
+        langId: langId,
+        title: progress.begin.title,
+        message: progress.begin.message,
+        percentage: progress.begin.percentage,
+        cancellable: progress.begin.cancellable.get(false),
+        startTime: epochTime(),
+      )
+      lsp.activeProgress[token] = state
+    of wdpkReport:
+      if token in lsp.activeProgress:
+        var state = lsp.activeProgress[token]
+        if progress.report.message.isSome:
+          state.message = progress.report.message
+        if progress.report.percentage.isSome:
+          state.percentage = progress.report.percentage
+        if progress.report.cancellable.isSome:
+          state.cancellable = progress.report.cancellable.get
+        lsp.activeProgress[token] = state
+      else:
+        # Handle report without prior begin (create new state)
+        let state = LspProgressState(
+          token: token,
+          langId: langId,
+          title: "Progress",
+          message: progress.report.message,
+          percentage: progress.report.percentage,
+          cancellable: progress.report.cancellable.get(false),
+          startTime: epochTime(),
+        )
+        lsp.activeProgress[token] = state
+    of wdpkEnd:
+      lsp.activeProgress.del(token)
+
+  # Set up status update callback to track server status
+  svc.onStatusUpdate = proc(
+      langId: string, health: ServerHealth, quiescent: bool, message: Option[string]
+  ) {.gcsafe.} =
+    lsp.serverStatus[langId] =
+      LspStatusState(health: health, quiescent: quiescent, message: message)
+
 proc getAndClearMessages*(lsp: LspIntegration): seq[string] =
   ## Get all pending status messages and clear them
   result = lsp.pendingMessages
   lsp.pendingMessages = @[]
+
+proc hasActiveProgress*(lsp: LspIntegration): bool =
+  ## Check if there are any active progress operations
+  lsp.activeProgress.len > 0
+
+proc getServerStatus*(lsp: LspIntegration, langId: string): Option[LspStatusState] =
+  ## Get the current status for a language server
+  if langId in lsp.serverStatus:
+    some(lsp.serverStatus[langId])
+  else:
+    none(LspStatusState)
+
+proc hasServerStatus*(lsp: LspIntegration, langId: string): bool =
+  ## Check if we have status information for a language server
+  langId in lsp.serverStatus
+
+proc isServerQuiescent*(lsp: LspIntegration, langId: string): bool =
+  ## Check if the server is quiescent (no pending background work)
+  if langId in lsp.serverStatus:
+    lsp.serverStatus[langId].quiescent
+  else:
+    true # Default to true if no status
+
+proc getServerHealth*(lsp: LspIntegration, langId: string): ServerHealth =
+  ## Get the health status for a language server
+  if langId in lsp.serverStatus:
+    lsp.serverStatus[langId].health
+  else:
+    shOk # Default to ok if no status
+
+proc clearStatusForLanguage*(lsp: LspIntegration, langId: string) =
+  ## Clear status for a specific language server
+  ## Called when a server is stopped
+  lsp.serverStatus.del(langId)
+
+proc getStatusText*(state: LspStatusState): string =
+  ## Format status state as a display string
+  ## Returns empty string if status is ok and quiescent
+  if state.health == shOk and state.quiescent:
+    return ""
+
+  result =
+    case state.health
+    of shOk:
+      if not state.quiescent: "Loading" else: ""
+    of shWarning:
+      "Warning"
+    of shError:
+      "Error"
+
+  if state.message.isSome and state.message.get.len > 0:
+    if result.len > 0:
+      result &= ": " & state.message.get
+    else:
+      result = state.message.get
+
+proc clearProgressForLanguage*(lsp: LspIntegration, langId: string) =
+  ## Clear all progress operations for a specific language server
+  ## Called when a server is stopped or crashes
+  var tokensToRemove: seq[string] = @[]
+  for token, state in lsp.activeProgress:
+    if state.langId == langId:
+      tokensToRemove.add(token)
+  for token in tokensToRemove:
+    lsp.activeProgress.del(token)
+
+const ProgressTimeoutSeconds* = 300.0 ## 5 minutes timeout for stale progress
+
+proc cleanupStaleProgress*(lsp: LspIntegration) =
+  ## Remove progress entries that have been active for too long
+  ## This handles cases where 'end' notification was never received
+  ## Only runs cleanup at most once per ProgressCleanupIntervalSeconds
+  let now = epochTime()
+
+  # Rate limit cleanup checks
+  if now - lsp.lastProgressCleanupTime < ProgressCleanupIntervalSeconds:
+    return
+  lsp.lastProgressCleanupTime = now
+
+  var tokensToRemove: seq[string] = @[]
+  for token, state in lsp.activeProgress:
+    if now - state.startTime > ProgressTimeoutSeconds:
+      tokensToRemove.add(token)
+  for token in tokensToRemove:
+    lsp.activeProgress.del(token)
+
+proc getActiveProgressList*(lsp: LspIntegration): seq[LspProgressState] =
+  ## Get all active progress operations
+  result = @[]
+  for state in lsp.activeProgress.values:
+    result.add(state)
+
+proc getLatestActiveProgress*(lsp: LspIntegration): Option[LspProgressState] =
+  ## Get the most recently started active progress operation
+  ## Returns the progress with the latest startTime for consistent display
+  if lsp.activeProgress.len == 0:
+    return none(LspProgressState)
+
+  var latest: LspProgressState
+  var found = false
+  for state in lsp.activeProgress.values:
+    if not found or state.startTime > latest.startTime:
+      latest = state
+      found = true
+  if found:
+    return some(latest)
+  return none(LspProgressState)
+
+proc truncateToWidth(s: string, maxWidth: int): string =
+  ## Truncate string to fit within maxWidth display columns
+  ## Adds "..." if truncated (single pass through runes)
+  var currentWidth = 0
+  for r in s.runes:
+    let runeWidth = displayWidth($r)
+    if currentWidth + runeWidth + 3 > maxWidth: # +3 for "..."
+      result.add("...")
+      return
+    currentWidth += runeWidth
+    result.add($r)
+  # If we get here, no truncation needed
+
+proc getProgressText*(state: LspProgressState): string =
+  ## Format progress state as a display string with length limit
+  result = state.title
+  if state.message.isSome:
+    result &= ": " & state.message.get
+  if state.percentage.isSome:
+    result &= " (" & $state.percentage.get & "%)"
+
+  # Truncate if too long
+  result = truncateToWidth(result, MaxProgressTextLen)
 
 proc setDiagnosticsCallback*(
     lsp: LspIntegration,
@@ -198,6 +413,19 @@ proc startDefinitionRequest*(
   let path = buffer.filePath.get
   return lsp.service.startDefinitionRequest(path, line, column)
 
+proc startDeclarationRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[int, string] =
+  ## Start a declaration request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startDeclarationRequest(path, line, column)
+
 proc startReferencesRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
@@ -210,6 +438,32 @@ proc startReferencesRequest*(
 
   let path = buffer.filePath.get
   return lsp.service.startReferencesRequest(path, line, column)
+
+proc startTypeDefinitionRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[int, string] =
+  ## Start a type definition request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startTypeDefinitionRequest(path, line, column)
+
+proc startImplementationRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[int, string] =
+  ## Start an implementation request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startImplementationRequest(path, line, column)
 
 proc startSignatureHelpRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
@@ -249,6 +503,71 @@ proc startCodeLensRequest*(
 
   let path = buffer.filePath.get
   return lsp.service.startCodeLensRequest(path)
+
+proc startCallHierarchyPrepareRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[int, string] =
+  ## Start a call hierarchy prepare request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startCallHierarchyPrepareRequest(path, line, column)
+
+proc startCallHierarchyIncomingCallsRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, item: CallHierarchyItem
+): Result[int, string] =
+  ## Start a call hierarchy incoming calls request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startCallHierarchyIncomingCallsRequest(path, item)
+
+proc startCallHierarchyOutgoingCallsRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, item: CallHierarchyItem
+): Result[int, string] =
+  ## Start a call hierarchy outgoing calls request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startCallHierarchyOutgoingCallsRequest(path, item)
+
+proc startDocumentSymbolsRequest*(
+    lsp: LspIntegration, buffer: TextBuffer
+): Result[int, string] =
+  ## Start a document symbols request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startDocumentSymbolsRequest(path)
+
+proc startSelectionRangeRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[int, string] =
+  ## Start a selection range request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startSelectionRangeRequest(path, line, column)
 
 proc checkResponse*(
     lsp: LspIntegration, requestId: int
@@ -593,6 +912,40 @@ proc getSemanticTokensLegend*(
     return none(SemanticTokensLegend)
 
   return lsp.service.getSemanticTokensLegend(langIdOpt.get)
+
+proc startSemanticTokensRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, firstLine, lastLine: int
+): Result[int, string] =
+  ## Start a semantic tokens request (non-blocking). Returns request ID.
+  ## Uses range request if supported, otherwise falls back to full document.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  if buffer.len == 0:
+    return err("Buffer is empty")
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return err("No LSP support for file: " & path)
+
+  # Check if range request is supported, fall back to full if not
+  if lsp.service.hasSemanticTokensRangeSupport(langIdOpt.get):
+    # Clamp line numbers to valid range
+    let actualLastLine = min(lastLine, buffer.len - 1)
+    let actualFirstLine = min(firstLine, actualLastLine)
+    let endChar = buffer.getLine(actualLastLine).charLen
+    return lsp.service.startSemanticTokensRangeRequest(
+      path, actualFirstLine, 0, actualLastLine, endChar
+    )
+  elif lsp.service.hasSemanticTokensFullSupport(langIdOpt.get):
+    # Fall back to full document request
+    return lsp.service.startSemanticTokensFullRequest(path)
+  else:
+    return err("Semantic tokens not supported")
 
 proc requestInlineValues*(
     lsp: LspIntegration,
@@ -1166,3 +1519,5 @@ proc shutdown*(lsp: LspIntegration) =
   ## Shutdown all LSP servers
   lsp.service.stopAll()
   lsp.openBuffers = @[]
+  lsp.activeProgress.clear()
+  lsp.serverStatus.clear()

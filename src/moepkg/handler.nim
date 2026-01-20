@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -598,28 +598,6 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
 
         e.state.needsFullRedraw = true
 
-      if r.shouldJumpList():
-        # Handle jump list command (:ju, :jump)
-        # Display jump list temporarily like Vim using tempMessages
-        if e.state.jumpList.len == 0:
-          e.state.setStatusMessage("Jump list is empty")
-        else:
-          e.state.tempMessages = @[]
-          e.state.tempMessages.add(" jump  line  col  file/text")
-          for i, pos in e.state.jumpList:
-            let marker = if i == e.state.jumpListIndex: ">" else: " "
-            let jumpNum = e.state.jumpList.len - i
-            let lineNum = pos.line + 1 # 1-based for display
-            let colNum = pos.column + 1 # 1-based for display
-            e.state.tempMessages.add(
-              marker & ($jumpNum).align(4) & " " & ($lineNum).align(5) & " " &
-                ($colNum).align(4)
-            )
-          e.state.needsFullRedraw = true
-        # Return to Normal mode
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.Normal
-
       if r.shouldSave():
         # Handle file save
         let saveResult = e.saveFile(r.getSaveFilename(), r.getForceSave())
@@ -1023,6 +1001,26 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             e.state.timing.debugUpdateInterval = 500 # Default: 500ms
         # Return to Normal mode
         e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.Normal
+      elif r.shouldJumpList():
+        # Handle jump list command (:ju, :jump)
+        # Display jump list temporarily like Vim using tempMessages
+        if e.state.jumpList.len == 0:
+          e.state.setStatusMessage("Jump list is empty")
+        else:
+          e.state.tempMessages = @[]
+          e.state.tempMessages.add(" jump  line  col  file/text")
+          for i, pos in e.state.jumpList:
+            let marker = if i == e.state.jumpListIndex: ">" else: " "
+            let jumpNum = e.state.jumpList.len - i
+            let lineNum = pos.line + 1 # 1-based for display
+            let colNum = pos.column + 1 # 1-based for display
+            e.state.tempMessages.add(
+              marker & ($jumpNum).align(4) & " " & ($lineNum).align(5) & " " &
+                ($colNum).align(4)
+            )
+          e.state.needsFullRedraw = true
+        # Return to Normal mode (not to previous Command mode)
         e.state.mode = EditorMode.Normal
       elif r.shouldEnterConfigMode():
         # Enter configuration mode
@@ -1608,6 +1606,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Update last input time for auto backup idle detection
   e.updateInputTime()
 
+  # Cancel smooth scroll animation on any key press
+  if event.kind == EventKind.Key and e.state.scrollAnimation.active:
+    cancelScrollAnimation(e.state.scrollAnimation)
+
   # Handle mouse events first
   if event.kind == EventKind.Mouse:
     discard e.handleMouseEvent(event)
@@ -1695,6 +1697,50 @@ proc handleEvent*(e: Editor, event: Event): bool =
       # Any other key closes picker
       e.hideCodeLensPicker()
       e.state.statusMessage = ""
+      # Don't return - let the key be processed normally
+
+  # Handle Hover popup input when active
+  if e.state.lspCache.hoverPopup.isActive() and event.kind == EventKind.Key:
+    let keyComboOpt = eventToKeyCombo(event)
+    if keyComboOpt.isSome:
+      let keyCombo = keyComboOpt.get
+
+      # Escape - close popup
+      if keyCombo.isSpecial and keyCombo.special == skEscape:
+        e.hideHoverPopup()
+        return true
+
+      # j/k/h/l - scroll
+      if not keyCombo.isSpecial:
+        if keyCombo.char == "j":
+          e.hoverPopupScrollDown()
+          return true
+        if keyCombo.char == "k":
+          e.hoverPopupScrollUp()
+          return true
+        if keyCombo.char == "l":
+          e.hoverPopupScrollRight()
+          return true
+        if keyCombo.char == "h":
+          e.hoverPopupScrollLeft()
+          return true
+
+      if keyCombo.isSpecial:
+        if keyCombo.special == skDown:
+          e.hoverPopupScrollDown()
+          return true
+        if keyCombo.special == skUp:
+          e.hoverPopupScrollUp()
+          return true
+        if keyCombo.special == skRight:
+          e.hoverPopupScrollRight()
+          return true
+        if keyCombo.special == skLeft:
+          e.hoverPopupScrollLeft()
+          return true
+
+      # Any other key closes popup and processes normally
+      e.hideHoverPopup()
       # Don't return - let the key be processed normally
 
   # Check for Vim-style Ctrl-w prefix for window commands
@@ -1933,6 +1979,29 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # (previousMode may be Filer if we went Command->Filer, so always use Normal)
     e.state.filerState = none(FilerState)
     e.state.mode = EditorMode.Normal
+    return true
+
+  if r.kind == hrFilerDeleteFile:
+    # Delete file/directory from filer
+    if e.state.filerState.isSome:
+      let deleteResult = e.state.filerState.get.deleteSelected()
+      if deleteResult.success:
+        # File/directory deleted successfully
+        if e.config.notification.screenNotifications and
+            e.config.notification.filerScreenNotify:
+          e.state.setStatusMessage("Deleted: " & deleteResult.path)
+        if e.config.notification.logNotifications and
+            e.config.notification.filerLogNotify:
+          logInfo("filer", "Deleted: " & deleteResult.path)
+      else:
+        # Deletion failed
+        e.state.setStatusMessage("Delete failed: " & deleteResult.error)
+        logError("filer", "Delete failed: " & deleteResult.error)
+    return true
+
+  if r.kind == hrFilerShowInfo:
+    # Show file information in status line
+    e.state.setStatusMessage(r.filerFileInfo)
     return true
 
   if r.kind == hrLogViewerQuit:

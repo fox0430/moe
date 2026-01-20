@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -350,6 +350,32 @@ type
   CodeLensParams* = object ## Parameters for textDocument/codeLens request
     textDocument*: TextDocumentIdentifier
 
+  # Code Action types
+  CodeActionContext* = object ## Context for code action requests
+    diagnostics*: seq[Diagnostic] ## Diagnostics known to the client
+    only*: Option[seq[string]]
+      ## Requested kinds of actions (e.g., ["quickfix", "refactor"])
+    triggerKind*: Option[int]
+      ## How the code action was triggered (1=Invoked, 2=Automatic)
+
+  CodeActionParams* = object ## Parameters for textDocument/codeAction request
+    textDocument*: TextDocumentIdentifier
+    range*: Range ## The range for which the command was invoked
+    context*: CodeActionContext ## Context carrying additional information
+
+  CodeAction* = object
+    ## A code action represents a change that can be performed in code.
+    ## Can be a simple Command, or provide edits directly.
+    title*: string ## A short, human-readable title for this code action
+    kind*: Option[string] ## The kind of the code action (e.g., "quickfix", "refactor")
+    diagnostics*: Option[seq[Diagnostic]] ## Diagnostics this action resolves
+    isPreferred*: Option[bool]
+      ## Marks this as preferred action (shown in UI without submenu)
+    disabled*: Option[JsonNode] ## Marks the action as disabled with a reason
+    edit*: Option[WorkspaceEdit] ## The workspace edit this code action performs
+    command*: Option[Command] ## A command this code action executes
+    data*: Option[JsonNode] ## Data preserved between request and resolve
+
   # Call Hierarchy types
   CallHierarchyItem* = object
     ## Represents programming constructs like functions or constructors in the
@@ -421,6 +447,41 @@ type
     length*: int
     tokenType*: int
     tokenModifiers*: int
+
+  # Work Done Progress types
+  WorkDoneProgressKind* = enum
+    ## The kind of work done progress
+    wdpkBegin = "begin"
+    wdpkReport = "report"
+    wdpkEnd = "end"
+
+  WorkDoneProgressBegin* = object
+    ## To start progress reporting a $/progress notification must be sent
+    title*: string ## Mandatory title of the progress operation
+    cancellable*: Option[bool] ## Controls if a cancel button should show
+    message*: Option[string] ## Optional, more detailed progress message
+    percentage*: Option[int] ## Optional progress percentage (0-100)
+
+  WorkDoneProgressReport* = object ## Reporting progress is done using this payload
+    cancellable*: Option[bool] ## Controls if a cancel button should show
+    message*: Option[string] ## Optional, more detailed progress message
+    percentage*: Option[int] ## Optional progress percentage (0-100)
+
+  WorkDoneProgressEnd* = object ## Signaling the end of a progress reporting
+    message*: Option[string] ## Optional final message indicating the outcome
+
+  WorkDoneProgress* = object ## Work done progress value (discriminated union)
+    case kind*: WorkDoneProgressKind
+    of wdpkBegin:
+      begin*: WorkDoneProgressBegin
+    of wdpkReport:
+      report*: WorkDoneProgressReport
+    of wdpkEnd:
+      `end`*: WorkDoneProgressEnd
+
+  WorkDoneProgressParams* = object ## Parameters for $/progress notification
+    token*: JsonNode ## The progress token (int | string)
+    value*: WorkDoneProgress ## The progress data
 
   # Server capabilities
   CompletionOptions* = object ## Completion options
@@ -964,6 +1025,56 @@ proc getSemanticTokenModifiers*(
     modifiers = modifiers shr 1
     inc idx
 
+proc parseWorkDoneProgressBegin*(node: JsonNode): WorkDoneProgressBegin =
+  ## Parse WorkDoneProgressBegin from JSON
+  result.title = node["title"].getStr
+  if node.hasKey("cancellable"):
+    result.cancellable = some(node["cancellable"].getBool)
+  if node.hasKey("message"):
+    result.message = some(node["message"].getStr)
+  if node.hasKey("percentage"):
+    result.percentage = some(node["percentage"].getInt)
+
+proc parseWorkDoneProgressReport*(node: JsonNode): WorkDoneProgressReport =
+  ## Parse WorkDoneProgressReport from JSON
+  if node.hasKey("cancellable"):
+    result.cancellable = some(node["cancellable"].getBool)
+  if node.hasKey("message"):
+    result.message = some(node["message"].getStr)
+  if node.hasKey("percentage"):
+    result.percentage = some(node["percentage"].getInt)
+
+proc parseWorkDoneProgressEnd*(node: JsonNode): WorkDoneProgressEnd =
+  ## Parse WorkDoneProgressEnd from JSON
+  if node.hasKey("message"):
+    result.message = some(node["message"].getStr)
+
+proc parseWorkDoneProgress*(node: JsonNode): WorkDoneProgress =
+  ## Parse WorkDoneProgress value from JSON
+  let kindStr = node["kind"].getStr
+  case kindStr
+  of "begin":
+    result = WorkDoneProgress(kind: wdpkBegin, begin: parseWorkDoneProgressBegin(node))
+  of "report":
+    result =
+      WorkDoneProgress(kind: wdpkReport, report: parseWorkDoneProgressReport(node))
+  of "end":
+    result = WorkDoneProgress(kind: wdpkEnd, `end`: parseWorkDoneProgressEnd(node))
+  else:
+    raise newException(ValueError, "Unknown work done progress kind: " & kindStr)
+
+proc parseWorkDoneProgressParams*(node: JsonNode): WorkDoneProgressParams =
+  ## Parse WorkDoneProgressParams ($/progress notification) from JSON
+  result.token = node["token"]
+  result.value = parseWorkDoneProgress(node["value"])
+
+proc getProgressToken*(params: WorkDoneProgressParams): string =
+  ## Get progress token as string (handles both int and string tokens)
+  if params.token.kind == JInt:
+    $params.token.getInt
+  else:
+    params.token.getStr
+
 proc toSemanticTokenType*(typeName: string): Option[SemanticTokenTypes] =
   ## Convert a token type name string to SemanticTokenTypes enum
   case typeName
@@ -1114,6 +1225,8 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
     result.documentLinkProvider = some(node["documentLinkProvider"])
   if node.hasKey("documentSymbolProvider"):
     result.documentSymbolProvider = some(node["documentSymbolProvider"])
+  if node.hasKey("codeActionProvider"):
+    result.codeActionProvider = some(node["codeActionProvider"])
   if node.hasKey("documentFormattingProvider"):
     result.documentFormattingProvider = some(node["documentFormattingProvider"])
   if node.hasKey("documentRangeFormattingProvider"):
@@ -1176,6 +1289,67 @@ proc parseCodeLens*(node: JsonNode): CodeLens =
     result.command = some(parseCommand(node["command"]))
   if node.hasKey("data"):
     result.data = some(node["data"])
+
+# Code Action serialization and parsing
+proc toJson*(context: CodeActionContext): JsonNode =
+  ## Serialize CodeActionContext to JSON
+  result = newJObject()
+  var diagArray = newJArray()
+  for diag in context.diagnostics:
+    var diagNode = %*{"range": diag.range.toJson, "message": diag.message}
+    if diag.severity.isSome:
+      diagNode["severity"] = %diag.severity.get.int
+    if diag.code.isSome:
+      diagNode["code"] = diag.code.get
+    if diag.source.isSome:
+      diagNode["source"] = %diag.source.get
+    diagArray.add(diagNode)
+  result["diagnostics"] = diagArray
+  if context.only.isSome:
+    result["only"] = %context.only.get
+  if context.triggerKind.isSome:
+    result["triggerKind"] = %context.triggerKind.get
+
+proc toJson*(params: CodeActionParams): JsonNode =
+  ## Serialize CodeActionParams to JSON
+  %*{
+    "textDocument": params.textDocument.toJson,
+    "range": params.range.toJson,
+    "context": params.context.toJson,
+  }
+
+proc parseCodeAction*(node: JsonNode): CodeAction =
+  ## Parse CodeAction from JSON
+  result.title = node["title"].getStr
+  if node.hasKey("kind") and node["kind"].kind == JString:
+    result.kind = some(node["kind"].getStr)
+  if node.hasKey("diagnostics") and node["diagnostics"].kind == JArray:
+    var diags: seq[Diagnostic] = @[]
+    for d in node["diagnostics"]:
+      diags.add(parseDiagnostic(d))
+    result.diagnostics = some(diags)
+  if node.hasKey("isPreferred"):
+    result.isPreferred = some(node["isPreferred"].getBool)
+  if node.hasKey("disabled"):
+    result.disabled = some(node["disabled"])
+  if node.hasKey("edit") and node["edit"].kind == JObject:
+    result.edit = some(parseWorkspaceEdit(node["edit"]))
+  if node.hasKey("command") and node["command"].kind == JObject:
+    result.command = some(parseCommand(node["command"]))
+  if node.hasKey("data"):
+    result.data = some(node["data"])
+
+proc toJson*(action: CodeAction): JsonNode =
+  ## Serialize CodeAction to JSON (for codeAction/resolve request)
+  result = %*{"title": action.title}
+  if action.kind.isSome:
+    result["kind"] = %action.kind.get
+  if action.isPreferred.isSome:
+    result["isPreferred"] = %action.isPreferred.get
+  if action.disabled.isSome:
+    result["disabled"] = action.disabled.get
+  if action.data.isSome:
+    result["data"] = action.data.get
 
 # Call Hierarchy serialization and parsing
 proc parseCallHierarchyItem*(node: JsonNode): CallHierarchyItem =
@@ -1358,3 +1532,64 @@ proc callHierarchyItemToJson*(item: CallHierarchyItem): JsonNode =
     result["detail"] = %item.detail.get
   if item.data.isSome:
     result["data"] = item.data.get
+
+# Dynamic Registration types (LSP 3.17)
+type
+  Registration* = object ## General parameters to register a capability.
+    id*: string ## The id used to register the request. Used to unregister.
+    `method`*: string ## The method / capability to register for.
+    registerOptions*: Option[JsonNode] ## Options necessary for the registration.
+
+  RegistrationParams* = object ## Parameters for client/registerCapability request.
+    registrations*: seq[Registration]
+
+  Unregistration* = object ## General parameters to unregister a capability.
+    id*: string ## The id used to unregister the request.
+    `method`*: string ## The method / capability to unregister.
+
+  UnregistrationParams* = object ## Parameters for client/unregisterCapability request.
+    unregisterations*: seq[Unregistration]
+      # Note: LSP spec uses "unregisterations" (typo in spec)
+
+  TextDocumentRegistrationOptions* = object
+    ## Options for text document registration (used in dynamic registration)
+    documentSelector*: Option[JsonNode]
+      # DocumentSelector | null - which documents this applies to
+
+  TextDocumentChangeRegistrationOptions* = object
+    ## Options for textDocument/didChange dynamic registration
+    documentSelector*: Option[JsonNode]
+    syncKind*: Option[TextDocumentSyncKind]
+
+  CompletionRegistrationOptions* = object
+    ## Options for textDocument/completion dynamic registration
+    documentSelector*: Option[JsonNode]
+    triggerCharacters*: Option[seq[string]]
+    allCommitCharacters*: Option[seq[string]]
+    resolveProvider*: Option[bool]
+    workDoneProgress*: Option[bool]
+
+proc parseRegistration*(node: JsonNode): Registration =
+  ## Parse Registration from JSON
+  result.id = node["id"].getStr
+  result.`method` = node["method"].getStr
+  if node.hasKey("registerOptions"):
+    result.registerOptions = some(node["registerOptions"])
+
+proc parseRegistrationParams*(node: JsonNode): RegistrationParams =
+  ## Parse RegistrationParams from JSON
+  if node.hasKey("registrations"):
+    for reg in node["registrations"]:
+      result.registrations.add(parseRegistration(reg))
+
+proc parseUnregistration*(node: JsonNode): Unregistration =
+  ## Parse Unregistration from JSON
+  result.id = node["id"].getStr
+  result.`method` = node["method"].getStr
+
+proc parseUnregistrationParams*(node: JsonNode): UnregistrationParams =
+  ## Parse UnregistrationParams from JSON
+  # Note: The LSP spec uses "unregisterations" (with typo)
+  if node.hasKey("unregisterations"):
+    for unreg in node["unregisterations"]:
+      result.unregisterations.add(parseUnregistration(unreg))

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -71,6 +71,8 @@ type
     hrFilerOpenFile # Open file from filer
     hrFilerOpenFileVSplit # Open file from filer in vertical split
     hrFilerOpenFileHSplit # Open file from filer in horizontal split
+    hrFilerDeleteFile # Delete file/directory from filer
+    hrFilerShowInfo # Show file information
     hrFilerQuit # Close filer and return to previous mode
     hrEnterFiler # Enter filer mode with optional path
     hrLogViewerQuit # Close log viewer window
@@ -207,6 +209,10 @@ type
       strippedLineCount*: int
     of hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit:
       filerFilePath*: string
+    of hrFilerDeleteFile:
+      filerDeletePath*: string
+    of hrFilerShowInfo:
+      filerFileInfo*: string
     of hrFilerQuit:
       discard
     of hrEnterFiler:
@@ -956,6 +962,10 @@ proc handleFilerMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
     )
+  of frDeleteFile:
+    return HandlerResult(kind: hrFilerDeleteFile, filerDeletePath: r.deletePath)
+  of frShowInfo:
+    return HandlerResult(kind: hrFilerShowInfo, filerFileInfo: r.fileInfo)
   of frQuit:
     return HandlerResult(kind: hrFilerQuit)
   of frUnhandled:
@@ -1406,15 +1416,16 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrNew, hrVnew,
     hrEnew, hrSave, hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst,
     hrBufferLast, hrBuffer, hrBufferDelete, hrStripWhitespace, hrFilerOpenFile,
-    hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerQuit, hrEnterFiler,
-    hrLogViewerQuit, hrEnterLogViewer, hrHelpViewerQuit, hrEnterHelpViewer,
-    hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences, hrDocumentSymbolQuit,
-    hrDocumentSymbolJumpTo, hrEnterDocumentSymbol, hrBufferManagerSelectBuffer,
-    hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrEnterBufferManager,
-    hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
-    hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit,
-    hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
-    hrEnterDiffViewer, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
+    hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerDeleteFile, hrFilerShowInfo,
+    hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrEnterLogViewer, hrHelpViewerQuit,
+    hrEnterHelpViewer, hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences,
+    hrDocumentSymbolQuit, hrDocumentSymbolJumpTo, hrEnterDocumentSymbol,
+    hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer, hrBufferManagerQuit,
+    hrEnterBufferManager, hrBackupManagerRestore, hrBackupManagerDelete,
+    hrBackupManagerOpenDiff, hrBackupManagerRefresh, hrBackupManagerQuit,
+    hrEnterBackupManager, hrDiffViewerQuit, hrRecentFile, hrRecentFileOpenFile,
+    hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrEnterDiffViewer,
+    hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
     hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
     hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
     hrLspSelectionRange, hrJumpList, hrLspLog,
@@ -1570,6 +1581,14 @@ proc getEnterFilerPath*(hrResult: HandlerResult): Option[string] =
     hrResult.enterFilerPath
   else:
     none(string)
+
+proc shouldFilerDeleteFile*(hrResult: HandlerResult): bool =
+  ## Check if we should delete a file/directory from filer
+  hrResult.kind == hrFilerDeleteFile
+
+proc getFilerDeletePath*(hrResult: HandlerResult): string =
+  ## Get the path to delete from filer
+  if hrResult.kind == hrFilerDeleteFile: hrResult.filerDeletePath else: ""
 
 proc shouldEnterLogViewer*(hrResult: HandlerResult): bool =
   ## Check if we should enter log viewer mode

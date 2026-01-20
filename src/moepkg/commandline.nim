@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -512,12 +512,12 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
   if cmd.endsWith("!"):
     result.flags.add("force")
 
-  # Look up command in aliases
+  # Look up command in aliases (case-insensitive)
   let baseCmd =
     if cmd.endsWith("!"):
-      cmd[0 ..^ 2]
+      cmd[0 ..^ 2].toLowerAscii()
     else:
-      cmd
+      cmd.toLowerAscii()
   if baseCmd in parser.aliases:
     result.action = parser.aliases[baseCmd]
   else:

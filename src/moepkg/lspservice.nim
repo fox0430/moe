@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -63,6 +63,8 @@ type
     capabilities: Table[string, ServerCapabilities] # languageId -> capabilities
     serverInfo: Table[string, tuple[name: string, version: Option[string]]]
       # languageId -> server info
+    # Dynamic registrations: languageId -> (registrationId -> Registration)
+    dynamicRegistrations: Table[string, Table[string, Registration]]
     workspaceRoot: string
     enabled*: bool
     # Pending request responses (requestId -> response)
@@ -73,6 +75,11 @@ type
     onDiagnosticsUpdate*: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.}
     onLogMessage*:
       proc(langId: string, msgType: MessageType, message: string) {.gcsafe.}
+    onProgress*:
+      proc(langId: string, token: string, progress: WorkDoneProgress) {.gcsafe.}
+    onStatusUpdate*: proc(
+      langId: string, health: ServerHealth, quiescent: bool, message: Option[string]
+    ) {.gcsafe.}
 
 proc newLspService*(workspaceRoot: string = ""): LspService =
   ## Create a new LSP service
@@ -81,6 +88,7 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
     configs: initTable[string, LanguageServerConfig](),
     capabilities: initTable[string, ServerCapabilities](),
     serverInfo: initTable[string, tuple[name: string, version: Option[string]]](),
+    dynamicRegistrations: initTable[string, Table[string, Registration]](),
     workspaceRoot:
       if workspaceRoot.len > 0:
         workspaceRoot
@@ -92,6 +100,8 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
     activeRequests: initTable[int, LspPendingRequest](),
     onDiagnosticsUpdate: nil,
     onLogMessage: nil,
+    onProgress: nil,
+    onStatusUpdate: nil,
   )
 
   # Default language server configurations
@@ -270,6 +280,7 @@ proc stopAll*(svc: LspService) =
   svc.workers.clear()
   svc.capabilities.clear()
   svc.serverInfo.clear()
+  svc.dynamicRegistrations.clear()
 
 proc poll*(svc: LspService, timeoutMs: int = 0) =
   ## Poll all workers - process events from worker threads
@@ -325,6 +336,40 @@ proc poll*(svc: LspService, timeoutMs: int = 0) =
               svc.onLogMessage(langId, mtLog, "    " & line)
           # Add blank line after each JSON block
           svc.onLogMessage(langId, mtLog, "")
+      of levProgress:
+        # Call onProgress callback
+        if svc.onProgress != nil:
+          svc.onProgress(langId, evt.progressToken, evt.progress)
+      of levDynamicRegister:
+        # Dynamic capability registration
+        if langId notin svc.dynamicRegistrations:
+          svc.dynamicRegistrations[langId] = initTable[string, Registration]()
+        for reg in evt.registrations:
+          svc.dynamicRegistrations[langId][reg.id] = reg
+          if svc.onLogMessage != nil:
+            svc.onLogMessage(
+              langId,
+              mtInfo,
+              "Dynamic registration: " & reg.`method` & " (id: " & reg.id & ")",
+            )
+      of levDynamicUnregister:
+        # Dynamic capability unregistration
+        if langId in svc.dynamicRegistrations:
+          for unreg in evt.unregistrations:
+            if unreg.id in svc.dynamicRegistrations[langId]:
+              svc.dynamicRegistrations[langId].del(unreg.id)
+              if svc.onLogMessage != nil:
+                svc.onLogMessage(
+                  langId,
+                  mtInfo,
+                  "Dynamic unregistration: " & unreg.`method` & " (id: " & unreg.id & ")",
+                )
+      of levStatusUpdate:
+        # Server status notification (experimental/serverStatus)
+        if svc.onStatusUpdate != nil:
+          svc.onStatusUpdate(
+            langId, evt.statusHealth, evt.statusQuiescent, evt.statusMessage
+          )
 
 # Non-blocking response checking
 proc checkResponse*(
@@ -555,6 +600,25 @@ proc startDefinitionRequest*(
   let requestId = svc.startTrackedRequest(worker, "textDocument/definition", params)
   return ok(requestId)
 
+proc startDeclarationRequest*(
+    svc: LspService, path: string, line, character: int
+): Result[int, string] =
+  ## Start a declaration request (non-blocking). Returns request ID.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let uri = pathToUri(path)
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let requestId = svc.startTrackedRequest(worker, "textDocument/declaration", params)
+  return ok(requestId)
+
 proc startReferencesRequest*(
     svc: LspService, path: string, line, character: int, includeDeclaration: bool = true
 ): Result[int, string] =
@@ -576,6 +640,82 @@ proc startReferencesRequest*(
     }
 
   let requestId = svc.startTrackedRequest(worker, "textDocument/references", params)
+  return ok(requestId)
+
+proc startTypeDefinitionRequest*(
+    svc: LspService, path: string, line, character: int
+): Result[int, string] =
+  ## Start a type definition request (non-blocking). Returns request ID.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let uri = pathToUri(path)
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let requestId = svc.startTrackedRequest(worker, "textDocument/typeDefinition", params)
+  return ok(requestId)
+
+proc startImplementationRequest*(
+    svc: LspService, path: string, line, character: int
+): Result[int, string] =
+  ## Start an implementation request (non-blocking). Returns request ID.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let uri = pathToUri(path)
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let requestId = svc.startTrackedRequest(worker, "textDocument/implementation", params)
+  return ok(requestId)
+
+proc startDocumentSymbolsRequest*(svc: LspService, path: string): Result[int, string] =
+  ## Start a document symbols request (non-blocking). Returns request ID.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let uri = pathToUri(path)
+  let params = %*{"textDocument": {"uri": uri}}
+
+  let requestId = svc.startTrackedRequest(worker, "textDocument/documentSymbol", params)
+  return ok(requestId)
+
+proc startSelectionRangeRequest*(
+    svc: LspService, path: string, line, character: int
+): Result[int, string] =
+  ## Start a selection range request (non-blocking). Returns request ID.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let uri = pathToUri(path)
+  let params =
+    %*{
+      "textDocument": {"uri": uri},
+      "positions": [{"line": line, "character": character}],
+    }
+
+  let requestId = svc.startTrackedRequest(worker, "textDocument/selectionRange", params)
   return ok(requestId)
 
 proc startSignatureHelpRequest*(
@@ -633,6 +773,105 @@ proc startCodeLensRequest*(svc: LspService, path: string): Result[int, string] =
   let requestId = svc.startTrackedRequest(worker, "textDocument/codeLens", params)
   return ok(requestId)
 
+proc startSemanticTokensFullRequest*(
+    svc: LspService, path: string
+): Result[int, string] =
+  ## Start a semantic tokens full request (non-blocking). Returns request ID.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let uri = pathToUri(path)
+  let params = %*{"textDocument": {"uri": uri}}
+
+  let requestId =
+    svc.startTrackedRequest(worker, "textDocument/semanticTokens/full", params)
+  return ok(requestId)
+
+proc startSemanticTokensRangeRequest*(
+    svc: LspService, path: string, startLine, startChar, endLine, endChar: int
+): Result[int, string] =
+  ## Start a semantic tokens range request (non-blocking). Returns request ID.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let uri = pathToUri(path)
+  let params =
+    %*{
+      "textDocument": {"uri": uri},
+      "range": {
+        "start": {"line": startLine, "character": startChar},
+        "end": {"line": endLine, "character": endChar},
+      },
+    }
+
+  let requestId =
+    svc.startTrackedRequest(worker, "textDocument/semanticTokens/range", params)
+  return ok(requestId)
+
+proc startCallHierarchyPrepareRequest*(
+    svc: LspService, path: string, line, character: int
+): Result[int, string] =
+  ## Start a call hierarchy prepare request (non-blocking). Returns request ID.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let uri = pathToUri(path)
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let requestId =
+    svc.startTrackedRequest(worker, "textDocument/prepareCallHierarchy", params)
+  return ok(requestId)
+
+proc startCallHierarchyIncomingCallsRequest*(
+    svc: LspService, path: string, item: CallHierarchyItem
+): Result[int, string] =
+  ## Start a call hierarchy incoming calls request (non-blocking). Returns request ID.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let params = %*{"item": callHierarchyItemToJson(item)}
+
+  let requestId = svc.startTrackedRequest(worker, "callHierarchy/incomingCalls", params)
+  return ok(requestId)
+
+proc startCallHierarchyOutgoingCallsRequest*(
+    svc: LspService, path: string, item: CallHierarchyItem
+): Result[int, string] =
+  ## Start a call hierarchy outgoing calls request (non-blocking). Returns request ID.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let params = %*{"item": callHierarchyItemToJson(item)}
+
+  let requestId = svc.startTrackedRequest(worker, "callHierarchy/outgoingCalls", params)
+  return ok(requestId)
+
 # Response parsing helpers for async requests
 proc parseCompletionResponse*(resp: JsonNode): seq[CompletionItem] =
   ## Parse a completion response JSON into CompletionItem sequence
@@ -676,6 +915,46 @@ proc parseCodeLensResponse*(resp: JsonNode): seq[CodeLens] =
     for item in resp:
       lenses.add(parseCodeLens(item))
   return lenses
+
+proc parseCallHierarchyPrepareResponse*(resp: JsonNode): seq[CallHierarchyItem] =
+  ## Parse a call hierarchy prepare response JSON
+  var items: seq[CallHierarchyItem] = @[]
+  if resp.kind == JArray:
+    for item in resp:
+      items.add(parseCallHierarchyItem(item))
+  return items
+
+proc parseCallHierarchyIncomingCallsResponse*(
+    resp: JsonNode
+): seq[CallHierarchyIncomingCall] =
+  ## Parse a call hierarchy incoming calls response JSON
+  var calls: seq[CallHierarchyIncomingCall] = @[]
+  if resp.kind == JArray:
+    for item in resp:
+      calls.add(parseCallHierarchyIncomingCall(item))
+  return calls
+
+proc parseCallHierarchyOutgoingCallsResponse*(
+    resp: JsonNode
+): seq[CallHierarchyOutgoingCall] =
+  ## Parse a call hierarchy outgoing calls response JSON
+  var calls: seq[CallHierarchyOutgoingCall] = @[]
+  if resp.kind == JArray:
+    for item in resp:
+      calls.add(parseCallHierarchyOutgoingCall(item))
+  return calls
+
+proc parseDocumentSymbolsResponse*(resp: JsonNode): DocumentSymbolResult =
+  ## Parse a document symbols response JSON
+  return parseDocumentSymbolResult(resp)
+
+proc parseSelectionRangeResponse*(resp: JsonNode): seq[SelectionRange] =
+  ## Parse a selection range response JSON
+  var ranges: seq[SelectionRange] = @[]
+  if resp.kind == JArray:
+    for item in resp:
+      ranges.add(parseSelectionRange(item))
+  return ranges
 
 # High-level blocking feature requests
 # WARNING: These block the main thread until response arrives!
@@ -1085,56 +1364,102 @@ proc requestRangeFormatting*(
   return ok(edits)
 
 # Capability checking - uses capabilities received from worker events
+
+proc hasDynamicRegistration*(svc: LspService, langId, methodName: string): bool =
+  ## Check if a method has been dynamically registered for a language
+  if langId notin svc.dynamicRegistrations:
+    return false
+  for id, reg in svc.dynamicRegistrations[langId]:
+    if reg.`method` == methodName:
+      return true
+  return false
+
+proc getDynamicRegistration*(
+    svc: LspService, langId, methodName: string
+): Option[Registration] =
+  ## Get dynamic registration for a method if it exists
+  if langId notin svc.dynamicRegistrations:
+    return none(Registration)
+  for id, reg in svc.dynamicRegistrations[langId]:
+    if reg.`method` == methodName:
+      return some(reg)
+  return none(Registration)
+
+proc getDynamicRegistrations*(svc: LspService, langId: string): seq[Registration] =
+  ## Get all dynamic registrations for a language
+  if langId notin svc.dynamicRegistrations:
+    return @[]
+  for id, reg in svc.dynamicRegistrations[langId]:
+    result.add(reg)
+
 proc hasCompletionSupport*(svc: LspService, langId: string): bool =
-  ## Check if completion is supported for a language
+  ## Check if completion is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/completion"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].completionProvider.isSome
 
 proc hasHoverSupport*(svc: LspService, langId: string): bool =
-  ## Check if hover is supported for a language
+  ## Check if hover is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/hover"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].hoverProvider.isSome
 
 proc hasDefinitionSupport*(svc: LspService, langId: string): bool =
-  ## Check if go to definition is supported for a language
+  ## Check if go to definition is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/definition"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].definitionProvider.isSome
 
 proc hasDeclarationSupport*(svc: LspService, langId: string): bool =
-  ## Check if go to declaration is supported for a language
+  ## Check if go to declaration is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/declaration"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].declarationProvider.isSome
 
 proc hasTypeDefinitionSupport*(svc: LspService, langId: string): bool =
-  ## Check if go to type definition is supported for a language
+  ## Check if go to type definition is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/typeDefinition"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].typeDefinitionProvider.isSome
 
 proc hasImplementationSupport*(svc: LspService, langId: string): bool =
-  ## Check if go to implementation is supported for a language
+  ## Check if go to implementation is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/implementation"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].implementationProvider.isSome
 
 proc hasReferencesSupport*(svc: LspService, langId: string): bool =
-  ## Check if find references is supported for a language
+  ## Check if find references is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/references"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].referencesProvider.isSome
 
 proc hasDocumentHighlightSupport*(svc: LspService, langId: string): bool =
-  ## Check if document highlight is supported for a language
+  ## Check if document highlight is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/documentHighlight"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].documentHighlightProvider.isSome
 
 proc hasDocumentLinkSupport*(svc: LspService, langId: string): bool =
-  ## Check if document link is supported for a language
+  ## Check if document link is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/documentLink"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].documentLinkProvider.isSome
@@ -1156,31 +1481,41 @@ proc hasDocumentLinkResolveSupport*(svc: LspService, langId: string): bool =
   return false
 
 proc hasSignatureHelpSupport*(svc: LspService, langId: string): bool =
-  ## Check if signature help is supported for a language
+  ## Check if signature help is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/signatureHelp"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].signatureHelpProvider.isSome
 
 proc hasRenameSupport*(svc: LspService, langId: string): bool =
-  ## Check if rename is supported for a language
+  ## Check if rename is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/rename"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].renameProvider.isSome
 
 proc hasFormattingSupport*(svc: LspService, langId: string): bool =
-  ## Check if document formatting is supported for a language
+  ## Check if document formatting is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/formatting"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].documentFormattingProvider.isSome
 
 proc hasRangeFormattingSupport*(svc: LspService, langId: string): bool =
-  ## Check if range formatting is supported for a language
+  ## Check if range formatting is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/rangeFormatting"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].documentRangeFormattingProvider.isSome
 
 proc hasDocumentSymbolSupport*(svc: LspService, langId: string): bool =
-  ## Check if document symbol is supported for a language
+  ## Check if document symbol is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/documentSymbol"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].documentSymbolProvider.isSome
@@ -1209,7 +1544,9 @@ proc requestDocumentSymbols*(
   return ok(parseDocumentSymbolResult(respResult.get))
 
 proc hasInlayHintSupport*(svc: LspService, langId: string): bool =
-  ## Check if inlay hints is supported for a language
+  ## Check if inlay hints is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/inlayHint"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].inlayHintProvider.isSome
@@ -1251,7 +1588,11 @@ proc requestInlayHints*(
   return ok(hints)
 
 proc hasSemanticTokensSupport*(svc: LspService, langId: string): bool =
-  ## Check if semantic tokens is supported for a language
+  ## Check if semantic tokens is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/semanticTokens"):
+    return true
+  if svc.hasDynamicRegistration(langId, "textDocument/semanticTokens/full"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].semanticTokensProvider.isSome
@@ -1349,13 +1690,17 @@ proc requestSemanticTokensRange*(
   return ok(some(parseSemanticTokens(resp)))
 
 proc hasSelectionRangeSupport*(svc: LspService, langId: string): bool =
-  ## Check if selection range is supported for a language
+  ## Check if selection range is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/selectionRange"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].selectionRangeProvider.isSome
 
 proc hasInlineValueSupport*(svc: LspService, langId: string): bool =
-  ## Check if inline value is supported for a language
+  ## Check if inline value is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/inlineValue"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].inlineValueProvider.isSome
@@ -1471,13 +1816,22 @@ proc requestInlineValues*(
 
 # CodeLens support
 proc hasCodeLensSupport*(svc: LspService, langId: string): bool =
-  ## Check if code lens is supported for a language
+  ## Check if code lens is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/codeLens"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].codeLensProvider.isSome
 
 proc hasCodeLensResolveSupport*(svc: LspService, langId: string): bool =
-  ## Check if code lens resolve is supported for a language
+  ## Check if code lens resolve is supported for a language (static or dynamic)
+  # Check dynamic registration first
+  let dynReg = svc.getDynamicRegistration(langId, "textDocument/codeLens")
+  if dynReg.isSome and dynReg.get.registerOptions.isSome:
+    let opts = dynReg.get.registerOptions.get
+    if opts.kind == JObject and opts.hasKey("resolveProvider"):
+      return opts["resolveProvider"].getBool(false)
+
   if langId notin svc.capabilities:
     return false
 
@@ -1565,13 +1919,17 @@ proc requestExecuteCommand*(
   return ok(respResult.get)
 
 proc hasCallHierarchySupport*(svc: LspService, langId: string): bool =
-  ## Check if call hierarchy is supported for a language
+  ## Check if call hierarchy is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/prepareCallHierarchy"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].callHierarchyProvider.isSome
 
 proc hasFoldingRangeSupport*(svc: LspService, langId: string): bool =
-  ## Check if folding range is supported for a language
+  ## Check if folding range is supported for a language (static or dynamic)
+  if svc.hasDynamicRegistration(langId, "textDocument/foldingRange"):
+    return true
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].foldingRangeProvider.isSome

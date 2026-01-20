@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -46,7 +46,7 @@ suite "Repeat Command (.) - Insert Text":
 
     # Simulate: i → "xyz" → Esc
     # Record the insert command
-    state.lastEditCommand = some(
+    state.editState.lastEditCommand = some(
       LastEditCommand(
         kind: lecInsertText,
         insertedText: "xyz",
@@ -92,7 +92,7 @@ suite "Repeat Command (.) - Insert Text":
     state.mode = EditorMode.Normal
 
     # Simulate: i → "a" → Enter → "b" → Esc
-    state.lastEditCommand = some(
+    state.editState.lastEditCommand = some(
       LastEditCommand(
         kind: lecInsertText,
         insertedText: "a\nb",
@@ -138,7 +138,7 @@ suite "Repeat Command (.) - Delete Operations":
     state.mode = EditorMode.Normal
 
     # Simulate: x (delete 'h')
-    state.lastEditCommand =
+    state.editState.lastEditCommand =
       some(LastEditCommand(kind: lecDeleteChar, deleteCount: 1, deleteForward: true))
 
     # Execute repeat command (.) - should delete 'e'
@@ -174,7 +174,7 @@ suite "Repeat Command (.) - Delete Operations":
     state.mode = EditorMode.Normal
 
     # Simulate: dd (delete line)
-    state.lastEditCommand =
+    state.editState.lastEditCommand =
       some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: 1))
 
     # Execute repeat command (.) - should delete line2
@@ -213,7 +213,7 @@ suite "Repeat Command (.) - Substitute Operations":
     state.mode = EditorMode.Normal
 
     # Simulate: s → "X" → Esc (substitute 'h' with 'X')
-    state.lastEditCommand = some(
+    state.editState.lastEditCommand = some(
       LastEditCommand(
         kind: lecSubstitute,
         substituteText: "X",
@@ -256,7 +256,7 @@ suite "Repeat Command (.) - Substitute Operations":
     state.mode = EditorMode.Normal
 
     # Simulate: S → "replaced" → Esc
-    state.lastEditCommand = some(
+    state.editState.lastEditCommand = some(
       LastEditCommand(
         kind: lecSubstitute,
         substituteText: "replaced",
@@ -303,7 +303,7 @@ suite "Repeat Command (.) - Replace Char":
     state.mode = EditorMode.Normal
 
     # Simulate: rx (replace 'h' with 'x')
-    state.lastEditCommand =
+    state.editState.lastEditCommand =
       some(LastEditCommand(kind: lecReplaceChar, replaceChar: "x", replaceCount: 1))
 
     # Execute repeat command (.) - should replace 'e' with 'x'
@@ -339,7 +339,7 @@ suite "Repeat Command (.) - Edge Cases":
     var state = EditorState()
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
-    state.lastEditCommand = none(LastEditCommand)
+    state.editState.lastEditCommand = none(LastEditCommand)
 
     # Execute repeat command (.) without previous command
     let registry = newCommandRegistry()
@@ -374,7 +374,7 @@ suite "Repeat Command (.) - Edge Cases":
     state.mode = EditorMode.Normal
 
     # Simulate: i → Esc (insert nothing)
-    state.lastEditCommand = some(
+    state.editState.lastEditCommand = some(
       LastEditCommand(
         kind: lecInsertText,
         insertedText: "",

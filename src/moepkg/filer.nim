@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -271,3 +271,86 @@ proc halfPageUp*(state: FilerState, viewportHeight: int, reservedLines: int = 3)
   let halfPage = max(1, availableHeight div 2)
   state.selectedIndex = max(0, state.selectedIndex - halfPage)
   state.ensureSelectedVisible(viewportHeight, reservedLines)
+
+proc deleteSelected*(
+    state: FilerState
+): tuple[success: bool, path: string, error: string] =
+  ## Delete the currently selected file or directory
+  ## Returns success status, the deleted path, and error message if failed
+  let entry = state.getSelectedEntry()
+  if entry.isNone:
+    return (false, "", "No file selected")
+
+  let e = entry.get
+
+  # Don't allow deleting ".."
+  if e.name == "..":
+    return (false, "", "Cannot delete parent directory reference")
+
+  let path = state.currentPath / e.name
+
+  try:
+    if e.kind == fekDirectory:
+      # Remove directory recursively
+      removeDir(path)
+    else:
+      # Remove file (or symlink)
+      removeFile(path)
+
+    # Refresh the file list after deletion
+    state.refresh()
+
+    return (true, path, "")
+  except OSError as ex:
+    return (false, path, ex.msg)
+
+proc formatFileSize(size: int64): string =
+  ## Format file size in human-readable format
+  if size < 1024:
+    return $size & " B"
+  elif size < 1024 * 1024:
+    return $(size div 1024) & " KB"
+  elif size < 1024 * 1024 * 1024:
+    return $(size div (1024 * 1024)) & " MB"
+  else:
+    return $(size div (1024 * 1024 * 1024)) & " GB"
+
+proc getSelectedInfo*(state: FilerState): string =
+  ## Get detailed information about the currently selected file/directory
+  ## Returns a formatted string with name, type, size, and modification time
+  let entry = state.getSelectedEntry()
+  if entry.isNone:
+    return "No file selected"
+
+  let e = entry.get
+
+  if e.name == "..":
+    return "Parent directory"
+
+  var info = e.name
+
+  # File type
+  case e.kind
+  of fekFile:
+    info.add(" [File]")
+  of fekDirectory:
+    info.add(" [Dir]")
+  of fekSymlink:
+    if e.targetKind == fekDirectory:
+      info.add(" [Symlink->Dir]")
+    else:
+      info.add(" [Symlink->File]")
+
+  # Size (only for files)
+  if e.kind == fekFile or (e.kind == fekSymlink and e.targetKind == fekFile):
+    info.add(" " & formatFileSize(e.size))
+
+  # Executable flag
+  if e.isExecutable:
+    info.add(" [x]")
+
+  # Modification time
+  let timeStr = e.modified.format("yyyy-MM-dd HH:mm:ss")
+  info.add(" " & timeStr)
+
+  return info

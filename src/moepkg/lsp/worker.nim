@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -21,6 +21,7 @@
 ## Runs chronos event loop in a separate thread to avoid blocking the UI
 
 import std/[json, options, os, strutils, strtabs, locks, tables, atomics, deques]
+import std/times except milliseconds
 
 import pkg/[results, chronos]
 import pkg/chronos/[asyncproc, threadsync]
@@ -34,6 +35,8 @@ const
   # Signal wait timeouts
   SignalTimeoutRunningMs* = 50 # Short timeout when LSP server is running
   SignalTimeoutIdleMs* = 500 # Longer timeout when idle
+  # Request timeout in seconds
+  RequestTimeoutSec* = 30
 
 type
   LspWorkerState* = enum
@@ -98,6 +101,16 @@ type
     levCapabilities # Server capabilities after init
     levResponse # Response to a request
     levRawJson # Raw JSON sent/received for debugging
+    levProgress # Work done progress notification
+    levDynamicRegister # Dynamic capability registration
+    levDynamicUnregister # Dynamic capability unregistration
+    levStatusUpdate # Server status notification (experimental/serverStatus)
+
+  # Server health status from experimental/serverStatus
+  ServerHealth* = enum
+    shOk = "ok"
+    shWarning = "warning"
+    shError = "error"
 
   LspJsonDirection* = enum
     ljdSent # JSON sent to server
@@ -127,6 +140,17 @@ type
     of levRawJson:
       jsonDirection*: LspJsonDirection
       rawJson*: string
+    of levProgress:
+      progressToken*: string # Progress token (int or string converted to string)
+      progress*: WorkDoneProgress # Progress data (begin/report/end)
+    of levDynamicRegister:
+      registrations*: seq[Registration]
+    of levDynamicUnregister:
+      unregistrations*: seq[Unregistration]
+    of levStatusUpdate:
+      statusHealth*: ServerHealth
+      statusQuiescent*: bool
+      statusMessage*: Option[string]
 
   # Thread-safe queues using locks and deques for O(1) operations
   CommandQueue = object
@@ -206,13 +230,13 @@ proc buildClientCapabilities(): JsonNode =
   %*{
     "textDocument": {
       "synchronization": {
-        "dynamicRegistration": false,
+        "dynamicRegistration": true,
         "willSave": false,
         "willSaveWaitUntil": false,
         "didSave": true,
       },
       "completion": {
-        "dynamicRegistration": false,
+        "dynamicRegistration": true,
         "completionItem": {
           "snippetSupport": false,
           "commitCharactersSupport": true,
@@ -222,38 +246,53 @@ proc buildClientCapabilities(): JsonNode =
         },
         "contextSupport": true,
       },
-      "hover":
-        {"dynamicRegistration": false, "contentFormat": ["plaintext", "markdown"]},
+      "hover": {"dynamicRegistration": true, "contentFormat": ["plaintext", "markdown"]},
       "signatureHelp": {
-        "dynamicRegistration": false,
+        "dynamicRegistration": true,
         "signatureInformation": {"documentationFormat": ["plaintext", "markdown"]},
       },
-      "declaration": {"dynamicRegistration": false},
-      "definition": {"dynamicRegistration": false},
-      "typeDefinition": {"dynamicRegistration": false},
-      "implementation": {"dynamicRegistration": false},
-      "references": {"dynamicRegistration": false},
-      "documentHighlight": {"dynamicRegistration": false},
-      "documentLink": {"dynamicRegistration": false, "tooltipSupport": true},
+      "declaration": {"dynamicRegistration": true},
+      "definition": {"dynamicRegistration": true},
+      "typeDefinition": {"dynamicRegistration": true},
+      "implementation": {"dynamicRegistration": true},
+      "references": {"dynamicRegistration": true},
+      "documentHighlight": {"dynamicRegistration": true},
+      "documentLink": {"dynamicRegistration": true, "tooltipSupport": true},
       "documentSymbol":
-        {"dynamicRegistration": false, "hierarchicalDocumentSymbolSupport": true},
+        {"dynamicRegistration": true, "hierarchicalDocumentSymbolSupport": true},
       "publishDiagnostics":
         {"relatedInformation": true, "tagSupport": {"valueSet": [1, 2]}},
-      "rename": {"dynamicRegistration": false, "prepareSupport": false},
-      "formatting": {"dynamicRegistration": false},
-      "rangeFormatting": {"dynamicRegistration": false},
-      "inlayHint": {"dynamicRegistration": false},
-      "inlineValue": {"dynamicRegistration": false},
-      "selectionRange": {"dynamicRegistration": false},
-      "codeLens": {"dynamicRegistration": false},
+      "rename": {"dynamicRegistration": true, "prepareSupport": false},
+      "codeAction": {
+        "dynamicRegistration": true,
+        "codeActionLiteralSupport": {
+          "codeActionKind": {
+            "valueSet": [
+              "", "quickfix", "refactor", "refactor.extract", "refactor.inline",
+              "refactor.rewrite", "source", "source.organizeImports", "source.fixAll",
+            ]
+          }
+        },
+        "isPreferredSupport": true,
+        "disabledSupport": true,
+        "dataSupport": true,
+        "resolveSupport": {"properties": ["edit"]},
+      },
+      "formatting": {"dynamicRegistration": true},
+      "rangeFormatting": {"dynamicRegistration": true},
+      "inlayHint": {"dynamicRegistration": true},
+      "inlineValue": {"dynamicRegistration": true},
+      "selectionRange": {"dynamicRegistration": true},
+      "codeLens": {"dynamicRegistration": true},
+      "callHierarchy": {"dynamicRegistration": true},
       "foldingRange": {
-        "dynamicRegistration": false,
+        "dynamicRegistration": true,
         "rangeLimit": 5000,
         "lineFoldingOnly": true,
         "foldingRangeKind": {"valueSet": ["comment", "imports", "region"]},
       },
       "semanticTokens": {
-        "dynamicRegistration": false,
+        "dynamicRegistration": true,
         "requests": {"range": true, "full": {"delta": false}},
         "tokenTypes": [
           "namespace", "type", "class", "enum", "interface", "struct", "typeParameter",
@@ -271,6 +310,7 @@ proc buildClientCapabilities(): JsonNode =
       },
     },
     "workspace": {"applyEdit": true, "workspaceFolders": true, "configuration": false},
+    "window": {"workDoneProgress": true},
   }
 
 # Worker thread main loop
@@ -282,8 +322,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     lastId = 0
     # Pending document notifications to send after initialization
     pendingDidOpen: seq[LspCommand] = @[]
-    # Map LSP request ID to our request ID for response tracking
-    pendingRequests: Table[int, int]
+    # Map LSP request ID to (our request ID, timestamp) for response tracking
+    pendingRequests: Table[int, tuple[requestId: int, timestamp: Time]]
 
   proc sendEvent(kind: LspEventKind) =
     var evt = LspEvent(kind: kind)
@@ -319,6 +359,60 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     var evt = LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: json)
     ctx.eventQueue[].push(evt)
 
+  proc sendDynamicRegister(regs: seq[Registration]) =
+    var evt = LspEvent(kind: levDynamicRegister, registrations: regs)
+    ctx.eventQueue[].push(evt)
+
+  proc sendDynamicUnregister(unregs: seq[Unregistration]) =
+    var evt = LspEvent(kind: levDynamicUnregister, unregistrations: unregs)
+    ctx.eventQueue[].push(evt)
+
+  proc handleServerRequest(
+      meth: string, reqId: JsonNode, params: JsonNode
+  ): Future[JsonNode] {.async.} =
+    ## Handle server-initiated requests. Returns the response to send.
+    case meth
+    of "window/workDoneProgress/create":
+      # Accept the progress token creation (respond with null/empty result)
+      return %*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()}
+    of "client/registerCapability":
+      # Dynamic capability registration
+      try:
+        let regParams = parseRegistrationParams(params)
+        sendDynamicRegister(regParams.registrations)
+        return %*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()}
+      except CatchableError as e:
+        sendLogMessage(mtWarning, "Failed to parse registerCapability: " & e.msg)
+        return
+          %*{
+            "jsonrpc": "2.0",
+            "id": reqId,
+            "error": {"code": -32602, "message": "Invalid params: " & e.msg},
+          }
+    of "client/unregisterCapability":
+      # Dynamic capability unregistration
+      try:
+        let unregParams = parseUnregistrationParams(params)
+        sendDynamicUnregister(unregParams.unregisterations)
+        return %*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()}
+      except CatchableError as e:
+        sendLogMessage(mtWarning, "Failed to parse unregisterCapability: " & e.msg)
+        return
+          %*{
+            "jsonrpc": "2.0",
+            "id": reqId,
+            "error": {"code": -32602, "message": "Invalid params: " & e.msg},
+          }
+    else:
+      # Unknown server request - respond with method not found error
+      sendLogMessage(mtInfo, "Unknown server request: " & meth)
+      return
+        %*{
+          "jsonrpc": "2.0",
+          "id": reqId,
+          "error": {"code": -32601, "message": "Method not found: " & meth},
+        }
+
   proc handleNotification(meth: string, params: JsonNode) =
     case meth
     of "textDocument/publishDiagnostics":
@@ -342,8 +436,82 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         message: params["message"].getStr,
       )
       ctx.eventQueue[].push(evt)
+    of "$/logTrace":
+      var message = params["message"].getStr
+      if params.hasKey("verbose"):
+        message &= "\n" & params["verbose"].getStr
+      var evt = LspEvent(kind: levLogMessage, msgType: mtInfo, message: message)
+      ctx.eventQueue[].push(evt)
+    of "$/progress":
+      try:
+        let progressParams = parseWorkDoneProgressParams(params)
+        var evt = LspEvent(
+          kind: levProgress,
+          progressToken: getProgressToken(progressParams),
+          progress: progressParams.value,
+        )
+        ctx.eventQueue[].push(evt)
+      except CatchableError as e:
+        sendLogMessage(mtWarning, "Failed to parse $/progress: " & e.msg)
+    of "experimental/serverStatus":
+      # rust-analyzer style status notification
+      try:
+        let health =
+          case params["health"].getStr
+          of "warning": shWarning
+          of "error": shError
+          else: shOk
+        let quiescent = params.getOrDefault("quiescent").getBool(true)
+        let message =
+          if params.hasKey("message") and params["message"].kind == JString:
+            some(params["message"].getStr)
+          else:
+            none(string)
+        var evt = LspEvent(
+          kind: levStatusUpdate,
+          statusHealth: health,
+          statusQuiescent: quiescent,
+          statusMessage: message,
+        )
+        ctx.eventQueue[].push(evt)
+      except CatchableError as e:
+        sendLogMessage(mtWarning, "Failed to parse experimental/serverStatus: " & e.msg)
+    of "extension/statusUpdate":
+      # nimlangserver style status notification
+      try:
+        # Determine health from projectErrors
+        let health =
+          if params.hasKey("projectErrors") and params["projectErrors"].len > 0:
+            shWarning
+          else:
+            shOk
+        # Determine quiescent from pendingRequests
+        let quiescent =
+          if params.hasKey("pendingRequests"):
+            params["pendingRequests"].len == 0
+          else:
+            true
+        # Build message from projectErrors if any
+        var message = none(string)
+        if params.hasKey("projectErrors") and params["projectErrors"].len > 0:
+          var errors: seq[string] = @[]
+          for err in params["projectErrors"]:
+            if err.kind == JString:
+              errors.add(err.getStr)
+          if errors.len > 0:
+            message = some(errors[0]) # Show first error
+        var evt = LspEvent(
+          kind: levStatusUpdate,
+          statusHealth: health,
+          statusQuiescent: quiescent,
+          statusMessage: message,
+        )
+        ctx.eventQueue[].push(evt)
+      except CatchableError as e:
+        sendLogMessage(mtWarning, "Failed to parse extension/statusUpdate: " & e.msg)
     else:
-      discard
+      # Log unknown notifications for debugging
+      sendLogMessage(mtInfo, "Unknown LSP notification: " & meth)
 
   proc sendRequest(
       meth: string, params: JsonNode
@@ -467,6 +635,20 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           else:
             newJObject(),
         )
+        continue
+
+      # Handle server request (has both "method" and "id")
+      if response.hasKey("method") and response.hasKey("id"):
+        let meth = response["method"].getStr
+        let reqId = response["id"]
+        let params =
+          if response.hasKey("params"):
+            response["params"]
+          else:
+            newJObject()
+        let resp = await handleServerRequest(meth, reqId, params)
+        sendRawJson(ljdSent, resp.pretty)
+        discard await serverStreams.input.sendRequest(resp)
         continue
 
       # Check for error
@@ -603,8 +785,11 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
             found = true
             break
         if not found:
-          # No pending didOpen for this URI, can't do much without langId
-          discard
+          # No pending didOpen for this URI, can't send didChange without prior didOpen
+          sendLogMessage(
+            mtWarning,
+            "didChange received for URI without prior didOpen: " & cmd.changeUri,
+          )
     of lcmdDidSave:
       if ctx.sharedState.loadState() == lwsRunning:
         var params = %*{"textDocument": {"uri": cmd.saveUri}}
@@ -615,8 +800,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       if ctx.sharedState.loadState() == lwsRunning:
         let lspIdResult = await sendRequest(cmd.reqMethod, cmd.reqParams)
         if lspIdResult.isOk:
-          # Track mapping from LSP request ID to our request ID
-          pendingRequests[lspIdResult.get] = cmd.requestId
+          # Track mapping from LSP request ID to our request ID with timestamp
+          pendingRequests[lspIdResult.get] = (cmd.requestId, getTime())
         else:
           # Send error response immediately
           sendResponse(cmd.requestId, none(JsonNode), some(lspIdResult.error))
@@ -653,11 +838,26 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       )
       return
 
+    # Check if this is a server request (has both "method" and "id")
+    if response.hasKey("method") and response.hasKey("id"):
+      let meth = response["method"].getStr
+      let reqId = response["id"]
+      let params =
+        if response.hasKey("params"):
+          response["params"]
+        else:
+          newJObject()
+
+      let resp = await handleServerRequest(meth, reqId, params)
+      sendRawJson(ljdSent, resp.pretty)
+      discard await serverStreams.input.sendRequest(resp)
+      return
+
     # Check if this is a response (has "id", no "method")
     if response.hasKey("id") and not response.hasKey("method"):
       let lspId = response["id"].getInt
       if lspId in pendingRequests:
-        let ourId = pendingRequests[lspId]
+        let (ourId, _) = pendingRequests[lspId]
         pendingRequests.del(lspId)
 
         # Check for error
@@ -669,6 +869,25 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         else:
           # Empty result (e.g., for void responses)
           sendResponse(ourId, some(newJNull()), none(string))
+      else:
+        # Response for unknown/timed-out request
+        sendLogMessage(
+          mtInfo, "Received late response for timed-out request (id=" & $lspId & ")"
+        )
+
+  proc checkRequestTimeouts() =
+    ## Check for timed out requests and send error responses
+    let now = getTime()
+    var timedOutIds: seq[int] = @[]
+
+    for lspId, (ourId, timestamp) in pendingRequests.pairs:
+      if (now - timestamp).inSeconds >= RequestTimeoutSec:
+        timedOutIds.add(lspId)
+        sendResponse(ourId, none(JsonNode), some("Request timed out"))
+        sendLogMessage(mtWarning, "LSP request timed out (id=" & $lspId & ")")
+
+    for lspId in timedOutIds:
+      pendingRequests.del(lspId)
 
   proc mainLoop() {.async.} =
     while ctx.sharedState.loadRunning():
@@ -690,6 +909,10 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         except CatchableError as e:
           sendError("Message processing error: " & e.msg)
           # Don't crash the worker, continue processing
+
+      # Check for timed out requests
+      if pendingRequests.len > 0:
+        checkRequestTimeouts()
 
       # Wait for signal from main thread or timeout
       # Timeout ensures we check outputFuture periodically when LSP server is running

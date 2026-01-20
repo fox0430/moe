@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -994,6 +994,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "C-x", "decrement-number")
   registry.bindKey(EditorMode.Normal, "C-o", "jump-back")
   registry.bindKey(EditorMode.Normal, "C-i", "jump-forward")
+  registry.bindKey(EditorMode.Normal, "Tab", "jump-forward") # Tab = Ctrl-I in terminal
   registry.bindKey(EditorMode.Normal, "n", "search-next")
   registry.bindKey(EditorMode.Normal, "N", "search-prev")
   registry.bindKey(EditorMode.Normal, "*", "search-word-forward")
@@ -2265,6 +2266,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Visual, "z f", "fold-create") # Create fold from selection
   registry.bindKey(EditorMode.Visual, "Escape", "switch-to-normal") # Exit to normal mode
   registry.bindKey(EditorMode.Visual, "Ctrl+c", "switch-to-normal") # Exit to normal mode
+  registry.bindKey(EditorMode.Visual, "C-a", "increment-number") # Increase number
+  registry.bindKey(EditorMode.Visual, "C-x", "decrement-number") # Decrease number
   registry.bindKey(
     EditorMode.Visual,
     KeyCombo(isSpecial: false, char: "s", modifiers: {kmCtrl}),
@@ -2314,6 +2317,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     # Create fold from selection
   registry.bindKey(EditorMode.VisualBlock, "Escape", "switch-to-normal")
   registry.bindKey(EditorMode.VisualBlock, "Ctrl+c", "switch-to-normal")
+  registry.bindKey(EditorMode.VisualBlock, "C-a", "increment-number") # Increase number
+  registry.bindKey(EditorMode.VisualBlock, "C-x", "decrement-number") # Decrease number
   registry.bindKey(
     EditorMode.VisualBlock,
     KeyCombo(isSpecial: false, char: "s", modifiers: {kmCtrl}),
@@ -2363,6 +2368,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     # Create fold from selection
   registry.bindKey(EditorMode.VisualLine, "Escape", "switch-to-normal")
   registry.bindKey(EditorMode.VisualLine, "Ctrl+c", "switch-to-normal")
+  registry.bindKey(EditorMode.VisualLine, "C-a", "increment-number") # Increase number
+  registry.bindKey(EditorMode.VisualLine, "C-x", "decrement-number") # Decrease number
   registry.bindKey(
     EditorMode.VisualLine,
     KeyCombo(isSpecial: false, char: "s", modifiers: {kmCtrl}),

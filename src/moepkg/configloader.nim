@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -241,6 +241,44 @@ proc loadStringArray(
       if valid:
         target = result
 
+proc loadFilePath(
+    table: TomlTableRef,
+    key: string,
+    target: var string,
+    vr: var ValidationResult,
+    section: string = "",
+) =
+  ## Load a file path if valid and file exists. Invalid values are skipped.
+  if table.hasKey(key):
+    let val = table[key]
+    if val.kind != TomlValueKind.String:
+      vr.addError(fullKey(section, key), $val, "string (file path)")
+    else:
+      let path = val.getStr().expandTilde
+      if not fileExists(path):
+        vr.addError(fullKey(section, key), val.getStr(), "existing file path")
+      else:
+        target = val.getStr()
+
+proc loadOptionDirPath(
+    table: TomlTableRef,
+    key: string,
+    target: var Option[string],
+    vr: var ValidationResult,
+    section: string = "",
+) =
+  ## Load an optional directory path if valid and directory exists. Invalid values are skipped.
+  if table.hasKey(key):
+    let val = table[key]
+    if val.kind != TomlValueKind.String:
+      vr.addError(fullKey(section, key), $val, "string (directory path)")
+    else:
+      let path = val.getStr().expandTilde
+      if not dirExists(path):
+        vr.addError(fullKey(section, key), val.getStr(), "existing directory path")
+      else:
+        target = some(val.getStr())
+
 proc loadEnum[T](
     table: TomlTableRef,
     key: string,
@@ -330,7 +368,7 @@ proc loadBuildOnSaveConfig(
 ) =
   const section = "BuildOnSave"
   loadBool(table, "enable", config.enable, vr, section)
-  loadOptionString(table, "workspaceRoot", config.workspaceRoot, vr, section)
+  loadOptionDirPath(table, "workspaceRoot", config.workspaceRoot, vr, section)
   loadOptionString(table, "command", config.command, vr, section)
 
 proc loadStatusLineConfig(
@@ -367,7 +405,11 @@ proc loadThemeConfig(
 ) =
   const section = "Theme"
   loadEnum(table, "kind", config.kind, vr, section, parseThemeKind, ValidThemeKinds)
-  loadString(table, "path", config.path, vr, section)
+  # Only validate path if kind is tkConfig (custom theme file)
+  if config.kind == tkConfig:
+    loadFilePath(table, "path", config.path, vr, section)
+  else:
+    loadString(table, "path", config.path, vr, section)
 
 proc loadAutoSaveConfig(
     table: TomlTableRef, config: var AutoSaveConfig, vr: var ValidationResult
@@ -410,7 +452,7 @@ proc loadAutoBackupConfig(
 ) =
   const section = "AutoBackup"
   loadBool(table, "enable", config.enable, vr, section)
-  loadOptionString(table, "backupDir", config.backupDir, vr, section)
+  loadOptionDirPath(table, "backupDir", config.backupDir, vr, section)
   loadInt(table, "idleTime", config.idleTime, vr, section, minVal = 1)
   loadInt(table, "interval", config.interval, vr, section, minVal = 1)
   loadStringArray(table, "dirToExclude", config.dirToExclude, vr, section)

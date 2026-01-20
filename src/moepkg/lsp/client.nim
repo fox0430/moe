@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -121,10 +121,61 @@ proc isReady*(client: LspClient): bool =
   ## Check if the client is fully ready to handle requests
   client.state == lssRunning and client.running and client.capabilities.isSome
 
-# Forward declarations
-proc readable*(client: LspClient): Result[bool, string]
-proc handleNotification*(client: LspClient, meth: string, params: JsonNode) {.gcsafe.}
-proc deleteWaitingResponse*(client: LspClient, id: RequestId) {.inline.}
+proc canSend*(client: LspClient): bool =
+  ## Check if the client can send messages (starting or running state)
+  client.state in {lssStarting, lssRunning} and client.running
+
+proc readable*(client: LspClient): Result[bool, string] =
+  ## Check if there is data available to read (non-blocking)
+  if client.outputStreamFuture.isNil:
+    return Result[bool, string].ok(false)
+  return Result[bool, string].ok(client.outputStreamFuture.finished)
+
+proc read*(client: LspClient): Future[JsonRpcResponseResult] {.async.} =
+  ## Read a response from the LSP server
+  let r = await client.outputStreamFuture
+  # Start reading the next message
+  client.outputStreamFuture = client.serverStreams.output.read()
+  return r
+
+proc handleNotification*(client: LspClient, meth: string, params: JsonNode) {.gcsafe.} =
+  ## Handle incoming notification from server
+  case meth
+  of "textDocument/publishDiagnostics":
+    if client.onDiagnostics != nil:
+      let uri = params["uri"].getStr
+      var diagnostics: seq[Diagnostic] = @[]
+      if params.hasKey("diagnostics"):
+        for d in params["diagnostics"]:
+          diagnostics.add(parseDiagnostic(d))
+      client.onDiagnostics(uri, diagnostics)
+  of "window/logMessage":
+    if client.onLogMessage != nil:
+      let msgType = MessageType(params["type"].getInt)
+      let message = params["message"].getStr
+      client.onLogMessage(msgType, message)
+  of "window/showMessage":
+    if client.onShowMessage != nil:
+      let msgType = MessageType(params["type"].getInt)
+      let message = params["message"].getStr
+      client.onShowMessage(msgType, message)
+  of "$/logTrace":
+    if client.onLogMessage != nil:
+      var message = params["message"].getStr
+      if params.hasKey("verbose"):
+        message &= "\n" & params["verbose"].getStr
+      client.onLogMessage(mtInfo, message)
+  else:
+    logDebug("lsp", "handleNotification: unknown notification: " & meth)
+
+proc deleteWaitingResponse*(client: LspClient, id: RequestId) {.inline.} =
+  if client.waitingResponses.contains(id):
+    client.waitingResponses.del(id)
+
+proc getWaitingResponse*(client: LspClient, id: RequestId): Option[WaitingResponse] =
+  if client.waitingResponses.contains(id):
+    return some(client.waitingResponses[id])
+  return none(WaitingResponse)
 
 proc checkInitComplete*(client: LspClient): bool =
   ## Check if async initialization has completed (success or failure)
@@ -179,8 +230,8 @@ proc checkInitComplete*(client: LspClient): bool =
         else:
           newJObject(),
       )
-    except:
-      discard
+    except CatchableError as e:
+      logDebug("lsp", "checkInitComplete: notification handling error: " & e.msg)
     return false # Keep waiting for init response
 
   # Check if this is the response to our initialize request
@@ -217,32 +268,6 @@ proc checkInitComplete*(client: LspClient): bool =
 
   # Unexpected response - keep waiting
   return false
-
-proc canSend*(client: LspClient): bool =
-  ## Check if the client can send messages (starting or running state)
-  client.state in {lssStarting, lssRunning} and client.running
-
-proc readable*(client: LspClient): Result[bool, string] =
-  ## Check if there is data available to read (non-blocking)
-  if client.outputStreamFuture.isNil:
-    return Result[bool, string].ok(false)
-  return Result[bool, string].ok(client.outputStreamFuture.finished)
-
-proc read*(client: LspClient): Future[JsonRpcResponseResult] {.async.} =
-  ## Read a response from the LSP server
-  let r = await client.outputStreamFuture
-  # Start reading the next message
-  client.outputStreamFuture = client.serverStreams.output.read()
-  return r
-
-proc deleteWaitingResponse*(client: LspClient, id: RequestId) {.inline.} =
-  if client.waitingResponses.contains(id):
-    client.waitingResponses.del(id)
-
-proc getWaitingResponse*(client: LspClient, id: RequestId): Option[WaitingResponse] =
-  if client.waitingResponses.contains(id):
-    return some(client.waitingResponses[id])
-  return none(WaitingResponse)
 
 # Request/notification sending
 
@@ -296,8 +321,7 @@ proc buildClientCapabilities(): JsonNode =
         },
         "contextSupport": true,
       },
-      "hover":
-        {"dynamicRegistration": false, "contentFormat": ["plaintext", "markdown"]},
+      "hover": {"dynamicRegistration": false, "contentFormat": ["plaintext"]},
       "signatureHelp": {
         "dynamicRegistration": false,
         "signatureInformation": {"documentationFormat": ["plaintext", "markdown"]},
@@ -314,6 +338,21 @@ proc buildClientCapabilities(): JsonNode =
       "publishDiagnostics":
         {"relatedInformation": true, "tagSupport": {"valueSet": [1, 2]}},
       "rename": {"dynamicRegistration": false, "prepareSupport": false},
+      "codeAction": {
+        "dynamicRegistration": false,
+        "codeActionLiteralSupport": {
+          "codeActionKind": {
+            "valueSet": [
+              "", "quickfix", "refactor", "refactor.extract", "refactor.inline",
+              "refactor.rewrite", "source", "source.organizeImports", "source.fixAll",
+            ]
+          }
+        },
+        "isPreferredSupport": true,
+        "disabledSupport": true,
+        "dataSupport": true,
+        "resolveSupport": {"properties": ["edit"]},
+      },
       "formatting": {"dynamicRegistration": false},
       "rangeFormatting": {"dynamicRegistration": false},
       "inlayHint": {"dynamicRegistration": false},
@@ -469,8 +508,8 @@ proc kill*(client: LspClient) =
   if client.serverProcess != nil:
     try:
       discard client.serverProcess.kill()
-    except:
-      discard
+    except CatchableError as e:
+      logDebug("lsp", "kill: failed to kill server process: " & e.msg)
 
   client.state = lssStopped
   client.serverProcess = nil
@@ -528,31 +567,6 @@ proc didSave*(
   return await client.sendNotification("textDocument/didSave", params)
 
 # Notification handling
-
-proc handleNotification*(client: LspClient, meth: string, params: JsonNode) {.gcsafe.} =
-  ## Handle incoming notification from server
-  case meth
-  of "textDocument/publishDiagnostics":
-    if client.onDiagnostics != nil:
-      let uri = params["uri"].getStr
-      var diagnostics: seq[Diagnostic] = @[]
-      if params.hasKey("diagnostics"):
-        for d in params["diagnostics"]:
-          diagnostics.add(parseDiagnostic(d))
-      client.onDiagnostics(uri, diagnostics)
-  of "window/logMessage":
-    if client.onLogMessage != nil:
-      let msgType = MessageType(params["type"].getInt)
-      let message = params["message"].getStr
-      client.onLogMessage(msgType, message)
-  of "window/showMessage":
-    if client.onShowMessage != nil:
-      let msgType = MessageType(params["type"].getInt)
-      let message = params["message"].getStr
-      client.onShowMessage(msgType, message)
-  else:
-    discard # Ignore unknown notifications
-
 proc processResponse*(client: LspClient, response: JsonNode): Option[RequestId] =
   ## Process a response and return the request ID if it was a response
   if response.hasKey("id") and not response.hasKey("method"):
@@ -599,8 +613,12 @@ proc sendAndWait*(
         client.handleNotification(
           response["method"].getStr, response.getOrDefault("params")
         )
-      except Exception:
-        discard # Ignore notification handling errors
+      except CatchableError as e:
+        logDebug(
+          "lsp",
+          "sendAndWait: notification handling error for " & response["method"].getStr &
+            ": " & e.msg,
+        )
       continue
 
     # This is a response, break out of the loop
@@ -1050,6 +1068,58 @@ proc codeLensResolve*(
 
   return Result[CodeLens, string].ok(parseCodeLens(respResult.get))
 
+proc codeAction*(
+    client: LspClient,
+    uri: string,
+    startLine, startChar, endLine, endChar: int,
+    diagnostics: seq[Diagnostic] = @[],
+    only: seq[string] = @[],
+): Future[Result[seq[CodeAction], string]] {.async.} =
+  ## Request code actions for a range
+  ## - diagnostics: Relevant diagnostics in the range
+  ## - only: Filter by code action kinds (e.g., ["quickfix", "refactor"])
+  var context = CodeActionContext(diagnostics: diagnostics)
+  if only.len > 0:
+    context.only = some(only)
+  context.triggerKind = some(1) # Invoked by user
+
+  let params = CodeActionParams(
+    textDocument: TextDocumentIdentifier(uri: uri),
+    range: Range(
+      start: Position(line: startLine, character: startChar),
+      `end`: Position(line: endLine, character: endChar),
+    ),
+    context: context,
+  )
+
+  let respResult = await client.sendAndWait("textDocument/codeAction", params.toJson)
+  if respResult.isErr:
+    return Result[seq[CodeAction], string].err(respResult.error)
+
+  var actions: seq[CodeAction] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      # Server may return Command or CodeAction
+      if item.hasKey("title") and item.hasKey("command") and not item.hasKey("edit"):
+        # This is a bare Command - wrap it in CodeAction
+        let cmd = parseCommand(item)
+        actions.add(CodeAction(title: cmd.title, command: some(cmd)))
+      else:
+        actions.add(parseCodeAction(item))
+
+  return Result[seq[CodeAction], string].ok(actions)
+
+proc codeActionResolve*(
+    client: LspClient, action: CodeAction
+): Future[Result[CodeAction, string]] {.async.} =
+  ## Resolve a code action to get full details (e.g., workspace edit)
+  let respResult = await client.sendAndWait("codeAction/resolve", action.toJson)
+  if respResult.isErr:
+    return Result[CodeAction, string].err(respResult.error)
+
+  return Result[CodeAction, string].ok(parseCodeAction(respResult.get))
+
 proc executeCommand*(
     client: LspClient, command: string, arguments: seq[JsonNode] = @[]
 ): Future[Result[JsonNode, string]] {.async.} =
@@ -1166,5 +1236,5 @@ proc poll*(client: LspClient): Future[void] {.async.} =
         newJObject()
     try:
       client.handleNotification(meth, params)
-    except Exception:
-      discard # Ignore notification handling errors
+    except CatchableError as e:
+      logDebug("lsp", "poll: notification handling error for " & meth & ": " & e.msg)

@@ -244,9 +244,9 @@ enable = false                         # Enable syntax checker in sidebar
 
 enable = true                          # Smooth scrolling
 
-minDelay = 5                           # Min delay in ms - maps to baseDurationMs
+friction = 80.0                        # Friction coefficient (velocity decay rate)
 
-maxDelay = 20                          # Max delay in ms - maps to maxDurationMs
+airDrag = 2.0                          # Air drag coefficient (velocity resistance)
 
 [StartUp.FileOpen]
 autoSplit = true                       # Auto-split on startup when opening multiple files

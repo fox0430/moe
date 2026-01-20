@@ -17,13 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[sequtils, os, parseutils, strutils, strformat, unicode, algorithm]
+import
+  std/
+    [sequtils, os, parseutils, strutils, strformat, unicode, algorithm, options, tables]
 
 import pkg/celina
 
 import syntax/highlite
 import cursor
 import color
+import lsp/protocol/types
 
 export SourceLanguage
 export EditorColorPairIndex
@@ -851,3 +854,316 @@ proc overwriteColorSegmentBlock*[T](
       style: defaultStyle,
     )
     highlight.overwrite(colorSegment)
+
+# =============================================================================
+# LSP Semantic Tokens Support
+# =============================================================================
+
+proc semanticTokenTypeToColor*(
+    typeName: string, modifiers: seq[string] = @[]
+): EditorColorPairIndex =
+  ## Convert semantic token type name to EditorColorPairIndex.
+  ## Supports both LSP standard types and rust-analyzer specific types.
+  ##
+  ## Standard LSP token types (LSP 3.16+):
+  ##   namespace, type, class, enum, interface, struct, typeParameter,
+  ##   parameter, variable, property, enumMember, event, function,
+  ##   method, macro, keyword, modifier, comment, string, number,
+  ##   regexp, operator, decorator
+  ##
+  ## Rust-analyzer specific types:
+  ##   lifetime, attribute, derive, union, typeAlias, builtinType,
+  ##   selfKeyword, selfTypeKeyword, formatSpecifier, escapeSequence,
+  ##   label, generic, constParameter, unresolvedReference, punctuation,
+  ##   angle, arithmetic, bitwise, brace, bracket, colon, comma,
+  ##   comparison, dot, logical, macroBang, parenthesis, semicolon,
+  ##   attributeBracket, builtinAttribute, deriveHelper, toolModule,
+  ##   invalidEscapeSequence
+
+  # Check for deprecated modifier first (can affect any type)
+  # Deprecated items typically use a strike-through style but we return
+  # the base color here - style handling should be done separately
+
+  case typeName
+  # Standard LSP token types
+  of "namespace":
+    EditorColorPairIndex.namespace
+  of "type":
+    EditorColorPairIndex.typeName
+  of "class":
+    EditorColorPairIndex.className
+  of "enum":
+    EditorColorPairIndex.enumName
+  of "interface":
+    EditorColorPairIndex.interfaceName
+  of "struct":
+    EditorColorPairIndex.typeName
+  of "typeParameter":
+    EditorColorPairIndex.typeParameter
+  of "parameter":
+    EditorColorPairIndex.parameter
+  of "variable":
+    # Check for specific modifiers
+    if "readonly" in modifiers or "static" in modifiers:
+      EditorColorPairIndex.constParameter
+    else:
+      EditorColorPairIndex.variable
+  of "property":
+    EditorColorPairIndex.property
+  of "enumMember":
+    EditorColorPairIndex.enumMember
+  of "event":
+    EditorColorPairIndex.event
+  of "function":
+    EditorColorPairIndex.function
+  of "method":
+    EditorColorPairIndex.`method`
+  of "macro":
+    EditorColorPairIndex.`macro`
+  of "keyword":
+    EditorColorPairIndex.keyword
+  of "modifier":
+    EditorColorPairIndex.keyword
+  of "comment":
+    EditorColorPairIndex.comment
+  of "string":
+    EditorColorPairIndex.lspString
+  of "number":
+    EditorColorPairIndex.decNumber
+  of "regexp":
+    EditorColorPairIndex.regexp
+  of "operator":
+    EditorColorPairIndex.operator
+  of "decorator":
+    EditorColorPairIndex.decorator
+
+  # Rust-analyzer specific token types
+  of "lifetime":
+    EditorColorPairIndex.lifetime
+  of "attribute":
+    EditorColorPairIndex.attribute
+  of "derive":
+    EditorColorPairIndex.derive
+  of "union":
+    EditorColorPairIndex.union
+  of "typeAlias":
+    EditorColorPairIndex.typeAlias
+  of "builtinType":
+    EditorColorPairIndex.builtinType
+  of "selfKeyword":
+    EditorColorPairIndex.selfKeyword
+  of "selfTypeKeyword":
+    EditorColorPairIndex.selfTypeKeyword
+  of "formatSpecifier":
+    EditorColorPairIndex.formatSpecifier
+  of "escapeSequence":
+    EditorColorPairIndex.escapeSequence
+  of "invalidEscapeSequence":
+    EditorColorPairIndex.invalidEscapeSequence
+  of "label":
+    EditorColorPairIndex.label
+  of "generic":
+    EditorColorPairIndex.generic
+  of "constParameter":
+    EditorColorPairIndex.constParameter
+  of "unresolvedReference":
+    EditorColorPairIndex.unresolvedReference
+  of "punctuation":
+    EditorColorPairIndex.punctuation
+  of "angle":
+    EditorColorPairIndex.angle
+  of "arithmetic":
+    EditorColorPairIndex.arithmetic
+  of "bitwise":
+    EditorColorPairIndex.bitwise
+  of "brace":
+    EditorColorPairIndex.brace
+  of "bracket":
+    EditorColorPairIndex.bracket
+  of "colon":
+    EditorColorPairIndex.colon
+  of "comma":
+    EditorColorPairIndex.comma
+  of "comparison":
+    EditorColorPairIndex.comparison
+  of "dot":
+    EditorColorPairIndex.dot
+  of "logical":
+    EditorColorPairIndex.logical
+  of "macroBang":
+    EditorColorPairIndex.macroBang
+  of "parenthesis":
+    EditorColorPairIndex.parenthesis
+  of "semicolon":
+    EditorColorPairIndex.semicolon
+  of "attributeBracket":
+    EditorColorPairIndex.attributeBracket
+  of "builtinAttribute":
+    EditorColorPairIndex.builtinAttribute
+  of "deriveHelper":
+    EditorColorPairIndex.deriveHelper
+  of "toolModule":
+    EditorColorPairIndex.toolModule
+  else:
+    # Unknown token type - use default
+    EditorColorPairIndex.default
+
+proc semanticTokenToColorSegment*(
+    token: SemanticToken, legend: SemanticTokensLegend
+): ColorSegment =
+  ## Convert a single SemanticToken to a ColorSegment.
+  let
+    typeName = getSemanticTokenType(token, legend)
+    modifiers = getSemanticTokenModifiers(token, legend)
+    color = semanticTokenTypeToColor(typeName, modifiers)
+
+  result = ColorSegment(
+    firstRow: token.line,
+    firstColumn: token.startChar,
+    lastRow: token.line, # Semantic tokens are typically single-line
+    lastColumn: token.endChar - 1, # endChar is exclusive, lastColumn is inclusive
+    color: color,
+    style: defaultStyle,
+  )
+
+proc applySemanticTokens*(
+    highlight: var Highlight, tokens: SemanticTokens, legend: SemanticTokensLegend
+) =
+  ## Apply semantic tokens to an existing Highlight, overwriting the relevant segments.
+  ## Semantic tokens from LSP take precedence over local syntax highlighting.
+  ##
+  ## Performance: O(n + m) where n = existing segments, m = semantic tokens
+  ## Uses batch processing instead of individual overwrite calls.
+  let decodedTokens = decodeSemanticTokens(tokens)
+  if decodedTokens.len == 0:
+    return
+
+  # Convert all tokens to ColorSegments and index by line for O(1) lookup
+  var tokensByLine = initTable[int, seq[ColorSegment]]()
+  for token in decodedTokens:
+    let segment = semanticTokenToColorSegment(token, legend)
+    if segment.lastColumn >= segment.firstColumn:
+      if token.line notin tokensByLine:
+        tokensByLine[token.line] = @[]
+      tokensByLine[token.line].add(segment)
+
+  if tokensByLine.len == 0:
+    return
+
+  # Sort tokens within each line by column
+  for line in tokensByLine.keys:
+    tokensByLine[line].sort do(a, b: ColorSegment) -> int:
+      cmp(a.firstColumn, b.firstColumn)
+
+  # Build new segment list by merging existing segments with tokens
+  var newSegments: seq[ColorSegment] = @[]
+
+  for seg in highlight.colorSegments:
+    # Check if this segment's line has any tokens
+    if seg.firstRow notin tokensByLine and seg.lastRow notin tokensByLine:
+      # No tokens on this line, keep segment as-is
+      newSegments.add(seg)
+      continue
+
+    # For simplicity, handle single-line segments (most common case)
+    if seg.firstRow == seg.lastRow:
+      let line = seg.firstRow
+      if line notin tokensByLine:
+        newSegments.add(seg)
+        continue
+
+      # Split segment around tokens on this line
+      let lineTokens = tokensByLine[line]
+      var currentCol = seg.firstColumn
+
+      for token in lineTokens:
+        # Skip tokens completely before current position
+        if token.lastColumn < currentCol:
+          continue
+
+        # Skip tokens completely outside segment bounds
+        if token.lastColumn < seg.firstColumn or token.firstColumn > seg.lastColumn:
+          continue
+
+        # Effective token start (clipped to current position and segment bounds)
+        let effectiveStart = max(token.firstColumn, max(currentCol, seg.firstColumn))
+        let effectiveEnd = min(token.lastColumn, seg.lastColumn)
+
+        # Skip if no valid range after clipping
+        if effectiveStart > effectiveEnd:
+          continue
+
+        # Add portion before token (if any)
+        if currentCol < effectiveStart:
+          newSegments.add(
+            ColorSegment(
+              firstRow: line,
+              firstColumn: currentCol,
+              lastRow: line,
+              lastColumn: effectiveStart - 1,
+              color: seg.color,
+              style: seg.style,
+            )
+          )
+
+        # Add the token itself
+        newSegments.add(
+          ColorSegment(
+            firstRow: line,
+            firstColumn: effectiveStart,
+            lastRow: line,
+            lastColumn: effectiveEnd,
+            color: token.color,
+            style: token.style,
+          )
+        )
+        currentCol = effectiveEnd + 1
+
+        # Stop if we've covered the entire segment
+        if currentCol > seg.lastColumn:
+          break
+
+      # Add remaining portion after last token (if any)
+      if currentCol <= seg.lastColumn:
+        newSegments.add(
+          ColorSegment(
+            firstRow: line,
+            firstColumn: currentCol,
+            lastRow: line,
+            lastColumn: seg.lastColumn,
+            color: seg.color,
+            style: seg.style,
+          )
+        )
+    else:
+      # Multi-line segment: for now, use the slower individual overwrite
+      # This is rare in practice
+      var tempHighlight = Highlight(colorSegments: @[seg])
+      for line in seg.firstRow .. seg.lastRow:
+        if line in tokensByLine:
+          for token in tokensByLine[line]:
+            tempHighlight.overwrite(token)
+      newSegments.add(tempHighlight.colorSegments)
+
+  highlight.colorSegments = newSegments
+
+proc semanticTokensToHighlight*(
+    tokens: SemanticTokens, legend: SemanticTokensLegend, bufferLen: int
+): Highlight =
+  ## Create a new Highlight from semantic tokens only.
+  ## This creates a sparse highlight - positions not covered by tokens will have default color.
+  result = Highlight(colorSegments: @[])
+  let decodedTokens = decodeSemanticTokens(tokens)
+
+  for token in decodedTokens:
+    if token.line < bufferLen:
+      let segment = semanticTokenToColorSegment(token, legend)
+      if segment.lastColumn >= segment.firstColumn:
+        result.colorSegments.add(segment)
+
+  # Sort segments by position
+  result.colorSegments.sort do(a, b: ColorSegment) -> int:
+    if a.firstRow != b.firstRow:
+      return cmp(a.firstRow, b.firstRow)
+    else:
+      return cmp(a.firstColumn, b.firstColumn)

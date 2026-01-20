@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -34,6 +34,8 @@ type
     frOpenDirectory # Navigate to a directory
     frEnterCommand # Enter command mode
     frQuit # Close filer and return to previous mode
+    frDeleteFile # Delete selected file/directory
+    frShowInfo # Show file information
     frUnhandled # Command was not handled
     frError # Error occurred
 
@@ -43,6 +45,10 @@ type
       filePath*: string
     of frOpenDirectory:
       dirPath*: string
+    of frDeleteFile:
+      deletePath*: string
+    of frShowInfo:
+      fileInfo*: string
     of frError:
       errorMessage*: string
     else:
@@ -139,11 +145,6 @@ proc handleFilerModeKey*(
           else:
             return FilerResult(kind: frOpenFile, filePath: selectedPath.get)
       return FilerResult(kind: frHandled)
-    of "h", "-":
-      # Go to parent directory
-      if filerState.goToParent():
-        return FilerResult(kind: frHandled)
-      return FilerResult(kind: frHandled)
     of "g":
       # Start waiting for second 'g'
       handler.waitingForG = true
@@ -155,7 +156,7 @@ proc handleFilerModeKey*(
     of ".":
       filerState.toggleHidden()
       return FilerResult(kind: frHandled)
-    of "s":
+    of "v":
       # Vertical split (follows symlinks to files)
       let selectedPath = filerState.getSelectedPath()
       if selectedPath.isSome:
@@ -163,7 +164,7 @@ proc handleFilerModeKey*(
         if entry.isSome and entry.get.isFile:
           return FilerResult(kind: frOpenFileVSplit, filePath: selectedPath.get)
       return FilerResult(kind: frHandled)
-    of "i":
+    of "h":
       # Horizontal split (follows symlinks to files)
       let selectedPath = filerState.getSelectedPath()
       if selectedPath.isSome:
@@ -171,6 +172,18 @@ proc handleFilerModeKey*(
         if entry.isSome and entry.get.isFile:
           return FilerResult(kind: frOpenFileHSplit, filePath: selectedPath.get)
       return FilerResult(kind: frHandled)
+    of "D":
+      # Delete selected file or directory
+      let selectedPath = filerState.getSelectedPath()
+      if selectedPath.isSome:
+        let entry = filerState.getSelectedEntry()
+        if entry.isSome and entry.get.name != "..":
+          return FilerResult(kind: frDeleteFile, deletePath: selectedPath.get)
+      return FilerResult(kind: frHandled)
+    of "i":
+      # Show file information
+      let info = filerState.getSelectedInfo()
+      return FilerResult(kind: frShowInfo, fileInfo: info)
     else:
       discard
 

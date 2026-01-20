@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,19 +17,19 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, monotimes, times, tables, strutils]
+import std/[options, monotimes, times, tables, strutils, json]
 
 import pkg/celina
 
 import
   cursor, modes, buffer, registers, filer, logviewer, helpviewer, command_completion,
   messagelog, buffermanager, backupmanager, diffviewer, debugviewer, configmode,
-  references_viewer, documentsymbol_viewer
+  references_viewer, documentsymbol_viewer, hoverpopup
 
 export
   buffer.SidebarItemKind, registers, command_completion, logviewer, helpviewer,
   buffermanager, backupmanager, diffviewer, debugviewer, configmode, references_viewer,
-  documentsymbol_viewer
+  documentsymbol_viewer, hoverpopup
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -140,6 +140,8 @@ type
     codeLensCache*: CodeLensCache # Cached CodeLens items for current buffer
     codeLensPicker*: CodeLensPicker # CodeLens selection UI state
     documentHighlightCache*: DocumentHighlightCache # Cached document highlights
+    semanticTokensCache*: SemanticTokensCache # Semantic tokens cache state
+    hoverPopup*: HoverPopupManager # Hover popup manager
     locations*: Option[LspLocationsResult]
       # LSP locations for references/definitions picker
     lastCodeLensUpdate*: MonoTime # Timestamp of last CodeLens update
@@ -147,12 +149,46 @@ type
     lastDocumentHighlightUpdate*: MonoTime # Timestamp of last document highlight update
     documentHighlightUpdateInterval*: int64
       # Debounce interval for document highlight updates
+    lastSemanticTokensUpdate*: MonoTime # Timestamp of last semantic tokens update
+    semanticTokensUpdateInterval*: int64 # Debounce interval for semantic tokens updates
     # Pending async request IDs for non-blocking LSP operations
     pendingSignatureHelpRequestId*: int
       # Request ID for pending signature help request (0 = none)
     pendingDocumentHighlightRequestId*: int
       # Request ID for pending document highlight request (0 = none)
     pendingCodeLensRequestId*: int # Request ID for pending code lens request (0 = none)
+    pendingSemanticTokensRequestId*: int
+      # Request ID for pending semantic tokens request (0 = none)
+    pendingHoverRequestId*: int # Request ID for pending hover request (0 = none)
+    # Pending location request (definition, references, etc.)
+    pendingLocationRequestId*: int # Request ID (0 = none)
+    pendingLocationRequestKind*: LspLocationRequestKind # Type of location request
+    # Pending document symbols request
+    pendingDocumentSymbolsRequestId*: int # Request ID (0 = none)
+    # Pending selection range request
+    pendingSelectionRangeRequestId*: int # Request ID (0 = none)
+    # Pending call hierarchy request (2-stage: prepare -> incoming/outgoing)
+    pendingCallHierarchyRequestId*: int # Request ID (0 = none)
+    pendingCallHierarchyKind*: CallHierarchyRequestKind # incoming or outgoing
+    pendingCallHierarchyPrepareResult*: Option[JsonNode]
+      # Cached prepare result for 2nd stage
+    # Pending code action request
+    pendingCodeActionRequestId*: int # Request ID (0 = none)
+
+  CallHierarchyRequestKind* = enum
+    chrkNone
+    chrkPrepareIncoming # Preparing for incoming calls
+    chrkPrepareOutgoing # Preparing for outgoing calls
+    chrkIncomingCalls # Getting incoming calls
+    chrkOutgoingCalls # Getting outgoing calls
+
+  LspLocationRequestKind* = enum
+    lrkNone
+    lrkDefinition
+    lrkDeclaration
+    lrkReferences
+    lrkTypeDefinition
+    lrkImplementation
 
   TimingState* = object ## Timing and debounce state grouped together
     lastResizeTime*: MonoTime # Timestamp of last processed resize event
@@ -406,6 +442,15 @@ type
     changeSeq*: int # Buffer changeSeq when cache was last updated
     isValid*: bool # Whether the cache is valid
 
+  SemanticTokensCache* = object
+    ## Cache state for semantic tokens (LSP-based syntax highlighting)
+    ## Actual SemanticTokens data is applied directly to buffer.highlight
+    changeSeq*: int # Buffer changeSeq when semantic tokens were last applied
+    filePath*: string # Path of the buffer this cache belongs to
+    isValid*: bool # Whether semantic tokens have been applied to current highlight
+    topLine*: int # Top visible line when tokens were requested
+    bottomLine*: int # Bottom visible line when tokens were requested
+
   SubstitutePreview* = object
     ## State for live substitute preview (like Vim's inccommand)
     isActive*: bool # Whether preview is currently active
@@ -489,6 +534,8 @@ type
     scrollAnimation*: ScrollAnimation # Current scroll animation state
     # LSP cache state (grouped in LspCacheState)
     lspCache*: LspCacheState # LSP cache and picker state
+    # LSP progress display
+    lspProgressText*: string # Current LSP progress text for status line
     # Temporary message display (like Vim's :jumps output)
     tempMessages*: seq[string] # Lines to display temporarily in command area
     # Substitute preview state (live preview like Vim's inccommand)

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -194,7 +194,7 @@ Backspace - Undo
 
 # Insert mode
 
-Ctrl-r              - Insert the character which is below the cursor
+Ctrl-e              - Insert the character which is below the cursor
 Ctrl-y              - Insert the character which is above the cursor
 Ctrl-i              - Insert a Tab
 Ctrl-h or Backspace - Delete the character before the cursor
