@@ -21,7 +21,12 @@ import std/[strformat, monotimes, times, os, options]
 
 import pkg/[celina, results]
 
-import moepkg/[editor, handler, modes, logger, cmdline, filer, lspintegration, config]
+import
+  moepkg/
+    [
+      editor, handler, modes, logger, cmdline, filer, lspintegration, config,
+      configloader,
+    ]
 
 proc toCursorStyle(ct: CursorType): CursorStyle =
   ## Convert config CursorType to celina CursorStyle
@@ -54,16 +59,30 @@ proc handleResize(e: Editor) =
 
 proc main() =
   # Parse command line arguments
-  let config = parseCmdLine()
+  let cmdLineConfig = parseCmdLine()
 
   # Initialize file logging system for debugging
-  let log = initLogger(LogLevel.Debug, enabled = config.debugEnabled)
+  let log = initLogger(LogLevel.Debug, enabled = cmdLineConfig.debugEnabled)
   setGlobalLogger(log)
-  if config.debugEnabled:
+  if cmdLineConfig.debugEnabled:
     logInfo("moe", "Editor starting with debug logging enabled")
 
-  # Create editor first to load configuration
-  var editor = newEditor()
+  # Load configuration
+  let loadResult = loadConfig()
+  var
+    editorConfig: EditorConfig
+    validationResult = newValidationResult()
+  if loadResult.isOk:
+    let (config, vr) = loadResult.get
+    editorConfig = config
+    validationResult = vr
+  else:
+    # Config file parse error - add to validation result and use default config
+    validationResult.addError("config", loadResult.error, "valid TOML file")
+    editorConfig = newEditorConfig()
+
+  # Create editor with loaded configuration and validation result
+  var editor = newEditor(editorConfig, validationResult)
 
   # Create app with config-based mouse setting
   var app = newApp(
@@ -89,28 +108,28 @@ proc main() =
         editor.state.needsFullRedraw = true
   )
 
-  if config.filePaths.len > 0:
+  if cmdLineConfig.filePaths.len > 0:
     # Check if first path is a directory
-    if config.filePaths.len == 1 and dirExists(config.filePaths[0]):
+    if cmdLineConfig.filePaths.len == 1 and dirExists(cmdLineConfig.filePaths[0]):
       # Directory specified - start in Filer mode
-      let dirPath = absolutePath(config.filePaths[0])
+      let dirPath = absolutePath(cmdLineConfig.filePaths[0])
       editor.state.mode = EditorMode.Filer
       editor.state.filerState = some(newFilerState(dirPath))
     else:
       # Load first file
       block:
-        let r = editor.loadFile(config.filePaths[0])
+        let r = editor.loadFile(cmdLineConfig.filePaths[0])
         if r.isErr:
           echo fmt"Error: {r.error}"
           quit(1)
         # Apply readonly mode if specified
-        if config.isReadonly:
+        if cmdLineConfig.isReadonly:
           editor.activeBuffer().readOnly = true
 
       # Load additional files with auto-split if enabled
-      if config.filePaths.len > 1 and editor.config.startUpFileOpen.autoSplit:
-        for i in 1 ..< config.filePaths.len:
-          let filePath = config.filePaths[i]
+      if cmdLineConfig.filePaths.len > 1 and editor.config.startUpFileOpen.autoSplit:
+        for i in 1 ..< cmdLineConfig.filePaths.len:
+          let filePath = cmdLineConfig.filePaths[i]
           if fileExists(filePath):
             # Split based on config
             let splitResult =
@@ -121,15 +140,15 @@ proc main() =
                 editor.hsplit(some(filePath))
             if splitResult.isErr:
               logError("moe", fmt"Failed to split for {filePath}: {splitResult.error}")
-            elif config.isReadonly:
+            elif cmdLineConfig.isReadonly:
               editor.activeBuffer().readOnly = true
-      elif config.filePaths.len > 1:
+      elif cmdLineConfig.filePaths.len > 1:
         # No auto-split, just load files into buffer list
-        for i in 1 ..< config.filePaths.len:
-          let filePath = config.filePaths[i]
+        for i in 1 ..< cmdLineConfig.filePaths.len:
+          let filePath = cmdLineConfig.filePaths[i]
           if fileExists(filePath):
             discard editor.loadFile(filePath)
-            if config.isReadonly:
+            if cmdLineConfig.isReadonly:
               editor.activeBuffer().readOnly = true
 
   app.onEvent proc(e: Event, app: App): bool =
@@ -190,7 +209,7 @@ proc main() =
   editor.savePersistData()
 
   # Clean up logger
-  if config.debugEnabled:
+  if cmdLineConfig.debugEnabled:
     logInfo("moe", "Editor shutting down")
     log.close()
 

@@ -59,7 +59,9 @@ proc toErrorMessages*(vr: ValidationResult): seq[string] =
 
 proc parseColorMode(s: string): ColorMode =
   case s
-  of "8bit": cm8bit
+  of "8": cm8color
+  of "16": cm16color
+  of "256": cm256color
   of "24bit": cm24bit
   of "none": cmNone
   else: cm24bit
@@ -302,7 +304,7 @@ proc loadEnum[T](
 
 # Valid enum values for validation
 const
-  ValidColorModes* = ["8bit", "24bit", "none"]
+  ValidColorModes* = ["8", "16", "256", "24bit", "none"]
   ValidCursorTypes* =
     ["terminalDefault", "blinkBlock", "blinkIbeam", "nonBlinkBlock", "nonBlinkIbeam"]
   ValidThemeKinds* = ["default", "config", "vscode"]

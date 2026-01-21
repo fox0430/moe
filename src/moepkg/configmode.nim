@@ -332,7 +332,7 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
       $c.standard.colorMode,
     enumSet: proc(c: EditorConfig, v: string) =
       c.standard.colorMode = parseEnum[ColorMode](v),
-    enumOptions: @["8bit", "24bit", "none"],
+    enumOptions: @["8", "16", "256", "24bit", "none"],
   )
 
   # Clipboard section

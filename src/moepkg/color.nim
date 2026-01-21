@@ -22,17 +22,81 @@
 ## This module provides RGB color handling, theme color definitions,
 ## and conversion utilities for the editor's color scheme.
 
-import std/[strutils, strformat, options]
+import std/[strutils, strformat, options, os]
 
 import pkg/[results, celina]
 
 type ColorModeKind* = enum
   ## Color mode for terminal output
+  cmk8color ## 8 basic ANSI colors (0-7)
+  cmk16color ## 16 ANSI colors (0-15, includes bright)
+  cmk256color ## 256-color palette
   cmk24bit ## True color (24-bit RGB)
-  cmk8bit ## 256-color palette
   cmkNone ## No colors (terminal defaults only)
 
 var globalColorMode* = cmk24bit ## Current color mode setting
+
+proc rgbTo8Color*(r, g, b: int16): uint8 =
+  ## Convert RGB to 8-color ANSI index (0-7).
+  ## Uses threshold-based mapping to basic colors.
+  ##
+  ## ANSI 8 colors: black(0), red(1), green(2), yellow(3),
+  ##                blue(4), magenta(5), cyan(6), white(7)
+
+  # Threshold for considering a channel "on"
+  const threshold = 128'i16
+
+  # Map RGB channels to 3-bit color index
+  let
+    rBit = if r >= threshold: 1'u8 else: 0'u8
+    gBit = if g >= threshold: 2'u8 else: 0'u8
+    bBit = if b >= threshold: 4'u8 else: 0'u8
+
+  result = rBit or gBit or bBit
+
+proc rgbTo16Color*(r, g, b: int16): uint8 =
+  ## Convert RGB to 16-color ANSI index (0-15).
+  ## Colors 0-7 are normal, 8-15 are bright variants.
+  ##
+  ## ANSI 16 colors:
+  ##   0: black,   1: red,     2: green,   3: yellow
+  ##   4: blue,    5: magenta, 6: cyan,    7: white
+  ##   8: bright black (gray), 9-15: bright variants
+
+  # Calculate luminance (perceived brightness, 0-255 range)
+  # Use int to avoid overflow: 255 * 587 = 149,685 exceeds int16 max
+  let luminance = (r.int * 299 + g.int * 587 + b.int * 114) div 1000
+
+  # Check for grayscale (R ≈ G ≈ B)
+  let
+    maxCh = max(max(r, g), b)
+    minCh = min(min(r, g), b)
+    isGrayscale = (maxCh - minCh) < 32
+
+  if isGrayscale:
+    # Map grayscale to 4 levels: black, dark gray, light gray, white
+    if luminance < 64:
+      return 0'u8 # Black
+    elif luminance < 128:
+      return 8'u8 # Bright black (dark gray)
+    elif luminance < 192:
+      return 7'u8 # White (actually light gray in most terminals)
+    else:
+      return 15'u8 # Bright white
+
+  # For chromatic colors, use lower threshold to catch dark colors
+  const threshold = 85'i16
+  let
+    rBit = if r >= threshold: 1'u8 else: 0'u8
+    gBit = if g >= threshold: 2'u8 else: 0'u8
+    bBit = if b >= threshold: 4'u8 else: 0'u8
+    baseColor = rBit or gBit or bBit
+
+  # Use bright variant if any channel is high
+  if maxCh >= 192:
+    result = baseColor + 8
+  else:
+    result = baseColor
 
 type
   ## RGB color with values 0-255. -1 indicates terminal default color.
@@ -365,7 +429,15 @@ proc toColorValue*(rgb: Rgb): ColorValue =
   of cmkNone:
     # No colors - use terminal default
     return ColorValue(kind: Default)
-  of cmk8bit:
+  of cmk8color:
+    # Convert to 8 basic ANSI colors
+    let index = rgbTo8Color(rgb.red, rgb.green, rgb.blue)
+    return ColorValue(kind: Indexed256, indexed256: index)
+  of cmk16color:
+    # Convert to 16 ANSI colors (includes bright variants)
+    let index = rgbTo16Color(rgb.red, rgb.green, rgb.blue)
+    return ColorValue(kind: Indexed256, indexed256: index)
+  of cmk256color:
     # Convert to 256-color palette
     let index = rgbTo256Color(rgb.red, rgb.green, rgb.blue)
     return ColorValue(kind: Indexed256, indexed256: index)
@@ -414,3 +486,85 @@ proc getThemeStyle*(
 proc setThemeColors*(colors: ThemeColors) =
   ## Set the current theme colors.
   themeColors = colors
+
+var cachedTerminalCapability: Option[ColorModeKind] = none(ColorModeKind)
+
+proc detectTerminalColorCapability*(): ColorModeKind =
+  ## Detect terminal color capability from environment variables.
+  ## Result is cached after first call.
+  ##
+  ## Detection order:
+  ## 1. COLORTERM=truecolor or 24bit → 24bit
+  ## 2. TERM ends with "-256color" or contains "256color" → 256 colors
+  ## 3. TERM is a known color terminal → 16 colors
+  ## 4. TERM contains "-color" suffix → 16 colors
+  ## 5. Otherwise → 8 colors
+
+  if cachedTerminalCapability.isSome:
+    return cachedTerminalCapability.get
+
+  let colorterm = getEnv("COLORTERM").toLowerAscii
+  if colorterm in ["truecolor", "24bit"]:
+    cachedTerminalCapability = some(cmk24bit)
+    return cmk24bit
+
+  let term = getEnv("TERM").toLowerAscii
+
+  # Check for 256 color support
+  if term.endsWith("-256color") or "256color" in term:
+    cachedTerminalCapability = some(cmk256color)
+    return cmk256color
+
+  # Known 16-color capable terminals
+  const knownColorTerminals = [
+    "xterm",
+    "xterm-color",
+    "screen",
+    "screen-color",
+    "tmux",
+    "tmux-color",
+    "rxvt",
+    "rxvt-unicode",
+    "linux", # Linux console
+    "cygwin",
+    "ansi",
+  ]
+
+  for known in knownColorTerminals:
+    if term == known or term.startsWith(known & "-"):
+      cachedTerminalCapability = some(cmk16color)
+      return cmk16color
+
+  # Check for generic color suffix (e.g., "foo-color")
+  if term.endsWith("-color"):
+    cachedTerminalCapability = some(cmk16color)
+    return cmk16color
+
+  # Fallback to 8 colors for unknown terminals
+  cachedTerminalCapability = some(cmk8color)
+  return cmk8color
+
+proc colorModeRank(mode: ColorModeKind): int {.inline.} =
+  ## Return rank of color mode (higher = more colors)
+  case mode
+  of cmk8color: 0
+  of cmk16color: 1
+  of cmk256color: 2
+  of cmk24bit: 3
+  of cmkNone: -1
+    # Special case
+
+proc applyColorModeFallback*(requested: ColorModeKind): ColorModeKind =
+  ## Apply fallback if the requested color mode exceeds terminal capability.
+  ## Returns the requested mode if supported, otherwise falls back to
+  ## the highest supported mode.
+
+  if requested == cmkNone:
+    return cmkNone
+
+  let capability = detectTerminalColorCapability()
+
+  if colorModeRank(requested) <= colorModeRank(capability):
+    return requested
+  else:
+    return capability

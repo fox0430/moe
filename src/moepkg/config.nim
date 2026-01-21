@@ -26,9 +26,11 @@ import std/[options, tables, os, osproc]
 
 type
   ColorMode* = enum
-    cm8bit = "8bit"
-    cm24bit = "24bit"
-    cmNone = "none"
+    cm8color = "8" ## 8 basic ANSI colors (0-7)
+    cm16color = "16" ## 16 ANSI colors (0-15, includes bright)
+    cm256color = "256" ## 256-color palette
+    cm24bit = "24bit" ## True color (24-bit RGB)
+    cmNone = "none" ## No colors (terminal defaults only)
 
   CursorType* = enum
     ctTerminalDefault = "terminalDefault"

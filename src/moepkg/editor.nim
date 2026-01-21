@@ -903,26 +903,18 @@ proc editFile*(e: Editor, path: string): Result[(), string] =
   e.switchToBufferByIndex(e.buffers.len - 1)
   ok(())
 
-proc newEditor*(): Editor =
-  # Load TOML configuration
-  let loadResult = loadConfig()
-  var editorConfig: EditorConfig
-  if loadResult.isOk:
-    let (config, vr) = loadResult.get
-    editorConfig = config
-    if vr.hasErrors:
-      for msg in vr.toErrorMessages:
-        stderr.writeLine "Config warning: " & msg
-  else:
-    stderr.writeLine "Config error: " & loadResult.error
-    editorConfig = newEditorConfig()
-
-  # Set color mode from configuration
-  globalColorMode =
+proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
+  ## Create a new Editor with the given configuration and validation result.
+  ## If validation errors exist, they will be displayed in the status message.
+  # Set color mode from configuration with fallback
+  let requestedColorMode =
     case editorConfig.standard.colorMode
+    of cm8color: cmk8color
+    of cm16color: cmk16color
+    of cm256color: cmk256color
     of cm24bit: cmk24bit
-    of cm8bit: cmk8bit
     of cmNone: cmkNone
+  globalColorMode = applyColorModeFallback(requestedColorMode)
 
   # Initialize theme from configuration
   initTheme(editorConfig)
@@ -1138,6 +1130,33 @@ proc newEditor*(): Editor =
     except OSError:
       discard
 
+  # Display validation errors in status message if any
+  if vr.hasErrors:
+    let errorMessages = vr.toErrorMessages
+    result.state.statusMessage = "Config error: " & errorMessages[0]
+    # Log all errors
+    for msg in errorMessages:
+      addMessageLog("Config error: " & msg)
+
+proc newEditor*(editorConfig: EditorConfig): Editor =
+  ## Create a new Editor with the given configuration.
+  result = newEditor(editorConfig, newValidationResult())
+
+proc newEditor*(): Editor =
+  ## Create a new Editor, loading configuration from default path.
+  # Load TOML configuration
+  let loadResult = loadConfig()
+  var
+    editorConfig: EditorConfig
+    vr = newValidationResult()
+  if loadResult.isOk:
+    (editorConfig, vr) = loadResult.get
+  else:
+    vr.addError("config", loadResult.error, "valid TOML file")
+    editorConfig = newEditorConfig()
+
+  result = newEditor(editorConfig, vr)
+
 proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
   ## Refresh git diff information for the active buffer
   ## This should be called after saving a file or buffer modifications
@@ -1236,12 +1255,15 @@ proc applyConfigSettings(e: Editor, newConfig: EditorConfig) =
   # Update timing intervals
   e.state.timing.gitDiffUpdateInterval = newConfig.git.updateInterval
 
-  # Update color mode
-  globalColorMode =
+  # Update color mode with fallback
+  let requestedColorMode =
     case newConfig.standard.colorMode
+    of cm8color: cmk8color
+    of cm16color: cmk16color
+    of cm256color: cmk256color
     of cm24bit: cmk24bit
-    of cm8bit: cmk8bit
     of cmNone: cmkNone
+  globalColorMode = applyColorModeFallback(requestedColorMode)
 
   # Update clipboard tool if enabled
   if newConfig.clipboard.enable:
