@@ -343,6 +343,21 @@ proc hexToRgb*(s: string): Result[Rgb, string] =
 
   return Result[Rgb, string].ok rgb
 
+proc parseThemeColor*(s: string): Result[Rgb, string] =
+  ## Parse a color string for theme files.
+  ## Supports:
+  ##   - "termDefault" for terminal default color
+  ##   - "#RRGGBB" or "RRGGBB" hex color format
+  ##
+  ## Examples:
+  ##   parseThemeColor("termDefault") -> TerminalDefaultRgb
+  ##   parseThemeColor("#ff0000") -> Rgb(red: 255, green: 0, blue: 0)
+
+  if s == "termDefault":
+    return Result[Rgb, string].ok TerminalDefaultRgb
+
+  return hexToRgb(s)
+
 proc toHex*(rgb: Rgb, withPrefix: bool = true): Option[string] =
   ## Convert RGB to hex color string.
   ## Returns None for terminal default color.

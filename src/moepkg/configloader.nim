@@ -1251,12 +1251,12 @@ proc loadThemeFromToml*(path: string): Result[ThemeColors, string] =
   var defaultBg = colors[EditorColorPairIndex.default].background.rgb
 
   if colorsTable.hasKey("foreground"):
-    let fgResult = hexToRgb(colorsTable["foreground"].getStr())
+    let fgResult = parseThemeColor(colorsTable["foreground"].getStr())
     if fgResult.isOk:
       defaultFg = fgResult.get
 
   if colorsTable.hasKey("background"):
-    let bgResult = hexToRgb(colorsTable["background"].getStr())
+    let bgResult = parseThemeColor(colorsTable["background"].getStr())
     if bgResult.isOk:
       defaultBg = bgResult.get
 
@@ -1271,7 +1271,7 @@ proc loadThemeFromToml*(path: string): Result[ThemeColors, string] =
       continue
 
     let colorStr = value.getStr()
-    let rgbResult = hexToRgb(colorStr)
+    let rgbResult = parseThemeColor(colorStr)
     if rgbResult.isErr:
       continue
 
