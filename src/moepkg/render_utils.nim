@@ -33,6 +33,7 @@ const
   TAB_CHAR* = 0x09.Rune ## Tab character constant
   FULLWIDTH_SPACE* = 0x3000.Rune ## Full-width space character (U+3000)
 
+  TabLineHeight* = 1 ## Height of tab line
   StatusLineReserve* = 1
   CommandLineReserve* = 1
   StatusAndCommandReserve* = 2

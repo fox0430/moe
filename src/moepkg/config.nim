@@ -93,6 +93,10 @@ type
     workspaceRoot*: Option[string]
     command*: Option[string]
 
+  # Tab line settings
+  TabLineConfig* = object
+    enable*: bool
+
   # Status line settings
   StatusLineConfig* = object
     multipleStatusLine*: bool
@@ -344,6 +348,7 @@ type
     standard*: StandardConfig
     clipboard*: ClipboardConfig
     buildOnSave*: BuildOnSaveConfig
+    tabLine*: TabLineConfig
     statusLine*: StatusLineConfig
     highlight*: HighlightConfig
     autoBackup*: AutoBackupConfig
@@ -418,12 +423,13 @@ proc newEditorConfig*(): EditorConfig =
       autoDeleteParen: true,
       liveReloadOfFile: false,
       colorMode: cm24bit,
-      mouse: true,
+      mouse: false,
     ),
     clipboard: ClipboardConfig(enable: true, tool: detectClipboardTool()),
     buildOnSave: BuildOnSaveConfig(
       enable: false, workspaceRoot: none(string), command: none(string)
     ),
+    tabLine: TabLineConfig(enable: true),
     statusLine: StatusLineConfig(
       multipleStatusLine: true,
       merge: false,

@@ -23,10 +23,11 @@ import pkg/[celina, results]
 
 import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
-  commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
-  gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
-  lspintegration, completion, signaturehelp, hoverpopup, backup, command_completion,
-  motion, recentfilemode, color, gapbuffer, persist, debugviewer, messagelog
+  commandconfig, statusline, tabline, windowmanager, unicode_utils, render_utils,
+  sidebar, gitdiff, highlight, logger, config, configloader, keybindconfig,
+  search_utils, filer, lspintegration, completion, signaturehelp, hoverpopup, backup,
+  command_completion, motion, recentfilemode, color, gapbuffer, persist, debugviewer,
+  messagelog
 import lsp/protocol/types as lspTypes
 import command_handlers/[handler_manager, visual_handler, insert_handler]
 
@@ -282,6 +283,9 @@ proc setActiveWindowScreenCursor(e: Editor, window: EditorWindow) =
     if bottomY > maxBottomY:
       maxBottomY = bottomY
 
+  # Calculate tab line offset
+  let tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+
   let
     windowBottomY = window.viewport.y + window.viewport.height
     isBottomWindow = (windowBottomY == maxBottomY)
@@ -291,9 +295,16 @@ proc setActiveWindowScreenCursor(e: Editor, window: EditorWindow) =
       sidebarWidth
     reservedLines = e.calculateReservedLines(isBottomWindow)
 
-  e.state.screenCursor = e.calculateWindowCursor(
-    window.buffer, window.viewport, window.cursor, lineNumOffset, reservedLines
+  var cursorPos = e.calculateWindowCursor(
+    window.buffer,
+    window.viewport,
+    window.cursor,
+    lineNumOffset,
+    reservedLines + tabLineOffset,
   )
+  # Adjust cursor Y for tab line offset
+  cursorPos.y += tabLineOffset
+  e.state.screenCursor = cursorPos
 
 proc switchToNextWindow*(e: Editor) =
   ## Switch to the next window (Ctrl-w, k)
@@ -956,6 +967,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       previousMode: EditorMode.Normal,
       # Display settings (grouped in DisplaySettings)
       display: DisplaySettings(
+        showTabLine: editorConfig.tabLine.enable,
         showStatusLine: editorConfig.standard.statusLine,
         multiStatusLine: editorConfig.statusLine.multipleStatusLine,
         showLineCount: true,
@@ -1231,6 +1243,7 @@ proc applyConfigSettings(e: Editor, newConfig: EditorConfig) =
   ## Note: Some settings require editor restart to take effect
 
   # Update display settings from config
+  e.state.display.showTabLine = newConfig.tabLine.enable
   e.state.display.showStatusLine = newConfig.standard.statusLine
   e.state.display.multiStatusLine = newConfig.statusLine.multipleStatusLine
   e.state.display.showLineNumbers = newConfig.standard.number
@@ -2406,9 +2419,14 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
       buffer.setString(popupX + popupWidth - 1, bottomY, "┘", borderStyle)
 
 proc renderLineNumbers(
-    e: Editor, buffer: var Buffer, textAreaWidth: int, sidebarWidth: int = 0
+    e: Editor,
+    buffer: var Buffer,
+    textAreaWidth: int,
+    sidebarWidth: int = 0,
+    startY: int = 0,
 ): int =
   ## Render line numbers and return max width of the line number text.
+  ## startY: Y offset for rendering (e.g., TabLineHeight when tab line is shown)
 
   # Guard against invalid text area width
   if textAreaWidth <= 0:
@@ -2420,7 +2438,7 @@ proc renderLineNumbers(
     reservedLines = e.calculateReservedLines(isBottomWindow = true)
     lineNumX = buffer.area.x + sidebarWidth
   var
-    screenY = 0
+    screenY = startY
     lineIndex = e.viewport.topLine
 
   while screenY < buffer.area.height - reservedLines and lineIndex < lineLen:
@@ -2797,12 +2815,14 @@ proc renderWindow(
     lineNumOffset: int,
     isBottomWindow: bool,
     isActiveWindow: bool,
+    tabLineOffset: int = 0,
 ) =
   ## Render a single window with sidebar, line numbers and text content
+  ## tabLineOffset: Y offset for rendering (TabLineHeight when tab line is shown)
   let
     lineCount = window.buffer.len
     reservedLines = e.calculateReservedLines(isBottomWindow)
-    visibleHeight = window.viewport.height - reservedLines
+    visibleHeight = window.viewport.height - reservedLines - tabLineOffset
 
   # Generate sidebar dynamically from buffer markers if enabled
   let maybeSidebar =
@@ -2826,10 +2846,10 @@ proc renderWindow(
   )
 
   var
-    screenY = 0
+    screenY = tabLineOffset
     lineIndex = window.viewport.topLine
 
-  while screenY < visibleHeight and lineIndex < lineCount:
+  while screenY < visibleHeight + tabLineOffset and lineIndex < lineCount:
     # Check if this line is inside a collapsed fold (but not the start line)
     if window.buffer.foldState.isLineInCollapsedFold(lineIndex):
       # Skip this line (it's hidden inside a fold)
@@ -2939,6 +2959,9 @@ proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
   # Find the maximum bottom Y coordinate (to determine bottom windows)
   let maxBottomY = findMaxBottomY(e.windowManager.windows)
 
+  # Calculate tab line offset (1 if tab line is shown, 0 otherwise)
+  let tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+
   # Render all split windows
   for i, window in e.windowManager.windows:
     # Calculate line number offset dynamically based on buffer size
@@ -2952,8 +2975,22 @@ proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
       isBottomWindow = (windowBottomY == maxBottomY)
       isActiveWindow = (i == e.windowManager.activeWindowIndex)
 
+    # Render tab line for this window if enabled
+    if e.state.display.showTabLine:
+      let buffersToShow =
+        if e.buffers.len > 0:
+          e.buffers
+        else:
+          @[e.textBuffer]
+      renderWindowTabLine(
+        buffersToShow, window.buffer, buffer, window.viewport.y, window.viewport.x,
+        window.viewport.width, e.state.display.showTabLine,
+      )
+
     # Render window (LogViewer uses normal buffer rendering now)
-    e.renderWindow(buffer, window, lineNumOffset, isBottomWindow, isActiveWindow)
+    e.renderWindow(
+      buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+    )
 
     # Render per-window status line if multi-status line mode is enabled
     # (and merge is disabled - merge shows only one status line at bottom)
@@ -2994,6 +3031,9 @@ proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
   e.executer.motionController.viewportManager.viewport.height = e.viewport.height
   e.viewport = e.executer.motionController.viewportManager.viewport
 
+  # Calculate tab line offset (1 if tab line is shown, 0 otherwise)
+  let tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+
   let
     reservedLines = e.calculateReservedLines(isBottomWindow = true)
     sidebarWidth = e.calculateSidebarWidth()
@@ -3003,26 +3043,23 @@ proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
       max(0, buffer.area.width - sidebarWidth - lineNumOffset - LineNumberPadding)
     textArea = Rect(
       x: buffer.area.x + sidebarWidth + lineNumOffset,
-      y: buffer.area.y,
+      y: buffer.area.y + tabLineOffset,
       width: max(0, buffer.area.width - sidebarWidth - lineNumOffset),
-      height: max(0, buffer.area.height - reservedLines),
+      height: max(0, buffer.area.height - reservedLines - tabLineOffset),
     )
+
+  # Calculate visible height accounting for tab line
+  let visibleHeight = max(1, buffer.area.height - reservedLines - tabLineOffset)
 
   # Generate sidebar dynamically from buffer markers if enabled
   let maybeSidebar =
     if e.state.display.showSidebar:
-      some(
-        generateSidebarFromBuffer(
-          e.textBuffer, e.viewport.topLine, buffer.area.height - reservedLines
-        )
-      )
+      some(generateSidebarFromBuffer(e.textBuffer, e.viewport.topLine, visibleHeight))
     else:
       none(Sidebar)
 
   # If terminal was resized, adjust viewport to keep cursor visible
   if wasResized:
-    let visibleHeight = max(1, e.viewport.height - reservedLines)
-
     # If cursor is now below the visible area, adjust topLine
     if e.state.cursor.line >= e.viewport.topLine + visibleHeight:
       let newTopLine = max(0, e.state.cursor.line - visibleHeight + 1)
@@ -3036,7 +3073,7 @@ proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
   # Render sidebar if enabled (with line wrap support)
   if maybeSidebar.isSome:
     let sidebar = maybeSidebar.get
-    var screenY = 0
+    var screenY = tabLineOffset
     var lineIndex = e.viewport.topLine
     while screenY < buffer.area.height - reservedLines and lineIndex < e.textBuffer.len:
       let sidebarLineIndex = lineIndex - e.viewport.topLine
@@ -3064,17 +3101,20 @@ proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
 
   # Render line numbers only if enabled
   if e.state.display.showLineNumbers:
-    discard e.renderLineNumbers(buffer, textAreaWidth, sidebarWidth)
+    discard e.renderLineNumbers(buffer, textAreaWidth, sidebarWidth, tabLineOffset)
   e.renderTextBuffer(buffer, textArea)
 
   # Calculate and set cursor position (including sidebar width)
-  e.state.screenCursor = e.calculateWindowCursor(
+  var cursorPos = e.calculateWindowCursor(
     e.textBuffer,
     e.viewport,
     e.state.cursor,
     sidebarWidth + lineNumOffset,
-    reservedLines,
+    reservedLines + tabLineOffset,
   )
+  # Adjust cursor Y for tab line offset
+  cursorPos.y += tabLineOffset
+  e.state.screenCursor = cursorPos
 
 proc renderBottomLines(e: Editor, buffer: var Buffer) =
   ## Render status line and command line at the bottom of the screen
@@ -5735,3 +5775,21 @@ proc render*(e: Editor, buffer: var Buffer) =
     e.renderMainContent(buffer, wasResized)
 
   e.renderOverlays(buffer)
+
+  # Render tab line at the very end to ensure visibility (only for single view mode)
+  # Split view mode renders tablines per-window in renderSplitView
+  if e.state.display.showTabLine and e.windowManager.windows.len <= 1:
+    let buffersToShow =
+      if e.buffers.len > 0:
+        e.buffers
+      else:
+        @[e.textBuffer]
+    renderTabLine(
+      buffersToShow,
+      e.activeBuffer(),
+      buffer,
+      0, # tabLineY
+      0, # tabLineX
+      buffer.area.width, # tabLineWidth
+      true, # showTabLine
+    )

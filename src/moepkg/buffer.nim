@@ -93,6 +93,7 @@ type
     startSeq*: int # changeSeq at the start of transaction
 
   TextBuffer* = ref object
+    id*: int # Unique buffer identifier
     backend*: BufferBackend
     filePath*: Option[string]
     readOnly*: bool
@@ -137,6 +138,12 @@ type
     of GapBuffer:
       gapBuffer*: GapBuffer
 
+var nextBufferId = 0
+
+proc genBufferId(): int =
+  result = nextBufferId
+  inc nextBufferId
+
 proc chooseBackend(): BufferBackend =
   GapBuffer
 
@@ -171,6 +178,7 @@ proc newTextBuffer*(
       runesBuffer.add(gb.getLine(i).toRunes())
 
     TextBuffer(
+      id: genBufferId(),
       backendKind: GapBuffer,
       backend: backend,
       filePath: filePath,

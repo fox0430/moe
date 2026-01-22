@@ -113,6 +113,7 @@ type
     insertModeStartPos*: Option[BufferPosition] # Position where Insert mode started
 
   DisplaySettings* = object ## Display and UI settings grouped together
+    showTabLine*: bool # Whether to show the tab line
     showStatusLine*: bool # Whether to show the status line
     multiStatusLine*: bool
       # Status line for each window (true) or only one at bottom (false)

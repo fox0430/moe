@@ -73,8 +73,8 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.statusLineGitBranch: makeColorPair("#ffffff", "#0040ff"),
 
   # Tab line
-  EditorColorPairIndex.tab: makeColorPair("#ffffff", "#000000"),
-  EditorColorPairIndex.currentTab: makeColorPair("#ffffff", "#09aefa"),
+  EditorColorPairIndex.tab: makeColorPair("#888888", "#252526"),
+  EditorColorPairIndex.currentTab: makeColorPair("#ffffff", "#1e1e1e"),
 
   # Command line
   EditorColorPairIndex.commandLine: makeColorPair("#ffffff", "#000000"),
