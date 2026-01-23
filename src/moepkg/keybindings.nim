@@ -973,9 +973,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     Command(
       name: "match-bracket",
       description: "Jump to matching bracket (%)",
-      kind: ctAction,
-      commandId: "motion.match.bracket",
-      args: @[],
+      kind: ctMotion,
+      motion: Motion.MatchBracket,
     )
   )
 

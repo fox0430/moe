@@ -205,3 +205,44 @@ proc isMatchingPair*(openChar, closeChar: char): bool =
   if openChar in parenPairs:
     return parenPairs[openChar] == closeChar
   return false
+
+# Bracket matching functions for % command
+proc isOpenBracket*(r: Rune): bool =
+  ## Check if a rune is an opening bracket (for % command)
+  ## Note: Does not include quotes (", ') unlike isOpeningParen
+  let ch = r.int32
+  ch == ord('(') or ch == ord('{') or ch == ord('[')
+
+proc isCloseBracket*(r: Rune): bool =
+  ## Check if a rune is a closing bracket (for % command)
+  ## Note: Does not include quotes (", ') unlike closing parens
+  let ch = r.int32
+  ch == ord(')') or ch == ord('}') or ch == ord(']')
+
+proc isBracket*(r: Rune): bool =
+  ## Check if a rune is any bracket (opening or closing)
+  r.isOpenBracket or r.isCloseBracket
+
+proc correspondingCloseBracket*(r: Rune): Rune =
+  ## Get the corresponding closing bracket for an opening bracket
+  let ch = r.int32
+  if ch == ord('('):
+    Rune(ord(')'))
+  elif ch == ord('{'):
+    Rune(ord('}'))
+  elif ch == ord('['):
+    Rune(ord(']'))
+  else:
+    r # Return same rune if not an opening bracket
+
+proc correspondingOpenBracket*(r: Rune): Rune =
+  ## Get the corresponding opening bracket for a closing bracket
+  let ch = r.int32
+  if ch == ord(')'):
+    Rune(ord('('))
+  elif ch == ord('}'):
+    Rune(ord('{'))
+  elif ch == ord(']'):
+    Rune(ord('['))
+  else:
+    r # Return same rune if not a closing bracket

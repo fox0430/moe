@@ -54,6 +54,7 @@ type
     bcMotionViewportHigh = "motion.viewport.high"
     bcMotionViewportMiddle = "motion.viewport.middle"
     bcMotionViewportLow = "motion.viewport.low"
+    bcMotionMatchBracket = "motion.match.bracket" # % - jump to matching bracket
     # Scroll commands
     bcScrollCursorTop = "scroll.cursor.top"
     bcScrollCursorCenter = "scroll.cursor.center"
@@ -2833,6 +2834,14 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Move to bottom of viewport",
     Motion.ViewportLow,
     true,
+    shouldRecordJump = true,
+  )
+  registry.registerMotionCommand(
+    bcMotionMatchBracket,
+    "Match Bracket",
+    "Jump to matching bracket (%)",
+    Motion.MatchBracket,
+    false,
     shouldRecordJump = true,
   )
 

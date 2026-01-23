@@ -245,6 +245,7 @@ type
     NextLineFirstNonBlank # Enter/+ - move to next line's first non-whitespace character
     PreviousLineFirstNonBlank
       # - - move to previous line's first non-whitespace character
+    MatchBracket # % - move to matching bracket
 
   TypedCommandKind* = enum
     MovementCommand

@@ -620,6 +620,108 @@ proc moveParagraphBackward(
     result.x = 0
     iterCount -= 1
 
+proc moveToMatchingBracket(
+    e: MotionExecutor, currentPos: CursorPosition
+): CursorPosition =
+  ## Move to matching bracket (% motion)
+  ## Finds the matching bracket for (, ), {, }, [, ]
+  result = currentPos
+
+  # Bounds check
+  if currentPos.y < 0 or currentPos.y >= e.buffer.len:
+    return
+
+  let currentLine = e.buffer.getLine(currentPos.y)
+  if currentPos.x >= currentLine.charLen:
+    return
+
+  # Get character at cursor
+  var charIdx = 0
+  var currentRune: Rune
+  for r in currentLine.runes:
+    if charIdx == currentPos.x:
+      currentRune = r
+      break
+    charIdx += 1
+
+  if not currentRune.isBracket:
+    return
+
+  if currentRune.isOpenBracket:
+    # Search forward for closing bracket
+    let closeBracket = correspondingCloseBracket(currentRune)
+    var depth = 1
+    var lineIdx = currentPos.y
+    var colIdx = currentPos.x + 1
+
+    while lineIdx < e.buffer.len:
+      let line = e.buffer.getLine(lineIdx)
+      var charPos = 0
+      var bytePos = 0
+
+      # Skip to starting column if on the same line
+      if lineIdx == currentPos.y:
+        for r in line.runes:
+          if charPos >= colIdx:
+            break
+          bytePos += r.size
+          charPos += 1
+      else:
+        charPos = 0
+        bytePos = 0
+
+      # Search for matching bracket
+      for r in line.toRunes[charPos ..^ 1]:
+        if r == currentRune:
+          depth += 1
+        elif r == closeBracket:
+          depth -= 1
+          if depth == 0:
+            result.y = lineIdx
+            result.x = charPos
+            return
+        charPos += 1
+
+      lineIdx += 1
+      colIdx = 0
+  else:
+    # Search backward for opening bracket
+    let openBracket = correspondingOpenBracket(currentRune)
+    var depth = 1
+    var lineIdx = currentPos.y
+    var colIdx = currentPos.x - 1
+
+    while lineIdx >= 0:
+      let line = e.buffer.getLine(lineIdx)
+      let lineCharLen = line.charLen
+
+      # Set starting column
+      if lineIdx != currentPos.y:
+        colIdx = lineCharLen - 1
+
+      # Search backward for matching bracket
+      while colIdx >= 0:
+        var charPos = 0
+        var targetRune: Rune
+        for r in line.runes:
+          if charPos == colIdx:
+            targetRune = r
+            break
+          charPos += 1
+
+        if targetRune == currentRune:
+          depth += 1
+        elif targetRune == openBracket:
+          depth -= 1
+          if depth == 0:
+            result.y = lineIdx
+            result.x = colIdx
+            return
+
+        colIdx -= 1
+
+      lineIdx -= 1
+
 proc moveViewportHigh(
     e: MotionExecutor, currentPos: CursorPosition, viewportTopLine: int, count: int = 1
 ): CursorPosition =
@@ -734,6 +836,8 @@ proc calculateNewPosition*(
     e.moveNextLineFirstNonBlank(currentPos, cmd.count)
   of Motion.PreviousLineFirstNonBlank:
     e.movePreviousLineFirstNonBlank(currentPos, cmd.count)
+  of Motion.MatchBracket:
+    e.moveToMatchingBracket(currentPos)
 
 proc newCursorManager*(state: EditorState): CursorManager =
   CursorManager(state: state)
