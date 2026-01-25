@@ -90,6 +90,9 @@ proc switchToBufferByIndex*(e: Editor, index: int) =
     e.state.needsFullRedraw = true
     logDebug("editor", "Switched to buffer successfully")
 
+  # Update current buffer index in state (for jump list)
+  e.state.currentBufferIndex = index
+
 proc currentBufferIndex*(e: Editor): int =
   ## Get the index of the current buffer in the buffer list
   ## Returns -1 if not found

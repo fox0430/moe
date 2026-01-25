@@ -211,6 +211,7 @@ type
       # Minimum milliseconds between debug buffer updates (default: 500)
 
   JumpPosition* = object ## Represents a position in the jump list
+    bufferIndex*: int # Buffer index in the buffer list
     line*: int # Line number
     column*: int # Column position
 
@@ -498,6 +499,7 @@ type
     # Jump list (Ctrl-o / Ctrl-i)
     jumpList*: seq[JumpPosition] # List of jump positions
     jumpListIndex*: int # Current position in jump list (-1 when not navigating)
+    currentBufferIndex*: int # Index of the current buffer (for jump list)
     # Filer state
     filerState*: Option[FilerState] # File explorer state (when in Filer mode)
     # Log viewer state

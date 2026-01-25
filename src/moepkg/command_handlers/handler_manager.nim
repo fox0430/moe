@@ -66,6 +66,7 @@ type
     hrBufferFirst # Switch to first buffer
     hrBufferLast # Switch to last buffer
     hrBuffer # Switch to buffer by number or name
+    hrJumpToBuffer # Jump to specific buffer and position (Ctrl-o/Ctrl-i)
     hrBufferDelete # Delete current buffer
     hrStripWhitespace # Remove trailing whitespace
     hrFilerOpenFile # Open file from filer
@@ -203,6 +204,10 @@ type
       discard
     of hrBuffer:
       bufferArg*: string # Buffer number or name
+    of hrJumpToBuffer:
+      jumpBufferIndex*: int # Target buffer index
+      jumpLine*: int # Target line number
+      jumpColumn*: int # Target column number
     of hrBufferDelete:
       forceBufferDelete*: bool
     of hrStripWhitespace:
@@ -548,6 +553,14 @@ proc handleNormalMode*(
   of nmrLspSelectionRange:
     # Signal to editor to execute LSP selection range
     return HandlerResult(kind: hrLspSelectionRange)
+  of nmrJumpToBuffer:
+    # Signal to editor to jump to a specific buffer and position
+    return HandlerResult(
+      kind: hrJumpToBuffer,
+      jumpBufferIndex: r.nmrJumpBufferIndex,
+      jumpLine: r.nmrJumpLine,
+      jumpColumn: r.nmrJumpColumn,
+    )
 
 proc handleInsertMode*(
     manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
@@ -1415,17 +1428,17 @@ proc wasHandled*(hrResult: HandlerResult): bool =
   hrResult.kind in {
     hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrNew, hrVnew,
     hrEnew, hrSave, hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst,
-    hrBufferLast, hrBuffer, hrBufferDelete, hrStripWhitespace, hrFilerOpenFile,
-    hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerDeleteFile, hrFilerShowInfo,
-    hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrEnterLogViewer, hrHelpViewerQuit,
-    hrEnterHelpViewer, hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences,
-    hrDocumentSymbolQuit, hrDocumentSymbolJumpTo, hrEnterDocumentSymbol,
-    hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer, hrBufferManagerQuit,
-    hrEnterBufferManager, hrBackupManagerRestore, hrBackupManagerDelete,
-    hrBackupManagerOpenDiff, hrBackupManagerRefresh, hrBackupManagerQuit,
-    hrEnterBackupManager, hrDiffViewerQuit, hrRecentFile, hrRecentFileOpenFile,
-    hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrEnterDiffViewer,
-    hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
+    hrBufferLast, hrBuffer, hrJumpToBuffer, hrBufferDelete, hrStripWhitespace,
+    hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerDeleteFile,
+    hrFilerShowInfo, hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrEnterLogViewer,
+    hrHelpViewerQuit, hrEnterHelpViewer, hrReferencesQuit, hrReferencesJumpTo,
+    hrEnterReferences, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
+    hrEnterDocumentSymbol, hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer,
+    hrBufferManagerQuit, hrEnterBufferManager, hrBackupManagerRestore,
+    hrBackupManagerDelete, hrBackupManagerOpenDiff, hrBackupManagerRefresh,
+    hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit, hrRecentFile,
+    hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
+    hrEnterDiffViewer, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
     hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
     hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
     hrLspSelectionRange, hrJumpList, hrLspLog,
@@ -1554,6 +1567,22 @@ proc shouldBuffer*(hrResult: HandlerResult): bool =
 proc getBufferArg*(hrResult: HandlerResult): string =
   ## Get the buffer argument (number or name)
   if hrResult.kind == hrBuffer: hrResult.bufferArg else: ""
+
+proc shouldJumpToBuffer*(hrResult: HandlerResult): bool =
+  ## Check if we should jump to a specific buffer and position
+  hrResult.kind == hrJumpToBuffer
+
+proc getJumpBufferIndex*(hrResult: HandlerResult): int =
+  ## Get the target buffer index for jump
+  if hrResult.kind == hrJumpToBuffer: hrResult.jumpBufferIndex else: -1
+
+proc getJumpLine*(hrResult: HandlerResult): int =
+  ## Get the target line for jump
+  if hrResult.kind == hrJumpToBuffer: hrResult.jumpLine else: 0
+
+proc getJumpColumn*(hrResult: HandlerResult): int =
+  ## Get the target column for jump
+  if hrResult.kind == hrJumpToBuffer: hrResult.jumpColumn else: 0
 
 proc shouldBufferDelete*(hrResult: HandlerResult): bool =
   ## Check if we should delete the current buffer

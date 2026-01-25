@@ -982,12 +982,17 @@ proc parseBoolArg(
 proc recordJump*(state: EditorState) =
   ## Record current cursor position as a jump point
   ## This should be called before jumping to a different location
-  let currentPos = JumpPosition(line: state.cursor.line, column: state.cursor.column)
+  let currentPos = JumpPosition(
+    bufferIndex: state.currentBufferIndex,
+    line: state.cursor.line,
+    column: state.cursor.column,
+  )
 
   # Don't record if the position is the same as the last jump in the list
   if state.jumpList.len > 0:
     let lastPos = state.jumpList[^1]
-    if lastPos.line == currentPos.line and lastPos.column == currentPos.column:
+    if lastPos.bufferIndex == currentPos.bufferIndex and lastPos.line == currentPos.line and
+        lastPos.column == currentPos.column:
       # Same position as last jump - don't record duplicate
       return
 
@@ -1005,98 +1010,6 @@ proc recordJump*(state: EditorState) =
 
   # Reset index to indicate we're not navigating the list
   state.jumpListIndex = -1
-
-proc handleJumpBack(ctx: CommandContext, args: seq[string]): Result[(), string] =
-  ## Jump to previous position in jump list (Ctrl-o)
-  if ctx.state.jumpList.len == 0:
-    return err("Jump list is empty")
-
-  # If this is the first jump back, record current position and start from end
-  if ctx.state.jumpListIndex < 0:
-    let currentPos =
-      JumpPosition(line: ctx.state.cursor.line, column: ctx.state.cursor.column)
-    ctx.state.jumpList.add(currentPos)
-    ctx.state.jumpListIndex = ctx.state.jumpList.len - 2
-  else:
-    # Move back in the list
-    ctx.state.jumpListIndex = max(0, ctx.state.jumpListIndex - 1)
-
-  # Jump to the position
-  let pos = ctx.state.jumpList[ctx.state.jumpListIndex]
-
-  # Check for empty buffer
-  if ctx.buffer.len == 0:
-    return err("Cannot jump: buffer is empty")
-
-  # Clamp line to valid range
-  ctx.state.cursor.line = min(pos.line, ctx.buffer.len - 1)
-
-  # Clamp column to valid range for the target line
-  let line = ctx.buffer.getLine(ctx.state.cursor.line)
-  let lineCharLen = line.charLen
-  ctx.state.cursor.column =
-    if lineCharLen == 0:
-      0
-    else:
-      min(pos.column, max(0, lineCharLen - 1))
-
-  # Update viewport using motion controller to properly handle reserved lines and line wrapping
-  let cursorPos = CursorPosition(x: ctx.state.cursor.column, y: ctx.state.cursor.line)
-  ctx.motionController.viewportManager.updateViewport(
-    cursorPos,
-    ctx.buffer.len,
-    ctx.state.display.showStatusLine,
-    ctx.state.viewportReservedLines,
-    ctx.state.display.lineWrap,
-    ctx.buffer,
-    0, # lineNumOffset - will be calculated by updateViewport if needed
-  )
-
-  return ok(())
-
-proc handleJumpForward(ctx: CommandContext, args: seq[string]): Result[(), string] =
-  ## Jump to next position in jump list (Ctrl-i)
-  if ctx.state.jumpList.len == 0 or ctx.state.jumpListIndex < 0:
-    return err("No newer jump position")
-
-  # Move forward in the list
-  if ctx.state.jumpListIndex >= ctx.state.jumpList.len - 1:
-    return err("Already at newest jump position")
-
-  ctx.state.jumpListIndex = ctx.state.jumpListIndex + 1
-
-  # Jump to the position
-  let pos = ctx.state.jumpList[ctx.state.jumpListIndex]
-
-  # Check for empty buffer
-  if ctx.buffer.len == 0:
-    return err("Cannot jump: buffer is empty")
-
-  # Clamp line to valid range
-  ctx.state.cursor.line = min(pos.line, ctx.buffer.len - 1)
-
-  # Clamp column to valid range for the target line
-  let line = ctx.buffer.getLine(ctx.state.cursor.line)
-  let lineCharLen = line.charLen
-  ctx.state.cursor.column =
-    if lineCharLen == 0:
-      0
-    else:
-      min(pos.column, max(0, lineCharLen - 1))
-
-  # Update viewport using motion controller to properly handle reserved lines and line wrapping
-  let cursorPos = CursorPosition(x: ctx.state.cursor.column, y: ctx.state.cursor.line)
-  ctx.motionController.viewportManager.updateViewport(
-    cursorPos,
-    ctx.buffer.len,
-    ctx.state.display.showStatusLine,
-    ctx.state.viewportReservedLines,
-    ctx.state.display.lineWrap,
-    ctx.buffer,
-    0, # lineNumOffset - will be calculated by updateViewport if needed
-  )
-
-  return ok(())
 
 # Helper function to register motion commands
 proc registerMotionCommand(
@@ -3640,25 +3553,6 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Decrement Number",
     "Decrement the number at or after cursor (Ctrl-X)",
     handleDecrementNumber,
-    0,
-    0,
-  )
-
-  # Jump list commands
-  registry.register(
-    builtin(bcJumpBack),
-    "Jump Back",
-    "Jump to previous position in jump list (Ctrl-o)",
-    handleJumpBack,
-    0,
-    0,
-  )
-
-  registry.register(
-    builtin(bcJumpForward),
-    "Jump Forward",
-    "Jump to next position in jump list (Ctrl-i)",
-    handleJumpForward,
     0,
     0,
   )

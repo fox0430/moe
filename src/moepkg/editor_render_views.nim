@@ -38,6 +38,26 @@ proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
 
   (oldWidth != e.viewport.width) or (oldHeight != e.viewport.height)
 
+proc adjustViewportForCursor(
+    viewport: var ViewPort,
+    cursor: BufferPosition,
+    visibleHeight, textAreaWidth: int,
+    lineWrap: bool,
+) =
+  ## Adjust viewport to keep cursor visible (scroll if cursor is off-screen)
+  # Vertical adjustment
+  if cursor.line >= viewport.topLine + visibleHeight:
+    viewport.topLine = max(0, cursor.line - visibleHeight + 1)
+  elif cursor.line < viewport.topLine:
+    viewport.topLine = cursor.line
+
+  # Horizontal adjustment (only when line wrap is disabled)
+  if not lineWrap:
+    if cursor.column >= viewport.leftColumn + textAreaWidth:
+      viewport.leftColumn = max(0, cursor.column - textAreaWidth + 1)
+    elif cursor.column < viewport.leftColumn:
+      viewport.leftColumn = cursor.column
+
 proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
   ## Render split window view
   let
@@ -87,6 +107,17 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       windowBottomY = window.viewport.y + window.viewport.height
       isBottomWindow = (windowBottomY == maxBottomY)
       isActiveWindow = (i == e.windowManager.activeWindowIndex)
+      reservedLines = e.calculateReservedLines(isBottomWindow)
+      visibleHeight = max(1, window.viewport.height - reservedLines - tabLineOffset)
+      sidebarWidth = e.calculateSidebarWidth()
+      textAreaWidth =
+        max(0, window.viewport.width - sidebarWidth - lineNumOffset - LineNumberPadding)
+
+    # Adjust viewport to keep cursor visible
+    adjustViewportForCursor(
+      window.viewport, window.cursor, visibleHeight, textAreaWidth,
+      e.state.display.lineWrap,
+    )
 
     # Render tab line for this window if enabled
     if e.state.display.showTabLine:
@@ -164,24 +195,23 @@ proc renderSingleView*(e: Editor, buffer: var Buffer, wasResized: bool) =
   # Calculate visible height accounting for tab line
   let visibleHeight = max(1, buffer.area.height - reservedLines - tabLineOffset)
 
+  # Adjust viewport to keep cursor visible
+  adjustViewportForCursor(
+    e.viewport, e.state.cursor, visibleHeight, textAreaWidth, e.state.display.lineWrap
+  )
+
+  # Sync motion controller's viewport with editor viewport
+  e.executer.motionController.viewportManager.viewport.topLine = e.viewport.topLine
+  e.executer.motionController.viewportManager.viewport.leftColumn =
+    e.viewport.leftColumn
+
   # Generate sidebar dynamically from buffer markers if enabled
+  # NOTE: Must be after viewport adjustment to use correct topLine
   let maybeSidebar =
     if e.state.display.showSidebar:
       some(generateSidebarFromBuffer(e.textBuffer, e.viewport.topLine, visibleHeight))
     else:
       none(Sidebar)
-
-  # If terminal was resized, adjust viewport to keep cursor visible
-  if wasResized:
-    # If cursor is now below the visible area, adjust topLine
-    if e.state.cursor.line >= e.viewport.topLine + visibleHeight:
-      let newTopLine = max(0, e.state.cursor.line - visibleHeight + 1)
-      e.viewport.topLine = newTopLine
-      e.executer.motionController.viewportManager.viewport.topLine = newTopLine
-    # If cursor is above the visible area
-    elif e.state.cursor.line < e.viewport.topLine:
-      e.viewport.topLine = e.state.cursor.line
-      e.executer.motionController.viewportManager.viewport.topLine = e.state.cursor.line
 
   # Render sidebar if enabled (with line wrap support)
   if maybeSidebar.isSome:

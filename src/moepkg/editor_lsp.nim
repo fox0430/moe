@@ -25,7 +25,7 @@ import pkg/results
 
 import
   editor_types, editor_file, signaturehelp, documentsymbol_viewer, references_viewer,
-  lspservice, lspintegration
+  lspservice, lspintegration, buffer
 import lsp/protocol/types as lspTypes
 
 proc maybeUpdateLsp*(e: Editor) =
@@ -99,14 +99,49 @@ proc pollLspCompletion*(e: Editor) =
   # Call the insert handler's poll function
   e.handlerManager.insertHandler.pollLspCompletion()
 
+proc switchToBufferForLsp(e: Editor, index: int) =
+  ## Switch to buffer at given index (simplified version for LSP jumps)
+  if index < 0 or index >= e.buffers.len:
+    return
+
+  let targetBuffer = e.buffers[index]
+
+  if e.windowManager.windows.len > 0 and
+      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    if activeWindow.buffer == targetBuffer:
+      return
+    activeWindow.buffer = targetBuffer
+    activeWindow.cursor = BufferPosition(line: 0, column: 0)
+    activeWindow.viewport.topLine = 0
+    activeWindow.viewport.leftColumn = 0
+    # Sync executor and motion controller
+    e.executer.buffer = targetBuffer
+    e.executer.motionController.executor.buffer = targetBuffer
+  else:
+    e.textBuffer = targetBuffer
+    e.executer.buffer = targetBuffer
+    e.executer.motionController.executor.buffer = targetBuffer
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+    e.viewport.topLine = 0
+    e.viewport.leftColumn = 0
+
+  e.state.currentBufferIndex = index
+  e.state.needsFullRedraw = true
+
 proc addToJumpList(e: Editor) =
   ## Add current cursor position to jump list before a jump
-  let jumpPos = JumpPosition(line: e.state.cursor.line, column: e.state.cursor.column)
+  let jumpPos = JumpPosition(
+    bufferIndex: e.state.currentBufferIndex,
+    line: e.state.cursor.line,
+    column: e.state.cursor.column,
+  )
 
-  # Don't add if same as last position
+  # Don't add if same as last position (same buffer, line, and column)
   if e.state.jumpList.len > 0:
     let lastPos = e.state.jumpList[^1]
-    if lastPos.line == jumpPos.line and lastPos.column == jumpPos.column:
+    if lastPos.bufferIndex == jumpPos.bufferIndex and lastPos.line == jumpPos.line and
+        lastPos.column == jumpPos.column:
       return
 
   e.state.jumpList.add(jumpPos)
@@ -139,16 +174,33 @@ proc jumpToLspLocation(e: Editor, loc: lspTypes.Location, resultKind: string): b
     e.state.cursor.column = max(0, targetCol)
     e.state.statusMessage = resultKind & " at line " & $(targetLine + 1)
   else:
-    # Different file - open it
-    let loadResult = e.loadFile(path)
-    if loadResult.isErr:
-      e.state.statusMessage = "Failed to open file: " & loadResult.error
-      return false
-    # Set cursor with boundary checks (loadFile already loaded into e.textBuffer)
-    let targetLine = min(loc.range.start.line, max(0, e.textBuffer.len - 1))
+    # Different file - open it in a new buffer (or switch to existing)
+    # Check if buffer already exists in the buffer list
+    var existingIndex = -1
+    for i, buf in e.buffers:
+      if buf.filePath.isSome and buf.filePath.get == path:
+        existingIndex = i
+        break
+
+    if existingIndex >= 0:
+      # Buffer already exists, switch to it
+      e.switchToBufferForLsp(existingIndex)
+    else:
+      # Create new buffer and load file
+      let newBuffer = newTextBuffer()
+      let loadResult = newBuffer.loadFile(path)
+      if loadResult.isErr:
+        e.state.statusMessage = "Failed to open file: " & loadResult.error
+        return false
+      e.buffers.add(newBuffer)
+      e.switchToBufferForLsp(e.buffers.high)
+
+    # Set cursor with boundary checks
+    let newActiveBuffer = e.activeBuffer()
+    let targetLine = min(loc.range.start.line, max(0, newActiveBuffer.len - 1))
     let lineLen =
-      if e.textBuffer.len > 0:
-        e.textBuffer[targetLine].len
+      if newActiveBuffer.len > 0:
+        newActiveBuffer[targetLine].len
       else:
         0
     let targetCol = min(loc.range.start.character, max(0, lineLen - 1))

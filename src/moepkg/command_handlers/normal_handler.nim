@@ -26,7 +26,10 @@ import std/[options, tables]
 import pkg/results
 
 import
-  ../[types, buffer, modes, motion, keybindings, commandregistry, config, registers]
+  ../[
+    types, buffer, modes, motion, keybindings, commandregistry, config, registers,
+    cursor,
+  ]
 import visual_handler, insert_commands
 
 type
@@ -49,6 +52,7 @@ type
     nmrLspHover # Signal to handler_manager to execute LSP hover
     nmrLspRename # Signal to handler_manager to execute LSP rename
     nmrLspSelectionRange # Signal to handler_manager to execute LSP selection range
+    nmrJumpToBuffer # Signal to handler_manager to jump to buffer and position
 
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
     motionController*: MotionController
@@ -97,6 +101,38 @@ type
       nmrLspNewName*: string
     of nmrLspSelectionRange:
       discard
+    of nmrJumpToBuffer:
+      nmrJumpBufferIndex*: int # Target buffer index
+      nmrJumpLine*: int # Target line number
+      nmrJumpColumn*: int # Target column number
+
+proc updateCursorToJumpPosition(
+    handler: NormalModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
+    pos: JumpPosition,
+): NormalModeResult =
+  ## Update cursor position to a jump list position in the same buffer
+  ## Returns error result if buffer is empty, or handled result on success
+  if buffer.len == 0:
+    return
+      NormalModeResult(kind: nmrError, errorMessage: "Cannot jump: buffer is empty")
+
+  state.cursor.line = min(pos.line, buffer.len - 1)
+  let line = buffer.getLine(state.cursor.line)
+  let lineCharLen = line.charLen
+  state.cursor.column =
+    if lineCharLen == 0:
+      0
+    else:
+      min(pos.column, max(0, lineCharLen - 1))
+
+  let cursorPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
+  handler.motionController.viewportManager.updateViewport(
+    cursorPos, buffer.len, state.display.showStatusLine, state.viewportReservedLines,
+    state.display.lineWrap, buffer, 0,
+  )
+  return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
 proc newNormalModeHandler*(
     motionController: MotionController,
@@ -568,6 +604,60 @@ proc handleNormalModeKey*(
     of "window.close":
       # Ctrl-W c command - Close current window
       return NormalModeResult(kind: nmrCloseWindow)
+    of "jump.back":
+      # Ctrl-o - Jump to previous position in jump list
+      if state.jumpList.len == 0:
+        return NormalModeResult(kind: nmrError, errorMessage: "Jump list is empty")
+
+      # If this is the first jump back, record current position and start from end
+      if state.jumpListIndex < 0:
+        let currentPos = JumpPosition(
+          bufferIndex: state.currentBufferIndex,
+          line: state.cursor.line,
+          column: state.cursor.column,
+        )
+        state.jumpList.add(currentPos)
+        state.jumpListIndex = state.jumpList.len - 2
+      else:
+        state.jumpListIndex = max(0, state.jumpListIndex - 1)
+
+      let pos = state.jumpList[state.jumpListIndex]
+
+      # Check if we need to switch buffers
+      if pos.bufferIndex != state.currentBufferIndex:
+        return NormalModeResult(
+          kind: nmrJumpToBuffer,
+          nmrJumpBufferIndex: pos.bufferIndex,
+          nmrJumpLine: pos.line,
+          nmrJumpColumn: pos.column,
+        )
+
+      # Same buffer - update cursor position
+      return handler.updateCursorToJumpPosition(buffer, state, pos)
+    of "jump.forward":
+      # Ctrl-i - Jump to next position in jump list
+      if state.jumpList.len == 0 or state.jumpListIndex < 0:
+        return NormalModeResult(kind: nmrError, errorMessage: "No newer jump position")
+
+      if state.jumpListIndex >= state.jumpList.len - 1:
+        return NormalModeResult(
+          kind: nmrError, errorMessage: "Already at newest jump position"
+        )
+
+      state.jumpListIndex = state.jumpListIndex + 1
+      let pos = state.jumpList[state.jumpListIndex]
+
+      # Check if we need to switch buffers
+      if pos.bufferIndex != state.currentBufferIndex:
+        return NormalModeResult(
+          kind: nmrJumpToBuffer,
+          nmrJumpBufferIndex: pos.bufferIndex,
+          nmrJumpLine: pos.line,
+          nmrJumpColumn: pos.column,
+        )
+
+      # Same buffer - update cursor position
+      return handler.updateCursorToJumpPosition(buffer, state, pos)
     else:
       # Try to execute using command registry for other actions
       let ctx = CommandContext(

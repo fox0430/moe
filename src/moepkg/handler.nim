@@ -921,15 +921,25 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.setStatusMessage("Jump list is empty")
         else:
           e.state.tempMessages = @[]
-          e.state.tempMessages.add(" jump  line  col  file/text")
+          e.state.tempMessages.add(" jump  line  col  file")
           for i, pos in e.state.jumpList:
             let marker = if i == e.state.jumpListIndex: ">" else: " "
             let jumpNum = e.state.jumpList.len - i
             let lineNum = pos.line + 1 # 1-based for display
             let colNum = pos.column + 1 # 1-based for display
+            # Get file name from buffer index
+            let fileName =
+              if pos.bufferIndex >= 0 and pos.bufferIndex < e.buffers.len:
+                let buf = e.buffers[pos.bufferIndex]
+                if buf.filePath.isSome:
+                  buf.filePath.get.extractFilename
+                else:
+                  "[No Name]"
+              else:
+                "[Invalid]"
             e.state.tempMessages.add(
               marker & ($jumpNum).align(4) & " " & ($lineNum).align(5) & " " &
-                ($colNum).align(4)
+                ($colNum).align(4) & "  " & fileName
             )
           e.state.needsFullRedraw = true
         # Return to Normal mode (not to previous Command mode)
@@ -1778,12 +1788,20 @@ proc handleEvent*(e: Editor, event: Event): bool =
         # No status line: only bottom has command line
         if isBottomWindow: 1 else: 0
 
+    # Add tab line height if shown
+    if e.state.display.showTabLine:
+      e.state.viewportReservedLines += TabLineHeight
+
     # Add extra lines for multi-line status messages (only for bottom window)
     if isBottomWindow:
       e.state.viewportReservedLines += e.state.statusMessageExtraLines()
   else:
     # Single window mode - use default calculation
     e.state.viewportReservedLines = if e.state.display.showStatusLine: 2 else: 1
+
+    # Add tab line height if shown
+    if e.state.display.showTabLine:
+      e.state.viewportReservedLines += TabLineHeight
 
     # Add extra lines for multi-line status messages
     e.state.viewportReservedLines += e.state.statusMessageExtraLines()
@@ -1829,6 +1847,27 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.state.cursor.line = lineNum - 1 # Convert to 0-based
       e.state.cursor.column = 0
       # Update viewport to make the line visible
+      e.updateViewportForCursor(e.state.cursor)
+
+  if r.shouldJumpToBuffer():
+    # Handle jump to buffer with position (Ctrl-o/Ctrl-i across files)
+    let targetIdx = r.getJumpBufferIndex()
+    let targetLine = r.getJumpLine()
+    let targetCol = r.getJumpColumn()
+    if targetIdx >= 0 and targetIdx < e.buffers.len:
+      e.switchToBufferByIndex(targetIdx)
+      # Update cursor position after buffer switch
+      let buf = e.activeBuffer()
+      if buf.len > 0:
+        e.state.cursor.line = min(targetLine, buf.len - 1)
+        let line = buf.getLine(e.state.cursor.line)
+        let lineCharLen = line.charLen
+        e.state.cursor.column =
+          if lineCharLen == 0:
+            0
+          else:
+            min(targetCol, max(0, lineCharLen - 1))
+      e.state.needsFullRedraw = true
       e.updateViewportForCursor(e.state.cursor)
 
   # Handle Filer mode results

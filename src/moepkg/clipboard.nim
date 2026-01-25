@@ -36,7 +36,9 @@ type
 
   ClipboardError* = object of CatchableError ## Error type for clipboard operations
 
-proc getClipboardCommand*(tool: ClipboardTool, operation: ClipboardOperation): Option[seq[string]] =
+proc getClipboardCommand*(
+    tool: ClipboardTool, operation: ClipboardOperation
+): Option[seq[string]] =
   ## Get the command to execute for clipboard operations
   ## operation can be "read" or "write"
   ## Note: Tool availability is checked at runtime, not here
