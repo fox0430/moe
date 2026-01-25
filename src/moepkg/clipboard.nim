@@ -29,59 +29,54 @@ import pkg/chronos
 
 import config
 
-type ClipboardError* = object of CatchableError ## Error type for clipboard operations
+type
+  ClipboardOperation = enum
+    read
+    write
 
-proc getClipboardCommand*(tool: ClipboardTool, operation: string): Option[seq[string]] =
+  ClipboardError* = object of CatchableError ## Error type for clipboard operations
+
+proc getClipboardCommand*(tool: ClipboardTool, operation: ClipboardOperation): Option[seq[string]] =
   ## Get the command to execute for clipboard operations
   ## operation can be "read" or "write"
   ## Note: Tool availability is checked at runtime, not here
   case tool
   of ctXclip:
     case operation
-    of "read":
+    of read:
       return some(@["xclip", "-selection", "clipboard", "-o"])
-    of "write":
+    of write:
       return some(@["xclip", "-selection", "clipboard", "-i"])
-    else:
-      return none(seq[string])
   of ctXsel:
     case operation
-    of "read":
+    of read:
       return some(@["xsel", "--clipboard", "--output"])
-    of "write":
+    of write:
       return some(@["xsel", "--clipboard", "--input"])
-    else:
-      return none(seq[string])
   of ctWlClipboard:
     case operation
-    of "read":
+    of read:
       return some(@["wl-paste", "-n"])
-    of "write":
+    of write:
       return some(@["wl-copy"])
-    else:
-      return none(seq[string])
   of ctWin32yank:
     case operation
-    of "read":
+    of read:
       return some(@["win32yank.exe", "-o", "--lf"])
-    of "write":
+    of write:
       return some(@["win32yank.exe", "-i", "--crlf"])
-    else:
-      return none(seq[string])
   of ctPbcopy:
     # macOS pbcopy/pbpaste
     case operation
-    of "read":
+    of read:
       return some(@["pbpaste"])
-    of "write":
+    of write:
       return some(@["pbcopy"])
-    else:
-      return none(seq[string])
 
 proc readFromClipboardSync*(tool: ClipboardTool): Result[string, string] =
   ## Read text from system clipboard synchronously
   ## Returns the clipboard content as a string, or an error message
-  let cmdOpt = getClipboardCommand(tool, "read")
+  let cmdOpt = getClipboardCommand(tool, read)
   if cmdOpt.isNone:
     return Result[string, string].err("Clipboard tool not available: " & $tool)
 
@@ -105,7 +100,7 @@ proc readFromClipboardSync*(tool: ClipboardTool): Result[string, string] =
 proc writeToClipboardSync*(tool: ClipboardTool, text: string): Result[void, string] =
   ## Write text to system clipboard synchronously using osproc
   ## Returns ok() on success, or an error message
-  let cmdOpt = getClipboardCommand(tool, "write")
+  let cmdOpt = getClipboardCommand(tool, write)
   if cmdOpt.isNone:
     return Result[void, string].err("Clipboard tool not available: " & $tool)
 
