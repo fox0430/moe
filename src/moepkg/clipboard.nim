@@ -19,31 +19,25 @@
 
 ## System clipboard integration using external tools
 ##
-## This module provides clipboard read/write functionality using external
+## This module provides async clipboard read/write functionality using external
 ## clipboard tools like xclip, xsel, wl-clipboard, etc.
 
-import std/[osproc, options, streams]
+import std/[options]
 
 import pkg/results
+import pkg/chronos
+import pkg/chronos/asyncproc
 
-import config, buffer, types
+import config
 
 type ClipboardError* = object of CatchableError ## Error type for clipboard operations
-
-proc isToolAvailable*(toolCommand: string): bool =
-  ## Check if a command-line tool is available in PATH
-  ## Returns true if the tool can be found, false otherwise
-  let checkResult = execCmdEx("command -v " & toolCommand)
-  return checkResult.exitCode == 0
 
 proc getClipboardCommand*(tool: ClipboardTool, operation: string): Option[seq[string]] =
   ## Get the command to execute for clipboard operations
   ## operation can be "read" or "write"
-  ## Returns none if tool is not available or unsupported
+  ## Note: Tool availability is checked at runtime, not here
   case tool
   of ctXclip:
-    if not isToolAvailable("xclip"):
-      return none(seq[string])
     case operation
     of "read":
       return some(@["xclip", "-selection", "clipboard", "-o"])
@@ -52,8 +46,6 @@ proc getClipboardCommand*(tool: ClipboardTool, operation: string): Option[seq[st
     else:
       return none(seq[string])
   of ctXsel:
-    if not isToolAvailable("xsel"):
-      return none(seq[string])
     case operation
     of "read":
       return some(@["xsel", "--clipboard", "--output"])
@@ -62,8 +54,6 @@ proc getClipboardCommand*(tool: ClipboardTool, operation: string): Option[seq[st
     else:
       return none(seq[string])
   of ctWlClipboard:
-    if not isToolAvailable("wl-copy"):
-      return none(seq[string])
     case operation
     of "read":
       return some(@["wl-paste", "-n"])
@@ -72,8 +62,6 @@ proc getClipboardCommand*(tool: ClipboardTool, operation: string): Option[seq[st
     else:
       return none(seq[string])
   of ctWin32yank:
-    if not isToolAvailable("win32yank.exe"):
-      return none(seq[string])
     case operation
     of "read":
       return some(@["win32yank.exe", "-o", "--lf"])
@@ -83,8 +71,6 @@ proc getClipboardCommand*(tool: ClipboardTool, operation: string): Option[seq[st
       return none(seq[string])
   of ctPbcopy:
     # macOS pbcopy/pbpaste
-    if not isToolAvailable("pbcopy"):
-      return none(seq[string])
     case operation
     of "read":
       return some(@["pbpaste"])
@@ -93,8 +79,10 @@ proc getClipboardCommand*(tool: ClipboardTool, operation: string): Option[seq[st
     else:
       return none(seq[string])
 
-proc readFromClipboard*(tool: ClipboardTool): Result[string, string] =
-  ## Read text from system clipboard
+proc readFromClipboard*(
+    tool: ClipboardTool
+): Future[Result[string, string]] {.async: (raises: []).} =
+  ## Read text from system clipboard asynchronously
   ## Returns the clipboard content as a string, or an error message
   let cmdOpt = getClipboardCommand(tool, "read")
   if cmdOpt.isNone:
@@ -102,11 +90,27 @@ proc readFromClipboard*(tool: ClipboardTool): Result[string, string] =
 
   let cmd = cmdOpt.get()
   try:
-    # Use startProcess instead of execCmdEx to avoid shell adding newline
-    let p = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
-    let output = p.outputStream.readAll()
-    let exitCode = p.waitForExit()
-    p.close()
+    const
+      WorkingDir = ""
+      Env = nil
+    let opts: set[AsyncProcessOption] = {UsePath}
+
+    let process = await startProcess(
+      cmd[0], WorkingDir, cmd[1 ..^ 1], Env, opts,
+      stdoutHandle = AsyncProcess.Pipe,
+      stdinHandle = AsyncProcess.Pipe,
+    )
+
+    # Read all output from stdout
+    var output = ""
+    while true:
+      var buf = newSeq[byte](4096)
+      let bytesRead = await process.stdoutStream.readOnce(addr buf[0], buf.len)
+      if bytesRead == 0:
+        break
+      output.add(cast[string](buf[0 ..< bytesRead]))
+
+    let exitCode = await process.waitForExit()
 
     if exitCode == 0:
       return Result[string, string].ok(output)
@@ -114,66 +118,76 @@ proc readFromClipboard*(tool: ClipboardTool): Result[string, string] =
       return Result[string, string].err(
         "Failed to read from clipboard: exit code " & $exitCode
       )
-  except OSError as e:
-    return Result[string, string].err("Failed to execute clipboard command: " & e.msg)
-  except IOError as e:
-    return Result[string, string].err("Failed to read clipboard output: " & e.msg)
+  except CancelledError:
+    return Result[string, string].err("Clipboard read cancelled")
+  except CatchableError as e:
+    return Result[string, string].err("Failed to read from clipboard: " & e.msg)
 
-proc writeToClipboard*(tool: ClipboardTool, text: string): Result[(), string] =
-  ## Write text to system clipboard
+proc writeToClipboard*(
+    tool: ClipboardTool, text: string
+): Future[Result[void, string]] {.async: (raises: []).} =
+  ## Write text to system clipboard asynchronously
   ## Returns ok() on success, or an error message
   let cmdOpt = getClipboardCommand(tool, "write")
   if cmdOpt.isNone:
-    return Result[(), string].err("Clipboard tool not available: " & $tool)
+    return Result[void, string].err("Clipboard tool not available: " & $tool)
 
   let cmd = cmdOpt.get()
   try:
-    # Create a temporary pipe to feed text to the clipboard command
-    let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
+    const
+      WorkingDir = ""
+      Env = nil
+    let opts: set[AsyncProcessOption] = {UsePath}
 
-    # Write text to stdin using streams
-    let inputStream = process.inputStream
-    inputStream.write(text)
-    inputStream.close()
+    let process = await startProcess(
+      cmd[0], WorkingDir, cmd[1 ..^ 1], Env, opts,
+      stdoutHandle = AsyncProcess.Pipe,
+      stdinHandle = AsyncProcess.Pipe,
+    )
 
-    let exitCode = process.waitForExit()
-    process.close()
+    # Write text to stdin and close to signal EOF
+    let textBytes = cast[seq[byte]](text)
+    if textBytes.len > 0:
+      await process.stdinStream.write(textBytes)
+    await process.stdinStream.closeWait()
+
+    let exitCode = await process.waitForExit()
 
     if exitCode == 0:
-      return Result[(), string].ok ()
+      return Result[void, string].ok()
     else:
-      return
-        Result[(), string].err("Failed to write to clipboard: exit code " & $exitCode)
-  except OSError as e:
-    return Result[(), string].err("Failed to execute clipboard command: " & e.msg)
-  except IOError as e:
-    return Result[(), string].err("Failed to write to clipboard: " & e.msg)
+      return Result[void, string].err(
+        "Failed to write to clipboard: exit code " & $exitCode
+      )
+  except CancelledError:
+    return Result[void, string].err("Clipboard write cancelled")
+  except CatchableError as e:
+    return Result[void, string].err("Failed to write to clipboard: " & e.msg)
 
-proc getSelectedText*(state: EditorState, buffer: TextBuffer): string =
-  ## Get the currently selected text in visual mode
-  ## Returns empty string if no active selection
-  if not state.visualSelection.active:
-    return ""
+# Internal async wrapper that discards the result
+proc writeToClipboardInternal(
+    tool: ClipboardTool, text: string
+): Future[void] {.async: (raises: []).} =
+  discard await writeToClipboard(tool, text)
 
-  # Normalize selection range (ensure start <= end)
-  let (selStart, selEnd) =
-    if state.visualSelection.start.line < state.visualSelection.current.line:
-      (state.visualSelection.start, state.visualSelection.current)
-    elif state.visualSelection.start.line > state.visualSelection.current.line:
-      (state.visualSelection.current, state.visualSelection.start)
-    else:
-      # Same line - compare columns
-      if state.visualSelection.start.column <= state.visualSelection.current.column:
-        (state.visualSelection.start, state.visualSelection.current)
-      else:
-        (state.visualSelection.current, state.visualSelection.start)
+# Fire-and-forget wrapper for clipboard write
+proc writeToClipboardAsync*(tool: ClipboardTool, text: string) =
+  ## Write text to clipboard in the background (fire-and-forget)
+  ## This does not block and errors are silently ignored
+  asyncSpawn writeToClipboardInternal(tool, text)
 
-  return buffer.getTextInRange(selStart, selEnd)
+# Synchronous wrapper for clipboard read with timeout
+proc readFromClipboardSync*(
+    tool: ClipboardTool, timeoutMs: int = 1000
+): Result[string, string] =
+  ## Read from clipboard synchronously with timeout
+  ## Uses async internally with waitFor, but has a timeout to prevent long blocks
+  let future = readFromClipboard(tool)
+  try:
+    let completed = waitFor withTimeout(future, milliseconds(timeoutMs))
+    if not completed:
+      return Result[string, string].err("Clipboard read timeout")
+    return future.read()
+  except CatchableError as e:
+    return Result[string, string].err("Clipboard read failed: " & e.msg)
 
-proc getCurrentLineText*(state: EditorState, buffer: TextBuffer): string =
-  ## Get the text of the current line (where cursor is positioned)
-  ## Returns the full line content including trailing newline if present
-  if state.cursor.line < 0 or state.cursor.line >= buffer.len:
-    return ""
-
-  return buffer.getLine(state.cursor.line)

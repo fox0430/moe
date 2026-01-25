@@ -26,11 +26,11 @@
 ## - Small delete register (-): For deletions less than one line
 ## - Clipboard registers (*, +): System clipboard integration
 
-import std/[options, strutils, tables, osproc, streams]
+import std/[options, strutils, tables]
 
 import pkg/results
 
-import config
+import config, clipboard
 
 type
   Register* = object ## A single register containing text
@@ -144,115 +144,30 @@ proc appendRegister(r: var Register, content: string, isLine: bool) =
     else:
       r.buffer = @[content]
 
-# Clipboard integration (self-contained to avoid circular imports)
+# Clipboard integration (uses async clipboard module)
 
-proc getClipboardCommand(tool: ClipboardTool, operation: string): Option[seq[string]] =
-  ## Get the command to execute for clipboard operations
-  case tool
-  of ctXclip:
-    case operation
-    of "read":
-      return some(@["xclip", "-selection", "clipboard", "-o"])
-    of "write":
-      return some(@["xclip", "-selection", "clipboard", "-i"])
-    else:
-      return none(seq[string])
-  of ctXsel:
-    case operation
-    of "read":
-      return some(@["xsel", "--clipboard", "--output"])
-    of "write":
-      return some(@["xsel", "--clipboard", "--input"])
-    else:
-      return none(seq[string])
-  of ctWlClipboard:
-    case operation
-    of "read":
-      return some(@["wl-paste", "-n"])
-    of "write":
-      return some(@["wl-copy"])
-    else:
-      return none(seq[string])
-  of ctWin32yank:
-    case operation
-    of "read":
-      return some(@["win32yank.exe", "-o", "--lf"])
-    of "write":
-      return some(@["win32yank.exe", "-i", "--crlf"])
-    else:
-      return none(seq[string])
-  of ctPbcopy:
-    case operation
-    of "read":
-      return some(@["pbpaste"])
-    of "write":
-      return some(@["pbcopy"])
-    else:
-      return none(seq[string])
-
-proc sendToClipboard(r: Registers, content: string): Result[(), string] =
-  ## Send content to system clipboard if available
-  if r.clipboardTool.isNone:
-    return ok(())
-
-  let cmdOpt = getClipboardCommand(r.clipboardTool.get, "write")
-  if cmdOpt.isNone:
-    return err("Clipboard tool not available")
-
-  let cmd = cmdOpt.get()
-  try:
-    let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
-    let inputStream = process.inputStream
-    inputStream.write(content)
-    inputStream.close()
-    let exitCode = process.waitForExit()
-    process.close()
-    if exitCode == 0:
-      return ok(())
-    else:
-      return err("Failed to write to clipboard")
-  except OSError as e:
-    return err("Clipboard error: " & e.msg)
-  except IOError as e:
-    return err("Clipboard I/O error: " & e.msg)
+proc sendToClipboard(r: Registers, content: string) =
+  ## Send content to system clipboard if available (fire-and-forget)
+  if r.clipboardTool.isSome:
+    writeToClipboardAsync(r.clipboardTool.get, content)
 
 proc getFromClipboard(r: Registers): Result[string, string] =
   ## Get content from system clipboard if available
   if r.clipboardTool.isNone:
     return err("No clipboard tool configured")
-
-  let cmdOpt = getClipboardCommand(r.clipboardTool.get, "read")
-  if cmdOpt.isNone:
-    return err("Clipboard tool not available")
-
-  let cmd = cmdOpt.get()
-  try:
-    # Use startProcess instead of execCmdEx to avoid shell adding newline
-    let p = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
-    let output = p.outputStream.readAll()
-    let exitCode = p.waitForExit()
-    p.close()
-
-    if exitCode == 0:
-      return ok(output)
-    else:
-      return err("Failed to read from clipboard")
-  except OSError as e:
-    return err("Clipboard error: " & e.msg)
-  except IOError as e:
-    return err("Clipboard I/O error: " & e.msg)
+  return readFromClipboardSync(r.clipboardTool.get)
 
 # Public API for setting registers
 
 proc setNoNamedRegister*(r: Registers, content: string, isLine: bool) =
   ## Set the unnamed register (") and sync to clipboard
   r.noNamed.setRegister(content, isLine)
-  discard r.sendToClipboard(content)
+  r.sendToClipboard(content)
 
 proc setNoNamedRegister*(r: Registers, lines: seq[string], isLine: bool) =
   ## Set the unnamed register from lines
   r.noNamed.setRegister(lines, isLine)
-  discard r.sendToClipboard(lines.join("\n"))
+  r.sendToClipboard(lines.join("\n"))
 
 proc setSmallDeleteRegister*(r: Registers, content: string) =
   ## Set the small delete register (-) for deletions less than one line

@@ -21,7 +21,7 @@
 
 import std/[options, monotimes, tables, json, times, strutils]
 
-import pkg/results
+import pkg/[results, chronos]
 
 import editor_types, logger, highlight
 
@@ -32,54 +32,60 @@ proc hasCodeLensSupport*(e: Editor): bool =
   let activeBuffer = e.activeBuffer()
   return e.lsp.hasCodeLensSupport(activeBuffer)
 
-proc processCodeLensResponse(e: Editor, lenses: seq[CodeLens]) =
+proc processCodeLensResponse(
+    e: Editor, lenses: seq[CodeLens]
+): Future[void] {.async: (raises: []).} =
   ## Internal: Process code lens response from LSP
-  let activeBuffer = e.activeBuffer()
-  if activeBuffer.filePath.isNone:
-    return
+  {.cast(raises: []).}:
+    try:
+      let activeBuffer = e.activeBuffer()
+      if activeBuffer.filePath.isNone:
+        return
 
-  let filePath = activeBuffer.filePath.get
+      let filePath = activeBuffer.filePath.get
 
-  # Convert to cached items grouped by line (Table for O(1) lookup)
-  var itemsByLine: Table[int, seq[CodeLensItem]]
-  for lens in lenses:
-    var item = CodeLensItem(line: lens.range.start.line)
+      # Convert to cached items grouped by line (Table for O(1) lookup)
+      var itemsByLine: Table[int, seq[CodeLensItem]]
+      for lens in lenses:
+        var item = CodeLensItem(line: lens.range.start.line)
 
-    if lens.command.isSome:
-      let cmd = lens.command.get
-      item.title = cmd.title
-      item.command = cmd.command
-      if cmd.arguments.isSome:
-        for arg in cmd.arguments.get:
-          item.arguments.add($arg)
-    else:
-      # Need to resolve - this is still blocking but only for lenses that need it
-      let resolveResult = e.lsp.requestCodeLensResolve(activeBuffer, lens)
-      if resolveResult.isOk:
-        let resolved = resolveResult.get
-        if resolved.command.isSome:
-          let cmd = resolved.command.get
+        if lens.command.isSome:
+          let cmd = lens.command.get
           item.title = cmd.title
           item.command = cmd.command
           if cmd.arguments.isSome:
             for arg in cmd.arguments.get:
               item.arguments.add($arg)
+        else:
+          # Need to resolve
+          let resolveResult = await e.lsp.requestCodeLensResolve(activeBuffer, lens)
+          if resolveResult.isOk:
+            let resolved = resolveResult.get
+            if resolved.command.isSome:
+              let cmd = resolved.command.get
+              item.title = cmd.title
+              item.command = cmd.command
+              if cmd.arguments.isSome:
+                for arg in cmd.arguments.get:
+                  item.arguments.add($arg)
 
-    if item.title.len > 0:
-      # Group by line number
-      if item.line notin itemsByLine:
-        itemsByLine[item.line] = @[]
-      itemsByLine[item.line].add(item)
+        if item.title.len > 0:
+          # Group by line number
+          if item.line notin itemsByLine:
+            itemsByLine[item.line] = @[]
+          itemsByLine[item.line].add(item)
 
-  e.state.lspCache.codeLensCache = CodeLensCache(
-    itemsByLine: itemsByLine,
-    changeSeq: activeBuffer.changeSeq,
-    filePath: filePath,
-    isValid: true,
-  )
+      e.state.lspCache.codeLensCache = CodeLensCache(
+        itemsByLine: itemsByLine,
+        changeSeq: activeBuffer.changeSeq,
+        filePath: filePath,
+        isValid: true,
+      )
 
-  # Update timestamp after successful update
-  e.state.lspCache.lastCodeLensUpdate = getMonoTime()
+      # Update timestamp after successful update
+      e.state.lspCache.lastCodeLensUpdate = getMonoTime()
+    except CancelledError:
+      discard
 
 proc doUpdateCodeLensCache(e: Editor) =
   ## Internal: Start an async CodeLens request (non-blocking)
@@ -125,7 +131,7 @@ proc updateCodeLensCache*(e: Editor) =
       e.state.lspCache.pendingCodeLensRequestId = 0
       if resultOpt.isSome:
         let lenses = parseCodeLensResponse(resultOpt.get)
-        e.processCodeLensResponse(lenses)
+        asyncSpawn e.processCodeLensResponse(lenses)
       # Continue to check if we need to start a new request (buffer might have changed)
     of lrsError, lrsTimeout:
       # Request failed or timed out, mark cache as valid but empty to prevent retry loop
@@ -161,30 +167,33 @@ proc getCodeLensItemsForCurrentLine*(e: Editor): seq[CodeLensItem] =
   ## Get cached CodeLens items for the current cursor line
   e.getCodeLensItemsForLine(e.state.cursor.line)
 
-proc executeCodeLensItem*(e: Editor, item: CodeLensItem): Result[void, string] =
+proc executeCodeLensItem*(
+    e: Editor, item: CodeLensItem
+): Future[Result[void, string]] {.async: (raises: [CancelledError]).} =
   ## Execute a cached CodeLens item's command
-  if not e.lsp.enabled:
-    return err("LSP is not enabled")
+  {.cast(raises: [CancelledError]).}:
+    if not e.lsp.enabled:
+      return err("LSP is not enabled")
 
-  if item.command.len == 0:
-    return err("CodeLens has no command")
+    if item.command.len == 0:
+      return err("CodeLens has no command")
 
-  let activeBuffer = e.activeBuffer()
+    let activeBuffer = e.activeBuffer()
 
-  # Convert arguments back to JsonNode
-  var args: seq[JsonNode] = @[]
-  for argStr in item.arguments:
-    try:
-      args.add(parseJson(argStr))
-    except JsonParsingError:
-      args.add(%argStr)
+    # Convert arguments back to JsonNode
+    var args: seq[JsonNode] = @[]
+    for argStr in item.arguments:
+      try:
+        args.add(parseJson(argStr))
+      except JsonParsingError:
+        args.add(%argStr)
 
-  let execResult = e.lsp.requestExecuteCommand(activeBuffer, item.command, args)
-  if execResult.isErr:
-    return err("Failed to execute command: " & execResult.error)
+    let execResult = await e.lsp.requestExecuteCommand(activeBuffer, item.command, args)
+    if execResult.isErr:
+      return err("Failed to execute command: " & execResult.error)
 
-  e.state.statusMessage = "Executed: " & item.title
-  return ok()
+    e.state.statusMessage = "Executed: " & item.title
+    return ok()
 
 proc invalidateCodeLensCache*(e: Editor) =
   ## Invalidate the CodeLens cache (call when buffer changes significantly)
@@ -485,77 +494,79 @@ proc codeLensPickerSelectPrev*(e: Editor) =
       e.state.lspCache.codeLensPicker.scrollOffset =
         e.state.lspCache.codeLensPicker.selectedIndex
 
-proc codeLensPickerSelectByNumber*(e: Editor, num: int): bool =
+proc codeLensPickerSelectByNumber*(
+    e: Editor, num: int
+): Future[void] {.async: (raises: []).} =
   ## Select and execute CodeLens item by number (1-9)
-  ## Returns true if successfully executed
-  if not e.state.lspCache.codeLensPicker.isActive or
-      e.state.lspCache.codeLensPicker.items.len == 0:
-    return false
+  try:
+    if not e.state.lspCache.codeLensPicker.isActive or
+        e.state.lspCache.codeLensPicker.items.len == 0:
+      return
 
-  let index = num - 1 # Convert 1-based to 0-based index
-  if index < 0 or index >= e.state.lspCache.codeLensPicker.items.len:
-    return false
+    let index = num - 1 # Convert 1-based to 0-based index
+    if index < 0 or index >= e.state.lspCache.codeLensPicker.items.len:
+      return
 
-  let item = e.state.lspCache.codeLensPicker.items[index]
-  e.hideCodeLensPicker()
+    let item = e.state.lspCache.codeLensPicker.items[index]
+    e.hideCodeLensPicker()
 
-  let execResult = e.executeCodeLensItem(item)
-  if execResult.isErr:
-    e.state.statusMessage = execResult.error
-    return false
-
-  return true
-
-proc codeLensPickerConfirm*(e: Editor): bool =
-  ## Confirm selection and execute the selected CodeLens item
-  ## Returns true if successfully executed
-  if not e.state.lspCache.codeLensPicker.isActive or
-      e.state.lspCache.codeLensPicker.items.len == 0:
-    return false
-
-  let item =
-    e.state.lspCache.codeLensPicker.items[e.state.lspCache.codeLensPicker.selectedIndex]
-  e.hideCodeLensPicker()
-
-  let execResult = e.executeCodeLensItem(item)
-  if execResult.isErr:
-    e.state.statusMessage = execResult.error
-    return false
-
-  return true
-
-proc executeCurrentLineCodeLens*(e: Editor): bool =
-  ## Execute CodeLens on current line
-  ## If multiple CodeLens items exist, show picker to choose
-  ## Returns true if successfully executed (or picker shown)
-  if not e.lsp.enabled:
-    e.state.statusMessage = "LSP is not enabled"
-    return false
-
-  # Force update cache (bypass debouncing for explicit user action)
-  if e.state.display.showCodeLens:
-    e.doUpdateCodeLensCache()
-
-  if not e.state.lspCache.codeLensCache.isValid:
-    e.state.statusMessage = "No CodeLens available"
-    return false
-
-  # Get CodeLens items for current line
-  let items = e.getCodeLensItemsForCurrentLine()
-  if items.len == 0:
-    e.state.statusMessage = "No CodeLens on current line"
-    return false
-
-  # If only one item, execute directly
-  if items.len == 1:
-    let execResult = e.executeCodeLensItem(items[0])
+    let execResult = await e.executeCodeLensItem(item)
     if execResult.isErr:
       e.state.statusMessage = execResult.error
-      return false
-    return true
+  except CancelledError:
+    discard
 
-  # Multiple items - show picker
-  e.showCodeLensPicker(items)
-  e.state.statusMessage =
-    "Select CodeLens (1-9: select, j/k: navigate, Enter: confirm, Esc: cancel)"
-  return true
+proc codeLensPickerConfirm*(e: Editor): Future[void] {.async: (raises: []).} =
+  ## Confirm selection and execute the selected CodeLens item
+  try:
+    if not e.state.lspCache.codeLensPicker.isActive or
+        e.state.lspCache.codeLensPicker.items.len == 0:
+      return
+
+    let item = e.state.lspCache.codeLensPicker.items[
+      e.state.lspCache.codeLensPicker.selectedIndex
+    ]
+    e.hideCodeLensPicker()
+
+    let execResult = await e.executeCodeLensItem(item)
+    if execResult.isErr:
+      e.state.statusMessage = execResult.error
+  except CancelledError:
+    discard
+
+proc executeCurrentLineCodeLens*(e: Editor): Future[void] {.async: (raises: []).} =
+  ## Execute CodeLens on current line
+  ## If multiple CodeLens items exist, show picker to choose
+  {.cast(raises: []).}:
+    try:
+      if not e.lsp.enabled:
+        e.state.statusMessage = "LSP is not enabled"
+        return
+
+      # Force update cache (bypass debouncing for explicit user action)
+      if e.state.display.showCodeLens:
+        e.doUpdateCodeLensCache()
+
+      if not e.state.lspCache.codeLensCache.isValid:
+        e.state.statusMessage = "No CodeLens available"
+        return
+
+      # Get CodeLens items for current line
+      let items = e.getCodeLensItemsForCurrentLine()
+      if items.len == 0:
+        e.state.statusMessage = "No CodeLens on current line"
+        return
+
+      # If only one item, execute directly
+      if items.len == 1:
+        let execResult = await e.executeCodeLensItem(items[0])
+        if execResult.isErr:
+          e.state.statusMessage = execResult.error
+        return
+
+      # Multiple items - show picker
+      e.showCodeLensPicker(items)
+      e.state.statusMessage =
+        "Select CodeLens (1-9: select, j/k: navigate, Enter: confirm, Esc: cancel)"
+    except CancelledError:
+      discard

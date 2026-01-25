@@ -19,7 +19,7 @@
 
 import std/[os, strformat, options]
 
-import pkg/results
+import pkg/[results, chronos]
 
 import syntax/highlite
 import config, buffer, backgroundprocess
@@ -183,9 +183,6 @@ proc cancel*(p: QuickRunProcess) {.inline.} =
 proc kill*(p: QuickRunProcess) {.inline.} =
   p.process.kill
 
-proc close*(p: QuickRunProcess) {.inline.} =
-  p.process.close
-
 proc isFinish*(p: QuickRunProcess): bool {.inline.} =
   p.process.isFinish
 
@@ -199,10 +196,15 @@ proc quickRunBufferIndex*(buffers: seq[TextBuffer], path: string): Option[int] =
   # TODO: Implement QuickRun mode detection
   none(int)
 
-proc startBackgroundQuickRun*(
+type QuickRunPrepareResult* = object
+  command*: BackgroundProcessCommand
+  filePath*: string
+  isTempFile*: bool
+
+proc prepareQuickRun*(
     buffer: TextBuffer, settings: EditorConfig
-): Result[QuickRunProcess, string] =
-  ## Start a background process for build and run commands.
+): Result[QuickRunPrepareResult, string] =
+  ## Prepare QuickRun by saving file and creating command (sync).
 
   let
     useTempFile = buffer.filePath.isNone or not fileExists(buffer.filePath.get)
@@ -211,77 +213,73 @@ proc startBackgroundQuickRun*(
       if useTempFile:
         # A temporary file name.
         if langExt.isErr:
-          return Result[QuickRunProcess, string].err langExt.error
+          return Result[QuickRunPrepareResult, string].err langExt.error
         "quickruntemp." & langExt.get
       else:
         buffer.filePath.get
 
   if settings.quickRun.saveBufferWhenQuickRun and not useTempFile:
-    let lastModificationTime = getLastModificationTime(path)
-    # TODO: Compare with buffer's last save time
-    discard lastModificationTime
+    try:
+      let lastModificationTime = getLastModificationTime(path)
+      # TODO: Compare with buffer's last save time
+      discard lastModificationTime
+    except OSError:
+      discard
 
   if settings.quickRun.saveBufferWhenQuickRun or useTempFile:
     # Create and use a temporary file if the source code file does not exist.
     let saveResult = buffer.saveFile(path)
     if saveResult.isErr:
-      return Result[QuickRunProcess, string].err fmt"Failed to save the current code: {saveResult.error}"
+      return Result[QuickRunPrepareResult, string].err fmt"Failed to save the current code: {saveResult.error}"
 
   let command = quickRunCommand(path, buffer.language, buffer, settings.quickRun)
   if command.isErr:
-    return Result[QuickRunProcess, string].err fmt"QuickRun failed: {command.error}"
+    return
+      Result[QuickRunPrepareResult, string].err fmt"QuickRun failed: {command.error}"
 
-  let backgroundProcess = startBackgroundProcess(command.get)
+  return Result[QuickRunPrepareResult, string].ok QuickRunPrepareResult(
+    command: command.get, filePath: path, isTempFile: useTempFile
+  )
+
+proc startBackgroundQuickRun*(
+    prepared: QuickRunPrepareResult
+): Future[Result[QuickRunProcess, string]] {.async: (raises: []).} =
+  ## Start a background process for build and run commands (async).
+
+  let backgroundProcess = await startBackgroundProcess(prepared.command)
   if backgroundProcess.isErr:
     return Result[QuickRunProcess, string].err fmt"QuickRun failed: {backgroundProcess.error}"
 
   return Result[QuickRunProcess, string].ok QuickRunProcess(
-    command: command.get,
-    filePath: path,
-    isTempFile: useTempFile,
+    command: prepared.command,
+    filePath: prepared.filePath,
+    isTempFile: prepared.isTempFile,
     process: backgroundProcess.get,
   )
 
-proc waitForResult*(p: var QuickRunProcess): Result[seq[string], string] =
-  ## Wait for the process to finish and return the output.
-  ## This is a blocking call.
-
-  let output = p.process.waitFor()
-
+proc cleanupTempFiles(p: QuickRunProcess) =
+  ## Cleanup temporary files created by QuickRun
   if p.isTempFile:
-    # Cleanup temporary a source code file.
-    if p.filePath.fileExists:
-      removeFile(p.filePath)
-    # Cleanup temporary a executable.
-    let baseName = p.filePath.splitFile.name
-    if baseName.fileExists:
-      removeFile(baseName)
-    # Also cleanup .out files for C/C++
-    if ".out".fileExists:
-      removeFile(".out")
+    try:
+      # Cleanup temporary a source code file.
+      if p.filePath.fileExists:
+        removeFile(p.filePath)
+      # Cleanup temporary a executable.
+      let baseName = p.filePath.splitFile.name
+      if baseName.fileExists:
+        removeFile(baseName)
+      # Also cleanup .out files for C/C++
+      if ".out".fileExists:
+        removeFile(".out")
+    except OSError:
+      discard
+
+proc waitForResultAsync*(
+    p: QuickRunProcess
+): Future[Result[seq[string], string]] {.async: (raises: []).} =
+  ## Wait for the process to finish and return the output.
+
+  let output = await p.process.waitForAsync()
+  p.cleanupTempFiles()
 
   return Result[seq[string], string].ok output
-
-proc result*(p: var QuickRunProcess): Result[seq[string], string] =
-  ## Return an output of execution result.
-  ## Note: This will fail if the process is still running.
-  ## Use waitForResult() instead for blocking behavior.
-
-  if p.isTempFile:
-    # Cleanup temporary a source code file.
-    if p.filePath.fileExists:
-      removeFile(p.filePath)
-    # Cleanup temporary a executable.
-    let baseName = p.filePath.splitFile.name
-    if baseName.fileExists:
-      removeFile(baseName)
-    # Also cleanup .out files for C/C++
-    if ".out".fileExists:
-      removeFile(".out")
-
-  let r = p.process.result
-  if r.isOk:
-    return Result[seq[string], string].ok r.get
-  else:
-    return
-      Result[seq[string], string].err fmt"QuickRun failed: {$p.filePath}: {r.error}"

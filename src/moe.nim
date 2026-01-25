@@ -19,7 +19,9 @@
 
 import std/[strformat, monotimes, times, os, options]
 
-import pkg/[celina, results]
+import pkg/[celina, results, chronos]
+import pkg/celina/async/async_buffer as celinaBuffer
+import pkg/celina/async/async_terminal as asyncTerminal
 
 import
   moepkg/
@@ -57,6 +59,119 @@ proc handleResize(e: Editor) =
   # Set the editor's full redraw flag
   e.state.needsFullRedraw = true
 
+proc lspPollingTask(editor: Editor, running: ptr bool) {.async.} =
+  ## Background task for periodic LSP polling
+  ## Ensures LSP messages are processed even when no user input occurs
+  const pollInterval = timer.milliseconds(50)
+  while running[]:
+    {.cast(gcsafe).}:
+      {.cast(raises: []).}:
+        try:
+          editor.lsp.poll(0)
+          # Also cleanup stale progress entries periodically
+          editor.lsp.cleanupStaleProgress()
+        except:
+          discard
+    await sleepAsync(pollInterval)
+
+proc runEditor(
+    editor: Editor, app: AsyncApp, cmdLineConfig: CmdLineConfig, log: Logger
+) {.async.} =
+  ## Async entry point for the editor main loop
+
+  # Start LSP polling background task
+  var lspPollingRunning = true
+  asyncSpawn lspPollingTask(editor, addr lspPollingRunning)
+
+  {.cast(gcsafe).}:
+    app.onEventAsync proc(e: Event, app: AsyncApp): Future[bool] {.async.} =
+      {.cast(gcsafe).}:
+        {.cast(raises: []).}:
+          if e.kind == EventKind.Resize:
+            # Special handling for resize events to force screen clear
+            editor.handleResize
+            return true
+
+          let shouldContinue = editor.handleEvent(e)
+
+          # Handle pending async operations (shell commands, :bg)
+          if editor.hasPendingAsyncOperations():
+            try:
+              await editor.handlePendingAsyncOperations()
+            except Exception as e:
+              logError("moe", "handlePendingAsyncOperations failed: " & e.msg)
+
+          return shouldContinue
+
+    app.onRenderAsync proc(asyncBuf: celinaBuffer.AsyncBuffer): Future[void] {.async.} =
+      {.cast(gcsafe).}:
+        {.cast(raises: []).}:
+          # Direct access to internal buffer (single lock, no copy)
+          asyncBuf.withBufferAsync:
+            editor.render(buffer)
+
+          # Set cursor style based on editor mode (unless disabled)
+          if not editor.config.standard.disableChangeCursor:
+            let cursorStyle =
+              case editor.state.mode
+              of EditorMode.Insert:
+                toCursorStyle(editor.config.standard.insertModeCursor)
+              else:
+                toCursorStyle(editor.config.standard.normalModeCursor)
+            # Set cursor style via ANSI escape sequence (no async API available)
+            let escSeq =
+              case cursorStyle
+              of CursorStyle.Default: "\e[0 q"
+              of CursorStyle.BlinkingBlock: "\e[1 q"
+              of CursorStyle.SteadyBlock: "\e[2 q"
+              of CursorStyle.BlinkingUnderline: "\e[3 q"
+              of CursorStyle.SteadyUnderline: "\e[4 q"
+              of CursorStyle.BlinkingBar: "\e[5 q"
+              of CursorStyle.SteadyBar: "\e[6 q"
+            stdout.write(escSeq)
+            stdout.flushFile()
+
+      # Set cursor position and show (using celina async API)
+      let x = editor.state.screenCursor.x
+      let y = editor.state.screenCursor.y
+      await asyncTerminal.showCursorAt(x, y)
+
+    # Run the async main loop
+    # Note: Bracketed Paste Mode is enabled via AppConfig(bracketedPaste: true)
+    await app.runAsync()
+
+    # Stop LSP polling background task
+    lspPollingRunning = false
+
+    # Restore cursor to default style on exit
+    if not editor.config.standard.disableChangeCursor:
+      let cursorStyle = toCursorStyle(editor.config.standard.defaultCursor)
+      let escSeq =
+        case cursorStyle
+        of CursorStyle.Default: "\e[0 q"
+        of CursorStyle.BlinkingBlock: "\e[1 q"
+        of CursorStyle.SteadyBlock: "\e[2 q"
+        of CursorStyle.BlinkingUnderline: "\e[3 q"
+        of CursorStyle.SteadyUnderline: "\e[4 q"
+        of CursorStyle.BlinkingBar: "\e[5 q"
+        of CursorStyle.SteadyBar: "\e[6 q"
+      stdout.write(escSeq)
+      stdout.flushFile()
+
+    # Cleanup background processes before exiting
+    cleanupBackgroundProcesses()
+
+    # Shutdown LSP servers before exiting
+    editor.shutdown()
+
+    # Save all persist data
+    editor.savePersistData()
+
+    # Clean up logger
+    if cmdLineConfig.debugEnabled:
+      logInfo("moe", "Editor shutting down")
+      log.close()
+
 proc main() =
   # Parse command line arguments
   let cmdLineConfig = parseCmdLine()
@@ -84,14 +199,15 @@ proc main() =
   # Create editor with loaded configuration and validation result
   var editor = newEditor(editorConfig, validationResult)
 
-  # Create app with config-based mouse setting
-  var app = newApp(
+  # Create async app with config-based mouse setting
+  var app = newAsyncApp(
     AppConfig(
       title: "moe",
       alternateScreen: true,
       mouseCapture: editor.config.standard.mouse,
       rawMode: true,
       windowMode: false,
+      bracketedPaste: true,
     )
   )
   editor.app = app
@@ -151,67 +267,8 @@ proc main() =
             if cmdLineConfig.isReadonly:
               editor.activeBuffer().readOnly = true
 
-  app.onEvent proc(e: Event, app: App): bool =
-    if e.kind == EventKind.Resize:
-      # Special handling for resize events to force screen clear
-      editor.handleResize
-      return true
-
-    return editor.handleEvent(e)
-
-  app.onRender proc(b: var Buffer) =
-    # Update editor view
-    editor.render(b)
-
-    # Set cursor style based on editor mode (unless disabled)
-    if not editor.config.standard.disableChangeCursor:
-      case editor.state.mode
-      of EditorMode.Insert:
-        app.setCursorStyle(toCursorStyle(editor.config.standard.insertModeCursor))
-      else:
-        app.setCursorStyle(toCursorStyle(editor.config.standard.normalModeCursor))
-
-    # Set cursor position from calculated screen coordinates
-    app.showCursorAt(editor.state.screenCursor.x, editor.state.screenCursor.y)
-
-  # Enable Bracketed Paste Mode before starting the main loop
-  # This makes the terminal wrap pasted text with special escape sequences
-  # so we can detect paste events and handle them without auto-indentation
-  stdout.write("\x1b[?2004h")
-  stdout.flushFile()
-
-  app.run()
-
-  # Disable Bracketed Paste Mode on exit
-  stdout.write("\x1b[?2004l")
-  stdout.flushFile()
-
-  # Restore cursor to default style on exit
-  if not editor.config.standard.disableChangeCursor:
-    # Write ANSI escape sequence directly to restore cursor
-    let cursorStyle = toCursorStyle(editor.config.standard.defaultCursor)
-    let escSeq =
-      case cursorStyle
-      of CursorStyle.Default: "\e[0 q"
-      of CursorStyle.BlinkingBlock: "\e[1 q"
-      of CursorStyle.SteadyBlock: "\e[2 q"
-      of CursorStyle.BlinkingUnderline: "\e[3 q"
-      of CursorStyle.SteadyUnderline: "\e[4 q"
-      of CursorStyle.BlinkingBar: "\e[5 q"
-      of CursorStyle.SteadyBar: "\e[6 q"
-    stdout.write(escSeq)
-    stdout.flushFile()
-
-  # Shutdown LSP servers before exiting
-  editor.shutdown()
-
-  # Save all persist data (search history, command history, cursor positions)
-  editor.savePersistData()
-
-  # Clean up logger
-  if cmdLineConfig.debugEnabled:
-    logInfo("moe", "Editor shutting down")
-    log.close()
+  # Run the async editor main loop
+  waitFor runEditor(editor, app, cmdLineConfig, log)
 
 when isMainModule:
   main()

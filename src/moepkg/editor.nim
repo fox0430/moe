@@ -19,7 +19,7 @@
 
 import std/[strutils, strformat, options, unicode, monotimes, times, os, json]
 
-import pkg/results
+import pkg/[results, chronos]
 
 import
   editor_types, editor_window, editor_file, editor_lsp, editor_codelens, editor_render

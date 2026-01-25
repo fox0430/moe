@@ -20,13 +20,7 @@
 ## Rendering-related procedures for the editor
 
 import
-  editor_render_helpers,
-  editor_render_window,
-  editor_render_views,
-  editor_render_modes
+  editor_render_helpers, editor_render_window, editor_render_views, editor_render_modes
 
 export
-  editor_render_helpers,
-  editor_render_window,
-  editor_render_views,
-  editor_render_modes
+  editor_render_helpers, editor_render_window, editor_render_views, editor_render_modes

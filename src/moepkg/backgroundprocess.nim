@@ -17,9 +17,10 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[osproc, strformat, streams]
+import std/strformat
 
-import pkg/results
+import pkg/[results, chronos]
+import pkg/chronos/asyncproc
 
 type
   BackgroundProcessCommand* = object
@@ -27,60 +28,95 @@ type
     args*: seq[string]
     workingDir*: string
 
-  BackgroundProcess* = object
-    process*: Process
+  BackgroundProcess* = ref object
+    process*: AsyncProcessRef
 
   StartProcessResult* = Result[BackgroundProcess, string]
 
-proc isRunning*(bp: BackgroundProcess): bool {.inline.} =
-  bp.process.running
+proc isRunning*(bp: BackgroundProcess): bool =
+  if bp.process.isNil:
+    return false
+  let r = bp.process.running()
+  if r.isOk:
+    return r.get
+  return false
 
-proc isFinish*(bp: BackgroundProcess): bool {.inline.} =
-  not bp.process.running
+proc isFinish*(bp: BackgroundProcess): bool =
+  not bp.isRunning
 
 proc cancel*(bp: BackgroundProcess) =
-  bp.process.terminate
+  if not bp.process.isNil:
+    discard bp.process.terminate()
 
 proc kill*(bp: BackgroundProcess) =
-  bp.process.kill
+  if not bp.process.isNil:
+    discard bp.process.kill()
 
-proc close*(bp: BackgroundProcess) =
-  bp.process.close
+proc closeAsync*(bp: BackgroundProcess): Future[void] {.async: (raises: []).} =
+  if not bp.process.isNil:
+    await bp.process.closeWait()
+    bp.process = nil
 
-proc outputStream*(bp: BackgroundProcess): Stream =
-  bp.process.outputStream
-
-proc startBackgroundProcess*(command: BackgroundProcessCommand): StartProcessResult =
+proc startBackgroundProcess*(
+    command: BackgroundProcessCommand
+): Future[StartProcessResult] {.async: (raises: []).} =
   ## Start the passed command in a new process and return BackgroundProcess.
+  ## Use AsyncProcess.Pipe for stdout to capture output, StdErrToStdOut to also capture stderr
+  const Options = {AsyncProcessOption.UsePath, AsyncProcessOption.StdErrToStdOut}
 
-  const
-    Env = nil
-    Options = {poUsePath, poDaemon, poStdErrToStdOut}
-
-  var process: Process
   try:
-    process = startProcess(command.cmd, command.workingDir, command.args, Env, Options)
-  except OSError as e:
+    let process = await startProcess(
+      command.cmd,
+      command.workingDir,
+      command.args,
+      options = Options,
+      stdoutHandle = AsyncProcess.Pipe,
+    )
+    return StartProcessResult.ok BackgroundProcess(process: process)
+  except AsyncProcessError as e:
     return StartProcessResult.err fmt"Failed to create a background process: {e.msg}"
+  except CancelledError:
+    return StartProcessResult.err "Process start was cancelled"
 
-  return StartProcessResult.ok BackgroundProcess(process: process)
+proc readAllOutput*(
+    bp: BackgroundProcess
+): Future[seq[string]] {.async: (raises: []).} =
+  ## Read all output from the process stdout
+  var lines: seq[string] = @[]
+  if bp.process.isNil:
+    return lines
 
-proc result*(bp: var BackgroundProcess): Result[seq[string], string] =
-  ## Return results (Stdout) the BackgroundProcess and close the process.
+  let stdout = bp.process.stdoutStream()
+  if stdout.isNil:
+    return lines
 
-  if bp.isRunning:
-    return Result[seq[string], string].err "BackgroundProcess is still running"
+  try:
+    while not stdout.atEof():
+      let line = await stdout.readLine()
+      lines.add(line)
+  except AsyncStreamError:
+    discard
+  except CancelledError:
+    discard
 
-  let (output, _) = bp.process.readLines
-  bp.close
+  return lines
 
-  return Result[seq[string], string].ok output
+proc waitForExitAsync*(bp: BackgroundProcess): Future[int] {.async: (raises: []).} =
+  ## Wait for the process to exit and return exit code
+  if bp.process.isNil:
+    return -1
 
-proc waitFor*(bp: var BackgroundProcess, timeout: int = -1): seq[string] =
-  ## Return results (Stdout) the BackgroundProcess and close the process.
-  ## Block until quit the process.
+  try:
+    return await bp.process.waitForExit()
+  except AsyncProcessError:
+    return -1
+  except CancelledError:
+    return -1
 
-  discard bp.process.waitForExit
-  let (output, _) = bp.process.readLines
-  bp.close
+proc waitForAsync*(bp: BackgroundProcess): Future[seq[string]] {.async: (raises: []).} =
+  ## Wait for process to complete and return all output lines
+  ## Read output first (blocks until EOF), then wait for exit
+  let output = await bp.readAllOutput()
+  discard await bp.waitForExitAsync()
+  await bp.closeAsync()
   return output

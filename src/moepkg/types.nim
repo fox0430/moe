@@ -542,6 +542,14 @@ type
     tempMessages*: seq[string] # Lines to display temporarily in command area
     # Substitute preview state (live preview like Vim's inccommand)
     substitutePreview*: SubstitutePreview
+    # Pending async operations (for shell commands that need TUI suspend)
+    pendingShellCommand*: string # Shell command to execute after suspend
+    pendingBackground*: bool # Whether to suspend for background (:bg)
+    # Pending build/quickrun info (for async background processes)
+    pendingBuildOnSave*:
+      tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
+    pendingQuickRun*:
+      tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
 
 proc setStatusMessage*(state: EditorState, msg: string) =
   ## Set status message and log it to message log

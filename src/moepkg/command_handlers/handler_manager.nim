@@ -1766,6 +1766,14 @@ proc shouldLspSelectionRange*(hrResult: HandlerResult): bool =
   ## Check if we should execute LSP selection range
   hrResult.kind == hrLspSelectionRange
 
+proc shouldLspFormat*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP document formatting
+  hrResult.kind == hrLspFormat
+
+proc shouldLspFold*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP folding range
+  hrResult.kind == hrLspFold
+
 proc shouldEnterBufferManager*(hrResult: HandlerResult): bool =
   ## Check if we should enter buffer manager mode
   hrResult.kind == hrEnterBufferManager

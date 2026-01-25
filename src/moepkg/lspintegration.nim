@@ -22,7 +22,7 @@
 
 import std/[options, json, strutils, algorithm, tables, times, unicode]
 
-import pkg/results
+import pkg/[results, chronos]
 
 import buffer, cursor, types, lspservice, messagelog, unicode_utils
 import lsp/protocol/types as lspTypes
@@ -583,319 +583,6 @@ proc cleanupTimedOutRequests*(lsp: LspIntegration) =
   ## Clean up any timed out requests
   lsp.service.cleanupTimedOutRequests()
 
-# Blocking feature requests (WARNING: These block the main thread!)
-proc requestCompletion*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[seq[CompletionItem], string] =
-  ## Request completion at cursor position (BLOCKING)
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestCompletion(path, line, column)
-
-proc requestHover*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[Option[Hover], string] =
-  ## Request hover information at cursor position
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestHover(path, line, column)
-
-proc requestDefinition*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[seq[Location], string] =
-  ## Request go to definition at cursor position
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestDefinition(path, line, column)
-
-proc requestDeclaration*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[seq[Location], string] =
-  ## Request go to declaration at cursor position
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestDeclaration(path, line, column)
-
-proc requestTypeDefinition*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[seq[Location], string] =
-  ## Request go to type definition at cursor position
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestTypeDefinition(path, line, column)
-
-proc requestImplementation*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[seq[Location], string] =
-  ## Request go to implementation at cursor position
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestImplementation(path, line, column)
-
-proc requestReferences*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[seq[Location], string] =
-  ## Request find references at cursor position
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestReferences(path, line, column)
-
-proc requestDocumentHighlight*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[seq[DocumentHighlight], string] =
-  ## Request document highlights at cursor position
-  ## Returns all occurrences of the symbol at the given position
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestDocumentHighlight(path, line, column)
-
-proc requestDocumentLinks*(
-    lsp: LspIntegration, buffer: TextBuffer
-): Result[seq[DocumentLink], string] =
-  ## Request document links for a buffer
-  ## Returns links to internal or external resources (e.g., imports, URLs)
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestDocumentLinks(path)
-
-proc requestDocumentLinkResolve*(
-    lsp: LspIntegration, buffer: TextBuffer, link: DocumentLink
-): Result[DocumentLink, string] =
-  ## Resolve a document link to get its target URI
-  ## Used when the initial documentLink response doesn't include target
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestDocumentLinkResolve(path, link)
-
-proc requestSignatureHelp*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[Option[SignatureHelp], string] =
-  ## Request signature help at cursor position
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestSignatureHelp(path, line, column)
-
-proc requestRename*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int, newName: string
-): Result[Option[WorkspaceEdit], string] =
-  ## Request rename of a symbol at cursor position
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestRename(path, line, column, newName)
-
-proc requestSelectionRange*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[Option[SelectionRange], string] =
-  ## Request selection range at cursor position
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestSelectionRange(path, line, column)
-
-proc requestFormatting*(
-    lsp: LspIntegration, buffer: TextBuffer, tabSize: int = 2, insertSpaces: bool = true
-): Result[seq[TextEdit], string] =
-  ## Request document formatting
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestFormatting(path, tabSize, insertSpaces)
-
-proc requestRangeFormatting*(
-    lsp: LspIntegration,
-    buffer: TextBuffer,
-    startLine, startChar, endLine, endChar: int,
-    tabSize: int = 2,
-    insertSpaces: bool = true,
-): Result[seq[TextEdit], string] =
-  ## Request range formatting
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestRangeFormatting(
-    path, startLine, startChar, endLine, endChar, tabSize, insertSpaces
-  )
-
-proc requestDocumentSymbols*(
-    lsp: LspIntegration, buffer: TextBuffer
-): Result[DocumentSymbolResult, string] =
-  ## Request document symbols for a buffer
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestDocumentSymbols(path)
-
-proc requestInlayHints*(
-    lsp: LspIntegration, buffer: TextBuffer, startLine, startChar, endLine, endChar: int
-): Result[seq[InlayHint], string] =
-  ## Request inlay hints for a range in a buffer
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestInlayHints(path, startLine, startChar, endLine, endChar)
-
-proc requestInlayHintsForVisibleRange*(
-    lsp: LspIntegration, buffer: TextBuffer, firstLine, lastLine: int
-): Result[seq[InlayHint], string] =
-  ## Request inlay hints for the visible range of a buffer
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  if buffer.len == 0:
-    return ok(newSeq[InlayHint]())
-
-  let path = buffer.filePath.get
-  # Clamp line numbers to valid range
-  let actualLastLine = min(lastLine, buffer.len - 1)
-  let actualFirstLine = min(firstLine, actualLastLine)
-  let endChar = buffer.getLine(actualLastLine).charLen
-  return
-    lsp.service.requestInlayHints(path, actualFirstLine, 0, actualLastLine, endChar)
-
-proc requestSemanticTokensFull*(
-    lsp: LspIntegration, buffer: TextBuffer
-): Result[Option[SemanticTokens], string] =
-  ## Request full semantic tokens for a buffer
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestSemanticTokensFull(path)
-
-proc requestSemanticTokensRange*(
-    lsp: LspIntegration, buffer: TextBuffer, startLine, startChar, endLine, endChar: int
-): Result[Option[SemanticTokens], string] =
-  ## Request semantic tokens for a range in a buffer
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return
-    lsp.service.requestSemanticTokensRange(path, startLine, startChar, endLine, endChar)
-
-proc requestSemanticTokensForVisibleRange*(
-    lsp: LspIntegration, buffer: TextBuffer, firstLine, lastLine: int
-): Result[Option[SemanticTokens], string] =
-  ## Request semantic tokens for the visible range of a buffer
-  ## Falls back to full document request if range is not supported
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  if buffer.len == 0:
-    return ok(none(SemanticTokens))
-
-  let path = buffer.filePath.get
-  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return err("No LSP support for file: " & path)
-
-  # Check if range request is supported, fall back to full if not
-  if lsp.service.hasSemanticTokensRangeSupport(langIdOpt.get):
-    # Clamp line numbers to valid range
-    let actualLastLine = min(lastLine, buffer.len - 1)
-    let actualFirstLine = min(firstLine, actualLastLine)
-    let endChar = buffer.getLine(actualLastLine).charLen
-    return lsp.service.requestSemanticTokensRange(
-      path, actualFirstLine, 0, actualLastLine, endChar
-    )
-  elif lsp.service.hasSemanticTokensFullSupport(langIdOpt.get):
-    # Fall back to full document request
-    return lsp.service.requestSemanticTokensFull(path)
-  else:
-    return err("Semantic tokens not supported")
-
 proc getSemanticTokensLegend*(
     lsp: LspIntegration, buffer: TextBuffer
 ): Option[SemanticTokensLegend] =
@@ -946,53 +633,6 @@ proc startSemanticTokensRequest*(
     return lsp.service.startSemanticTokensFullRequest(path)
   else:
     return err("Semantic tokens not supported")
-
-proc requestInlineValues*(
-    lsp: LspIntegration,
-    buffer: TextBuffer,
-    startLine, startChar, endLine, endChar: int,
-    frameId: int,
-    stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar: int,
-): Result[seq[InlineValue], string] =
-  ## Request inline values for a range in a buffer during debugging
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestInlineValues(
-    path, startLine, startChar, endLine, endChar, frameId, stoppedLine,
-    stoppedStartChar, stoppedEndLine, stoppedEndChar,
-  )
-
-proc requestInlineValuesForVisibleRange*(
-    lsp: LspIntegration,
-    buffer: TextBuffer,
-    firstLine, lastLine: int,
-    frameId: int,
-    stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar: int,
-): Result[seq[InlineValue], string] =
-  ## Request inline values for the visible range of a buffer during debugging
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  if buffer.len == 0:
-    return ok(newSeq[InlineValue]())
-
-  let path = buffer.filePath.get
-  # Clamp line numbers to valid range
-  let actualLastLine = min(lastLine, buffer.len - 1)
-  let actualFirstLine = min(firstLine, actualLastLine)
-  let endChar = buffer.getLine(actualLastLine).charLen
-  return lsp.service.requestInlineValues(
-    path, actualFirstLine, 0, actualLastLine, endChar, frameId, stoppedLine,
-    stoppedStartChar, stoppedEndLine, stoppedEndChar,
-  )
 
 proc hasInlineValueSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if inline value is supported for a buffer's language
@@ -1328,23 +968,9 @@ proc hasCallHierarchySupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
 
   return lsp.service.hasCallHierarchySupport(langIdOpt.get)
 
-proc requestCodeLens*(
-    lsp: LspIntegration, buffer: TextBuffer
-): Result[seq[CodeLens], string] =
-  ## Request code lenses for a buffer
-  ## Code lenses represent commands shown along with source text (e.g., "5 references")
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestCodeLens(path)
-
 proc requestCodeLensResolve*(
     lsp: LspIntegration, buffer: TextBuffer, lens: CodeLens
-): Result[CodeLens, string] =
+): Future[Result[CodeLens, string]] {.async: (raises: [CancelledError]).} =
   ## Resolve a code lens to get its command
   ## Used when the initial codeLens response doesn't include the command
   if not lsp.enabled:
@@ -1354,14 +980,14 @@ proc requestCodeLensResolve*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.requestCodeLensResolve(path, lens)
+  return await lsp.service.requestCodeLensResolve(path, lens)
 
 proc requestExecuteCommand*(
     lsp: LspIntegration,
     buffer: TextBuffer,
     command: string,
     arguments: seq[JsonNode] = @[],
-): Result[JsonNode, string] =
+): Future[Result[JsonNode, string]] {.async: (raises: [CancelledError]).} =
   ## Execute a command on the LSP server (used for code lens commands)
   if not lsp.enabled:
     return err("LSP disabled")
@@ -1370,49 +996,7 @@ proc requestExecuteCommand*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.requestExecuteCommand(path, command, arguments)
-
-proc requestCallHierarchyPrepare*(
-    lsp: LspIntegration, buffer: TextBuffer, line, column: int
-): Result[seq[CallHierarchyItem], string] =
-  ## Prepare call hierarchy at cursor position
-  ## Returns a list of CallHierarchyItems for the symbol at the position
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestCallHierarchyPrepare(path, line, column)
-
-proc requestCallHierarchyIncomingCalls*(
-    lsp: LspIntegration, buffer: TextBuffer, item: CallHierarchyItem
-): Result[seq[CallHierarchyIncomingCall], string] =
-  ## Request incoming calls for a CallHierarchyItem
-  ## Returns all callers of the given item
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestCallHierarchyIncomingCalls(path, item)
-
-proc requestCallHierarchyOutgoingCalls*(
-    lsp: LspIntegration, buffer: TextBuffer, item: CallHierarchyItem
-): Result[seq[CallHierarchyOutgoingCall], string] =
-  ## Request outgoing calls for a CallHierarchyItem
-  ## Returns all items called by the given item
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestCallHierarchyOutgoingCalls(path, item)
+  return await lsp.service.requestExecuteCommand(path, command, arguments)
 
 # Folding Range support
 proc hasFoldingRangeSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
@@ -1429,20 +1013,6 @@ proc hasFoldingRangeSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
     return false
 
   return lsp.service.hasFoldingRangeSupport(langIdOpt.get)
-
-proc requestFoldingRanges*(
-    lsp: LspIntegration, buffer: TextBuffer
-): Result[seq[FoldingRange], string] =
-  ## Request folding ranges for a buffer
-  ## Returns all foldable regions (functions, classes, comments, imports, etc.)
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.requestFoldingRange(path)
 
 proc applyLspFoldingRanges*(
     buffer: TextBuffer,
@@ -1496,24 +1066,6 @@ proc applyLspFoldingRanges*(
 
   return added
 
-proc refreshLspFolds*(
-    lsp: LspIntegration,
-    buffer: TextBuffer,
-    clearExisting: bool = true,
-    startCollapsed: bool = false,
-): Result[int, string] =
-  ## Request folding ranges from LSP and apply them to buffer
-  ## Returns the number of folds successfully added
-  ## If clearExisting is true, removes all existing folds first
-  ## If startCollapsed is false (default), folds are added in expanded state
-  let rangesResult = lsp.requestFoldingRanges(buffer)
-  if rangesResult.isErr:
-    return err(rangesResult.error)
-
-  let count =
-    buffer.applyLspFoldingRanges(rangesResult.get, clearExisting, startCollapsed)
-  return ok(count)
-
 # Cleanup
 proc shutdown*(lsp: LspIntegration) =
   ## Shutdown all LSP servers
@@ -1521,3 +1073,101 @@ proc shutdown*(lsp: LspIntegration) =
   lsp.openBuffers = @[]
   lsp.activeProgress.clear()
   lsp.serverStatus.clear()
+
+# ============================================================================
+# Async request APIs
+# ============================================================================
+
+proc requestFormatting*(
+    lsp: LspIntegration, buffer: TextBuffer, tabSize: int = 2, insertSpaces: bool = true
+): Future[Result[seq[TextEdit], string]] {.async: (raises: [CancelledError]).} =
+  ## Request formatting for a buffer
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return await lsp.service.requestFormatting(path, tabSize, insertSpaces)
+
+proc requestRename*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int, newName: string
+): Future[Result[Option[WorkspaceEdit], string]] {.async: (raises: [CancelledError]).} =
+  ## Request rename at a position
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return await lsp.service.requestRename(path, line, column, newName)
+
+proc requestDefinition*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
+  ## Request go to definition at a position
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return await lsp.service.requestDefinition(path, line, column)
+
+proc requestReferences*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
+  ## Request find references at a position
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return await lsp.service.requestReferences(path, line, column)
+
+proc requestDocumentSymbols*(
+    lsp: LspIntegration, buffer: TextBuffer
+): Future[Result[DocumentSymbolResult, string]] {.async: (raises: [CancelledError]).} =
+  ## Request document symbols
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return await lsp.service.requestDocumentSymbols(path)
+
+proc requestFoldingRanges*(
+    lsp: LspIntegration, buffer: TextBuffer
+): Future[Result[seq[FoldingRange], string]] {.async: (raises: [CancelledError]).} =
+  ## Request folding ranges for a buffer
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return await lsp.service.requestFoldingRange(path)
+
+proc refreshLspFolds*(
+    lsp: LspIntegration,
+    buffer: TextBuffer,
+    clearExisting: bool = true,
+    startCollapsed: bool = false,
+): Future[Result[int, string]] {.async: (raises: [CancelledError]).} =
+  ## Request folding ranges from LSP and apply them to buffer
+  {.cast(raises: [CancelledError]).}:
+    let rangesResult = await lsp.requestFoldingRanges(buffer)
+    if rangesResult.isErr:
+      return err(rangesResult.error)
+
+    let count =
+      buffer.applyLspFoldingRanges(rangesResult.get, clearExisting, startCollapsed)
+    return ok(count)

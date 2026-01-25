@@ -25,7 +25,7 @@ import pkg/results
 
 import
   editor_types, editor_file, signaturehelp, documentsymbol_viewer, references_viewer,
-  lspservice
+  lspservice, lspintegration
 import lsp/protocol/types as lspTypes
 
 proc maybeUpdateLsp*(e: Editor) =
@@ -760,3 +760,56 @@ proc requestDocumentSymbols*(e: Editor): bool =
   ## Request document symbols (async)
   ## Returns true if request was started
   e.startLspDocumentSymbols()
+
+proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledError]).} =
+  ## Request LSP document formatting and apply edits
+  ## Returns true if successful
+  {.cast(raises: [CancelledError]).}:
+    {.cast(gcsafe).}:
+      if not e.lsp.enabled:
+        e.state.statusMessage = "LSP not enabled"
+        return false
+
+      let activeBuffer = e.activeBuffer()
+
+      # Get formatting result from LSP
+      let formatResult = await e.lsp.requestFormatting(activeBuffer)
+      if formatResult.isErr:
+        e.state.statusMessage = "LSP format failed: " & formatResult.error
+        return false
+
+      let edits = formatResult.get
+      if edits.len == 0:
+        e.state.statusMessage = "No formatting changes"
+        return true
+
+      # Apply the text edits to the buffer
+      let applyResult = applyTextEdits(activeBuffer, edits)
+      if applyResult.isErr:
+        e.state.statusMessage = "Failed to apply edits: " & applyResult.error
+        return false
+
+      e.state.statusMessage =
+        "Formatted (" & $edits.len & " edit" & (if edits.len > 1: "s" else: "") & ")"
+      e.state.needsFullRedraw = true
+      return true
+
+proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
+  ## Request LSP folding ranges and update buffer fold markers
+  try:
+    if not e.lsp.enabled:
+      e.state.statusMessage = "LSP not enabled"
+      return
+
+    let activeBuffer = e.activeBuffer()
+
+    # Use lspintegration's refreshLspFolds
+    let foldResult = await lspintegration.refreshLspFolds(e.lsp, activeBuffer)
+    if foldResult.isErr:
+      e.state.statusMessage = "LSP fold failed: " & foldResult.error
+      return
+
+    e.state.statusMessage = "Updated fold markers"
+    e.state.needsFullRedraw = true
+  except CancelledError:
+    discard

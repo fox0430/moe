@@ -19,7 +19,8 @@
 
 import std/[options, os, strutils, tables, monotimes]
 
-import pkg/[celina, results]
+import pkg/[celina, results, chronos]
+from pkg/celina/core/mouse_logic import MouseButton
 
 import
   editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
@@ -27,6 +28,24 @@ import
   command_completion, build, render_utils, sidebar, debugviewer, configloader,
   references_viewer, documentsymbol_viewer, messagelog, commandline
 import command_handlers/handler_manager
+
+# Track running background processes for cleanup on exit
+var runningBackgroundProcesses: seq[BackgroundProcess] = @[]
+
+proc addRunningProcess*(p: BackgroundProcess) =
+  runningBackgroundProcesses.add(p)
+
+proc removeRunningProcess*(p: BackgroundProcess) =
+  let idx = runningBackgroundProcesses.find(p)
+  if idx >= 0:
+    runningBackgroundProcesses.delete(idx)
+
+proc cleanupBackgroundProcesses*() =
+  ## Cancel all running background processes (call on editor exit)
+  for p in runningBackgroundProcesses:
+    if p.isRunning:
+      p.kill()
+  runningBackgroundProcesses = @[]
 
 proc getBufferInfos(e: Editor): seq[BufferInfo] =
   ## Extract buffer information from the buffer list for BufferManager
@@ -561,42 +580,12 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         e.state.needsFullRedraw = true
 
       if r.shouldShellCommand():
-        # Handle shell command (:!command)
-        let cmd = r.getShellCommand()
-        if cmd.len > 0:
-          var exitCode: int
-          e.app.suspend()
-          try:
-            # Execute the shell command
-            exitCode = execShellCmd(cmd)
-
-            # Wait for user to press Enter
-            stdout.write("\nPress Enter to continue...")
-            stdout.flushFile()
-            discard stdin.readLine()
-          finally:
-            e.app.resume()
-
-          e.state.needsFullRedraw = true
-
-          if exitCode == 0:
-            e.state.setStatusMessage("Shell command completed")
-          else:
-            e.state.setStatusMessage("Shell command exited with code " & $exitCode)
+        # Set pending shell command to be executed by handleEventAsync
+        e.state.pendingShellCommand = r.getShellCommand()
 
       if r.shouldBackground():
-        # Handle background command (:bg)
-        # Pause editor and show recent terminal output
-        e.app.suspend()
-        try:
-          # Wait for user to press Enter
-          stdout.write("Press Enter to return to editor...")
-          stdout.flushFile()
-          discard stdin.readLine()
-        finally:
-          e.app.resume()
-
-        e.state.needsFullRedraw = true
+        # Set pending background flag to be handled by handleEventAsync
+        e.state.pendingBackground = true
 
       if r.shouldSave():
         # Handle file save
@@ -629,50 +618,17 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
                 e.config.buildOnSave.workspaceRoot.get
               else:
                 parentDir(savedPath)
-            let buildResult = startBackgroundBuildOnSave(
-              savedPath, activeBuffer.language, customCmd, workspaceRoot
+            # Set pending build info for async processing
+            e.state.pendingBuildOnSave = (
+              path: savedPath,
+              language: activeBuffer.language.ord,
+              customCmd: customCmd,
+              workspaceRoot: workspaceRoot,
             )
-            if buildResult.isErr:
-              # Always show errors
-              e.state.setStatusMessage("Build error: " & buildResult.error)
-              logError("handler", "Build on save failed: " & buildResult.error)
-            else:
-              var buildProcess = buildResult.get
-              # Build on save screen notification (controlled by config)
-              if e.config.notification.screenNotifications and
-                  e.config.notification.buildOnSaveScreenNotify:
-                e.state.setStatusMessage("Building: " & savedPath)
-              # Build on save log notification (controlled by config)
-              if e.config.notification.logNotifications and
-                  e.config.notification.buildOnSaveLogNotify:
-                logInfo("handler", "Build on save started: " & savedPath)
-
-              # Wait for the process to finish and get the result
-              let output = buildProcess.process.waitFor()
-              # Create a new buffer with the output
-              let outputContent = output.join("\n")
-              let outputBuffer = newTextBuffer(outputContent)
-              outputBuffer.readOnly = true
-
-              # Open the output in a new horizontal split window
-              let splitResult = e.hsplitWithBuffer(outputBuffer)
-              if splitResult.isErr:
-                # Always show errors
-                e.state.setStatusMessage(
-                  "Failed to open output window: " & splitResult.error
-                )
-                logError(
-                  "handler", "Build on save window split failed: " & splitResult.error
-                )
-              else:
-                # Build on save screen notification (controlled by config)
-                if e.config.notification.screenNotifications and
-                    e.config.notification.buildOnSaveScreenNotify:
-                  e.state.setStatusMessage("Build completed: " & savedPath)
-                # Build on save log notification (controlled by config)
-                if e.config.notification.logNotifications and
-                    e.config.notification.buildOnSaveLogNotify:
-                  logInfo("handler", "Build on save completed: " & savedPath)
+            # Build on save screen notification (controlled by config)
+            if e.config.notification.screenNotifications and
+                e.config.notification.buildOnSaveScreenNotify:
+              e.state.setStatusMessage("Building: " & savedPath)
 
       if r.shouldSaveAndQuit():
         # Handle file save and quit
@@ -730,49 +686,23 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       if r.shouldQuickRun() or e.state.requestQuickRun:
         # Reset request flag if set
         e.state.requestQuickRun = false
-        # Handle QuickRun command
-        let quickRunResult = startBackgroundQuickRun(activeBuffer, e.config)
-        if quickRunResult.isErr:
-          # Always show errors
-          e.state.setStatusMessage("QuickRun error: " & quickRunResult.error)
-          logError("handler", "QuickRun failed: " & quickRunResult.error)
+        # Prepare QuickRun (sync) and set pending for async execution
+        let prepareResult = prepareQuickRun(activeBuffer, e.config)
+        if prepareResult.isErr:
+          e.state.setStatusMessage("QuickRun error: " & prepareResult.error)
+          logError("handler", "QuickRun prepare failed: " & prepareResult.error)
         else:
-          var qrProcess = quickRunResult.get
+          let prepared = prepareResult.get
+          e.state.pendingQuickRun = (
+            cmd: prepared.command.cmd,
+            args: prepared.command.args,
+            filePath: prepared.filePath,
+            isTempFile: prepared.isTempFile,
+          )
           # QuickRun screen notification (controlled by config)
           if e.config.notification.screenNotifications and
               e.config.notification.quickRunScreenNotify:
-            e.state.setStatusMessage(quickRunStartupMessage(qrProcess.filePath))
-
-          # Wait for the process to finish and get the result
-          let outputResult = qrProcess.waitForResult()
-          if outputResult.isErr:
-            # Always show errors
-            e.state.setStatusMessage("QuickRun error: " & outputResult.error)
-          else:
-            let output = outputResult.get
-            # Create a new buffer with the output
-            let outputContent = output.join("\n")
-            let outputBuffer = newTextBuffer(outputContent)
-            # Mark as read-only since it's just output
-            outputBuffer.readOnly = true
-
-            # Open the output in a new horizontal split window
-            let splitResult = e.hsplitWithBuffer(outputBuffer)
-            if splitResult.isErr:
-              # Always show errors
-              e.state.setStatusMessage(
-                "Failed to open output window: " & splitResult.error
-              )
-              logError("handler", "QuickRun window split failed: " & splitResult.error)
-            else:
-              # QuickRun screen notification (controlled by config)
-              if e.config.notification.screenNotifications and
-                  e.config.notification.quickRunScreenNotify:
-                e.state.setStatusMessage("QuickRun completed: " & qrProcess.filePath)
-              # QuickRun log notification (controlled by config)
-              if e.config.notification.logNotifications and
-                  e.config.notification.quickRunLogNotify:
-                logInfo("handler", "QuickRun completed: " & qrProcess.filePath)
+            e.state.setStatusMessage(quickRunStartupMessage(prepared.filePath))
         # Return to Normal mode
         e.state.previousMode = e.state.mode
         e.state.mode = EditorMode.Normal
@@ -785,32 +715,14 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.setStatusMessage("Build error: File not saved")
           logError("handler", "Build failed: No file path")
         else:
-          let buildResult =
-            startBackgroundBuild(filePath, activeBuffer.language, parentDir(filePath))
-          if buildResult.isErr:
-            e.state.setStatusMessage("Build error: " & buildResult.error)
-            logError("handler", "Build failed: " & buildResult.error)
-          else:
-            var buildProcess = buildResult.get
-            e.state.setStatusMessage("Building: " & filePath)
-
-            # Wait for the process to finish and get the result
-            let output = buildProcess.process.waitFor()
-            # Create a new buffer with the output
-            let outputContent = output.join("\n")
-            let outputBuffer = newTextBuffer(outputContent)
-            outputBuffer.readOnly = true
-
-            # Open the output in a new horizontal split window
-            let splitResult = e.hsplitWithBuffer(outputBuffer)
-            if splitResult.isErr:
-              e.state.setStatusMessage(
-                "Failed to open output window: " & splitResult.error
-              )
-              logError("handler", "Build window split failed: " & splitResult.error)
-            else:
-              e.state.setStatusMessage("Build completed: " & filePath)
-              logInfo("handler", "Build completed: " & filePath)
+          # Set pending build info for async processing
+          e.state.pendingBuildOnSave = (
+            path: filePath,
+            language: activeBuffer.language.ord,
+            customCmd: "",
+            workspaceRoot: parentDir(filePath),
+          )
+          e.state.setStatusMessage("Building: " & filePath)
         # Return to Normal mode
         e.state.previousMode = e.state.mode
         e.state.mode = EditorMode.Normal
@@ -1027,6 +939,9 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         e.state.previousMode = e.state.mode
         e.state.mode = EditorMode.Config
         e.state.configModeState = some(newConfigModeState(e.config))
+      elif r.shouldQuickRun() or r.shouldBuild():
+        # QuickRun and Build already set mode to Normal above
+        discard
       else:
         # Handle mode transitions
         let modeTransition = r.getModeTransition()
@@ -1524,7 +1439,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
   let mouse = event.mouse
 
   # Only handle left button press (not release, move, or drag)
-  if mouse.button != celina.MouseButton.Left:
+  if mouse.button != mouse_logic.MouseButton.Left:
     return false
   if mouse.kind != celina.MouseEventKind.Press:
     return false
@@ -1666,7 +1581,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
       # Enter - confirm selection
       if keyCombo.isSpecial and keyCombo.special == skEnter:
-        discard e.codeLensPickerConfirm()
+        asyncSpawn e.codeLensPickerConfirm()
         return true
 
       # j or Down - next item
@@ -1681,9 +1596,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
         # Number keys 1-9 - direct selection
         if keyCombo.char.len == 1 and keyCombo.char[0] in '1' .. '9':
           let num = ord(keyCombo.char[0]) - ord('0')
-          if e.codeLensPickerSelectByNumber(num):
-            return true
-          # If number is out of range, just ignore
+          asyncSpawn e.codeLensPickerSelectByNumber(num)
           return true
 
       if keyCombo.isSpecial:
@@ -2255,7 +2168,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   # Handle LSP CodeLens execute
   if r.shouldLspCodeLensExecute():
-    discard e.executeCurrentLineCodeLens()
+    asyncSpawn e.executeCurrentLineCodeLens()
     return true
 
   # Handle LSP Call Hierarchy incoming calls
@@ -2291,6 +2204,16 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Handle LSP Selection Range
   if r.shouldLspSelectionRange():
     discard e.requestLspSelectionRange()
+    return true
+
+  # Handle LSP Document Formatting
+  if r.shouldLspFormat():
+    discard e.requestLspFormat()
+    return true
+
+  # Handle LSP Folding Range
+  if r.shouldLspFold():
+    asyncSpawn e.refreshLspFolds()
     return true
 
   # Handle mode transitions
@@ -2352,3 +2275,138 @@ proc handleEvent*(e: Editor, event: Event): bool =
     e.state.setStatusMessage(statusMsg)
 
   return true # Continue running
+
+proc hasPendingAsyncOperations*(e: Editor): bool =
+  ## Check if there are pending async operations
+  e.state.pendingShellCommand.len > 0 or e.state.pendingBackground or
+    e.state.pendingBuildOnSave.path.len > 0 or e.state.pendingQuickRun.cmd.len > 0
+
+type
+  BuildInfo =
+    tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
+  QuickRunInfo =
+    tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
+
+proc runBuildAsync(
+    editor: Editor, info: BuildInfo
+): Future[void] {.async: (raises: []).} =
+  ## Run build process in background and display output when complete
+  {.cast(gcsafe).}:
+    try:
+      let buildResult = await startBackgroundBuildOnSave(
+        info.path, SourceLanguage(info.language), info.customCmd, info.workspaceRoot
+      )
+      if buildResult.isErr:
+        editor.state.setStatusMessage("Build error: " & buildResult.error)
+      else:
+        let buildProcess = buildResult.get
+        addRunningProcess(buildProcess.process)
+        let output = await buildProcess.waitForAsync()
+        removeRunningProcess(buildProcess.process)
+        let outputContent = output.join("\n")
+        let outputBuffer = newTextBuffer(outputContent)
+        outputBuffer.readOnly = true
+        let splitResult = editor.hsplitWithBuffer(outputBuffer)
+        if splitResult.isErr:
+          editor.state.setStatusMessage(
+            "Failed to open output window: " & splitResult.error
+          )
+        else:
+          if editor.config.notification.screenNotifications and
+              editor.config.notification.buildOnSaveScreenNotify:
+            editor.state.setStatusMessage("Build completed: " & info.path)
+      editor.state.needsFullRedraw = true
+    except Exception as ex:
+      editor.state.setStatusMessage("Build error: " & ex.msg)
+
+proc runQuickRunAsync(
+    editor: Editor, info: QuickRunInfo
+): Future[void] {.async: (raises: []).} =
+  ## Run QuickRun process in background and display output when complete
+  {.cast(gcsafe).}:
+    try:
+      let prepared = QuickRunPrepareResult(
+        command: BackgroundProcessCommand(cmd: info.cmd, args: info.args),
+        filePath: info.filePath,
+        isTempFile: info.isTempFile,
+      )
+      let quickRunResult = await startBackgroundQuickRun(prepared)
+      if quickRunResult.isErr:
+        editor.state.setStatusMessage("QuickRun error: " & quickRunResult.error)
+      else:
+        let qrProcess = quickRunResult.get
+        addRunningProcess(qrProcess.process)
+        let outputResult = await qrProcess.waitForResultAsync()
+        removeRunningProcess(qrProcess.process)
+        if outputResult.isErr:
+          editor.state.setStatusMessage("QuickRun error: " & outputResult.error)
+        else:
+          let output = outputResult.get
+          let outputContent = output.join("\n")
+          let outputBuffer = newTextBuffer(outputContent)
+          outputBuffer.readOnly = true
+          let splitResult = editor.hsplitWithBuffer(outputBuffer)
+          if splitResult.isErr:
+            editor.state.setStatusMessage(
+              "Failed to open output window: " & splitResult.error
+            )
+          else:
+            if editor.config.notification.screenNotifications and
+                editor.config.notification.quickRunScreenNotify:
+              editor.state.setStatusMessage("QuickRun completed: " & qrProcess.filePath)
+      editor.state.needsFullRedraw = true
+    except Exception as ex:
+      editor.state.setStatusMessage("QuickRun error: " & ex.msg)
+
+proc handlePendingAsyncOperationsImpl(
+    e: Editor
+): Future[void] {.async: (raises: [Exception]).} =
+  ## Handle pending async operations that require TUI suspend or background processing
+  ## Called from the main event loop after handleEvent returns
+
+  {.cast(gcsafe).}:
+    # Handle shell command
+    if e.state.pendingShellCommand.len > 0:
+      let cmd = e.state.pendingShellCommand
+      e.state.pendingShellCommand = ""
+      await e.app.suspendAsync()
+      stdout.write("\e[H\e[2J") # Clear screen
+      stdout.flushFile()
+      let exitCode = execShellCmd(cmd)
+      stdout.write("\n\nShell returned " & $exitCode & "\n")
+      stdout.write("Press Enter to continue...")
+      stdout.flushFile()
+      discard stdin.readLine()
+      await e.app.resumeAsync()
+      e.state.needsFullRedraw = true
+
+    # Handle background suspend
+    if e.state.pendingBackground:
+      e.state.pendingBackground = false
+      await e.app.suspendAsync()
+      stdout.write("\e[H\e[2J")
+      stdout.write("moe suspended. Press Enter to return to moe...")
+      stdout.flushFile()
+      discard stdin.readLine()
+      await e.app.resumeAsync()
+      e.state.needsFullRedraw = true
+
+    # Handle pending build - spawn as background task
+    if e.state.pendingBuildOnSave.path.len > 0:
+      let buildInfo = e.state.pendingBuildOnSave
+      e.state.pendingBuildOnSave =
+        (path: "", language: 0, customCmd: "", workspaceRoot: "")
+      asyncSpawn runBuildAsync(e, buildInfo)
+
+    # Handle pending QuickRun - spawn as background task
+    if e.state.pendingQuickRun.cmd.len > 0:
+      let qrInfo = e.state.pendingQuickRun
+      e.state.pendingQuickRun = (cmd: "", args: @[], filePath: "", isTempFile: false)
+      asyncSpawn runQuickRunAsync(e, qrInfo)
+
+proc handlePendingAsyncOperations*(
+    e: Editor
+): Future[void] {.async: (raises: [Exception]).} =
+  ## Wrapper for handlePendingAsyncOperationsImpl with gcsafe cast
+  {.cast(gcsafe).}:
+    await handlePendingAsyncOperationsImpl(e)

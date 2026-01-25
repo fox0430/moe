@@ -1331,6 +1331,29 @@ proc handleVisualPaste(ctx: CommandContext): Result[(), string] =
   visualPaste(ctx.buffer, ctx.state)
   Result[(), string].ok ()
 
+## Helper for clipboard operations
+
+proc getSelectedText(state: EditorState, buffer: TextBuffer): string =
+  ## Get the currently selected text in visual mode
+  ## Returns empty string if no active selection
+  if not state.visualSelection.active:
+    return ""
+
+  # Normalize selection range (ensure start <= end)
+  let (selStart, selEnd) =
+    if state.visualSelection.start.line < state.visualSelection.current.line:
+      (state.visualSelection.start, state.visualSelection.current)
+    elif state.visualSelection.start.line > state.visualSelection.current.line:
+      (state.visualSelection.current, state.visualSelection.start)
+    else:
+      # Same line - compare columns
+      if state.visualSelection.start.column <= state.visualSelection.current.column:
+        (state.visualSelection.start, state.visualSelection.current)
+      else:
+        (state.visualSelection.current, state.visualSelection.start)
+
+  return buffer.getTextInRange(selStart, selEnd)
+
 ## Clipboard command handlers
 
 proc handleClipboardCopy(ctx: CommandContext): Result[(), string] =
@@ -1343,10 +1366,8 @@ proc handleClipboardCopy(ctx: CommandContext): Result[(), string] =
   if selectedText.len == 0:
     return err("No text selected")
 
-  # Write to clipboard
-  let writeResult = writeToClipboard(ctx.clipboardConfig.tool, selectedText)
-  if writeResult.isErr:
-    return err(writeResult.error)
+  # Write to clipboard (fire-and-forget)
+  writeToClipboardAsync(ctx.clipboardConfig.tool, selectedText)
 
   return Result[(), string].ok ()
 
@@ -1356,7 +1377,7 @@ proc handleClipboardPaste(ctx: CommandContext): Result[(), string] =
     return err("Clipboard integration is disabled")
 
   # Read from clipboard
-  let readResult = readFromClipboard(ctx.clipboardConfig.tool)
+  let readResult = readFromClipboardSync(ctx.clipboardConfig.tool)
   if readResult.isErr:
     return err(readResult.error)
 
@@ -1415,7 +1436,7 @@ proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
   # If register is empty, try system clipboard (if enabled)
   if pasteText.len == 0 and ctx.clipboardConfig.enable:
     logDebug("paste", "Register empty, trying clipboard")
-    let readResult = readFromClipboard(ctx.clipboardConfig.tool)
+    let readResult = readFromClipboardSync(ctx.clipboardConfig.tool)
     if readResult.isErr:
       return err(
         "Nothing to paste (register empty and clipboard error: " & readResult.error & ")"
@@ -1528,7 +1549,7 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
   # If register is empty, try system clipboard (if enabled)
   if pasteText.len == 0 and ctx.clipboardConfig.enable:
     logDebug("paste", "Register empty, trying clipboard")
-    let readResult = readFromClipboard(ctx.clipboardConfig.tool)
+    let readResult = readFromClipboardSync(ctx.clipboardConfig.tool)
     if readResult.isErr:
       return err(
         "Nothing to paste (register empty and clipboard error: " & readResult.error & ")"
@@ -1707,7 +1728,7 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
 
   # Also write to system clipboard if enabled
   if ctx.clipboardConfig.enable:
-    discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
+    writeToClipboardAsync(ctx.clipboardConfig.tool, deletedText)
 
   # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand = some(
@@ -1842,7 +1863,7 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
 
   # Also write to system clipboard if enabled
   if ctx.clipboardConfig.enable:
-    discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
+    writeToClipboardAsync(ctx.clipboardConfig.tool, deletedText)
 
   # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand = some(
@@ -1891,7 +1912,7 @@ proc handleSubstituteChar(ctx: CommandContext, count: int = 1): Result[(), strin
 
   # Also write to system clipboard if enabled
   if ctx.clipboardConfig.enable:
-    discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
+    writeToClipboardAsync(ctx.clipboardConfig.tool, deletedText)
 
   # Begin transaction for delete + insert mode (all in one undo unit)
   let txnResult =
@@ -1942,7 +1963,7 @@ proc handleSubstituteLine(ctx: CommandContext, count: int = 1): Result[(), strin
 
   # Also write to system clipboard if enabled
   if ctx.clipboardConfig.enable:
-    discard writeToClipboard(ctx.clipboardConfig.tool, text)
+    writeToClipboardAsync(ctx.clipboardConfig.tool, text)
 
   # Get indent from first line (for auto-indent)
   let firstLine = ctx.buffer.getLine(startLine)
@@ -2116,7 +2137,7 @@ proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
 
   # Also write to system clipboard if enabled
   if ctx.clipboardConfig.enable:
-    discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
+    writeToClipboardAsync(ctx.clipboardConfig.tool, deletedText)
 
   # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand =
@@ -2189,15 +2210,9 @@ proc handleYankLine(ctx: CommandContext, count: int = 1): Result[(), string] =
       $ctx.state.yankIsLine,
   )
 
-  # Also write to system clipboard if enabled
+  # Also write to system clipboard if enabled (fire-and-forget)
   if ctx.clipboardConfig.enable:
-    let writeResult = writeToClipboard(ctx.clipboardConfig.tool, yankText)
-    if writeResult.isErr:
-      # Don't fail the operation if clipboard write fails, but always show clipboard errors
-      ctx.state.statusMessage =
-        "Yanked " & $actualCount & " line(s) (clipboard error: " & writeResult.error &
-        ")"
-      return Result[(), string].ok ()
+    writeToClipboardAsync(ctx.clipboardConfig.tool, yankText)
 
   # Yank screen notification (controlled by config)
   if ctx.notificationConfig.screenNotifications and

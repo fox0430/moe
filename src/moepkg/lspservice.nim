@@ -23,7 +23,7 @@
 
 import std/[tables, options, os, strutils, json, times]
 
-import pkg/results
+import pkg/[results, chronos]
 
 import lsp/worker
 import lsp/protocol/types
@@ -423,39 +423,44 @@ proc cleanupTimedOutRequests*(svc: LspService) =
   for reqId in toRemove:
     svc.activeRequests.del(reqId)
 
-# Request-response helper (BLOCKING - use only when necessary)
-proc waitForResponse(
+# Request-response helper (async, non-blocking)
+proc waitForResponse*(
     svc: LspService, requestId: int, timeoutMs: int = DefaultRequestTimeoutMs
-): Result[JsonNode, string] =
-  ## Wait for a response to a request, polling until it arrives or timeout
-  ## WARNING: This blocks the main thread! Use checkResponse for non-blocking checks.
+): Future[Result[JsonNode, string]] {.async: (raises: [CancelledError]).} =
+  ## Wait for response asynchronously - uses async sleep instead of blocking
   let startTime = epochTime()
   let timeoutSec = timeoutMs.float / 1000.0
 
   while true:
-    # Poll for new events
-    svc.poll()
+    # Poll for new events (wrapped in try/except for raises: [])
+    {.cast(raises: []).}:
+      try:
+        svc.poll()
+      except:
+        discard
 
     # Check if response has arrived
-    if requestId in svc.pendingResponses:
-      let resp = svc.pendingResponses[requestId]
-      svc.pendingResponses.del(requestId)
-      svc.activeRequests.del(requestId)
+    {.cast(raises: []).}:
+      if requestId in svc.pendingResponses:
+        let resp = svc.pendingResponses[requestId]
+        svc.pendingResponses.del(requestId)
+        svc.activeRequests.del(requestId)
 
-      if resp.error.isSome:
-        return err(resp.error.get)
-      elif resp.result.isSome:
-        return ok(resp.result.get)
-      else:
-        return ok(newJNull())
+        if resp.error.isSome:
+          return err(resp.error.get)
+        elif resp.result.isSome:
+          return ok(resp.result.get)
+        else:
+          return ok(newJNull())
 
     # Check timeout
     if epochTime() - startTime > timeoutSec:
-      svc.activeRequests.del(requestId)
+      {.cast(raises: []).}:
+        svc.activeRequests.del(requestId)
       return err("Request timed out")
 
-    # Brief sleep to avoid busy loop (1ms)
-    sleep(1)
+    # Async sleep to yield to other tasks (5ms)
+    await sleepAsync(timer.milliseconds(5))
 
 # Helper to start a tracked request
 proc startTrackedRequest(
@@ -475,6 +480,37 @@ proc startTrackedRequest(
     timeoutMs: timeoutMs,
   )
   return requestId
+
+# Helper for position-based LSP requests (reduces boilerplate)
+proc startPositionRequest(
+    svc: LspService, path: string, line, character: int, methodName: string
+): Result[int, string] =
+  ## Common helper for position-based LSP requests
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+  let uri = pathToUri(path)
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+  ok(svc.startTrackedRequest(worker, methodName, params))
+
+# Helper for document-based LSP requests (path only, no position)
+proc startDocumentRequest(
+    svc: LspService, path: string, methodName: string
+): Result[int, string] =
+  ## Common helper for document-based LSP requests
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+  let uri = pathToUri(path)
+  let params = %*{"textDocument": {"uri": uri}}
+  ok(svc.startTrackedRequest(worker, methodName, params))
 
 # High-level document operations
 proc notifyDocumentOpened*(
@@ -547,77 +583,25 @@ proc startCompletionRequest*(
     svc: LspService, path: string, line, character: int
 ): Result[int, string] =
   ## Start a completion request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/completion", params)
-  return ok(requestId)
+  svc.startPositionRequest(path, line, character, "textDocument/completion")
 
 proc startHoverRequest*(
     svc: LspService, path: string, line, character: int
 ): Result[int, string] =
   ## Start a hover request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/hover", params)
-  return ok(requestId)
+  svc.startPositionRequest(path, line, character, "textDocument/hover")
 
 proc startDefinitionRequest*(
     svc: LspService, path: string, line, character: int
 ): Result[int, string] =
   ## Start a definition request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/definition", params)
-  return ok(requestId)
+  svc.startPositionRequest(path, line, character, "textDocument/definition")
 
 proc startDeclarationRequest*(
     svc: LspService, path: string, line, character: int
 ): Result[int, string] =
   ## Start a declaration request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/declaration", params)
-  return ok(requestId)
+  svc.startPositionRequest(path, line, character, "textDocument/declaration")
 
 proc startReferencesRequest*(
     svc: LspService, path: string, line, character: int, includeDeclaration: bool = true
@@ -646,55 +630,17 @@ proc startTypeDefinitionRequest*(
     svc: LspService, path: string, line, character: int
 ): Result[int, string] =
   ## Start a type definition request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/typeDefinition", params)
-  return ok(requestId)
+  svc.startPositionRequest(path, line, character, "textDocument/typeDefinition")
 
 proc startImplementationRequest*(
     svc: LspService, path: string, line, character: int
 ): Result[int, string] =
   ## Start an implementation request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/implementation", params)
-  return ok(requestId)
+  svc.startPositionRequest(path, line, character, "textDocument/implementation")
 
 proc startDocumentSymbolsRequest*(svc: LspService, path: string): Result[int, string] =
   ## Start a document symbols request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params = %*{"textDocument": {"uri": uri}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/documentSymbol", params)
-  return ok(requestId)
+  svc.startDocumentRequest(path, "textDocument/documentSymbol")
 
 proc startSelectionRangeRequest*(
     svc: LspService, path: string, line, character: int
@@ -722,75 +668,23 @@ proc startSignatureHelpRequest*(
     svc: LspService, path: string, line, character: int
 ): Result[int, string] =
   ## Start a signature help request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/signatureHelp", params)
-  return ok(requestId)
+  svc.startPositionRequest(path, line, character, "textDocument/signatureHelp")
 
 proc startDocumentHighlightRequest*(
     svc: LspService, path: string, line, character: int
 ): Result[int, string] =
   ## Start a document highlight request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId =
-    svc.startTrackedRequest(worker, "textDocument/documentHighlight", params)
-  return ok(requestId)
+  svc.startPositionRequest(path, line, character, "textDocument/documentHighlight")
 
 proc startCodeLensRequest*(svc: LspService, path: string): Result[int, string] =
   ## Start a code lens request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params = %*{"textDocument": {"uri": uri}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/codeLens", params)
-  return ok(requestId)
+  svc.startDocumentRequest(path, "textDocument/codeLens")
 
 proc startSemanticTokensFullRequest*(
     svc: LspService, path: string
 ): Result[int, string] =
   ## Start a semantic tokens full request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params = %*{"textDocument": {"uri": uri}}
-
-  let requestId =
-    svc.startTrackedRequest(worker, "textDocument/semanticTokens/full", params)
-  return ok(requestId)
+  svc.startDocumentRequest(path, "textDocument/semanticTokens/full")
 
 proc startSemanticTokensRangeRequest*(
     svc: LspService, path: string, startLine, startChar, endLine, endChar: int
@@ -822,21 +716,7 @@ proc startCallHierarchyPrepareRequest*(
     svc: LspService, path: string, line, character: int
 ): Result[int, string] =
   ## Start a call hierarchy prepare request (non-blocking). Returns request ID.
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId =
-    svc.startTrackedRequest(worker, "textDocument/prepareCallHierarchy", params)
-  return ok(requestId)
+  svc.startPositionRequest(path, line, character, "textDocument/prepareCallHierarchy")
 
 proc startCallHierarchyIncomingCallsRequest*(
     svc: LspService, path: string, item: CallHierarchyItem
@@ -955,413 +835,6 @@ proc parseSelectionRangeResponse*(resp: JsonNode): seq[SelectionRange] =
     for item in resp:
       ranges.add(parseSelectionRange(item))
   return ranges
-
-# High-level blocking feature requests
-# WARNING: These block the main thread until response arrives!
-proc requestCompletion*(
-    svc: LspService, path: string, line, character: int
-): Result[seq[CompletionItem], string] =
-  ## Request completion at a position (BLOCKING)
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/completion", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  return ok(parseCompletionResponse(respResult.get))
-
-proc requestHover*(
-    svc: LspService, path: string, line, character: int
-): Result[Option[Hover], string] =
-  ## Request hover information at a position
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/hover", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  if resp.kind == JNull:
-    return ok(none(Hover))
-
-  return ok(some(parseHover(resp)))
-
-proc requestDefinition*(
-    svc: LspService, path: string, line, character: int
-): Result[seq[Location], string] =
-  ## Request go to definition
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/definition", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  return ok(parseLocations(respResult.get))
-
-proc requestDeclaration*(
-    svc: LspService, path: string, line, character: int
-): Result[seq[Location], string] =
-  ## Request go to declaration
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/declaration", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  return ok(parseLocations(respResult.get))
-
-proc requestTypeDefinition*(
-    svc: LspService, path: string, line, character: int
-): Result[seq[Location], string] =
-  ## Request go to type definition
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/typeDefinition", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  return ok(parseLocations(respResult.get))
-
-proc requestImplementation*(
-    svc: LspService, path: string, line, character: int
-): Result[seq[Location], string] =
-  ## Request go to implementation
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/implementation", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  return ok(parseLocations(respResult.get))
-
-proc requestReferences*(
-    svc: LspService, path: string, line, character: int, includeDeclaration: bool = true
-): Result[seq[Location], string] =
-  ## Request references to a symbol
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "position": {"line": line, "character": character},
-      "context": {"includeDeclaration": includeDeclaration},
-    }
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/references", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  return ok(parseLocations(respResult.get))
-
-proc requestDocumentHighlight*(
-    svc: LspService, path: string, line, character: int
-): Result[seq[DocumentHighlight], string] =
-  ## Request document highlights at a position
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId =
-    svc.startTrackedRequest(worker, "textDocument/documentHighlight", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  var highlights: seq[DocumentHighlight] = @[]
-  if resp.kind == JArray:
-    for item in resp:
-      highlights.add(parseDocumentHighlight(item))
-
-  return ok(highlights)
-
-proc requestDocumentLinks*(
-    svc: LspService, path: string
-): Result[seq[DocumentLink], string] =
-  ## Request document links for a file
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params = %*{"textDocument": {"uri": uri}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/documentLink", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  var links: seq[DocumentLink] = @[]
-  if resp.kind == JArray:
-    for item in resp:
-      links.add(parseDocumentLink(item))
-
-  return ok(links)
-
-proc requestDocumentLinkResolve*(
-    svc: LspService, path: string, link: DocumentLink
-): Result[DocumentLink, string] =
-  ## Resolve a document link to get its target URI
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  # Convert DocumentLink to JSON params
-  let params =
-    %*{
-      "range": {
-        "start":
-          {"line": link.range.start.line, "character": link.range.start.character},
-        "end": {"line": link.range.`end`.line, "character": link.range.`end`.character},
-      }
-    }
-  if link.target.isSome:
-    params["target"] = %link.target.get
-  if link.data.isSome:
-    params["data"] = link.data.get
-
-  let requestId = svc.startTrackedRequest(worker, "documentLink/resolve", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  return ok(parseDocumentLink(respResult.get))
-
-proc requestSignatureHelp*(
-    svc: LspService, path: string, line, character: int
-): Result[Option[SignatureHelp], string] =
-  ## Request signature help at a position
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/signatureHelp", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  if resp.kind == JNull:
-    return ok(none(SignatureHelp))
-
-  return ok(some(parseSignatureHelp(resp)))
-
-proc requestRename*(
-    svc: LspService, path: string, line, character: int, newName: string
-): Result[Option[WorkspaceEdit], string] =
-  ## Request rename of a symbol
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "position": {"line": line, "character": character},
-      "newName": newName,
-    }
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/rename", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  if resp.kind == JNull:
-    return ok(none(WorkspaceEdit))
-
-  return ok(some(parseWorkspaceEdit(resp)))
-
-proc requestFormatting*(
-    svc: LspService, path: string, tabSize: int = 2, insertSpaces: bool = true
-): Result[seq[TextEdit], string] =
-  ## Request document formatting
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
-    }
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/formatting", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  var edits: seq[TextEdit] = @[]
-  if resp.kind == JArray:
-    for item in resp:
-      edits.add(parseTextEdit(item))
-
-  return ok(edits)
-
-proc requestRangeFormatting*(
-    svc: LspService,
-    path: string,
-    startLine, startChar, endLine, endChar: int,
-    tabSize: int = 2,
-    insertSpaces: bool = true,
-): Result[seq[TextEdit], string] =
-  ## Request range formatting
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "range": {
-        "start": {"line": startLine, "character": startChar},
-        "end": {"line": endLine, "character": endChar},
-      },
-      "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
-    }
-
-  let requestId =
-    svc.startTrackedRequest(worker, "textDocument/rangeFormatting", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  var edits: seq[TextEdit] = @[]
-  if resp.kind == JArray:
-    for item in resp:
-      edits.add(parseTextEdit(item))
-
-  return ok(edits)
 
 # Capability checking - uses capabilities received from worker events
 
@@ -1520,29 +993,6 @@ proc hasDocumentSymbolSupport*(svc: LspService, langId: string): bool =
     return false
   return svc.capabilities[langId].documentSymbolProvider.isSome
 
-proc requestDocumentSymbols*(
-    svc: LspService, path: string
-): Result[DocumentSymbolResult, string] =
-  ## Request document symbols for a file
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params = %*{"textDocument": {"uri": uri}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/documentSymbol", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  return ok(parseDocumentSymbolResult(respResult.get))
-
 proc hasInlayHintSupport*(svc: LspService, langId: string): bool =
   ## Check if inlay hints is supported for a language (static or dynamic)
   if svc.hasDynamicRegistration(langId, "textDocument/inlayHint"):
@@ -1550,42 +1000,6 @@ proc hasInlayHintSupport*(svc: LspService, langId: string): bool =
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].inlayHintProvider.isSome
-
-proc requestInlayHints*(
-    svc: LspService, path: string, startLine, startChar, endLine, endChar: int
-): Result[seq[InlayHint], string] =
-  ## Request inlay hints for a range in a file
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "range": {
-        "start": {"line": startLine, "character": startChar},
-        "end": {"line": endLine, "character": endChar},
-      },
-    }
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/inlayHint", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  var hints: seq[InlayHint] = @[]
-  if resp.kind == JArray:
-    for item in resp:
-      hints.add(parseInlayHint(item))
-
-  return ok(hints)
 
 proc hasSemanticTokensSupport*(svc: LspService, langId: string): bool =
   ## Check if semantic tokens is supported for a language (static or dynamic)
@@ -1626,69 +1040,6 @@ proc getSemanticTokensLegend*(
     return none(SemanticTokensLegend)
   return some(provider.get.legend)
 
-proc requestSemanticTokensFull*(
-    svc: LspService, path: string
-): Result[Option[SemanticTokens], string] =
-  ## Request full semantic tokens for a file
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params = %*{"textDocument": {"uri": uri}}
-
-  let requestId =
-    svc.startTrackedRequest(worker, "textDocument/semanticTokens/full", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  if resp.kind == JNull:
-    return ok(none(SemanticTokens))
-
-  return ok(some(parseSemanticTokens(resp)))
-
-proc requestSemanticTokensRange*(
-    svc: LspService, path: string, startLine, startChar, endLine, endChar: int
-): Result[Option[SemanticTokens], string] =
-  ## Request semantic tokens for a range in a file
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "range": {
-        "start": {"line": startLine, "character": startChar},
-        "end": {"line": endLine, "character": endChar},
-      },
-    }
-
-  let requestId =
-    svc.startTrackedRequest(worker, "textDocument/semanticTokens/range", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  if resp.kind == JNull:
-    return ok(none(SemanticTokens))
-
-  return ok(some(parseSemanticTokens(resp)))
-
 proc hasSelectionRangeSupport*(svc: LspService, langId: string): bool =
   ## Check if selection range is supported for a language (static or dynamic)
   if svc.hasDynamicRegistration(langId, "textDocument/selectionRange"):
@@ -1705,54 +1056,6 @@ proc hasInlineValueSupport*(svc: LspService, langId: string): bool =
     return false
   return svc.capabilities[langId].inlineValueProvider.isSome
 
-proc requestSelectionRange*(
-    svc: LspService, path: string, positions: seq[Position]
-): Result[seq[SelectionRange], string] =
-  ## Request selection ranges for given positions in a file
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  var posArray = newJArray()
-  for pos in positions:
-    posArray.add(%*{"line": pos.line, "character": pos.character})
-
-  let params = %*{"textDocument": {"uri": uri}, "positions": posArray}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/selectionRange", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  var ranges: seq[SelectionRange] = @[]
-  if resp.kind == JArray:
-    for item in resp:
-      ranges.add(parseSelectionRange(item))
-
-  return ok(ranges)
-
-proc requestSelectionRange*(
-    svc: LspService, path: string, line, character: int
-): Result[Option[SelectionRange], string] =
-  ## Request selection range for a single position in a file
-  let positions = @[Position(line: line, character: character)]
-  let rangesResult = svc.requestSelectionRange(path, positions)
-  if rangesResult.isErr:
-    return err(rangesResult.error)
-
-  let ranges = rangesResult.get
-  if ranges.len == 0:
-    return ok(none(SelectionRange))
-
-  return ok(some(ranges[0]))
-
 # Status information
 proc getRunningLanguages*(svc: LspService): seq[string] =
   ## Get list of languages with running LSP servers
@@ -1766,53 +1069,6 @@ proc getServerInfo*(svc: LspService, langId: string): Option[ServerInfo] =
     return none(ServerInfo)
   let info = svc.serverInfo[langId]
   return some(ServerInfo(name: info.name, version: info.version))
-
-proc requestInlineValues*(
-    svc: LspService,
-    path: string,
-    startLine, startChar, endLine, endChar: int,
-    frameId: int,
-    stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar: int,
-): Result[seq[InlineValue], string] =
-  ## Request inline values for a range in a file during debugging
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "viewPort": {
-        "start": {"line": startLine, "character": startChar},
-        "end": {"line": endLine, "character": endChar},
-      },
-      "context": {
-        "frameId": frameId,
-        "stoppedLocation": {
-          "start": {"line": stoppedLine, "character": stoppedStartChar},
-          "end": {"line": stoppedEndLine, "character": stoppedEndChar},
-        },
-      },
-    }
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/inlineValue", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  var values: seq[InlineValue] = @[]
-  if resp.kind == JArray:
-    for item in resp:
-      values.add(parseInlineValue(item))
-
-  return ok(values)
 
 # CodeLens support
 proc hasCodeLensSupport*(svc: LspService, langId: string): bool =
@@ -1846,78 +1102,6 @@ proc hasCodeLensResolveSupport*(svc: LspService, langId: string): bool =
 
   return false
 
-proc requestCodeLens*(svc: LspService, path: string): Result[seq[CodeLens], string] =
-  ## Request code lenses for a file
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let uri = pathToUri(path)
-  let params = %*{"textDocument": {"uri": uri}}
-
-  let requestId = svc.startTrackedRequest(worker, "textDocument/codeLens", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let resp = respResult.get
-  var lenses: seq[CodeLens] = @[]
-  if resp.kind == JArray:
-    for item in resp:
-      lenses.add(parseCodeLens(item))
-
-  return ok(lenses)
-
-proc requestCodeLensResolve*(
-    svc: LspService, path: string, lens: CodeLens
-): Result[CodeLens, string] =
-  ## Resolve a code lens to get its command
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  # Convert CodeLens to JSON params
-  let params = codeLensToJson(lens)
-
-  let requestId = svc.startTrackedRequest(worker, "codeLens/resolve", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  return ok(parseCodeLens(respResult.get))
-
-proc requestExecuteCommand*(
-    svc: LspService, path: string, command: string, arguments: seq[JsonNode] = @[]
-): Result[JsonNode, string] =
-  ## Execute a command on the LSP server
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
-
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
-
-  let params = %*{"command": command, "arguments": arguments}
-
-  let requestId = svc.startTrackedRequest(worker, "workspace/executeCommand", params)
-  let respResult = svc.waitForResponse(requestId)
-
-  if respResult.isErr:
-    return err(respResult.error)
-
-  return ok(respResult.get)
-
 proc hasCallHierarchySupport*(svc: LspService, langId: string): bool =
   ## Check if call hierarchy is supported for a language (static or dynamic)
   if svc.hasDynamicRegistration(langId, "textDocument/prepareCallHierarchy"):
@@ -1934,118 +1118,284 @@ proc hasFoldingRangeSupport*(svc: LspService, langId: string): bool =
     return false
   return svc.capabilities[langId].foldingRangeProvider.isSome
 
-proc requestCallHierarchyPrepare*(
+proc requestCompletion*(
     svc: LspService, path: string, line, character: int
-): Result[seq[CallHierarchyItem], string] =
-  ## Prepare call hierarchy at a given position
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
+): Future[Result[seq[CompletionItem], string]] {.async: (raises: [CancelledError]).} =
+  ## Async version of requestCompletion
+  {.cast(raises: [CancelledError]).}:
+    let workerResult = svc.getWorkerForPath(path)
+    if workerResult.isErr:
+      return err(workerResult.error)
 
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
+    let worker = workerResult.get
+    if not worker.isRunning:
+      return err("Server not ready")
 
-  let uri = pathToUri(path)
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+    let uri = pathToUri(path)
+    let params =
+      %*{
+        "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
+      }
 
-  let requestId =
-    svc.startTrackedRequest(worker, "textDocument/prepareCallHierarchy", params)
-  let respResult = svc.waitForResponse(requestId)
+    let requestId = svc.startTrackedRequest(worker, "textDocument/completion", params)
+    let respResult = await svc.waitForResponse(requestId)
 
-  if respResult.isErr:
-    return err(respResult.error)
+    if respResult.isErr:
+      return err(respResult.error)
 
-  let resp = respResult.get
-  var items: seq[CallHierarchyItem] = @[]
-  if resp.kind == JArray:
-    for item in resp:
-      items.add(parseCallHierarchyItem(item))
+    return ok(parseCompletionResponse(respResult.get))
 
-  return ok(items)
+proc requestHover*(
+    svc: LspService, path: string, line, character: int
+): Future[Result[Option[Hover], string]] {.async: (raises: [CancelledError]).} =
+  ## Async version of requestHover
+  {.cast(raises: [CancelledError]).}:
+    let workerResult = svc.getWorkerForPath(path)
+    if workerResult.isErr:
+      return err(workerResult.error)
 
-proc requestCallHierarchyIncomingCalls*(
-    svc: LspService, path: string, item: CallHierarchyItem
-): Result[seq[CallHierarchyIncomingCall], string] =
-  ## Request incoming calls for a CallHierarchyItem
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
+    let worker = workerResult.get
+    if not worker.isRunning:
+      return err("Server not ready")
 
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
+    let uri = pathToUri(path)
+    let params =
+      %*{
+        "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
+      }
 
-  let params = %*{"item": callHierarchyItemToJson(item)}
+    let requestId = svc.startTrackedRequest(worker, "textDocument/hover", params)
+    let respResult = await svc.waitForResponse(requestId)
 
-  let requestId = svc.startTrackedRequest(worker, "callHierarchy/incomingCalls", params)
-  let respResult = svc.waitForResponse(requestId)
+    if respResult.isErr:
+      return err(respResult.error)
 
-  if respResult.isErr:
-    return err(respResult.error)
+    let resp = respResult.get
+    if resp.kind == JNull:
+      return ok(none(Hover))
 
-  let resp = respResult.get
-  var calls: seq[CallHierarchyIncomingCall] = @[]
-  if resp.kind == JArray:
-    for c in resp:
-      calls.add(parseCallHierarchyIncomingCall(c))
+    return ok(some(parseHover(resp)))
 
-  return ok(calls)
+proc requestFormatting*(
+    svc: LspService, path: string, tabSize: int = 2, insertSpaces: bool = true
+): Future[Result[seq[TextEdit], string]] {.async: (raises: [CancelledError]).} =
+  ## Async version of requestFormatting
+  {.cast(raises: [CancelledError]).}:
+    let workerResult = svc.getWorkerForPath(path)
+    if workerResult.isErr:
+      return err(workerResult.error)
 
-proc requestCallHierarchyOutgoingCalls*(
-    svc: LspService, path: string, item: CallHierarchyItem
-): Result[seq[CallHierarchyOutgoingCall], string] =
-  ## Request outgoing calls for a CallHierarchyItem
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
+    let worker = workerResult.get
+    if not worker.isRunning:
+      return err("Server not ready")
 
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
+    let uri = pathToUri(path)
+    let params =
+      %*{
+        "textDocument": {"uri": uri},
+        "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
+      }
 
-  let params = %*{"item": callHierarchyItemToJson(item)}
+    let requestId = svc.startTrackedRequest(worker, "textDocument/formatting", params)
+    let respResult = await svc.waitForResponse(requestId)
 
-  let requestId = svc.startTrackedRequest(worker, "callHierarchy/outgoingCalls", params)
-  let respResult = svc.waitForResponse(requestId)
+    if respResult.isErr:
+      return err(respResult.error)
 
-  if respResult.isErr:
-    return err(respResult.error)
+    let resp = respResult.get
+    var edits: seq[TextEdit] = @[]
+    if resp.kind == JArray:
+      for item in resp:
+        edits.add(parseTextEdit(item))
 
-  let resp = respResult.get
-  var calls: seq[CallHierarchyOutgoingCall] = @[]
-  if resp.kind == JArray:
-    for c in resp:
-      calls.add(parseCallHierarchyOutgoingCall(c))
+    return ok(edits)
 
-  return ok(calls)
+proc requestRename*(
+    svc: LspService, path: string, line, character: int, newName: string
+): Future[Result[Option[WorkspaceEdit], string]] {.async: (raises: [CancelledError]).} =
+  ## Async version of requestRename
+  {.cast(raises: [CancelledError]).}:
+    let workerResult = svc.getWorkerForPath(path)
+    if workerResult.isErr:
+      return err(workerResult.error)
+
+    let worker = workerResult.get
+    if not worker.isRunning:
+      return err("Server not ready")
+
+    let uri = pathToUri(path)
+    let params =
+      %*{
+        "textDocument": {"uri": uri},
+        "position": {"line": line, "character": character},
+        "newName": newName,
+      }
+
+    let requestId = svc.startTrackedRequest(worker, "textDocument/rename", params)
+    let respResult = await svc.waitForResponse(requestId)
+
+    if respResult.isErr:
+      return err(respResult.error)
+
+    let resp = respResult.get
+    if resp.kind == JNull:
+      return ok(none(WorkspaceEdit))
+
+    return ok(some(parseWorkspaceEdit(resp)))
+
+proc requestDefinition*(
+    svc: LspService, path: string, line, character: int
+): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
+  ## Async version of requestDefinition
+  {.cast(raises: [CancelledError]).}:
+    let workerResult = svc.getWorkerForPath(path)
+    if workerResult.isErr:
+      return err(workerResult.error)
+
+    let worker = workerResult.get
+    if not worker.isRunning:
+      return err("Server not ready")
+
+    let uri = pathToUri(path)
+    let params =
+      %*{
+        "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
+      }
+
+    let requestId = svc.startTrackedRequest(worker, "textDocument/definition", params)
+    let respResult = await svc.waitForResponse(requestId)
+
+    if respResult.isErr:
+      return err(respResult.error)
+
+    return ok(parseLocations(respResult.get))
+
+proc requestReferences*(
+    svc: LspService, path: string, line, character: int, includeDeclaration: bool = true
+): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
+  ## Async version of requestReferences
+  {.cast(raises: [CancelledError]).}:
+    let workerResult = svc.getWorkerForPath(path)
+    if workerResult.isErr:
+      return err(workerResult.error)
+
+    let worker = workerResult.get
+    if not worker.isRunning:
+      return err("Server not ready")
+
+    let uri = pathToUri(path)
+    let params =
+      %*{
+        "textDocument": {"uri": uri},
+        "position": {"line": line, "character": character},
+        "context": {"includeDeclaration": includeDeclaration},
+      }
+
+    let requestId = svc.startTrackedRequest(worker, "textDocument/references", params)
+    let respResult = await svc.waitForResponse(requestId)
+
+    if respResult.isErr:
+      return err(respResult.error)
+
+    return ok(parseLocations(respResult.get))
+
+proc requestDocumentSymbols*(
+    svc: LspService, path: string
+): Future[Result[DocumentSymbolResult, string]] {.async: (raises: [CancelledError]).} =
+  ## Async version of requestDocumentSymbols
+  {.cast(raises: [CancelledError]).}:
+    let workerResult = svc.getWorkerForPath(path)
+    if workerResult.isErr:
+      return err(workerResult.error)
+
+    let worker = workerResult.get
+    if not worker.isRunning:
+      return err("Server not ready")
+
+    let uri = pathToUri(path)
+    let params = %*{"textDocument": {"uri": uri}}
+
+    let requestId =
+      svc.startTrackedRequest(worker, "textDocument/documentSymbol", params)
+    let respResult = await svc.waitForResponse(requestId)
+
+    if respResult.isErr:
+      return err(respResult.error)
+
+    return ok(parseDocumentSymbolResult(respResult.get))
 
 proc requestFoldingRange*(
     svc: LspService, path: string
-): Result[seq[FoldingRange], string] =
-  ## Request folding ranges for a file
-  let workerResult = svc.getWorkerForPath(path)
-  if workerResult.isErr:
-    return err(workerResult.error)
+): Future[Result[seq[FoldingRange], string]] {.async: (raises: [CancelledError]).} =
+  ## Async version of requestFoldingRange
+  {.cast(raises: [CancelledError]).}:
+    let workerResult = svc.getWorkerForPath(path)
+    if workerResult.isErr:
+      return err(workerResult.error)
 
-  let worker = workerResult.get
-  if not worker.isRunning:
-    return err("Server not ready")
+    let worker = workerResult.get
+    if not worker.isRunning:
+      return err("Server not ready")
 
-  let uri = pathToUri(path)
-  let params = %*{"textDocument": {"uri": uri}}
+    let uri = pathToUri(path)
+    let params = %*{"textDocument": {"uri": uri}}
 
-  let requestId = svc.startTrackedRequest(worker, "textDocument/foldingRange", params)
-  let respResult = svc.waitForResponse(requestId)
+    let requestId = svc.startTrackedRequest(worker, "textDocument/foldingRange", params)
+    let respResult = await svc.waitForResponse(requestId)
 
-  if respResult.isErr:
-    return err(respResult.error)
+    if respResult.isErr:
+      return err(respResult.error)
 
-  let resp = respResult.get
-  var ranges: seq[FoldingRange] = @[]
-  if resp.kind == JArray:
-    for item in resp:
-      ranges.add(parseFoldingRange(item))
+    let resp = respResult.get
+    var ranges: seq[FoldingRange] = @[]
+    if resp.kind == JArray:
+      for item in resp:
+        ranges.add(parseFoldingRange(item))
 
-  return ok(ranges)
+    return ok(ranges)
+
+proc requestCodeLensResolve*(
+    svc: LspService, path: string, lens: CodeLens
+): Future[Result[CodeLens, string]] {.async: (raises: [CancelledError]).} =
+  ## Async version of requestCodeLensResolve
+  {.cast(raises: [CancelledError]).}:
+    let workerResult = svc.getWorkerForPath(path)
+    if workerResult.isErr:
+      return err(workerResult.error)
+
+    let worker = workerResult.get
+    if not worker.isRunning:
+      return err("Server not ready")
+
+    let params = codeLensToJson(lens)
+
+    let requestId = svc.startTrackedRequest(worker, "codeLens/resolve", params)
+    let respResult = await svc.waitForResponse(requestId)
+
+    if respResult.isErr:
+      return err(respResult.error)
+
+    return ok(parseCodeLens(respResult.get))
+
+proc requestExecuteCommand*(
+    svc: LspService, path: string, command: string, arguments: seq[JsonNode] = @[]
+): Future[Result[JsonNode, string]] {.async: (raises: [CancelledError]).} =
+  ## Async version of requestExecuteCommand
+  {.cast(raises: [CancelledError]).}:
+    let workerResult = svc.getWorkerForPath(path)
+    if workerResult.isErr:
+      return err(workerResult.error)
+
+    let worker = workerResult.get
+    if not worker.isRunning:
+      return err("Server not ready")
+
+    let params = %*{"command": command, "arguments": arguments}
+
+    let requestId = svc.startTrackedRequest(worker, "workspace/executeCommand", params)
+    let respResult = await svc.waitForResponse(requestId)
+
+    if respResult.isErr:
+      return err(respResult.error)
+
+    return ok(respResult.get)

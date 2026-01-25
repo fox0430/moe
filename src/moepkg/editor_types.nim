@@ -47,7 +47,7 @@ type
     lsp*: LspIntegration
     lastLspChangeSeq*: int
     recentFileModeState*: RecentFileModeState
-    app*: App
+    app*: AsyncApp
     cursorPositions*: Table[string, CursorPositionEntry]
 
   RenderContext* = object

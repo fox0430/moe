@@ -137,7 +137,8 @@ tool = "invalid"
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
     check "Clipboard.tool" in vr.errors[0].name
-    check config.clipboard.tool == ctXsel # Default value
+    # Default value depends on system (detectClipboardTool), just check it's a valid enum
+    check config.clipboard.tool in {ctXsel, ctXclip, ctWlClipboard}
 
 suite "Config Validation - AutoBackup section":
   test "Valid AutoBackup config passes validation":

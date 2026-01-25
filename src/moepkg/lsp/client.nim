@@ -192,10 +192,8 @@ proc checkInitComplete*(client: LspClient): bool =
   if client.outputStreamFuture.isNil:
     return false
 
-  # Try to wait for the future with a very short timeout (5ms)
-  # This allows us to make progress without blocking the UI too long
-  let completed = waitFor withTimeout(client.outputStreamFuture, 5.milliseconds)
-  if not completed:
+  # Check if the future has completed (non-blocking)
+  if not client.outputStreamFuture.finished:
     return false
 
   logDebug("lsp", "checkInitComplete: got data, reading...")
@@ -387,11 +385,13 @@ proc buildClientCapabilities(): JsonNode =
     "workspace": {"applyEdit": true, "workspaceFolders": false, "configuration": false},
   }
 
-proc startAsync*(client: LspClient): Result[void, string] =
+proc startAsync*(client: LspClient): Future[void] {.async: (raises: []).} =
   ## Start the LSP server process and send initialize request (non-blocking)
   ## The response will be handled by checkInitComplete() in the poll loop
+  ## Errors are stored in client.initError and client.state is set to lssCrashed
   if client.state != lssStopped:
-    return Result[void, string].err("Client already started")
+    client.initError = "Client already started"
+    return
 
   client.state = lssStarting
   logDebug("lsp", "startAsync: starting LSP server")
@@ -403,14 +403,14 @@ proc startAsync*(client: LspClient): Result[void, string] =
   if commandParts.len > 1:
     args = commandParts[1 ..^ 1] & args
 
-  # Start server process (blocking but quick)
+  # Start server process
   const
     WorkingDir = ""
     Env = nil
   let opts: set[AsyncProcessOption] = {UsePath, StdErrToStdOut}
 
   try:
-    client.serverProcess = waitFor startProcess(
+    client.serverProcess = await startProcess(
       command,
       WorkingDir,
       args,
@@ -419,11 +419,16 @@ proc startAsync*(client: LspClient): Result[void, string] =
       stdoutHandle = AsyncProcess.Pipe,
       stdinHandle = AsyncProcess.Pipe,
     )
+  except CancelledError:
+    client.state = lssCrashed
+    client.initError = "LSP server start cancelled"
+    logDebug("lsp", "startAsync: cancelled")
+    return
   except CatchableError as e:
     client.state = lssCrashed
     client.initError = "Failed to start LSP server: " & e.msg
     logDebug("lsp", "startAsync: failed to start process: " & e.msg)
-    return Result[void, string].err(client.initError)
+    return
 
   logDebug("lsp", "startAsync: process started")
 
@@ -448,33 +453,34 @@ proc startAsync*(client: LspClient): Result[void, string] =
       "trace": "off",
     }
 
-  let reqResult = waitFor client.sendRequest("initialize", initParams)
-  if reqResult.isErr:
+  try:
+    let reqResult = await client.sendRequest("initialize", initParams)
+    if reqResult.isErr:
+      client.state = lssCrashed
+      client.initError = "Failed to send initialize: " & reqResult.error
+      logDebug("lsp", "startAsync: failed to send initialize: " & reqResult.error)
+      return
+
+    # Store the request ID so checkInitComplete can match the response
+    client.pendingInitRequest = some(reqResult.get)
+    logDebug("lsp", "startAsync: initialize request sent, waiting for response")
+  except CancelledError:
     client.state = lssCrashed
-    client.initError = "Failed to send initialize: " & reqResult.error
-    logDebug("lsp", "startAsync: failed to send initialize: " & reqResult.error)
-    return Result[void, string].err(client.initError)
-
-  # Store the request ID so checkInitComplete can match the response
-  client.pendingInitRequest = some(reqResult.get)
-  logDebug("lsp", "startAsync: initialize request sent, waiting for response")
-
-  return Result[void, string].ok()
+    client.initError = "Initialize request cancelled"
+    logDebug("lsp", "startAsync: cancelled during initialize")
+    return
 
 proc startInBackground*(client: LspClient) =
   ## Start the LSP server initialization in the background (non-blocking)
   ## Check isReady() or checkInitComplete() to see when initialization is done
+  ## Any errors will be stored in client.initError
   logDebug("lsp", "startInBackground called, current state=" & $client.state)
   if client.state != lssStopped:
     logDebug("lsp", "startInBackground: not stopped, returning")
     return
 
   logDebug("lsp", "startInBackground: starting...")
-  let r = client.startAsync()
-  if r.isErr:
-    logDebug("lsp", "startInBackground: error: " & r.error)
-  else:
-    logDebug("lsp", "startInBackground: started, state=" & $client.state)
+  asyncSpawn client.startAsync()
 
 proc stop*(client: LspClient): Future[Result[void, string]] {.async.} =
   ## Stop the LSP server gracefully

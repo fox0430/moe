@@ -24,8 +24,8 @@ import std/[options, strutils]
 import pkg/celina
 
 import
-  editor_types, editor_window, editor_render_window, render_utils, statusline,
-  tabline, sidebar
+  editor_types, editor_window, editor_render_window, render_utils, statusline, tabline,
+  sidebar
 
 proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
   ## Update viewport size from buffer area and return true if resized

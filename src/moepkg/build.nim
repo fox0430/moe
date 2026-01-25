@@ -19,7 +19,7 @@
 
 import std/[strformat, strutils]
 
-import pkg/results
+import pkg/[results, chronos]
 
 import syntax/highlite, backgroundprocess
 
@@ -38,9 +38,6 @@ proc isRunning*(bp: BuildProcess): bool {.inline.} =
 
 proc isFinish*(bp: BuildProcess): bool {.inline.} =
   bp.process.isFinish
-
-proc result*(bp: var BuildProcess): Result[seq[string], string] {.inline.} =
-  bp.process.result
 
 proc nimBuildCommand(path: string): BuildCommand {.inline.} =
   return (cmd: "nim", args: @["c", path])
@@ -66,14 +63,14 @@ proc buildCommand(
 
 proc startBackgroundBuild*(
     path: string, language: SourceLanguage, workspaceRoot: string = ""
-): Result[BuildProcess, string] =
+): Future[Result[BuildProcess, string]] {.async: (raises: []).} =
   ## Start a background process for exec the build command.
 
   let command = buildCommand(path, language, workspaceRoot)
   if command.isErr:
     return Result[BuildProcess, string].err fmt"Failed to exec build commands: {command.error}"
 
-  let backgroundProcess = startBackgroundProcess(command.get)
+  let backgroundProcess = await startBackgroundProcess(command.get)
   if backgroundProcess.isErr:
     return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
 
@@ -83,7 +80,7 @@ proc startBackgroundBuild*(
 
 proc startBackgroundBuild*(
     customCommand: BuildCommand, language: SourceLanguage, workspaceRoot: string = ""
-): Result[BuildProcess, string] =
+): Future[Result[BuildProcess, string]] {.async: (raises: []).} =
   ## Start the build on a background process.
 
   if customCommand.cmd.len == 0:
@@ -93,7 +90,7 @@ proc startBackgroundBuild*(
     cmd: customCommand.cmd, args: customCommand.args, workingDir: workspaceRoot
   )
 
-  let backgroundProcess = startBackgroundProcess(command)
+  let backgroundProcess = await startBackgroundProcess(command)
   if backgroundProcess.isErr:
     return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
 
@@ -117,12 +114,16 @@ proc startBackgroundBuildOnSave*(
     language: SourceLanguage,
     customCommand: string = "",
     workspaceRoot: string = "",
-): Result[BuildProcess, string] =
+): Future[Result[BuildProcess, string]] {.async: (raises: []).} =
   ## Start a background build for buildOnSave.
   ## If customCommand is provided, use it; otherwise use language-specific command.
 
   if customCommand.len > 0:
     let parsed = parseCommandString(customCommand)
-    return startBackgroundBuild(parsed, language, workspaceRoot)
+    return await startBackgroundBuild(parsed, language, workspaceRoot)
   else:
-    return startBackgroundBuild(path, language, workspaceRoot)
+    return await startBackgroundBuild(path, language, workspaceRoot)
+
+proc waitForAsync*(bp: BuildProcess): Future[seq[string]] {.async: (raises: []).} =
+  ## Wait for build process to complete and return output
+  return await bp.process.waitForAsync()
