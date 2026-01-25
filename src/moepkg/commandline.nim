@@ -429,6 +429,34 @@ proc parseSubstituteCommand*(commandText: string): SubstituteParseResult =
     of psFlags:
       result.flags.add('\\')
 
+proc extractSubstitutePattern*(commandText: string): string =
+  ## Extract the search pattern from a substitute command
+  ## Supports formats like :%s/pattern/replacement/flags or :s/pattern/...
+  ## Returns empty string if not a substitute command or pattern is incomplete
+  let parsed = parseSubstituteCommand(commandText)
+  if parsed.isValid:
+    # Return raw pattern without escape processing (for display/matching)
+    return parsed.pattern
+  return ""
+
+proc extractSubstituteReplacement*(
+    commandText: string
+): tuple[replacement: string, hasReplacement: bool] =
+  ## Extract the replacement text from a substitute command
+  ## Returns (replacement, true) if replacement section exists (even if empty)
+  ## Returns ("", false) if we haven't reached the replacement section yet
+  let parsed = parseSubstituteCommand(commandText)
+  if parsed.isValid and parsed.hasReplacement:
+    return (parsed.replacement, true)
+  return ("", false)
+
+proc extractSubstituteFlags*(commandText: string): string =
+  ## Extract the flags from a substitute command
+  let parsed = parseSubstituteCommand(commandText)
+  if parsed.isValid:
+    return parsed.flags
+  return ""
+
 proc newCommandLineParser*(): CommandLineParser =
   ## Create a new command line parser.
   ## Aliases are defined in commandconfig.nim and loaded via CommandConfig.applyToParser()

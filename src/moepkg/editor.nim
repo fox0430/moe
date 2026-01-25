@@ -17,317 +17,23 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, strformat, options, tables, unicode, monotimes, times, os, json]
+import std/[strutils, strformat, options, unicode, monotimes, times, os, json]
 
-import pkg/[celina, results]
+import pkg/results
 
 import
-  buffer, cursor, types, commands, commandregistry, modes, commandline, commandconfig,
-  statusline, tabline, windowmanager, unicode_utils, render_utils, sidebar, gitdiff,
-  highlight, logger, config, configloader, keybindconfig, search_utils, filer,
-  lspintegration, completion, signaturehelp, hoverpopup, backup, command_completion,
-  motion, recentfilemode, color, gapbuffer, persist, debugviewer, messagelog
+  editor_types, editor_window, editor_file, editor_lsp, editor_codelens, editor_render
+
+import
+  statusline, tabline, render_utils, gitdiff, logger, configloader, keybindconfig,
+  search_utils, completion, signaturehelp, hoverpopup, command_completion, motion,
+  color, gapbuffer, debugviewer, messagelog
 import keybindings except Command
 import lsp/protocol/types as lspTypes
-import command_handlers/[handler_manager, visual_handler, insert_handler]
+import command_handlers/insert_handler
 
-type Editor* = ref object
-  textBuffer*: TextBuffer
-  state*: EditorState
-  viewport*: ViewPort
-  executer*: CommandExecutor
-  commandRegistry*: CommandRegistry
-  keyBindingRegistry*: KeyBindingRegistry
-  commandLineParser*: CommandLineParser
-  commandConfig*: CommandConfig
-  handlerManager*: HandlerManager
-  windowManager*: EditorWindowManager # Window manager for split windows
-  buffers*: seq[TextBuffer] # Buffer list (like Vim's buffer list)
-  config*: EditorConfig # TOML configuration
-  lsp*: LspIntegration # LSP client integration
-  lastLspChangeSeq*: int # Track buffer changes for LSP notifications
-  recentFileModeState*: RecentFileModeState # State for Recent File mode
-  app*: App # Celina application reference for suspend/resume
-  cursorPositions*: Table[string, CursorPositionEntry] # Persisted cursor positions
-
-proc buffer*(e: Editor): TextBuffer =
-  e.textBuffer
-
-proc activeBuffer*(e: Editor): TextBuffer =
-  ## Get the currently active buffer (from active window if split, otherwise main buffer)
-  if e.windowManager.windows.len > 0 and
-      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.windowManager.windows[e.windowManager.activeWindowIndex].buffer
-  else:
-    e.textBuffer
-
-proc saveActiveWindowState*(e: Editor) =
-  ## Save current EditorState cursor and viewport to the active window
-  if e.windowManager.windows.len > 0 and
-      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    activeWindow.cursor = e.state.cursor
-    # Also save viewport scroll position from motionController
-    activeWindow.viewport.topLine =
-      e.executer.motionController.viewportManager.viewport.topLine
-    activeWindow.viewport.leftColumn =
-      e.executer.motionController.viewportManager.viewport.leftColumn
-
-proc restoreActiveWindowState(e: Editor) =
-  ## Restore the active window's cursor and viewport to EditorState
-  if e.windowManager.windows.len > 0 and
-      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.state.cursor = activeWindow.cursor
-    # Restore viewport scroll position to motionController
-    e.executer.motionController.viewportManager.viewport.topLine =
-      activeWindow.viewport.topLine
-    e.executer.motionController.viewportManager.viewport.leftColumn =
-      activeWindow.viewport.leftColumn
-
-proc syncActiveWindow*(e: Editor) =
-  ## Sync the active window's buffer and viewport with the executor and motion controller
-  let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-  e.executer.buffer = activeWindow.buffer
-  e.executer.motionController.executor.buffer = activeWindow.buffer
-  e.executer.motionController.viewportManager.viewport = activeWindow.viewport
-  e.restoreActiveWindowState()
-  e.state.needsFullRedraw = true
-
-proc calculateReservedLines(e: Editor, isBottomWindow: bool = true): int =
-  ## Calculate number of reserved lines based on status line configuration
-  ## and multi-line status messages
-  result =
-    if e.state.display.showStatusLine:
-      if e.state.display.multiStatusLine:
-        if isBottomWindow: StatusAndCommandReserve else: StatusLineReserve
-      elif isBottomWindow:
-        StatusAndCommandReserve
-      else:
-        0
-    else:
-      if isBottomWindow: CommandLineReserve else: 0
-
-  # Add extra lines for multi-line status messages (only for bottom window)
-  if isBottomWindow:
-    result += e.state.statusMessageExtraLines()
-
-proc calculateWindowCursor(
-    e: Editor,
-    buffer: TextBuffer,
-    viewport: ViewPort,
-    cursor: BufferPosition,
-    lineNumOffset: int,
-    reservedLines: int,
-): CursorPosition =
-  ## Calculate screen cursor position for a window
-  ## Returns the absolute screen coordinates
-  ##
-  ## Algorithm overview:
-  ## - Validate cursor is within buffer and viewport
-  ## - For wrapped mode: iterate through lines to count wrapped screen lines
-  ## - For non-wrapped mode: use simple arithmetic with horizontal scroll offset
-  ## - Return (0, 0) if cursor is not visible on screen
-  ##
-  ## Parameters:
-  ## - buffer: TextBuffer containing the text
-  ## - viewport: Current viewport configuration (position, size)
-  ## - cursor: Logical cursor position (line, column)
-  ## - lineNumOffset: Width of line number area
-  ## - reservedLines: Lines reserved for status/command (at bottom)
-
-  # Validate cursor is within buffer bounds
-  if cursor.line < 0 or cursor.line >= buffer.len:
-    return CursorPosition(x: 0, y: 0)
-
-  # Cursor is above visible area
-  if cursor.line < viewport.topLine:
-    return CursorPosition(x: 0, y: 0)
-
-  if e.state.display.lineWrap:
-    # === WRAP MODE: Calculate cursor position considering line wrapping ===
-    #
-    # Strategy:
-    # 1. Calculate available width for text (viewport width - line numbers)
-    # 2. Count screen lines consumed by all logical lines BEFORE cursor line
-    # 3. Within cursor line, calculate which wrapped line the cursor is on
-    # 4. Calculate column within that wrapped line
-    #
-    # Performance optimization:
-    # - Only iterate through visible lines (topLine to cursor.line)
-    # - Early exit if we exceed visible height
-    # - This keeps complexity O(visible_lines) instead of O(all_lines)
-
-    let maxWidth = max(1, viewport.width - lineNumOffset)
-
-    # Phase 1: Count screen lines consumed by lines BEFORE cursor line
-    # This accounts for wrapped lines pushing cursor down the screen
-    var screenY = 0
-    let maxVisibleLine = min(cursor.line, viewport.topLine + viewport.height)
-
-    for lineIdx in viewport.topLine ..< maxVisibleLine:
-      if lineIdx >= 0 and lineIdx < buffer.len:
-        let line = buffer.getLine(lineIdx)
-        let lineCharLen = line.charLen
-
-        if lineCharLen == 0:
-          # Empty line takes 1 screen line
-          screenY += 1
-        else:
-          # Calculate wrapped line count using formula:
-          # wrappedLines = ceil(lineCharLen / maxWidth)
-          #              = ((lineCharLen - 1) div maxWidth) + 1
-          # Example: 100 chars with maxWidth=40 -> ((99 div 40) + 1) = 2 + 1 = 3 lines
-          let wrappedLines = calculateWrapCount(lineCharLen, maxWidth)
-          screenY += wrappedLines
-
-        # Early exit if cursor would be off-screen (performance optimization)
-        if screenY >= viewport.height - reservedLines:
-          return CursorPosition(x: 0, y: 0)
-
-    # Phase 2: Calculate cursor position WITHIN the cursor line
-    # The cursor line itself may be wrapped across multiple screen lines
-    let
-      cursorLineText = buffer.getLine(cursor.line)
-
-      # Get display width (accounting for wide characters like tabs, Unicode)
-      # Example: "Hello\tWorld" with cursor at column 7
-      # displayWidthUpToCursor accounts for tab width
-      displayWidthUpToCursor =
-        displayWidthUpToWithTabs(cursorLineText, cursor.column, e.state.display.tabStop)
-
-      # Determine which wrapped line segment the cursor is on
-      # Example: cursor at display width 95 with maxWidth=40
-      # wrapLineIndex = 95 div 40 = 2 (3rd wrapped line, 0-indexed)
-      # wrapLineColumn = 95 mod 40 = 15 (column 15 within that wrapped line)
-      wrapLineIndex = displayWidthUpToCursor div maxWidth
-      wrapLineColumn = displayWidthUpToCursor mod maxWidth
-
-    # Add wrapped line count from cursor line to total screen Y
-    screenY += wrapLineIndex
-
-    # Final visibility check and coordinate calculation
-    if screenY < viewport.height - reservedLines:
-      # Cursor is visible - calculate absolute screen coordinates
-      # x = viewport.x (window x) + lineNumOffset (line number width) + wrapLineColumn
-      # y = viewport.y (window y) + screenY (lines from top)
-      let finalX = viewport.x + lineNumOffset + wrapLineColumn
-      let finalY = viewport.y + screenY
-      return CursorPosition(x: finalX, y: finalY)
-  else:
-    # === NO-WRAP MODE: Calculate cursor position with horizontal scrolling ===
-    #
-    # Strategy:
-    # - Each logical line = 1 screen line (no wrapping)
-    # - Y position is simple: cursor.line - viewport.topLine
-    # - X position accounts for horizontal scroll (viewport.leftColumn)
-    #
-    # Example: cursor at column 100, viewport.leftColumn = 60, maxWidth = 80
-    # displayWidthUpToCursor = 100 (cursor position)
-    # displayWidthUpToLeftCol = 60 (scroll offset)
-    # screenX = 100 - 60 = 40 (cursor appears at column 40 on screen)
-
-    # Check if cursor line is within visible vertical range
-    if cursor.line < viewport.topLine + viewport.height - reservedLines:
-      let
-        cursorLineText = buffer.getLine(cursor.line)
-
-        # Calculate display widths (accounting for tabs, wide characters)
-        displayWidthUpToCursor = displayWidthUpToWithTabs(
-          cursorLineText, cursor.column, e.state.display.tabStop
-        )
-        displayWidthUpToLeftCol = displayWidthUpToWithTabs(
-          cursorLineText, viewport.leftColumn, e.state.display.tabStop
-        )
-
-        # Y position: simple offset from top of viewport
-        screenY = viewport.y + (cursor.line - viewport.topLine)
-
-        # X position: cursor position minus horizontal scroll offset
-        # max(0, ...) ensures we don't go negative if cursor is left of scroll
-        screenX =
-          viewport.x + lineNumOffset +
-          max(0, displayWidthUpToCursor - displayWidthUpToLeftCol)
-
-      return CursorPosition(x: screenX, y: screenY)
-
-  # Cursor is not visible (off-screen)
-  return CursorPosition(x: 0, y: 0)
-
-proc calculateSidebarWidth(e: Editor): int =
-  ## Calculate the width occupied by the sidebar (0 if disabled)
-  if e.state.display.showSidebar: DefaultSidebarWidth else: 0
-
-proc setActiveWindowScreenCursor(e: Editor, window: EditorWindow) =
-  ## Calculate and set screen cursor position for the active window
-
-  # Determine if this window is at the bottom of the screen
-  var maxBottomY = 0
-  for w in e.windowManager.windows:
-    let bottomY = w.viewport.y + w.viewport.height
-    if bottomY > maxBottomY:
-      maxBottomY = bottomY
-
-  # Calculate tab line offset
-  let tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
-
-  let
-    windowBottomY = window.viewport.y + window.viewport.height
-    isBottomWindow = (windowBottomY == maxBottomY)
-    sidebarWidth = e.calculateSidebarWidth()
-    lineNumOffset =
-      calculateLineNumOffset(window.buffer, e.state.display.showLineNumbers) +
-      sidebarWidth
-    reservedLines = e.calculateReservedLines(isBottomWindow)
-
-  var cursorPos = e.calculateWindowCursor(
-    window.buffer,
-    window.viewport,
-    window.cursor,
-    lineNumOffset,
-    reservedLines + tabLineOffset,
-  )
-  # Adjust cursor Y for tab line offset
-  cursorPos.y += tabLineOffset
-  e.state.screenCursor = cursorPos
-
-proc switchToNextWindow*(e: Editor) =
-  ## Switch to the next window (Ctrl-w, k)
-  if e.windowManager.windows.len <= 1:
-    return
-
-  # Save current window state before switching
-  e.saveActiveWindowState()
-
-  # Switch to next window using window manager
-  e.windowManager.switchToNextWindow()
-
-  # Sync and restore the new active window state
-  e.syncActiveWindow()
-
-  # Update cursor position immediately to avoid visual glitch
-  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.setActiveWindowScreenCursor(activeWindow)
-
-proc switchToPrevWindow*(e: Editor) =
-  ## Switch to the previous window (Ctrl-w, j)
-  if e.windowManager.windows.len <= 1:
-    return
-
-  # Save current window state before switching
-  e.saveActiveWindowState()
-
-  # Switch to previous window using window manager
-  e.windowManager.switchToPrevWindow()
-
-  # Sync and restore the new active window state
-  e.syncActiveWindow()
-
-  # Update cursor position immediately to avoid visual glitch
-  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.setActiveWindowScreenCursor(activeWindow)
+export
+  editor_types, editor_window, editor_file, editor_lsp, editor_codelens, editor_render
 
 proc findBufferByPath*(e: Editor, path: string): int =
   ## Find a buffer in the buffer list by its file path
@@ -533,31 +239,6 @@ proc isBufferShared*(e: Editor, buffer: TextBuffer): bool =
   # Buffer is not shared across multiple windows (0 or 1 window)
   return false
 
-proc closeWindow*(e: Editor): bool =
-  ## Close the active window
-  ## Returns true if editor should quit (last window closed)
-
-  logDebug(
-    "editor",
-    "closeWindow called: windows.len=" & $e.windowManager.windows.len &
-      " activeWindowIndex=" & $e.windowManager.activeWindowIndex,
-  )
-
-  let shouldQuit = e.windowManager.closeWindow(e.state.display.multiStatusLine)
-
-  if shouldQuit:
-    return true
-
-  # Sync to the new active window
-  e.syncActiveWindow()
-
-  # Update cursor position immediately to avoid visual glitch
-  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.setActiveWindowScreenCursor(activeWindow)
-
-  return false
-
 proc addCommandAlias*(
     e: Editor, alias: string, action: CommandLineAction
 ): Result[(), string] =
@@ -666,9 +347,6 @@ proc setSyntaxCheckerVisible*(e: Editor, visible: bool) =
   ## Set syntax checker results visibility in sidebar
   e.state.display.showSyntaxChecker = visible
   e.state.needsFullRedraw = true
-
-# Include window split and buffer management procedures
-include editor_window
 
 proc editFile*(e: Editor, path: string): Result[(), string] =
   ## Load a file and switch to it (like :e in Vim)
@@ -961,22 +639,6 @@ proc newEditor*(): Editor =
 
   result = newEditor(editorConfig, vr)
 
-proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
-  ## Refresh git diff information for the active buffer
-  ## This should be called after saving a file or buffer modifications
-  ##
-  ## Parameters:
-  ## - useBuffer: If true, compare buffer contents with HEAD (real-time)
-  ##              If false, compare disk file with working tree (saved only)
-  if e.state.display.showGitDiff:
-    let activeBuffer = e.activeBuffer()
-    let diffResult = updateBufferWithGitDiff(activeBuffer, useBuffer)
-
-    if diffResult.isOk:
-      e.state.timing.lastGitDiffUpdate = getMonoTime()
-      e.state.timing.lastGitDiffChangeSeq = activeBuffer.changeSeq
-      e.state.needsFullRedraw = true
-
 proc maybeReloadExternallyModifiedFile*(e: Editor) =
   ## Check if files were modified externally and reload them if:
   ##   - liveReloadOfFile is enabled in config
@@ -1171,37 +833,6 @@ proc enterRecentFileMode*(e: Editor): Result[void, string] =
     return err(loadResult.error)
   ok()
 
-# Include file operation procedures
-include editor_file
-
-proc extractSubstitutePattern*(commandText: string): string =
-  ## Extract the search pattern from a substitute command
-  ## Supports formats like :%s/pattern/replacement/flags or :s/pattern/...
-  ## Returns empty string if not a substitute command or pattern is incomplete
-  let parsed = parseSubstituteCommand(commandText)
-  if parsed.isValid:
-    # Return raw pattern without escape processing (for display/matching)
-    return parsed.pattern
-  return ""
-
-proc extractSubstituteReplacement*(
-    commandText: string
-): tuple[replacement: string, hasReplacement: bool] =
-  ## Extract the replacement text from a substitute command
-  ## Returns (replacement, true) if replacement section exists (even if empty)
-  ## Returns ("", false) if we haven't reached the replacement section yet
-  let parsed = parseSubstituteCommand(commandText)
-  if parsed.isValid and parsed.hasReplacement:
-    return (parsed.replacement, true)
-  return ("", false)
-
-proc extractSubstituteFlags*(commandText: string): string =
-  ## Extract the flags from a substitute command
-  let parsed = parseSubstituteCommand(commandText)
-  if parsed.isValid:
-    return parsed.flags
-  return ""
-
 proc startSubstitutePreview*(e: Editor) =
   ## Start substitute preview by saving the current buffer content
   if e.state.substitutePreview.isActive:
@@ -1308,15 +939,6 @@ proc updateSubstitutePreview*(
 
   buffer.highlightNeedsUpdate = true
   e.state.needsFullRedraw = true
-
-# Include rendering-related procedures from separate file
-include editor_render
-
-# Include LSP-related procedures from separate file
-include editor_lsp
-
-# Include CodeLens, DocumentHighlight, and SemanticTokens related procedures
-include editor_codelens
 
 proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)

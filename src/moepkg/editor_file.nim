@@ -17,8 +17,29 @@
 #                                                                              #
 #[############################################################################]#
 
-# This file is included by editor.nim - do not import directly
-# Contains file operation procedures (load, save, auto-save, auto-backup)
+## File operation procedures (load, save, auto-save, auto-backup)
+
+import std/[options, strformat, os, monotimes, times]
+
+import pkg/results
+
+import editor_types, logger, gitdiff, backup, search_utils
+
+proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
+  ## Refresh git diff information for the active buffer
+  ## This should be called after saving a file or buffer modifications
+  ##
+  ## Parameters:
+  ## - useBuffer: If true, compare buffer contents with HEAD (real-time)
+  ##              If false, compare disk file with working tree (saved only)
+  if e.state.display.showGitDiff:
+    let activeBuffer = e.activeBuffer()
+    let diffResult = updateBufferWithGitDiff(activeBuffer, useBuffer)
+
+    if diffResult.isOk:
+      e.state.timing.lastGitDiffUpdate = getMonoTime()
+      e.state.timing.lastGitDiffChangeSeq = activeBuffer.changeSeq
+      e.state.needsFullRedraw = true
 
 proc loadFile*(e: Editor, path: string): Result[(), string] =
   ## Load text file

@@ -17,8 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-# This file is included by editor.nim - do not import directly
-# Contains CodeLens, DocumentHighlight, and SemanticTokens related procedures
+## CodeLens, DocumentHighlight, and SemanticTokens related procedures
+
+import std/[options, monotimes, tables, json, times, strutils]
+
+import pkg/results
+
+import editor_types, logger, highlight
 
 proc hasCodeLensSupport*(e: Editor): bool =
   ## Check if CodeLens is supported for the current buffer

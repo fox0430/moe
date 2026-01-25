@@ -1,0 +1,84 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+## Editor type definitions
+## This module contains the core Editor type and related types used across editor modules.
+
+import std/tables
+
+import pkg/celina
+
+import
+  buffer, cursor, types, commands, commandregistry, modes, commandline, commandconfig,
+  windowmanager, lspintegration, recentfilemode, config, persist
+import keybindings except Command
+import command_handlers/handler_manager
+
+type
+  Editor* = ref object
+    textBuffer*: TextBuffer
+    state*: EditorState
+    viewport*: ViewPort
+    executer*: CommandExecutor
+    commandRegistry*: CommandRegistry
+    keyBindingRegistry*: KeyBindingRegistry
+    commandLineParser*: CommandLineParser
+    commandConfig*: CommandConfig
+    handlerManager*: HandlerManager
+    windowManager*: EditorWindowManager
+    buffers*: seq[TextBuffer]
+    config*: EditorConfig
+    lsp*: LspIntegration
+    lastLspChangeSeq*: int
+    recentFileModeState*: RecentFileModeState
+    app*: App
+    cursorPositions*: Table[string, CursorPositionEntry]
+
+  RenderContext* = object
+    ## Context for rendering operations to reduce parameter passing
+    cursorLine*: int
+    cursorCol*: int
+    hasSelection*: bool
+    selStart*: BufferPosition
+    selEnd*: BufferPosition
+
+  IndentInfo* = object
+    ## Cached indentation analysis for a line to avoid O(n²) performance
+    leadingWhitespaceEnd*: int
+    hasContent*: bool
+
+# Basic accessor procedures
+proc buffer*(e: Editor): TextBuffer =
+  e.textBuffer
+
+proc activeBuffer*(e: Editor): TextBuffer =
+  ## Get the currently active buffer (from active window if split, otherwise main buffer)
+  if e.windowManager.windows.len > 0 and
+      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    e.windowManager.windows[e.windowManager.activeWindowIndex].buffer
+  else:
+    e.textBuffer
+
+# Re-export commonly used types from dependencies
+# Note: keybindings is NOT exported here to avoid Command type ambiguity with types.Command
+# Modules that need keybindings should import it directly with `import keybindings except Command`
+export
+  buffer, cursor, types, commands, commandregistry, modes, commandline, commandconfig,
+  windowmanager, lspintegration, recentfilemode, config, persist, handler_manager,
+  tables, celina

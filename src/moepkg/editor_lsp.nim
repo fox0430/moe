@@ -17,8 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-# This file is included by editor.nim - do not import directly
-# Contains LSP-related procedures for the editor
+## LSP-related procedures for the editor
+
+import std/[options, strutils, json]
+
+import pkg/results
+
+import
+  editor_types, editor_file, signaturehelp, documentsymbol_viewer, references_viewer,
+  lspservice
+import lsp/protocol/types as lspTypes
 
 proc maybeUpdateLsp*(e: Editor) =
   ## Update LSP if buffer was modified
