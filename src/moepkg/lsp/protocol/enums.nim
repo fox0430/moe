@@ -125,19 +125,17 @@ type
     ihkParameter = 2 ## Parameter name hints
 
   ErrorCodes* = enum
-    ## JSON-RPC error codes
-    ecParseError = -32700
-    ecInvalidRequest = -32600
-    ecMethodNotFound = -32601
-    ecInvalidParams = -32602
-    ecInternalError = -32603
-    # LSP specific
-    ecServerNotInitialized = -32002
-    ecUnknownErrorCode = -32001
     ecRequestFailed = -32803
     ecServerCancelled = -32802
     ecContentModified = -32801
     ecRequestCancelled = -32800
+    ecParseError = -32700
+    ecInternalError = -32603
+    ecInvalidParams = -32602
+    ecMethodNotFound = -32601
+    ecInvalidRequest = -32600
+    ecServerNotInitialized = -32002
+    ecUnknownErrorCode = -32001
 
   SemanticTokenTypes* = enum
     ## Standard semantic token types (LSP 3.16+)

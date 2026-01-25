@@ -169,7 +169,7 @@ proc getMostRecentBackupInDir(backupDir: string): string =
   except CatchableError:
     return ""
 
-proc getMostRecentBackup(baseBackupDir, sourceFilePath: string): string =
+proc getMostRecentBackup(baseBackupDir, sourceFilePath: string): string {.used.} =
   ## Get the most recent backup file content for comparison (public API)
   ## Returns empty string if no backup exists or on error
   let backupDir = getBackupDirForSource(baseBackupDir, sourceFilePath)
@@ -222,7 +222,7 @@ proc cleanupOldBackupsInDir(backupDir: string, maxFiles: int) =
     except CatchableError:
       discard
 
-proc cleanupOldBackups(baseBackupDir, sourceFilePath: string, maxFiles: int) =
+proc cleanupOldBackups(baseBackupDir, sourceFilePath: string, maxFiles: int) {.used.} =
   ## Remove oldest backup files if count exceeds maxFiles (public API)
   let backupDir = getBackupDirForSource(baseBackupDir, sourceFilePath)
   if backupDir.len == 0:

@@ -100,14 +100,6 @@ proc getStatusLineModeLabelStyle(mode: EditorMode): Style =
   else:
     getThemeStyle(EditorColorPairIndex.statusLineNormalModeLabel, {StyleModifier.Bold})
 
-proc getGitBranchStyle(): Style =
-  ## Get git branch display style
-  getThemeStyle(EditorColorPairIndex.statusLineGitBranch, {StyleModifier.Bold})
-
-proc getGitChangedLinesStyle(): Style =
-  ## Get git changed lines display style
-  getThemeStyle(EditorColorPairIndex.statusLineGitChangedLines, {StyleModifier.Bold})
-
 proc buildFileDisplay(textBuffer: TextBuffer, config: StatusLineConfig): string =
   ## Build the file display text based on config settings
   ## Includes filename, directory, and changed mark as configured

@@ -22,12 +22,12 @@ import std/[strutils, strformat, options, tables, unicode, monotimes, times, os,
 import pkg/[celina, results]
 
 import
-  buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
-  commandconfig, statusline, tabline, windowmanager, unicode_utils, render_utils,
-  sidebar, gitdiff, highlight, logger, config, configloader, keybindconfig,
-  search_utils, filer, lspintegration, completion, signaturehelp, hoverpopup, backup,
-  command_completion, motion, recentfilemode, color, gapbuffer, persist, debugviewer,
-  messagelog
+  buffer, cursor, types, commands, commandregistry, modes, commandline, commandconfig,
+  statusline, tabline, windowmanager, unicode_utils, render_utils, sidebar, gitdiff,
+  highlight, logger, config, configloader, keybindconfig, search_utils, filer,
+  lspintegration, completion, signaturehelp, hoverpopup, backup, command_completion,
+  motion, recentfilemode, color, gapbuffer, persist, debugviewer, messagelog
+import keybindings except Command
 import lsp/protocol/types as lspTypes
 import command_handlers/[handler_manager, visual_handler, insert_handler]
 
@@ -5631,7 +5631,7 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
     let reservedLines =
       if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
     let bufferLen = e.activeBuffer().len
-    let (active, cursorLine) = e.executer.motionController.viewportManager.updateScrollAnimation(
+    let (_, cursorLine) = e.executer.motionController.viewportManager.updateScrollAnimation(
       e.state.scrollAnimation, e.config.smoothScroll, reservedLines, bufferLen
     )
     e.state.cursor.line = cursorLine

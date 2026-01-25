@@ -961,16 +961,10 @@ proc parseCount(
     logDebug("parse", "parseCount returning default (no args): " & $default)
     return default
 
-# Helper function to parse optional string argument
-proc parseStringArg(args: seq[string], index: int = 0, default: string = ""): string =
-  ## Safely get string argument at index, return default if not available
-  if args.len > index:
-    return args[index]
-  else:
-    return default
-
 # Helper function to parse boolean argument
-proc parseBoolArg(args: seq[string], index: int = 0, default: bool = false): bool =
+proc parseBoolArg(
+    args: seq[string], index: int = 0, default: bool = false
+): bool {.used.} =
   ## Parse boolean argument (true/false, yes/no, 1/0)
   if args.len > index:
     let arg = args[index].toLowerAscii()
@@ -4308,12 +4302,6 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       word.add($runes[i])
 
     return some(WordInfo(word: word, startCol: startCol, endCol: endCol))
-
-  proc getWordUnderCursor(buffer: TextBuffer, cursor: BufferPosition): string =
-    let info = getWordInfoUnderCursor(buffer, cursor)
-    if info.isSome:
-      return info.get.word
-    return ""
 
   # Helper proc to check if a rune is a word character
   proc isWordChar(r: Rune): bool =

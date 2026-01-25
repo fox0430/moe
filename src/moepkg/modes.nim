@@ -20,7 +20,7 @@
 import std/options
 
 type
-  EditorMode* = enum
+  EditorMode* {.pure.} = enum
     Normal
     Insert
     Command

@@ -325,9 +325,6 @@ proc visualIndent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
       endLine =
         max(state.visualSelection.start.line, state.visualSelection.current.line)
 
-    # Save original cursor
-    let origCursor = state.cursor
-
     # Indent each line in the selection
     for lineNum in startLine .. endLine:
       state.cursor.line = lineNum
@@ -362,9 +359,6 @@ proc visualDedent*(buffer: TextBuffer, state: EditorState, count: int = 1) =
         min(state.visualSelection.start.line, state.visualSelection.current.line)
       endLine =
         max(state.visualSelection.start.line, state.visualSelection.current.line)
-
-    # Save original cursor
-    let origCursor = state.cursor
 
     # Dedent each line in the selection
     for lineNum in startLine .. endLine:

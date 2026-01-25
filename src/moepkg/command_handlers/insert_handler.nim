@@ -351,7 +351,7 @@ proc pollLspCompletion*(handler: InsertModeHandler) =
   handler.lsp.poll()
 
   # Check for response
-  let (status, resultOpt, errorOpt) = handler.lsp.checkResponse(reqIdOpt.get)
+  let (status, resultOpt, _) = handler.lsp.checkResponse(reqIdOpt.get)
 
   case status
   of lrsPending:
