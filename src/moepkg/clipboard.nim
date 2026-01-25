@@ -19,14 +19,13 @@
 
 ## System clipboard integration using external tools
 ##
-## This module provides async clipboard read/write functionality using external
+## This module provides clipboard read/write functionality using external
 ## clipboard tools like xclip, xsel, wl-clipboard, etc.
 
-import std/[options]
+import std/[options, osproc, streams]
 
 import pkg/results
 import pkg/chronos
-import pkg/chronos/asyncproc
 
 import config
 
@@ -79,10 +78,8 @@ proc getClipboardCommand*(tool: ClipboardTool, operation: string): Option[seq[st
     else:
       return none(seq[string])
 
-proc readFromClipboard*(
-    tool: ClipboardTool
-): Future[Result[string, string]] {.async: (raises: []).} =
-  ## Read text from system clipboard asynchronously
+proc readFromClipboardSync*(tool: ClipboardTool): Result[string, string] =
+  ## Read text from system clipboard synchronously
   ## Returns the clipboard content as a string, or an error message
   let cmdOpt = getClipboardCommand(tool, "read")
   if cmdOpt.isNone:
@@ -90,27 +87,11 @@ proc readFromClipboard*(
 
   let cmd = cmdOpt.get()
   try:
-    const
-      WorkingDir = ""
-      Env = nil
-    let opts: set[AsyncProcessOption] = {UsePath}
-
-    let process = await startProcess(
-      cmd[0], WorkingDir, cmd[1 ..^ 1], Env, opts,
-      stdoutHandle = AsyncProcess.Pipe,
-      stdinHandle = AsyncProcess.Pipe,
-    )
-
-    # Read all output from stdout
-    var output = ""
-    while true:
-      var buf = newSeq[byte](4096)
-      let bytesRead = await process.stdoutStream.readOnce(addr buf[0], buf.len)
-      if bytesRead == 0:
-        break
-      output.add(cast[string](buf[0 ..< bytesRead]))
-
-    let exitCode = await process.waitForExit()
+    let process =
+      startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath, poStdErrToStdOut})
+    let output = process.outputStream.readAll()
+    let exitCode = process.waitForExit()
+    process.close()
 
     if exitCode == 0:
       return Result[string, string].ok(output)
@@ -118,15 +99,11 @@ proc readFromClipboard*(
       return Result[string, string].err(
         "Failed to read from clipboard: exit code " & $exitCode
       )
-  except CancelledError:
-    return Result[string, string].err("Clipboard read cancelled")
   except CatchableError as e:
     return Result[string, string].err("Failed to read from clipboard: " & e.msg)
 
-proc writeToClipboard*(
-    tool: ClipboardTool, text: string
-): Future[Result[void, string]] {.async: (raises: []).} =
-  ## Write text to system clipboard asynchronously
+proc writeToClipboardSync*(tool: ClipboardTool, text: string): Result[void, string] =
+  ## Write text to system clipboard synchronously using osproc
   ## Returns ok() on success, or an error message
   let cmdOpt = getClipboardCommand(tool, "write")
   if cmdOpt.isNone:
@@ -134,35 +111,47 @@ proc writeToClipboard*(
 
   let cmd = cmdOpt.get()
   try:
-    const
-      WorkingDir = ""
-      Env = nil
-    let opts: set[AsyncProcessOption] = {UsePath}
-
-    let process = await startProcess(
-      cmd[0], WorkingDir, cmd[1 ..^ 1], Env, opts,
-      stdoutHandle = AsyncProcess.Pipe,
-      stdinHandle = AsyncProcess.Pipe,
-    )
-
-    # Write text to stdin and close to signal EOF
-    let textBytes = cast[seq[byte]](text)
-    if textBytes.len > 0:
-      await process.stdinStream.write(textBytes)
-    await process.stdinStream.closeWait()
-
-    let exitCode = await process.waitForExit()
-
-    if exitCode == 0:
-      return Result[void, string].ok()
+    # wl-copy accepts text as positional argument
+    if tool == ctWlClipboard:
+      var args = cmd[1 ..^ 1]
+      args.add(text)
+      let process = startProcess(cmd[0], args = args, options = {poUsePath})
+      let exitCode = process.waitForExit()
+      process.close()
+      if exitCode == 0:
+        return Result[void, string].ok()
+      else:
+        return Result[void, string].err(
+          "Failed to write to clipboard: exit code " & $exitCode
+        )
     else:
-      return Result[void, string].err(
-        "Failed to write to clipboard: exit code " & $exitCode
-      )
-  except CancelledError:
-    return Result[void, string].err("Clipboard write cancelled")
+      # Other tools (xclip, xsel, pbcopy, win32yank) use stdin
+      let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
+      process.inputStream.write(text)
+      process.inputStream.close()
+      let exitCode = process.waitForExit()
+      process.close()
+
+      if exitCode == 0:
+        return Result[void, string].ok()
+      else:
+        return Result[void, string].err(
+          "Failed to write to clipboard: exit code " & $exitCode
+        )
   except CatchableError as e:
     return Result[void, string].err("Failed to write to clipboard: " & e.msg)
+
+proc readFromClipboard*(
+    tool: ClipboardTool
+): Future[Result[string, string]] {.async: (raises: []).} =
+  ## Read text from system clipboard (async wrapper)
+  return readFromClipboardSync(tool)
+
+proc writeToClipboard*(
+    tool: ClipboardTool, text: string
+): Future[Result[void, string]] {.async: (raises: []).} =
+  ## Write text to system clipboard (async wrapper)
+  return writeToClipboardSync(tool, text)
 
 # Internal async wrapper that discards the result
 proc writeToClipboardInternal(
@@ -175,19 +164,3 @@ proc writeToClipboardAsync*(tool: ClipboardTool, text: string) =
   ## Write text to clipboard in the background (fire-and-forget)
   ## This does not block and errors are silently ignored
   asyncSpawn writeToClipboardInternal(tool, text)
-
-# Synchronous wrapper for clipboard read with timeout
-proc readFromClipboardSync*(
-    tool: ClipboardTool, timeoutMs: int = 1000
-): Result[string, string] =
-  ## Read from clipboard synchronously with timeout
-  ## Uses async internally with waitFor, but has a timeout to prevent long blocks
-  let future = readFromClipboard(tool)
-  try:
-    let completed = waitFor withTimeout(future, milliseconds(timeoutMs))
-    if not completed:
-      return Result[string, string].err("Clipboard read timeout")
-    return future.read()
-  except CatchableError as e:
-    return Result[string, string].err("Clipboard read failed: " & e.msg)
-
