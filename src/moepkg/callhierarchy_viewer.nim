@@ -1,0 +1,141 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+## Call Hierarchy viewer state management
+##
+## This module provides the data structures and operations for the call hierarchy viewer mode.
+## Used to display and navigate LSP call hierarchy results (incoming/outgoing calls).
+
+import std/[strformat, strutils, options]
+
+import lsp/protocol/types as lspTypes
+
+type
+  CallHierarchyViewKind* = enum
+    chvkPrepare ## Initial prepare result
+    chvkIncoming ## Incoming calls view
+    chvkOutgoing ## Outgoing calls view
+
+  CallHierarchyViewerState* = ref object
+    items*: seq[lspTypes.CallHierarchyItem] ## Call hierarchy items to display
+    selectedIndex*: int ## Currently selected item index
+    topLine*: int ## Scroll position (first visible line)
+    viewKind*: CallHierarchyViewKind ## Type of view (prepare/incoming/outgoing)
+    title*: string ## Title for the list
+
+proc newCallHierarchyViewerState*(
+    items: seq[lspTypes.CallHierarchyItem], viewKind: CallHierarchyViewKind
+): CallHierarchyViewerState =
+  ## Create a new call hierarchy viewer state
+  let title =
+    case viewKind
+    of chvkPrepare: "Call Hierarchy"
+    of chvkIncoming: "Incoming Calls"
+    of chvkOutgoing: "Outgoing Calls"
+  CallHierarchyViewerState(
+    items: items, selectedIndex: 0, topLine: 0, viewKind: viewKind, title: title
+  )
+
+proc itemCount*(state: CallHierarchyViewerState): int =
+  ## Get the number of items
+  state.items.len
+
+proc getItem*(
+    state: CallHierarchyViewerState, index: int
+): Option[lspTypes.CallHierarchyItem] =
+  ## Get a specific item
+  if index >= 0 and index < state.items.len:
+    some(state.items[index])
+  else:
+    none(lspTypes.CallHierarchyItem)
+
+proc getSelectedItem*(
+    state: CallHierarchyViewerState
+): Option[lspTypes.CallHierarchyItem] =
+  ## Get the currently selected item
+  state.getItem(state.selectedIndex)
+
+proc uriToPath(uri: string): string =
+  ## Convert file:// URI to path
+  if uri.startsWith("file://"):
+    return uri[7 ..^ 1]
+  return uri
+
+proc formatLine*(item: lspTypes.CallHierarchyItem): string =
+  ## Format a call hierarchy item as a display line
+  let path = uriToPath(item.uri)
+  let detail =
+    if item.detail.isSome:
+      " " & item.detail.get
+    else:
+      ""
+  let line = item.selectionRange.start.line + 1
+  let col = item.selectionRange.start.character + 1
+  fmt"{item.name}{detail} ({path}:{line}:{col})"
+
+proc getLine*(state: CallHierarchyViewerState, index: int): string =
+  ## Get a formatted line for display
+  if index >= 0 and index < state.items.len:
+    state.items[index].formatLine()
+  else:
+    ""
+
+proc moveUp*(state: CallHierarchyViewerState) =
+  ## Move selection up
+  if state.selectedIndex > 0:
+    state.selectedIndex.dec
+
+proc moveDown*(state: CallHierarchyViewerState) =
+  ## Move selection down
+  if state.selectedIndex < state.items.high:
+    state.selectedIndex.inc
+
+proc moveToFirst*(state: CallHierarchyViewerState) =
+  ## Move to first item
+  state.selectedIndex = 0
+
+proc moveToLast*(state: CallHierarchyViewerState) =
+  ## Move to last item
+  if state.items.len > 0:
+    state.selectedIndex = state.items.high
+  else:
+    state.selectedIndex = 0
+
+proc halfPageUp*(state: CallHierarchyViewerState, viewportHeight: int) =
+  ## Move up by half a page
+  let halfPage = viewportHeight div 2
+  state.selectedIndex = max(0, state.selectedIndex - halfPage)
+
+proc halfPageDown*(state: CallHierarchyViewerState, viewportHeight: int) =
+  ## Move down by half a page
+  let halfPage = viewportHeight div 2
+  if state.items.len > 0:
+    state.selectedIndex = min(state.items.high, state.selectedIndex + halfPage)
+
+proc ensureSelectedVisible*(state: CallHierarchyViewerState, viewportHeight: int) =
+  ## Ensure the selected item is visible in the viewport
+  # Adjust topLine to keep selected item visible
+  if state.selectedIndex < state.topLine:
+    state.topLine = state.selectedIndex
+  elif state.selectedIndex >= state.topLine + viewportHeight:
+    state.topLine = state.selectedIndex - viewportHeight + 1
+
+  # Ensure topLine is not negative
+  if state.topLine < 0:
+    state.topLine = 0

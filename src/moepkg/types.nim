@@ -24,12 +24,12 @@ import pkg/celina
 import
   cursor, modes, buffer, registers, filer, logviewer, helpviewer, command_completion,
   messagelog, buffermanager, backupmanager, diffviewer, debugviewer, configmode,
-  references_viewer, documentsymbol_viewer, hoverpopup
+  references_viewer, documentsymbol_viewer, callhierarchy_viewer, hoverpopup
 
 export
   buffer.SidebarItemKind, registers, command_completion, logviewer, helpviewer,
   buffermanager, backupmanager, diffviewer, debugviewer, configmode, references_viewer,
-  documentsymbol_viewer, hoverpopup
+  documentsymbol_viewer, callhierarchy_viewer, hoverpopup
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -175,6 +175,18 @@ type
       # Cached prepare result for 2nd stage
     # Pending code action request
     pendingCodeActionRequestId*: int # Request ID (0 = none)
+    # Pending document link request
+    pendingDocumentLinkRequestId*: int # Request ID (0 = none)
+    pendingDocumentLinkCursorLine*: int # Cursor line when request was made
+    pendingDocumentLinkCursorCol*: int # Cursor column (UTF-16) when request was made
+    # Pending document link resolve request (2nd stage)
+    pendingDocumentLinkResolveRequestId*: int # Request ID (0 = none)
+
+  RenameState* = object ## State for LSP rename mode
+    text*: string # New name being typed
+    cursorLine*: int # Line where rename was initiated
+    cursorColumn*: int # Column where rename was initiated
+    originalWord*: string # Original word being renamed
 
   CallHierarchyRequestKind* = enum
     chrkNone
@@ -512,6 +524,9 @@ type
     # Document symbol viewer state
     documentSymbolViewerState*: Option[DocumentSymbolViewerState]
       # Document symbol viewer state (when in DocumentSymbol mode)
+    # Call hierarchy viewer state
+    callHierarchyViewerState*: Option[CallHierarchyViewerState]
+      # Call hierarchy viewer state (when in CallHierarchy mode)
     # Buffer manager state
     bufferManagerState*: Option[BufferManagerState]
       # Buffer manager state (when in BufferManager mode)
@@ -547,11 +562,14 @@ type
     # Pending async operations (for shell commands that need TUI suspend)
     pendingShellCommand*: string # Shell command to execute after suspend
     pendingBackground*: bool # Whether to suspend for background (:bg)
+    pendingManPage*: string # Man page to show after suspend (:man)
     # Pending build/quickrun info (for async background processes)
     pendingBuildOnSave*:
       tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
     pendingQuickRun*:
       tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
+    # LSP Rename state
+    renameState*: RenameState # State for LSP rename mode
 
 proc setStatusMessage*(state: EditorState, msg: string) =
   ## Set status message and log it to message log

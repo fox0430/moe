@@ -19,13 +19,12 @@
 
 ## View rendering procedures (split view, single view, bottom lines)
 
-import std/[options, strutils]
+import std/strutils
 
 import pkg/celina
 
 import
-  editor_types, editor_window, editor_render_window, render_utils, statusline, tabline,
-  sidebar
+  editor_types, editor_window, editor_render_window, render_utils, statusline, tabline
 
 proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
   ## Update viewport size from buffer area and return true if resized
@@ -60,6 +59,20 @@ proc adjustViewportForCursor(
 
 proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
   ## Render split window view
+
+  # For single window mode, sync window viewport size with editor viewport
+  # This ensures the window has the correct screen size (especially on first render)
+  # Also sync motionController viewport since ViewPort is a value type (copies on assignment)
+  if e.windowManager.windows.len == 1:
+    let window = e.windowManager.windows[0]
+    if window.viewport.width != e.viewport.width or
+        window.viewport.height != e.viewport.height:
+      window.viewport.width = e.viewport.width
+      window.viewport.height = e.viewport.height
+      # Also update motionController viewport size (ViewPort is value type, not shared)
+      e.executer.motionController.viewportManager.viewport.width = e.viewport.width
+      e.executer.motionController.viewportManager.viewport.height = e.viewport.height
+
   let
     oldWidth = e.viewport.width
     oldHeight = e.viewport.height
@@ -76,13 +89,18 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       e.state.display.multiStatusLine,
     )
 
-    # After resize, restore viewport scroll position from window to motion controller
+    # After resize, sync viewport from window to motion controller
+    # (ViewPort is value type, so must sync all fields)
     if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
       let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
       e.executer.motionController.viewportManager.viewport.topLine =
         activeWindow.viewport.topLine
       e.executer.motionController.viewportManager.viewport.leftColumn =
         activeWindow.viewport.leftColumn
+      e.executer.motionController.viewportManager.viewport.width =
+        activeWindow.viewport.width
+      e.executer.motionController.viewportManager.viewport.height =
+        activeWindow.viewport.height
   else:
     # Normal case: sync active window's cursor with state cursor
     if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
@@ -156,109 +174,6 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
     e.setActiveWindowScreenCursor(activeWindow)
 
-proc renderSingleViewSidebar(
-    buffer: var Buffer, sidebar: Sidebar, sidebarLineIndex: int, screenY: int
-) =
-  ## Render a single line of the sidebar for single view mode
-  ## sidebarLineIndex: index into sidebar.buffer (logical line based)
-  ## screenY: actual screen Y coordinate for rendering
-  if sidebarLineIndex >= 0 and sidebarLineIndex < sidebar.buffer.len:
-    for x in 0 ..< sidebar.width:
-      let item = sidebar.buffer[sidebarLineIndex][x]
-      if x < buffer.area.width and screenY < buffer.area.height:
-        buffer.setString(x, screenY, item.text, item.style)
-
-proc renderSingleView*(e: Editor, buffer: var Buffer, wasResized: bool) =
-  ## Render single buffer view (no split windows)
-  # Sync viewport with motion controller (both directions)
-  e.executer.motionController.viewportManager.viewport.width = e.viewport.width
-  e.executer.motionController.viewportManager.viewport.height = e.viewport.height
-  e.viewport = e.executer.motionController.viewportManager.viewport
-
-  # Calculate tab line offset (1 if tab line is shown, 0 otherwise)
-  let tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
-
-  let
-    reservedLines = e.calculateReservedLines(isBottomWindow = true)
-    sidebarWidth = e.calculateSidebarWidth()
-    lineNumOffset =
-      calculateLineNumOffset(e.textBuffer, e.state.display.showLineNumbers)
-    textAreaWidth =
-      max(0, buffer.area.width - sidebarWidth - lineNumOffset - LineNumberPadding)
-    textArea = Rect(
-      x: buffer.area.x + sidebarWidth + lineNumOffset,
-      y: buffer.area.y + tabLineOffset,
-      width: max(0, buffer.area.width - sidebarWidth - lineNumOffset),
-      height: max(0, buffer.area.height - reservedLines - tabLineOffset),
-    )
-
-  # Calculate visible height accounting for tab line
-  let visibleHeight = max(1, buffer.area.height - reservedLines - tabLineOffset)
-
-  # Adjust viewport to keep cursor visible
-  adjustViewportForCursor(
-    e.viewport, e.state.cursor, visibleHeight, textAreaWidth, e.state.display.lineWrap
-  )
-
-  # Sync motion controller's viewport with editor viewport
-  e.executer.motionController.viewportManager.viewport.topLine = e.viewport.topLine
-  e.executer.motionController.viewportManager.viewport.leftColumn =
-    e.viewport.leftColumn
-
-  # Generate sidebar dynamically from buffer markers if enabled
-  # NOTE: Must be after viewport adjustment to use correct topLine
-  let maybeSidebar =
-    if e.state.display.showSidebar:
-      some(generateSidebarFromBuffer(e.textBuffer, e.viewport.topLine, visibleHeight))
-    else:
-      none(Sidebar)
-
-  # Render sidebar if enabled (with line wrap support)
-  if maybeSidebar.isSome:
-    let sidebar = maybeSidebar.get
-    var screenY = tabLineOffset
-    var lineIndex = e.viewport.topLine
-    while screenY < buffer.area.height - reservedLines and lineIndex < e.textBuffer.len:
-      let sidebarLineIndex = lineIndex - e.viewport.topLine
-
-      if e.state.display.lineWrap:
-        let
-          line = e.textBuffer.getLine(lineIndex)
-          lineCharLen = line.charLen
-          numWraps = calculateWrapCount(lineCharLen, textAreaWidth)
-
-        # Render sidebar marker for first screen line of this logical line
-        renderSingleViewSidebar(buffer, sidebar, sidebarLineIndex, screenY)
-        inc screenY
-
-        # For wrapped continuation lines, render empty sidebar
-        for _ in 1 ..< numWraps:
-          if screenY >= buffer.area.height - reservedLines:
-            break
-          inc screenY
-      else:
-        renderSingleViewSidebar(buffer, sidebar, sidebarLineIndex, screenY)
-        inc screenY
-
-      inc lineIndex
-
-  # Render line numbers only if enabled
-  if e.state.display.showLineNumbers:
-    discard e.renderLineNumbers(buffer, textAreaWidth, sidebarWidth, tabLineOffset)
-  e.renderTextBuffer(buffer, textArea)
-
-  # Calculate and set cursor position (including sidebar width)
-  var cursorPos = e.calculateWindowCursor(
-    e.textBuffer,
-    e.viewport,
-    e.state.cursor,
-    sidebarWidth + lineNumOffset,
-    reservedLines + tabLineOffset,
-  )
-  # Adjust cursor Y for tab line offset
-  cursorPos.y += tabLineOffset
-  e.state.screenCursor = cursorPos
-
 proc renderBottomLines*(e: Editor, buffer: var Buffer) =
   ## Render status line and command line at the bottom of the screen
   let
@@ -268,7 +183,7 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
   # Render status line using active buffer
   # - Single window mode: always render status line at bottom
   # - Multi-window mode: only render if multiStatusLine is disabled OR merge is enabled
-  if e.windowManager.windows.len == 0 or not e.state.display.multiStatusLine or
+  if e.windowManager.windows.len == 1 or not e.state.display.multiStatusLine or
       e.config.statusLine.merge:
     e.state.renderStatusLine(e.activeBuffer(), buffer, statusLineY, e.config.statusLine)
 
@@ -295,6 +210,11 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
     let searchPrompt = searchChar & e.state.search.text
     buffer.setString(buffer.area.x, commandLineY, searchPrompt, commandStyle())
     e.state.screenCursor.x = searchPrompt.len
+    e.state.screenCursor.y = buffer.area.height - 1
+  elif e.state.mode == EditorMode.Rename:
+    let renamePrompt = "Rename: " & e.state.renameState.text
+    buffer.setString(buffer.area.x, commandLineY, renamePrompt, commandStyle())
+    e.state.screenCursor.x = renamePrompt.len
     e.state.screenCursor.y = buffer.area.height - 1
   else:
     let lineCount = e.state.statusMessageLineCount()

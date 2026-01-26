@@ -190,7 +190,6 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("lspLog", claLspLog)
   config.addAlias("lspFormat", claLspFormat)
   config.addAlias("lspRestart", claLspRestart)
-  config.addAlias("lspForceRestart", claLspForceRestart)
   config.addAlias("lspFold", claLspFold)
   config.addAlias("lspExeCommand", claLspExecuteCommand)
   config.addAlias("lspCallHierarchyIncoming", claLspCallHierarchyIncoming)

@@ -294,6 +294,43 @@ type
     sidebarSyntaxCheckWarnSign
     sidebarSyntaxCheckErrSign
 
+    # Viewer common colors
+    viewerHeader
+    viewerSelectedLine
+    viewerEmptyMessage
+
+    # Filer mode specific
+    filerDirectory
+    filerSymlink
+    filerSymlinkDir
+    filerHiddenFile
+
+    # Buffer manager specific
+    bufferManagerActive
+    bufferManagerModified
+
+    # Configuration mode specific
+    configModeSection
+    configModeBoolTrue
+    configModeBoolFalse
+    configModeEnum
+    configModeInt
+    configModeEditMode
+    configModePopupBg
+    configModePopupSelected
+
+    # Diff viewer specific
+    diffViewerHeader
+    diffViewerMeta
+
+    # Other viewers
+    recentFileMissing
+    debugViewerSectionHeader
+    referencesViewerHeader
+    documentSymbolViewerHeader
+    callHierarchyViewerHeader
+    helpViewerSectionHeader
+
   ## A single color with RGB value
   ThemeColor* = object
     rgb*: Rgb

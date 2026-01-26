@@ -25,7 +25,7 @@ import pkg/results
 
 import
   editor_types, editor_file, signaturehelp, documentsymbol_viewer, references_viewer,
-  lspservice, lspintegration, buffer
+  callhierarchy_viewer, lspservice, lspintegration, buffer
 import lsp/protocol/types as lspTypes
 
 proc maybeUpdateLsp*(e: Editor) =
@@ -105,26 +105,19 @@ proc switchToBufferForLsp(e: Editor, index: int) =
     return
 
   let targetBuffer = e.buffers[index]
+  let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
-  if e.windowManager.windows.len > 0 and
-      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    if activeWindow.buffer == targetBuffer:
-      return
-    activeWindow.buffer = targetBuffer
-    activeWindow.cursor = BufferPosition(line: 0, column: 0)
-    activeWindow.viewport.topLine = 0
-    activeWindow.viewport.leftColumn = 0
-    # Sync executor and motion controller
-    e.executer.buffer = targetBuffer
-    e.executer.motionController.executor.buffer = targetBuffer
-  else:
-    e.textBuffer = targetBuffer
-    e.executer.buffer = targetBuffer
-    e.executer.motionController.executor.buffer = targetBuffer
-    e.state.cursor = BufferPosition(line: 0, column: 0)
-    e.viewport.topLine = 0
-    e.viewport.leftColumn = 0
+  if activeWindow.buffer == targetBuffer:
+    return
+
+  activeWindow.buffer = targetBuffer
+  activeWindow.cursor = BufferPosition(line: 0, column: 0)
+  activeWindow.viewport.topLine = 0
+  activeWindow.viewport.leftColumn = 0
+
+  # Sync executor and motion controller
+  e.executer.buffer = targetBuffer
+  e.executer.motionController.executor.buffer = targetBuffer
 
   e.state.currentBufferIndex = index
   e.state.needsFullRedraw = true
@@ -164,12 +157,14 @@ proc jumpToLspLocation(e: Editor, loc: lspTypes.Location, resultKind: string): b
   if activeBuffer.filePath.isSome and activeBuffer.filePath.get == path:
     # Same file - just move cursor with boundary checks
     let targetLine = min(loc.range.start.line, max(0, activeBuffer.len - 1))
-    let lineLen =
+    let lineText =
       if activeBuffer.len > 0:
-        activeBuffer[targetLine].len
+        activeBuffer.getLine(targetLine)
       else:
-        0
-    let targetCol = min(loc.range.start.character, max(0, lineLen - 1))
+        ""
+    # Convert LSP UTF-16 character offset to UTF-8 byte offset
+    let utf8Col = utf16OffsetToUtf8(lineText, loc.range.start.character)
+    let targetCol = min(utf8Col, max(0, lineText.len - 1))
     e.state.cursor.line = targetLine
     e.state.cursor.column = max(0, targetCol)
     e.state.statusMessage = resultKind & " at line " & $(targetLine + 1)
@@ -198,12 +193,14 @@ proc jumpToLspLocation(e: Editor, loc: lspTypes.Location, resultKind: string): b
     # Set cursor with boundary checks
     let newActiveBuffer = e.activeBuffer()
     let targetLine = min(loc.range.start.line, max(0, newActiveBuffer.len - 1))
-    let lineLen =
+    let lineText =
       if newActiveBuffer.len > 0:
-        newActiveBuffer[targetLine].len
+        newActiveBuffer.getLine(targetLine)
       else:
-        0
-    let targetCol = min(loc.range.start.character, max(0, lineLen - 1))
+        ""
+    # Convert LSP UTF-16 character offset to UTF-8 byte offset
+    let utf8Col = utf16OffsetToUtf8(lineText, loc.range.start.character)
+    let targetCol = min(utf8Col, max(0, lineText.len - 1))
     e.state.cursor.line = targetLine
     e.state.cursor.column = max(0, targetCol)
     e.state.statusMessage = resultKind & " in " & path
@@ -247,6 +244,7 @@ proc handleLspLocations(
 
 proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
   ## Open a file and jump to a specific location
+  ## Note: column is expected to be LSP UTF-16 code unit offset
   ## Returns true if successful
   let activeBuffer = e.activeBuffer()
 
@@ -257,12 +255,14 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
   if activeBuffer.filePath.isSome and activeBuffer.filePath.get == path:
     # Same file - just move cursor with boundary checks
     let targetLine = min(line, max(0, activeBuffer.len - 1))
-    let lineLen =
+    let lineText =
       if activeBuffer.len > 0:
-        activeBuffer[targetLine].len
+        activeBuffer.getLine(targetLine)
       else:
-        0
-    let targetCol = min(column, max(0, lineLen - 1))
+        ""
+    # Convert LSP UTF-16 character offset to UTF-8 byte offset
+    let utf8Col = utf16OffsetToUtf8(lineText, column)
+    let targetCol = min(utf8Col, max(0, lineText.len - 1))
     e.state.cursor.line = targetLine
     e.state.cursor.column = max(0, targetCol)
   else:
@@ -273,12 +273,14 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
       return false
     # Set cursor with boundary checks (loadFile already loaded into e.textBuffer)
     let targetLine = min(line, max(0, e.textBuffer.len - 1))
-    let lineLen =
+    let lineText =
       if e.textBuffer.len > 0:
-        e.textBuffer[targetLine].len
+        e.textBuffer.getLine(targetLine)
       else:
-        0
-    let targetCol = min(column, max(0, lineLen - 1))
+        ""
+    # Convert LSP UTF-16 character offset to UTF-8 byte offset
+    let utf8Col = utf16OffsetToUtf8(lineText, column)
+    let targetCol = min(utf8Col, max(0, lineText.len - 1))
     e.state.cursor.line = targetLine
     e.state.cursor.column = max(0, targetCol)
 
@@ -492,7 +494,7 @@ proc pollLspCallHierarchy*(e: Editor) =
         e.state.lspCache.pendingCallHierarchyKind = chrkNone
         e.state.statusMessage = "No callable symbol at cursor"
     of chrkIncomingCalls:
-      # Second stage complete - show incoming calls
+      # Second stage complete - show incoming calls in CallHierarchy mode
       e.state.lspCache.pendingCallHierarchyRequestId = 0
       e.state.lspCache.pendingCallHierarchyKind = chrkNone
 
@@ -502,16 +504,22 @@ proc pollLspCallHierarchy*(e: Editor) =
           e.state.statusMessage = "No incoming calls found"
           return
 
-        var locations: seq[lspTypes.Location] = @[]
+        # Convert incoming calls to CallHierarchyItem list
+        var items: seq[lspTypes.CallHierarchyItem] = @[]
         for call in calls:
-          locations.add(
-            lspTypes.Location(uri: call.`from`.uri, range: call.`from`.selectionRange)
-          )
-        discard e.handleLspLocations(locations, "Incoming Calls", "Caller")
+          items.add(call.`from`)
+
+        # Enter CallHierarchy mode (only set previousMode if not already in CallHierarchy)
+        if e.state.mode != EditorMode.CallHierarchy:
+          e.state.previousMode = e.state.mode
+          e.state.mode = EditorMode.CallHierarchy
+        e.state.callHierarchyViewerState =
+          some(newCallHierarchyViewerState(items, chvkIncoming))
+        e.state.statusMessage = $items.len & " incoming calls found"
       else:
         e.state.statusMessage = "No incoming calls found"
     of chrkOutgoingCalls:
-      # Second stage complete - show outgoing calls
+      # Second stage complete - show outgoing calls in CallHierarchy mode
       e.state.lspCache.pendingCallHierarchyRequestId = 0
       e.state.lspCache.pendingCallHierarchyKind = chrkNone
 
@@ -521,12 +529,18 @@ proc pollLspCallHierarchy*(e: Editor) =
           e.state.statusMessage = "No outgoing calls found"
           return
 
-        var locations: seq[lspTypes.Location] = @[]
+        # Convert outgoing calls to CallHierarchyItem list
+        var items: seq[lspTypes.CallHierarchyItem] = @[]
         for call in calls:
-          locations.add(
-            lspTypes.Location(uri: call.to.uri, range: call.to.selectionRange)
-          )
-        discard e.handleLspLocations(locations, "Outgoing Calls", "Callee")
+          items.add(call.to)
+
+        # Enter CallHierarchy mode (only set previousMode if not already in CallHierarchy)
+        if e.state.mode != EditorMode.CallHierarchy:
+          e.state.previousMode = e.state.mode
+          e.state.mode = EditorMode.CallHierarchy
+        e.state.callHierarchyViewerState =
+          some(newCallHierarchyViewerState(items, chvkOutgoing))
+        e.state.statusMessage = $items.len & " outgoing calls found"
       else:
         e.state.statusMessage = "No outgoing calls found"
     of chrkNone:
@@ -550,6 +564,62 @@ proc requestLspCallHierarchyOutgoing*(e: Editor): bool =
   ## Request LSP outgoing calls at current cursor position (async)
   ## Returns true if request was started
   e.startCallHierarchyRequest(chrkPrepareOutgoing)
+
+proc requestCallHierarchyIncomingForItem*(
+    e: Editor, item: lspTypes.CallHierarchyItem
+): bool =
+  ## Request incoming calls for a specific CallHierarchyItem (async)
+  ## Used from CallHierarchy mode when user presses 'i'
+  ## Returns true if request was started
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+
+  # Cancel any pending call hierarchy request
+  e.state.lspCache.pendingCallHierarchyRequestId = 0
+  e.state.lspCache.pendingCallHierarchyKind = chrkNone
+
+  let reqResult = e.lsp.startCallHierarchyIncomingCallsRequest(activeBuffer, item)
+  if reqResult.isErr:
+    e.state.statusMessage = "LSP incoming calls failed: " & reqResult.error
+    return false
+
+  e.state.lspCache.pendingCallHierarchyRequestId = reqResult.get
+  e.state.lspCache.pendingCallHierarchyKind = chrkIncomingCalls
+  return true
+
+proc requestCallHierarchyOutgoingForItem*(
+    e: Editor, item: lspTypes.CallHierarchyItem
+): bool =
+  ## Request outgoing calls for a specific CallHierarchyItem (async)
+  ## Used from CallHierarchy mode when user presses 'o'
+  ## Returns true if request was started
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+
+  # Cancel any pending call hierarchy request
+  e.state.lspCache.pendingCallHierarchyRequestId = 0
+  e.state.lspCache.pendingCallHierarchyKind = chrkNone
+
+  let reqResult = e.lsp.startCallHierarchyOutgoingCallsRequest(activeBuffer, item)
+  if reqResult.isErr:
+    e.state.statusMessage = "LSP outgoing calls failed: " & reqResult.error
+    return false
+
+  e.state.lspCache.pendingCallHierarchyRequestId = reqResult.get
+  e.state.lspCache.pendingCallHierarchyKind = chrkOutgoingCalls
+  return true
+
+proc jumpToCallHierarchyItem*(e: Editor, item: lspTypes.CallHierarchyItem): bool =
+  ## Jump to a CallHierarchyItem location
+  ## Returns true if successful
+  let loc = lspTypes.Location(uri: item.uri, range: item.selectionRange)
+  return e.jumpToLspLocation(loc, "Call Hierarchy")
 
 proc requestLspTypeDefinition*(e: Editor): bool =
   ## Request LSP goto type definition at current cursor position (async)
@@ -698,22 +768,35 @@ proc pollLspSelectionRange*(e: Editor) =
       let ranges = parseSelectionRangeResponse(resultOpt.get)
       if ranges.len > 0:
         let selRange = ranges[0]
+        let activeBuffer = e.activeBuffer()
+
+        # Convert LSP UTF-16 positions to UTF-8 byte offsets
+        let startLine = selRange.range.start.line
+        let startLineText =
+          if startLine >= 0 and startLine < activeBuffer.len:
+            activeBuffer.getLine(startLine)
+          else:
+            ""
+        let startCol = utf16OffsetToUtf8(startLineText, selRange.range.start.character)
+
+        let endLine = selRange.range.`end`.line
+        let endLineText =
+          if endLine >= 0 and endLine < activeBuffer.len:
+            activeBuffer.getLine(endLine)
+          else:
+            ""
+        let endCol = utf16OffsetToUtf8(endLineText, selRange.range.`end`.character)
+
         # Enter visual mode and set selection to the range
         e.state.previousMode = e.state.mode
         e.state.mode = EditorMode.Visual
         e.state.visualSelection = VisualSelection(
           kind: vskChar,
-          start: BufferPosition(
-            line: selRange.range.start.line, column: selRange.range.start.character
-          ),
-          current: BufferPosition(
-            line: selRange.range.`end`.line, column: selRange.range.`end`.character
-          ),
+          start: BufferPosition(line: startLine, column: startCol),
+          current: BufferPosition(line: endLine, column: endCol),
           active: true,
         )
-        e.state.cursor = BufferPosition(
-          line: selRange.range.`end`.line, column: selRange.range.`end`.character
-        )
+        e.state.cursor = BufferPosition(line: endLine, column: endCol)
       else:
         e.state.statusMessage = "No selection range available"
     else:
@@ -865,3 +948,350 @@ proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
     e.state.needsFullRedraw = true
   except CancelledError:
     discard
+
+proc requestLspRename*(
+    e: Editor, newName: string
+): Future[void] {.async: (raises: []).} =
+  ## Request LSP rename and apply workspace edits
+  {.cast(raises: []).}:
+    {.cast(gcsafe).}:
+      try:
+        if not e.lsp.enabled:
+          e.state.statusMessage = "LSP not enabled"
+          return
+
+        let activeBuffer = e.activeBuffer()
+        let line = e.state.renameState.cursorLine
+        let col = e.state.renameState.cursorColumn
+
+        # Get rename result from LSP
+        let renameResult = await e.lsp.requestRename(activeBuffer, line, col, newName)
+        if renameResult.isErr:
+          e.state.statusMessage = "LSP rename failed: " & renameResult.error
+          return
+
+        let workspaceEditOpt = renameResult.get
+        if workspaceEditOpt.isNone:
+          e.state.statusMessage = "No rename changes"
+          return
+
+        let workspaceEdit = workspaceEditOpt.get
+
+        # Apply the workspace edits to all affected buffers
+        let applyResult = applyWorkspaceEdit(e.buffers, workspaceEdit)
+        if applyResult.isErr:
+          e.state.statusMessage = "Failed to apply rename: " & applyResult.error
+          return
+
+        let modifiedCount = applyResult.get
+        e.state.statusMessage =
+          "Renamed '" & e.state.renameState.originalWord & "' to '" & newName & "' (" &
+          $modifiedCount & " file" & (if modifiedCount > 1: "s" else: "") & " modified)"
+        e.state.needsFullRedraw = true
+      except CancelledError:
+        discard
+
+proc findDocumentLinkAtCursor(
+    links: seq[lspTypes.DocumentLink], line, column: int
+): Option[lspTypes.DocumentLink] =
+  ## Find a document link that contains the cursor position
+  ## LSP ranges are half-open intervals [start, end)
+  for link in links:
+    let startLine = link.range.start.line
+    let endLine = link.range.`end`.line
+    let startChar = link.range.start.character
+    let endChar = link.range.`end`.character
+
+    # Check if cursor is within the link range [start, end)
+    if line >= startLine and line <= endLine:
+      if line == startLine and line == endLine:
+        # Single line link: [startChar, endChar)
+        if column >= startChar and column < endChar:
+          return some(link)
+      elif line == startLine:
+        # First line of multi-line link
+        if column >= startChar:
+          return some(link)
+      elif line == endLine:
+        # Last line of multi-line link: [0, endChar)
+        if column < endChar:
+          return some(link)
+      else:
+        # Cursor is on a middle line of a multi-line link
+        return some(link)
+
+  return none(lspTypes.DocumentLink)
+
+proc jumpToDocumentLink(e: Editor, link: lspTypes.DocumentLink): bool =
+  ## Jump to a document link target
+  ## Returns true if successful
+  if link.target.isNone:
+    e.state.statusMessage = "Document link has no target"
+    return false
+
+  let target = link.target.get
+
+  # Check if the target is a file:// URI
+  if target.startsWith("file://"):
+    let path = lspservice.uriToPath(target)
+    let activeBuffer = e.activeBuffer()
+
+    # Add current position to jump list before jumping
+    e.addToJumpList()
+
+    # Check if it's the same file
+    if activeBuffer.filePath.isSome and activeBuffer.filePath.get == path:
+      e.state.statusMessage = "Already in this file"
+      return true
+
+    # Check if buffer already exists
+    var existingIndex = -1
+    for i, buf in e.buffers:
+      if buf.filePath.isSome and buf.filePath.get == path:
+        existingIndex = i
+        break
+
+    if existingIndex >= 0:
+      e.switchToBufferForLsp(existingIndex)
+    else:
+      let newBuffer = newTextBuffer()
+      let loadResult = newBuffer.loadFile(path)
+      if loadResult.isErr:
+        e.state.statusMessage = "Failed to open file: " & loadResult.error
+        return false
+      e.buffers.add(newBuffer)
+      e.switchToBufferForLsp(e.buffers.high)
+
+      # Notify LSP about the newly opened file
+      if e.lsp.enabled:
+        discard e.lsp.onBufferOpen(newBuffer)
+
+    e.state.statusMessage = "Opened: " & path.split('/')[^1]
+    return true
+  elif target.startsWith("http://") or target.startsWith("https://"):
+    # External URL - show message (could open browser in the future)
+    e.state.statusMessage = "External link: " & target
+    return true
+  else:
+    # Unknown URI scheme
+    e.state.statusMessage = "Unknown link target: " & target
+    return false
+
+proc startLspDocumentLinks*(e: Editor): bool =
+  ## Start async document links request
+  ## Returns true if request was started
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    e.state.statusMessage = "No file path for current buffer"
+    return false
+
+  if not e.lsp.hasDocumentLinkSupport(activeBuffer):
+    e.state.statusMessage = "Document links not supported"
+    return false
+
+  # Cancel any existing requests
+  e.state.lspCache.pendingDocumentLinkRequestId = 0
+  e.state.lspCache.pendingDocumentLinkResolveRequestId = 0
+
+  # Save cursor position (convert to UTF-16 for LSP comparison)
+  let lineText =
+    if e.state.cursor.line >= 0 and e.state.cursor.line < activeBuffer.len:
+      activeBuffer.getLine(e.state.cursor.line)
+    else:
+      ""
+  e.state.lspCache.pendingDocumentLinkCursorLine = e.state.cursor.line
+  e.state.lspCache.pendingDocumentLinkCursorCol =
+    utf8OffsetToUtf16(lineText, e.state.cursor.column)
+
+  let reqResult = e.lsp.startDocumentLinkRequest(activeBuffer)
+  if reqResult.isErr:
+    e.state.statusMessage = "LSP document links failed: " & reqResult.error
+    return false
+
+  e.state.lspCache.pendingDocumentLinkRequestId = reqResult.get
+  return true
+
+proc pollLspDocumentLinks*(e: Editor) =
+  ## Poll for pending document links response (stage 1)
+  if not e.lsp.enabled:
+    return
+
+  let requestId = e.state.lspCache.pendingDocumentLinkRequestId
+  if requestId == 0:
+    return
+
+  # Poll LSP service for events
+  e.lsp.poll(0)
+
+  # Check for response
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+
+  case status
+  of lrsPending:
+    discard # Still waiting
+  of lrsSuccess:
+    e.state.lspCache.pendingDocumentLinkRequestId = 0
+    if resultOpt.isSome:
+      let links = parseDocumentLinksResponse(resultOpt.get)
+      if links.len == 0:
+        e.state.statusMessage = "No document links found"
+        return
+
+      # Find link at saved cursor position
+      let cursorLine = e.state.lspCache.pendingDocumentLinkCursorLine
+      let cursorCol = e.state.lspCache.pendingDocumentLinkCursorCol
+      let linkOpt = findDocumentLinkAtCursor(links, cursorLine, cursorCol)
+
+      if linkOpt.isNone:
+        e.state.statusMessage =
+          "No link at cursor position (" & $links.len & " links in document)"
+        return
+
+      let link = linkOpt.get
+
+      # If link has no target, try to resolve it
+      if link.target.isNone:
+        let activeBuffer = e.activeBuffer()
+        if e.lsp.hasDocumentLinkResolveSupport(activeBuffer):
+          # Start resolve request
+          let resolveResult = e.lsp.startDocumentLinkResolveRequest(activeBuffer, link)
+          if resolveResult.isOk:
+            e.state.lspCache.pendingDocumentLinkResolveRequestId = resolveResult.get
+            return
+          else:
+            e.state.statusMessage = "Failed to resolve link: " & resolveResult.error
+            return
+        else:
+          e.state.statusMessage =
+            "Document link has no target and resolve not supported"
+          return
+
+      discard e.jumpToDocumentLink(link)
+    else:
+      e.state.statusMessage = "No document links found"
+  of lrsError:
+    e.state.lspCache.pendingDocumentLinkRequestId = 0
+    if errorOpt.isSome:
+      e.state.statusMessage = "LSP document links failed: " & errorOpt.get
+  of lrsTimeout:
+    e.state.lspCache.pendingDocumentLinkRequestId = 0
+    e.state.statusMessage = "LSP document links timed out"
+
+proc pollLspDocumentLinkResolve*(e: Editor) =
+  ## Poll for pending document link resolve response (stage 2)
+  if not e.lsp.enabled:
+    return
+
+  let requestId = e.state.lspCache.pendingDocumentLinkResolveRequestId
+  if requestId == 0:
+    return
+
+  # Poll LSP service for events
+  e.lsp.poll(0)
+
+  # Check for response
+  let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
+
+  case status
+  of lrsPending:
+    discard # Still waiting
+  of lrsSuccess:
+    e.state.lspCache.pendingDocumentLinkResolveRequestId = 0
+    if resultOpt.isSome:
+      let resolvedLink = parseDocumentLinkResolveResponse(resultOpt.get)
+      discard e.jumpToDocumentLink(resolvedLink)
+    else:
+      e.state.statusMessage = "Document link resolve returned no result"
+  of lrsError:
+    e.state.lspCache.pendingDocumentLinkResolveRequestId = 0
+    if errorOpt.isSome:
+      e.state.statusMessage = "LSP document link resolve failed: " & errorOpt.get
+  of lrsTimeout:
+    e.state.lspCache.pendingDocumentLinkResolveRequestId = 0
+    e.state.statusMessage = "LSP document link resolve timed out"
+
+proc requestLspDocumentLinks*(e: Editor): bool =
+  ## Request document links and jump to link at cursor (async)
+  ## Returns true if request was started
+  e.startLspDocumentLinks()
+
+proc restartLspServer*(e: Editor): bool =
+  ## Restart LSP server for the current buffer's language
+  ## This will start the server even if it was not running
+  ## Returns true if successful
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    e.state.statusMessage = "No file path for current buffer"
+    return false
+
+  let langIdOpt = e.lsp.service.getLanguageIdFromPath(activeBuffer.filePath.get)
+  if langIdOpt.isNone:
+    e.state.statusMessage = "No LSP support for this file type"
+    return false
+
+  let langId = langIdOpt.get
+
+  # Stop the worker if it exists (ignore errors)
+  discard e.lsp.service.stopWorker(langId)
+
+  # Start the worker
+  let startResult = e.lsp.service.startWorker(langId)
+  if startResult.isErr:
+    e.state.statusMessage = "Failed to start LSP server: " & startResult.error
+    return false
+
+  # Re-notify about open buffers for this language
+  for buf in e.buffers:
+    if buf.filePath.isSome:
+      let bufLangIdOpt = e.lsp.service.getLanguageIdFromPath(buf.filePath.get)
+      if bufLangIdOpt.isSome and bufLangIdOpt.get == langId:
+        discard e.lsp.onBufferOpen(buf)
+
+  e.state.statusMessage = "Restarted LSP server for " & langId
+  return true
+
+proc requestLspExecuteCommand*(
+    e: Editor, command: string, args: seq[string] = @[]
+): Future[void] {.async: (raises: []).} =
+  ## Execute an LSP workspace command
+  {.cast(raises: []).}:
+    {.cast(gcsafe).}:
+      try:
+        if not e.lsp.enabled:
+          e.state.statusMessage = "LSP not enabled"
+          return
+
+        let activeBuffer = e.activeBuffer()
+
+        # Check if execute command is supported
+        if not e.lsp.hasExecuteCommandSupport(activeBuffer):
+          e.state.statusMessage = "Execute command not supported by LSP server"
+          return
+
+        # Convert string arguments to JSON
+        var jsonArgs: seq[JsonNode] = @[]
+        for arg in args:
+          jsonArgs.add(%arg)
+
+        # Execute the command
+        let execResult =
+          await e.lsp.requestExecuteCommand(activeBuffer, command, jsonArgs)
+        if execResult.isErr:
+          e.state.statusMessage = "LSP executeCommand failed: " & execResult.error
+          return
+
+        let response = execResult.get
+        if response.kind == JNull:
+          e.state.statusMessage = "Executed: " & command
+        else:
+          e.state.statusMessage = "Executed: " & command & " -> " & $response
+      except CancelledError:
+        discard

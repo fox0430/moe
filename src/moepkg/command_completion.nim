@@ -173,7 +173,6 @@ const CommandDescriptions = {
   "lspLog": "Open LSP log",
   "lspFormat": "Format with LSP",
   "lspRestart": "Restart LSP",
-  "lspForceRestart": "Force restart LSP",
   "lspFold": "Fold with LSP",
   "lspExeCommand": "Execute LSP command",
   "lspCallHierarchyIncoming": "Show incoming calls",

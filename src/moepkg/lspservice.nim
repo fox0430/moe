@@ -680,6 +680,25 @@ proc startCodeLensRequest*(svc: LspService, path: string): Result[int, string] =
   ## Start a code lens request (non-blocking). Returns request ID.
   svc.startDocumentRequest(path, "textDocument/codeLens")
 
+proc startDocumentLinkRequest*(svc: LspService, path: string): Result[int, string] =
+  ## Start a document link request (non-blocking). Returns request ID.
+  svc.startDocumentRequest(path, "textDocument/documentLink")
+
+proc startDocumentLinkResolveRequest*(
+    svc: LspService, path: string, link: DocumentLink
+): Result[int, string] =
+  ## Start a document link resolve request (non-blocking). Returns request ID.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let params = documentLinkToJson(link)
+  ok(svc.startTrackedRequest(worker, "documentLink/resolve", params))
+
 proc startSemanticTokensFullRequest*(
     svc: LspService, path: string
 ): Result[int, string] =
@@ -835,6 +854,18 @@ proc parseSelectionRangeResponse*(resp: JsonNode): seq[SelectionRange] =
     for item in resp:
       ranges.add(parseSelectionRange(item))
   return ranges
+
+proc parseDocumentLinksResponse*(resp: JsonNode): seq[DocumentLink] =
+  ## Parse a document links response JSON
+  var links: seq[DocumentLink] = @[]
+  if resp.kind == JArray:
+    for item in resp:
+      links.add(parseDocumentLink(item))
+  return links
+
+proc parseDocumentLinkResolveResponse*(resp: JsonNode): DocumentLink =
+  ## Parse a document link resolve response JSON
+  parseDocumentLink(resp)
 
 # Capability checking - uses capabilities received from worker events
 
@@ -1117,6 +1148,14 @@ proc hasFoldingRangeSupport*(svc: LspService, langId: string): bool =
   if langId notin svc.capabilities:
     return false
   return svc.capabilities[langId].foldingRangeProvider.isSome
+
+proc hasExecuteCommandSupport*(svc: LspService, langId: string): bool =
+  ## Check if execute command is supported for a language
+  if svc.hasDynamicRegistration(langId, "workspace/executeCommand"):
+    return true
+  if langId notin svc.capabilities:
+    return false
+  return svc.capabilities[langId].executeCommandProvider.isSome
 
 proc requestCompletion*(
     svc: LspService, path: string, line, character: int

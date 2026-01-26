@@ -192,9 +192,8 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
 
 proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
   ## Create a vertical split window
-  # Save current window state before splitting (if windows already exist)
-  if e.windowManager.windows.len > 0:
-    e.saveActiveWindowState()
+  # Save current window state before splitting
+  e.saveActiveWindowState()
 
   let bufferResult =
     e.windowManager.vsplit(e.textBuffer, e.viewport, e.state.cursor, filename)
@@ -227,9 +226,8 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
 
 proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   ## Create a vertical split window with a specific buffer
-  # Save current window state before splitting (if windows already exist)
-  if e.windowManager.windows.len > 0:
-    e.saveActiveWindowState()
+  # Save current window state before splitting
+  e.saveActiveWindowState()
 
   let bufferResult =
     e.windowManager.vsplitWithBuffer(e.textBuffer, e.viewport, e.state.cursor, buffer)
@@ -262,9 +260,8 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
 
 proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
   ## Create a horizontal split window (top and bottom)
-  # Save current window state before splitting (if windows already exist)
-  if e.windowManager.windows.len > 0:
-    e.saveActiveWindowState()
+  # Save current window state before splitting
+  e.saveActiveWindowState()
 
   let bufferResult = e.windowManager.hsplit(
     e.textBuffer, e.viewport, e.state.cursor, e.state.display.multiStatusLine, filename
@@ -298,9 +295,8 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
 
 proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   ## Create a horizontal split window with a specific buffer
-  # Save current window state before splitting (if windows already exist)
-  if e.windowManager.windows.len > 0:
-    e.saveActiveWindowState()
+  # Save current window state before splitting
+  e.saveActiveWindowState()
 
   let bufferResult = e.windowManager.hsplitWithBuffer(
     e.textBuffer, e.viewport, e.state.cursor, e.state.display.multiStatusLine, buffer
@@ -348,30 +344,20 @@ proc enew*(e: Editor): Result[(), string] =
   newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
   logDebug("editor", "enew: buffer added, buffers.len: " & $e.buffers.len)
 
-  if e.windowManager.windows.len > 0 and
-      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    # Replace the buffer in the active window
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    activeWindow.buffer = newBuffer
-    activeWindow.cursor = BufferPosition(line: 0, column: 0)
-    activeWindow.viewport.topLine = 0
-    activeWindow.viewport.leftColumn = 0
+  # Replace the buffer in the active window
+  let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+  activeWindow.buffer = newBuffer
+  activeWindow.cursor = BufferPosition(line: 0, column: 0)
+  activeWindow.viewport.topLine = 0
+  activeWindow.viewport.leftColumn = 0
 
-    # Update executor and motion controller references
-    e.executer.buffer = newBuffer
-    e.executer.motionController.executor.buffer = newBuffer
-    e.executer.motionController.viewportManager.viewport = activeWindow.viewport
+  # Update executor and motion controller references
+  e.executer.buffer = newBuffer
+  e.executer.motionController.executor.buffer = newBuffer
+  e.executer.motionController.viewportManager.viewport = activeWindow.viewport
 
-    # Reset cursor
-    e.state.cursor = BufferPosition(line: 0, column: 0)
-  else:
-    # No windows, replace the main buffer
-    e.textBuffer = newBuffer
-    e.executer.buffer = newBuffer
-    e.executer.motionController.executor.buffer = newBuffer
-    e.state.cursor = BufferPosition(line: 0, column: 0)
-    e.viewport.topLine = 0
-    e.viewport.leftColumn = 0
+  # Reset cursor
+  e.state.cursor = BufferPosition(line: 0, column: 0)
 
   e.state.needsFullRedraw = true
   ok(())

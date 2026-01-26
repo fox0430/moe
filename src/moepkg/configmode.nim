@@ -129,21 +129,12 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
   )
   result.add ConfigItemDescriptor(
     kind: cvkBool,
-    displayName: "currentNumber",
-    section: "Standard",
+    displayName: "currentLine",
+    section: "Highlight",
     boolGet: proc(c: EditorConfig): bool =
-      c.standard.currentNumber,
+      c.highlight.currentLine,
     boolSet: proc(c: EditorConfig, v: bool) =
-      c.standard.currentNumber = v,
-  )
-  result.add ConfigItemDescriptor(
-    kind: cvkBool,
-    displayName: "cursorLine",
-    section: "Standard",
-    boolGet: proc(c: EditorConfig): bool =
-      c.standard.cursorLine,
-    boolSet: proc(c: EditorConfig, v: bool) =
-      c.standard.cursorLine = v,
+      c.highlight.currentLine = v,
   )
   result.add ConfigItemDescriptor(
     kind: cvkBool,

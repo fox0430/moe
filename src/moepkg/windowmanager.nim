@@ -74,8 +74,10 @@ proc switchToPrevWindow*(wm: EditorWindowManager) =
 proc closeWindow*(wm: EditorWindowManager, multiStatusLine: bool): bool =
   ## Close the active window and redistribute space to remaining windows
   ## Returns true if this was the last window (editor should quit)
+  ## Note: The last window is never actually deleted - only the quit flag is returned
 
-  # If no windows or only one window, indicate should quit
+  # If only one window left, indicate should quit but don't delete the window
+  # This ensures windows.len >= 1 invariant is maintained
   if wm.windows.len <= 1:
     return true
 
@@ -392,17 +394,6 @@ proc vsplit*(
   ## Create a vertical split window (side by side)
   ## Returns the new buffer that should be used
 
-  # If no windows exist yet, create first window from current state
-  if wm.windows.len == 0:
-    wm.windows.add(
-      EditorWindow(
-        buffer: currentBuffer,
-        viewport: currentViewport,
-        cursor: cursorPosition,
-        active: false,
-      )
-    )
-
   # Create new buffer for the split
   let newBuffer =
     if filename.isSome:
@@ -475,17 +466,6 @@ proc vsplitWithBuffer*(
   ## Create a vertical split window with a specific buffer
   ## Returns the new buffer that should be used
 
-  # If no windows exist yet, create first window from current state
-  if wm.windows.len == 0:
-    wm.windows.add(
-      EditorWindow(
-        buffer: currentBuffer,
-        viewport: currentViewport,
-        cursor: cursorPosition,
-        active: false,
-      )
-    )
-
   let
     # Split the active window vertically (side by side)
     originalViewport = wm.windows[wm.activeWindowIndex].viewport
@@ -545,18 +525,6 @@ proc hsplit*(
 ): Result[TextBuffer, string] =
   ## Create a horizontal split window (top and bottom)
   ## Returns the new buffer that should be used
-
-  # If no windows exist yet, create first window from current state
-  # viewport.height includes command line space - it will be excluded via reservedLines during rendering
-  if wm.windows.len == 0:
-    wm.windows.add(
-      EditorWindow(
-        buffer: currentBuffer,
-        viewport: currentViewport,
-        cursor: cursorPosition,
-        active: false,
-      )
-    )
 
   # Create new buffer for the split
   let newBuffer =
@@ -653,17 +621,6 @@ proc hsplitWithBuffer*(
   ## Create a horizontal split window with a specific buffer
   ## Returns the new buffer that should be used
 
-  # If no windows exist yet, create first window from current state
-  if wm.windows.len == 0:
-    wm.windows.add(
-      EditorWindow(
-        buffer: currentBuffer,
-        viewport: currentViewport,
-        cursor: cursorPosition,
-        active: false,
-      )
-    )
-
   let
     # Split the active window horizontally (top and bottom)
     originalViewport = wm.windows[wm.activeWindowIndex].viewport
@@ -737,9 +694,6 @@ proc resizeWindows*(
     multiStatusLine: bool,
 ) =
   ## Adjust all window viewports when terminal is resized
-
-  if wm.windows.len == 0:
-    return
 
   if oldWidth <= 0 or oldHeight <= 0 or newWidth <= 0 or newHeight <= 0:
     return

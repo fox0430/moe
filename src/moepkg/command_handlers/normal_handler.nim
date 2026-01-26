@@ -52,6 +52,7 @@ type
     nmrLspHover # Signal to handler_manager to execute LSP hover
     nmrLspRename # Signal to handler_manager to execute LSP rename
     nmrLspSelectionRange # Signal to handler_manager to execute LSP selection range
+    nmrLspDocumentLink # Signal to handler_manager to execute LSP document link
     nmrJumpToBuffer # Signal to handler_manager to jump to buffer and position
 
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
@@ -100,6 +101,8 @@ type
     of nmrLspRename:
       nmrLspNewName*: string
     of nmrLspSelectionRange:
+      discard
+    of nmrLspDocumentLink:
       discard
     of nmrJumpToBuffer:
       nmrJumpBufferIndex*: int # Target buffer index
@@ -271,6 +274,12 @@ proc handleModeSwitch*(
     return NormalModeResult(
       kind: nmrHandled, modeTransition: some(EditorMode.DocumentSymbol)
     )
+  of EditorMode.Rename:
+    # Rename mode is entered through LSP rename command, not mode switch
+    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+  of EditorMode.CallHierarchy:
+    return
+      NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.CallHierarchy))
   of EditorMode.Normal:
     # Already in Normal mode
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
@@ -716,6 +725,8 @@ proc handleNormalModeKey*(
       return NormalModeResult(kind: nmrLspRename, nmrLspNewName: "")
     elif cmd.commandId == "lsp.selection.range":
       return NormalModeResult(kind: nmrLspSelectionRange)
+    elif cmd.commandId == "lsp.document.link":
+      return NormalModeResult(kind: nmrLspDocumentLink)
     elif cmd.commandId == "lsp.document.symbol":
       # Transition to DocumentSymbol mode
       return NormalModeResult(

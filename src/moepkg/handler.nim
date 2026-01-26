@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, os, strutils, tables, monotimes]
+import std/[options, os, strutils, tables, monotimes, unicode]
 
 import pkg/[celina, results, chronos]
 from pkg/celina/core/mouse_logic import MouseButton
@@ -26,7 +26,8 @@ import
   editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
   filer, quickrunutils, helpviewer, buffermanager, backupmanager, backup, diffviewer,
   command_completion, build, render_utils, sidebar, debugviewer, configloader,
-  references_viewer, documentsymbol_viewer, messagelog, commandline
+  references_viewer, documentsymbol_viewer, callhierarchy_viewer, messagelog,
+  commandline, color, theme
 import command_handlers/handler_manager
 
 # Track running background processes for cleanup on exit
@@ -473,11 +474,8 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         of bsoNumber:
           e.config.standard.number = val
           e.state.setStatusMessage("number = " & $val)
-        of bsoCurrentNumber:
-          e.config.standard.currentNumber = val
-          e.state.setStatusMessage("currentnumber = " & $val)
         of bsoCursorLine:
-          e.config.standard.cursorLine = val
+          e.config.highlight.currentLine = val
           e.state.display.showCursorLine = val
           e.state.setStatusMessage("cursorline = " & $val)
         of bsoStatusLine:
@@ -517,7 +515,6 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.setStatusMessage("icon = " & $val)
         of bsoHighlightCurrentLine:
           e.config.highlight.currentLine = val
-          e.config.standard.cursorLine = val # Keep both settings in sync
           e.state.display.showCursorLine = val
           e.state.setStatusMessage("highlightcurrentline = " & $val)
         of bsoHighlightCurrentWord:
@@ -582,6 +579,10 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       if r.shouldShellCommand():
         # Set pending shell command to be executed by handleEventAsync
         e.state.pendingShellCommand = r.getShellCommand()
+
+      if r.shouldMan():
+        # Set pending man page to be executed by handleEventAsync
+        e.state.pendingManPage = r.getManPage()
 
       if r.shouldBackground():
         # Set pending background flag to be handled by handleEventAsync
@@ -944,6 +945,29 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.needsFullRedraw = true
         # Return to Normal mode (not to previous Command mode)
         e.state.mode = EditorMode.Normal
+      elif r.kind == hrTheme:
+        # Handle theme change command
+        let themeName = r.hrThemeName
+        if themeName == "default":
+          # Use default theme
+          setThemeColors(DefaultColors)
+          e.state.setStatusMessage("Theme changed to: default")
+        else:
+          # Try to load theme from config directory
+          let themePath =
+            getHomeDir() / ".config" / "moe" / "themes" / (themeName & ".toml")
+          let expandedPath = expandTilde(themePath)
+          if fileExists(expandedPath):
+            let themeResult = loadThemeFromToml(expandedPath)
+            if themeResult.isOk:
+              setThemeColors(themeResult.get)
+              e.state.setStatusMessage("Theme changed to: " & themeName)
+            else:
+              e.state.setStatusMessage("Failed to load theme: " & themeResult.error)
+          else:
+            e.state.setStatusMessage("Theme not found: " & themeName)
+        e.state.needsFullRedraw = true
+        e.state.mode = EditorMode.Normal
       elif r.shouldEnterConfigMode():
         # Enter configuration mode
         e.state.previousMode = e.state.mode
@@ -1199,6 +1223,68 @@ proc handleSearchModeEvent(e: Editor, event: Event): bool =
     # Reset history navigation when user types
     e.state.search.historyIndex = -1
     e.handleSearchCharacterInput(keyCombo.char)
+    return true
+
+  # Ignore other special keys
+  return true
+
+proc handleRenameModeEvent(e: Editor, event: Event): bool =
+  ## Handle Rename mode events - for LSP rename symbol input
+  ##
+  ## Key Mappings:
+  ## - Escape      -> Cancel rename, return to Normal mode
+  ## - Enter/CR    -> Execute rename with current text
+  ## - Backspace   -> Remove last character
+  ## - Character   -> Add character to rename text
+  ##
+  ## Returns: true (event handled)
+  if event.kind != EventKind.Key:
+    return true
+
+  # Convert event to key combo
+  let keyComboOpt = eventToKeyCombo(event)
+  if keyComboOpt.isNone:
+    return true
+
+  let keyCombo = keyComboOpt.get
+
+  # Escape: Cancel rename and return to previous mode
+  if keyCombo.isSpecial and keyCombo.special == skEscape:
+    e.state.mode = e.state.previousMode
+    e.state.statusMessage = "Rename cancelled"
+    e.state.needsFullRedraw = true
+    return true
+
+  # Enter: Execute rename
+  let isEnter =
+    (keyCombo.isSpecial and keyCombo.special == skEnter) or
+    (not keyCombo.isSpecial and (keyCombo.char == "\n" or keyCombo.char == "\r"))
+
+  if isEnter:
+    let newName = e.state.renameState.text
+    if newName.len == 0:
+      e.state.statusMessage = "Rename cancelled: empty name"
+      e.state.mode = e.state.previousMode
+    elif newName == e.state.renameState.originalWord:
+      e.state.statusMessage = "Rename cancelled: same name"
+      e.state.mode = e.state.previousMode
+    else:
+      # Execute the LSP rename asynchronously
+      e.state.mode = e.state.previousMode
+      asyncSpawn e.requestLspRename(newName)
+    e.state.needsFullRedraw = true
+    return true
+
+  # Backspace: Remove last character (Unicode-aware)
+  if keyCombo.isSpecial and keyCombo.special == skBackspace:
+    if e.state.renameState.text.runeLen > 0:
+      e.state.renameState.text =
+        e.state.renameState.text.runeSubStr(0, e.state.renameState.text.runeLen - 1)
+    return true
+
+  # Character input: Add character to rename text
+  if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+    e.state.renameState.text &= keyCombo.char
     return true
 
   # Ignore other special keys
@@ -1500,15 +1586,22 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       lineNumOffset = e.calculateLineNumOffsetForMouse(activeBuffer)
       # Status line + command line
       reservedLines = if e.state.display.showStatusLine: 2 else: 1
+      # Account for tab line offset
+      tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+      adjustedMouseY = mouse.y - tabLineOffset
       posOpt = screenToBufferPosition(
-        e.viewport, activeBuffer, mouse.x, mouse.y, lineNumOffset, reservedLines,
+        e.viewport, activeBuffer, mouse.x, adjustedMouseY, lineNumOffset, reservedLines,
         e.state.display.lineWrap,
       )
 
     if posOpt.isNone:
       return false
 
-    e.state.cursor = posOpt.get
+    let pos = posOpt.get
+    e.state.cursor = pos
+    # Also update the active window's cursor
+    if e.windowManager.windows.len > 0:
+      e.windowManager.windows[e.windowManager.activeWindowIndex].cursor = pos
     e.state.needsFullRedraw = true
     return true
 
@@ -1568,6 +1661,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Handle Search mode input differently (character by character)
   if e.state.mode == EditorMode.Search:
     return handleSearchModeEvent(e, event)
+
+  # Handle Rename mode input (character by character)
+  if e.state.mode == EditorMode.Rename:
+    return handleRenameModeEvent(e, event)
 
   # Handle Recent File mode input
   if e.state.mode == EditorMode.RecentFile:
@@ -2031,6 +2128,48 @@ proc handleEvent*(e: Editor, event: Event): bool =
     discard e.openFileAndJumpTo(filePath, target.line, target.column)
     return true
 
+  # Handle Call Hierarchy mode results
+  if r.shouldCallHierarchyQuit():
+    # Close call hierarchy viewer and return to Normal mode
+    # Cancel any pending call hierarchy requests
+    e.state.lspCache.pendingCallHierarchyRequestId = 0
+    e.state.lspCache.pendingCallHierarchyKind = chrkNone
+    e.state.callHierarchyViewerState = none(CallHierarchyViewerState)
+    e.state.mode = EditorMode.Normal
+    return true
+
+  if r.shouldCallHierarchyJumpTo():
+    # Jump to selected call hierarchy item
+    let target = r.getCallHierarchyJumpTarget()
+    # Convert file:// URI to path
+    let path =
+      if target.uri.startsWith("file://"):
+        target.uri[7 ..^ 1]
+      else:
+        target.uri
+    # Close call hierarchy viewer and cancel any pending requests
+    e.state.lspCache.pendingCallHierarchyRequestId = 0
+    e.state.lspCache.pendingCallHierarchyKind = chrkNone
+    e.state.callHierarchyViewerState = none(CallHierarchyViewerState)
+    e.state.mode = EditorMode.Normal
+    # Open file and jump to location
+    discard e.openFileAndJumpTo(path, target.line, target.column)
+    return true
+
+  if r.shouldCallHierarchyRequestIncoming():
+    # Request incoming calls for selected item
+    let itemOpt = r.getCallHierarchyIncomingItem()
+    if itemOpt.isSome:
+      discard e.requestCallHierarchyIncomingForItem(itemOpt.get)
+    return true
+
+  if r.shouldCallHierarchyRequestOutgoing():
+    # Request outgoing calls for selected item
+    let itemOpt = r.getCallHierarchyOutgoingItem()
+    if itemOpt.isSome:
+      discard e.requestCallHierarchyOutgoingForItem(itemOpt.get)
+    return true
+
   # Handle Buffer Manager mode results
   if r.shouldBufferManagerQuit():
     # Close buffer manager and return to Normal mode
@@ -2107,14 +2246,52 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   if r.shouldConfigSaveConfig():
     # Save configuration to TOML file
+    let configPath = getConfigPath()
+
+    # Backup existing config file if it exists
+    if fileExists(configPath):
+      let backupPath = configPath & ".bac"
+      try:
+        copyFile(configPath, backupPath)
+        logInfo("config", "Backed up existing config to: " & backupPath)
+      except CatchableError as ex:
+        e.state.setStatusMessage("Failed to backup config: " & ex.msg)
+        logError("config", "Failed to backup config: " & ex.msg)
+        return true
+
     let saveResult = saveConfig(e.config)
     if saveResult.isOk:
-      let configPath = getConfigPath()
       e.state.setStatusMessage("Config saved: " & configPath)
-      logInfo("config", "Configuration saved to: " & configPath)
+      logInfo("config", "Config saved: " & configPath)
     else:
-      e.state.setStatusMessage("Error: " & saveResult.error)
+      e.state.setStatusMessage("Failed to save config: " & saveResult.error)
       logError("config", "Failed to save config: " & saveResult.error)
+    return true
+
+  if r.shouldPutConfigFile():
+    # Write current configuration to file (:putConfigFile)
+    let configPath = getConfigPath()
+
+    # Backup existing config file if it exists
+    if fileExists(configPath):
+      let backupPath = configPath & ".bac"
+      try:
+        copyFile(configPath, backupPath)
+        logInfo("config", "Backed up existing config to: " & backupPath)
+      except CatchableError as ex:
+        e.state.setStatusMessage("Error: Failed to backup config: " & ex.msg)
+        logError("config", "Failed to backup config: " & ex.msg)
+        e.state.mode = EditorMode.Normal
+        return true
+
+    let saveResult = saveConfig(e.config)
+    if saveResult.isOk:
+      e.state.setStatusMessage("Config written: " & configPath)
+      logInfo("config", "Config written: " & configPath)
+    else:
+      e.state.setStatusMessage("Failed to write config: " & saveResult.error)
+      logError("config", "Failed to write config: " & saveResult.error)
+    e.state.mode = EditorMode.Normal
     return true
 
   if r.shouldBackupManagerRefresh():
@@ -2235,9 +2412,34 @@ proc handleEvent*(e: Editor, event: Event): bool =
     discard e.requestLspHover()
     return true
 
-  # Handle LSP Rename - for now just show status message, rename requires user input
+  # Handle LSP Rename - enter Rename mode for user input
   if r.shouldLspRename():
-    e.state.statusMessage = "Rename: Use :lspRename <newname> command"
+    if not e.lsp.enabled:
+      e.state.statusMessage = "LSP not enabled"
+      return true
+
+    # Check if rename is supported
+    if not e.lsp.hasRenameSupport(activeBuffer):
+      e.state.statusMessage = "Rename not supported"
+      return true
+
+    # Get the word under cursor
+    let word = activeBuffer.getWordAtPosition(e.state.cursor)
+    if word.len == 0:
+      e.state.statusMessage = "No symbol under cursor"
+      return true
+
+    # Initialize rename state and enter Rename mode
+    e.state.renameState = RenameState(
+      text: word,
+      cursorLine: e.state.cursor.line,
+      cursorColumn: e.state.cursor.column,
+      originalWord: word,
+    )
+    e.state.previousMode = e.state.mode
+    e.state.mode = EditorMode.Rename
+    e.state.statusMessage = ""
+    e.state.needsFullRedraw = true
     return true
 
   # Handle LSP Selection Range
@@ -2245,14 +2447,31 @@ proc handleEvent*(e: Editor, event: Event): bool =
     discard e.requestLspSelectionRange()
     return true
 
+  # Handle LSP Document Link
+  if r.shouldLspDocumentLink():
+    discard e.requestLspDocumentLinks()
+    return true
+
   # Handle LSP Document Formatting
   if r.shouldLspFormat():
     discard e.requestLspFormat()
     return true
 
+  # Handle LSP Restart
+  if r.shouldLspRestart():
+    discard e.restartLspServer()
+    return true
+
   # Handle LSP Folding Range
   if r.shouldLspFold():
     asyncSpawn e.refreshLspFolds()
+    return true
+
+  # Handle LSP Execute Command
+  if r.shouldLspExecuteCommand():
+    let command = r.getLspExecuteCommand()
+    let args = r.getLspExecuteCommandArgs()
+    asyncSpawn e.requestLspExecuteCommand(command, args)
     return true
 
   # Handle mode transitions
@@ -2317,8 +2536,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
 proc hasPendingAsyncOperations*(e: Editor): bool =
   ## Check if there are pending async operations
-  e.state.pendingShellCommand.len > 0 or e.state.pendingBackground or
-    e.state.pendingBuildOnSave.path.len > 0 or e.state.pendingQuickRun.cmd.len > 0
+  e.state.pendingShellCommand.len > 0 or e.state.pendingManPage.len > 0 or
+    e.state.pendingBackground or e.state.pendingBuildOnSave.path.len > 0 or
+    e.state.pendingQuickRun.cmd.len > 0
 
 type
   BuildInfo =
@@ -2414,6 +2634,22 @@ proc handlePendingAsyncOperationsImpl(
       let exitCode = execShellCmd(cmd)
       stdout.write("\n\nShell returned " & $exitCode & "\n")
       stdout.write("Press Enter to continue...")
+      stdout.flushFile()
+      discard stdin.readLine()
+      await e.app.resumeAsync()
+      e.state.needsFullRedraw = true
+
+    # Handle man page display
+    if e.state.pendingManPage.len > 0:
+      let page = e.state.pendingManPage
+      e.state.pendingManPage = ""
+      await e.app.suspendAsync()
+      stdout.write("\e[H\e[2J") # Clear screen
+      stdout.flushFile()
+      let exitCode = execShellCmd("man " & quoteShell(page))
+      if exitCode != 0:
+        stdout.write("man: " & page & " not found\n")
+      stdout.write("\nPress Enter to continue...")
       stdout.flushFile()
       discard stdin.readLine()
       await e.app.resumeAsync()

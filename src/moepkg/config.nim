@@ -58,8 +58,6 @@ type
   # Standard settings
   StandardConfig* = object
     number*: bool
-    currentNumber*: bool
-    cursorLine*: bool
     statusLine*: bool
     syntax*: bool
     indentationLines*: bool
@@ -401,8 +399,6 @@ proc newEditorConfig*(): EditorConfig =
   EditorConfig(
     standard: StandardConfig(
       number: true,
-      currentNumber: true,
-      cursorLine: false,
       statusLine: true,
       syntax: true,
       indentationLines: true,

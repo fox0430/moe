@@ -70,7 +70,6 @@ type
     claLspLog # :lspLog (open LSP log viewer)
     claLspFormat # :lspFormat (LSP document formatting)
     claLspRestart # :lspRestart (restart LSP server)
-    claLspForceRestart # :lspForceRestart (force restart LSP server)
     claLspFold # :lspFold (LSP folding range)
     claLspExecuteCommand # :lspExeCommand (LSP execute command)
     claLspCallHierarchyIncoming # :lspCallHierarchyIncoming (LSP incoming calls)
@@ -176,12 +175,11 @@ type
       discard
     of claLspRestart:
       discard
-    of claLspForceRestart:
-      discard
     of claLspFold:
       discard
     of claLspExecuteCommand:
       lspCommand*: string # LSP command to execute
+      lspCommandArgs*: seq[string] # LSP command arguments
     of claLspCallHierarchyIncoming:
       discard
     of claLspCallHierarchyOutgoing:
@@ -748,13 +746,18 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claLspFormat)
   of claLspRestart:
     return CommandLineResult(kind: claLspRestart)
-  of claLspForceRestart:
-    return CommandLineResult(kind: claLspForceRestart)
   of claLspFold:
     return CommandLineResult(kind: claLspFold)
   of claLspExecuteCommand:
     if cmd.args.len > 0:
-      return CommandLineResult(kind: claLspExecuteCommand, lspCommand: cmd.args[0])
+      let args =
+        if cmd.args.len > 1:
+          cmd.args[1 ..^ 1]
+        else:
+          @[]
+      return CommandLineResult(
+        kind: claLspExecuteCommand, lspCommand: cmd.args[0], lspCommandArgs: args
+      )
     else:
       return CommandLineResult(kind: claUnknown, errorMessage: "LSP command required")
   of claLspCallHierarchyIncoming:

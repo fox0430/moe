@@ -200,16 +200,15 @@ proc main() =
   var editor = newEditor(editorConfig, validationResult)
 
   # Create async app with config-based mouse setting
-  var app = newAsyncApp(
-    AppConfig(
-      title: "moe",
-      alternateScreen: true,
-      mouseCapture: editor.config.standard.mouse,
-      rawMode: true,
-      windowMode: false,
-      bracketedPaste: true,
-    )
+  let appConfig = AppConfig(
+    title: "moe",
+    alternateScreen: true,
+    mouseCapture: editor.config.standard.mouse,
+    rawMode: true,
+    windowMode: false,
+    bracketedPaste: true,
   )
+  var app = newAsyncApp(appConfig)
   editor.app = app
 
   # Set up LSP diagnostics callback to update buffer markers

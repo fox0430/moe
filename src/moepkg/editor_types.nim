@@ -68,12 +68,8 @@ proc buffer*(e: Editor): TextBuffer =
   e.textBuffer
 
 proc activeBuffer*(e: Editor): TextBuffer =
-  ## Get the currently active buffer (from active window if split, otherwise main buffer)
-  if e.windowManager.windows.len > 0 and
-      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.windowManager.windows[e.windowManager.activeWindowIndex].buffer
-  else:
-    e.textBuffer
+  ## Get the currently active buffer (always from the active window since we always have at least one window)
+  e.windowManager.windows[e.windowManager.activeWindowIndex].buffer
 
 # Re-export commonly used types from dependencies
 # Note: keybindings is NOT exported here to avoid Command type ambiguity with types.Command

@@ -230,3 +230,51 @@ sidebarSyntaxCheckWarnSign = "#ffff00"
 sidebarSyntaxCheckWarnSignBg = "#ffffff"
 sidebarSyntaxCheckErrSign = "#ff0000"
 sidebarSyntaxCheckErrSignBg = "#ffffff"
+
+# Viewer common colors
+viewerHeader = "#0040ff"
+viewerHeaderBg = "#ffffff"
+viewerSelectedLine = "#ffffff"
+viewerSelectedLineBg = "#0067c0"
+viewerEmptyMessage = "#808080"
+viewerEmptyMessageBg = "#ffffff"
+
+# Filer mode specific
+filerDirectory = "#0040ff"
+filerSymlink = "#008080"
+filerSymlinkDir = "#800080"
+filerHiddenFile = "#a0a0a0"
+
+# Buffer manager specific
+bufferManagerActive = "#008000"
+bufferManagerModified = "#ff8700"
+
+# Configuration mode specific
+configModeSection = "#008000"
+configModeSectionBg = "#ffffff"
+configModeBoolTrue = "#008000"
+configModeBoolTrueBg = "#ffffff"
+configModeBoolFalse = "#c00000"
+configModeBoolFalseBg = "#ffffff"
+configModeEnum = "#0067c0"
+configModeEnumBg = "#ffffff"
+configModeInt = "#805000"
+configModeIntBg = "#ffffff"
+configModeEditMode = "#000000"
+configModeEditModeBg = "#ffd700"
+configModePopupBg = "#000000"
+configModePopupBgBg = "#e0e0e0"
+configModePopupSelected = "#ffffff"
+configModePopupSelectedBg = "#0067c0"
+
+# Diff viewer specific
+diffViewerHeader = "#0067c0"
+diffViewerMeta = "#805000"
+
+# Other viewers
+recentFileMissing = "#a0a0a0"
+debugViewerSectionHeader = "#0040ff"
+referencesViewerHeader = "#0067c0"
+documentSymbolViewerHeader = "#008000"
+callHierarchyViewerHeader = "#008000"
+helpViewerSectionHeader = "#0040ff"

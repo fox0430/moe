@@ -27,194 +27,6 @@ import
   editor_types, editor_window, editor_render_helpers, render_utils, unicode_utils,
   sidebar
 
-proc renderLineNumbers*(
-    e: Editor,
-    buffer: var Buffer,
-    textAreaWidth: int,
-    sidebarWidth: int = 0,
-    startY: int = 0,
-): int =
-  ## Render line numbers and return max width of the line number text.
-  ## startY: Y offset for rendering (e.g., TabLineHeight when tab line is shown)
-
-  # Guard against invalid text area width
-  if textAreaWidth <= 0:
-    return 0
-
-  let
-    lineLen = e.textBuffer.len
-    maxLineNumWidth = len($lineLen) + LineNumberSpacer
-    reservedLines = e.calculateReservedLines(isBottomWindow = true)
-    lineNumX = buffer.area.x + sidebarWidth
-  var
-    screenY = startY
-    lineIndex = e.viewport.topLine
-
-  while screenY < buffer.area.height - reservedLines and lineIndex < lineLen:
-    # Render line numbers with wrapping support
-    let
-      line = e.textBuffer.getLine(lineIndex)
-      isCurrentLine = lineIndex == e.state.cursor.line
-      # Apply currentNumber setting: highlight current line number only if enabled
-      lineStyle =
-        if isCurrentLine and e.state.display.showCurrentLineNumber:
-          currentLineStyle()
-        else:
-          lineNumStyle()
-
-    if e.state.display.lineWrap:
-      let
-        lineCharLen = line.charLen # Use character count, not byte count
-        numWraps = calculateWrapCount(lineCharLen, textAreaWidth)
-        lineNumStr = formatLineNumber(lineIndex, maxLineNumWidth)
-
-      buffer.setString(lineNumX, buffer.area.y + screenY, lineNumStr, lineStyle)
-      inc screenY
-
-      for _ in 1 ..< numWraps:
-        # Render empty space for wrapped parts (no line number)
-        if screenY >= buffer.area.height - reservedLines:
-          break
-        let emptyLineNumStr = spaces(maxLineNumWidth)
-        buffer.setString(
-          lineNumX, buffer.area.y + screenY, emptyLineNumStr, lineNumStyle()
-        )
-        inc screenY
-    else:
-      # Normal single-line display
-      let lineNumStr = formatLineNumber(lineIndex, maxLineNumWidth)
-      buffer.setString(lineNumX, buffer.area.y + screenY, lineNumStr, lineStyle)
-      inc screenY
-
-    inc lineIndex
-
-  while screenY < buffer.area.height - reservedLines:
-    # Clear remaining line number area to prevent artifacts
-    let emptyLineNumStr = spaces(maxLineNumWidth)
-    buffer.setString(lineNumX, buffer.area.y + screenY, emptyLineNumStr, lineNumStyle())
-    inc screenY
-
-  return maxLineNumWidth
-
-proc renderTextBuffer*(e: Editor, buffer: var Buffer, area: Rect) =
-  # Get visual selection range if active
-  let (hasSelection, selStart, selEnd) = e.getVisualSelection()
-
-  # Create render context
-  let ctx = RenderContext(
-    cursorLine: e.state.cursor.line,
-    cursorCol: e.state.cursor.column,
-    hasSelection: hasSelection,
-    selStart: selStart,
-    selEnd: selEnd,
-  )
-
-  var
-    screenY = 0
-    lineIndex = e.viewport.topLine
-
-  while screenY < area.height and lineIndex < e.textBuffer.len:
-    # Render file content with optional line wrapping
-    let line = e.textBuffer.getLine(lineIndex)
-
-    if e.state.display.lineWrap:
-      # Line wrapping enabled - split long lines across multiple screen lines
-      let
-        maxWidth = area.width
-        lineCharLen = line.charLen # Use character count, not byte count
-
-      if lineCharLen == 0:
-        # Empty line - fill with cursor line highlight if on cursor line
-        e.fillCursorLineBackground(
-          buffer, area.x, area.y + screenY, lineIndex, e.state.cursor.line
-        )
-        # Render CodeLens on empty lines
-        e.renderCodeLensInline(buffer, area.x, area.y + screenY, lineIndex, 0)
-        inc screenY
-        inc lineIndex
-        continue
-
-      var startCharCol = 0 # Character position, not byte position
-      var isFirstWrappedLine = true
-        # Track if this is the first screen line for this logical line
-      while startCharCol < lineCharLen and screenY < area.height:
-        # Calculate how many characters fit in maxWidth display columns
-        # This properly handles wide characters (CJK, etc.)
-        let (charCount, _) = displayWidthSubstr(line, startCharCol, maxWidth)
-        let
-          endCharCol = startCharCol + charCount
-          # Convert character positions to byte positions for slicing
-          startBytePos = charToBytePos(line, startCharCol)
-          endBytePos = charToBytePos(line, endCharCol)
-          displayLine = line[startBytePos ..< endBytePos]
-
-        if displayLine.len > 0:
-          # Render with selection highlighting if in visual mode
-          e.renderLineSegmentWithSelection(
-            e.textBuffer,
-            buffer,
-            displayLine,
-            area.x,
-            area.y + screenY,
-            lineIndex,
-            startCharCol,
-            ctx,
-            useRunes = true,
-          )
-
-          # Render CodeLens only on the first wrapped line
-          if isFirstWrappedLine:
-            let lineDisplayWidth =
-              displayWidthWithTabs(displayLine, e.state.display.tabStop)
-            e.renderCodeLensInline(
-              buffer, area.x, area.y + screenY, lineIndex, lineDisplayWidth
-            )
-            isFirstWrappedLine = false
-
-        inc screenY
-        startCharCol += charCount # Use actual character count, not maxWidth
-    else:
-      # No line wrapping - use horizontal scrolling
-      # Use character-based slicing (not byte-based) for multibyte character support
-      let displayLine =
-        if e.viewport.leftColumn < line.charLen:
-          line.runeSubStr(e.viewport.leftColumn)
-        else:
-          ""
-
-      if displayLine.len > 0:
-        # Render with selection highlighting if in visual mode
-        e.renderLineSegmentWithSelection(
-          e.textBuffer,
-          buffer,
-          displayLine,
-          area.x,
-          area.y + screenY,
-          lineIndex,
-          e.viewport.leftColumn,
-          ctx,
-          useRunes = false,
-        )
-
-        # Render CodeLens inline after line content
-        let lineDisplayWidth =
-          displayWidthWithTabs(displayLine, e.state.display.tabStop)
-        e.renderCodeLensInline(
-          buffer, area.x, area.y + screenY, lineIndex, lineDisplayWidth
-        )
-      else:
-        # Empty line or scrolled past line end - fill with cursor line highlight if on cursor line
-        e.fillCursorLineBackground(
-          buffer, area.x, area.y + screenY, lineIndex, e.state.cursor.line
-        )
-
-        # Render CodeLens even on empty lines
-        e.renderCodeLensInline(buffer, area.x, area.y + screenY, lineIndex, 0)
-
-      inc screenY
-
-    inc lineIndex
-
 proc renderWindowLineWrapped*(
     e: Editor,
     buffer: var Buffer,
@@ -224,9 +36,11 @@ proc renderWindowLineWrapped*(
     screenY: var int,
     lineIndex: var int,
     visibleHeight: int,
+    tabLineOffset: int,
 ) =
   ## Render a single line with wrapping enabled
   let
+    maxScreenY = visibleHeight + tabLineOffset
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
     sidebarWidth = e.calculateSidebarWidth()
@@ -235,13 +49,16 @@ proc renderWindowLineWrapped*(
     isCurrentLine = (lineIndex == window.cursor.line)
     # Apply currentNumber setting: highlight current line number only if enabled
     lineStyle =
-      if isCurrentLine and e.config.standard.currentNumber:
+      if isCurrentLine:
         currentLineStyle()
       else:
         lineNumStyle()
     lineNumScreenX = window.viewport.x + sidebarWidth
 
   if lineCharLen == 0:
+    # Don't render if already past visible area
+    if screenY >= maxScreenY:
+      return
     # Empty line - just render line number (if enabled)
     if lineNumOffset > 0:
       let lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
@@ -260,7 +77,11 @@ proc renderWindowLineWrapped*(
     startCharCol = 0
     wrapLineCount = 0
 
-  while startCharCol < lineCharLen and screenY < visibleHeight:
+  # Don't render if already past visible area
+  if screenY >= maxScreenY:
+    return
+
+  while startCharCol < lineCharLen and screenY < maxScreenY:
     let
       endCharCol = min(startCharCol + maxWidth, lineCharLen)
       startBytePos = charToBytePos(line, startCharCol)
@@ -302,7 +123,7 @@ proc renderWindowLineWrapped*(
     inc wrapLineCount
     startCharCol += maxWidth
 
-    if screenY >= visibleHeight:
+    if screenY >= maxScreenY:
       break
 
   inc lineIndex
@@ -324,7 +145,7 @@ proc renderWindowLineNoWrap*(
     isCurrentLine = (lineIndex == window.cursor.line)
     # Apply currentNumber setting: highlight current line number only if enabled
     lineStyle =
-      if isCurrentLine and e.config.standard.currentNumber:
+      if isCurrentLine:
         currentLineStyle()
       else:
         lineNumStyle()
@@ -372,15 +193,18 @@ proc renderWindowSidebar*(
     window: EditorWindow,
     sidebar: Sidebar,
     screenY: int,
+    sidebarIndex: int,
     sidebarOffset: int,
 ) =
   ## Render a single line of the sidebar
+  ## screenY: screen row offset from window.viewport.y
+  ## sidebarIndex: index into sidebar.buffer (0-based, independent of tabLineOffset)
   let actualScreenY = window.viewport.y + screenY
 
-  if screenY >= 0 and screenY < sidebar.buffer.len:
+  if sidebarIndex >= 0 and sidebarIndex < sidebar.buffer.len:
     for x in 0 ..< sidebar.width:
       let
-        item = sidebar.buffer[screenY][x]
+        item = sidebar.buffer[sidebarIndex][x]
         screenX = window.viewport.x + sidebarOffset + x
       if screenX < buffer.area.width and actualScreenY < buffer.area.height:
         buffer.setString(screenX, actualScreenY, item.text, item.style)
@@ -434,6 +258,7 @@ proc renderWindow*(
     visibleHeight = window.viewport.height - reservedLines - tabLineOffset
 
   # Generate sidebar dynamically from buffer markers if enabled
+  # Note: sidebar needs visibleHeight rows (screenY goes from tabLineOffset to visibleHeight + tabLineOffset)
   let maybeSidebar =
     if e.state.display.showSidebar:
       some(
@@ -459,6 +284,9 @@ proc renderWindow*(
     lineIndex = window.viewport.topLine
 
   while screenY < visibleHeight + tabLineOffset and lineIndex < lineCount:
+    # sidebarIndex is 0-based index into sidebar buffer (based on logical line, not screen row)
+    let sidebarIndex = lineIndex - window.viewport.topLine
+
     # Check if this line is inside a collapsed fold (but not the start line)
     if window.buffer.foldState.isLineInCollapsedFold(lineIndex):
       # Skip this line (it's hidden inside a fold)
@@ -470,7 +298,7 @@ proc renderWindow*(
     if foldOpt.isSome and foldOpt.get.startLine == lineIndex:
       # Render the fold marker
       if maybeSidebar.isSome:
-        renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, 0)
+        renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, sidebarIndex, 0)
       e.renderFoldLine(buffer, window, lineNumOffset, screenY, foldOpt.get)
       # Skip to the line after the fold
       lineIndex = foldOpt.get.endLine + 1
@@ -480,11 +308,12 @@ proc renderWindow*(
     # Normal line rendering
     # Render sidebar if enabled
     if maybeSidebar.isSome:
-      renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, 0)
+      renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, sidebarIndex, 0)
 
     if e.state.display.lineWrap:
       e.renderWindowLineWrapped(
-        buffer, window, lineNumOffset, ctx, screenY, lineIndex, visibleHeight
+        buffer, window, lineNumOffset, ctx, screenY, lineIndex, visibleHeight,
+        tabLineOffset,
       )
     else:
       e.renderWindowLineNoWrap(buffer, window, lineNumOffset, ctx, screenY, lineIndex)

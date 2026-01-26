@@ -218,6 +218,43 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.sidebarSyntaxCheckHintSign: makeColorPair("#ffff00", "#000000"),
   EditorColorPairIndex.sidebarSyntaxCheckWarnSign: makeColorPair("#ffff00", "#000000"),
   EditorColorPairIndex.sidebarSyntaxCheckErrSign: makeColorPair("#ff0000", "#000000"),
+
+  # Viewer common colors
+  EditorColorPairIndex.viewerHeader: makeColorPair("#ffd700", "#000000"),
+  EditorColorPairIndex.viewerSelectedLine: makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.viewerEmptyMessage: makeColorPair("#878787", "#000000"),
+
+  # Filer mode specific
+  EditorColorPairIndex.filerDirectory: makeColorPairDefaultBg("#5f87ff"),
+  EditorColorPairIndex.filerSymlink: makeColorPairDefaultBg("#00ffff"),
+  EditorColorPairIndex.filerSymlinkDir: makeColorPairDefaultBg("#af5fff"),
+  EditorColorPairIndex.filerHiddenFile: makeColorPairDefaultBg("#808080"),
+
+  # Buffer manager specific
+  EditorColorPairIndex.bufferManagerActive: makeColorPairDefaultBg("#5fff5f"),
+  EditorColorPairIndex.bufferManagerModified: makeColorPairDefaultBg("#ff8700"),
+
+  # Configuration mode specific
+  EditorColorPairIndex.configModeSection: makeColorPair("#5fff5f", "#000000"),
+  EditorColorPairIndex.configModeBoolTrue: makeColorPair("#5faf5f", "#000000"),
+  EditorColorPairIndex.configModeBoolFalse: makeColorPair("#af5f5f", "#000000"),
+  EditorColorPairIndex.configModeEnum: makeColorPair("#87afd7", "#000000"),
+  EditorColorPairIndex.configModeInt: makeColorPair("#d7af5f", "#000000"),
+  EditorColorPairIndex.configModeEditMode: makeColorPair("#000000", "#ffd700"),
+  EditorColorPairIndex.configModePopupBg: makeColorPair("#ffffff", "#303030"),
+  EditorColorPairIndex.configModePopupSelected: makeColorPair("#ffffff", "#005faf"),
+
+  # Diff viewer specific
+  EditorColorPairIndex.diffViewerHeader: makeColorPairDefaultBg("#00d7ff"),
+  EditorColorPairIndex.diffViewerMeta: makeColorPairDefaultBg("#ffd700"),
+
+  # Other viewers
+  EditorColorPairIndex.recentFileMissing: makeColorPairDefaultBg("#606060"),
+  EditorColorPairIndex.debugViewerSectionHeader: makeColorPairDefaultBg("#87afff"),
+  EditorColorPairIndex.referencesViewerHeader: makeColorPairDefaultBg("#00afff"),
+  EditorColorPairIndex.documentSymbolViewerHeader: makeColorPairDefaultBg("#afd700"),
+  EditorColorPairIndex.callHierarchyViewerHeader: makeColorPairDefaultBg("#afd700"),
+  EditorColorPairIndex.helpViewerSectionHeader: makeColorPairDefaultBg("#5fafff"),
 ]
 
 proc initDefaultTheme*() =

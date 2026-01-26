@@ -30,7 +30,7 @@ import lsp/protocol/types as lspTypes
 export lspservice
 export lspTypes.WorkDoneProgress, lspTypes.WorkDoneProgressKind
 export lspTypes.WorkDoneProgressBegin, lspTypes.WorkDoneProgressReport
-export lspTypes.WorkDoneProgressEnd
+export lspTypes.WorkDoneProgressEnd, lspTypes.WorkspaceEdit
 export worker.ServerHealth, worker.LspEventKind
 
 const MaxProgressTextLen* = 50 ## Maximum display width for progress text
@@ -371,8 +371,71 @@ proc poll*(lsp: LspIntegration, timeoutMs: int = 0) =
   if lsp.enabled:
     lsp.service.poll(timeoutMs)
 
+# UTF-16 position conversion helpers
+# LSP uses UTF-16 code units for character positions, but the editor uses UTF-8 bytes.
+# These functions convert between the two representations.
+
+proc utf16OffsetToUtf8*(line: string, utf16Offset: int): int =
+  ## Convert LSP UTF-16 code unit offset to UTF-8 byte offset
+  ## LSP uses UTF-16 code units for character positions
+  ## Returns the UTF-8 byte offset, clamped to line length
+  if utf16Offset <= 0:
+    return 0
+  if line.len == 0:
+    return 0
+
+  var utf16Count = 0
+  var byteOffset = 0
+
+  for rune in line.runes:
+    if utf16Count >= utf16Offset:
+      break
+    # BMP characters (U+0000 to U+FFFF) use 1 UTF-16 code unit
+    # Characters above U+FFFF (surrogate pairs) use 2 UTF-16 code units
+    let codePoint = rune.int
+    if codePoint >= 0x10000:
+      utf16Count += 2 # Surrogate pair
+    else:
+      utf16Count += 1
+    byteOffset += rune.size
+
+  return min(byteOffset, line.len)
+
+proc utf8OffsetToUtf16*(line: string, utf8Offset: int): int =
+  ## Convert UTF-8 byte offset to LSP UTF-16 code unit offset
+  ## Used when sending positions back to LSP server
+  if utf8Offset <= 0:
+    return 0
+  if line.len == 0:
+    return 0
+
+  var utf16Count = 0
+  var byteCount = 0
+
+  for rune in line.runes:
+    if byteCount >= utf8Offset:
+      break
+    let codePoint = rune.int
+    if codePoint >= 0x10000:
+      utf16Count += 2 # Surrogate pair
+    else:
+      utf16Count += 1
+    byteCount += rune.size
+
+  return utf16Count
+
+proc toUtf16Column(buffer: TextBuffer, line, column: int): int =
+  ## Helper to convert buffer position (UTF-8 byte offset) to UTF-16 code unit offset
+  let lineText =
+    if line >= 0 and line < buffer.len:
+      buffer.getLine(line)
+    else:
+      ""
+  utf8OffsetToUtf16(lineText, column)
+
 # Async (non-blocking) feature requests
 # These return immediately with a request ID. Use poll() and checkResponse() to get results.
+# Note: All position-based requests convert UTF-8 column to UTF-16 for LSP protocol compliance.
 
 proc startCompletionRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
@@ -385,7 +448,8 @@ proc startCompletionRequest*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.startCompletionRequest(path, line, column)
+  let utf16Col = buffer.toUtf16Column(line, column)
+  return lsp.service.startCompletionRequest(path, line, utf16Col)
 
 proc startHoverRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
@@ -398,7 +462,8 @@ proc startHoverRequest*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.startHoverRequest(path, line, column)
+  let utf16Col = buffer.toUtf16Column(line, column)
+  return lsp.service.startHoverRequest(path, line, utf16Col)
 
 proc startDefinitionRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
@@ -411,7 +476,8 @@ proc startDefinitionRequest*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.startDefinitionRequest(path, line, column)
+  let utf16Col = buffer.toUtf16Column(line, column)
+  return lsp.service.startDefinitionRequest(path, line, utf16Col)
 
 proc startDeclarationRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
@@ -424,7 +490,8 @@ proc startDeclarationRequest*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.startDeclarationRequest(path, line, column)
+  let utf16Col = buffer.toUtf16Column(line, column)
+  return lsp.service.startDeclarationRequest(path, line, utf16Col)
 
 proc startReferencesRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
@@ -437,7 +504,8 @@ proc startReferencesRequest*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.startReferencesRequest(path, line, column)
+  let utf16Col = buffer.toUtf16Column(line, column)
+  return lsp.service.startReferencesRequest(path, line, utf16Col)
 
 proc startTypeDefinitionRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
@@ -450,7 +518,8 @@ proc startTypeDefinitionRequest*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.startTypeDefinitionRequest(path, line, column)
+  let utf16Col = buffer.toUtf16Column(line, column)
+  return lsp.service.startTypeDefinitionRequest(path, line, utf16Col)
 
 proc startImplementationRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
@@ -463,7 +532,8 @@ proc startImplementationRequest*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.startImplementationRequest(path, line, column)
+  let utf16Col = buffer.toUtf16Column(line, column)
+  return lsp.service.startImplementationRequest(path, line, utf16Col)
 
 proc startSignatureHelpRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
@@ -476,7 +546,8 @@ proc startSignatureHelpRequest*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.startSignatureHelpRequest(path, line, column)
+  let utf16Col = buffer.toUtf16Column(line, column)
+  return lsp.service.startSignatureHelpRequest(path, line, utf16Col)
 
 proc startDocumentHighlightRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
@@ -489,7 +560,8 @@ proc startDocumentHighlightRequest*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.startDocumentHighlightRequest(path, line, column)
+  let utf16Col = buffer.toUtf16Column(line, column)
+  return lsp.service.startDocumentHighlightRequest(path, line, utf16Col)
 
 proc startCodeLensRequest*(
     lsp: LspIntegration, buffer: TextBuffer
@@ -515,7 +587,8 @@ proc startCallHierarchyPrepareRequest*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.startCallHierarchyPrepareRequest(path, line, column)
+  let utf16Col = buffer.toUtf16Column(line, column)
+  return lsp.service.startCallHierarchyPrepareRequest(path, line, utf16Col)
 
 proc startCallHierarchyIncomingCallsRequest*(
     lsp: LspIntegration, buffer: TextBuffer, item: CallHierarchyItem
@@ -556,6 +629,32 @@ proc startDocumentSymbolsRequest*(
   let path = buffer.filePath.get
   return lsp.service.startDocumentSymbolsRequest(path)
 
+proc startDocumentLinkRequest*(
+    lsp: LspIntegration, buffer: TextBuffer
+): Result[int, string] =
+  ## Start a document link request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startDocumentLinkRequest(path)
+
+proc startDocumentLinkResolveRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, link: DocumentLink
+): Result[int, string] =
+  ## Start a document link resolve request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startDocumentLinkResolveRequest(path, link)
+
 proc startSelectionRangeRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
@@ -567,7 +666,8 @@ proc startSelectionRangeRequest*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return lsp.service.startSelectionRangeRequest(path, line, column)
+  let utf16Col = buffer.toUtf16Column(line, column)
+  return lsp.service.startSelectionRangeRequest(path, line, utf16Col)
 
 proc checkResponse*(
     lsp: LspIntegration, requestId: int
@@ -679,6 +779,21 @@ proc hasDocumentLinkResolveSupport*(lsp: LspIntegration, buffer: TextBuffer): bo
 
   return lsp.service.hasDocumentLinkResolveSupport(langIdOpt.get)
 
+proc hasRenameSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if rename is supported for a buffer's language
+  if not lsp.enabled:
+    return false
+
+  if buffer.filePath.isNone:
+    return false
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return false
+
+  return lsp.service.hasRenameSupport(langIdOpt.get)
+
 # TextEdit application helpers
 proc compareTextEditReverse(a, b: TextEdit): int =
   ## Compare TextEdits for reverse sorting (back to front)
@@ -691,6 +806,7 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
   ## Apply a sequence of TextEdits to the buffer
   ## Edits are applied in reverse order (back to front) to preserve positions
   ## Note: LSP TextEdit.range.end is exclusive, buffer.deleteRange is inclusive
+  ## Note: LSP character positions are in UTF-16 code units, converted to UTF-8 bytes
   if edits.len == 0:
     return ok()
 
@@ -700,9 +816,17 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
 
   # Apply each edit
   for edit in sortedEdits:
-    let startPos =
-      BufferPosition(line: edit.range.start.line, column: edit.range.start.character)
+    let startLine = edit.range.start.line
     let lspEndPos = edit.range.`end`
+
+    # Convert UTF-16 character offset to UTF-8 byte offset
+    let startLineText =
+      if startLine >= 0 and startLine < buffer.len:
+        buffer.getLine(startLine)
+      else:
+        ""
+    let startCol = utf16OffsetToUtf8(startLineText, edit.range.start.character)
+    let startPos = BufferPosition(line: startLine, column: startCol)
 
     # Check if range is empty (LSP exclusive end == start means empty range)
     let isEmptyRange =
@@ -713,15 +837,31 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
     if not isEmptyRange:
       # Convert LSP exclusive end to buffer inclusive end
       var adjustedEndPos: BufferPosition
+
+      # Get end line text for UTF-16 conversion
+      let endLineText =
+        if lspEndPos.line >= 0 and lspEndPos.line < buffer.len:
+          buffer.getLine(lspEndPos.line)
+        else:
+          ""
+
       if lspEndPos.character > 0:
-        # Simply decrement character position
-        adjustedEndPos =
-          BufferPosition(line: lspEndPos.line, column: lspEndPos.character - 1)
+        # Convert UTF-16 to UTF-8 and decrement by 1 byte for inclusive end
+        let utf8EndCol = utf16OffsetToUtf8(endLineText, lspEndPos.character)
+        # Need to find the start of the previous character
+        if utf8EndCol > 0:
+          # Walk backwards to find previous character boundary
+          var prevCharStart = utf8EndCol - 1
+          while prevCharStart > 0 and (endLineText[prevCharStart].ord and 0xC0) == 0x80:
+            dec prevCharStart
+          adjustedEndPos = BufferPosition(line: lspEndPos.line, column: prevCharStart)
+        else:
+          adjustedEndPos = BufferPosition(line: lspEndPos.line, column: 0)
       else:
         # End is at start of a line (character == 0)
         # Need to point to end of previous line to include the newline
         if lspEndPos.line > 0:
-          let prevLineLen = buffer.getLine(lspEndPos.line - 1).charLen
+          let prevLineLen = buffer.getLine(lspEndPos.line - 1).len
           adjustedEndPos = BufferPosition(line: lspEndPos.line - 1, column: prevLineLen)
         else:
           # Edge case: end is at (0, 0), skip deletion
@@ -742,6 +882,120 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
         return err("Failed to insert text: " & insertResult.error)
 
   return ok()
+
+proc findBufferByPath(buffers: seq[TextBuffer], path: string): Option[int] =
+  ## Find buffer index by file path
+  for i, buffer in buffers:
+    if buffer.filePath.isSome and buffer.filePath.get == path:
+      return some(i)
+  return none(int)
+
+proc applyEditsToFile(path: string, edits: seq[TextEdit]): Result[void, string] =
+  ## Apply edits to a file that is not currently open
+  ## Loads the file, applies edits, and saves it back
+  let tempBuffer = newTextBuffer()
+  let loadResult = tempBuffer.loadFile(path)
+  if loadResult.isErr:
+    return err("Failed to load file: " & loadResult.error)
+
+  let applyResult = applyTextEdits(tempBuffer, edits)
+  if applyResult.isErr:
+    return err(applyResult.error)
+
+  let saveResult = tempBuffer.saveFile(path)
+  if saveResult.isErr:
+    return err("Failed to save file: " & saveResult.error)
+
+  return ok()
+
+proc applyWorkspaceEdit*(
+    buffers: var seq[TextBuffer],
+    edit: WorkspaceEdit,
+    transactionName: string = "Rename",
+): Result[int, string] =
+  ## Apply a WorkspaceEdit to multiple buffers
+  ## Returns the number of files modified
+  ## For open buffers: uses transactions for undo support
+  ## For unopened files: loads, modifies, and saves directly
+  ##
+  ## Note: Per LSP spec, documentChanges takes precedence over changes.
+  ## If both are present, only documentChanges is used.
+  var modifiedCount = 0
+  var openBuffersToModify: seq[tuple[bufferIdx: int, edits: seq[TextEdit]]] = @[]
+  var unopenedFilesToModify: seq[tuple[path: string, edits: seq[TextEdit]]] = @[]
+
+  # Per LSP specification, documentChanges takes precedence over changes
+  if edit.documentChanges.isSome:
+    # Handle documentChanges field (seq[TextDocumentEdit])
+    for docEdit in edit.documentChanges.get:
+      let path = uriToPath(docEdit.textDocument.uri)
+      let bufferIdxOpt = findBufferByPath(buffers, path)
+      if bufferIdxOpt.isSome:
+        openBuffersToModify.add((bufferIdxOpt.get, docEdit.edits))
+      else:
+        unopenedFilesToModify.add((path, docEdit.edits))
+  elif edit.changes.isSome:
+    # Handle changes field (uri -> seq[TextEdit]) only if documentChanges is absent
+    for uri, edits in edit.changes.get:
+      let path = uriToPath(uri)
+      let bufferIdxOpt = findBufferByPath(buffers, path)
+      if bufferIdxOpt.isSome:
+        openBuffersToModify.add((bufferIdxOpt.get, edits))
+      else:
+        unopenedFilesToModify.add((path, edits))
+
+  # Track successfully modified files for error reporting
+  var modifiedBufferPaths: seq[string] = @[]
+  var modifiedFilePaths: seq[string] = @[]
+
+  # Apply edits to open buffers with transactions for undo support
+  for (bufferIdx, edits) in openBuffersToModify:
+    let buffer = buffers[bufferIdx]
+
+    # Begin transaction for undo grouping
+    let txResult = buffer.beginTransaction(transactionName)
+    if txResult.isErr:
+      if modifiedBufferPaths.len > 0:
+        return err(
+          "Failed to begin transaction: " & txResult.error & " (Warning: " &
+            $modifiedBufferPaths.len & " buffer(s) already modified: " &
+            modifiedBufferPaths.join(", ") & ")"
+        )
+      return err("Failed to begin transaction: " & txResult.error)
+
+    let applyResult = applyTextEdits(buffer, edits)
+    if applyResult.isErr:
+      discard buffer.rollbackTransaction()
+      if modifiedBufferPaths.len > 0:
+        return err(
+          "Failed to apply edits: " & applyResult.error & " (Warning: " &
+            $modifiedBufferPaths.len & " buffer(s) already modified: " &
+            modifiedBufferPaths.join(", ") & ")"
+        )
+      return err("Failed to apply edits: " & applyResult.error)
+
+    discard buffer.commitTransaction()
+    modifiedCount += 1
+    if buffer.filePath.isSome:
+      modifiedBufferPaths.add(buffer.filePath.get)
+
+  # Apply edits to unopened files (load, modify, save)
+  for (path, edits) in unopenedFilesToModify:
+    let applyResult = applyEditsToFile(path, edits)
+    if applyResult.isErr:
+      let alreadyModified = modifiedBufferPaths.len + modifiedFilePaths.len
+      if alreadyModified > 0:
+        var modifiedList = modifiedBufferPaths & modifiedFilePaths
+        return err(
+          "Failed to modify " & path & ": " & applyResult.error & " (Warning: " &
+            $alreadyModified & " file(s) already modified: " & modifiedList.join(", ") &
+            ")"
+        )
+      return err("Failed to modify " & path & ": " & applyResult.error)
+    modifiedCount += 1
+    modifiedFilePaths.add(path)
+
+  return ok(modifiedCount)
 
 # Diagnostic helpers
 proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic]) =
@@ -998,6 +1252,21 @@ proc requestExecuteCommand*(
   let path = buffer.filePath.get
   return await lsp.service.requestExecuteCommand(path, command, arguments)
 
+proc hasExecuteCommandSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if execute command is supported for a buffer's language
+  if not lsp.enabled:
+    return false
+
+  if buffer.filePath.isNone:
+    return false
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return false
+
+  return lsp.service.hasExecuteCommandSupport(langIdOpt.get)
+
 # Folding Range support
 proc hasFoldingRangeSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if folding range is supported for a buffer's language
@@ -1095,6 +1364,7 @@ proc requestRename*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int, newName: string
 ): Future[Result[Option[WorkspaceEdit], string]] {.async: (raises: [CancelledError]).} =
   ## Request rename at a position
+  ## Note: column is expected to be UTF-8 byte offset, converted to UTF-16 for LSP
   if not lsp.enabled:
     return err("LSP disabled")
 
@@ -1102,12 +1372,22 @@ proc requestRename*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return await lsp.service.requestRename(path, line, column, newName)
+
+  # Convert UTF-8 byte offset to UTF-16 code unit offset for LSP
+  let lineText =
+    if line >= 0 and line < buffer.len:
+      buffer.getLine(line)
+    else:
+      ""
+  let utf16Column = utf8OffsetToUtf16(lineText, column)
+
+  return await lsp.service.requestRename(path, line, utf16Column, newName)
 
 proc requestDefinition*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
   ## Request go to definition at a position
+  ## Note: column is expected to be UTF-8 byte offset, converted to UTF-16 for LSP
   if not lsp.enabled:
     return err("LSP disabled")
 
@@ -1115,12 +1395,22 @@ proc requestDefinition*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return await lsp.service.requestDefinition(path, line, column)
+
+  # Convert UTF-8 byte offset to UTF-16 code unit offset for LSP
+  let lineText =
+    if line >= 0 and line < buffer.len:
+      buffer.getLine(line)
+    else:
+      ""
+  let utf16Column = utf8OffsetToUtf16(lineText, column)
+
+  return await lsp.service.requestDefinition(path, line, utf16Column)
 
 proc requestReferences*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
   ## Request find references at a position
+  ## Note: column is expected to be UTF-8 byte offset, converted to UTF-16 for LSP
   if not lsp.enabled:
     return err("LSP disabled")
 
@@ -1128,7 +1418,16 @@ proc requestReferences*(
     return err("Buffer has no file path")
 
   let path = buffer.filePath.get
-  return await lsp.service.requestReferences(path, line, column)
+
+  # Convert UTF-8 byte offset to UTF-16 code unit offset for LSP
+  let lineText =
+    if line >= 0 and line < buffer.len:
+      buffer.getLine(line)
+    else:
+      ""
+  let utf16Column = utf8OffsetToUtf16(lineText, column)
+
+  return await lsp.service.requestReferences(path, line, utf16Column)
 
 proc requestDocumentSymbols*(
     lsp: LspIntegration, buffer: TextBuffer

@@ -321,8 +321,6 @@ proc loadStandardConfig(
 ) =
   const section = "Standard"
   loadBool(table, "number", config.number, vr, section)
-  loadBool(table, "currentNumber", config.currentNumber, vr, section)
-  loadBool(table, "cursorLine", config.cursorLine, vr, section)
   loadBool(table, "statusLine", config.statusLine, vr, section)
   loadBool(table, "syntax", config.syntax, vr, section)
   loadBool(table, "indentationLines", config.indentationLines, vr, section)
@@ -524,6 +522,12 @@ proc loadQuickRunConfig(
   loadOptionString(table, "NimOptions", config.nimOptions, vr, section)
   loadOptionString(table, "shOptions", config.shOptions, vr, section)
   loadOptionString(table, "bashOptions", config.bashOptions, vr, section)
+
+proc loadTabLineConfig(
+    table: TomlTableRef, config: var TabLineConfig, vr: var ValidationResult
+) =
+  const section = "TabLine"
+  loadBool(table, "enable", config.enable, vr, section)
 
 proc loadStartUpFileOpenConfig(
     table: TomlTableRef, config: var StartUpFileOpenConfig, vr: var ValidationResult
@@ -861,6 +865,9 @@ proc loadConfigFromToml*(
 
   if toml.hasKey("BuildOnSave"):
     loadBuildOnSaveConfig(toml["BuildOnSave"].getTable(), config.buildOnSave, vr)
+
+  if toml.hasKey("TabLine"):
+    loadTabLineConfig(toml["TabLine"].getTable(), config.tabLine, vr)
 
   if toml.hasKey("StatusLine"):
     loadStatusLineConfig(toml["StatusLine"].getTable(), config.statusLine, vr)
@@ -1220,6 +1227,62 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.sidebarSyntaxCheckWarnSign)
   of "sidebarSyntaxCheckErrSign":
     return some(EditorColorPairIndex.sidebarSyntaxCheckErrSign)
+  # Viewer common colors
+  of "viewerHeader":
+    return some(EditorColorPairIndex.viewerHeader)
+  of "viewerSelectedLine":
+    return some(EditorColorPairIndex.viewerSelectedLine)
+  of "viewerEmptyMessage":
+    return some(EditorColorPairIndex.viewerEmptyMessage)
+  # Filer mode specific
+  of "filerDirectory":
+    return some(EditorColorPairIndex.filerDirectory)
+  of "filerSymlink":
+    return some(EditorColorPairIndex.filerSymlink)
+  of "filerSymlinkDir":
+    return some(EditorColorPairIndex.filerSymlinkDir)
+  of "filerHiddenFile":
+    return some(EditorColorPairIndex.filerHiddenFile)
+  # Buffer manager specific
+  of "bufferManagerActive":
+    return some(EditorColorPairIndex.bufferManagerActive)
+  of "bufferManagerModified":
+    return some(EditorColorPairIndex.bufferManagerModified)
+  # Configuration mode specific
+  of "configModeSection":
+    return some(EditorColorPairIndex.configModeSection)
+  of "configModeBoolTrue":
+    return some(EditorColorPairIndex.configModeBoolTrue)
+  of "configModeBoolFalse":
+    return some(EditorColorPairIndex.configModeBoolFalse)
+  of "configModeEnum":
+    return some(EditorColorPairIndex.configModeEnum)
+  of "configModeInt":
+    return some(EditorColorPairIndex.configModeInt)
+  of "configModeEditMode":
+    return some(EditorColorPairIndex.configModeEditMode)
+  of "configModePopupBg":
+    return some(EditorColorPairIndex.configModePopupBg)
+  of "configModePopupSelected":
+    return some(EditorColorPairIndex.configModePopupSelected)
+  # Diff viewer specific
+  of "diffViewerHeader":
+    return some(EditorColorPairIndex.diffViewerHeader)
+  of "diffViewerMeta":
+    return some(EditorColorPairIndex.diffViewerMeta)
+  # Other viewers
+  of "recentFileMissing":
+    return some(EditorColorPairIndex.recentFileMissing)
+  of "debugViewerSectionHeader":
+    return some(EditorColorPairIndex.debugViewerSectionHeader)
+  of "referencesViewerHeader":
+    return some(EditorColorPairIndex.referencesViewerHeader)
+  of "documentSymbolViewerHeader":
+    return some(EditorColorPairIndex.documentSymbolViewerHeader)
+  of "callHierarchyViewerHeader":
+    return some(EditorColorPairIndex.callHierarchyViewerHeader)
+  of "helpViewerSectionHeader":
+    return some(EditorColorPairIndex.helpViewerSectionHeader)
   else:
     return none(EditorColorPairIndex)
 
@@ -1332,8 +1395,6 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   # Standard section
   lines.add "[Standard]"
   lines.add "number = " & toTomlBool(config.standard.number)
-  lines.add "currentNumber = " & toTomlBool(config.standard.currentNumber)
-  lines.add "cursorLine = " & toTomlBool(config.standard.cursorLine)
   lines.add "statusLine = " & toTomlBool(config.standard.statusLine)
   lines.add "syntax = " & toTomlBool(config.standard.syntax)
   lines.add "indentationLines = " & toTomlBool(config.standard.indentationLines)

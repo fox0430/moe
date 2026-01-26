@@ -821,27 +821,6 @@ proc signatureHelp*(
 
   return Result[Option[SignatureHelp], string].ok(some(parseSignatureHelp(resp)))
 
-proc rename*(
-    client: LspClient, uri: string, line, character: int, newName: string
-): Future[Result[Option[WorkspaceEdit], string]] {.async.} =
-  ## Request rename of a symbol
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "position": {"line": line, "character": character},
-      "newName": newName,
-    }
-
-  let respResult = await client.sendAndWait("textDocument/rename", params)
-  if respResult.isErr:
-    return Result[Option[WorkspaceEdit], string].err(respResult.error)
-
-  let resp = respResult.get
-  if resp.kind == JNull:
-    return Result[Option[WorkspaceEdit], string].ok(none(WorkspaceEdit))
-
-  return Result[Option[WorkspaceEdit], string].ok(some(parseWorkspaceEdit(resp)))
-
 proc formatting*(
     client: LspClient, uri: string, tabSize: int = 2, insertSpaces: bool = true
 ): Future[Result[seq[TextEdit], string]] {.async.} =

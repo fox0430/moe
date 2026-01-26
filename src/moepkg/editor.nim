@@ -25,9 +25,9 @@ import
   editor_types, editor_window, editor_file, editor_lsp, editor_codelens, editor_render
 
 import
-  statusline, tabline, render_utils, gitdiff, logger, configloader, keybindconfig,
-  search_utils, completion, signaturehelp, hoverpopup, command_completion, motion,
-  color, gapbuffer, debugviewer, messagelog
+  statusline, render_utils, gitdiff, logger, configloader, keybindconfig, search_utils,
+  completion, signaturehelp, hoverpopup, command_completion, motion, color, gapbuffer,
+  debugviewer, messagelog
 import keybindings except Command
 import lsp/protocol/types as lspTypes
 import command_handlers/insert_handler
@@ -58,37 +58,24 @@ proc switchToBufferByIndex*(e: Editor, index: int) =
     if targetBuffer.filePath.isSome: targetBuffer.filePath.get else: "No Name"
   logDebug("editor", "Target buffer path: " & targetPath)
 
-  if e.windowManager.windows.len > 0 and
-      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+  let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
-    # Don't switch if already on this buffer
-    if activeWindow.buffer == targetBuffer:
-      logDebug("editor", "Already on this buffer (window mode)")
-      return
+  # Don't switch if already on this buffer
+  if activeWindow.buffer == targetBuffer:
+    logDebug("editor", "Already on this buffer")
+    return
 
-    activeWindow.buffer = targetBuffer
-    activeWindow.cursor = BufferPosition(line: 0, column: 0)
-    activeWindow.viewport.topLine = 0
-    activeWindow.viewport.leftColumn = 0
+  activeWindow.buffer = targetBuffer
+  activeWindow.cursor = BufferPosition(line: 0, column: 0)
+  activeWindow.viewport.topLine = 0
+  activeWindow.viewport.leftColumn = 0
 
-    # Sync the executor and motion controller
-    e.syncActiveWindow()
+  # Sync the executor and motion controller
+  e.syncActiveWindow()
 
-    # Update screen cursor
-    e.setActiveWindowScreenCursor(activeWindow)
-    logDebug("editor", "Switched buffer in window mode")
-  else:
-    # No windows, update the main buffer reference
-    logDebug("editor", "Switching in single buffer mode")
-    e.textBuffer = targetBuffer
-    e.executer.buffer = targetBuffer
-    e.executer.motionController.executor.buffer = targetBuffer
-    e.state.cursor = BufferPosition(line: 0, column: 0)
-    e.viewport.topLine = 0
-    e.viewport.leftColumn = 0
-    e.state.needsFullRedraw = true
-    logDebug("editor", "Switched to buffer successfully")
+  # Update screen cursor
+  e.setActiveWindowScreenCursor(activeWindow)
+  logDebug("editor", "Switched buffer in window")
 
   # Update current buffer index in state (for jump list)
   e.state.currentBufferIndex = index
@@ -447,8 +434,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         showLinePercentage: true,
         showEncoding: true,
         showLineNumbers: editorConfig.standard.number,
-        showCurrentLineNumber: editorConfig.standard.currentNumber,
-        showCursorLine: editorConfig.standard.cursorLine,
+        showCursorLine: editorConfig.highlight.currentLine,
         showSyntax: editorConfig.standard.syntax,
         showIndentationLines: editorConfig.standard.indentationLines,
         showSidebar: editorConfig.standard.sidebar,
@@ -583,6 +569,21 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     toReservedWords(editorConfig.highlight.reservedWord)
   )
 
+  # Create default window (always have at least one window)
+  result.windowManager.windows.add(
+    EditorWindow(
+      buffer: result.textBuffer,
+      viewport: result.viewport,
+      cursor: BufferPosition(line: 0, column: 0),
+      active: true,
+    )
+  )
+  result.windowManager.activeWindowIndex = 0
+  logDebug(
+    "editor",
+    "Default window created, windows.len: " & $result.windowManager.windows.len,
+  )
+
   result.executer = newCommandExecutor(
     result.textBuffer,
     result.state,
@@ -704,8 +705,7 @@ proc applyConfigSettings(e: Editor, newConfig: EditorConfig) =
   e.state.display.showStatusLine = newConfig.standard.statusLine
   e.state.display.multiStatusLine = newConfig.statusLine.multipleStatusLine
   e.state.display.showLineNumbers = newConfig.standard.number
-  e.state.display.showCurrentLineNumber = newConfig.standard.currentNumber
-  e.state.display.showCursorLine = newConfig.standard.cursorLine
+  e.state.display.showCursorLine = newConfig.highlight.currentLine
   e.state.display.showSyntax = newConfig.standard.syntax
   e.state.display.showIndentationLines = newConfig.standard.indentationLines
   e.state.display.showSidebar = newConfig.standard.sidebar
@@ -1126,6 +1126,8 @@ proc tick*(e: Editor) =
   e.pollLspCallHierarchy()
   e.pollLspSelectionRange()
   e.pollLspDocumentSymbols()
+  e.pollLspDocumentLinks()
+  e.pollLspDocumentLinkResolve()
 
   # File and config monitoring
   e.maybeReloadExternallyModifiedFile()
@@ -1215,6 +1217,11 @@ proc renderSpecialMode(e: Editor, buffer: var Buffer): bool =
     renderDocumentSymbolViewer,
   ):
     return true
+  if tryRender(
+    EditorMode.CallHierarchy, e.state.callHierarchyViewerState.isSome,
+    renderCallHierarchyViewer,
+  ):
+    return true
   if tryRender(EditorMode.Help, e.state.helpViewerState.isSome, renderHelpViewer):
     return true
   if tryRender(
@@ -1239,12 +1246,8 @@ proc renderSpecialMode(e: Editor, buffer: var Buffer): bool =
   return false
 
 proc renderMainContent(e: Editor, buffer: var Buffer, wasResized: bool) =
-  ## Render the main editor view (single or split).
-  if e.windowManager.windows.len > 0:
-    e.renderSplitView(buffer, wasResized)
-  else:
-    e.renderSingleView(buffer, wasResized)
-
+  ## Render the main editor view (always uses split view since we always have at least one window).
+  e.renderSplitView(buffer, wasResized)
   e.renderBottomLines(buffer)
   e.renderTempMessages(buffer)
 
@@ -1294,21 +1297,3 @@ proc render*(e: Editor, buffer: var Buffer) =
     e.renderMainContent(buffer, wasResized)
 
   e.renderOverlays(buffer)
-
-  # Render tab line at the very end to ensure visibility (only for single view mode)
-  # Split view mode renders tablines per-window in renderSplitView
-  if e.state.display.showTabLine and e.windowManager.windows.len <= 1:
-    let buffersToShow =
-      if e.buffers.len > 0:
-        e.buffers
-      else:
-        @[e.textBuffer]
-    renderTabLine(
-      buffersToShow,
-      e.activeBuffer(),
-      buffer,
-      0, # tabLineY
-      0, # tabLineX
-      buffer.area.width, # tabLineWidth
-      true, # showTabLine
-    )

@@ -2,10 +2,6 @@
 
 number = true                          # Line numbers
 
-currentNumber = true                   # Current line number highlighting
-
-cursorLine = true                      # Cursor line highlighting
-
 statusLine = true                      # Show status line
 
 syntax = true                          # Syntax highlighting
@@ -64,7 +60,7 @@ command = "nimble build"               # Custom build command
 
 [TabLine]
 
-allBuffer = false                      # 📝 Show all buffers in tab line (not yet applied)
+enable = true                          # Enable tab line
 
 [StatusLine]
 

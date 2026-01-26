@@ -1184,7 +1184,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.bindKey(EditorMode.Normal, "g r", "lsp-find-references")
 
-  # LSP - Execute CodeLens (gl)
+  # LSP - Execute CodeLens (gL)
   registry.registerCommand(
     Command(
       name: "lsp-codelens-execute",
@@ -1194,7 +1194,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       args: @[],
     )
   )
-  registry.bindKey(EditorMode.Normal, "g l", "lsp-codelens-execute")
+  registry.bindKey(EditorMode.Normal, "g L", "lsp-codelens-execute")
 
   # LSP - Go to declaration (gc)
   registry.registerCommand(
@@ -1295,6 +1295,18 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     KeyCombo(isSpecial: false, char: "s", modifiers: {kmCtrl}),
     registry.commandRegistry["lsp-selection-range"],
   )
+
+  # LSP - Document link (g l)
+  registry.registerCommand(
+    Command(
+      name: "lsp-document-link",
+      description: "Follow document link at cursor (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.document.link",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g l", "lsp-document-link")
 
   # ZZ - Save and quit
   registry.registerCommand(

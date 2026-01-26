@@ -31,17 +31,18 @@ import
     types, buffer, cursor, modes, motion, keybindings, commandline, commandconfig,
     commandregistry, config, stringbuilder, filer, recentfilemode, lspintegration,
   ]
+import ../lsp/protocol/types as lspTypes
 import
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
   filer_handler, logviewer_handler, help_handler, buffermanager_handler,
   backupmanager_handler, diffviewer_handler, recentfilemode_handler, debug_handler,
-  config_handler, references_handler, documentsymbol_handler
+  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler
 
 export
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
   filer_handler, logviewer_handler, help_handler, buffermanager_handler,
   backupmanager_handler, diffviewer_handler, recentfilemode_handler, debug_handler,
-  config_handler, references_handler, documentsymbol_handler
+  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler
 
 type
   HandlerResultKind* = enum
@@ -110,6 +111,7 @@ type
     hrLspHover # Execute LSP hover
     hrLspRename # Execute LSP rename
     hrLspSelectionRange # Execute LSP selection range
+    hrLspDocumentLink # Execute LSP document link
     hrShellCommand # Execute shell command
     hrBackground # Pause editor and show terminal (:bg)
     hrJumpList # Show jump list (:ju, :jump)
@@ -125,7 +127,6 @@ type
     hrLspLog # Open LSP log viewer (:lspLog)
     hrLspFormat # LSP document formatting (:lspFormat)
     hrLspRestart # Restart LSP server (:lspRestart)
-    hrLspForceRestart # Force restart LSP server (:lspForceRestart)
     hrLspFold # LSP folding range (:lspFold)
     hrLspExecuteCommand # LSP execute command (:lspExeCommand)
     hrSubstitute # Search and replace (:s)
@@ -135,6 +136,11 @@ type
     hrDocumentSymbolQuit # Close document symbol viewer and return to previous mode
     hrDocumentSymbolJumpTo # Jump to the selected symbol
     hrEnterDocumentSymbol # Enter document symbol viewer mode
+    hrCallHierarchyQuit # Close call hierarchy viewer and return to previous mode
+    hrCallHierarchyJumpTo # Jump to the selected call hierarchy item
+    hrCallHierarchyRequestIncoming # Request incoming calls for selected item
+    hrCallHierarchyRequestOutgoing # Request outgoing calls for selected item
+    hrEnterCallHierarchy # Enter call hierarchy viewer mode
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -154,6 +160,7 @@ type
     configModeHandler*: ConfigModeHandler
     referencesHandler*: ReferencesHandler
     documentSymbolHandler*: DocumentSymbolHandler
+    callHierarchyHandler*: CallHierarchyHandler
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandLineParser*: CommandLineParser
@@ -289,6 +296,8 @@ type
       hrLspNewName*: string
     of hrLspSelectionRange:
       discard
+    of hrLspDocumentLink:
+      discard
     of hrShellCommand:
       shellCommand*: string
     of hrBackground:
@@ -319,12 +328,11 @@ type
       discard
     of hrLspRestart:
       discard
-    of hrLspForceRestart:
-      discard
     of hrLspFold:
       discard
     of hrLspExecuteCommand:
       hrLspCommand*: string
+      hrLspCommandArgs*: seq[string]
     of hrSubstitute:
       hrSubstituteCount*: int
     of hrReferencesQuit:
@@ -341,6 +349,18 @@ type
       symbolLine*: int
       symbolColumn*: int
     of hrEnterDocumentSymbol:
+      discard
+    of hrCallHierarchyQuit:
+      discard
+    of hrCallHierarchyJumpTo:
+      callHierarchyJumpUri*: string
+      callHierarchyJumpLine*: int
+      callHierarchyJumpColumn*: int
+    of hrCallHierarchyRequestIncoming:
+      callHierarchyIncomingItem*: lspTypes.CallHierarchyItem
+    of hrCallHierarchyRequestOutgoing:
+      callHierarchyOutgoingItem*: lspTypes.CallHierarchyItem
+    of hrEnterCallHierarchy:
       discard
     of hrUnhandled:
       discard
@@ -387,6 +407,7 @@ proc newHandlerManager*(
   let configModeHandler = newConfigModeHandler()
   let referencesHandler = newReferencesHandler()
   let documentSymbolHandler = newDocumentSymbolHandler()
+  let callHierarchyHandler = newCallHierarchyHandler()
 
   HandlerManager(
     normalHandler: normalHandler,
@@ -404,6 +425,7 @@ proc newHandlerManager*(
     configModeHandler: configModeHandler,
     referencesHandler: referencesHandler,
     documentSymbolHandler: documentSymbolHandler,
+    callHierarchyHandler: callHierarchyHandler,
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,
@@ -553,6 +575,9 @@ proc handleNormalMode*(
   of nmrLspSelectionRange:
     # Signal to editor to execute LSP selection range
     return HandlerResult(kind: hrLspSelectionRange)
+  of nmrLspDocumentLink:
+    # Signal to editor to execute LSP document link
+    return HandlerResult(kind: hrLspDocumentLink)
   of nmrJumpToBuffer:
     # Signal to editor to jump to a specific buffer and position
     return HandlerResult(
@@ -738,12 +763,14 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrLspFormat)
   of cmrLspRestart:
     return HandlerResult(kind: hrLspRestart)
-  of cmrLspForceRestart:
-    return HandlerResult(kind: hrLspForceRestart)
   of cmrLspFold:
     return HandlerResult(kind: hrLspFold)
   of cmrLspExecuteCommand:
-    return HandlerResult(kind: hrLspExecuteCommand, hrLspCommand: r.lspCommand)
+    return HandlerResult(
+      kind: hrLspExecuteCommand,
+      hrLspCommand: r.lspCommand,
+      hrLspCommandArgs: r.lspCommandArgs,
+    )
   of cmrLspCallHierarchyIncoming:
     return HandlerResult(kind: hrLspCallHierarchyIncoming)
   of cmrLspCallHierarchyOutgoing:
@@ -1102,6 +1129,47 @@ proc handleDocumentSymbolMode*(
   of dsvrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleCallHierarchyMode*(
+    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+): HandlerResult =
+  ## Handle Call Hierarchy Viewer mode input
+  let r = manager.callHierarchyHandler.handleCallHierarchyModeKey(
+    state, viewportHeight, keyCombo
+  )
+  case r.kind
+  of chvrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of chvrEnterCommand:
+    # Enter command mode from call hierarchy viewer
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+    )
+  of chvrQuit:
+    return HandlerResult(kind: hrCallHierarchyQuit)
+  of chvrJumpToItem:
+    return HandlerResult(
+      kind: hrCallHierarchyJumpTo,
+      callHierarchyJumpUri: r.targetItem.uri,
+      callHierarchyJumpLine: r.targetItem.selectionRange.start.line,
+      callHierarchyJumpColumn: r.targetItem.selectionRange.start.character,
+    )
+  of chvrRequestIncoming:
+    return HandlerResult(
+      kind: hrCallHierarchyRequestIncoming, callHierarchyIncomingItem: r.targetItem
+    )
+  of chvrRequestOutgoing:
+    return HandlerResult(
+      kind: hrCallHierarchyRequestOutgoing, callHierarchyOutgoingItem: r.targetItem
+    )
+  of chvrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of chvrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
 proc handleHelpViewerMode*(
     manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
 ): HandlerResult =
@@ -1332,6 +1400,8 @@ proc handleKeyCombo*(
     return manager.handleReferencesMode(state, viewport.height, keyCombo)
   of EditorMode.DocumentSymbol:
     return manager.handleDocumentSymbolMode(state, viewport.height, keyCombo)
+  of EditorMode.CallHierarchy:
+    return manager.handleCallHierarchyMode(state, viewport.height, keyCombo)
   of EditorMode.RecentFile:
     # Recent File mode requires its own state, not EditorState
     # This should be handled at a higher level with RecentFileModeState
@@ -1341,6 +1411,9 @@ proc handleKeyCombo*(
     return HandlerResult(kind: hrUnhandled)
   of EditorMode.QuickRun:
     # QuickRun mode is not interactive - handled through command mode
+    return HandlerResult(kind: hrUnhandled)
+  of EditorMode.Rename:
+    # Rename mode is handled at a higher level in handler.nim
     return HandlerResult(kind: hrUnhandled)
 
 proc playbackMacro*(
@@ -1433,7 +1506,9 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrFilerShowInfo, hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrEnterLogViewer,
     hrHelpViewerQuit, hrEnterHelpViewer, hrReferencesQuit, hrReferencesJumpTo,
     hrEnterReferences, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
-    hrEnterDocumentSymbol, hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer,
+    hrEnterDocumentSymbol, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
+    hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
+    hrEnterCallHierarchy, hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer,
     hrBufferManagerQuit, hrEnterBufferManager, hrBackupManagerRestore,
     hrBackupManagerDelete, hrBackupManagerOpenDiff, hrBackupManagerRefresh,
     hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit, hrRecentFile,
@@ -1441,7 +1516,7 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrEnterDiffViewer, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
     hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
     hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
-    hrLspSelectionRange, hrJumpList, hrLspLog,
+    hrLspSelectionRange, hrLspDocumentLink, hrJumpList, hrLspLog,
   }
 
 proc shouldQuit*(hrResult: HandlerResult): bool =
@@ -1673,6 +1748,56 @@ proc getDocumentSymbolJumpTarget*(
   else:
     (0, 0)
 
+proc shouldEnterCallHierarchy*(hrResult: HandlerResult): bool =
+  ## Check if we should enter call hierarchy viewer mode
+  hrResult.kind == hrEnterCallHierarchy
+
+proc shouldCallHierarchyQuit*(hrResult: HandlerResult): bool =
+  ## Check if we should close call hierarchy viewer
+  hrResult.kind == hrCallHierarchyQuit
+
+proc shouldCallHierarchyJumpTo*(hrResult: HandlerResult): bool =
+  ## Check if we should jump to a call hierarchy item
+  hrResult.kind == hrCallHierarchyJumpTo
+
+proc getCallHierarchyJumpTarget*(
+    hrResult: HandlerResult
+): tuple[uri: string, line: int, column: int] =
+  ## Get the jump target for call hierarchy
+  if hrResult.kind == hrCallHierarchyJumpTo:
+    (
+      hrResult.callHierarchyJumpUri, hrResult.callHierarchyJumpLine,
+      hrResult.callHierarchyJumpColumn,
+    )
+  else:
+    ("", 0, 0)
+
+proc shouldCallHierarchyRequestIncoming*(hrResult: HandlerResult): bool =
+  ## Check if we should request incoming calls
+  hrResult.kind == hrCallHierarchyRequestIncoming
+
+proc getCallHierarchyIncomingItem*(
+    hrResult: HandlerResult
+): Option[lspTypes.CallHierarchyItem] =
+  ## Get the item for incoming calls request
+  if hrResult.kind == hrCallHierarchyRequestIncoming:
+    some(hrResult.callHierarchyIncomingItem)
+  else:
+    none(lspTypes.CallHierarchyItem)
+
+proc shouldCallHierarchyRequestOutgoing*(hrResult: HandlerResult): bool =
+  ## Check if we should request outgoing calls
+  hrResult.kind == hrCallHierarchyRequestOutgoing
+
+proc getCallHierarchyOutgoingItem*(
+    hrResult: HandlerResult
+): Option[lspTypes.CallHierarchyItem] =
+  ## Get the item for outgoing calls request
+  if hrResult.kind == hrCallHierarchyRequestOutgoing:
+    some(hrResult.callHierarchyOutgoingItem)
+  else:
+    none(lspTypes.CallHierarchyItem)
+
 proc shouldEnterHelpViewer*(hrResult: HandlerResult): bool =
   ## Check if we should enter help viewer mode
   hrResult.kind == hrEnterHelpViewer
@@ -1794,6 +1919,10 @@ proc getLspRenameNewName*(hrResult: HandlerResult): string =
 proc shouldLspSelectionRange*(hrResult: HandlerResult): bool =
   ## Check if we should execute LSP selection range
   hrResult.kind == hrLspSelectionRange
+
+proc shouldLspDocumentLink*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP document link
+  hrResult.kind == hrLspDocumentLink
 
 proc shouldLspFormat*(hrResult: HandlerResult): bool =
   ## Check if we should execute LSP document formatting
@@ -1926,3 +2055,34 @@ proc shouldConfigQuit*(hrResult: HandlerResult): bool =
 proc shouldConfigSaveConfig*(hrResult: HandlerResult): bool =
   ## Check if we should save config
   hrResult.kind == hrConfigSaveConfig
+
+proc shouldPutConfigFile*(hrResult: HandlerResult): bool =
+  ## Check if we should write current config to file (:putConfigFile)
+  hrResult.kind == hrPutConfigFile
+
+proc shouldLspRestart*(hrResult: HandlerResult): bool =
+  ## Check if we should restart LSP server
+  hrResult.kind == hrLspRestart
+
+proc shouldLspExecuteCommand*(hrResult: HandlerResult): bool =
+  ## Check if we should execute an LSP command
+  hrResult.kind == hrLspExecuteCommand
+
+proc getLspExecuteCommand*(hrResult: HandlerResult): string =
+  ## Get the LSP command to execute
+  if hrResult.kind == hrLspExecuteCommand: hrResult.hrLspCommand else: ""
+
+proc getLspExecuteCommandArgs*(hrResult: HandlerResult): seq[string] =
+  ## Get the LSP command arguments
+  if hrResult.kind == hrLspExecuteCommand:
+    hrResult.hrLspCommandArgs
+  else:
+    @[]
+
+proc shouldMan*(hrResult: HandlerResult): bool =
+  ## Check if we should show a man page
+  hrResult.kind == hrMan
+
+proc getManPage*(hrResult: HandlerResult): string =
+  ## Get the man page to show
+  if hrResult.kind == hrMan: hrResult.hrManPage else: ""

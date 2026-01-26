@@ -23,7 +23,7 @@ import std/[options, monotimes, tables, json, times, strutils]
 
 import pkg/[results, chronos]
 
-import editor_types, logger, highlight
+import editor_types, logger, highlight, lspintegration
 
 proc hasCodeLensSupport*(e: Editor): bool =
   ## Check if CodeLens is supported for the current buffer
@@ -212,6 +212,7 @@ proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlig
   # Convert LSP DocumentHighlight to our cached format
   # Handle multi-line highlights by creating an item for each line
   # Group by line for O(1) lookup during rendering
+  # Note: LSP character positions are UTF-16, convert to UTF-8 byte offsets
   var itemsByLine: Table[int, seq[DocumentHighlightItem]]
   for highlight in highlights:
     let kind =
@@ -224,12 +225,16 @@ proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlig
     let endLine = highlight.range.`end`.line
 
     if startLine == endLine:
-      # Single line highlight
+      # Single line highlight - convert UTF-16 to UTF-8
+      let lineText =
+        if startLine >= 0 and startLine < activeBuffer.len:
+          activeBuffer.getLine(startLine)
+        else:
+          ""
+      let utf8StartCol = utf16OffsetToUtf8(lineText, highlight.range.start.character)
+      let utf8EndCol = utf16OffsetToUtf8(lineText, highlight.range.`end`.character)
       let item = DocumentHighlightItem(
-        line: startLine,
-        startColumn: highlight.range.start.character,
-        endColumn: highlight.range.`end`.character,
-        kind: kind,
+        line: startLine, startColumn: utf8StartCol, endColumn: utf8EndCol, kind: kind
       )
       if startLine notin itemsByLine:
         itemsByLine[startLine] = @[]
@@ -237,10 +242,23 @@ proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlig
     else:
       # Multi-line highlight: create an item for each line
       for line in startLine .. endLine:
-        let startCol = if line == startLine: highlight.range.start.character else: 0
-        # For end column, use a large value for middle/last lines
+        let lineText =
+          if line >= 0 and line < activeBuffer.len:
+            activeBuffer.getLine(line)
+          else:
+            ""
+        let startCol =
+          if line == startLine:
+            utf16OffsetToUtf8(lineText, highlight.range.start.character)
+          else:
+            0
+        # For end column, use a large value for middle lines
         # (will be clamped during rendering)
-        let endCol = if line == endLine: highlight.range.`end`.character else: int.high
+        let endCol =
+          if line == endLine:
+            utf16OffsetToUtf8(lineText, highlight.range.`end`.character)
+          else:
+            int.high
         let item = DocumentHighlightItem(
           line: line, startColumn: startCol, endColumn: endCol, kind: kind
         )

@@ -221,72 +221,41 @@ proc autoSave*(e: Editor) =
   # Check all windows for modified buffers and save them
   var savedCount = 0
   var savedPaths: seq[string] = @[]
+  var savedBuffers: seq[TextBuffer] =
+    @[] # Track already saved buffers to avoid duplicates
 
-  if e.windowManager.windows.len > 0:
-    # Multi-window mode: check each window's buffer
-    var savedBuffers: seq[TextBuffer] =
-      @[] # Track already saved buffers to avoid duplicates
+  for window in e.windowManager.windows:
+    let buffer = window.buffer
 
-    for window in e.windowManager.windows:
-      let buffer = window.buffer
+    # Skip if already saved (same buffer in multiple windows)
+    if buffer in savedBuffers:
+      continue
 
-      # Skip if already saved (same buffer in multiple windows)
-      if buffer in savedBuffers:
-        continue
-
-      # Check if buffer is modified and has a file path
-      if buffer.isModified and buffer.filePath.isSome:
-        let savePath = buffer.filePath.get
-
-        # Skip externally modified files to avoid overwriting external changes
-        if buffer.isExternallyModified():
-          logDebug(
-            "editor", "Skipping auto save for externally modified file: " & savePath
-          )
-          continue
-
-        let saveResult = buffer.saveFile(savePath)
-
-        if saveResult.isOk:
-          savedBuffers.add(buffer)
-          savedCount += 1
-          savedPaths.add(savePath)
-
-          # Refresh git diff after saving
-          if e.state.display.showGitDiff:
-            discard updateBufferWithGitDiff(buffer, useBuffer = false)
-
-          # Notify LSP that a document was saved
-          if e.lsp.enabled:
-            discard e.lsp.onBufferSave(buffer)
-        else:
-          logError(
-            "editor", "Auto save failed for " & savePath & ": " & saveResult.error
-          )
-  else:
-    # Single window mode: check the main buffer
-    if e.textBuffer.isModified and e.textBuffer.filePath.isSome:
-      let savePath = e.textBuffer.filePath.get
+    # Check if buffer is modified and has a file path
+    if buffer.isModified and buffer.filePath.isSome:
+      let savePath = buffer.filePath.get
 
       # Skip externally modified files to avoid overwriting external changes
-      if e.textBuffer.isExternallyModified():
+      if buffer.isExternallyModified():
         logDebug(
           "editor", "Skipping auto save for externally modified file: " & savePath
         )
-        return
+        continue
 
-      let saveResult = e.textBuffer.saveFile(savePath)
+      let saveResult = buffer.saveFile(savePath)
 
       if saveResult.isOk:
+        savedBuffers.add(buffer)
         savedCount += 1
         savedPaths.add(savePath)
 
         # Refresh git diff after saving
-        e.refreshGitDiff(useBuffer = false)
+        if e.state.display.showGitDiff:
+          discard updateBufferWithGitDiff(buffer, useBuffer = false)
 
         # Notify LSP that a document was saved
         if e.lsp.enabled:
-          discard e.lsp.onBufferSave(e.textBuffer)
+          discard e.lsp.onBufferSave(buffer)
       else:
         logError("editor", "Auto save failed for " & savePath & ": " & saveResult.error)
 
@@ -345,35 +314,22 @@ proc autoBackup*(e: Editor) =
   # Backup all modified buffers
   var backupCount = 0
   var backupPaths: seq[string] = @[]
+  var backedUpBuffers: seq[TextBuffer] =
+    @[] # Track already backed up buffers to avoid duplicates
 
-  if e.windowManager.windows.len > 0:
-    # Multi-window mode: backup each window's buffer
-    var backedUpBuffers: seq[TextBuffer] =
-      @[] # Track already backed up buffers to avoid duplicates
+  for window in e.windowManager.windows:
+    let buffer = window.buffer
 
-    for window in e.windowManager.windows:
-      let buffer = window.buffer
+    # Skip if already backed up (same buffer in multiple windows)
+    if buffer in backedUpBuffers:
+      continue
 
-      # Skip if already backed up (same buffer in multiple windows)
-      if buffer in backedUpBuffers:
-        continue
-
-      # Only backup modified buffers with a file path
-      if buffer.isModified and buffer.filePath.isSome:
-        let backupResult = backupBuffer(buffer, e.config.autoBackup)
-
-        if backupResult.isOk:
-          backedUpBuffers.add(buffer)
-          backupCount += 1
-          backupPaths.add(backupResult.get)
-        elif backupResult.error != "No changes since last backup":
-          logError("editor", "Auto backup failed: " & backupResult.error)
-  else:
-    # Single window mode: backup the main buffer
-    if e.textBuffer.isModified and e.textBuffer.filePath.isSome:
-      let backupResult = backupBuffer(e.textBuffer, e.config.autoBackup)
+    # Only backup modified buffers with a file path
+    if buffer.isModified and buffer.filePath.isSome:
+      let backupResult = backupBuffer(buffer, e.config.autoBackup)
 
       if backupResult.isOk:
+        backedUpBuffers.add(buffer)
         backupCount += 1
         backupPaths.add(backupResult.get)
       elif backupResult.error != "No changes since last backup":

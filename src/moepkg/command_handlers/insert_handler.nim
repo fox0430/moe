@@ -413,6 +413,11 @@ proc isCtrlR(keyCombo: KeyCombo): bool =
   not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
     keyCombo.char.toLowerAscii == "r"
 
+proc isCtrlI(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+I (insert tab)
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+    keyCombo.char.toLowerAscii == "i"
+
 proc shouldTriggerSignatureHelp*(keyCombo: KeyCombo): bool =
   ## Check if the typed character should trigger signature help
   not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char.len == 1 and
@@ -568,6 +573,10 @@ proc handleInsertModeKey*(
       if reqResult.isOk:
         state.lspCache.pendingSignatureHelpRequestId = reqResult.get
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  # Ctrl+I - insert tab
+  if keyCombo.isCtrlI:
+    return handler.handleTab(buffer, state)
 
   # Check for mode switch keys (like Escape)
   let binding = handler.keyBindingRegistry.findBinding(EditorMode.Insert, keyCombo)

@@ -35,7 +35,6 @@ type
   BoolSettingOption* = enum
     ## Boolean setting options that can be toggled via :set command
     bsoNumber # line numbers
-    bsoCurrentNumber # current line number
     bsoCursorLine # cursor line highlight
     bsoStatusLine # status line
     bsoSyntax # syntax highlighting
@@ -112,7 +111,6 @@ type
     cmrLspLog # Open LSP log viewer (:lspLog)
     cmrLspFormat # LSP document formatting (:lspFormat)
     cmrLspRestart # Restart LSP server (:lspRestart)
-    cmrLspForceRestart # Force restart LSP server (:lspForceRestart)
     cmrLspFold # LSP folding range (:lspFold)
     cmrLspExecuteCommand # LSP execute command (:lspExeCommand)
     cmrLspCallHierarchyIncoming # LSP incoming calls (:lspCallHierarchyIncoming)
@@ -212,12 +210,11 @@ type
       discard
     of cmrLspRestart:
       discard
-    of cmrLspForceRestart:
-      discard
     of cmrLspFold:
       discard
     of cmrLspExecuteCommand:
       lspCommand*: string
+      lspCommandArgs*: seq[string]
     of cmrLspCallHierarchyIncoming:
       discard
     of cmrLspCallHierarchyOutgoing:
@@ -331,15 +328,6 @@ proc executeSet*(
   of "nonumber", "nonu":
     return
       CommandModeResult(kind: cmrSetBoolOption, boolOption: bsoNumber, boolValue: false)
-  # Current line number
-  of "currentnumber", "cnu":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoCurrentNumber, boolValue: true
-    )
-  of "nocurrentnumber", "nocnu":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoCurrentNumber, boolValue: false
-    )
   # Cursor line
   of "cursorline", "cul":
     return CommandModeResult(
@@ -914,13 +902,14 @@ proc handleCommandModeInput*(
     return CommandModeResult(kind: cmrLspFormat)
   of claLspRestart:
     return CommandModeResult(kind: cmrLspRestart)
-  of claLspForceRestart:
-    return CommandModeResult(kind: cmrLspForceRestart)
   of claLspFold:
     return CommandModeResult(kind: cmrLspFold)
   of claLspExecuteCommand:
-    return
-      CommandModeResult(kind: cmrLspExecuteCommand, lspCommand: cmdResult.lspCommand)
+    return CommandModeResult(
+      kind: cmrLspExecuteCommand,
+      lspCommand: cmdResult.lspCommand,
+      lspCommandArgs: cmdResult.lspCommandArgs,
+    )
   of claLspCallHierarchyIncoming:
     return CommandModeResult(kind: cmrLspCallHierarchyIncoming)
   of claLspCallHierarchyOutgoing:

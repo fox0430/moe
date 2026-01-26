@@ -41,6 +41,8 @@ type
     Config
     References
     DocumentSymbol
+    Rename
+    CallHierarchy
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -68,3 +70,5 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.Config: "CONFIG"
   of EditorMode.References: "REFERENCES"
   of EditorMode.DocumentSymbol: "SYMBOLS"
+  of EditorMode.Rename: "RENAME"
+  of EditorMode.CallHierarchy: "CALL HIERARCHY"
