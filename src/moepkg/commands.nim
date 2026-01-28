@@ -37,7 +37,7 @@ proc newCommandExecutor*(
     buffer: buffer.TextBuffer,
     state: EditorState,
     viewport: ViewPort,
-    clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: ctXclip),
+    clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: cbtXclip),
     notificationConfig: NotificationConfig = NotificationConfig(),
     commandRegistry: Option[CommandRegistry] = none(CommandRegistry),
     keyBindingRegistry: Option[KeyBindingRegistry] = none(KeyBindingRegistry),

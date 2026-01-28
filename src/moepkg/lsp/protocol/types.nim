@@ -819,25 +819,37 @@ proc parseInlayHintLabelPart*(node: JsonNode): InlayHintLabelPart =
   if node.hasKey("command"):
     result.command = some(node["command"])
 
-proc parseInlayHint*(node: JsonNode): InlayHint =
-  ## Parse InlayHint from JSON
-  result.position = parsePosition(node["position"])
-  result.label = node["label"]
+proc parseInlayHint*(node: JsonNode): Option[InlayHint] =
+  ## Parse InlayHint from JSON. Returns none if node is nil or not an object.
+  if node.isNil or node.kind != JObject:
+    return none(InlayHint)
+
+  var hint: InlayHint
+  if not node.hasKey("position") or not node.hasKey("label"):
+    return none(InlayHint)
+
+  hint.position = parsePosition(node["position"])
+  hint.label = node["label"]
   if node.hasKey("kind"):
-    result.kind = some(InlayHintKind(node["kind"].getInt))
+    hint.kind = some(InlayHintKind(node["kind"].getInt))
   if node.hasKey("textEdits"):
-    var edits: seq[TextEdit] = @[]
-    for edit in node["textEdits"]:
-      edits.add(parseTextEdit(edit))
-    result.textEdits = some(edits)
+    let textEditsNode = node["textEdits"]
+    if textEditsNode.kind == JArray:
+      var edits: seq[TextEdit] = @[]
+      for edit in textEditsNode:
+        if edit.kind == JObject:
+          edits.add(parseTextEdit(edit))
+      hint.textEdits = some(edits)
   if node.hasKey("tooltip"):
-    result.tooltip = some(node["tooltip"])
+    hint.tooltip = some(node["tooltip"])
   if node.hasKey("paddingLeft"):
-    result.paddingLeft = some(node["paddingLeft"].getBool)
+    hint.paddingLeft = some(node["paddingLeft"].getBool)
   if node.hasKey("paddingRight"):
-    result.paddingRight = some(node["paddingRight"].getBool)
+    hint.paddingRight = some(node["paddingRight"].getBool)
   if node.hasKey("data"):
-    result.data = some(node["data"])
+    hint.data = some(node["data"])
+
+  return some(hint)
 
 proc getInlayHintLabel*(hint: InlayHint): string =
   ## Extract the label string from an inlay hint
@@ -1180,32 +1192,37 @@ proc hasModifier*(
   return modifier in modifiers
 
 proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
+  # Return empty capabilities if node is not a JObject
+  if node.isNil or node.kind != JObject:
+    return result
   if node.hasKey("textDocumentSync"):
     result.textDocumentSync = some(node["textDocumentSync"])
   if node.hasKey("completionProvider"):
     let cp = node["completionProvider"]
     var opts = CompletionOptions()
-    if cp.hasKey("triggerCharacters"):
-      var chars: seq[string] = @[]
-      for c in cp["triggerCharacters"]:
-        chars.add(c.getStr)
-      opts.triggerCharacters = some(chars)
-    if cp.hasKey("resolveProvider"):
-      opts.resolveProvider = some(cp["resolveProvider"].getBool)
+    if cp.kind == JObject:
+      if cp.hasKey("triggerCharacters"):
+        var chars: seq[string] = @[]
+        for c in cp["triggerCharacters"]:
+          chars.add(c.getStr)
+        opts.triggerCharacters = some(chars)
+      if cp.hasKey("resolveProvider"):
+        opts.resolveProvider = some(cp["resolveProvider"].getBool)
     result.completionProvider = some(opts)
   if node.hasKey("signatureHelpProvider"):
     let sh = node["signatureHelpProvider"]
     var opts = SignatureHelpOptions()
-    if sh.hasKey("triggerCharacters"):
-      var chars: seq[string] = @[]
-      for c in sh["triggerCharacters"]:
-        chars.add(c.getStr)
-      opts.triggerCharacters = some(chars)
-    if sh.hasKey("retriggerCharacters"):
-      var chars: seq[string] = @[]
-      for c in sh["retriggerCharacters"]:
-        chars.add(c.getStr)
-      opts.retriggerCharacters = some(chars)
+    if sh.kind == JObject:
+      if sh.hasKey("triggerCharacters"):
+        var chars: seq[string] = @[]
+        for c in sh["triggerCharacters"]:
+          chars.add(c.getStr)
+        opts.triggerCharacters = some(chars)
+      if sh.hasKey("retriggerCharacters"):
+        var chars: seq[string] = @[]
+        for c in sh["retriggerCharacters"]:
+          chars.add(c.getStr)
+        opts.retriggerCharacters = some(chars)
     result.signatureHelpProvider = some(opts)
   if node.hasKey("hoverProvider"):
     result.hoverProvider = some(node["hoverProvider"])

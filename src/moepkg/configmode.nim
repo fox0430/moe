@@ -392,12 +392,12 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
   )
   result.add ConfigItemDescriptor(
     kind: cvkBool,
-    displayName: "chanedMark",
+    displayName: "changedMark",
     section: "StatusLine",
     boolGet: proc(c: EditorConfig): bool =
-      c.statusLine.chanedMark,
+      c.statusLine.changedMark,
     boolSet: proc(c: EditorConfig, v: bool) =
-      c.statusLine.chanedMark = v,
+      c.statusLine.changedMark = v,
   )
   result.add ConfigItemDescriptor(
     kind: cvkBool,

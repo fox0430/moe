@@ -45,11 +45,11 @@ type
     tkVscode = "vscode"
 
   ClipboardTool* = enum
-    ctXsel = "xsel"
-    ctXclip = "xclip"
-    ctWlClipboard = "wl-clipboard"
-    ctWin32yank = "win32yank"
-    ctPbcopy = "pbcopy"
+    cbtXsel = "xsel"
+    cbtXclip = "xclip"
+    cbtWlClipboard = "wl-clipboard"
+    cbtWin32yank = "win32yank"
+    cbtPbcopy = "pbcopy"
 
   SplitType* = enum
     stHorizontal = "horizontal"
@@ -101,7 +101,7 @@ type
     merge*: bool
     mode*: bool
     filename*: bool
-    chanedMark*: bool
+    changedMark*: bool
     directory*: bool
     gitChangedLines*: bool
     gitBranchName*: bool
@@ -379,20 +379,20 @@ proc detectClipboardTool*(): ClipboardTool =
   if isWaylandSession():
     # Wayland: prefer wl-clipboard
     if isToolAvailable("wl-copy"):
-      return ctWlClipboard
+      return cbtWlClipboard
   # X11 or Wayland fallback: try xsel, then xclip
   if isToolAvailable("xsel"):
-    return ctXsel
+    return cbtXsel
   if isToolAvailable("xclip"):
-    return ctXclip
+    return cbtXclip
   # macOS
   if isToolAvailable("pbcopy"):
-    return ctPbcopy
+    return cbtPbcopy
   # WSL/Windows
   if isToolAvailable("win32yank.exe"):
-    return ctWin32yank
+    return cbtWin32yank
   # Default fallback
-  return ctXsel
+  return cbtXsel
 
 proc newEditorConfig*(): EditorConfig =
   ## Create a new configuration with default values
@@ -431,7 +431,7 @@ proc newEditorConfig*(): EditorConfig =
       merge: false,
       mode: true,
       filename: true,
-      chanedMark: true,
+      changedMark: true,
       directory: true,
       gitChangedLines: true,
       gitBranchName: true,

@@ -1077,9 +1077,9 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     if minLine != int.high:
       b.lastChangedLines = (minLine, maxLine)
 
-  # Return suggested cursor position for the first change
+  # Return suggested cursor position for the last undone change (Vim behavior)
   if undoneChanges.len > 0:
-    return ok(getChangePosition(undoneChanges[0]))
+    return ok(getChangePosition(undoneChanges[^1]))
   else:
     return ok(BufferPosition(line: 0, column: 0))
 
@@ -1211,9 +1211,9 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     if minLine != int.high:
       b.lastChangedLines = (minLine, maxLine)
 
-  # Return suggested cursor position for the first change
+  # Return suggested cursor position for the last redone change (Vim behavior)
   if redoneChanges.len > 0:
-    return ok(getChangePosition(redoneChanges[0]))
+    return ok(getChangePosition(redoneChanges[^1]))
   else:
     return ok(BufferPosition(line: 0, column: 0))
 

@@ -43,31 +43,31 @@ proc getClipboardCommand*(
   ## operation can be "read" or "write"
   ## Note: Tool availability is checked at runtime, not here
   case tool
-  of ctXclip:
+  of cbtXclip:
     case operation
     of read:
       return some(@["xclip", "-selection", "clipboard", "-o"])
     of write:
       return some(@["xclip", "-selection", "clipboard", "-i"])
-  of ctXsel:
+  of cbtXsel:
     case operation
     of read:
       return some(@["xsel", "--clipboard", "--output"])
     of write:
       return some(@["xsel", "--clipboard", "--input"])
-  of ctWlClipboard:
+  of cbtWlClipboard:
     case operation
     of read:
       return some(@["wl-paste", "-n"])
     of write:
       return some(@["wl-copy"])
-  of ctWin32yank:
+  of cbtWin32yank:
     case operation
     of read:
       return some(@["win32yank.exe", "-o", "--lf"])
     of write:
       return some(@["win32yank.exe", "-i", "--crlf"])
-  of ctPbcopy:
+  of cbtPbcopy:
     # macOS pbcopy/pbpaste
     case operation
     of read:
@@ -109,7 +109,7 @@ proc writeToClipboardSync*(tool: ClipboardTool, text: string): Result[void, stri
   let cmd = cmdOpt.get()
   try:
     # wl-copy accepts text as positional argument
-    if tool == ctWlClipboard:
+    if tool == cbtWlClipboard:
       var args = cmd[1 ..^ 1]
       args.add(text)
       let process = startProcess(cmd[0], args = args, options = {poUsePath})

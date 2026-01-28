@@ -84,12 +84,12 @@ proc parseThemeKind(s: string): ThemeKind =
 
 proc parseClipboardTool(s: string): ClipboardTool =
   case s
-  of "xsel": ctXsel
-  of "xclip": ctXclip
-  of "wl-clipboard": ctWlClipboard
-  of "win32yank": ctWin32yank
-  of "pbcopy": ctPbcopy
-  else: ctXsel
+  of "xsel": cbtXsel
+  of "xclip": cbtXclip
+  of "wl-clipboard": cbtWlClipboard
+  of "win32yank": cbtWin32yank
+  of "pbcopy": cbtPbcopy
+  else: cbtXsel
 
 proc parseSplitType(s: string): SplitType =
   case s
@@ -379,7 +379,7 @@ proc loadStatusLineConfig(
   loadBool(table, "merge", config.merge, vr, section)
   loadBool(table, "mode", config.mode, vr, section)
   loadBool(table, "filename", config.filename, vr, section)
-  loadBool(table, "chanedMark", config.chanedMark, vr, section)
+  loadBool(table, "changedMark", config.changedMark, vr, section)
   loadBool(table, "directory", config.directory, vr, section)
   loadBool(table, "gitChangedLines", config.gitChangedLines, vr, section)
   loadBool(table, "gitBranchName", config.gitBranchName, vr, section)
@@ -1429,7 +1429,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "merge = " & toTomlBool(config.statusLine.merge)
   lines.add "mode = " & toTomlBool(config.statusLine.mode)
   lines.add "filename = " & toTomlBool(config.statusLine.filename)
-  lines.add "chanedMark = " & toTomlBool(config.statusLine.chanedMark)
+  lines.add "changedMark = " & toTomlBool(config.statusLine.changedMark)
   lines.add "directory = " & toTomlBool(config.statusLine.directory)
   lines.add "gitChangedLines = " & toTomlBool(config.statusLine.gitChangedLines)
   lines.add "gitBranchName = " & toTomlBool(config.statusLine.gitBranchName)

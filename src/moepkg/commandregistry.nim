@@ -3500,12 +3500,25 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
   # is executed, and executeOperatorOnRange is called automatically
 
   # Undo/Redo commands
+  proc clampCursorToBuffer(ctx: CommandContext) =
+    ## Clamp cursor position to valid buffer range
+    if ctx.buffer.len == 0:
+      ctx.state.cursor = BufferPosition(line: 0, column: 0)
+    else:
+      if ctx.state.cursor.line >= ctx.buffer.len:
+        ctx.state.cursor.line = ctx.buffer.len - 1
+      let line = ctx.buffer.getLine(ctx.state.cursor.line)
+      let maxCol = max(0, line.charLen - 1)
+      if ctx.state.cursor.column > maxCol:
+        ctx.state.cursor.column = maxCol
+
   registry.register(
     builtin(bcEditUndo),
     "Undo",
     "Undo the last change(s)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let count = parseCount(args, default = 1)
+      var lastCursorPos: Option[BufferPosition] = none(BufferPosition)
       for i in 1 .. count:
         let r = ctx.buffer.undo()
         if r.isErr:
@@ -3513,7 +3526,12 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
             return err(r.error)
           else:
             break # Stop if we can't undo anymore
-      # TODO: Apply cursor position from r.value to active window
+        lastCursorPos = some(r.value)
+
+      if lastCursorPos.isSome:
+        ctx.state.cursor = lastCursorPos.get
+        clampCursorToBuffer(ctx)
+
       return Result[(), string].ok (),
     0,
     1, # Accept optional count argument
@@ -3525,6 +3543,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Redo the last undone change(s)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let count = parseCount(args, default = 1)
+      var lastCursorPos: Option[BufferPosition] = none(BufferPosition)
       for i in 1 .. count:
         let r = ctx.buffer.redo()
         if r.isErr:
@@ -3532,7 +3551,12 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
             return err(r.error)
           else:
             break # Stop if we can't redo anymore
-      # TODO: Apply cursor position from r.value to active window
+        lastCursorPos = some(r.value)
+
+      if lastCursorPos.isSome:
+        ctx.state.cursor = lastCursorPos.get
+        clampCursorToBuffer(ctx)
+
       return Result[(), string].ok (),
     0,
     1, # Accept optional count argument

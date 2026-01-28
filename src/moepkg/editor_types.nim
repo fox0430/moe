@@ -30,6 +30,11 @@ import
 import keybindings except Command
 import command_handlers/handler_manager
 
+export
+  buffer, cursor, types, commands, commandregistry, modes, commandline, commandconfig,
+  windowmanager, lspintegration, recentfilemode, config, persist, handler_manager,
+  tables, celina
+
 type
   Editor* = ref object
     textBuffer*: TextBuffer
@@ -64,17 +69,9 @@ type
     hasContent*: bool
 
 # Basic accessor procedures
-proc buffer*(e: Editor): TextBuffer =
+proc buffer*(e: Editor): TextBuffer {.inline.} =
   e.textBuffer
 
-proc activeBuffer*(e: Editor): TextBuffer =
+proc activeBuffer*(e: Editor): TextBuffer {.inline.} =
   ## Get the currently active buffer (always from the active window since we always have at least one window)
   e.windowManager.windows[e.windowManager.activeWindowIndex].buffer
-
-# Re-export commonly used types from dependencies
-# Note: keybindings is NOT exported here to avoid Command type ambiguity with types.Command
-# Modules that need keybindings should import it directly with `import keybindings except Command`
-export
-  buffer, cursor, types, commands, commandregistry, modes, commandline, commandconfig,
-  windowmanager, lspintegration, recentfilemode, config, persist, handler_manager,
-  tables, celina

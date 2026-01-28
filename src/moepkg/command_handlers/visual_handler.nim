@@ -21,7 +21,6 @@
 ##
 ## This module handles visual selection and provides the core selection
 ## functionality for Visual mode
-## - Macro recording support
 
 import std/options
 

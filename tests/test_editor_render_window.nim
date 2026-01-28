@@ -1,0 +1,886 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+## Tests for editor_render_window.nim functions
+## This module tests window and line rendering procedures
+
+import std/[unittest, strutils]
+import pkg/celina
+import ../src/moepkg/[editor, buffer, config, configloader, render_utils]
+import ../src/moepkg/editor_render_window
+
+proc createTestEditor(): Editor =
+  ## Create a minimal editor for testing
+  let config = newEditorConfig()
+  let vr = newValidationResult()
+  result = newEditor(config, vr)
+
+proc createTestBuffer(): Buffer =
+  ## Create a minimal Celina Buffer for testing
+  result = newBuffer(80, 24)
+  result.area = Rect(x: 0, y: 0, width: 80, height: 24)
+
+proc createTestSidebar(height: int): Sidebar =
+  ## Create a test sidebar with correct number of items per row
+  result = Sidebar(width: 2, buffer: @[])
+  for i in 0 ..< height:
+    var row: seq[SidebarItem]
+    # Add 2 items (one per column) to match width
+    row.add(SidebarItem(text: " ", style: normalStyle()))
+    row.add(SidebarItem(text: " ", style: normalStyle()))
+    result.buffer.add(row)
+
+suite "renderWindowLineWrapped - Basic behavior":
+  test "Render empty line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+    )
+
+    var screenY = 0
+    var lineIndex = 0
+
+    e.renderWindowLineWrapped(buffer, window, 0, ctx, screenY, lineIndex, 20, 0)
+
+    check screenY == 1
+    check lineIndex == 1
+
+  test "Render short line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    # Add content to text buffer
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+    )
+
+    var screenY = 0
+    var lineIndex = 0
+
+    e.renderWindowLineWrapped(buffer, window, 0, ctx, screenY, lineIndex, 20, 0)
+
+    check screenY == 1
+    check lineIndex == 1
+
+  test "Render line with line number":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Test line")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+    )
+
+    var screenY = 0
+    var lineIndex = 0
+
+    # Line number offset of 4 characters
+    e.renderWindowLineWrapped(buffer, window, 4, ctx, screenY, lineIndex, 20, 0)
+
+    check screenY == 1
+    check lineIndex == 1
+
+  test "Render line that wraps":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    # Create a long line that will wrap
+    let longLine = "x".repeat(100)
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40 # Narrow width to force wrapping
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+    )
+
+    var screenY = 0
+    var lineIndex = 0
+
+    e.renderWindowLineWrapped(buffer, window, 0, ctx, screenY, lineIndex, 20, 0)
+
+    # Line should wrap multiple times
+    check screenY > 1
+    check lineIndex == 1
+
+  test "Render with tab line offset":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Test")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+    )
+
+    var screenY = 1 # Start after tab line
+    var lineIndex = 0
+
+    e.renderWindowLineWrapped(buffer, window, 0, ctx, screenY, lineIndex, 20, 1)
+
+    check screenY == 2
+    check lineIndex == 1
+
+suite "renderWindowLineNoWrap - Basic behavior":
+  test "Render empty line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+    )
+
+    e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
+
+  test "Render short line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+    )
+
+    e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
+
+  test "Render line with line number":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Test line")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+    )
+
+    e.renderWindowLineNoWrap(buffer, window, 4, ctx, 0, 0)
+
+  test "Render with horizontal scroll":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    let longLine = "x".repeat(100)
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 50 # Scroll right
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 50,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+    )
+
+    e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
+
+  test "Render scrolled past line end":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Short")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 100 # Scroll past line end
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+    )
+
+    e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
+
+  test "Render on current line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Current line")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0 # Cursor on this line
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+    )
+
+    e.renderWindowLineNoWrap(buffer, window, 4, ctx, 0, 0)
+
+suite "renderWindowSidebar - Basic behavior":
+  test "Render sidebar line":
+    var buffer = createTestBuffer()
+
+    let window = EditorWindow(
+      viewport: ViewPort(x: 0, y: 0, width: 80, height: 24),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: true,
+    )
+
+    let sidebar = createTestSidebar(10)
+
+    renderWindowSidebar(buffer, window, sidebar, 0, 0, 0)
+
+  test "Render sidebar at offset":
+    var buffer = createTestBuffer()
+
+    let window = EditorWindow(
+      viewport: ViewPort(x: 5, y: 2, width: 70, height: 20),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: true,
+    )
+
+    let sidebar = createTestSidebar(10)
+
+    renderWindowSidebar(buffer, window, sidebar, 3, 3, 0)
+
+  test "Render sidebar with invalid index":
+    var buffer = createTestBuffer()
+
+    let window = EditorWindow(
+      viewport: ViewPort(x: 0, y: 0, width: 80, height: 24),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: true,
+    )
+
+    let sidebar = createTestSidebar(5)
+
+    # Index out of bounds - should not crash
+    renderWindowSidebar(buffer, window, sidebar, 0, 10, 0)
+
+  test "Render sidebar with negative index":
+    var buffer = createTestBuffer()
+
+    let window = EditorWindow(
+      viewport: ViewPort(x: 0, y: 0, width: 80, height: 24),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: true,
+    )
+
+    let sidebar = createTestSidebar(5)
+
+    # Negative index - should not crash
+    renderWindowSidebar(buffer, window, sidebar, 0, -1, 0)
+
+suite "renderFoldLine - Basic behavior":
+  test "Render fold marker":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    discard e.textBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3"
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    let fold = Fold(startLine: 0, endLine: 2, collapsed: true)
+
+    e.renderFoldLine(buffer, window, 0, 0, fold)
+
+  test "Render fold marker with line number":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    discard e.textBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3"
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    let fold = Fold(startLine: 0, endLine: 2, collapsed: true)
+
+    e.renderFoldLine(buffer, window, 4, 0, fold)
+
+  test "Render fold marker at window offset":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    discard
+      e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 60
+    window.viewport.height = 20
+    window.viewport.x = 10
+    window.viewport.y = 5
+
+    let fold = Fold(startLine: 0, endLine: 1, collapsed: true)
+
+    e.renderFoldLine(buffer, window, 4, 0, fold)
+
+suite "renderWindow - Basic behavior":
+  test "Render window with single line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+  test "Render window with multiple lines":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    discard e.textBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    e.renderWindow(buffer, window, 4, true, true, 0)
+
+  test "Render window with line wrap enabled":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.lineWrap = true
+
+    let longLine = "x".repeat(100)
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+  test "Render window with line wrap disabled":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.lineWrap = false
+
+    let longLine = "x".repeat(100)
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+  test "Render window with sidebar enabled":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showSidebar = true
+
+    discard
+      e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    e.renderWindow(buffer, window, 4, true, true, 0)
+
+  test "Render window with sidebar disabled":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showSidebar = false
+
+    discard
+      e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    e.renderWindow(buffer, window, 4, true, true, 0)
+
+  test "Render window with tab line offset":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Content")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    e.renderWindow(buffer, window, 4, true, true, 1)
+
+  test "Render window as non-active":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Content")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.active = false
+
+    e.renderWindow(buffer, window, 4, true, false, 0)
+
+  test "Render window as non-bottom":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Content")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 12
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    e.renderWindow(buffer, window, 4, false, true, 0)
+
+suite "renderWindowSeparator - Basic behavior":
+  test "Render vertical separator":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    # Create two side-by-side windows
+    let window1 = EditorWindow(
+      viewport: ViewPort(x: 0, y: 0, width: 40, height: 24),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: true,
+    )
+    let window2 = EditorWindow(
+      viewport: ViewPort(x: 40, y: 0, width: 40, height: 24),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: false,
+    )
+
+    e.renderWindowSeparator(buffer, window1, window2, true)
+
+  test "Render horizontal separator when multi status line disabled":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.multiStatusLine = false
+
+    # Create two stacked windows
+    let window1 = EditorWindow(
+      viewport: ViewPort(x: 0, y: 0, width: 80, height: 12),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: true,
+    )
+    let window2 = EditorWindow(
+      viewport: ViewPort(x: 0, y: 12, width: 80, height: 12),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: false,
+    )
+
+    e.renderWindowSeparator(buffer, window1, window2, false)
+
+  test "No horizontal separator when multi status line enabled":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.multiStatusLine = true
+
+    # Create two stacked windows
+    let window1 = EditorWindow(
+      viewport: ViewPort(x: 0, y: 0, width: 80, height: 12),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: true,
+    )
+    let window2 = EditorWindow(
+      viewport: ViewPort(x: 0, y: 12, width: 80, height: 12),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: false,
+    )
+
+    # Should not draw horizontal separator
+    e.renderWindowSeparator(buffer, window1, window2, false)
+
+  test "Separator at window offset":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    let window1 = EditorWindow(
+      viewport: ViewPort(x: 10, y: 5, width: 30, height: 15),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: true,
+    )
+    let window2 = EditorWindow(
+      viewport: ViewPort(x: 40, y: 5, width: 30, height: 15),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: false,
+    )
+
+    e.renderWindowSeparator(buffer, window1, window2, true)
+
+suite "renderWindow - Visual selection":
+  test "Render window with visual selection":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.mode = EditorMode.Visual
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.cursor = BufferPosition(line: 0, column: 5)
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+  test "Render window with visual line selection":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.mode = EditorMode.VisualLine
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 2, column: 0)
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskLine
+    e.state.cursor = BufferPosition(line: 2, column: 0)
+
+    discard e.textBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3"
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+  test "Render window with visual block selection":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.mode = EditorMode.VisualBlock
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 2, column: 5)
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskBlock
+    e.state.cursor = BufferPosition(line: 2, column: 5)
+
+    discard e.textBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3"
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+suite "renderWindow - Scrolling":
+  test "Render window with vertical scroll":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    # Add many lines
+    var content = ""
+    for i in 0 ..< 100:
+      content &= "Line " & $i & "\n"
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), content)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.topLine = 50 # Scroll down
+
+    e.renderWindow(buffer, window, 4, true, true, 0)
+
+  test "Render window with horizontal scroll":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.lineWrap = false
+
+    let longLine = "x".repeat(200)
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 100 # Scroll right
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+suite "renderWindow - Edge cases":
+  test "Render window with empty buffer":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+  test "Render window with very small size":
+    let e = createTestEditor()
+    var buffer = newBuffer(20, 5)
+    buffer.area = Rect(x: 0, y: 0, width: 20, height: 5)
+
+    e.viewport.width = 20
+    e.viewport.height = 5
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Small window")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 20
+    window.viewport.height = 5
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    e.renderWindow(buffer, window, 2, true, true, 0)
+
+  test "Render window with Unicode content":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    discard e.textBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "こんにちは世界\n日本語テスト"
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    e.renderWindow(buffer, window, 4, true, true, 0)
+
+  test "Render window with mixed content":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    discard e.textBuffer.insertText(
+      BufferPosition(line: 0, column: 0), "Hello 世界\n  indented\n\ttab"
+    )
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+
+    e.renderWindow(buffer, window, 4, true, true, 0)

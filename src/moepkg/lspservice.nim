@@ -28,10 +28,11 @@ import pkg/[results, chronos]
 import lsp/worker
 import lsp/protocol/types
 
-export worker
-export types
+export worker, types
 
-const DefaultRequestTimeoutMs* = 5000 # 5 second timeout for LSP requests
+const
+  DefaultRequestTimeoutMs* = 5000 ## 5 second timeout for LSP requests
+  PollIntervalMs = 5 ## Polling interval for async response waiting
 
 type
   LanguageServerConfig* = object ## Configuration for a language server
@@ -55,9 +56,15 @@ type
 
   LspService* = ref object
     ## Service for managing LSP workers.
-    ## NOTE: This type is NOT thread-safe. All methods must be called from the
-    ## main thread only. The workers themselves handle thread communication
-    ## internally via thread-safe queues.
+    ##
+    ## Thread Safety:
+    ## - This type is NOT thread-safe. All public methods must be called from
+    ##   the main thread only.
+    ## - The workers handle thread communication internally via thread-safe queues.
+    ## - Callbacks (onDiagnosticsUpdate, onLogMessage, etc.) are invoked from the
+    ##   main thread during poll() calls, NOT from worker threads.
+    ## - The {.gcsafe.} pragma on callbacks is required because they may reference
+    ##   global state, but actual invocation is always single-threaded.
     workers: Table[string, LspWorker] # languageId -> worker
     configs: Table[string, LanguageServerConfig] # languageId -> config
     capabilities: Table[string, ServerCapabilities] # languageId -> capabilities
@@ -98,10 +105,21 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
     pendingResponses:
       initTable[int, tuple[result: Option[JsonNode], error: Option[string]]](),
     activeRequests: initTable[int, LspPendingRequest](),
-    onDiagnosticsUpdate: nil,
-    onLogMessage: nil,
-    onProgress: nil,
-    onStatusUpdate: nil,
+    # Default no-op callbacks to avoid nil checks throughout the code
+    onDiagnosticsUpdate: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.} =
+      discard,
+    onLogMessage: proc(
+        langId: string, msgType: MessageType, message: string
+    ) {.gcsafe.} =
+      discard,
+    onProgress: proc(
+        langId: string, token: string, progress: WorkDoneProgress
+    ) {.gcsafe.} =
+      discard,
+    onStatusUpdate: proc(
+        langId: string, health: ServerHealth, quiescent: bool, message: Option[string]
+    ) {.gcsafe.} =
+      discard,
   )
 
   # Default language server configurations
@@ -236,8 +254,7 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
   svc.workers[langId] = worker
 
   # Notify via log callback that server is starting
-  if svc.onLogMessage != nil:
-    svc.onLogMessage(langId, mtInfo, "Starting language server: " & config.command)
+  svc.onLogMessage(langId, mtInfo, "Starting language server: " & config.command)
 
   return ok(worker)
 
@@ -271,6 +288,17 @@ proc stopWorker*(svc: LspService, langId: string): Result[void, string] =
   svc.workers.del(langId)
   svc.capabilities.del(langId)
   svc.serverInfo.del(langId)
+  svc.dynamicRegistrations.del(langId)
+
+  # Clean up pending requests for this language
+  var toRemove: seq[int] = @[]
+  for reqId, req in svc.activeRequests:
+    if req.langId == langId:
+      toRemove.add(reqId)
+  for reqId in toRemove:
+    svc.activeRequests.del(reqId)
+    svc.pendingResponses.del(reqId)
+
   return ok()
 
 proc stopAll*(svc: LspService) =
@@ -281,6 +309,8 @@ proc stopAll*(svc: LspService) =
   svc.capabilities.clear()
   svc.serverInfo.clear()
   svc.dynamicRegistrations.clear()
+  svc.activeRequests.clear()
+  svc.pendingResponses.clear()
 
 proc poll*(svc: LspService, timeoutMs: int = 0) =
   ## Poll all workers - process events from worker threads
@@ -297,79 +327,66 @@ proc poll*(svc: LspService, timeoutMs: int = 0) =
     for evt in events:
       case evt.kind
       of levInitialized:
-        if svc.onLogMessage != nil:
-          svc.onLogMessage(langId, mtInfo, "Language server initialized")
+        svc.onLogMessage(langId, mtInfo, "Language server initialized")
       of levError:
-        if svc.onLogMessage != nil:
-          svc.onLogMessage(langId, mtError, evt.errorMsg)
+        svc.onLogMessage(langId, mtError, evt.errorMsg)
       of levDiagnostics:
-        if svc.onDiagnosticsUpdate != nil:
-          svc.onDiagnosticsUpdate(evt.diagUri, evt.diagnostics)
+        svc.onDiagnosticsUpdate(evt.diagUri, evt.diagnostics)
       of levLogMessage:
-        if svc.onLogMessage != nil:
-          svc.onLogMessage(langId, evt.msgType, evt.message)
+        svc.onLogMessage(langId, evt.msgType, evt.message)
       of levShowMessage:
-        if svc.onLogMessage != nil:
-          svc.onLogMessage(langId, evt.msgType, evt.message)
+        svc.onLogMessage(langId, evt.msgType, evt.message)
       of levServerInfo:
         svc.serverInfo[langId] = (name: evt.serverName, version: evt.serverVersion)
-        if svc.onLogMessage != nil:
-          var msg = "Server: " & evt.serverName
-          if evt.serverVersion.isSome:
-            msg &= " v" & evt.serverVersion.get
-          svc.onLogMessage(langId, mtInfo, msg)
+        var msg = "Server: " & evt.serverName
+        if evt.serverVersion.isSome:
+          msg &= " v" & evt.serverVersion.get
+        svc.onLogMessage(langId, mtInfo, msg)
       of levCapabilities:
         svc.capabilities[langId] = evt.capabilities
       of levResponse:
         svc.pendingResponses[evt.requestId] =
           (result: evt.responseResult, error: evt.responseError)
       of levRawJson:
-        if svc.onLogMessage != nil:
-          let timestamp = now().format("HH:mm:ss'.'fff")
-          let direction = if evt.jsonDirection == ljdSent: ">>> " else: "<<< "
-          # Split multi-line JSON into separate log entries
-          let lines = evt.rawJson.splitLines()
-          for i, line in lines:
-            if i == 0:
-              svc.onLogMessage(langId, mtLog, "[" & timestamp & "] " & direction & line)
-            else:
-              svc.onLogMessage(langId, mtLog, "    " & line)
-          # Add blank line after each JSON block
-          svc.onLogMessage(langId, mtLog, "")
+        let timestamp = now().format("HH:mm:ss'.'fff")
+        let direction = if evt.jsonDirection == ljdSent: ">>> " else: "<<< "
+        # Split multi-line JSON into separate log entries
+        let lines = evt.rawJson.splitLines()
+        for i, line in lines:
+          if i == 0:
+            svc.onLogMessage(langId, mtLog, "[" & timestamp & "] " & direction & line)
+          else:
+            svc.onLogMessage(langId, mtLog, "    " & line)
+        # Add blank line after each JSON block
+        svc.onLogMessage(langId, mtLog, "")
       of levProgress:
-        # Call onProgress callback
-        if svc.onProgress != nil:
-          svc.onProgress(langId, evt.progressToken, evt.progress)
+        svc.onProgress(langId, evt.progressToken, evt.progress)
       of levDynamicRegister:
         # Dynamic capability registration
         if langId notin svc.dynamicRegistrations:
           svc.dynamicRegistrations[langId] = initTable[string, Registration]()
         for reg in evt.registrations:
           svc.dynamicRegistrations[langId][reg.id] = reg
-          if svc.onLogMessage != nil:
-            svc.onLogMessage(
-              langId,
-              mtInfo,
-              "Dynamic registration: " & reg.`method` & " (id: " & reg.id & ")",
-            )
+          svc.onLogMessage(
+            langId,
+            mtInfo,
+            "Dynamic registration: " & reg.`method` & " (id: " & reg.id & ")",
+          )
       of levDynamicUnregister:
         # Dynamic capability unregistration
         if langId in svc.dynamicRegistrations:
           for unreg in evt.unregistrations:
             if unreg.id in svc.dynamicRegistrations[langId]:
               svc.dynamicRegistrations[langId].del(unreg.id)
-              if svc.onLogMessage != nil:
-                svc.onLogMessage(
-                  langId,
-                  mtInfo,
-                  "Dynamic unregistration: " & unreg.`method` & " (id: " & unreg.id & ")",
-                )
+              svc.onLogMessage(
+                langId,
+                mtInfo,
+                "Dynamic unregistration: " & unreg.`method` & " (id: " & unreg.id & ")",
+              )
       of levStatusUpdate:
-        # Server status notification (experimental/serverStatus)
-        if svc.onStatusUpdate != nil:
-          svc.onStatusUpdate(
-            langId, evt.statusHealth, evt.statusQuiescent, evt.statusMessage
-          )
+        svc.onStatusUpdate(
+          langId, evt.statusHealth, evt.statusQuiescent, evt.statusMessage
+        )
 
 # Non-blocking response checking
 proc checkResponse*(
@@ -422,6 +439,7 @@ proc cleanupTimedOutRequests*(svc: LspService) =
       toRemove.add(reqId)
   for reqId in toRemove:
     svc.activeRequests.del(reqId)
+    svc.pendingResponses.del(reqId)
 
 # Request-response helper (async, non-blocking)
 proc waitForResponse*(
@@ -432,12 +450,17 @@ proc waitForResponse*(
   let timeoutSec = timeoutMs.float / 1000.0
 
   while true:
-    # Poll for new events (wrapped in try/except for raises: [])
+    # Poll for new events
+    # Note: poll() should not raise exceptions, but we handle them defensively
+    # and log any unexpected errors via the service's log callback
     {.cast(raises: []).}:
       try:
         svc.poll()
-      except:
-        discard
+      except CatchableError as e:
+        svc.onLogMessage("", mtError, "Unexpected error in poll: " & e.msg)
+      except Defect as e:
+        svc.onLogMessage("", mtError, "Defect in poll: " & e.msg)
+        raise
 
     # Check if response has arrived
     {.cast(raises: []).}:
@@ -459,8 +482,8 @@ proc waitForResponse*(
         svc.activeRequests.del(requestId)
       return err("Request timed out")
 
-    # Async sleep to yield to other tasks (5ms)
-    await sleepAsync(timer.milliseconds(5))
+    # Async sleep to yield to other tasks
+    await sleepAsync(timer.milliseconds(PollIntervalMs))
 
 # Helper to start a tracked request
 proc startTrackedRequest(
@@ -896,77 +919,58 @@ proc getDynamicRegistrations*(svc: LspService, langId: string): seq[Registration
   for id, reg in svc.dynamicRegistrations[langId]:
     result.add(reg)
 
+# Template for standard capability checks (dynamic registration + static capability)
+template hasCapabilitySupport(
+    svc: LspService, langId: string, methodName: string, capability: untyped
+): bool =
+  if svc.hasDynamicRegistration(langId, methodName):
+    true
+  elif langId notin svc.capabilities:
+    false
+  else:
+    svc.capabilities[langId].capability.isSome
+
 proc hasCompletionSupport*(svc: LspService, langId: string): bool =
   ## Check if completion is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/completion"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].completionProvider.isSome
+  svc.hasCapabilitySupport(langId, "textDocument/completion", completionProvider)
 
 proc hasHoverSupport*(svc: LspService, langId: string): bool =
   ## Check if hover is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/hover"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].hoverProvider.isSome
+  svc.hasCapabilitySupport(langId, "textDocument/hover", hoverProvider)
 
 proc hasDefinitionSupport*(svc: LspService, langId: string): bool =
   ## Check if go to definition is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/definition"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].definitionProvider.isSome
+  svc.hasCapabilitySupport(langId, "textDocument/definition", definitionProvider)
 
 proc hasDeclarationSupport*(svc: LspService, langId: string): bool =
   ## Check if go to declaration is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/declaration"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].declarationProvider.isSome
+  svc.hasCapabilitySupport(langId, "textDocument/declaration", declarationProvider)
 
 proc hasTypeDefinitionSupport*(svc: LspService, langId: string): bool =
   ## Check if go to type definition is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/typeDefinition"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].typeDefinitionProvider.isSome
+  svc.hasCapabilitySupport(
+    langId, "textDocument/typeDefinition", typeDefinitionProvider
+  )
 
 proc hasImplementationSupport*(svc: LspService, langId: string): bool =
   ## Check if go to implementation is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/implementation"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].implementationProvider.isSome
+  svc.hasCapabilitySupport(
+    langId, "textDocument/implementation", implementationProvider
+  )
 
 proc hasReferencesSupport*(svc: LspService, langId: string): bool =
   ## Check if find references is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/references"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].referencesProvider.isSome
+  svc.hasCapabilitySupport(langId, "textDocument/references", referencesProvider)
 
 proc hasDocumentHighlightSupport*(svc: LspService, langId: string): bool =
   ## Check if document highlight is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/documentHighlight"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].documentHighlightProvider.isSome
+  svc.hasCapabilitySupport(
+    langId, "textDocument/documentHighlight", documentHighlightProvider
+  )
 
 proc hasDocumentLinkSupport*(svc: LspService, langId: string): bool =
   ## Check if document link is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/documentLink"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].documentLinkProvider.isSome
+  svc.hasCapabilitySupport(langId, "textDocument/documentLink", documentLinkProvider)
 
 proc hasDocumentLinkResolveSupport*(svc: LspService, langId: string): bool =
   ## Check if document link resolve is supported for a language
@@ -986,51 +990,33 @@ proc hasDocumentLinkResolveSupport*(svc: LspService, langId: string): bool =
 
 proc hasSignatureHelpSupport*(svc: LspService, langId: string): bool =
   ## Check if signature help is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/signatureHelp"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].signatureHelpProvider.isSome
+  svc.hasCapabilitySupport(langId, "textDocument/signatureHelp", signatureHelpProvider)
 
 proc hasRenameSupport*(svc: LspService, langId: string): bool =
   ## Check if rename is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/rename"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].renameProvider.isSome
+  svc.hasCapabilitySupport(langId, "textDocument/rename", renameProvider)
 
 proc hasFormattingSupport*(svc: LspService, langId: string): bool =
   ## Check if document formatting is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/formatting"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].documentFormattingProvider.isSome
+  svc.hasCapabilitySupport(
+    langId, "textDocument/formatting", documentFormattingProvider
+  )
 
 proc hasRangeFormattingSupport*(svc: LspService, langId: string): bool =
   ## Check if range formatting is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/rangeFormatting"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].documentRangeFormattingProvider.isSome
+  svc.hasCapabilitySupport(
+    langId, "textDocument/rangeFormatting", documentRangeFormattingProvider
+  )
 
 proc hasDocumentSymbolSupport*(svc: LspService, langId: string): bool =
   ## Check if document symbol is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/documentSymbol"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].documentSymbolProvider.isSome
+  svc.hasCapabilitySupport(
+    langId, "textDocument/documentSymbol", documentSymbolProvider
+  )
 
 proc hasInlayHintSupport*(svc: LspService, langId: string): bool =
   ## Check if inlay hints is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/inlayHint"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].inlayHintProvider.isSome
+  svc.hasCapabilitySupport(langId, "textDocument/inlayHint", inlayHintProvider)
 
 proc hasSemanticTokensSupport*(svc: LspService, langId: string): bool =
   ## Check if semantic tokens is supported for a language (static or dynamic)
@@ -1073,19 +1059,13 @@ proc getSemanticTokensLegend*(
 
 proc hasSelectionRangeSupport*(svc: LspService, langId: string): bool =
   ## Check if selection range is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/selectionRange"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].selectionRangeProvider.isSome
+  svc.hasCapabilitySupport(
+    langId, "textDocument/selectionRange", selectionRangeProvider
+  )
 
 proc hasInlineValueSupport*(svc: LspService, langId: string): bool =
   ## Check if inline value is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/inlineValue"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].inlineValueProvider.isSome
+  svc.hasCapabilitySupport(langId, "textDocument/inlineValue", inlineValueProvider)
 
 # Status information
 proc getRunningLanguages*(svc: LspService): seq[string] =
@@ -1104,11 +1084,7 @@ proc getServerInfo*(svc: LspService, langId: string): Option[ServerInfo] =
 # CodeLens support
 proc hasCodeLensSupport*(svc: LspService, langId: string): bool =
   ## Check if code lens is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/codeLens"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].codeLensProvider.isSome
+  svc.hasCapabilitySupport(langId, "textDocument/codeLens", codeLensProvider)
 
 proc hasCodeLensResolveSupport*(svc: LspService, langId: string): bool =
   ## Check if code lens resolve is supported for a language (static or dynamic)
@@ -1135,27 +1111,17 @@ proc hasCodeLensResolveSupport*(svc: LspService, langId: string): bool =
 
 proc hasCallHierarchySupport*(svc: LspService, langId: string): bool =
   ## Check if call hierarchy is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/prepareCallHierarchy"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].callHierarchyProvider.isSome
+  svc.hasCapabilitySupport(
+    langId, "textDocument/prepareCallHierarchy", callHierarchyProvider
+  )
 
 proc hasFoldingRangeSupport*(svc: LspService, langId: string): bool =
   ## Check if folding range is supported for a language (static or dynamic)
-  if svc.hasDynamicRegistration(langId, "textDocument/foldingRange"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].foldingRangeProvider.isSome
+  svc.hasCapabilitySupport(langId, "textDocument/foldingRange", foldingRangeProvider)
 
 proc hasExecuteCommandSupport*(svc: LspService, langId: string): bool =
   ## Check if execute command is supported for a language
-  if svc.hasDynamicRegistration(langId, "workspace/executeCommand"):
-    return true
-  if langId notin svc.capabilities:
-    return false
-  return svc.capabilities[langId].executeCommandProvider.isSome
+  svc.hasCapabilitySupport(langId, "workspace/executeCommand", executeCommandProvider)
 
 proc requestCompletion*(
     svc: LspService, path: string, line, character: int

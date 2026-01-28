@@ -1305,8 +1305,6 @@ proc handleConfigMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
     )
-  of cmrQuit:
-    return HandlerResult(kind: hrConfigQuit)
   of cmrSaveConfig:
     return HandlerResult(kind: hrConfigSaveConfig)
   of cmrUnhandled:

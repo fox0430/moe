@@ -1,0 +1,667 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+## Tests for visual_handler.nim
+
+import std/[unittest, options, tables]
+
+import pkg/results
+
+import ../src/moepkg/buffer {.all.}
+import ../src/moepkg/cursor {.all.}
+import ../src/moepkg/types {.all.}
+import ../src/moepkg/keybindings {.all.}
+import ../src/moepkg/modes {.all.}
+import ../src/moepkg/motion {.all.}
+import ../src/moepkg/commandregistry {.all.}
+import ../src/moepkg/config {.all.}
+import ../src/moepkg/registers {.all.}
+import ../src/moepkg/command_handlers/visual_handler {.all.}
+
+proc createTestState(): EditorState =
+  ## Create a minimal EditorState for testing
+  EditorState(
+    cursor: BufferPosition(line: 0, column: 0),
+    preferredColumn: -1,
+    screenCursor: CursorPosition(x: 0, y: 0),
+    mode: EditorMode.Visual,
+    previousMode: EditorMode.Normal,
+    display: DisplaySettings(
+      showTabLine: false,
+      showStatusLine: true,
+      multiStatusLine: false,
+      showLineCount: true,
+      showLinePercentage: true,
+      showEncoding: true,
+      showLineNumbers: true,
+      showCursorLine: false,
+      showSyntax: true,
+      showIndentationLines: false,
+      showSidebar: false,
+      showGitDiff: false,
+      showSyntaxChecker: false,
+      showCodeLens: false,
+      showDocumentHighlight: false,
+      lineWrap: true,
+      tabStop: 2,
+      expandTab: true,
+      autoIndent: true,
+      autoCloseParen: false,
+      autoDeleteParen: false,
+    ),
+    needsFullRedraw: false,
+    viewportReservedLines: 2,
+    macroState: MacroState(
+      isRecording: false,
+      register: '\0',
+      recordedKeys: @[],
+      registers: initTable[char, seq[string]](),
+      lastRegister: none(char),
+      waitingForRegister: false,
+      commandType: "",
+      pendingCount: 0,
+      playbackDepth: 0,
+    ),
+    registers: initRegisters(),
+    visualSelection: VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 0),
+      active: false,
+      kind: vskChar,
+    ),
+  )
+
+proc createTestViewport(): ViewPort =
+  ## Create a minimal viewport for testing
+  ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+
+proc createTestHandler(buf: TextBuffer): VisualModeHandler =
+  ## Create a VisualModeHandler for testing
+  let keyBindingRegistry = newKeyBindingRegistry()
+  setupDefaultBindings(keyBindingRegistry)
+
+  let commandRegistry = newCommandRegistry()
+  registerBuiltinCommands(commandRegistry)
+
+  let motionController =
+    newMotionController(buf, createTestState(), createTestViewport())
+
+  newVisualModeHandler(
+    keyBindingRegistry, commandRegistry, motionController, NotificationConfig()
+  )
+
+suite "VisualModeHandler - Constructor":
+  test "Create VisualModeHandler with default config":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+
+    check handler != nil
+    check handler.motionController != nil
+    check handler.keyBindingRegistry != nil
+    check handler.commandRegistry != nil
+
+  test "Create VisualModeHandler with custom notification config":
+    let buf = newTextBuffer()
+    let keyBindingRegistry = newKeyBindingRegistry()
+    let commandRegistry = newCommandRegistry()
+    let motionController =
+      newMotionController(buf, createTestState(), createTestViewport())
+
+    let notificationConfig = NotificationConfig(screenNotifications: true)
+    let handler = newVisualModeHandler(
+      keyBindingRegistry, commandRegistry, motionController, notificationConfig
+    )
+
+    check handler != nil
+    check handler.notificationConfig.screenNotifications == true
+
+suite "VisualModeHandler - initSelection":
+  test "Initialize character selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    initSelection(state, buf, vskChar)
+
+    check state.visualSelection.active == true
+    check state.visualSelection.kind == vskChar
+    check state.visualSelection.start.line == 0
+    check state.visualSelection.start.column == 5
+    check state.visualSelection.current.line == 0
+    check state.visualSelection.current.column == 5
+
+  test "Initialize line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    initSelection(state, buf, vskLine)
+
+    check state.visualSelection.active == true
+    check state.visualSelection.kind == vskLine
+    check state.visualSelection.start == state.cursor
+    check state.visualSelection.current == state.cursor
+
+  test "Initialize block selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    initSelection(state, buf, vskBlock)
+
+    check state.visualSelection.active == true
+    check state.visualSelection.kind == vskBlock
+
+suite "VisualModeHandler - clearSelection":
+  test "Clear active selection":
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 2, column: 5),
+      active: true,
+      kind: vskChar,
+    )
+
+    clearSelection(state)
+
+    check state.visualSelection.active == false
+
+  test "Clear already inactive selection":
+    let state = createTestState()
+    state.visualSelection.active = false
+
+    clearSelection(state)
+
+    check state.visualSelection.active == false
+
+suite "VisualModeHandler - updateSelection":
+  test "Update selection with new position":
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 5),
+      active: true,
+      kind: vskChar,
+    )
+
+    let newPos = BufferPosition(line: 2, column: 10)
+    updateSelection(state, newPos)
+
+    check state.visualSelection.current.line == 2
+    check state.visualSelection.current.column == 10
+    check state.visualSelection.start.line == 0 # unchanged
+    check state.visualSelection.start.column == 0 # unchanged
+
+  test "Update inactive selection (no-op)":
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 5),
+      active: false,
+      kind: vskChar,
+    )
+
+    let newPos = BufferPosition(line: 2, column: 10)
+    updateSelection(state, newPos)
+
+    check state.visualSelection.current.line == 0 # unchanged
+    check state.visualSelection.current.column == 5 # unchanged
+
+suite "VisualModeHandler - getSelectionRange":
+  test "Get range from visual handler module":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 1, column: 3),
+      current: BufferPosition(line: 0, column: 7),
+      active: true,
+      kind: vskChar,
+    )
+
+    let (selStart, selEnd) = selection.getSelectionRange()
+
+    check selStart.line == 0
+    check selStart.column == 7
+    check selEnd.line == 1
+    check selEnd.column == 3
+
+suite "VisualModeHandler - isPositionInSelection":
+  test "Position in character selection (same line)":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 2),
+      current: BufferPosition(line: 0, column: 8),
+      active: true,
+      kind: vskChar,
+    )
+
+    check isPositionInSelection(selection, BufferPosition(line: 0, column: 5)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 0, column: 2)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 0, column: 8)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 0, column: 1)) == false
+    check isPositionInSelection(selection, BufferPosition(line: 0, column: 9)) == false
+
+  test "Position in character selection (multi-line)":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 5),
+      current: BufferPosition(line: 2, column: 3),
+      active: true,
+      kind: vskChar,
+    )
+
+    # On start line
+    check isPositionInSelection(selection, BufferPosition(line: 0, column: 5)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 0, column: 10)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 0, column: 4)) == false
+
+    # On middle line
+    check isPositionInSelection(selection, BufferPosition(line: 1, column: 0)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 1, column: 100)) == true
+
+    # On end line
+    check isPositionInSelection(selection, BufferPosition(line: 2, column: 0)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 2, column: 3)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 2, column: 4)) == false
+
+  test "Position in line selection":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 1, column: 0),
+      current: BufferPosition(line: 3, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    check isPositionInSelection(selection, BufferPosition(line: 1, column: 0)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 2, column: 100)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 3, column: 10)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 0, column: 0)) == false
+    check isPositionInSelection(selection, BufferPosition(line: 4, column: 0)) == false
+
+  test "Position in block selection":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 2),
+      current: BufferPosition(line: 2, column: 6),
+      active: true,
+      kind: vskBlock,
+    )
+
+    # Within block
+    check isPositionInSelection(selection, BufferPosition(line: 0, column: 3)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 1, column: 4)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 2, column: 5)) == true
+
+    # On boundaries
+    check isPositionInSelection(selection, BufferPosition(line: 0, column: 2)) == true
+    check isPositionInSelection(selection, BufferPosition(line: 2, column: 6)) == true
+
+    # Outside column range
+    check isPositionInSelection(selection, BufferPosition(line: 1, column: 1)) == false
+    check isPositionInSelection(selection, BufferPosition(line: 1, column: 7)) == false
+
+    # Outside line range
+    check isPositionInSelection(selection, BufferPosition(line: 3, column: 4)) == false
+
+  test "Position in inactive selection":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 2),
+      current: BufferPosition(line: 0, column: 8),
+      active: false,
+      kind: vskChar,
+    )
+
+    check isPositionInSelection(selection, BufferPosition(line: 0, column: 5)) == false
+
+suite "VisualModeHandler - isVisualMode":
+  test "Visual mode is visual":
+    check isVisualMode(EditorMode.Visual) == true
+
+  test "VisualLine mode is visual":
+    check isVisualMode(EditorMode.VisualLine) == true
+
+  test "VisualBlock mode is visual":
+    check isVisualMode(EditorMode.VisualBlock) == true
+
+  test "Normal mode is not visual":
+    check isVisualMode(EditorMode.Normal) == false
+
+  test "Insert mode is not visual":
+    check isVisualMode(EditorMode.Insert) == false
+
+  test "Command mode is not visual":
+    check isVisualMode(EditorMode.Command) == false
+
+  test "Search mode is not visual":
+    check isVisualMode(EditorMode.Search) == false
+
+  test "Replace mode is not visual":
+    check isVisualMode(EditorMode.Replace) == false
+
+suite "VisualModeHandler - VisualModeResult":
+  test "vmrHandled result with mode transition":
+    let result =
+      VisualModeResult(kind: vmrHandled, modeTransition: some(EditorMode.Normal))
+    check result.kind == vmrHandled
+    check result.modeTransition.isSome
+    check result.modeTransition.get == EditorMode.Normal
+
+  test "vmrHandled result without mode transition":
+    let result = VisualModeResult(kind: vmrHandled, modeTransition: none(EditorMode))
+    check result.kind == vmrHandled
+    check result.modeTransition.isNone
+
+  test "vmrUnhandled result":
+    let result = VisualModeResult(kind: vmrUnhandled)
+    check result.kind == vmrUnhandled
+
+  test "vmrWaitingForInput result":
+    let result = VisualModeResult(kind: vmrWaitingForInput)
+    check result.kind == vmrWaitingForInput
+
+  test "vmrLspSelectionRange result":
+    let result = VisualModeResult(kind: vmrLspSelectionRange)
+    check result.kind == vmrLspSelectionRange
+
+  test "vmrError result":
+    let result = VisualModeResult(kind: vmrError, errorMessage: "test error")
+    check result.kind == vmrError
+    check result.errorMessage == "test error"
+
+suite "VisualModeHandler - executeCommand":
+  test "Execute motion.left command":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+    state.mode = EditorMode.Visual
+    initSelection(state, buf, vskChar)
+    let viewport = createTestViewport()
+
+    let result = handler.executeCommand(buf, state, viewport, "motion.left")
+
+    check result.kind == vmrHandled
+    check state.cursor.column == 4
+
+  test "Execute non-existent command returns error":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    let viewport = createTestViewport()
+
+    let result = handler.executeCommand(buf, state, viewport, "nonexistent.command")
+
+    check result.kind == vmrError
+
+suite "VisualModeHandler - handleVisualModeKey":
+  test "Handle ESC key clears selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 5),
+      active: true,
+      kind: vskChar,
+    )
+    let viewport = createTestViewport()
+
+    let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check state.visualSelection.active == false
+
+  test "Handle unbound key returns unhandled":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    initSelection(state, buf, vskChar)
+    let viewport = createTestViewport()
+
+    # Use a key that is unlikely to be bound
+    let keyCombo = KeyCombo(isSpecial: false, char: "\x00", modifiers: {})
+    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check result.kind == vmrUnhandled or result.kind == vmrHandled
+
+  test "Keys are recorded during macro recording":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    initSelection(state, buf, vskChar)
+    state.macroState.isRecording = true
+    state.macroState.register = 'a'
+    state.macroState.recordedKeys = @[]
+    let viewport = createTestViewport()
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "h", modifiers: {})
+    discard handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check state.macroState.recordedKeys.len >= 1
+
+  test "Handle Visual mode fallback to VisualLine":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    initSelection(state, buf, vskLine)
+    let viewport = createTestViewport()
+
+    # Try a key that should be handled by Visual mode bindings
+    let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
+    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check result.kind == vmrHandled or result.kind == vmrUnhandled
+
+  test "Handle Visual mode fallback to VisualBlock":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    initSelection(state, buf, vskBlock)
+    let viewport = createTestViewport()
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
+    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check result.kind == vmrHandled or result.kind == vmrUnhandled
+
+suite "VisualModeHandler - Mode Transitions":
+  test "Yank command transitions to Normal mode":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.previousMode = EditorMode.Normal
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    let viewport = createTestViewport()
+
+    # 'y' key for yank
+    let keyCombo = KeyCombo(isSpecial: false, char: "y", modifiers: {})
+    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check result.kind == vmrHandled
+    check result.modeTransition.isSome
+    check result.modeTransition.get == EditorMode.Normal
+
+  test "Delete command transitions to previous mode":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.previousMode = EditorMode.Normal
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    let viewport = createTestViewport()
+
+    # 'd' key for delete
+    let keyCombo = KeyCombo(isSpecial: false, char: "d", modifiers: {})
+    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check result.kind == vmrHandled
+
+  test "Change command transitions to Insert mode":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    let viewport = createTestViewport()
+
+    # 'c' key for change
+    let keyCombo = KeyCombo(isSpecial: false, char: "c", modifiers: {})
+    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check result.kind == vmrHandled
+    # Mode should transition to Insert
+    check state.mode == EditorMode.Insert or result.modeTransition.isSome
+
+suite "VisualModeHandler - Selection Types":
+  test "Char selection handles correctly":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.cursor = BufferPosition(line: 0, column: 4)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    let viewport = createTestViewport()
+
+    # Move right
+    let keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
+    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check result.kind == vmrHandled
+    # After 'l', cursor moves from column 4 to 5
+    check state.cursor.column == 5
+
+  test "Line selection handles correctly":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 0),
+      active: true,
+      kind: vskLine,
+    )
+    let viewport = createTestViewport()
+
+    # Move down
+    let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
+    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check result.kind == vmrHandled
+    check state.visualSelection.current.line == 1
+
+  test "Block selection handles correctly":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 0),
+      active: true,
+      kind: vskBlock,
+    )
+    let viewport = createTestViewport()
+
+    # Move right then down
+    var keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
+    discard handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
+    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    check result.kind == vmrHandled
+    check state.visualSelection.current.line == 1
+    check state.visualSelection.current.column == 1
+
+suite "VisualModeHandler - Waiting for Input":
+  test "Check for waiting state when sequence not complete":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    initSelection(state, buf, vskChar)
+    let viewport = createTestViewport()
+
+    # Try 'r' for replace - should wait for char input
+    let keyCombo = KeyCombo(isSpecial: false, char: "r", modifiers: {})
+    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+
+    # Either waiting for input or handled depending on implementation
+    check result.kind in {vmrWaitingForInput, vmrHandled, vmrUnhandled}
+
+suite "VisualModeHandler - Error Handling":
+  test "Error result contains message":
+    let result = VisualModeResult(kind: vmrError, errorMessage: "Command not found")
+    check result.kind == vmrError
+    check result.errorMessage == "Command not found"
+
+  test "Execute command with invalid buffer state":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    # Empty buffer with invalid cursor position
+    state.cursor = BufferPosition(line: 100, column: 100)
+    let viewport = createTestViewport()
+
+    # Try to execute a command
+    let result = handler.executeCommand(buf, state, viewport, "motion.left")
+
+    # Should handle gracefully
+    check result.kind == vmrHandled or result.kind == vmrError

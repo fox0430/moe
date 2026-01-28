@@ -469,3 +469,196 @@ suite "Buffer - Redo with Newlines and Highlighting":
     check b.getLine(1) == "line1"
     check b.getLine(2) == "line2"
     check b.getLine(3) == "line3"
+
+suite "Buffer - Undo/Redo Edge Cases":
+  test "undo/redo with empty buffer":
+    let b = newTextBuffer("")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "A")
+    check b.getLine(0) == "A"
+
+    discard b.undo()
+    check b.getLine(0) == ""
+
+    discard b.redo()
+    check b.getLine(0) == "A"
+
+  test "insert at invalid line returns error":
+    let b = newTextBuffer("Line1")
+    let r = b.insertText(BufferPosition(line: 10, column: 0), "Text")
+    check r.isErr
+    # No undo entry should be recorded for failed operation
+    check b.undo().isErr
+
+  test "delete at invalid position":
+    let b = newTextBuffer("Test")
+    discard b.deleteChar(BufferPosition(line: 10, column: 0))
+    # No change was made, so undo should fail
+    check b.undo().isErr
+
+  test "undo/redo with very long text":
+    let b = newTextBuffer("Start")
+    var longText = ""
+    for i in 0 ..< 1000:
+      longText.add('X')
+
+    discard b.insertText(BufferPosition(line: 0, column: 5), longText)
+    check b.getLine(0).len == 1005
+
+    discard b.undo()
+    check b.getLine(0) == "Start"
+
+    discard b.redo()
+    check b.getLine(0).len == 1005
+
+  test "undo/redo with complex emoji sequence":
+    let b = newTextBuffer("Test")
+    # Family emoji with ZWJ (zero-width joiner)
+    discard
+      b.insertText(BufferPosition(line: 0, column: 4), "👨‍👩‍👧‍👦")
+
+    discard b.undo()
+    check b.getLine(0) == "Test"
+
+    discard b.redo()
+    check b.getLine(0) == "Test👨‍👩‍👧‍👦"
+
+  test "undo count of 0 does nothing":
+    let b = newTextBuffer("Hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), " World")
+    check b.getLine(0) == "Hello World"
+
+    let r = b.undo(0)
+    check r.isOk
+    check b.getLine(0) == "Hello World"
+
+  test "undo count larger than stack size":
+    let b = newTextBuffer("A")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "B")
+    discard b.insertText(BufferPosition(line: 0, column: 2), "C")
+    check b.getLine(0) == "ABC"
+
+    # Try to undo 10 times (only 2 changes exist)
+    let r = b.undo(10)
+    check r.isOk
+    check b.getLine(0) == "A"
+
+  test "redo count larger than stack size":
+    let b = newTextBuffer("A")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "B")
+    discard b.undo()
+    check b.getLine(0) == "A"
+
+    # Try to redo 10 times (only 1 change in redo stack)
+    let r = b.redo(10)
+    check r.isOk
+    check b.getLine(0) == "AB"
+
+  test "interleaved undo/redo clears redo stack on new change":
+    let b = newTextBuffer("A")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "B")
+    check b.getLine(0) == "AB"
+
+    discard b.undo()
+    check b.getLine(0) == "A"
+
+    # Make a new change - this clears the redo stack
+    discard b.insertText(BufferPosition(line: 0, column: 1), "C")
+    check b.getLine(0) == "AC"
+
+    # Redo should now fail
+    check b.redo().isErr
+
+suite "Buffer - Cursor Position Details":
+  test "undo multiple changes returns last undo position":
+    let b = newTextBuffer("test")
+    discard b.insertText(BufferPosition(line: 0, column: 4), " one")
+    discard b.insertText(BufferPosition(line: 0, column: 8), " two")
+    discard b.insertText(BufferPosition(line: 0, column: 12), " three")
+    check b.getLine(0) == "test one two three"
+
+    # Undo 2 changes - should return position of last (2nd) undo
+    let r = b.undo(2)
+    check r.isOk
+    check r.value.line == 0
+    check r.value.column == 8 # Position of " two" insertion
+
+  test "redo multiple changes returns last redo position":
+    let b = newTextBuffer("test")
+    discard b.insertText(BufferPosition(line: 0, column: 4), " one")
+    discard b.insertText(BufferPosition(line: 0, column: 8), " two")
+    discard b.undo(2)
+    check b.getLine(0) == "test"
+
+    # Redo 2 changes - should return position of last (2nd) redo
+    let r = b.redo(2)
+    check r.isOk
+    check r.value.line == 0
+    check r.value.column == 8 # Position of " two" insertion
+
+  test "undo delete returns deletion position":
+    let b = newTextBuffer("hello world")
+    discard b.deleteRange(
+      BufferPosition(line: 0, column: 5), BufferPosition(line: 0, column: 10)
+    )
+    check b.getLine(0) == "hello"
+
+    let r = b.undo()
+    check r.isOk
+    check r.value.line == 0
+    check r.value.column == 5 # Start of deleted range
+
+  test "undo line deletion returns line position":
+    let b = newTextBuffer("line1\nline2\nline3")
+    discard b.deleteLine(1)
+    check b.len == 2
+
+    let r = b.undo()
+    check r.isOk
+    check r.value.line == 1
+    check r.value.column == 0
+
+  test "undo transaction returns first change position":
+    let b = newTextBuffer("test")
+    discard b.beginTransaction("multi")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "A")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "B")
+    discard b.commitTransaction()
+
+    let r = b.undo()
+    check r.isOk
+    # Returns position of first change in transaction
+    check r.value.line == 0
+    check r.value.column == 0
+
+suite "Buffer - joinLines Undo/Redo":
+  test "undo joinLines":
+    let b = newTextBuffer("line1\nline2\nline3")
+    check b.len == 3
+
+    discard b.joinLines(0)
+    check b.len == 2
+    check b.getLine(0) == "line1 line2"
+
+    let r = b.undo()
+    check r.isOk
+    check b.len == 3
+    check b.getLine(0) == "line1"
+    check b.getLine(1) == "line2"
+
+  test "redo joinLines":
+    let b = newTextBuffer("line1\nline2")
+    discard b.joinLines(0)
+    discard b.undo()
+    check b.len == 2
+
+    let r = b.redo()
+    check r.isOk
+    check b.len == 1
+    check b.getLine(0) == "line1 line2"
+
+  test "joinLines at last line does nothing":
+    let b = newTextBuffer("only line")
+    let r = b.joinLines(0)
+    check r.isErr
+    # No undo entry should be created
+    check b.undo().isErr

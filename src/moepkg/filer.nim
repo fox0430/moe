@@ -123,7 +123,7 @@ proc refresh*(state: FilerState) =
   try:
     for kind, path in walkDir(state.currentPath):
       try:
-        let info = getFileInfo(path)
+        let info = getFileInfo(path, followSymlink = false)
         let entry = newFileEntry(path, info)
 
         # Filter hidden files if showHidden is false
@@ -219,8 +219,10 @@ proc enterDirectory*(state: FilerState, path: string): bool =
 
 proc goToParent*(state: FilerState): bool =
   ## Go to parent directory, returns true if successful
+  if state.currentPath == "/":
+    return false
   let parent = parentDir(state.currentPath)
-  if parent != state.currentPath:
+  if parent.len > 0 and parent != state.currentPath:
     let oldDir = extractFilename(state.currentPath)
     state.currentPath = parent
     state.selectedIndex = 0

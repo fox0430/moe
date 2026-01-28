@@ -18,7 +18,6 @@
 #[############################################################################]#
 
 ## Replace mode handler
-## - Macro recording support
 
 import std/[options, unicode]
 

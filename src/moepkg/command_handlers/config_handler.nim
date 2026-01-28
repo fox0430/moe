@@ -30,7 +30,6 @@ type
   ConfigModeResultKind* = enum
     cmrHandled # Command was handled successfully
     cmrEnterCommand # Enter command mode
-    cmrQuit # Close config mode and return to previous mode
     cmrSaveConfig # Save configuration to file
     cmrUnhandled # Command was not handled
     cmrError # Error occurred

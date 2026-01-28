@@ -31,8 +31,7 @@ import protocol/types
 import ../appinfo
 import ../logger
 
-export types
-export chronos
+export types, chronos
 
 type
   LspServerState* = enum
@@ -59,13 +58,14 @@ type
     capabilities*: Option[ServerCapabilities]
     serverInfo*: Option[ServerInfo]
     waitingResponses*: Table[RequestId, WaitingResponse]
-    pendingInitRequest: Option[RequestId] # Tracks pending initialize request
+    pendingInitRequest*: Option[RequestId] # Tracks pending initialize request
     needsSendInitialized*: bool # True when we need to send "initialized" notification
     initError*: string # Error message if initialization failed
     # Callbacks for server notifications
-    onDiagnostics*: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.}
-    onLogMessage*: proc(msgType: MessageType, message: string) {.gcsafe.}
-    onShowMessage*: proc(msgType: MessageType, message: string) {.gcsafe.}
+    onDiagnostics*:
+      proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe, raises: [].}
+    onLogMessage*: proc(msgType: MessageType, message: string) {.gcsafe, raises: [].}
+    onShowMessage*: proc(msgType: MessageType, message: string) {.gcsafe, raises: [].}
 
 proc newLspClient*(
     languageId, command: string, args: seq[string] = @[], workspaceRoot: string = ""
@@ -138,35 +138,40 @@ proc read*(client: LspClient): Future[JsonRpcResponseResult] {.async.} =
   client.outputStreamFuture = client.serverStreams.output.read()
   return r
 
-proc handleNotification*(client: LspClient, meth: string, params: JsonNode) {.gcsafe.} =
+proc handleNotification*(
+    client: LspClient, meth: string, params: JsonNode
+) {.gcsafe, raises: [].} =
   ## Handle incoming notification from server
-  case meth
-  of "textDocument/publishDiagnostics":
-    if client.onDiagnostics != nil:
-      let uri = params["uri"].getStr
-      var diagnostics: seq[Diagnostic] = @[]
-      if params.hasKey("diagnostics"):
-        for d in params["diagnostics"]:
-          diagnostics.add(parseDiagnostic(d))
-      client.onDiagnostics(uri, diagnostics)
-  of "window/logMessage":
-    if client.onLogMessage != nil:
-      let msgType = MessageType(params["type"].getInt)
-      let message = params["message"].getStr
-      client.onLogMessage(msgType, message)
-  of "window/showMessage":
-    if client.onShowMessage != nil:
-      let msgType = MessageType(params["type"].getInt)
-      let message = params["message"].getStr
-      client.onShowMessage(msgType, message)
-  of "$/logTrace":
-    if client.onLogMessage != nil:
-      var message = params["message"].getStr
-      if params.hasKey("verbose"):
-        message &= "\n" & params["verbose"].getStr
-      client.onLogMessage(mtInfo, message)
-  else:
-    logDebug("lsp", "handleNotification: unknown notification: " & meth)
+  try:
+    case meth
+    of "textDocument/publishDiagnostics":
+      if client.onDiagnostics != nil:
+        let uri = params["uri"].getStr
+        var diagnostics: seq[Diagnostic] = @[]
+        if params.hasKey("diagnostics"):
+          for d in params["diagnostics"]:
+            diagnostics.add(parseDiagnostic(d))
+        client.onDiagnostics(uri, diagnostics)
+    of "window/logMessage":
+      if client.onLogMessage != nil:
+        let msgType = MessageType(params["type"].getInt)
+        let message = params["message"].getStr
+        client.onLogMessage(msgType, message)
+    of "window/showMessage":
+      if client.onShowMessage != nil:
+        let msgType = MessageType(params["type"].getInt)
+        let message = params["message"].getStr
+        client.onShowMessage(msgType, message)
+    of "$/logTrace":
+      if client.onLogMessage != nil:
+        var message = params["message"].getStr
+        if params.hasKey("verbose"):
+          message &= "\n" & params["verbose"].getStr
+        client.onLogMessage(mtInfo, message)
+    else:
+      logDebug("lsp", "handleNotification: unknown notification: " & meth)
+  except CatchableError as e:
+    logDebug("lsp", "handleNotification: error handling " & meth & ": " & e.msg)
 
 proc deleteWaitingResponse*(client: LspClient, id: RequestId) {.inline.} =
   if client.waitingResponses.contains(id):
@@ -220,16 +225,13 @@ proc checkInitComplete*(client: LspClient): bool =
   # Check if this is a notification - handle it and keep waiting
   if response.hasKey("method") and not response.hasKey("id"):
     logDebug("lsp", "checkInitComplete: got notification, continuing to wait...")
-    try:
-      client.handleNotification(
-        response["method"].getStr,
-        if response.hasKey("params"):
-          response["params"]
-        else:
-          newJObject(),
-      )
-    except CatchableError as e:
-      logDebug("lsp", "checkInitComplete: notification handling error: " & e.msg)
+    client.handleNotification(
+      response["method"].getStr,
+      if response.hasKey("params"):
+        response["params"]
+      else:
+        newJObject(),
+    )
     return false # Keep waiting for init response
 
   # Check if this is the response to our initialize request
@@ -469,6 +471,11 @@ proc startAsync*(client: LspClient): Future[void] {.async: (raises: []).} =
     client.initError = "Initialize request cancelled"
     logDebug("lsp", "startAsync: cancelled during initialize")
     return
+  except CatchableError as e:
+    client.state = lssCrashed
+    client.initError = "Initialize request failed: " & e.msg
+    logDebug("lsp", "startAsync: failed during initialize: " & e.msg)
+    return
 
 proc startInBackground*(client: LspClient) =
   ## Start the LSP server initialization in the background (non-blocking)
@@ -615,16 +622,9 @@ proc sendAndWait*(
 
     # Check if this is a notification (has method but no id)
     if response.hasKey("method") and not response.hasKey("id"):
-      try:
-        client.handleNotification(
-          response["method"].getStr, response.getOrDefault("params")
-        )
-      except CatchableError as e:
-        logDebug(
-          "lsp",
-          "sendAndWait: notification handling error for " & response["method"].getStr &
-            ": " & e.msg,
-        )
+      client.handleNotification(
+        response["method"].getStr, response.getOrDefault("params")
+      )
       continue
 
     # This is a response, break out of the loop
@@ -907,7 +907,9 @@ proc inlayHints*(
   let resp = respResult.get
   if resp.kind == JArray:
     for item in resp:
-      hints.add(parseInlayHint(item))
+      let parsed = parseInlayHint(item)
+      if parsed.isSome:
+        hints.add(parsed.get)
 
   return Result[seq[InlayHint], string].ok(hints)
 
@@ -1219,7 +1221,4 @@ proc poll*(client: LspClient): Future[void] {.async.} =
         response["params"]
       else:
         newJObject()
-    try:
-      client.handleNotification(meth, params)
-    except CatchableError as e:
-      logDebug("lsp", "poll: notification handling error for " & meth & ": " & e.msg)
+    client.handleNotification(meth, params)

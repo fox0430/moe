@@ -121,7 +121,7 @@ proc buildFileDisplay(textBuffer: TextBuffer, config: StatusLineConfig): string 
       displayText &= filePath.extractFilename()
 
   # Add changed mark if enabled and buffer is modified
-  if config.chanedMark and textBuffer.isModified:
+  if config.changedMark and textBuffer.isModified:
     displayText &= " [+]"
 
   return displayText

@@ -141,7 +141,7 @@ proc newNormalModeHandler*(
     motionController: MotionController,
     keyBindingRegistry: KeyBindingRegistry,
     commandRegistry: CommandRegistry,
-    clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: ctXclip),
+    clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: cbtXclip),
     smoothScrollConfig: SmoothScrollConfig =
       SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
     notificationConfig: NotificationConfig = NotificationConfig(),

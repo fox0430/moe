@@ -38,8 +38,6 @@ type
     enabled: bool
     file: File
 
-var globalLogger: Logger = nil
-
 proc getLogFilePath(): string =
   ## Determine the log file path
   ## Priority: ./moe-debug.log (current directory), fallback to /tmp/moe-debug.log
@@ -71,6 +69,15 @@ proc initLogger*(minLevel: LogLevel = LogLevel.Debug, enabled: bool = false): Lo
         result.enabled = false
         stderr.writeLine(&"Warning: Failed to open log file: {e.msg}")
 
+# Global logger instance - initialized at module load time for thread safety
+var globalLogger: Logger
+
+try:
+  globalLogger = initLogger()
+except CatchableError:
+  # Fallback to disabled logger if initialization fails (e.g., getCurrentDir() fails)
+  globalLogger = Logger(enabled: false)
+
 proc close*(logger: Logger) =
   ## Close the logger and release resources
   if not logger.isNil and logger.enabled:
@@ -82,11 +89,10 @@ proc setGlobalLogger*(logger: Logger) =
   ## Set the global logger instance
   globalLogger = logger
 
-proc getGlobalLogger*(): Logger =
-  ## Get the global logger instance, initializing if necessary
-  if globalLogger.isNil:
-    globalLogger = initLogger()
-  result = globalLogger
+proc getGlobalLogger*(): Logger {.gcsafe, raises: [].} =
+  ## Get the global logger instance (initialized at module load time)
+  {.cast(gcsafe).}:
+    result = globalLogger
 
 proc logLevelToStr(level: LogLevel): string =
   ## Convert log level to string representation
@@ -96,7 +102,9 @@ proc logLevelToStr(level: LogLevel): string =
   of LogLevel.Warn: "WARN"
   of LogLevel.Error: "ERROR"
 
-proc log*(logger: Logger, level: LogLevel, module: string, message: string) =
+proc log*(
+    logger: Logger, level: LogLevel, module: string, message: string
+) {.gcsafe, raises: [].} =
   ## Write a log message to the log file
   ##
   ## Args:
@@ -107,19 +115,19 @@ proc log*(logger: Logger, level: LogLevel, module: string, message: string) =
   if logger.isNil or not logger.enabled or level < logger.minLevel:
     return
 
-  let timestamp = now().format("yyyy-MM-dd HH:mm:ss")
-  let levelStr = logLevelToStr(level)
-  let logLine = &"[{timestamp}] [{levelStr}] [{module}] {message}\n"
+  try:
+    let timestamp = now().format("yyyy-MM-dd HH:mm:ss")
+    let levelStr = logLevelToStr(level)
+    let logLine = &"[{timestamp}] [{levelStr}] [{module}] {message}\n"
 
-  withLock(logger.lock):
-    try:
+    withLock(logger.lock):
       logger.file.write(logLine)
       logger.file.flushFile()
-    except CatchableError:
-      # Silently fail if we can't write to the log file
-      discard
+  except CatchableError:
+    # Silently fail if we can't write to the log file
+    discard
 
-proc log*(level: LogLevel, module: string, message: string) =
+proc log*(level: LogLevel, module: string, message: string) {.gcsafe, raises: [].} =
   ## Write a log message using the global logger
   ##
   ## Args:
@@ -129,19 +137,19 @@ proc log*(level: LogLevel, module: string, message: string) =
   getGlobalLogger().log(level, module, message)
 
 # Convenience procs for different log levels
-proc logDebug*(module: string, message: string) =
+proc logDebug*(module: string, message: string) {.gcsafe, raises: [].} =
   ## Log a debug message using the global logger
   log(LogLevel.Debug, module, message)
 
-proc logInfo*(module: string, message: string) =
+proc logInfo*(module: string, message: string) {.gcsafe, raises: [].} =
   ## Log an info message using the global logger
   log(LogLevel.Info, module, message)
 
-proc logWarn*(module: string, message: string) =
+proc logWarn*(module: string, message: string) {.gcsafe, raises: [].} =
   ## Log a warning message using the global logger
   log(LogLevel.Warn, module, message)
 
-proc logError*(module: string, message: string) =
+proc logError*(module: string, message: string) {.gcsafe, raises: [].} =
   ## Log an error message using the global logger
   log(LogLevel.Error, module, message)
 

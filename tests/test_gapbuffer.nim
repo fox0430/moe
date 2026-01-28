@@ -709,3 +709,1120 @@ suite "GapBuffer - Iterator Edge Cases":
       lines.add(line)
     check lines ==
       @["", ""] # "\n\n" = 2 empty lines (newline is terminator, not separator)
+
+# =============================================================================
+# Low-level Linear Index API Tests
+# =============================================================================
+
+suite "GapBuffer - Linear Index Insert":
+  test "insert into empty buffer":
+    let gb = newGapBuffer()
+    check gb.lineCount() == 1
+    check gb.getLine(0) == ""
+
+    gb.insert(0, "Hello")
+    check gb.lineCount() == 1
+    check gb.getLine(0) == "Hello"
+    check $gb == "Hello"
+
+  test "insert at beginning of line":
+    let gb = newGapBuffer("World")
+    gb.insert(0, "Hello ")
+    check $gb == "Hello World"
+    check gb.getLine(0) == "Hello World"
+
+  test "insert in middle of line":
+    let gb = newGapBuffer("HWorld")
+    gb.insert(1, "ello ")
+    check $gb == "Hello World"
+
+  test "insert at end of line":
+    let gb = newGapBuffer("Hello")
+    gb.insert(5, " World")
+    check $gb == "Hello World"
+
+  test "insert beyond buffer end":
+    let gb = newGapBuffer("Hello")
+    gb.insert(100, "World")
+    # Position is clamped to end, appends to same line
+    check gb.lineCount() == 1
+    check $gb == "HelloWorld"
+
+  test "insert single newline in empty buffer":
+    let gb = newGapBuffer()
+    gb.insert(0, "\n")
+    check gb.lineCount() == 2
+    check gb.getLine(0) == ""
+    check gb.getLine(1) == ""
+
+  test "insert single newline at line start":
+    let gb = newGapBuffer("Hello")
+    gb.insert(0, "\n")
+    check gb.lineCount() == 2
+    check gb.getLine(0) == ""
+    check gb.getLine(1) == "Hello"
+    check $gb == "\nHello"
+
+  test "insert single newline in line middle":
+    let gb = newGapBuffer("HelloWorld")
+    gb.insert(5, "\n")
+    check gb.lineCount() == 2
+    check gb.getLine(0) == "Hello"
+    check gb.getLine(1) == "World"
+    check $gb == "Hello\nWorld"
+
+  test "insert multiple consecutive newlines":
+    let gb = newGapBuffer("Text")
+    gb.insert(4, "\n\n\n")
+    check gb.lineCount() == 4
+    check gb.getLine(0) == "Text"
+    check gb.getLine(1) == ""
+    check gb.getLine(2) == ""
+    check gb.getLine(3) == ""
+
+  test "insert text with newline at start":
+    let gb = newGapBuffer("World")
+    gb.insert(0, "Hello\n")
+    check gb.lineCount() == 2
+    check gb.getLine(0) == "Hello"
+    check gb.getLine(1) == "World"
+    check $gb == "Hello\nWorld"
+
+  test "insert multi-line text":
+    let gb = newGapBuffer("Start")
+    gb.insert(5, "\nLine1\nLine2\nLine3")
+    check gb.lineCount() == 4
+    check gb.getLine(0) == "Start"
+    check gb.getLine(1) == "Line1"
+    check gb.getLine(2) == "Line2"
+    check gb.getLine(3) == "Line3"
+
+  test "insert multi-line text in middle of line":
+    let gb = newGapBuffer("StartEnd")
+    gb.insert(5, "\nMiddle\n")
+    check gb.lineCount() == 3
+    check gb.getLine(0) == "Start"
+    check gb.getLine(1) == "Middle"
+    check gb.getLine(2) == "End"
+    check $gb == "Start\nMiddle\nEnd"
+
+  test "sequential insertions":
+    let gb = newGapBuffer()
+
+    gb.insert(0, "A")
+    check $gb == "A"
+
+    gb.insert(1, "B")
+    check $gb == "AB"
+
+    gb.insert(2, "\n")
+    check gb.lineCount() == 2
+
+    gb.insert(3, "C")
+    check $gb == "AB\nC"
+
+    gb.insert(4, "D")
+    check $gb == "AB\nCD"
+
+  test "insert character method":
+    let gb = newGapBuffer()
+    gb.insert(0, 'H')
+    gb.insert(1, 'i')
+    check $gb == "Hi"
+
+  test "insert preserves content after gap":
+    let gb = newGapBuffer("Line1\nLine2\nLine3")
+    # Insert in first line, should preserve lines 2 and 3
+    gb.insert(3, "XXX")
+    check gb.lineCount() == 3
+    check gb.getLine(0) == "LinXXXe1"
+    check gb.getLine(1) == "Line2"
+    check gb.getLine(2) == "Line3"
+
+  test "insert with newline preserves suffix":
+    let gb = newGapBuffer("HelloWorld")
+    gb.insert(5, "\n")
+    check gb.getLine(0) == "Hello"
+    check gb.getLine(1) == "World"
+    # Verify by char access
+    check gb.charAt(0) == 'H'
+    check gb.charAt(5) == '\n'
+    check gb.charAt(6) == 'W'
+
+  test "empty string insertion does nothing":
+    let gb = newGapBuffer("Test")
+    gb.insert(2, "")
+    check $gb == "Test"
+    check gb.lineCount() == 1
+
+suite "GapBuffer - Linear Index Delete":
+  test "delete single character from line":
+    let gb = newGapBuffer("Hello")
+    gb.delete(1, 1) # Delete 'e'
+    check $gb == "Hllo"
+    check gb.lineCount() == 1
+
+  test "delete from beginning of line":
+    let gb = newGapBuffer("Hello")
+    gb.delete(0, 2) # Delete "He"
+    check $gb == "llo"
+
+  test "delete from end of line":
+    let gb = newGapBuffer("Hello")
+    gb.delete(3, 2) # Delete "lo"
+    check $gb == "Hel"
+
+  test "delete entire line content":
+    let gb = newGapBuffer("Hello")
+    gb.delete(0, 5)
+    check $gb == ""
+    check gb.lineCount() == 1 # Line still exists but empty
+
+  test "delete newline character":
+    let gb = newGapBuffer("Hello\nWorld")
+    check gb.lineCount() == 2
+
+    gb.delete(5, 1) # Delete the newline
+    check $gb == "HelloWorld"
+    check gb.lineCount() == 1
+
+  test "delete across two lines":
+    let gb = newGapBuffer("Hello\nWorld")
+    gb.delete(3, 5) # Delete "lo\nWo"
+    check $gb == "Helrld"
+    check gb.lineCount() == 1
+
+  test "delete entire first line including newline":
+    let gb = newGapBuffer("Line1\nLine2\nLine3")
+    gb.delete(0, 6) # Delete "Line1\n"
+    check $gb == "Line2\nLine3"
+    check gb.lineCount() == 2
+    check gb.getLine(0) == "Line2"
+
+  test "delete middle line completely":
+    let gb = newGapBuffer("Line1\nLine2\nLine3")
+    gb.delete(6, 6) # Delete "Line2\n"
+    check $gb == "Line1\nLine3"
+    check gb.lineCount() == 2
+
+  test "delete across three lines":
+    let gb = newGapBuffer("Line1\nLine2\nLine3")
+    gb.delete(3, 11) # Delete "e1\nLine2\nLi"
+    check $gb == "Linne3"
+    check gb.lineCount() == 1
+
+  test "delete from middle to end":
+    let gb = newGapBuffer("Hello\nWorld\nTest")
+    gb.delete(7, 100) # Delete from 'o' in World to end
+    check $gb == "Hello\nW"
+    check gb.lineCount() == 2
+
+  test "delete beyond buffer does nothing extra":
+    let gb = newGapBuffer("Test")
+    gb.delete(2, 100) # Delete from position 2 to end
+    check $gb == "Te"
+
+  test "delete with count 0 does nothing":
+    let gb = newGapBuffer("Hello")
+    gb.delete(2, 0)
+    check $gb == "Hello"
+
+  test "delete with negative count does nothing":
+    let gb = newGapBuffer("Hello")
+    gb.delete(2, -5)
+    check $gb == "Hello"
+
+  test "delete from invalid position does nothing":
+    let gb = newGapBuffer("Hello")
+    gb.delete(100, 5)
+    check $gb == "Hello"
+
+  test "delete empty lines":
+    let gb = newGapBuffer("A\n\nB")
+    check gb.lineCount() == 3
+
+    gb.delete(2, 1) # Delete second newline
+    check $gb == "A\nB"
+    check gb.lineCount() == 2
+
+  test "sequential deletes":
+    let gb = newGapBuffer("ABCDEF")
+
+    gb.delete(2, 1) # Delete 'C' -> "ABDEF"
+    check $gb == "ABDEF"
+
+    gb.delete(2, 1) # Delete 'D' -> "ABEF"
+    check $gb == "ABEF"
+
+    gb.delete(1, 2) # Delete 'BE' -> "AF"
+    check $gb == "AF"
+
+  test "delete and insert combination":
+    let gb = newGapBuffer("Hello World")
+
+    gb.delete(5, 6) # Delete " World" -> "Hello"
+    check $gb == "Hello"
+
+    gb.insert(5, "\nNim") # Insert newline and "Nim"
+    check $gb == "Hello\nNim"
+    check gb.lineCount() == 2
+
+  test "delete preserves content before and after":
+    let gb = newGapBuffer("AAA\nBBB\nCCC\nDDD")
+
+    gb.delete(8, 4) # Delete "CCC\n"
+    check gb.lineCount() == 3
+    check gb.getLine(0) == "AAA"
+    check gb.getLine(1) == "BBB"
+    check gb.getLine(2) == "DDD"
+
+  test "delete entire buffer except last line":
+    let gb = newGapBuffer("A\nB\nC")
+    gb.delete(0, 4) # Delete "A\nB\n"
+    check $gb == "C"
+    check gb.lineCount() == 1
+
+  test "delete in empty buffer does nothing":
+    let gb = newGapBuffer()
+    gb.delete(0, 5)
+    check gb.lineCount() == 1
+    check $gb == ""
+
+  test "delete single char with charAt verification":
+    let gb = newGapBuffer("ABCDE")
+    check gb.charAt(2) == 'C'
+
+    gb.delete(2, 1)
+    check gb.charAt(2) == 'D'
+    check $gb == "ABDE"
+
+  test "delete newline merges lines correctly":
+    let gb = newGapBuffer("First\nSecond")
+    let origLineCount = gb.lineCount()
+    check origLineCount == 2
+
+    gb.delete(5, 1) # Delete newline at position 5
+    check gb.lineCount() == 1
+    check gb.getLine(0) == "FirstSecond"
+
+suite "GapBuffer - charAt and charLen":
+  test "charLen of empty buffer":
+    let gb = newGapBuffer()
+    check gb.charLen == 0
+
+  test "charLen of single line":
+    let gb = newGapBuffer("Hello")
+    check gb.charLen == 5
+
+  test "charLen of multiple lines":
+    let gb = newGapBuffer("Hello\nWorld")
+    check gb.charLen == 11 # 5 + 1 (newline) + 5
+
+  test "charAt access":
+    let gb = newGapBuffer("ABCDE")
+    check gb.charAt(0) == 'A'
+    check gb.charAt(2) == 'C'
+    check gb.charAt(4) == 'E'
+
+  test "charAt at line boundaries":
+    let gb = newGapBuffer("AB\nCD")
+    # Positions: A(0) B(1) \n(2) C(3) D(4)
+    check gb.charAt(0) == 'A'
+    check gb.charAt(1) == 'B'
+    check gb.charAt(2) == '\n'
+    check gb.charAt(3) == 'C'
+    check gb.charAt(4) == 'D'
+
+  test "charAt beyond end raises error":
+    let gb = newGapBuffer("Test")
+    expect(IndexDefect):
+      discard gb.charAt(100)
+
+  test "charAt on empty buffer raises error":
+    let gb = newGapBuffer()
+    expect(IndexDefect):
+      discard gb.charAt(0)
+
+suite "GapBuffer - Substring":
+  test "substring basic extraction":
+    let gb = newGapBuffer("ABCDEFGH")
+    check gb.substring(0, 3) == "ABC"
+    check gb.substring(3, 3) == "DEF"
+    check gb.substring(5, 3) == "FGH"
+
+  test "substring cross-line extraction":
+    let gb = newGapBuffer("AB\nCD\nEF")
+    # Positions: A(0) B(1) \n(2) C(3) D(4) \n(5) E(6) F(7)
+    check gb.substring(1, 4) == "B\nCD"
+    check gb.substring(0, 8) == "AB\nCD\nEF"
+
+  test "substring boundary cases":
+    let gb = newGapBuffer("Test")
+    check gb.substring(0, 0) == ""
+    check gb.substring(0, 100) == "Test"
+    check gb.substring(100, 5) == ""
+    check gb.substring(2, -5) == ""
+
+  test "substring full buffer":
+    let gb = newGapBuffer("ABCDE")
+    check gb.substring(0, 5) == "ABCDE"
+
+  test "substring partial from start":
+    let gb = newGapBuffer("ABCDE")
+    check gb.substring(0, 3) == "ABC"
+
+  test "substring partial from end":
+    let gb = newGapBuffer("ABCDE")
+    check gb.substring(2, 3) == "CDE"
+
+  test "substring beyond end":
+    let gb = newGapBuffer("ABCDE")
+    check gb.substring(3, 100) == "DE"
+
+  test "substring start beyond end":
+    let gb = newGapBuffer("ABCDE")
+    check gb.substring(100, 5) == ""
+
+suite "GapBuffer - Slice Operator":
+  test "slice basic access":
+    let gb = newGapBuffer("ABCDEFGH")
+    check gb[0 .. 2] == "ABC"
+    check gb[3 .. 5] == "DEF"
+    check gb[6 .. 7] == "GH"
+
+  test "slice with newlines":
+    let gb = newGapBuffer("AB\nCD")
+    # Positions: A(0) B(1) \n(2) C(3) D(4)
+    check gb[0 .. 1] == "AB"
+    check gb[1 .. 3] == "B\nC"
+    check gb[2 .. 4] == "\nCD"
+
+  test "slice edge cases":
+    let gb = newGapBuffer("Test")
+    check gb[0 .. 0] == "T"
+    check gb[3 .. 3] == "t"
+    check gb[5 .. 10] == "" # Start beyond end
+
+suite "GapBuffer - indexToLineCol":
+  test "indexToLineCol single line":
+    let gb = newGapBuffer("Hello")
+    check gb.indexToLineCol(0) == (0, 0)
+    check gb.indexToLineCol(2) == (0, 2)
+    check gb.indexToLineCol(5) == (0, 5) # End of line
+
+  test "indexToLineCol multiple lines":
+    let gb = newGapBuffer("AB\nCD")
+    # Positions: A(0) B(1) \n(2) C(3) D(4)
+    check gb.indexToLineCol(0) == (0, 0) # 'A'
+    check gb.indexToLineCol(1) == (0, 1) # 'B'
+    check gb.indexToLineCol(2) == (0, 2) # newline position
+    check gb.indexToLineCol(3) == (1, 0) # 'C'
+    check gb.indexToLineCol(4) == (1, 1) # 'D'
+
+  test "indexToLineCol negative index":
+    let gb = newGapBuffer("Test")
+    check gb.indexToLineCol(-1) == (-1, -1)
+
+suite "GapBuffer - findLineStart":
+  test "findLineStart single line":
+    let gb = newGapBuffer("Hello")
+    check gb.findLineStart(0) == 0
+
+  test "findLineStart multiple lines":
+    let gb = newGapBuffer("Hello\nWorld\nTest")
+    check gb.findLineStart(0) == 0
+    check gb.findLineStart(1) == 6 # After "Hello\n"
+    check gb.findLineStart(2) == 12 # After "Hello\nWorld\n"
+
+  test "findLineStart invalid line":
+    let gb = newGapBuffer("Test")
+    check gb.findLineStart(-1) == -1
+    check gb.findLineStart(100) == -1
+
+suite "GapBuffer - Gap Management (Low-level)":
+  test "gap expansion on many insertions":
+    let gb = newGapBuffer()
+    let initialGapInfo = gb.getGapInfo()
+
+    # Insert many lines to force gap expansion
+    for i in 0 ..< 100:
+      gb.insertLine(i, "Line " & $i)
+
+    let finalGapInfo = gb.getGapInfo()
+
+    # Verify all lines are intact
+    check gb.lineCount() == 101 # 100 inserted + 1 initial
+    for i in 0 ..< 100:
+      check gb.getLine(i) == "Line " & $i
+
+  test "content integrity after gap moves":
+    let gb = newGapBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
+
+    # Insert at different positions to force gap movement
+    gb.insert(0, "A") # Gap moves to line 0
+    gb.insert(gb.charLen, "Z") # Gap moves to end
+
+    # Verify content is still correct
+    check gb.getLine(0) == "ALine1"
+    check gb.getLine(4) == "Line5Z"
+
+  test "alternating insert positions":
+    let gb = newGapBuffer("AAAA\nBBBB\nCCCC")
+
+    # Insert at first line
+    gb.insert(2, "1")
+    check gb.getLine(0) == "AA1AA"
+
+    # Insert at last line (line number is gb.lineCount - 1)
+    let lastLineStart = gb.findLineStart(gb.lineCount - 1)
+    gb.insert(lastLineStart + 2, "2")
+    check gb.getLine(2) == "CC2CC"
+
+    # Insert at middle line (line 1)
+    let middleLineStart = gb.findLineStart(1)
+    gb.insert(middleLineStart + 2, "3")
+    check gb.getLine(1) == "BB3BB"
+
+  test "large buffer with many operations":
+    let gb = newGapBuffer()
+
+    # Build a large buffer
+    for i in 0 ..< 500:
+      gb.insert(gb.charLen, "X")
+      if i mod 10 == 0:
+        gb.insert(gb.charLen, "\n")
+
+    # Verify structure
+    let lineCount = gb.lineCount()
+    check lineCount > 1
+
+    # Delete from various positions
+    gb.delete(0, 10)
+    gb.delete(100, 10)
+    gb.delete(200, 10)
+
+    # Insert again
+    gb.insert(50, "TEST")
+
+    # Verify buffer is still usable
+    let text = $gb
+    check text.find("TEST") != -1
+    check text.find("X") != -1
+
+  test "gap remains functional after resize":
+    let gb = newGapBuffer()
+
+    # Small operations
+    for i in 0 ..< 10:
+      gb.insertLine(i, "Small" & $i)
+
+    check gb.lineCount() == 11
+
+    # Large expansion
+    for i in 10 ..< 200:
+      gb.insertLine(i, "Large" & $i)
+
+    check gb.lineCount() == 201
+
+    # Verify random access still works
+    check gb.getLine(5) == "Small5"
+    check gb.getLine(50) == "Large50"
+    check gb.getLine(150) == "Large150"
+
+  test "rapid insert/delete cycles":
+    let gb = newGapBuffer("Base")
+
+    for cycle in 0 ..< 50:
+      gb.insert(2, "XY")
+      gb.delete(2, 2)
+
+    # Should return to original state
+    check $gb == "Base"
+
+suite "GapBuffer - Edge Cases (Low-level)":
+  test "empty buffer operations":
+    let gb = newGapBuffer()
+
+    # charAt on empty buffer should fail (no characters)
+    expect(IndexDefect):
+      discard gb.charAt(0)
+
+    # getLine on empty returns empty string
+    check gb.getLine(0) == ""
+
+    # String conversion
+    check $gb == ""
+
+    # Length
+    check gb.charLen == 0 # No actual characters
+    check gb.lineCount() == 1 # One empty line
+
+  test "single character buffer":
+    let gb = newGapBuffer("A")
+
+    check gb.len == 1
+    check gb.charAt(0) == 'A'
+    check $gb == "A"
+
+    # Delete it
+    gb.delete(0, 1)
+    check $gb == ""
+
+  test "buffer with only newlines":
+    let gb = newGapBuffer("\n\n\n")
+
+    # Trailing newline is line terminator, not separator
+    # So "\n\n\n" = 3 empty lines (each terminated by newline)
+    check gb.lineCount() == 3
+    for i in 0 ..< 3:
+      check gb.getLine(i) == ""
+
+  test "very long line":
+    var longText = ""
+    for i in 0 ..< 10000:
+      longText.add('X')
+
+    let gb = newGapBuffer(longText)
+    check gb.lineCount() == 1
+    check gb.getLine(0).len == 10000
+    check gb.charLen == 10000
+
+  test "many empty lines":
+    let gb = newGapBuffer()
+    for i in 0 ..< 1000:
+      gb.insertLine(i, "")
+
+    check gb.lineCount() == 1001 # 1000 + initial
+    for i in 0 ..< 1000:
+      check gb.getLine(i) == ""
+
+  test "boundary insert at every position":
+    let gb = newGapBuffer("ABC")
+
+    # Insert at each position
+    gb.insert(0, "0") # "0ABC"
+    gb.insert(2, "1") # "0A1BC"
+    gb.insert(5, "2") # "0A1BC2"
+
+    check $gb == "0A1BC2"
+
+  test "boundary delete at boundaries":
+    let gb = newGapBuffer("ABCDEF")
+
+    # Delete from start
+    gb.delete(0, 1)
+    check $gb == "BCDEF"
+
+    # Delete from current end
+    gb.delete(4, 1)
+    check $gb == "BCDE"
+
+  test "zero-length operations":
+    let gb = newGapBuffer("Test")
+
+    # Insert zero-length string
+    gb.insert(2, "")
+    check $gb == "Test"
+
+    # Delete zero count
+    gb.delete(2, 0)
+    check $gb == "Test"
+
+  test "out of bounds access":
+    let gb = newGapBuffer("Test")
+
+    # charAt beyond (but within last line's virtual newline might succeed)
+    # Position 4 is the virtual newline, 5+ should fail
+    expect(IndexDefect):
+      discard gb.charAt(100)
+
+    # getLine beyond
+    check gb.getLine(100) == ""
+
+    # delete beyond does partial delete
+    gb.delete(2, 100)
+    check $gb == "Te"
+
+  test "insert then immediate delete":
+    let gb = newGapBuffer("Base")
+
+    let originalLen = gb.len
+    gb.insert(2, "XYZ")
+    gb.delete(2, 3)
+
+    check gb.len == originalLen
+    check $gb == "Base"
+
+  test "substring consistency with charAt":
+    let gb = newGapBuffer("ABCDEFGH")
+
+    for start in 0 .. 7:
+      for length in 1 .. 3:
+        let sub = gb.substring(start, length)
+        for i in 0 ..< sub.len:
+          if start + i < gb.charLen:
+            check sub[i] == gb.charAt(start + i)
+
+  test "line iterator on edge cases":
+    # Empty buffer
+    let gb1 = newGapBuffer()
+    var count1 = 0
+    for line in gb1.lines():
+      inc count1
+    check count1 == 1
+
+    # Single line
+    let gb2 = newGapBuffer("Test")
+    var lines2: seq[string] = @[]
+    for line in gb2.lines():
+      lines2.add(line)
+    check lines2.len == 1
+
+  test "character iterator completeness":
+    # POSIX semantics: "A\nB\n" = 2 lines "A" and "B" (trailing newline is terminator)
+    # chars() iterator is consistent with $ operator
+    let text = "A\nB\n"
+    let gb = newGapBuffer(text)
+
+    var reconstructed = ""
+    for ch in gb.chars():
+      reconstructed.add(ch)
+
+    # Trailing newline is not preserved (POSIX terminator semantics)
+    check reconstructed == "A\nB"
+    check reconstructed == $gb
+
+suite "GapBuffer - String Conversion Extended":
+  test "string conversion empty buffer":
+    let gb = newGapBuffer()
+    check $gb == ""
+
+  test "string conversion single line":
+    let gb = newGapBuffer("Hello")
+    check $gb == "Hello"
+
+  test "string conversion multiple lines":
+    let gb = newGapBuffer("Line1\nLine2\nLine3")
+    check $gb == "Line1\nLine2\nLine3"
+
+  test "string conversion empty lines":
+    let gb = newGapBuffer("\n\n")
+    check $gb == "\n\n"
+
+  test "chars iterator empty buffer":
+    let gb = newGapBuffer()
+    var chars: seq[char] = @[]
+    for ch in gb.chars():
+      chars.add(ch)
+    check chars.len == 0
+
+  test "chars iterator single line":
+    let gb = newGapBuffer("ABC")
+    var chars: seq[char] = @[]
+    for ch in gb.chars():
+      chars.add(ch)
+    check chars == @['A', 'B', 'C']
+
+  test "chars iterator multiple lines":
+    let gb = newGapBuffer("AB\nCD")
+    var chars: seq[char] = @[]
+    for ch in gb.chars():
+      chars.add(ch)
+    check chars == @['A', 'B', '\n', 'C', 'D']
+
+  test "chars iterator reconstruction":
+    let text = "Hello\nWorld\n!"
+    let gb = newGapBuffer(text)
+    var reconstructed = ""
+    for ch in gb.chars():
+      reconstructed.add(ch)
+    check reconstructed == text
+
+  test "lines iterator empty buffer":
+    let gb = newGapBuffer()
+    var lines: seq[string] = @[]
+    for line in gb.lines():
+      lines.add(line)
+    check lines == @[""]
+
+  test "lines iterator single line":
+    let gb = newGapBuffer("Test")
+    var lines: seq[string] = @[]
+    for line in gb.lines():
+      lines.add(line)
+    check lines == @["Test"]
+
+  test "lines iterator multiple lines":
+    let gb = newGapBuffer("Line1\nLine2\nLine3")
+    var lines: seq[string] = @[]
+    for line in gb.lines():
+      lines.add(line)
+    check lines == @["Line1", "Line2", "Line3"]
+
+  test "lines iterator empty lines":
+    # POSIX semantics: "\n\n" = 2 empty lines (each \n terminates a line)
+    let gb = newGapBuffer("\n\n")
+    var lines: seq[string] = @[]
+    for line in gb.lines():
+      lines.add(line)
+    check lines == @["", ""]
+
+  test "string conversion after modifications":
+    let gb = newGapBuffer("Initial")
+    gb.insert(0, "Pre")
+    check $gb == "PreInitial"
+
+    gb.insert(gb.charLen, "Post")
+    check $gb == "PreInitialPost"
+
+    gb.delete(3, 7)
+    check $gb == "PrePost"
+
+  test "iterator consistency after modifications":
+    let gb = newGapBuffer("AB\nCD")
+    gb.insert(2, "X") # "ABX\nCD"
+
+    var chars: seq[char] = @[]
+    for ch in gb.chars():
+      chars.add(ch)
+    check chars == @['A', 'B', 'X', '\n', 'C', 'D']
+
+    var lines: seq[string] = @[]
+    for line in gb.lines():
+      lines.add(line)
+    check lines == @["ABX", "CD"]
+
+  test "string conversion with Unicode":
+    let gb = newGapBuffer("Hello 世界 🌍")
+    let result = $gb
+    check result == "Hello 世界 🌍"
+
+  test "chars iterator with Unicode":
+    let gb = newGapBuffer("日本")
+    var result = ""
+    for ch in gb.chars():
+      result.add(ch)
+    check result == "日本"
+
+# =============================================================================
+# Additional API Tests
+# =============================================================================
+
+suite "GapBuffer - findLineEnd":
+  test "findLineEnd single line":
+    let gb = newGapBuffer("Hello")
+    # Line 0: "Hello" (positions 0-4)
+    # findLineEnd returns position of last char (before newline)
+    check gb.findLineEnd(0) == 4
+
+  test "findLineEnd multiple lines":
+    let gb = newGapBuffer("Hello\nWorld\nTest")
+    # Line 0: "Hello" (positions 0-4), ends at 4
+    # Line 1: "World" (positions 6-10), ends at 10
+    # Line 2: "Test" (positions 12-15), ends at 15
+    check gb.findLineEnd(0) == 4
+    check gb.findLineEnd(1) == 10
+    check gb.findLineEnd(2) == 15
+
+  test "findLineEnd empty line":
+    let gb = newGapBuffer("A\n\nB")
+    # Line 0: "A" (position 0), ends at 0
+    # Line 1: "" (empty), ends at 1 (position 2 is start, len is 0, so 2 + 0 - 1 = 1)
+    # Line 2: "B" (position 3), ends at 3
+    check gb.findLineEnd(0) == 0
+    check gb.findLineEnd(1) == 1 # Empty line: lineStart(1)=2, lineLen=0, so 2+0-1=1
+    check gb.findLineEnd(2) == 3
+
+  test "findLineEnd invalid line":
+    let gb = newGapBuffer("Test")
+    check gb.findLineEnd(-1) == -1
+    check gb.findLineEnd(100) == -1
+
+  test "findLineEnd empty buffer":
+    let gb = newGapBuffer()
+    # Empty buffer has one empty line
+    check gb.findLineEnd(0) == -1 # lineStart(0)=0, lineLen=0, so 0+0-1=-1
+
+suite "GapBuffer - Character Modification":
+  test "modify character via line replacement":
+    let gb = newGapBuffer("Hello")
+    var line = gb[0]
+    line[0] = 'J'
+    gb[0] = line
+    check gb[0] == "Jello"
+
+  test "modify character in middle":
+    let gb = newGapBuffer("Hello")
+    var line = gb[0]
+    line[2] = 'X'
+    gb[0] = line
+    check gb[0] == "HeXlo"
+
+  test "modify character at end":
+    let gb = newGapBuffer("Hello")
+    var line = gb[0]
+    line[4] = '!'
+    gb[0] = line
+    check gb[0] == "Hell!"
+
+  test "modify characters in multiple lines":
+    let gb = newGapBuffer("ABC\nDEF")
+    var line0 = gb[0]
+    line0[1] = 'X'
+    gb[0] = line0
+
+    var line1 = gb[1]
+    line1[1] = 'Y'
+    gb[1] = line1
+
+    check gb[0] == "AXC"
+    check gb[1] == "DYF"
+
+  test "modifyLineContent for character change":
+    let gb = newGapBuffer("Hello")
+    gb.modifyLineContent(
+      0,
+      proc(s: var string) =
+        s[0] = 'J',
+    )
+    check gb[0] == "Jello"
+
+  test "modifyLineContent for multiple changes":
+    let gb = newGapBuffer("abcde")
+    gb.modifyLineContent(
+      0,
+      proc(s: var string) =
+        s[0] = 'A'
+        s[2] = 'C'
+        s[4] = 'E',
+    )
+    check gb[0] == "AbCdE"
+
+suite "GapBuffer - Stress Tests":
+  test "many sequential insertions and deletions":
+    let gb = newGapBuffer()
+
+    # Insert 1000 lines
+    for i in 0 ..< 1000:
+      gb.insertLine(i, "Line " & $i)
+
+    check gb.lineCount() == 1001
+
+    # Delete half
+    for i in 0 ..< 500:
+      gb.deleteLine(0)
+
+    check gb.lineCount() == 501
+
+    # Verify remaining content
+    check gb.getLine(0) == "Line 500"
+
+  test "alternating operations at different positions":
+    let gb = newGapBuffer("AAAA\nBBBB\nCCCC\nDDDD")
+
+    # Operations that force gap movement
+    for i in 0 ..< 50:
+      gb.insert(0, "X") # Insert at start
+      gb.insert(gb.charLen, "Y") # Insert at end
+      if i mod 5 == 0:
+        gb.delete(gb.charLen div 2, 1) # Delete from middle
+
+    # Verify buffer is still consistent
+    check gb.lineCount() >= 1
+    let text = $gb
+    check text.len > 0
+
+  test "rapid insert at same position":
+    let gb = newGapBuffer("Base")
+
+    for i in 0 ..< 500:
+      gb.insert(2, "X")
+
+    check gb.getLine(0).len == 504 # "Ba" + 500 'X' + "se"
+
+  test "delete entire buffer repeatedly":
+    let gb = newGapBuffer()
+
+    for round in 0 ..< 10:
+      # Fill buffer
+      for i in 0 ..< 100:
+        gb.insertLine(i, "Line " & $i)
+
+      # Delete all
+      while gb.lineCount() > 1:
+        gb.deleteLine(0)
+
+      check gb.lineCount() == 1
+
+  test "mixed line and character operations":
+    let gb = newGapBuffer()
+
+    for i in 0 ..< 100:
+      gb.insertLine(gb.lineCount(), "Line" & $i)
+      gb.insert(gb.charLen, "!")
+      if i mod 3 == 0:
+        gb.insertIntoLine(i, 0, ">>")
+
+    check gb.lineCount() > 100
+
+suite "GapBuffer - Boundary Conditions":
+  test "insert at exact capacity boundary":
+    let gb = newGapBuffer()
+    let initialInfo = gb.getGapInfo()
+
+    # Fill exactly to initial capacity
+    for i in 0 ..< initialInfo.capacity - 1:
+      gb.insertLine(i, "L" & $i)
+
+    # One more should trigger resize
+    let beforeResize = gb.getGapInfo()
+    gb.insertLine(gb.lineCount(), "Overflow")
+    let afterResize = gb.getGapInfo()
+
+    check afterResize.capacity > beforeResize.capacity
+
+  test "delete to single line":
+    let gb = newGapBuffer("A\nB\nC\nD\nE")
+    check gb.lineCount() == 5
+
+    gb.deleteLine(4)
+    gb.deleteLine(3)
+    gb.deleteLine(2)
+    gb.deleteLine(1)
+
+    check gb.lineCount() == 1
+    check gb[0] == "A"
+
+  test "operations on single character lines":
+    let gb = newGapBuffer("A\nB\nC")
+
+    gb.insertIntoLine(0, 1, "X")
+    check gb[0] == "AX"
+
+    gb.deleteAtLineCol(1, 0, 1)
+    check gb[1] == ""
+
+    gb[2] = "Z"
+    check gb[2] == "Z"
+
+  test "charLen consistency after operations":
+    let gb = newGapBuffer("Hello\nWorld")
+    let initialLen = gb.charLen
+    check initialLen == 11 # "Hello" + "\n" + "World"
+
+    gb.insert(5, "X")
+    check gb.charLen == initialLen + 1
+
+    gb.delete(5, 1)
+    check gb.charLen == initialLen
+
+  test "lineCount consistency after operations":
+    let gb = newGapBuffer("A")
+    check gb.lineCount() == 1
+
+    gb.insert(1, "\n")
+    check gb.lineCount() == 2
+
+    gb.insert(2, "\n")
+    check gb.lineCount() == 3
+
+    gb.delete(1, 1) # Delete first newline
+    check gb.lineCount() == 2
+
+suite "GapBuffer - Unicode Extended":
+  test "character modification with Unicode context":
+    let gb = newGapBuffer("ABC")
+    var line = gb[0]
+    line[1] = 'X'
+    gb[0] = line
+    check gb[0] == "AXC"
+
+  test "substring with Unicode":
+    let gb = newGapBuffer("Hello世界")
+    # ASCII part
+    check gb.substring(0, 5) == "Hello"
+
+  test "findLineStart and findLineEnd with Unicode":
+    let gb = newGapBuffer("日本語\nEnglish")
+    check gb.findLineStart(0) == 0
+    check gb.findLineStart(1) == 10 # After "日本語\n" (9 bytes + 1 newline)
+    check gb.findLineEnd(0) == 8 # "日本語" is 9 bytes, last char at position 8
+    check gb.findLineEnd(1) == 16 # "English" ends at position 16
+
+  test "charLen with various Unicode":
+    let gb1 = newGapBuffer("Hello")
+    check gb1.charLen == 5
+
+    let gb2 = newGapBuffer("日本語")
+    check gb2.charLen == 9 # 3 chars * 3 bytes each
+
+    let gb3 = newGapBuffer("🎉🎌🌍")
+    check gb3.charLen == 12 # 3 emojis * 4 bytes each
+
+suite "GapBuffer - Error Handling":
+  test "insertLine at invalid negative index":
+    let gb = newGapBuffer("Test")
+    expect IndexDefect:
+      gb.insertLine(-1, "Invalid")
+
+  test "insertLine at index beyond len":
+    let gb = newGapBuffer("Test")
+    expect IndexDefect:
+      gb.insertLine(10, "Invalid")
+
+  test "deleteLine at invalid index":
+    let gb = newGapBuffer("Test")
+    expect IndexDefect:
+      gb.deleteLine(-1)
+    expect IndexDefect:
+      gb.deleteLine(10)
+
+  test "replaceLine at invalid index":
+    let gb = newGapBuffer("Test")
+    expect IndexDefect:
+      gb.replaceLine(-1, "Invalid")
+    expect IndexDefect:
+      gb.replaceLine(10, "Invalid")
+
+  test "modifyLineContent at invalid index":
+    let gb = newGapBuffer("Test")
+    expect IndexDefect:
+      gb.modifyLineContent(
+        -1,
+        proc(s: var string) =
+          discard,
+      )
+    expect IndexDefect:
+      gb.modifyLineContent(
+        10,
+        proc(s: var string) =
+          discard,
+      )
+
+  test "insertIntoLine at invalid line":
+    let gb = newGapBuffer("Test")
+    expect IndexDefect:
+      gb.insertIntoLine(-1, 0, "X")
+    expect IndexDefect:
+      gb.insertIntoLine(10, 0, "X")
+
+  test "insertIntoLine at invalid column":
+    let gb = newGapBuffer("Test")
+    expect IndexDefect:
+      gb.insertIntoLine(0, -1, "X")
+    expect IndexDefect:
+      gb.insertIntoLine(0, 100, "X")
+
+  test "deleteAtLineCol at invalid line":
+    let gb = newGapBuffer("Test")
+    expect IndexDefect:
+      gb.deleteAtLineCol(-1, 0, 1)
+    expect IndexDefect:
+      gb.deleteAtLineCol(10, 0, 1)
+
+  test "deleteAtLineCol with invalid count":
+    let gb = newGapBuffer("Test")
+    expect IndexDefect:
+      gb.deleteAtLineCol(0, 0, 0)
+    expect IndexDefect:
+      gb.deleteAtLineCol(0, 0, -1)
