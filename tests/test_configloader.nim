@@ -126,7 +126,7 @@ tool = "xsel"
     let (config, vr) = loadFromTomlString(tomlStr)
     check not vr.hasErrors
     check config.clipboard.enable == true
-    check config.clipboard.tool == ctXsel
+    check config.clipboard.tool == cbtXsel
 
   test "Invalid clipboard tool is detected":
     let tomlStr =
@@ -138,7 +138,7 @@ tool = "invalid"
     check vr.hasErrors
     check "Clipboard.tool" in vr.errors[0].name
     # Default value depends on system (detectClipboardTool), just check it's a valid enum
-    check config.clipboard.tool in {ctXsel, ctXclip, ctWlClipboard}
+    check config.clipboard.tool in {cbtXsel, cbtXclip, cbtWlClipboard}
 
 suite "Config Validation - AutoBackup section":
   test "Valid AutoBackup config passes validation":
@@ -338,7 +338,7 @@ tool = "xsel"
     check config.standard.tabStop == 4
     check config.standard.colorMode == cm24bit
     check config.clipboard.enable == true
-    check config.clipboard.tool == ctXsel
+    check config.clipboard.tool == cbtXsel
 
   test "loadConfigFromToml with invalid values uses defaults":
     let testFile = "/tmp/moe_test_invalid_config.toml"

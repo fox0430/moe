@@ -220,6 +220,9 @@ proc handleReplaceModeKey*(
     case cmd.kind
     of ctModeSwitch:
       return handler.handleModeSwitch(cmd.targetMode)
+    of ctOverlaySwitch:
+      # Overlay switches not supported in replace mode
+      return ReplaceModeResult(kind: rmrUnhandled)
     of ctMotion:
       return handler.handleMotion(buffer, state, cmd.motion)
     else:

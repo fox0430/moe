@@ -74,6 +74,19 @@ proc lspPollingTask(editor: Editor, running: ptr bool) {.async.} =
           discard
     await sleepAsync(pollInterval)
 
+proc setRawAnsiCursor(style: CursorStyle) =
+  let escSeq =
+    case style
+    of CursorStyle.Default: CursorStyleDefault
+    of CursorStyle.BlinkingBlock: CursorStyleBlinkingBlock
+    of CursorStyle.SteadyBlock: CursorStyleSteadyBlock
+    of CursorStyle.BlinkingUnderline: CursorStyleBlinkingUnderline
+    of CursorStyle.SteadyUnderline: CursorStyleSteadyUnderline
+    of CursorStyle.BlinkingBar: CursorStyleBlinkingBar
+    of CursorStyle.SteadyBar: CursorStyleSteadyBar
+  stdout.write(escSeq)
+  stdout.flushFile()
+
 proc runEditor(
     editor: Editor, app: AsyncApp, cmdLineConfig: CmdLineConfig, log: Logger
 ) {.async.} =
@@ -119,22 +132,15 @@ proc runEditor(
               else:
                 toCursorStyle(editor.config.standard.normalModeCursor)
             # Set cursor style via ANSI escape sequence (no async API available)
-            let escSeq =
-              case cursorStyle
-              of CursorStyle.Default: "\e[0 q"
-              of CursorStyle.BlinkingBlock: "\e[1 q"
-              of CursorStyle.SteadyBlock: "\e[2 q"
-              of CursorStyle.BlinkingUnderline: "\e[3 q"
-              of CursorStyle.SteadyUnderline: "\e[4 q"
-              of CursorStyle.BlinkingBar: "\e[5 q"
-              of CursorStyle.SteadyBar: "\e[6 q"
-            stdout.write(escSeq)
-            stdout.flushFile()
+            setRawAnsiCursor(cursorStyle)
 
-      # Set cursor position and show (using celina async API)
-      let x = editor.state.screenCursor.x
-      let y = editor.state.screenCursor.y
-      await asyncTerminal.showCursorAt(x, y)
+      # Set cursor position and visibility (using celina async API)
+      if editor.state.cursorVisible:
+        await asyncTerminal.showCursorAt(
+          editor.state.screenCursor.x, editor.state.screenCursor.y
+        )
+      else:
+        await asyncTerminal.hideCursor()
 
     # Run the async main loop
     # Note: Bracketed Paste Mode is enabled via AppConfig(bracketedPaste: true)
@@ -146,17 +152,7 @@ proc runEditor(
     # Restore cursor to default style on exit
     if not editor.config.standard.disableChangeCursor:
       let cursorStyle = toCursorStyle(editor.config.standard.defaultCursor)
-      let escSeq =
-        case cursorStyle
-        of CursorStyle.Default: "\e[0 q"
-        of CursorStyle.BlinkingBlock: "\e[1 q"
-        of CursorStyle.SteadyBlock: "\e[2 q"
-        of CursorStyle.BlinkingUnderline: "\e[3 q"
-        of CursorStyle.SteadyUnderline: "\e[4 q"
-        of CursorStyle.BlinkingBar: "\e[5 q"
-        of CursorStyle.SteadyBar: "\e[6 q"
-      stdout.write(escSeq)
-      stdout.flushFile()
+      setRawAnsiCursor(cursorStyle)
 
     # Cleanup background processes before exiting
     cleanupBackgroundProcesses()
@@ -229,7 +225,10 @@ proc main() =
       # Directory specified - start in Filer mode
       let dirPath = absolutePath(cmdLineConfig.filePaths[0])
       editor.state.mode = EditorMode.Filer
-      editor.state.filerState = some(newFilerState(dirPath))
+      let activeWin =
+        editor.windowManager.windows[editor.windowManager.activeWindowIndex]
+      activeWin.mode = EditorMode.Filer
+      activeWin.filerState = some(newFilerState(dirPath))
     else:
       # Load first file
       block:

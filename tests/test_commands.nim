@@ -85,11 +85,11 @@ suite "CommandExecutor - Constructor":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    let clipboardConfig = ClipboardConfig(enable: true, tool: ctXclip)
+    let clipboardConfig = ClipboardConfig(enable: true, tool: cbtXclip)
     let exec = newCommandExecutor(buf, state, viewport, clipboardConfig)
 
     check exec.clipboardConfig.enable == true
-    check exec.clipboardConfig.tool == ctXclip
+    check exec.clipboardConfig.tool == cbtXclip
 
   test "Create CommandExecutor with custom NotificationConfig":
     let buf = newTextBuffer()
@@ -131,118 +131,118 @@ suite "CommandExecutor - Motion Execution":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 5)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 0, column: 5)
     exec.executeMotion(Motion.Left, 1)
 
-    check state.cursor.column == 4
+    check exec.cursor.column == 4
 
   test "Execute motion right":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 0, column: 0)
     exec.executeMotion(Motion.Right, 1)
 
-    check state.cursor.column == 1
+    check exec.cursor.column == 1
 
   test "Execute motion left with count":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 5)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 0, column: 5)
     exec.executeMotion(Motion.Left, 3)
 
-    check state.cursor.column == 2
+    check exec.cursor.column == 2
 
   test "Execute motion down":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 0, column: 0)
     exec.executeMotion(Motion.Down, 1)
 
-    check state.cursor.line == 1
+    check exec.cursor.line == 1
 
   test "Execute motion up":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 2, column: 0)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 2, column: 0)
     exec.executeMotion(Motion.Up, 1)
 
-    check state.cursor.line == 1
+    check exec.cursor.line == 1
 
   test "Execute motion home":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 5)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 0, column: 5)
     exec.executeMotion(Motion.Home, 1)
 
-    check state.cursor.column == 0
+    check exec.cursor.column == 0
 
   test "Execute motion end":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 0, column: 0)
     exec.executeMotion(Motion.End, 1)
 
     # End should move to last character position (10 for "Hello World")
-    check state.cursor.column == 10
+    check exec.cursor.column == 10
 
   test "Execute motion first line":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 2, column: 0)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 2, column: 0)
     exec.executeMotion(Motion.FirstLine, 1)
 
-    check state.cursor.line == 0
+    check exec.cursor.line == 0
 
   test "Execute motion last line":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 0, column: 0)
     exec.executeMotion(Motion.LastLine, 1)
 
-    check state.cursor.line == 2
+    check exec.cursor.line == 2
 
 suite "CommandExecutor - Compatibility Wrappers":
   test "clampCursor does not crash":
@@ -300,10 +300,10 @@ suite "CommandExecutor - Keybinding Execution":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 5)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 0, column: 5)
 
     # Create a motion command
     let cmd = Command(
@@ -317,7 +317,7 @@ suite "CommandExecutor - Keybinding Execution":
     let result = exec.executeKeybinding(cmd)
 
     if result.isOk:
-      check state.cursor.column == 4
+      check exec.cursor.column == 4
 
 suite "CommandExecutor - Integration":
   test "Motion controller is initialized":
@@ -336,71 +336,71 @@ suite "CommandExecutor - Integration":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 0, column: 0)
 
     # Move right 3 times
     exec.executeMotion(Motion.Right, 1)
     exec.executeMotion(Motion.Right, 1)
     exec.executeMotion(Motion.Right, 1)
 
-    check state.cursor.column == 3
+    check exec.cursor.column == 3
 
     # Move left 2 times
     exec.executeMotion(Motion.Left, 2)
 
-    check state.cursor.column == 1
+    check exec.cursor.column == 1
 
   test "Motion boundary at start of line":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 0, column: 0)
 
     # Try to move left from start of line - should stay at 0
     exec.executeMotion(Motion.Left, 1)
 
-    check state.cursor.column == 0
+    check exec.cursor.column == 0
 
   test "Motion boundary at end of line":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 10) # Last character
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 0, column: 10) # Last character
 
     # Move right from end of line - should stay at last position
     exec.executeMotion(Motion.Right, 1)
 
-    check state.cursor.column == 10
+    check exec.cursor.column == 10
 
   test "Multi-line motion navigation":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
 
     let state = createTestState()
-    state.cursor = BufferPosition(line: 0, column: 0)
     let viewport = createTestViewport()
 
     let exec = newCommandExecutor(buf, state, viewport)
+    exec.cursor = BufferPosition(line: 0, column: 0)
 
     # Move down twice
     exec.executeMotion(Motion.Down, 2)
-    check state.cursor.line == 2
+    check exec.cursor.line == 2
 
     # Move to end of line
     exec.executeMotion(Motion.End, 1)
-    check state.cursor.column == 5 # "Line 3" has 6 chars, last pos is 5
+    check exec.cursor.column == 5 # "Line 3" has 6 chars, last pos is 5
 
     # Move to first line
     exec.executeMotion(Motion.FirstLine, 1)
-    check state.cursor.line == 0
+    check exec.cursor.line == 0

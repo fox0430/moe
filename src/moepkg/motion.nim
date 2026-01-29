@@ -878,10 +878,6 @@ proc clampPosition*(
     elif result.x < 0:
       result.x = 0
 
-proc applyCursorPosition*(mgr: CursorManager, pos: BufferPosition) =
-  ## Update the actual cursor position in state
-  mgr.state.cursor = pos
-
 proc newViewportManager*(viewport: ViewPort): ViewportManager =
   ViewportManager(viewport: viewport)
 

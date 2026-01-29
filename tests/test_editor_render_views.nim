@@ -264,7 +264,7 @@ suite "renderBottomLines - Command mode":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.mode = EditorMode.Command
+    e.state.enterCommandOverlay()
     e.state.commandText = ":write"
     e.state.commandCursor = 6
 
@@ -280,7 +280,7 @@ suite "renderBottomLines - Command mode":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.mode = EditorMode.Command
+    e.state.enterCommandOverlay()
     e.state.commandText = ":"
     e.state.commandCursor = 0
 
@@ -295,7 +295,7 @@ suite "renderBottomLines - Command mode":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.mode = EditorMode.Command
+    e.state.enterCommandOverlay()
     e.state.commandText = ":set tabstop=4 shiftwidth=4 expandtab"
     e.state.commandCursor = 37
 
@@ -311,8 +311,7 @@ suite "renderBottomLines - Search mode":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.mode = EditorMode.Search
-    e.state.search.direction = Forward
+    e.state.enterSearchOverlay(Forward)
     e.state.search.text = "pattern"
 
     e.renderBottomLines(buffer)
@@ -327,8 +326,7 @@ suite "renderBottomLines - Search mode":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.mode = EditorMode.Search
-    e.state.search.direction = Backward
+    e.state.enterSearchOverlay(Backward)
     e.state.search.text = "test"
 
     e.renderBottomLines(buffer)
@@ -343,8 +341,7 @@ suite "renderBottomLines - Search mode":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.mode = EditorMode.Search
-    e.state.search.direction = Forward
+    e.state.enterSearchOverlay(Forward)
     e.state.search.text = ""
 
     e.renderBottomLines(buffer)
@@ -359,8 +356,7 @@ suite "renderBottomLines - Rename mode":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.mode = EditorMode.Rename
-    e.state.renameState.text = "newName"
+    e.state.enterRenameOverlay("newName", 0, 0)
 
     e.renderBottomLines(buffer)
 
@@ -374,8 +370,7 @@ suite "renderBottomLines - Rename mode":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.mode = EditorMode.Rename
-    e.state.renameState.text = ""
+    e.state.enterRenameOverlay("", 0, 0)
 
     e.renderBottomLines(buffer)
 
@@ -503,9 +498,8 @@ suite "renderSplitView - Viewport adjustment":
       discard
         e.textBuffer.insertText(BufferPosition(line: i, column: 0), "Line " & $i & "\n")
 
-    # Move cursor far down
-    e.state.cursor.line = 50
-    e.state.cursor.column = 0
+    # Move cursor far down (use e.cursor to sync with EditorWindow)
+    e.cursor = BufferPosition(line: 50, column: 0)
 
     e.renderSplitView(buffer, false)
 
@@ -525,15 +519,14 @@ suite "renderSplitView - Viewport adjustment":
     let longLine = "x".repeat(200)
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
 
-    # Move cursor far right
-    e.state.cursor.line = 0
-    e.state.cursor.column = 150
+    # Move cursor far right (use e.cursor to sync with EditorWindow)
+    e.cursor = BufferPosition(line: 0, column: 150)
 
     e.renderSplitView(buffer, false)
 
     # Viewport should have scrolled horizontally
-    let window = e.windowManager.windows[0]
-    check window.viewport.leftColumn > 0
+    let window2 = e.windowManager.windows[0]
+    check window2.viewport.leftColumn > 0
 
   test "Viewport does not scroll horizontally when line wrap enabled":
     let e = createTestEditor()
@@ -547,9 +540,8 @@ suite "renderSplitView - Viewport adjustment":
     let longLine = "x".repeat(200)
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
 
-    # Move cursor far right
-    e.state.cursor.line = 0
-    e.state.cursor.column = 150
+    # Move cursor far right (use e.cursor to sync with EditorWindow)
+    e.cursor = BufferPosition(line: 0, column: 150)
 
     e.renderSplitView(buffer, false)
 
@@ -679,7 +671,7 @@ suite "Integration - Full render cycle":
     e.renderBottomLines(buffer)
 
     # Switch to command mode
-    e.state.mode = EditorMode.Command
+    e.state.enterCommandOverlay()
     e.state.commandText = ":quit"
     e.state.commandCursor = 5
     e.renderBottomLines(buffer)

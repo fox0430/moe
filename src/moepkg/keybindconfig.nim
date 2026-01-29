@@ -39,8 +39,6 @@ proc parseMode(s: string): Option[EditorMode] =
     some(EditorMode.Normal)
   of "insert":
     some(EditorMode.Insert)
-  of "command":
-    some(EditorMode.Command)
   of "visual":
     some(EditorMode.Visual)
   of "replace":
@@ -48,12 +46,25 @@ proc parseMode(s: string): Option[EditorMode] =
   else:
     none(EditorMode)
 
+proc parseOverlay(s: string): Option[OverlayKind] =
+  ## Parse overlay string to OverlayKind enum
+  case s.toLowerAscii
+  of "command":
+    some(okCommand)
+  of "search":
+    some(okSearch)
+  of "rename":
+    some(okRename)
+  else:
+    none(OverlayKind)
+
 proc parseCommandType(s: string): CommandType =
   ## Parse command type string
   case s.toLowerAscii
   of "motion": ctMotion
   of "action": ctAction
   of "mode_switch", "modeswitch": ctModeSwitch
+  of "overlay_switch", "overlayswitch": ctOverlaySwitch
   of "text_object", "textobject": ctTextObject
   of "operator": ctOperator
   of "operator_pending", "operatorpending": ctOperatorPending
@@ -151,6 +162,17 @@ proc loadKeybindingsFromToml*(registry: KeyBindingRegistry, tomlPath: string) =
             name: "mode_switch",
             description: "Switch to " & binding["target_mode"].getStr(),
             targetMode: targetModeOpt.get,
+          )
+          cmdOpt = some(cmd)
+    of ctOverlaySwitch:
+      if binding.hasKey("target_overlay"):
+        let targetOverlayOpt = parseOverlay(binding["target_overlay"].getStr())
+        if targetOverlayOpt.isSome:
+          let cmd = Command(
+            kind: ctOverlaySwitch,
+            name: "overlay_switch",
+            description: "Switch to " & binding["target_overlay"].getStr() & " overlay",
+            targetOverlay: targetOverlayOpt.get,
           )
           cmdOpt = some(cmd)
     of ctAction, ctTextObject, ctOperator, ctCustom:

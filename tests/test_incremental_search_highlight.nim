@@ -40,11 +40,11 @@ import ../src/moepkg/modes {.all.}
 ## Helper proc to simulate the search pattern selection logic
 ## This mimics the logic in getSelectionStyle (editor.nim:834-843)
 proc getSearchPattern(
-    mode: EditorMode, searchText: string, lastSearchText: string
+    isSearchOverlay: bool, searchText: string, lastSearchText: string
 ): string =
   ## Determine which search pattern to use for highlighting
   ## Returns the pattern that should be highlighted, or empty string for no highlight
-  if mode == EditorMode.Search:
+  if isSearchOverlay:
     # In Search mode: only highlight if user has typed something
     if searchText.len > 0:
       searchText
@@ -56,24 +56,24 @@ proc getSearchPattern(
 
 suite "Incremental Search Highlight - Search Pattern Selection":
   test "first search in Search mode with text":
-    let pattern = getSearchPattern(EditorMode.Search, "hello", "")
+    let pattern = getSearchPattern(true, "hello", "")
     check pattern == "hello"
 
   test "first search in Search mode without text":
-    let pattern = getSearchPattern(EditorMode.Search, "", "")
+    let pattern = getSearchPattern(true, "", "")
     check pattern == ""
 
   test "second search in Search mode without text (key fix)":
     # This is THE KEY TEST for the bug fix
     # Previous bug: would return "world" here (lastSearchText)
     # Fixed behavior: returns "" (empty searchText in Search mode)
-    let pattern = getSearchPattern(EditorMode.Search, "", "world")
+    let pattern = getSearchPattern(true, "", "world")
     check pattern == ""
     check pattern != "world" # Explicitly verify it doesn't use lastSearchText
 
   test "second search in Search mode with new text":
     # User has started typing a new search
-    let pattern = getSearchPattern(EditorMode.Search, "h", "world")
+    let pattern = getSearchPattern(true, "h", "world")
     check pattern == "h"
     check pattern != "world"
 
@@ -81,33 +81,33 @@ suite "Incremental Search Highlight - Search Pattern Selection":
     # Simulate user typing "hello" character by character
     var pattern: string
 
-    pattern = getSearchPattern(EditorMode.Search, "h", "world")
+    pattern = getSearchPattern(true, "h", "world")
     check pattern == "h"
 
-    pattern = getSearchPattern(EditorMode.Search, "he", "world")
+    pattern = getSearchPattern(true, "he", "world")
     check pattern == "he"
 
-    pattern = getSearchPattern(EditorMode.Search, "hel", "world")
+    pattern = getSearchPattern(true, "hel", "world")
     check pattern == "hel"
 
-    pattern = getSearchPattern(EditorMode.Search, "hell", "world")
+    pattern = getSearchPattern(true, "hell", "world")
     check pattern == "hell"
 
-    pattern = getSearchPattern(EditorMode.Search, "hello", "world")
+    pattern = getSearchPattern(true, "hello", "world")
     check pattern == "hello"
 
   test "Normal mode uses lastSearchText":
-    let pattern = getSearchPattern(EditorMode.Normal, "", "world")
+    let pattern = getSearchPattern(false, "", "world")
     check pattern == "world"
 
   test "Normal mode ignores empty searchText":
-    let pattern = getSearchPattern(EditorMode.Normal, "ignored", "world")
+    let pattern = getSearchPattern(false, "ignored", "world")
     check pattern == "world"
 
 suite "Incremental Search Highlight - Mode Transitions":
   test "entering Search mode from Normal mode":
     # User is in Normal mode with previous search
-    var mode = EditorMode.Normal
+    var mode = false
     var searchText = ""
     var lastSearchText = "world"
 
@@ -116,7 +116,7 @@ suite "Incremental Search Highlight - Mode Transitions":
     check pattern == "world"
 
     # User presses / to enter Search mode
-    mode = EditorMode.Search
+    mode = true
     searchText = "" # Empty initially
 
     # Key test: entering Search mode should not show lastSearchText
@@ -125,7 +125,7 @@ suite "Incremental Search Highlight - Mode Transitions":
 
   test "exiting Search mode to Normal mode":
     # User completes a search
-    var mode = EditorMode.Search
+    var mode = true
     var searchText = "hello"
     var lastSearchText = "world"
 
@@ -136,7 +136,7 @@ suite "Incremental Search Highlight - Mode Transitions":
     # User presses Enter - search is finalized
     lastSearchText = searchText # Save to history
     searchText = "" # Clear search buffer
-    mode = EditorMode.Normal
+    mode = false
 
     # In Normal mode, shows lastSearchText
     pattern = getSearchPattern(mode, searchText, lastSearchText)
@@ -144,13 +144,13 @@ suite "Incremental Search Highlight - Mode Transitions":
 
   test "canceling search with Escape":
     # User starts a search but cancels it
-    var mode = EditorMode.Search
+    var mode = true
     var searchText = "hel"
     var lastSearchText = "world"
 
     # User presses Escape - cancel search
     searchText = "" # Clear search buffer
-    mode = EditorMode.Normal
+    mode = false
 
     # Back in Normal mode, old lastSearchText is preserved
     var pattern = getSearchPattern(mode, searchText, lastSearchText)
@@ -159,18 +159,18 @@ suite "Incremental Search Highlight - Mode Transitions":
 suite "Incremental Search Highlight - Real-world Scenarios":
   test "user workflow: search foo, then search bar":
     # Simulate complete user workflow
-    var mode: EditorMode
+    var mode: bool
     var searchText: string
     var lastSearchText: string
     var pattern: string
 
     # Initial state
-    mode = EditorMode.Normal
+    mode = false
     searchText = ""
     lastSearchText = ""
 
     # User presses / to search
-    mode = EditorMode.Search
+    mode = true
 
     # User types "foo"
     searchText = "foo"
@@ -180,14 +180,14 @@ suite "Incremental Search Highlight - Real-world Scenarios":
     # User presses Enter
     lastSearchText = searchText
     searchText = ""
-    mode = EditorMode.Normal
+    mode = false
 
     # Verify lastSearchText is highlighted
     pattern = getSearchPattern(mode, searchText, lastSearchText)
     check pattern == "foo"
 
     # User presses / again for a new search
-    mode = EditorMode.Search
+    mode = true
     searchText = ""
 
     # KEY TEST: Should not show "foo" anymore
@@ -201,7 +201,7 @@ suite "Incremental Search Highlight - Real-world Scenarios":
     check pattern == "bar"
 
   test "user workflow: backspace during second search":
-    var mode = EditorMode.Search
+    var mode = true
     var searchText = ""
     var lastSearchText = "world"
     var pattern: string
@@ -233,7 +233,7 @@ suite "Incremental Search Highlight - Real-world Scenarios":
     check pattern != "world" # Should not revert to lastSearchText
 
   test "rapid mode switching":
-    var mode: EditorMode
+    var mode: bool
     var searchText: string
     var lastSearchText = "initial"
     var pattern: string
@@ -241,7 +241,7 @@ suite "Incremental Search Highlight - Real-world Scenarios":
     # Enter and exit Search mode multiple times
     for i in 1 .. 5:
       # Enter Search mode
-      mode = EditorMode.Search
+      mode = true
       searchText = ""
 
       # Should start with no highlight
@@ -256,7 +256,7 @@ suite "Incremental Search Highlight - Real-world Scenarios":
       # Exit to Normal mode
       lastSearchText = searchText
       searchText = ""
-      mode = EditorMode.Normal
+      mode = false
 
       # Should show lastSearchText
       pattern = getSearchPattern(mode, searchText, lastSearchText)
@@ -267,7 +267,7 @@ suite "Incremental Search Highlight - Buffer Integration":
     let buf = newTextBuffer("hello world hello again")
 
     # Simulate Search mode with searchText = "hello"
-    let searchPattern = getSearchPattern(EditorMode.Search, "hello", "world")
+    let searchPattern = getSearchPattern(true, "hello", "world")
     check searchPattern == "hello"
 
     # Verify buffer can find the pattern
@@ -283,7 +283,7 @@ suite "Incremental Search Highlight - Buffer Integration":
     let buf = newTextBuffer("hello world hello again")
 
     # Simulate Search mode with empty searchText
-    let searchPattern = getSearchPattern(EditorMode.Search, "", "world")
+    let searchPattern = getSearchPattern(true, "", "world")
     check searchPattern == ""
 
     # With empty pattern, isPositionInSearchMatch should return false
@@ -298,7 +298,7 @@ suite "Incremental Search Highlight - Buffer Integration":
     let buf = newTextBuffer("hello world hello again")
 
     # Simulate Normal mode with lastSearchText = "world"
-    let searchPattern = getSearchPattern(EditorMode.Normal, "", "world")
+    let searchPattern = getSearchPattern(false, "", "world")
     check searchPattern == "world"
 
     # Verify buffer highlights the pattern
@@ -309,33 +309,33 @@ suite "Incremental Search Highlight - Buffer Integration":
 
 suite "Incremental Search Highlight - Edge Cases":
   test "empty strings everywhere":
-    let pattern = getSearchPattern(EditorMode.Search, "", "")
+    let pattern = getSearchPattern(true, "", "")
     check pattern == ""
 
   test "unicode in search patterns":
-    let pattern1 = getSearchPattern(EditorMode.Search, "日本語", "")
+    let pattern1 = getSearchPattern(true, "日本語", "")
     check pattern1 == "日本語"
 
-    let pattern2 = getSearchPattern(EditorMode.Normal, "", "한글")
+    let pattern2 = getSearchPattern(false, "", "한글")
     check pattern2 == "한글"
 
   test "very long search patterns":
     let longPattern = "a".repeat(1000)
-    let pattern = getSearchPattern(EditorMode.Search, longPattern, "short")
+    let pattern = getSearchPattern(true, longPattern, "short")
     check pattern == longPattern
     check pattern.len == 1000
 
   test "Insert mode ignores search":
     # Insert mode should use lastSearchText (like Normal mode)
-    let pattern = getSearchPattern(EditorMode.Insert, "", "world")
+    let pattern = getSearchPattern(false, "", "world")
     check pattern == "world"
 
   test "Visual mode ignores search":
     # Visual mode should use lastSearchText (like Normal mode)
-    let pattern = getSearchPattern(EditorMode.Visual, "", "world")
+    let pattern = getSearchPattern(false, "", "world")
     check pattern == "world"
 
   test "Command mode ignores search":
     # Command mode should use lastSearchText (like Normal mode)
-    let pattern = getSearchPattern(EditorMode.Command, "", "world")
+    let pattern = getSearchPattern(false, "", "world")
     check pattern == "world"

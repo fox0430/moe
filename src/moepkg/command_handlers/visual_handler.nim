@@ -159,6 +159,7 @@ proc executeCommand*(
     buffer: buffer,
     state: state,
     viewport: viewport,
+    cursor: state.cursor,
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
     notificationConfig: handler.notificationConfig,
@@ -166,6 +167,7 @@ proc executeCommand*(
 
   let originalMode = state.mode
   let r = handler.commandRegistry.execute(ctx, commandId, args)
+  state.cursor = ctx.cursor
   if r.isOk:
     # Check if mode changed from a visual mode to something else
     let modeTransition =
@@ -222,6 +224,7 @@ proc handleVisualModeKey*(
     buffer: buffer,
     state: state,
     viewport: viewport,
+    cursor: state.cursor,
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
     notificationConfig: handler.notificationConfig,
@@ -229,6 +232,11 @@ proc handleVisualModeKey*(
 
   # Execute command through registry
   let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
+  state.cursor = ctx.cursor
+
+  # Update visual selection current position if still in visual mode
+  if isVisualMode(state.mode) and state.visualSelection.active:
+    state.visualSelection.current = state.cursor
 
   if cmdResult.isErr:
     return VisualModeResult(kind: vmrError, errorMessage: cmdResult.error)

@@ -65,10 +65,40 @@ type
     viewport*: ViewPort
     cursor*: BufferPosition # Window-local cursor position
     active*: bool # Whether this is the active window
+    # Window-specific mode state (for window splitting in special modes)
+    mode*: EditorMode # Current mode for this window
+    filerState*: Option[FilerState] # File explorer state
+    logViewerState*: Option[LogViewerState] # Log viewer state
+    helpViewerState*: Option[HelpViewerState] # Help viewer state
+    bufferManagerState*: Option[BufferManagerState] # Buffer manager state
+    backupManagerState*: Option[BackupManagerState] # Backup manager state
+    diffViewerState*: Option[DiffViewerState] # Diff viewer state
+    debugViewerState*: Option[DebugViewerState] # Debug viewer state
+    configModeState*: Option[ConfigModeState] # Configuration mode state
+    referencesViewerState*: Option[ReferencesViewerState] # References viewer state
+    documentSymbolViewerState*: Option[DocumentSymbolViewerState]
+      # Document symbol viewer state
+    callHierarchyViewerState*: Option[CallHierarchyViewerState]
+      # Call hierarchy viewer state
 
   SearchDirection* = enum
     Forward # Search forward (/)
     Backward # Search backward (?)
+
+  OverlayState* = object
+    ## State for overlay modes (Command, Search, Rename)
+    ## These are transient modes that sit on top of a base mode
+    case kind*: OverlayKind
+    of okCommand:
+      commandText*: string # Text being typed (includes ":" prefix)
+      commandCursor*: int # Cursor position within text (0-based after ":")
+    of okSearch:
+      searchDirection*: SearchDirection # / or ?
+    of okRename:
+      renameText*: string # New name being typed
+      renameOriginalWord*: string # Original word being renamed
+      renameCursorLine*: int # Line where rename was initiated
+      renameCursorColumn*: int # Column where rename was initiated
 
   SearchState* = object ## Search-related state grouped together for better organization
     text*: string # Text being typed in search mode (was: searchText)
@@ -474,13 +504,17 @@ type
     lastReplacement*: string # Last replacement used for preview
 
   EditorState* = ref object
-    cursor*: BufferPosition # Actual buffer cursor position (line/column)
+    # Note: The single source of truth for mode/cursor is EditorWindow
+    # These fields are kept for handler compatibility and synced with EditorWindow
+    # Use e.cursor, e.currentMode, e.setMode() accessors when possible
+    cursor*: BufferPosition # Working cursor position (synced with EditorWindow.cursor)
+    mode*: EditorMode # Current mode (synced with EditorWindow.mode)
     preferredColumn*: int # Preferred column for vertical movement (vim's $ behavior)
     screenCursor*: CursorPosition # Screen cursor position (x/y)
+    cursorVisible*: bool # Whether the terminal cursor should be visible
     matchingParenPos*: Option[BufferPosition]
       # Position of matching paren (for highlighting)
     currentWord*: string # Word under cursor (for currentWord highlighting)
-    mode*: EditorMode
     previousMode*: EditorMode # Previous mode for ESC handling
     command*: string
     commandText*: string # Text being typed in command mode
@@ -512,35 +546,6 @@ type
     jumpList*: seq[JumpPosition] # List of jump positions
     jumpListIndex*: int # Current position in jump list (-1 when not navigating)
     currentBufferIndex*: int # Index of the current buffer (for jump list)
-    # Filer state
-    filerState*: Option[FilerState] # File explorer state (when in Filer mode)
-    # Log viewer state
-    logViewerState*: Option[LogViewerState] # Log viewer state (when in LogViewer mode)
-    # Help viewer state
-    helpViewerState*: Option[HelpViewerState] # Help viewer state (when in Help mode)
-    # References viewer state
-    referencesViewerState*: Option[ReferencesViewerState]
-      # References viewer state (when in References mode)
-    # Document symbol viewer state
-    documentSymbolViewerState*: Option[DocumentSymbolViewerState]
-      # Document symbol viewer state (when in DocumentSymbol mode)
-    # Call hierarchy viewer state
-    callHierarchyViewerState*: Option[CallHierarchyViewerState]
-      # Call hierarchy viewer state (when in CallHierarchy mode)
-    # Buffer manager state
-    bufferManagerState*: Option[BufferManagerState]
-      # Buffer manager state (when in BufferManager mode)
-    # Backup manager state
-    backupManagerState*: Option[BackupManagerState]
-      # Backup manager state (when in BackupManager mode)
-    # Diff viewer state
-    diffViewerState*: Option[DiffViewerState]
-      # Diff viewer state (when in DiffViewer mode)
-    # Debug viewer state
-    debugViewerState*: Option[DebugViewerState] # Debug viewer state (when in Debug mode)
-    # Configuration mode state
-    configModeState*: Option[ConfigModeState]
-      # Configuration mode state (when in Config mode)
     # Debug buffer tracking for auto-refresh
     debugBuffer*: TextBuffer
       # Reference to the debug buffer for auto-refresh (nil if none)
@@ -570,6 +575,9 @@ type
       tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
     # LSP Rename state
     renameState*: RenameState # State for LSP rename mode
+    # Overlay state for transient modes (Command, Search, Rename)
+    # When set, the editor displays an overlay on top of the base mode
+    overlay*: Option[OverlayState]
 
 proc setStatusMessage*(state: EditorState, msg: string) =
   ## Set status message and log it to message log
@@ -596,3 +604,86 @@ proc statusMessageExtraLines*(state: EditorState): int =
     lineCount - 1
   else:
     0
+
+# Overlay accessors
+
+proc hasOverlay*(state: EditorState): bool =
+  ## Check if an overlay is currently active
+  state.overlay.isSome
+
+proc overlayKind*(state: EditorState): Option[OverlayKind] =
+  ## Get the kind of active overlay, if any
+  if state.overlay.isSome:
+    some(state.overlay.get.kind)
+  else:
+    none(OverlayKind)
+
+proc isCommandOverlay*(state: EditorState): bool =
+  ## Check if command overlay is active
+  state.overlay.isSome and state.overlay.get.kind == okCommand
+
+proc isSearchOverlay*(state: EditorState): bool =
+  ## Check if search overlay is active
+  state.overlay.isSome and state.overlay.get.kind == okSearch
+
+proc isRenameOverlay*(state: EditorState): bool =
+  ## Check if rename overlay is active
+  state.overlay.isSome and state.overlay.get.kind == okRename
+
+proc enterCommandOverlay*(state: EditorState) =
+  ## Enter command mode overlay
+  ## The base mode (Normal, Filer, etc.) is preserved
+  state.overlay =
+    some(OverlayState(kind: okCommand, commandText: ":", commandCursor: 0))
+  # Initialize command text (legacy field)
+  state.commandText = ":"
+  state.commandCursor = 0
+
+proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
+  ## Enter search mode overlay
+  ## The base mode (Normal, LogViewer, etc.) is preserved
+  state.overlay = some(OverlayState(kind: okSearch, searchDirection: direction))
+  # Initialize search state
+  state.search.direction = direction
+  state.search.text = ""
+  state.search.startPos = state.cursor
+  state.search.historyIndex = -1
+
+proc enterRenameOverlay*(state: EditorState, word: string, line, col: int) =
+  ## Enter rename mode overlay
+  ## The base mode (Normal) is preserved
+  state.overlay = some(
+    OverlayState(
+      kind: okRename,
+      renameText: word,
+      renameOriginalWord: word,
+      renameCursorLine: line,
+      renameCursorColumn: col,
+    )
+  )
+  # Initialize rename state (legacy field)
+  state.renameState.text = word
+  state.renameState.originalWord = word
+  state.renameState.cursorLine = line
+  state.renameState.cursorColumn = col
+
+proc exitOverlay*(state: EditorState) =
+  ## Exit the current overlay and return to the base mode
+  if state.overlay.isSome:
+    state.overlay = none(OverlayState)
+    # Clear overlay-specific state
+    state.commandText = ""
+    state.commandCursor = 0
+    state.search.text = ""
+    state.search.historyIndex = -1
+
+proc baseMode*(state: EditorState): EditorMode =
+  ## Get the base mode (the mode under the overlay)
+  ## With overlays, state.mode always holds the base mode
+  state.mode
+
+proc effectiveMode*(state: EditorState): EditorMode =
+  ## Get the effective mode for display purposes
+  ## Returns the overlay mode if active, otherwise the base mode
+  ## This is for backward compatibility with code that checks state.mode
+  state.mode

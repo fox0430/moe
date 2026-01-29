@@ -54,20 +54,13 @@ proc newReferencesHandler*(): ReferencesHandler =
 
 proc handleReferencesModeKey*(
     handler: ReferencesHandler,
-    state: EditorState,
+    refState: ReferencesViewerState,
     viewportHeight: int,
     keyCombo: KeyCombo,
 ): ReferencesResult =
   ## Handle a key press in References Viewer mode
   ##
   ## Returns a ReferencesResult indicating what action should be taken
-
-  if state.referencesViewerState.isNone:
-    return ReferencesResult(
-      kind: rvrError, errorMessage: "References viewer state not initialized"
-    )
-
-  let refState = state.referencesViewerState.get
 
   # Handle 'gg' command (two g presses)
   if handler.waitingForG:

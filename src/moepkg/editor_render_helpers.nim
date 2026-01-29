@@ -23,7 +23,7 @@ import std/[options, strutils, unicode, tables]
 
 import pkg/celina
 
-import editor_types, color, render_utils, unicode_utils, search_utils, highlight
+import editor_types, color, render_utils, unicode_utils, search_utils, highlight, modes
 
 proc colorIndexToStyle*(colorIdx: EditorColorPairIndex): Style =
   ## Convert EditorColorPairIndex to Celina Style using theme colors
@@ -108,8 +108,10 @@ proc getSelectionStyle*(
     pos: BufferPosition,
     cursorLine: int,
     cursorCol: int,
+    windowMode: EditorMode,
 ): Style =
   ## Get the appropriate style for a character based on selection state and syntax
+  ## windowMode: The mode of the window being rendered (for correct per-window highlighting)
   # Check if this is the cursor position
   let isCursorPos = (pos.line == cursorLine and pos.column == cursorCol)
 
@@ -126,7 +128,7 @@ proc getSelectionStyle*(
     buffer.isPositionInWord(pos, e.state.currentWord)
 
   let isInCurrentWord =
-    e.state.mode != EditorMode.Search and e.state.currentWord.len > 0 and
+    not e.state.isSearchOverlay and e.state.currentWord.len > 0 and
     not isInSameWordAsCursor and buffer.isPositionInWord(pos, e.state.currentWord)
 
   if hasSelection and e.state.visualSelection.isPositionInSelection(pos):
@@ -148,13 +150,13 @@ proc getSelectionStyle*(
     # - In Command mode with substitute command: use substitute pattern (incremental highlight)
     # - Not in Search mode: use lastSearchText (persistent highlight from previous search)
     let searchPattern =
-      if e.state.mode == EditorMode.Search:
+      if e.state.isSearchOverlay:
         # In Search mode: only highlight if user has typed something
         if e.state.search.text.len > 0:
           e.state.search.text
         else:
           "" # No highlight when starting a new search
-      elif e.state.mode == EditorMode.Command:
+      elif e.state.isCommandOverlay:
         # In Command mode: check for substitute command pattern
         let subPattern = extractSubstitutePattern(e.state.commandText)
         if subPattern.len > 0: subPattern else: e.state.search.lastText
@@ -173,7 +175,8 @@ proc getSelectionStyle*(
         pos, searchPattern, shouldIgnoreCase, e.state.search.wholeWord
       ):
         searchHighlightStyle()
-      elif e.state.display.showSyntax and not buffer.highlight.isNil:
+      elif e.state.display.showSyntax and windowMode.isFileEditMode and
+          not buffer.highlight.isNil:
         # Apply syntax highlighting from buffer
         # Update highlight if needed (after text edits)
         buffer.updateHighlight()
@@ -195,7 +198,8 @@ proc getSelectionStyle*(
           cursorLineHighlightStyle()
         else:
           normalStyle()
-    elif e.state.display.showSyntax and not buffer.highlight.isNil:
+    elif e.state.display.showSyntax and windowMode.isFileEditMode and
+        not buffer.highlight.isNil:
       # Apply syntax highlighting from buffer
       # Update highlight if needed (after text edits)
       buffer.updateHighlight()
@@ -217,7 +221,8 @@ proc getSelectionStyle*(
         cursorLineHighlightStyle()
       else:
         normalStyle()
-  elif e.state.display.showSyntax and not buffer.highlight.isNil:
+  elif e.state.display.showSyntax and windowMode.isFileEditMode and
+      not buffer.highlight.isNil:
     # Apply syntax highlighting from buffer
     # Update highlight if needed (after text edits)
     buffer.updateHighlight()
@@ -245,12 +250,13 @@ proc isVisualMode*(mode: EditorMode): bool {.inline.} =
   mode in {EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
 
 proc getVisualSelection*(
-    e: Editor, windowActive: bool = true
+    e: Editor, windowMode: EditorMode, windowActive: bool = true
 ): tuple[hasSelection: bool, selStart, selEnd: BufferPosition] =
   ## Get visual selection range if active
+  ## windowMode: The mode of the window being rendered
   ## windowActive: only show selection in active window (default true for compatibility)
   let hasSelection =
-    isVisualMode(e.state.mode) and e.state.visualSelection.active and windowActive
+    isVisualMode(windowMode) and e.state.visualSelection.active and windowActive
 
   if hasSelection:
     let (start, endPos) = e.state.visualSelection.getSelectionRange()
@@ -341,7 +347,8 @@ proc renderLineSegmentWithSelection*(
       let
         pos = BufferPosition(line: lineIndex, column: charIdx)
         style = e.getSelectionStyle(
-          textBuffer, ctx.hasSelection, pos, ctx.cursorLine, ctx.cursorCol
+          textBuffer, ctx.hasSelection, pos, ctx.cursorLine, ctx.cursorCol,
+          ctx.windowMode,
         )
       renderChar(rune, charIdx, style)
       charIdx += 1
@@ -353,7 +360,8 @@ proc renderLineSegmentWithSelection*(
         col = startColumn + charIdx
         pos = BufferPosition(line: lineIndex, column: col)
         style = e.getSelectionStyle(
-          textBuffer, ctx.hasSelection, pos, ctx.cursorLine, ctx.cursorCol
+          textBuffer, ctx.hasSelection, pos, ctx.cursorLine, ctx.cursorCol,
+          ctx.windowMode,
         )
       renderChar(rune, col, style)
       charIdx += 1

@@ -20,15 +20,20 @@
 import std/options
 
 type
+  OverlayKind* {.pure.} = enum
+    ## Overlay types for transient modes that sit on top of base modes
+    ## These modes don't change the underlying mode - they just add an input overlay
+    okCommand ## Command mode overlay (ex-mode, :)
+    okSearch ## Search mode overlay (/, ?)
+    okRename ## LSP rename mode overlay
+
   EditorMode* {.pure.} = enum
     Normal
     Insert
-    Command
     Visual
     VisualBlock
     VisualLine
     Replace
-    Search
     Filer
     QuickRun
     LogViewer
@@ -41,23 +46,29 @@ type
     Config
     References
     DocumentSymbol
-    Rename
     CallHierarchy
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
     handled*: bool
 
+proc isFileEditMode*(m: EditorMode): bool =
+  ## Returns true if the mode is a file editing mode where syntax highlighting applies
+  ## Special modes (Filer, Help, Config, QuickRun, etc.) return false
+  ## - QuickRun shows execution output, not editable source
+  m in {
+    EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
+    EditorMode.VisualLine, EditorMode.Replace,
+  }
+
 proc modeLabel*(m: EditorMode): string =
   case m
   of EditorMode.Normal: "NORMAL"
   of EditorMode.Insert: "INSERT"
-  of EditorMode.Command: "COMMAND"
   of EditorMode.Visual: "VISUAL"
   of EditorMode.VisualBlock: "VISUAL BLOCK"
   of EditorMode.VisualLine: "VISUAL LINE"
   of EditorMode.Replace: "REPLACE"
-  of EditorMode.Search: "SEARCH"
   of EditorMode.Filer: "FILER"
   of EditorMode.QuickRun: "QUICKRUN"
   of EditorMode.LogViewer: "LOG"
@@ -70,5 +81,10 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.Config: "CONFIG"
   of EditorMode.References: "REFERENCES"
   of EditorMode.DocumentSymbol: "SYMBOLS"
-  of EditorMode.Rename: "RENAME"
   of EditorMode.CallHierarchy: "CALL HIERARCHY"
+
+proc overlayLabel*(o: OverlayKind): string =
+  case o
+  of okCommand: "COMMAND"
+  of okSearch: "SEARCH"
+  of okRename: "RENAME"

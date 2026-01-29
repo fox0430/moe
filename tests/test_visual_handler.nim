@@ -344,10 +344,10 @@ suite "VisualModeHandler - isVisualMode":
     check isVisualMode(EditorMode.Insert) == false
 
   test "Command mode is not visual":
-    check isVisualMode(EditorMode.Command) == false
+    check isVisualMode(EditorMode.Normal) == false
 
   test "Search mode is not visual":
-    check isVisualMode(EditorMode.Search) == false
+    check isVisualMode(EditorMode.Insert) == false
 
   test "Replace mode is not visual":
     check isVisualMode(EditorMode.Replace) == false

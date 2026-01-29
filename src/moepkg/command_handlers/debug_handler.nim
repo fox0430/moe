@@ -21,9 +21,7 @@
 ##
 ## This module handles key events in Debug mode.
 
-import std/options
-
-import ../[keybindings, types, debugviewer]
+import ../[keybindings, debugviewer]
 
 type
   DebugViewerResultKind* = enum
@@ -48,7 +46,7 @@ proc newDebugViewerHandler*(): DebugViewerHandler =
   DebugViewerHandler()
 
 proc handleDebugModeKey*(
-    state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+    debugState: DebugViewerState, viewportHeight: int, keyCombo: KeyCombo
 ): DebugViewerResult =
   ## Handle key press in Debug mode
   ##
@@ -61,11 +59,6 @@ proc handleDebugModeKey*(
   ## - Ctrl+d: Page down
   ## - Ctrl+u: Page up
   ## - :: Enter command mode
-
-  if state.debugViewerState.isNone:
-    return DebugViewerResult(kind: dvrQuit)
-
-  var debugState = state.debugViewerState.get
 
   # Handle special keys
   if keyCombo.isSpecial:

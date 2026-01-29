@@ -73,20 +73,13 @@ proc newBackupManagerHandler*(): BackupManagerHandler =
 
 proc handleBackupManagerModeKey*(
     handler: BackupManagerHandler,
-    state: EditorState,
+    bkState: BackupManagerState,
     viewportHeight: int,
     keyCombo: KeyCombo,
 ): BackupManagerResult =
   ## Handle a key press in Backup Manager mode
   ##
   ## Returns a BackupManagerResult indicating what action should be taken
-
-  if state.backupManagerState.isNone:
-    return BackupManagerResult(
-      kind: bkmrError, errorMessage: "Backup manager state not initialized"
-    )
-
-  let bkState = state.backupManagerState.get
 
   # Handle 'gg' command (two g presses)
   if handler.waitingForG:

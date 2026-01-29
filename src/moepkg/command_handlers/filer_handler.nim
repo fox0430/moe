@@ -23,7 +23,7 @@
 
 import std/options
 
-import ../[types, filer, keybindings]
+import ../[filer, keybindings]
 
 type
   FilerResultKind* = enum
@@ -33,7 +33,6 @@ type
     frOpenFileHSplit # Open file in horizontal split
     frOpenDirectory # Navigate to a directory
     frEnterCommand # Enter command mode
-    frQuit # Close filer and return to previous mode
     frDeleteFile # Delete selected file/directory
     frShowInfo # Show file information
     frUnhandled # Command was not handled
@@ -62,16 +61,14 @@ proc newFilerHandler*(): FilerHandler =
   FilerHandler(waitingForG: false)
 
 proc handleFilerModeKey*(
-    handler: FilerHandler, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+    handler: FilerHandler,
+    filerState: FilerState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
 ): FilerResult =
   ## Handle a key press in Filer mode
   ##
   ## Returns a FilerResult indicating what action should be taken
-
-  if state.filerState.isNone:
-    return FilerResult(kind: frError, errorMessage: "Filer state not initialized")
-
-  let filerState = state.filerState.get
 
   # Handle 'gg' command (two g presses)
   if handler.waitingForG:
@@ -124,8 +121,6 @@ proc handleFilerModeKey*(
     case keyCombo.char
     of ":":
       return FilerResult(kind: frEnterCommand)
-    of "q":
-      return FilerResult(kind: frQuit)
     of "j":
       filerState.moveDown()
       filerState.ensureSelectedVisible(viewportHeight)

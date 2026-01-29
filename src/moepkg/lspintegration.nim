@@ -1343,10 +1343,6 @@ proc shutdown*(lsp: LspIntegration) =
   lsp.activeProgress.clear()
   lsp.serverStatus.clear()
 
-# ============================================================================
-# Async request APIs
-# ============================================================================
-
 proc requestFormatting*(
     lsp: LspIntegration, buffer: TextBuffer, tabSize: int = 2, insertSpaces: bool = true
 ): Future[Result[seq[TextEdit], string]] {.async: (raises: [CancelledError]).} =

@@ -171,6 +171,7 @@ type
     case kind*: HandlerResultKind
     of hrHandled:
       modeTransition*: Option[EditorMode]
+      overlayTransition*: Option[OverlayKind]
       statusMessage*: string
     of hrQuit:
       shouldQuit*: bool
@@ -514,7 +515,10 @@ proc handleNormalMode*(
         # Clear replace history when entering Replace mode
         state.editState.replaceHistory = @[]
     return HandlerResult(
-      kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
+      kind: hrHandled,
+      modeTransition: r.modeTransition,
+      overlayTransition: r.overlayTransition,
+      statusMessage: "",
     )
   of nmrUnhandled:
     return HandlerResult(kind: hrUnhandled)
@@ -973,10 +977,14 @@ proc handleReplaceMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleFilerMode*(
-    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+    manager: HandlerManager,
+    filerState: FilerState,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Filer mode input
-  let r = manager.filerHandler.handleFilerModeKey(state, viewportHeight, keyCombo)
+  let r = manager.filerHandler.handleFilerModeKey(filerState, viewportHeight, keyCombo)
   case r.kind
   of frHandled:
     return HandlerResult(
@@ -990,8 +998,7 @@ proc handleFilerMode*(
     return HandlerResult(kind: hrFilerOpenFileHSplit, filerFilePath: r.filePath)
   of frOpenDirectory:
     # Directory navigation is handled within the filer state
-    if state.filerState.isSome:
-      discard state.filerState.get.enterDirectory(r.dirPath)
+    discard filerState.enterDirectory(r.dirPath)
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
@@ -1000,14 +1007,12 @@ proc handleFilerMode*(
     state.commandText = ":"
     state.commandCursor = 0
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of frDeleteFile:
     return HandlerResult(kind: hrFilerDeleteFile, filerDeletePath: r.deletePath)
   of frShowInfo:
     return HandlerResult(kind: hrFilerShowInfo, filerFileInfo: r.fileInfo)
-  of frQuit:
-    return HandlerResult(kind: hrFilerQuit)
   of frUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of frError:
@@ -1034,27 +1039,19 @@ proc handleLogViewerMode*(
     state.commandText = ":"
     state.commandCursor = 0
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of lvrEnterSearchForward:
-    # Enter search mode (forward) from log viewer
-    state.previousMode = EditorMode.LogViewer
-    state.search.text = ""
-    state.search.startPos = state.cursor
-    state.search.direction = Forward
-    state.search.historyIndex = -1
+    # Enter search overlay (forward) from log viewer
+    state.enterSearchOverlay(Forward)
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Search), statusMessage: ""
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
   of lvrEnterSearchBackward:
-    # Enter search mode (backward) from log viewer
-    state.previousMode = EditorMode.LogViewer
-    state.search.text = ""
-    state.search.startPos = state.cursor
-    state.search.direction = Backward
-    state.search.historyIndex = -1
+    # Enter search overlay (backward) from log viewer
+    state.enterSearchOverlay(Backward)
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Search), statusMessage: ""
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
   of lvrQuit:
     return HandlerResult(kind: hrLogViewerQuit)
@@ -1066,11 +1063,16 @@ proc handleLogViewerMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleReferencesMode*(
-    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+    manager: HandlerManager,
+    refState: ReferencesViewerState,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle References Viewer mode input
-  let r =
-    manager.referencesHandler.handleReferencesModeKey(state, viewportHeight, keyCombo)
+  let r = manager.referencesHandler.handleReferencesModeKey(
+    refState, viewportHeight, keyCombo
+  )
   case r.kind
   of rvrHandled:
     return HandlerResult(
@@ -1081,7 +1083,7 @@ proc handleReferencesMode*(
     state.commandText = ":"
     state.commandCursor = 0
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of rvrQuit:
     return HandlerResult(kind: hrReferencesQuit)
@@ -1098,11 +1100,15 @@ proc handleReferencesMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleDocumentSymbolMode*(
-    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+    manager: HandlerManager,
+    symState: DocumentSymbolViewerState,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Document Symbol Viewer mode input
   let r = manager.documentSymbolHandler.handleDocumentSymbolModeKey(
-    state, viewportHeight, keyCombo
+    symState, viewportHeight, keyCombo
   )
   case r.kind
   of dsvrHandled:
@@ -1114,7 +1120,7 @@ proc handleDocumentSymbolMode*(
     state.commandText = ":"
     state.commandCursor = 0
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of dsvrQuit:
     return HandlerResult(kind: hrDocumentSymbolQuit)
@@ -1130,11 +1136,15 @@ proc handleDocumentSymbolMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleCallHierarchyMode*(
-    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+    manager: HandlerManager,
+    chState: CallHierarchyViewerState,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Call Hierarchy Viewer mode input
   let r = manager.callHierarchyHandler.handleCallHierarchyModeKey(
-    state, viewportHeight, keyCombo
+    chState, viewportHeight, keyCombo
   )
   case r.kind
   of chvrHandled:
@@ -1146,7 +1156,7 @@ proc handleCallHierarchyMode*(
     state.commandText = ":"
     state.commandCursor = 0
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of chvrQuit:
     return HandlerResult(kind: hrCallHierarchyQuit)
@@ -1171,11 +1181,16 @@ proc handleCallHierarchyMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleHelpViewerMode*(
-    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+    manager: HandlerManager,
+    helpState: HelpViewerState,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Help Viewer mode input
-  let r =
-    manager.helpViewerHandler.handleHelpViewerModeKey(state, viewportHeight, keyCombo)
+  let r = manager.helpViewerHandler.handleHelpViewerModeKey(
+    helpState, viewportHeight, keyCombo
+  )
   case r.kind
   of hvrHandled:
     return HandlerResult(
@@ -1186,7 +1201,7 @@ proc handleHelpViewerMode*(
     state.commandText = ":"
     state.commandCursor = 0
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of hvrQuit:
     return HandlerResult(kind: hrHelpViewerQuit)
@@ -1196,11 +1211,15 @@ proc handleHelpViewerMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleBufferManagerMode*(
-    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+    manager: HandlerManager,
+    bmState: BufferManagerState,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Buffer Manager mode input
   let r = manager.bufferManagerHandler.handleBufferManagerModeKey(
-    state, viewportHeight, keyCombo
+    bmState, viewportHeight, keyCombo
   )
   case r.kind
   of bmrHandled:
@@ -1219,7 +1238,7 @@ proc handleBufferManagerMode*(
     state.commandText = ":"
     state.commandCursor = 0
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of bmrQuit:
     return HandlerResult(kind: hrBufferManagerQuit)
@@ -1229,11 +1248,15 @@ proc handleBufferManagerMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleBackupManagerMode*(
-    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+    manager: HandlerManager,
+    bkState: BackupManagerState,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Backup Manager mode input
   let r = manager.backupManagerHandler.handleBackupManagerModeKey(
-    state, viewportHeight, keyCombo
+    bkState, viewportHeight, keyCombo
   )
   case r.kind
   of bkmrHandled:
@@ -1254,7 +1277,7 @@ proc handleBackupManagerMode*(
     state.commandText = ":"
     state.commandCursor = 0
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of bkmrQuit:
     return HandlerResult(kind: hrBackupManagerQuit)
@@ -1264,11 +1287,16 @@ proc handleBackupManagerMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleDiffViewerMode*(
-    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+    manager: HandlerManager,
+    diffState: DiffViewerState,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Diff Viewer mode input
-  let r =
-    manager.diffViewerHandler.handleDiffViewerModeKey(state, viewportHeight, keyCombo)
+  let r = manager.diffViewerHandler.handleDiffViewerModeKey(
+    diffState, viewportHeight, keyCombo
+  )
   case r.kind
   of dvrHandled:
     return HandlerResult(
@@ -1279,7 +1307,7 @@ proc handleDiffViewerMode*(
     state.commandText = ":"
     state.commandCursor = 0
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of dvrQuit:
     return HandlerResult(kind: hrDiffViewerQuit)
@@ -1289,10 +1317,15 @@ proc handleDiffViewerMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleConfigMode*(
-    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+    manager: HandlerManager,
+    configState: ConfigModeState,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Configuration mode input
-  let r = manager.configModeHandler.handleConfigModeKey(state, viewportHeight, keyCombo)
+  let r =
+    manager.configModeHandler.handleConfigModeKey(configState, viewportHeight, keyCombo)
   case r.kind
   of cmrHandled:
     return HandlerResult(
@@ -1303,7 +1336,7 @@ proc handleConfigMode*(
     state.commandText = ":"
     state.commandCursor = 0
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of cmrSaveConfig:
     return HandlerResult(kind: hrConfigSaveConfig)
@@ -1331,7 +1364,7 @@ proc handleRecentFileMode*(
     return HandlerResult(kind: hrRecentFileOpenFile, recentFilePath: r.filePath)
   of rfmrEnterCommand:
     return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of rfmrQuit:
     return HandlerResult(kind: hrRecentFileQuit)
@@ -1353,9 +1386,11 @@ proc handleKeyCombo*(
     state: EditorState,
     viewport: ViewPort,
     keyCombo: KeyCombo,
+    window: Option[EditorWindow] = none(EditorWindow),
 ): HandlerResult =
   ## Handle a KeyCombo by dispatching to the appropriate mode handler
   ## This is used for macro playback where we have KeyCombo directly
+  ## window is required for special modes (Filer, etc.) that store state in EditorWindow
 
   # Complete any active scroll animation on key input (instant jump to target)
   if state.scrollAnimation.active:
@@ -1370,36 +1405,88 @@ proc handleKeyCombo*(
     return manager.handleNormalMode(buffer, state, viewport, keyCombo)
   of EditorMode.Insert:
     return manager.handleInsertMode(buffer, state, keyCombo)
-  of EditorMode.Command:
-    # Handle Command mode key events for macro playback
-    return manager.handleCommandMode(buffer, state, viewport, keyCombo)
-  of EditorMode.Search:
-    # Handle Search mode key events for macro playback
-    return manager.handleSearchMode(buffer, state, viewport, keyCombo)
   of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
     return manager.handleVisualMode(buffer, state, viewport, keyCombo)
   of EditorMode.Replace:
     return manager.handleReplaceMode(buffer, state, keyCombo)
   of EditorMode.Filer:
-    return manager.handleFilerMode(state, viewport.height, keyCombo)
+    if window.isSome and window.get.filerState.isSome:
+      return manager.handleFilerMode(
+        window.get.filerState.get, state, viewport.height, keyCombo
+      )
+    else:
+      return HandlerResult(kind: hrError, errorMessage: "Filer state not initialized")
   of EditorMode.LogViewer:
     return manager.handleLogViewerMode(buffer, state, viewport.height, keyCombo)
   of EditorMode.Help:
-    return manager.handleHelpViewerMode(state, viewport.height, keyCombo)
+    if window.isSome and window.get.helpViewerState.isSome:
+      return manager.handleHelpViewerMode(
+        window.get.helpViewerState.get, state, viewport.height, keyCombo
+      )
+    else:
+      return
+        HandlerResult(kind: hrError, errorMessage: "Help viewer state not initialized")
   of EditorMode.BufferManager:
-    return manager.handleBufferManagerMode(state, viewport.height, keyCombo)
+    if window.isSome and window.get.bufferManagerState.isSome:
+      return manager.handleBufferManagerMode(
+        window.get.bufferManagerState.get, state, viewport.height, keyCombo
+      )
+    else:
+      return HandlerResult(
+        kind: hrError, errorMessage: "Buffer manager state not initialized"
+      )
   of EditorMode.BackupManager:
-    return manager.handleBackupManagerMode(state, viewport.height, keyCombo)
+    if window.isSome and window.get.backupManagerState.isSome:
+      return manager.handleBackupManagerMode(
+        window.get.backupManagerState.get, state, viewport.height, keyCombo
+      )
+    else:
+      return HandlerResult(
+        kind: hrError, errorMessage: "Backup manager state not initialized"
+      )
   of EditorMode.DiffViewer:
-    return manager.handleDiffViewerMode(state, viewport.height, keyCombo)
+    if window.isSome and window.get.diffViewerState.isSome:
+      return manager.handleDiffViewerMode(
+        window.get.diffViewerState.get, state, viewport.height, keyCombo
+      )
+    else:
+      return
+        HandlerResult(kind: hrError, errorMessage: "Diff viewer state not initialized")
   of EditorMode.Config:
-    return manager.handleConfigMode(state, viewport.height, keyCombo)
+    if window.isSome and window.get.configModeState.isSome:
+      return manager.handleConfigMode(
+        window.get.configModeState.get, state, viewport.height, keyCombo
+      )
+    else:
+      return
+        HandlerResult(kind: hrError, errorMessage: "Config mode state not initialized")
   of EditorMode.References:
-    return manager.handleReferencesMode(state, viewport.height, keyCombo)
+    if window.isSome and window.get.referencesViewerState.isSome:
+      return manager.handleReferencesMode(
+        window.get.referencesViewerState.get, state, viewport.height, keyCombo
+      )
+    else:
+      return HandlerResult(
+        kind: hrError, errorMessage: "References viewer state not initialized"
+      )
   of EditorMode.DocumentSymbol:
-    return manager.handleDocumentSymbolMode(state, viewport.height, keyCombo)
+    if window.isSome and window.get.documentSymbolViewerState.isSome:
+      return manager.handleDocumentSymbolMode(
+        window.get.documentSymbolViewerState.get, state, viewport.height, keyCombo
+      )
+    else:
+      return HandlerResult(
+        kind: hrError, errorMessage: "Document symbol viewer state not initialized"
+      )
   of EditorMode.CallHierarchy:
-    return manager.handleCallHierarchyMode(state, viewport.height, keyCombo)
+    if window.isSome and window.get.callHierarchyViewerState.isSome:
+      return manager.handleCallHierarchyMode(
+        window.get.callHierarchyViewerState.get, state, viewport.height, keyCombo
+      )
+    else:
+      return HandlerResult(
+        kind: hrError, errorMessage: "Call hierarchy viewer state not initialized"
+      )
   of EditorMode.RecentFile:
     # Recent File mode requires its own state, not EditorState
     # This should be handled at a higher level with RecentFileModeState
@@ -1409,9 +1496,6 @@ proc handleKeyCombo*(
     return HandlerResult(kind: hrUnhandled)
   of EditorMode.QuickRun:
     # QuickRun mode is not interactive - handled through command mode
-    return HandlerResult(kind: hrUnhandled)
-  of EditorMode.Rename:
-    # Rename mode is handled at a higher level in handler.nim
     return HandlerResult(kind: hrUnhandled)
 
 proc playbackMacro*(
@@ -1480,6 +1564,7 @@ proc handleEvent*(
     state: EditorState,
     viewport: ViewPort,
     event: Event,
+    window: Option[EditorWindow] = none(EditorWindow),
 ): HandlerResult =
   ## Main entry point for handling events across all modes
 
@@ -1491,7 +1576,7 @@ proc handleEvent*(
   if keyComboOpt.isNone:
     return HandlerResult(kind: hrUnhandled)
 
-  return manager.handleKeyCombo(buffer, state, viewport, keyComboOpt.get)
+  return manager.handleKeyCombo(buffer, state, viewport, keyComboOpt.get, window)
 
 # Utility functions for HandlerResult
 proc wasHandled*(hrResult: HandlerResult): bool =
@@ -1822,6 +1907,13 @@ proc getModeTransition*(hrResult: HandlerResult): Option[EditorMode] =
     hrResult.modeTransition
   else:
     none(EditorMode)
+
+proc getOverlayTransition*(hrResult: HandlerResult): Option[OverlayKind] =
+  ## Get overlay transition if any
+  if hrResult.kind == hrHandled:
+    hrResult.overlayTransition
+  else:
+    none(OverlayKind)
 
 proc getStatusMessage*(hrResult: HandlerResult): string =
   ## Get status message if any

@@ -57,20 +57,13 @@ proc newCallHierarchyHandler*(): CallHierarchyHandler =
 
 proc handleCallHierarchyModeKey*(
     handler: CallHierarchyHandler,
-    state: EditorState,
+    chState: CallHierarchyViewerState,
     viewportHeight: int,
     keyCombo: KeyCombo,
 ): CallHierarchyResult =
   ## Handle a key press in Call Hierarchy Viewer mode
   ##
   ## Returns a CallHierarchyResult indicating what action should be taken
-
-  if state.callHierarchyViewerState.isNone:
-    return CallHierarchyResult(
-      kind: chvrError, errorMessage: "Call hierarchy viewer state not initialized"
-    )
-
-  let chState = state.callHierarchyViewerState.get
 
   # Handle 'gg' command (two g presses)
   if handler.waitingForG:

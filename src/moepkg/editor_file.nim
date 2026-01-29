@@ -65,10 +65,10 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
         min(savedPos.column, max(0, e.textBuffer.getLine(line).charLen - 1))
       else:
         0
-    e.state.cursor = BufferPosition(line: line, column: col)
+    e.cursor = BufferPosition(line: line, column: col)
     logDebug("editor", fmt"Restored cursor position for {path}: line={line}, col={col}")
   else:
-    e.state.cursor = BufferPosition(line: 0, column: 0)
+    e.cursor = BufferPosition(line: 0, column: 0)
 
   # Reset viewport to start (will be adjusted by motion controller)
   e.viewport.topLine = 0
@@ -104,7 +104,7 @@ proc saveBufferCursorPosition*(e: Editor, buffer: TextBuffer) =
     return
   let absPath = absolutePath(buffer.filePath.get)
   e.cursorPositions[absPath] =
-    CursorPositionEntry(line: e.state.cursor.line, column: e.state.cursor.column)
+    CursorPositionEntry(line: e.cursor.line, column: e.cursor.column)
 
 proc addCommandToHistory*(e: Editor, command: string) =
   ## Add a command to the command history

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, strformat, options, unicode, monotimes, times, os, json]
+import std/[strutils, strformat, options, monotimes, times, os]
 
 import pkg/[results, chronos]
 
@@ -29,7 +29,6 @@ import
   completion, signaturehelp, hoverpopup, command_completion, motion, color, gapbuffer,
   debugviewer, messagelog
 import keybindings except Command
-import lsp/protocol/types as lspTypes
 import command_handlers/insert_handler
 
 export
@@ -58,23 +57,21 @@ proc switchToBufferByIndex*(e: Editor, index: int) =
     if targetBuffer.filePath.isSome: targetBuffer.filePath.get else: "No Name"
   logDebug("editor", "Target buffer path: " & targetPath)
 
-  let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-
   # Don't switch if already on this buffer
-  if activeWindow.buffer == targetBuffer:
+  if e.activeWindow.buffer == targetBuffer:
     logDebug("editor", "Already on this buffer")
     return
 
-  activeWindow.buffer = targetBuffer
-  activeWindow.cursor = BufferPosition(line: 0, column: 0)
-  activeWindow.viewport.topLine = 0
-  activeWindow.viewport.leftColumn = 0
+  e.activeWindow.buffer = targetBuffer
+  e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
+  e.activeWindow.viewport.topLine = 0
+  e.activeWindow.viewport.leftColumn = 0
 
   # Sync the executor and motion controller
   e.syncActiveWindow()
 
   # Update screen cursor
-  e.setActiveWindowScreenCursor(activeWindow)
+  e.setActiveWindowScreenCursor(e.activeWindow)
   logDebug("editor", "Switched buffer in window")
 
   # Update current buffer index in state (for jump list)
@@ -423,6 +420,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       preferredColumn: -1,
         # -1 means not set, will be initialized on first vertical move
       screenCursor: CursorPosition(x: 0, y: 0),
+      cursorVisible: true,
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
       # Display settings (grouped in DisplaySettings)
@@ -1009,8 +1007,8 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     )
 
   generateEditorStateInfo(
-    debugLines, e.state.mode, e.state.previousMode, e.state.cursor.line,
-    e.state.cursor.column, e.state.commandText, e.state.statusMessage,
+    debugLines, e.state.mode, e.state.previousMode, e.activeWindow.cursor.line,
+    e.cursor.column, e.state.commandText, e.state.statusMessage,
     debugConfig.editorView.enable,
   )
 
@@ -1155,7 +1153,7 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
     let (_, cursorLine) = e.executer.motionController.viewportManager.updateScrollAnimation(
       e.state.scrollAnimation, e.config.smoothScroll, reservedLines, bufferLen
     )
-    e.state.cursor.line = cursorLine
+    e.activeWindow.cursor.line = cursorLine
 
   if e.state.needsFullRedraw:
     e.state.needsFullRedraw = false
@@ -1165,13 +1163,12 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
     e.state.debugBuffer != nil and e.activeBuffer() == e.state.debugBuffer
 
   if e.config.highlight.pairOfParen and not isDebugBuffer:
-    e.state.matchingParenPos =
-      findMatchingParenPosition(e.activeBuffer(), e.state.cursor)
+    e.state.matchingParenPos = findMatchingParenPosition(e.activeBuffer(), e.cursor)
   else:
     e.state.matchingParenPos = none(BufferPosition)
 
   if e.config.highlight.currentWord and not isDebugBuffer:
-    e.state.currentWord = getWordAtPosition(e.activeBuffer(), e.state.cursor)
+    e.state.currentWord = getWordAtPosition(e.activeBuffer(), e.cursor)
   else:
     e.state.currentWord = ""
 
@@ -1187,63 +1184,6 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
     e.updateSemanticTokensCache()
 
   result = e.updateViewportSize(buffer)
-
-proc renderSpecialMode(e: Editor, buffer: var Buffer): bool =
-  ## Render special modes (Filer, LogViewer, Help, etc.).
-  ## Returns true if a special mode was rendered, false otherwise.
-
-  template tryRender(
-      targetMode: EditorMode, isActiveInCmd: bool, renderProc: untyped
-  ): bool =
-    if e.state.mode == targetMode or
-        (e.state.mode == EditorMode.Command and isActiveInCmd):
-      e.renderProc(buffer)
-      e.renderBottomLines(buffer)
-      true
-    else:
-      false
-
-  let prev = e.state.previousMode
-
-  if tryRender(EditorMode.Filer, e.state.filerState.isSome, renderFiler):
-    return true
-  # LogViewer uses split window with actual TextBuffer, rendered via renderSplitView
-  if tryRender(
-    EditorMode.References, e.state.referencesViewerState.isSome, renderReferencesViewer
-  ):
-    return true
-  if tryRender(
-    EditorMode.DocumentSymbol, e.state.documentSymbolViewerState.isSome,
-    renderDocumentSymbolViewer,
-  ):
-    return true
-  if tryRender(
-    EditorMode.CallHierarchy, e.state.callHierarchyViewerState.isSome,
-    renderCallHierarchyViewer,
-  ):
-    return true
-  if tryRender(EditorMode.Help, e.state.helpViewerState.isSome, renderHelpViewer):
-    return true
-  if tryRender(
-    EditorMode.BufferManager, e.state.bufferManagerState.isSome, renderBufferManager
-  ):
-    return true
-  if tryRender(EditorMode.Config, e.state.configModeState.isSome, renderConfigMode):
-    return true
-  if tryRender(
-    EditorMode.BackupManager, e.state.backupManagerState.isSome, renderBackupManager
-  ):
-    return true
-  if tryRender(EditorMode.DiffViewer, e.state.diffViewerState.isSome, renderDiffViewer):
-    return true
-  if tryRender(
-    EditorMode.RecentFile, prev == EditorMode.RecentFile, renderRecentFileMode
-  ):
-    return true
-  if tryRender(EditorMode.Debug, prev == EditorMode.Debug, renderDebugMode):
-    return true
-
-  return false
 
 proc renderMainContent(e: Editor, buffer: var Buffer, wasResized: bool) =
   ## Render the main editor view (always uses split view since we always have at least one window).
@@ -1293,7 +1233,7 @@ proc render*(e: Editor, buffer: var Buffer) =
   e.tick()
   let wasResized = e.prepareFrame(buffer)
 
-  if not e.renderSpecialMode(buffer):
-    e.renderMainContent(buffer, wasResized)
+  # Always use split view rendering - each window renders based on its own mode
+  e.renderMainContent(buffer, wasResized)
 
   e.renderOverlays(buffer)

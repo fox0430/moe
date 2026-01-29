@@ -21,13 +21,14 @@ import std/options
 
 import pkg/results
 
-import types, buffer, motion, commandregistry, keybindings, config
+import types, buffer, motion, commandregistry, keybindings, config, cursor
 
 type CommandExecutor* = ref object
   motionController*: MotionController
   buffer*: buffer.TextBuffer
   state*: EditorState
   viewport*: ViewPort
+  cursor*: BufferPosition # Current cursor position (synced with EditorWindow)
   commandRegistry*: CommandRegistry
   keyBindingRegistry*: KeyBindingRegistry
   clipboardConfig*: ClipboardConfig
@@ -66,6 +67,8 @@ proc newCommandExecutor*(
     buffer: buffer,
     state: state,
     viewport: viewport,
+    cursor: BufferPosition(line: 0, column: 0),
+      # Initialized, synced with window before use
     commandRegistry: cmdReg,
     keyBindingRegistry: keyReg,
     clipboardConfig: clipboardConfig,
@@ -75,11 +78,12 @@ proc newCommandExecutor*(
 proc execute*(e: CommandExecutor, command: string): Result[(), string] =
   ## Execute a command string through the command registry
 
-  # Create command context
+  # Create command context with current cursor
   let ctx = CommandContext(
     buffer: e.buffer,
     state: e.state,
     viewport: e.viewport,
+    cursor: e.cursor, # Pass cursor to context
     motionController: e.motionController,
     keyBindingRegistry: nil, # Not available in this context
     clipboardConfig: e.clipboardConfig,
@@ -92,6 +96,9 @@ proc execute*(e: CommandExecutor, command: string): Result[(), string] =
     # Clear command buffer on success
     e.state.command = ""
 
+  # Sync cursor back from context
+  e.cursor = ctx.cursor
+
   return r
 
 proc executeKeybinding*(
@@ -102,13 +109,17 @@ proc executeKeybinding*(
     buffer: e.buffer,
     state: e.state,
     viewport: e.viewport,
+    cursor: e.cursor, # Pass cursor to context
     motionController: e.motionController,
     keyBindingRegistry: nil, # Not available in this context
     clipboardConfig: e.clipboardConfig,
     notificationConfig: e.notificationConfig,
   )
 
-  return e.commandRegistry.executeCommand(ctx, binding)
+  let r = e.commandRegistry.executeCommand(ctx, binding)
+  # Sync cursor back from context
+  e.cursor = ctx.cursor
+  return r
 
 # Compatibility methods for existing code
 proc clampCursor*(exec: CommandExecutor) =
@@ -122,6 +133,6 @@ proc updateViewport*(exec: CommandExecutor) =
 proc executeMotion*(exec: CommandExecutor, motion: Motion, count: int = 1) =
   ## Compatibility wrapper for direct motion execution
   let cmd = MotionCommand(motion: motion, count: count)
-  let r = exec.motionController.executeMotion(cmd, exec.state.cursor)
+  let r = exec.motionController.executeMotion(cmd, exec.cursor)
   if r.isOk:
-    exec.state.cursor = r.value
+    exec.cursor = r.value

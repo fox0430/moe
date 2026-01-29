@@ -71,7 +71,9 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
       if resultOpt.isSome:
         let sigHelpOpt = parseSignatureHelpResponse(resultOpt.get)
         if sigHelpOpt.isSome:
-          sigHelpMgr.show(sigHelpOpt.get, e.state.cursor.line, e.state.cursor.column)
+          sigHelpMgr.show(
+            sigHelpOpt.get, e.activeWindow.cursor.line, e.activeWindow.cursor.column
+          )
         else:
           if sigHelpMgr.parenDepth == 0:
             sigHelpMgr.hide()
@@ -82,7 +84,7 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
 
   # Start a new request
   let reqResult = e.lsp.startSignatureHelpRequest(
-    activeBuffer, e.state.cursor.line, e.state.cursor.column
+    activeBuffer, e.activeWindow.cursor.line, e.activeWindow.cursor.column
   )
   if reqResult.isOk:
     e.state.lspCache.pendingSignatureHelpRequestId = reqResult.get
@@ -105,7 +107,7 @@ proc switchToBufferForLsp(e: Editor, index: int) =
     return
 
   let targetBuffer = e.buffers[index]
-  let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+  let activeWindow = e.activeWindow
 
   if activeWindow.buffer == targetBuffer:
     return
@@ -126,8 +128,8 @@ proc addToJumpList(e: Editor) =
   ## Add current cursor position to jump list before a jump
   let jumpPos = JumpPosition(
     bufferIndex: e.state.currentBufferIndex,
-    line: e.state.cursor.line,
-    column: e.state.cursor.column,
+    line: e.activeWindow.cursor.line,
+    column: e.activeWindow.cursor.column,
   )
 
   # Don't add if same as last position (same buffer, line, and column)
@@ -165,8 +167,8 @@ proc jumpToLspLocation(e: Editor, loc: lspTypes.Location, resultKind: string): b
     # Convert LSP UTF-16 character offset to UTF-8 byte offset
     let utf8Col = utf16OffsetToUtf8(lineText, loc.range.start.character)
     let targetCol = min(utf8Col, max(0, lineText.len - 1))
-    e.state.cursor.line = targetLine
-    e.state.cursor.column = max(0, targetCol)
+    e.activeWindow.cursor.line = targetLine
+    e.activeWindow.cursor.column = max(0, targetCol)
     e.state.statusMessage = resultKind & " at line " & $(targetLine + 1)
   else:
     # Different file - open it in a new buffer (or switch to existing)
@@ -201,8 +203,8 @@ proc jumpToLspLocation(e: Editor, loc: lspTypes.Location, resultKind: string): b
     # Convert LSP UTF-16 character offset to UTF-8 byte offset
     let utf8Col = utf16OffsetToUtf8(lineText, loc.range.start.character)
     let targetCol = min(utf8Col, max(0, lineText.len - 1))
-    e.state.cursor.line = targetLine
-    e.state.cursor.column = max(0, targetCol)
+    e.activeWindow.cursor.line = targetLine
+    e.activeWindow.cursor.column = max(0, targetCol)
     e.state.statusMessage = resultKind & " in " & path
 
   # Update viewport to follow cursor
@@ -237,8 +239,8 @@ proc handleLspLocations(
 
     # Enter References mode
     e.state.previousMode = e.state.mode
-    e.state.mode = EditorMode.References
-    e.state.referencesViewerState = some(newReferencesViewerState(items, title))
+    e.setMode(EditorMode.References)
+    e.activeWindow.referencesViewerState = some(newReferencesViewerState(items, title))
     e.state.statusMessage = $locations.len & " " & title.toLowerAscii() & " found"
     return true
 
@@ -263,8 +265,8 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
     # Convert LSP UTF-16 character offset to UTF-8 byte offset
     let utf8Col = utf16OffsetToUtf8(lineText, column)
     let targetCol = min(utf8Col, max(0, lineText.len - 1))
-    e.state.cursor.line = targetLine
-    e.state.cursor.column = max(0, targetCol)
+    e.activeWindow.cursor.line = targetLine
+    e.activeWindow.cursor.column = max(0, targetCol)
   else:
     # Different file - open it
     let loadResult = e.loadFile(path)
@@ -281,8 +283,8 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
     # Convert LSP UTF-16 character offset to UTF-8 byte offset
     let utf8Col = utf16OffsetToUtf8(lineText, column)
     let targetCol = min(utf8Col, max(0, lineText.len - 1))
-    e.state.cursor.line = targetLine
-    e.state.cursor.column = max(0, targetCol)
+    e.activeWindow.cursor.line = targetLine
+    e.activeWindow.cursor.column = max(0, targetCol)
 
   # Update viewport to follow cursor
   e.state.needsFullRedraw = true
@@ -300,8 +302,8 @@ proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =
   e.state.lspCache.pendingLocationRequestKind = lrkNone
 
   let activeBuffer = e.activeBuffer()
-  let line = e.state.cursor.line
-  let col = e.state.cursor.column
+  let line = e.activeWindow.cursor.line
+  let col = e.activeWindow.cursor.column
 
   let reqResult =
     case kind
@@ -424,7 +426,7 @@ proc startCallHierarchyRequest(e: Editor, kind: CallHierarchyRequestKind): bool 
 
   # Start with prepare request
   let reqResult = e.lsp.startCallHierarchyPrepareRequest(
-    activeBuffer, e.state.cursor.line, e.state.cursor.column
+    activeBuffer, e.activeWindow.cursor.line, e.activeWindow.cursor.column
   )
 
   if reqResult.isErr:
@@ -512,8 +514,8 @@ proc pollLspCallHierarchy*(e: Editor) =
         # Enter CallHierarchy mode (only set previousMode if not already in CallHierarchy)
         if e.state.mode != EditorMode.CallHierarchy:
           e.state.previousMode = e.state.mode
-          e.state.mode = EditorMode.CallHierarchy
-        e.state.callHierarchyViewerState =
+        e.setMode(EditorMode.CallHierarchy)
+        e.activeWindow.callHierarchyViewerState =
           some(newCallHierarchyViewerState(items, chvkIncoming))
         e.state.statusMessage = $items.len & " incoming calls found"
       else:
@@ -537,8 +539,8 @@ proc pollLspCallHierarchy*(e: Editor) =
         # Enter CallHierarchy mode (only set previousMode if not already in CallHierarchy)
         if e.state.mode != EditorMode.CallHierarchy:
           e.state.previousMode = e.state.mode
-          e.state.mode = EditorMode.CallHierarchy
-        e.state.callHierarchyViewerState =
+        e.setMode(EditorMode.CallHierarchy)
+        e.activeWindow.callHierarchyViewerState =
           some(newCallHierarchyViewerState(items, chvkOutgoing))
         e.state.statusMessage = $items.len & " outgoing calls found"
       else:
@@ -643,8 +645,9 @@ proc startLspHover*(e: Editor): bool =
   e.state.lspCache.pendingHoverRequestId = 0
 
   let activeBuffer = e.activeBuffer()
-  let reqResult =
-    e.lsp.startHoverRequest(activeBuffer, e.state.cursor.line, e.state.cursor.column)
+  let reqResult = e.lsp.startHoverRequest(
+    activeBuffer, e.activeWindow.cursor.line, e.activeWindow.cursor.column
+  )
 
   if reqResult.isErr:
     e.state.statusMessage = "LSP hover failed: " & reqResult.error
@@ -680,7 +683,7 @@ proc pollLspHover*(e: Editor) =
         let hoverText = getHoverText(hoverOpt.get)
         if hoverText.len > 0:
           e.state.lspCache.hoverPopup.show(
-            hoverText, e.state.cursor.line, e.state.cursor.column
+            hoverText, e.activeWindow.cursor.line, e.activeWindow.cursor.column
           )
         else:
           e.state.statusMessage = "No hover information available"
@@ -734,7 +737,7 @@ proc startLspSelectionRange*(e: Editor): bool =
 
   let activeBuffer = e.activeBuffer()
   let reqResult = e.lsp.startSelectionRangeRequest(
-    activeBuffer, e.state.cursor.line, e.state.cursor.column
+    activeBuffer, e.activeWindow.cursor.line, e.activeWindow.cursor.column
   )
 
   if reqResult.isErr:
@@ -789,14 +792,14 @@ proc pollLspSelectionRange*(e: Editor) =
 
         # Enter visual mode and set selection to the range
         e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.Visual
+        e.setMode(EditorMode.Visual)
         e.state.visualSelection = VisualSelection(
           kind: vskChar,
           start: BufferPosition(line: startLine, column: startCol),
           current: BufferPosition(line: endLine, column: endCol),
           active: true,
         )
-        e.state.cursor = BufferPosition(line: endLine, column: endCol)
+        e.cursor = BufferPosition(line: endLine, column: endCol)
       else:
         e.state.statusMessage = "No selection range available"
     else:
@@ -878,8 +881,8 @@ proc pollLspDocumentSymbols*(e: Editor) =
 
       # Enter DocumentSymbol mode
       e.state.previousMode = e.state.mode
-      e.state.mode = EditorMode.DocumentSymbol
-      e.state.documentSymbolViewerState = some(viewerState)
+      e.setMode(EditorMode.DocumentSymbol)
+      e.activeWindow.documentSymbolViewerState = some(viewerState)
       e.state.statusMessage = $symbolCount & " symbols found"
     else:
       e.state.statusMessage = "No symbols found"
@@ -1099,13 +1102,13 @@ proc startLspDocumentLinks*(e: Editor): bool =
 
   # Save cursor position (convert to UTF-16 for LSP comparison)
   let lineText =
-    if e.state.cursor.line >= 0 and e.state.cursor.line < activeBuffer.len:
-      activeBuffer.getLine(e.state.cursor.line)
+    if e.activeWindow.cursor.line >= 0 and e.activeWindow.cursor.line < activeBuffer.len:
+      activeBuffer.getLine(e.activeWindow.cursor.line)
     else:
       ""
-  e.state.lspCache.pendingDocumentLinkCursorLine = e.state.cursor.line
+  e.state.lspCache.pendingDocumentLinkCursorLine = e.activeWindow.cursor.line
   e.state.lspCache.pendingDocumentLinkCursorCol =
-    utf8OffsetToUtf16(lineText, e.state.cursor.column)
+    utf8OffsetToUtf16(lineText, e.activeWindow.cursor.column)
 
   let reqResult = e.lsp.startDocumentLinkRequest(activeBuffer)
   if reqResult.isErr:

@@ -268,7 +268,8 @@ proc renderWindow*(
       none(Sidebar)
 
   # Get visual selection range if active
-  let (hasSelection, selStart, selEnd) = e.getVisualSelection(window.active)
+  let (hasSelection, selStart, selEnd) =
+    e.getVisualSelection(window.mode, window.active)
 
   # Create render context for this window
   let ctx = RenderContext(
@@ -277,6 +278,7 @@ proc renderWindow*(
     hasSelection: hasSelection,
     selStart: selStart,
     selEnd: selEnd,
+    windowMode: window.mode,
   )
 
   var

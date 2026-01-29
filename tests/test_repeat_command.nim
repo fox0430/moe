@@ -71,12 +71,14 @@ suite "Repeat Command (.) - Insert Text":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
+      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
+    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -114,12 +116,14 @@ suite "Repeat Command (.) - Insert Text":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
+      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
+    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -155,12 +159,14 @@ suite "Repeat Command (.) - Delete Operations":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
+      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
+    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -191,12 +197,14 @@ suite "Repeat Command (.) - Delete Operations":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
+      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
+    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -236,12 +244,14 @@ suite "Repeat Command (.) - Substitute Operations":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
+      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
+    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -279,12 +289,14 @@ suite "Repeat Command (.) - Substitute Operations":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
+      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
+    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -320,12 +332,14 @@ suite "Repeat Command (.) - Replace Char":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
+      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
+    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -355,12 +369,14 @@ suite "Repeat Command (.) - Edge Cases":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
+      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
+    state.cursor = ctx.cursor
 
     # Verify
     check result.isErr
@@ -396,12 +412,14 @@ suite "Repeat Command (.) - Edge Cases":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
+      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
+    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk

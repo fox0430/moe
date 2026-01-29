@@ -54,20 +54,13 @@ proc newDocumentSymbolHandler*(): DocumentSymbolHandler =
 
 proc handleDocumentSymbolModeKey*(
     handler: DocumentSymbolHandler,
-    state: EditorState,
+    symState: DocumentSymbolViewerState,
     viewportHeight: int,
     keyCombo: KeyCombo,
 ): DocumentSymbolResult =
   ## Handle a key press in Document Symbol Viewer mode
   ##
   ## Returns a DocumentSymbolResult indicating what action should be taken
-
-  if state.documentSymbolViewerState.isNone:
-    return DocumentSymbolResult(
-      kind: dsvrError, errorMessage: "Document symbol viewer state not initialized"
-    )
-
-  let symState = state.documentSymbolViewerState.get
 
   # Handle 'gg' command (two g presses)
   if handler.waitingForG:

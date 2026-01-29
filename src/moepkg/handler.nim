@@ -113,13 +113,13 @@ proc executeSearchFromCurrentPosition(e: Editor): bool =
   let activeBuffer = e.activeBuffer()
   let searchResult =
     if e.state.search.direction == Forward:
-      activeBuffer.findNext(e.state.search.text, e.state.cursor, shouldIgnoreCase)
+      activeBuffer.findNext(e.state.search.text, e.cursor, shouldIgnoreCase)
     else:
-      activeBuffer.findPrev(e.state.search.text, e.state.cursor, shouldIgnoreCase)
+      activeBuffer.findPrev(e.state.search.text, e.cursor, shouldIgnoreCase)
 
   if searchResult.isSome:
     let pos = searchResult.get
-    e.state.cursor = pos
+    e.cursor = pos
     e.updateViewportForCursor(pos)
     e.state.setStatusMessage("Found: " & e.state.search.text)
     e.state.needsFullRedraw = true
@@ -165,40 +165,32 @@ proc finalizeSearch(e: Editor) =
 
     # If incsearch is enabled, cursor is already at the found position
     if e.state.search.incsearch:
-      e.updateViewportForCursor(e.state.cursor)
+      e.updateViewportForCursor(e.cursor)
       e.state.needsFullRedraw = true
     else:
       # If incsearch is disabled, perform search now
       discard e.executeSearchFromCurrentPosition()
 
-  # Return to previous mode (Normal or LogViewer)
-  let targetMode =
-    if e.state.previousMode == EditorMode.LogViewer:
-      EditorMode.LogViewer
-    else:
-      EditorMode.Normal
-  e.state.previousMode = e.state.mode
-  e.state.mode = targetMode
-  e.state.search.text = ""
-  # Reset history navigation index
-  e.state.search.historyIndex = -1
+  # Exit overlay and return to base mode
+  # The base mode (Normal, LogViewer, Filer, etc.) is preserved
+  e.state.exitOverlay()
+  e.setMode(e.state.mode) # Sync window mode
 
 proc cancelSearch(e: Editor) =
-  ## Cancel search and return to previous mode
+  ## Cancel search and return to base mode
   ##
   ## Called when: Escape is pressed in Search mode
   ##
   ## Behavior:
   ## - If incsearch enabled: Restore cursor to original position (searchStartPos)
-  ## - Transition back to previous mode
+  ## - Exit overlay and return to base mode
   ## - Clear searchText buffer
   ## - Does NOT save to lastSearchText (search was cancelled)
   if e.state.search.incsearch:
-    e.state.cursor = e.state.search.startPos
-  e.state.mode = e.state.previousMode
-  e.state.search.text = ""
-  # Reset history navigation index
-  e.state.search.historyIndex = -1
+    e.cursor = e.state.search.startPos
+  # Exit overlay and restore base mode
+  e.state.exitOverlay()
+  e.setMode(e.state.mode) # Sync window mode
 
 proc performIncrementalSearch(e: Editor) =
   ## Perform incremental search and update cursor position dynamically
@@ -238,7 +230,7 @@ proc performIncrementalSearch(e: Editor) =
 
   if searchResult.isSome:
     let pos = searchResult.get
-    e.state.cursor = pos
+    e.cursor = pos
 
     # Update viewport to follow cursor
     e.updateViewportForCursor(pos)
@@ -247,7 +239,7 @@ proc performIncrementalSearch(e: Editor) =
     e.state.needsFullRedraw = true
   else:
     # No match found, restore to start position
-    e.state.cursor = e.state.search.startPos
+    e.cursor = e.state.search.startPos
     e.state.setStatusMessage("Pattern not found: " & e.state.search.text)
 
 proc handleSearchCharacterInput(e: Editor, ch: string) =
@@ -289,14 +281,14 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
 
   let keyCombo = keyComboOpt.get
 
-  # Handle Escape to exit Command mode and return to previous mode
+  # Handle Escape to exit Command mode and return to previous (base) mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:
     e.state.commandCompletionManager.cancelCompletion()
     # Cancel substitute preview and restore original content
     e.cancelSubstitutePreview()
-    e.state.mode = e.state.previousMode
-    e.state.commandText = ""
-    e.state.commandCursor = 0
+    # Exit overlay and restore base mode
+    e.state.exitOverlay()
+    e.setMode(e.state.mode) # Sync window mode
     return true
 
   # Handle Tab key for command completion
@@ -393,7 +385,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       let isShared = e.isBufferShared(activeBuffer)
       let commandToExecute = e.state.commandText
       let r = e.handlerManager.handleCommandMode(
-        activeBuffer, commandToExecute, isShared, e.state.cursor.line
+        activeBuffer, commandToExecute, isShared, e.activeWindow.cursor.line
       )
 
       # Add to command history (without the leading ":")
@@ -405,22 +397,49 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
 
       if r.shouldCloseWindow():
         # Handle window close - may also quit if last window
-        # If we're closing from LogViewer mode, clear LogViewer state
-        if e.state.previousMode == EditorMode.LogViewer:
-          e.state.logViewerState = none(LogViewerState)
-          e.state.previousMode = EditorMode.Normal
+        # Clear special mode state in the window being closed
+        let activeWin = e.activeWindow
+        case e.state.previousMode
+        of EditorMode.LogViewer:
+          activeWin.logViewerState = none(LogViewerState)
+        of EditorMode.Filer:
+          activeWin.filerState = none(FilerState)
+        of EditorMode.Help:
+          activeWin.helpViewerState = none(HelpViewerState)
+        of EditorMode.BufferManager:
+          activeWin.bufferManagerState = none(BufferManagerState)
+        of EditorMode.BackupManager:
+          activeWin.backupManagerState = none(BackupManagerState)
+        of EditorMode.DiffViewer:
+          activeWin.diffViewerState = none(DiffViewerState)
+        of EditorMode.Debug:
+          activeWin.debugViewerState = none(DebugViewerState)
+        of EditorMode.Config:
+          activeWin.configModeState = none(ConfigModeState)
+        of EditorMode.References:
+          activeWin.referencesViewerState = none(ReferencesViewerState)
+        of EditorMode.DocumentSymbol:
+          activeWin.documentSymbolViewerState = none(DocumentSymbolViewerState)
+        of EditorMode.CallHierarchy:
+          activeWin.callHierarchyViewerState = none(CallHierarchyViewerState)
+        else:
+          discard
+        # Reset window mode before closing
+        e.state.previousMode = EditorMode.Normal
+        activeWin.mode = EditorMode.Normal
         let shouldQuit = e.closeWindow
         if shouldQuit:
           return false # Last window closed, quit editor
+        # Note: closeWindow calls syncActiveWindow which restores mode from new active window
 
       if r.shouldGotoLine():
         # Jump to the specified line
         let lineNum = r.getLineNumber()
         if lineNum > 0 and lineNum <= activeBuffer.len:
-          e.state.cursor.line = lineNum - 1 # Convert to 0-based
-          e.state.cursor.column = 0
+          e.activeWindow.cursor.line = lineNum - 1 # Convert to 0-based
+          e.activeWindow.cursor.column = 0
           # Update viewport to make the line visible
-          e.updateViewportForCursor(e.state.cursor)
+          e.updateViewportForCursor(e.cursor)
 
       if r.shouldVSplit():
         # Handle vertical split
@@ -704,9 +723,9 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           if e.config.notification.screenNotifications and
               e.config.notification.quickRunScreenNotify:
             e.state.setStatusMessage(quickRunStartupMessage(prepared.filePath))
-        # Return to Normal mode
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.Normal
+        # Return to Normal mode - exit overlay first
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
 
       if r.shouldBuild():
         # Handle Build command
@@ -724,9 +743,9 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             workspaceRoot: parentDir(filePath),
           )
           e.state.setStatusMessage("Building: " & filePath)
-        # Return to Normal mode
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.Normal
+        # Return to Normal mode - exit overlay first
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
 
       if r.kind == hrSubstitute:
         # Handle substitute result - display count
@@ -735,14 +754,16 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           $count & " substitution" & (if count == 1: "" else: "s")
         )
         e.state.needsFullRedraw = true
-        # Return to Normal mode
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.Normal
+        # Return to Normal mode - exit overlay first
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
 
       if r.shouldEnterFiler():
-        # Enter filer mode with optional path
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.Filer
+        # Enter filer mode with optional path - save base mode, exit overlay
+        let baseModeBeforeOverlay = e.state.baseMode
+        e.state.exitOverlay()
+        e.state.previousMode = baseModeBeforeOverlay
+        e.setMode(EditorMode.Filer)
         let filerPath = r.getEnterFilerPath()
         let startPath =
           if filerPath.isSome:
@@ -751,9 +772,12 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             parentDir(activeBuffer.filePath.get)
           else:
             getCurrentDir()
-        e.state.filerState = some(newFilerState(startPath))
+        let activeWin = e.activeWindow
+        activeWin.mode = EditorMode.Filer
+        activeWin.filerState = some(newFilerState(startPath))
       elif r.shouldEnterLogViewer():
-        # Open LogViewer in a new split window for editor messages
+        # Open LogViewer in a new split window for editor messages - exit overlay first
+        e.state.exitOverlay()
         let logLines = getMessageLog()
         let logContent =
           if logLines.len > 0:
@@ -766,10 +790,13 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         if splitResult.isErr:
           e.state.setStatusMessage("Failed to open log: " & splitResult.error)
         else:
-          e.state.mode = EditorMode.LogViewer
-          e.state.logViewerState = some(newLogViewerState(lckEditor))
+          e.setMode(EditorMode.LogViewer)
+          let activeWin = e.activeWindow
+          activeWin.mode = EditorMode.LogViewer
+          activeWin.logViewerState = some(newLogViewerState(lckEditor))
       elif r.shouldLspLog():
-        # Open LogViewer in a new split window for LSP messages
+        # Open LogViewer in a new split window for LSP messages - exit overlay first
+        e.state.exitOverlay()
         let logLines = getLspMessageLog()
         let logContent =
           if logLines.len > 0:
@@ -782,40 +809,56 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         if splitResult.isErr:
           e.state.setStatusMessage("Failed to open LSP log: " & splitResult.error)
         else:
-          e.state.mode = EditorMode.LogViewer
-          e.state.logViewerState = some(newLogViewerState(lckLsp))
+          e.setMode(EditorMode.LogViewer)
+          let activeWin = e.activeWindow
+          activeWin.mode = EditorMode.LogViewer
+          activeWin.logViewerState = some(newLogViewerState(lckLsp))
       elif r.shouldEnterHelpViewer():
-        # Enter help viewer mode
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.Help
-        e.state.helpViewerState = some(newHelpViewerState())
+        # Enter help viewer mode - save base mode, exit overlay
+        let baseModeBeforeOverlay = e.state.baseMode
+        e.state.exitOverlay()
+        e.state.previousMode = baseModeBeforeOverlay
+        e.setMode(EditorMode.Help)
+        let activeWin = e.activeWindow
+        activeWin.mode = EditorMode.Help
+        activeWin.helpViewerState = some(newHelpViewerState())
       elif r.shouldEnterBufferManager():
-        # Enter buffer manager mode
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.BufferManager
+        # Enter buffer manager mode - save base mode, exit overlay
+        let baseModeBeforeOverlay = e.state.baseMode
+        e.state.exitOverlay()
+        e.state.previousMode = baseModeBeforeOverlay
+        e.setMode(EditorMode.BufferManager)
         let bmState = newBufferManagerState()
         bmState.updateEntries(e.getBufferInfos())
         bmState.previousWindowIndex = e.windowManager.activeWindowIndex
-        e.state.bufferManagerState = some(bmState)
+        let activeWin = e.activeWindow
+        activeWin.mode = EditorMode.BufferManager
+        activeWin.bufferManagerState = some(bmState)
       elif r.shouldEnterBackupManager():
-        # Enter backup manager mode
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.BackupManager
+        # Enter backup manager mode - save base mode, exit overlay
+        let baseModeBeforeOverlay = e.state.baseMode
+        e.state.exitOverlay()
+        e.state.previousMode = baseModeBeforeOverlay
+        e.setMode(EditorMode.BackupManager)
         let baseBackupDir = e.config.autoBackup.getBaseBackupDir()
         var sourceFilePath = ""
         if e.buffer.filePath.isSome:
           sourceFilePath = absolutePath(e.buffer.filePath.get)
-        let bkState = initBackupManagerState(baseBackupDir, sourceFilePath)
-        e.state.backupManagerState = some(bkState)
+        let activeWin = e.activeWindow
+        activeWin.mode = EditorMode.BackupManager
+        activeWin.backupManagerState =
+          some(initBackupManagerState(baseBackupDir, sourceFilePath))
       elif r.shouldEnterRecentFileMode():
-        # Enter recent file mode
+        # Enter recent file mode - save base mode, exit overlay
+        let baseModeBeforeOverlay = e.state.baseMode
+        e.state.exitOverlay()
         let loadResult = e.enterRecentFileMode()
         if loadResult.isErr:
           logError("handler", "Failed to enter Recent File mode: " & loadResult.error)
           e.state.statusMessage = "Error: " & loadResult.error
         else:
-          e.state.previousMode = e.state.mode
-          e.state.mode = EditorMode.RecentFile
+          e.state.previousMode = baseModeBeforeOverlay
+          e.setMode(EditorMode.RecentFile)
           e.state.statusMessage = ""
       elif r.shouldEnterDebugViewer():
         # Open debug info in a vertical split (like log viewer)
@@ -852,8 +895,8 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             debugConfig.bufferStatus.enable,
           )
         generateEditorStateInfo(
-          debugLines, e.state.mode, e.state.previousMode, e.state.cursor.line,
-          e.state.cursor.column, e.state.commandText, e.state.statusMessage,
+          debugLines, e.state.mode, e.state.previousMode, e.activeWindow.cursor.line,
+          e.activeWindow.cursor.column, e.state.commandText, e.state.statusMessage,
           debugConfig.editorView.enable,
         )
         generateSearchInfo(
@@ -912,9 +955,9 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.timing.lastDebugUpdate = getMonoTime()
           if e.state.timing.debugUpdateInterval == 0:
             e.state.timing.debugUpdateInterval = 500 # Default: 500ms
-        # Return to Normal mode
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.Normal
+        # Return to Normal mode - exit overlay first
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
       elif r.shouldJumpList():
         # Handle jump list command (:ju, :jump)
         # Display jump list temporarily like Vim using tempMessages
@@ -943,8 +986,9 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
                 ($colNum).align(4) & "  " & fileName
             )
           e.state.needsFullRedraw = true
-        # Return to Normal mode (not to previous Command mode)
-        e.state.mode = EditorMode.Normal
+        # Return to Normal mode (not to previous Command mode) - exit overlay first
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
       elif r.kind == hrTheme:
         # Handle theme change command
         let themeName = r.hrThemeName
@@ -967,12 +1011,18 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           else:
             e.state.setStatusMessage("Theme not found: " & themeName)
         e.state.needsFullRedraw = true
-        e.state.mode = EditorMode.Normal
+        # Exit overlay first, then set Normal mode
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
       elif r.shouldEnterConfigMode():
-        # Enter configuration mode
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.Config
-        e.state.configModeState = some(newConfigModeState(e.config))
+        # Enter configuration mode - save base mode (before overlay), not Command mode
+        let baseModeBeforeOverlay = e.state.baseMode
+        e.state.exitOverlay()
+        e.state.previousMode = baseModeBeforeOverlay
+        e.setMode(EditorMode.Config)
+        let activeWin = e.activeWindow
+        activeWin.mode = EditorMode.Config
+        activeWin.configModeState = some(newConfigModeState(e.config))
       elif r.shouldQuickRun() or r.shouldBuild():
         # QuickRun and Build already set mode to Normal above
         discard
@@ -980,21 +1030,24 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         # Handle mode transitions
         let modeTransition = r.getModeTransition()
         if modeTransition.isSome:
-          # Entering a new mode (e.g., Filer) - previousMode already set when entering Command
-          e.state.mode = modeTransition.get
+          # Entering a new mode (e.g., Filer) - exit overlay first, then set new mode
+          e.state.exitOverlay()
+          e.setMode(modeTransition.get)
         else:
-          # Return to the mode we were in before entering Command mode
-          e.state.mode = e.state.previousMode
+          # Return to the base mode we were in before entering Command overlay
+          e.state.exitOverlay()
+          e.setMode(e.state.mode) # Sync window mode
 
       # Set status message if any
       let statusMsg = r.getStatusMessage()
       if statusMsg.len > 0:
         e.state.setStatusMessage(statusMsg)
     else:
-      # Empty command, just return to previous mode
-      e.state.mode = e.state.previousMode
+      # Empty command, just return to base mode
+      e.state.exitOverlay()
+      e.setMode(e.state.mode) # Sync window mode
 
-    # Clear command text and cursor
+    # Clear command text and cursor (already done by exitOverlay, but ensure consistency)
     e.state.commandText = ""
     e.state.commandCursor = 0
     return true
@@ -1208,7 +1261,7 @@ proc handleSearchModeEvent(e: Editor, event: Event): bool =
         e.state.search.text = ""
         # Restore cursor to start position if incsearch is enabled
         if e.state.search.incsearch:
-          e.state.cursor = e.state.search.startPos
+          e.cursor = e.state.search.startPos
     return true
 
   # Backspace: Remove last character and re-search
@@ -1248,9 +1301,10 @@ proc handleRenameModeEvent(e: Editor, event: Event): bool =
 
   let keyCombo = keyComboOpt.get
 
-  # Escape: Cancel rename and return to previous mode
+  # Escape: Cancel rename and return to base mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:
-    e.state.mode = e.state.previousMode
+    e.state.exitOverlay()
+    e.setMode(e.state.mode) # Sync window mode
     e.state.statusMessage = "Rename cancelled"
     e.state.needsFullRedraw = true
     return true
@@ -1264,13 +1318,16 @@ proc handleRenameModeEvent(e: Editor, event: Event): bool =
     let newName = e.state.renameState.text
     if newName.len == 0:
       e.state.statusMessage = "Rename cancelled: empty name"
-      e.state.mode = e.state.previousMode
+      e.state.exitOverlay()
+      e.setMode(e.state.mode) # Sync window mode
     elif newName == e.state.renameState.originalWord:
       e.state.statusMessage = "Rename cancelled: same name"
-      e.state.mode = e.state.previousMode
+      e.state.exitOverlay()
+      e.setMode(e.state.mode) # Sync window mode
     else:
       # Execute the LSP rename asynchronously
-      e.state.mode = e.state.previousMode
+      e.state.exitOverlay()
+      e.setMode(e.state.mode) # Sync window mode
       asyncSpawn e.requestLspRename(newName)
     e.state.needsFullRedraw = true
     return true
@@ -1312,7 +1369,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
 
   if r.shouldQuitRecentFileMode():
     e.state.previousMode = e.state.mode
-    e.state.mode = EditorMode.Normal
+    e.setMode(EditorMode.Normal)
     e.state.statusMessage = ""
     e.state.needsFullRedraw = true
     return true
@@ -1349,18 +1406,29 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
     else:
       e.state.statusMessage = "Opened: " & filePath
     e.state.previousMode = e.state.mode
-    e.state.mode = EditorMode.Normal
+    e.setMode(EditorMode.Normal)
     e.state.needsFullRedraw = true
     return true
 
-  # Handle mode transitions (e.g., entering Command mode with :)
+  # Handle overlay transitions (e.g., entering Command mode with :)
+  let overlayTransition = r.getOverlayTransition()
+  if overlayTransition.isSome:
+    case overlayTransition.get
+    of okCommand:
+      e.state.enterCommandOverlay()
+    of okSearch:
+      e.state.enterSearchOverlay(e.state.search.direction)
+    of okRename:
+      e.state.enterRenameOverlay(
+        e.state.renameState.originalWord, e.state.renameState.cursorLine,
+        e.state.renameState.cursorColumn,
+      )
+
+  # Handle mode transitions
   let modeTransition = r.getModeTransition()
   if modeTransition.isSome:
     e.state.previousMode = e.state.mode
-    e.state.mode = modeTransition.get
-    if modeTransition.get == EditorMode.Command:
-      e.state.commandText = ":"
-      e.state.commandCursor = 0
+    e.setMode(modeTransition.get)
 
   e.state.needsFullRedraw = true
   return true
@@ -1381,21 +1449,24 @@ proc handleDebugModeEvent(e: Editor, event: Event): bool =
   # Reserve: 2 lines for status/command line, 1 line for title
   let viewportHeight = max(0, e.viewport.height - 2 - 1)
 
-  let r = handleDebugModeKey(e.state, viewportHeight, keyCombo)
+  let activeWin = e.activeWindow
+  if activeWin.debugViewerState.isNone:
+    e.state.statusMessage = "Debug viewer state not initialized"
+    return true
+
+  let r = handleDebugModeKey(activeWin.debugViewerState.get, viewportHeight, keyCombo)
 
   case r.kind
   of dvrQuit:
-    e.state.debugViewerState = none(DebugViewerState)
+    activeWin.mode = EditorMode.Normal
+    activeWin.debugViewerState = none(DebugViewerState)
     e.state.previousMode = e.state.mode
-    e.state.mode = EditorMode.Normal
+    e.setMode(EditorMode.Normal)
     e.state.statusMessage = ""
     e.state.needsFullRedraw = true
     return true
   of dvrEnterCommand:
-    e.state.previousMode = e.state.mode
-    e.state.mode = EditorMode.Command
-    e.state.commandText = ":"
-    e.state.commandCursor = 0
+    e.state.enterCommandOverlay()
     e.state.needsFullRedraw = true
     return true
   of dvrHandled, dvrUnhandled, dvrError:
@@ -1421,7 +1492,7 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
   of EditorMode.Insert:
     # In Insert mode: Insert text directly without auto-indentation
     # Split the pasted text into lines and insert each
-    var pos = e.state.cursor
+    var pos = e.cursor
 
     # Insert the entire text at once - this bypasses auto-indent
     # because we're not going through insertNewline()
@@ -1438,8 +1509,8 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
       else:
         newColumn += 1
 
-    e.state.cursor.line = newLine
-    e.state.cursor.column = newColumn
+    e.activeWindow.cursor.line = newLine
+    e.activeWindow.cursor.column = newColumn
     e.state.needsFullRedraw = true
   of EditorMode.Normal:
     # In Normal mode: Enter Insert mode first, then paste
@@ -1450,10 +1521,10 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
       return true
 
     # Record insert start position for text tracking
-    e.state.editState.insertModeStartPos = some(e.state.cursor)
+    e.state.editState.insertModeStartPos = some(e.cursor)
 
     # Insert the pasted text
-    var pos = e.state.cursor
+    var pos = e.cursor
     discard activeBuffer.insertText(pos, pastedText)
 
     # Calculate new cursor position
@@ -1466,8 +1537,8 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
       else:
         newColumn += 1
 
-    e.state.cursor.line = newLine
-    e.state.cursor.column = newColumn
+    e.activeWindow.cursor.line = newLine
+    e.activeWindow.cursor.column = newColumn
 
     # Commit the transaction
     discard activeBuffer.commitTransaction()
@@ -1572,9 +1643,9 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
             for j, w in e.windowManager.windows.mpairs:
               w.active = (j == i)
 
-          # Update cursor
-          e.windowManager.windows[i].cursor = pos
-          e.state.cursor = pos
+          # Update cursor (e.cursor= sets both state.cursor and activeWindow.cursor)
+          # Note: After switching window index, e.activeWindow now refers to window i
+          e.cursor = pos
           e.state.needsFullRedraw = true
           return true
 
@@ -1598,21 +1669,19 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       return false
 
     let pos = posOpt.get
-    e.state.cursor = pos
-    # Also update the active window's cursor
-    if e.windowManager.windows.len > 0:
-      e.windowManager.windows[e.windowManager.activeWindowIndex].cursor = pos
+    # e.cursor= sets both state.cursor and activeWindow.cursor
+    e.cursor = pos
     e.state.needsFullRedraw = true
     return true
 
   # Handle mouse click in Filer mode
-  if e.state.mode == EditorMode.Filer and e.state.filerState.isSome:
-    var filerState = e.state.filerState.get
+  if e.state.mode == EditorMode.Filer and e.activeWindow.filerState.isSome:
+    var filerState = e.activeWindow.filerState.get
     let clickedIndex = filerState.topLine + (mouse.y - FilerHeaderLines)
 
     if clickedIndex >= 0 and clickedIndex < filerState.entries.len:
       filerState.selectedIndex = clickedIndex
-      e.state.filerState = some(filerState)
+      e.activeWindow.filerState = some(filerState)
       e.state.needsFullRedraw = true
       return true
 
@@ -1645,25 +1714,20 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.state.tempMessages = @[]
       e.state.needsFullRedraw = true
 
-      # If ":" was pressed, enter command mode
+      # If ":" was pressed, enter command overlay
       if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == ":":
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.Command
-        e.state.commandText = ":"
-        e.state.commandCursor = 0
+        e.state.enterCommandOverlay()
       # Otherwise just dismiss and stay in current mode
       return true
 
-  # Handle Command mode input differently (character by character)
-  if e.state.mode == EditorMode.Command:
+  # Handle overlay modes (Command, Search, Rename) - these sit on top of base modes
+  if e.state.isCommandOverlay:
     return handleCommandModeEvent(e, event)
 
-  # Handle Search mode input differently (character by character)
-  if e.state.mode == EditorMode.Search:
+  if e.state.isSearchOverlay:
     return handleSearchModeEvent(e, event)
 
-  # Handle Rename mode input (character by character)
-  if e.state.mode == EditorMode.Rename:
+  if e.state.isRenameOverlay:
     return handleRenameModeEvent(e, event)
 
   # Handle Recent File mode input
@@ -1854,7 +1918,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
   var activeViewport = e.viewport
   if e.windowManager.windows.len > 0 and
       e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    activeViewport = e.windowManager.windows[e.windowManager.activeWindowIndex].viewport
+    activeViewport = e.activeWindow.viewport
     # Sync the motion controller's viewport with the active window's viewport
     e.executer.motionController.viewportManager.viewport = activeViewport
 
@@ -1868,8 +1932,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
     # A window is a bottom window if its bottom edge is at the maximum bottom Y
     let
-      activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-      windowBottomY = activeWindow.viewport.y + activeWindow.viewport.height
+      windowBottomY = e.activeWindow.viewport.y + e.activeWindow.viewport.height
       isBottomWindow = (windowBottomY == maxBottomY)
 
     # Calculate reserved lines based on window position and status line mode
@@ -1905,19 +1968,34 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # Sync the motion controller's viewport with the editor's viewport
     e.executer.motionController.viewportManager.viewport = e.viewport
 
-  let r = e.handlerManager.handleEvent(activeBuffer, e.state, activeViewport, event)
+  # Get active window for handleEvent (needed for special modes like Filer)
+  let activeWin =
+    if e.windowManager.windows.len > 0 and
+        e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+      some(e.activeWindow)
+    else:
+      none(EditorWindow)
+
+  # Sync EditorState from EditorWindow before handler call
+  # (handlers read/write state.cursor and state.mode)
+  e.syncStateFromWindow()
+
+  let r = e.handlerManager.handleEvent(
+    activeBuffer, e.state, activeViewport, event, activeWin
+  )
+
+  # Sync EditorState back to EditorWindow after handler call
+  e.syncStateToWindow()
 
   # For LogViewer mode, update viewport to follow cursor
   # (LogViewer handles cursor directly without using MotionController)
-  if e.state.mode == EditorMode.LogViewer:
-    e.updateViewportForCursor(e.state.cursor)
+  if e.currentMode == EditorMode.LogViewer:
+    e.updateViewportForCursor(e.cursor)
 
-  # Sync viewport and cursor back from state to active window
+  # Sync viewport from motionController to window
   if e.windowManager.windows.len > 0 and
       e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.windowManager.windows[e.windowManager.activeWindowIndex].viewport =
-      e.executer.motionController.viewportManager.viewport
-    e.windowManager.windows[e.windowManager.activeWindowIndex].cursor = e.state.cursor
+    e.activeWindow.viewport = e.executer.motionController.viewportManager.viewport
   else:
     # Single window mode - sync viewport from motionController
     e.viewport = e.executer.motionController.viewportManager.viewport
@@ -1941,10 +2019,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # Jump to the specified line
     let lineNum = r.getLineNumber()
     if lineNum > 0 and lineNum <= activeBuffer.len:
-      e.state.cursor.line = lineNum - 1 # Convert to 0-based
-      e.state.cursor.column = 0
+      e.activeWindow.cursor.line = lineNum - 1 # Convert to 0-based
+      e.activeWindow.cursor.column = 0
       # Update viewport to make the line visible
-      e.updateViewportForCursor(e.state.cursor)
+      e.updateViewportForCursor(e.cursor)
 
   if r.shouldJumpToBuffer():
     # Handle jump to buffer with position (Ctrl-o/Ctrl-i across files)
@@ -1956,16 +2034,16 @@ proc handleEvent*(e: Editor, event: Event): bool =
       # Update cursor position after buffer switch
       let buf = e.activeBuffer()
       if buf.len > 0:
-        e.state.cursor.line = min(targetLine, buf.len - 1)
-        let line = buf.getLine(e.state.cursor.line)
+        e.activeWindow.cursor.line = min(targetLine, buf.len - 1)
+        let line = buf.getLine(e.activeWindow.cursor.line)
         let lineCharLen = line.charLen
-        e.state.cursor.column =
+        e.activeWindow.cursor.column =
           if lineCharLen == 0:
             0
           else:
             min(targetCol, max(0, lineCharLen - 1))
       e.state.needsFullRedraw = true
-      e.updateViewportForCursor(e.state.cursor)
+      e.updateViewportForCursor(e.cursor)
 
   # Handle Filer mode results
   if r.kind == hrFilerOpenFile:
@@ -1975,9 +2053,11 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.state.setStatusMessage("Error: " & loadResult.error)
     else:
       # Clear filer state and switch to Normal mode
-      e.state.filerState = none(FilerState)
-      e.state.mode = EditorMode.Normal
-      e.state.cursor = BufferPosition(line: 0, column: 0)
+      let activeWin = e.activeWindow
+      activeWin.mode = EditorMode.Normal
+      activeWin.filerState = none(FilerState)
+      e.setMode(EditorMode.Normal)
+      e.cursor = BufferPosition(line: 0, column: 0)
       # Filer screen notification (controlled by config)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:
@@ -1994,8 +2074,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.state.setStatusMessage("Error: " & splitResult.error)
     else:
       # Clear filer state and switch to Normal mode
-      e.state.filerState = none(FilerState)
-      e.state.mode = EditorMode.Normal
+      let activeWin = e.activeWindow
+      activeWin.mode = EditorMode.Normal
+      activeWin.filerState = none(FilerState)
+      e.setMode(EditorMode.Normal)
       # Filer screen notification (controlled by config)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:
@@ -2012,8 +2094,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.state.setStatusMessage("Error: " & splitResult.error)
     else:
       # Clear filer state and switch to Normal mode
-      e.state.filerState = none(FilerState)
-      e.state.mode = EditorMode.Normal
+      let activeWin = e.activeWindow
+      activeWin.mode = EditorMode.Normal
+      activeWin.filerState = none(FilerState)
+      e.setMode(EditorMode.Normal)
       # Filer screen notification (controlled by config)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:
@@ -2025,15 +2109,17 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   if r.kind == hrFilerQuit:
     # Close filer and return to Normal mode
-    # (previousMode may be Filer if we went Command->Filer, so always use Normal)
-    e.state.filerState = none(FilerState)
-    e.state.mode = EditorMode.Normal
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Normal
+    activeWin.filerState = none(FilerState)
+    e.setMode(EditorMode.Normal)
     return true
 
   if r.kind == hrFilerDeleteFile:
     # Delete file/directory from filer
-    if e.state.filerState.isSome:
-      let deleteResult = e.state.filerState.get.deleteSelected()
+    let activeWin = e.activeWindow
+    if activeWin.filerState.isSome:
+      let deleteResult = activeWin.filerState.get.deleteSelected()
       if deleteResult.success:
         # File/directory deleted successfully
         if e.config.notification.screenNotifications and
@@ -2055,8 +2141,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   if r.kind == hrLogViewerQuit:
     # Close log viewer window and return to Normal mode
-    e.state.logViewerState = none(LogViewerState)
-    e.state.mode = EditorMode.Normal
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Normal
+    activeWin.logViewerState = none(LogViewerState)
+    e.setMode(EditorMode.Normal)
     # Close the window if we're in split view
     if e.windowManager.windows.len > 1:
       discard e.closeWindow()
@@ -2064,10 +2152,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   if r.kind == hrLogViewerRefresh:
     # Refresh log viewer content by creating new buffer with updated content
-    if e.state.logViewerState.isSome and
-        e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    let activeWin = e.activeWindow
+    if activeWin.logViewerState.isSome:
       let logLines =
-        case e.state.logViewerState.get.contentKind
+        case activeWin.logViewerState.get.contentKind
         of lckEditor:
           getMessageLog()
         of lckLsp:
@@ -2081,49 +2169,59 @@ proc handleEvent*(e: Editor, event: Event): bool =
       let newBuffer = newTextBuffer(logContent)
       newBuffer.readOnly = true
       # Replace the window's buffer
-      e.windowManager.windows[e.windowManager.activeWindowIndex].buffer = newBuffer
+      activeWin.buffer = newBuffer
       # Clamp cursor if needed
       let maxLine = max(0, newBuffer.len - 1)
-      if e.state.cursor.line > maxLine:
-        e.state.cursor.line = maxLine
+      if e.activeWindow.cursor.line > maxLine:
+        e.activeWindow.cursor.line = maxLine
       e.state.setStatusMessage("Log refreshed")
     return true
 
   if r.kind == hrHelpViewerQuit:
     # Close help viewer and return to Normal mode
-    e.state.helpViewerState = none(HelpViewerState)
-    e.state.mode = EditorMode.Normal
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Normal
+    activeWin.helpViewerState = none(HelpViewerState)
+    e.setMode(EditorMode.Normal)
     return true
 
   if r.shouldReferencesQuit():
     # Close references viewer and return to Normal mode
-    e.state.referencesViewerState = none(ReferencesViewerState)
-    e.state.mode = EditorMode.Normal
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Normal
+    activeWin.referencesViewerState = none(ReferencesViewerState)
+    e.setMode(EditorMode.Normal)
     return true
 
   if r.shouldReferencesJumpTo():
     # Jump to selected reference
     let target = r.getReferencesJumpTarget()
     # Close references viewer first
-    e.state.referencesViewerState = none(ReferencesViewerState)
-    e.state.mode = EditorMode.Normal
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Normal
+    activeWin.referencesViewerState = none(ReferencesViewerState)
+    e.setMode(EditorMode.Normal)
     # Open file and jump to location
     discard e.openFileAndJumpTo(target.path, target.line, target.column)
     return true
 
   if r.shouldDocumentSymbolQuit():
     # Close document symbol viewer and return to Normal mode
-    e.state.documentSymbolViewerState = none(DocumentSymbolViewerState)
-    e.state.mode = EditorMode.Normal
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Normal
+    activeWin.documentSymbolViewerState = none(DocumentSymbolViewerState)
+    e.setMode(EditorMode.Normal)
     return true
 
   if r.shouldDocumentSymbolJumpTo():
     # Jump to selected symbol (same file)
     let target = r.getDocumentSymbolJumpTarget()
-    let filePath = e.state.documentSymbolViewerState.get.filePath
+    let activeWin = e.activeWindow
+    let filePath = activeWin.documentSymbolViewerState.get.filePath
     # Close document symbol viewer first
-    e.state.documentSymbolViewerState = none(DocumentSymbolViewerState)
-    e.state.mode = EditorMode.Normal
+    activeWin.mode = EditorMode.Normal
+    activeWin.documentSymbolViewerState = none(DocumentSymbolViewerState)
+    e.setMode(EditorMode.Normal)
     # Open file and jump to location (adds to jump list)
     discard e.openFileAndJumpTo(filePath, target.line, target.column)
     return true
@@ -2134,8 +2232,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # Cancel any pending call hierarchy requests
     e.state.lspCache.pendingCallHierarchyRequestId = 0
     e.state.lspCache.pendingCallHierarchyKind = chrkNone
-    e.state.callHierarchyViewerState = none(CallHierarchyViewerState)
-    e.state.mode = EditorMode.Normal
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Normal
+    activeWin.callHierarchyViewerState = none(CallHierarchyViewerState)
+    e.setMode(EditorMode.Normal)
     return true
 
   if r.shouldCallHierarchyJumpTo():
@@ -2150,8 +2250,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # Close call hierarchy viewer and cancel any pending requests
     e.state.lspCache.pendingCallHierarchyRequestId = 0
     e.state.lspCache.pendingCallHierarchyKind = chrkNone
-    e.state.callHierarchyViewerState = none(CallHierarchyViewerState)
-    e.state.mode = EditorMode.Normal
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Normal
+    activeWin.callHierarchyViewerState = none(CallHierarchyViewerState)
+    e.setMode(EditorMode.Normal)
     # Open file and jump to location
     discard e.openFileAndJumpTo(path, target.line, target.column)
     return true
@@ -2173,8 +2275,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Handle Buffer Manager mode results
   if r.shouldBufferManagerQuit():
     # Close buffer manager and return to Normal mode
-    e.state.bufferManagerState = none(BufferManagerState)
-    e.state.mode = EditorMode.Normal
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Normal
+    activeWin.bufferManagerState = none(BufferManagerState)
+    e.setMode(EditorMode.Normal)
     return true
 
   if r.shouldBufferManagerSelectBuffer():
@@ -2183,8 +2287,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
     if bufferIndex >= 0 and bufferIndex < e.buffers.len:
       e.switchToBufferByIndex(bufferIndex)
     # Close buffer manager and return to Normal mode
-    e.state.bufferManagerState = none(BufferManagerState)
-    e.state.mode = EditorMode.Normal
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Normal
+    activeWin.bufferManagerState = none(BufferManagerState)
+    e.setMode(EditorMode.Normal)
     return true
 
   if r.shouldBufferManagerDeleteBuffer():
@@ -2212,8 +2318,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
           e.executer.motionController.executor.buffer = e.activeBuffer()
 
         # Update buffer manager entries
-        if e.state.bufferManagerState.isSome:
-          e.state.bufferManagerState.get.updateEntries(e.getBufferInfos())
+        let activeWin = e.activeWindow
+        if activeWin.bufferManagerState.isSome:
+          activeWin.bufferManagerState.get.updateEntries(e.getBufferInfos())
     else:
       # Cannot delete the only buffer
       e.state.setStatusMessage("Cannot delete the last buffer")
@@ -2222,8 +2329,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Handle Backup Manager mode results
   if r.shouldBackupManagerQuit():
     # Close backup manager and return to Normal mode
-    e.state.backupManagerState = none(BackupManagerState)
-    e.state.mode = EditorMode.Normal
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Normal
+    activeWin.backupManagerState = none(BackupManagerState)
+    e.setMode(EditorMode.Normal)
     return true
 
   # Handle Diff Viewer mode results
@@ -2233,15 +2342,19 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # because previousMode can get corrupted if the user enters Command mode
     # (e.g., BackupManager -> DiffViewer -> Command -> DiffViewer -> quit
     #  would incorrectly stay in DiffViewer if we used previousMode)
-    e.state.diffViewerState = none(DiffViewerState)
-    e.state.mode = EditorMode.BackupManager
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.BackupManager
+    activeWin.diffViewerState = none(DiffViewerState)
+    e.setMode(EditorMode.BackupManager)
     return true
 
   # Handle Config mode results
   if r.shouldConfigQuit():
     # Close config mode and return to previous mode
-    e.state.configModeState = none(ConfigModeState)
-    e.state.mode = e.state.previousMode
+    let activeWin = e.activeWindow
+    activeWin.mode = e.state.previousMode
+    activeWin.configModeState = none(ConfigModeState)
+    e.setMode(e.state.previousMode)
     return true
 
   if r.shouldConfigSaveConfig():
@@ -2281,7 +2394,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       except CatchableError as ex:
         e.state.setStatusMessage("Error: Failed to backup config: " & ex.msg)
         logError("config", "Failed to backup config: " & ex.msg)
-        e.state.mode = EditorMode.Normal
+        e.setMode(EditorMode.Normal)
         return true
 
     let saveResult = saveConfig(e.config)
@@ -2291,20 +2404,22 @@ proc handleEvent*(e: Editor, event: Event): bool =
     else:
       e.state.setStatusMessage("Failed to write config: " & saveResult.error)
       logError("config", "Failed to write config: " & saveResult.error)
-    e.state.mode = EditorMode.Normal
+    e.setMode(EditorMode.Normal)
     return true
 
   if r.shouldBackupManagerRefresh():
     # Refresh backup list
-    if e.state.backupManagerState.isSome:
-      e.state.backupManagerState.get.refresh()
+    let activeWin = e.activeWindow
+    if activeWin.backupManagerState.isSome:
+      activeWin.backupManagerState.get.refresh()
     return true
 
   if r.shouldBackupManagerRestore():
     # Restore the selected backup
     let backupIndex = r.getBackupManagerRestoreIndex()
-    if e.state.backupManagerState.isSome:
-      let bkState = e.state.backupManagerState.get
+    let activeWin = e.activeWindow
+    if activeWin.backupManagerState.isSome:
+      let bkState = activeWin.backupManagerState.get
       # Backup current buffer before restore (in case user wants to undo)
       discard e.buffer.backupBuffer(e.config.autoBackup)
       if bkState.restoreBackup(backupIndex):
@@ -2343,8 +2458,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if r.shouldBackupManagerDelete():
     # Delete the selected backup
     let backupIndex = r.getBackupManagerDeleteIndex()
-    if e.state.backupManagerState.isSome:
-      let bkState = e.state.backupManagerState.get
+    let activeWin = e.activeWindow
+    if activeWin.backupManagerState.isSome:
+      let bkState = activeWin.backupManagerState.get
       if bkState.deleteBackup(backupIndex):
         e.state.setStatusMessage("Backup deleted")
       else:
@@ -2354,15 +2470,17 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if r.shouldBackupManagerOpenDiff():
     # Open diff viewer for the selected backup
     let backupIndex = r.getBackupManagerDiffIndex()
-    if e.state.backupManagerState.isSome:
-      let bkState = e.state.backupManagerState.get
+    let activeWin = e.activeWindow
+    if activeWin.backupManagerState.isSome:
+      let bkState = activeWin.backupManagerState.get
       if backupIndex >= 0 and backupIndex < bkState.entries.len:
         let entry = bkState.entries[backupIndex]
         # Initialize diff viewer with source and backup paths
         let dvState = initDiffViewerState(bkState.sourceFilePath, entry.fullPath)
-        e.state.diffViewerState = some(dvState)
+        activeWin.diffViewerState = some(dvState)
         e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.DiffViewer
+        e.setMode(EditorMode.DiffViewer)
+        activeWin.mode = EditorMode.DiffViewer
         if dvState.errorMessage.len > 0:
           e.state.setStatusMessage("Diff error: " & dvState.errorMessage)
     return true
@@ -2424,20 +2542,15 @@ proc handleEvent*(e: Editor, event: Event): bool =
       return true
 
     # Get the word under cursor
-    let word = activeBuffer.getWordAtPosition(e.state.cursor)
+    let word = activeBuffer.getWordAtPosition(e.cursor)
     if word.len == 0:
       e.state.statusMessage = "No symbol under cursor"
       return true
 
-    # Initialize rename state and enter Rename mode
-    e.state.renameState = RenameState(
-      text: word,
-      cursorLine: e.state.cursor.line,
-      cursorColumn: e.state.cursor.column,
-      originalWord: word,
+    # Initialize rename overlay
+    e.state.enterRenameOverlay(
+      word, e.activeWindow.cursor.line, e.activeWindow.cursor.column
     )
-    e.state.previousMode = e.state.mode
-    e.state.mode = EditorMode.Rename
     e.state.statusMessage = ""
     e.state.needsFullRedraw = true
     return true
@@ -2474,57 +2587,75 @@ proc handleEvent*(e: Editor, event: Event): bool =
     asyncSpawn e.requestLspExecuteCommand(command, args)
     return true
 
+  # Handle overlay transitions
+  let overlayTransition = r.getOverlayTransition()
+  if overlayTransition.isSome:
+    case overlayTransition.get
+    of okCommand:
+      e.state.enterCommandOverlay()
+    of okSearch:
+      # Search mode needs direction from search state (already set by handler)
+      e.state.enterSearchOverlay(e.state.search.direction)
+    of okRename:
+      e.state.enterRenameOverlay(
+        e.state.renameState.originalWord, e.state.renameState.cursorLine,
+        e.state.renameState.cursorColumn,
+      )
+
   # Handle mode transitions
   let modeTransition = r.getModeTransition()
   if modeTransition.isSome:
     let oldMode = e.state.mode
     let newMode = modeTransition.get
-
     e.state.previousMode = oldMode
-    e.state.mode = newMode
+    e.setMode(newMode)
 
     # Initialize filer state when entering Filer mode
-    if newMode == EditorMode.Filer and e.state.filerState.isNone:
+    let activeWin = e.activeWindow
+    if newMode == EditorMode.Filer and activeWin.filerState.isNone:
       # Use buffer's directory or current working directory
       let startPath =
         if activeBuffer.filePath.isSome:
           parentDir(activeBuffer.filePath.get)
         else:
           getCurrentDir()
-      e.state.filerState = some(newFilerState(startPath))
+      activeWin.filerState = some(newFilerState(startPath))
+      activeWin.mode = EditorMode.Filer
 
     # Initialize buffer manager state when entering BufferManager mode
     if newMode == EditorMode.BufferManager:
       let bmState = newBufferManagerState()
       bmState.updateEntries(e.getBufferInfos())
       bmState.previousWindowIndex = e.windowManager.activeWindowIndex
-      e.state.bufferManagerState = some(bmState)
+      activeWin.bufferManagerState = some(bmState)
+      activeWin.mode = EditorMode.BufferManager
 
     # Adjust cursor when transitioning from Insert to Normal mode
     # In Insert mode, cursor can be after the last character
     # In Normal mode, cursor must be on a character (not after)
     if oldMode == EditorMode.Insert and newMode == EditorMode.Normal:
       let
-        currentLine = activeBuffer.getLine(e.state.cursor.line)
+        currentLine = activeBuffer.getLine(e.activeWindow.cursor.line)
         lineCharLen = currentLine.charLen
-        oldColumn = e.state.cursor.column
+        oldColumn = e.activeWindow.cursor.column
 
       logDebug(
         "handler",
-        "Insert→Normal transition: line=" & $e.state.cursor.line & " oldColumn=" &
+        "Insert→Normal transition: line=" & $e.activeWindow.cursor.line & " oldColumn=" &
           $oldColumn & " lineCharLen=" & $lineCharLen,
       )
 
       if lineCharLen == 0:
         # Empty line: cursor should be at column 0
-        e.state.cursor.column = 0
-      elif e.state.cursor.column >= lineCharLen:
+        e.activeWindow.cursor.column = 0
+      elif e.activeWindow.cursor.column >= lineCharLen:
         # Cursor is beyond last character, move it back to last char
-        e.state.cursor.column = lineCharLen - 1
+        e.activeWindow.cursor.column = lineCharLen - 1
 
-      if oldColumn != e.state.cursor.column:
+      if oldColumn != e.activeWindow.cursor.column:
         logDebug(
-          "handler", "Cursor adjusted: " & $oldColumn & " → " & $e.state.cursor.column
+          "handler",
+          "Cursor adjusted: " & $oldColumn & " → " & $e.activeWindow.cursor.column,
         )
 
   # Set status message if any

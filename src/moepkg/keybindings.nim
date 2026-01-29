@@ -72,6 +72,7 @@ type
     ctMotion ## Basic cursor movement
     ctAction ## Editor actions (save, quit, etc)
     ctModeSwitch ## Switch editor modes
+    ctOverlaySwitch ## Switch to overlay modes (command, search, rename)
     ctTextObject ## Text object operations
     ctOperator ## Vim-style operators (delete, yank, etc)
     ctOperatorPending ## Operators that require additional input (f, t, r, etc)
@@ -87,6 +88,8 @@ type
       motion*: Motion
     of ctModeSwitch:
       targetMode*: EditorMode
+    of ctOverlaySwitch:
+      targetOverlay*: OverlayKind
     of ctOperatorPending:
       operatorType*: string ## "find", "till", "replace", etc
       reverse*: bool ## For F, T (backwards versions)
@@ -1941,8 +1944,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     Command(
       name: "switch-to-command",
       description: "Switch to command mode",
-      kind: ctModeSwitch,
-      targetMode: EditorMode.Command,
+      kind: ctOverlaySwitch,
+      targetOverlay: okCommand,
     )
   )
   registry.bindKey(EditorMode.Normal, ":", "switch-to-command")
@@ -1952,8 +1955,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     Command(
       name: "switch-to-search",
       description: "Switch to search mode (forward)",
-      kind: ctModeSwitch,
-      targetMode: EditorMode.Search,
+      kind: ctOverlaySwitch,
+      targetOverlay: okSearch,
     )
   )
   registry.bindKey(EditorMode.Normal, "/", "switch-to-search")
@@ -1963,8 +1966,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     Command(
       name: "switch-to-search-backward",
       description: "Switch to search mode (backward)",
-      kind: ctModeSwitch,
-      targetMode: EditorMode.Search,
+      kind: ctOverlaySwitch,
+      targetOverlay: okSearch,
     )
   )
   registry.bindKey(EditorMode.Normal, "?", "switch-to-search-backward")

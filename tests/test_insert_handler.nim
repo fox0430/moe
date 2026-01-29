@@ -439,15 +439,15 @@ suite "InsertModeHandler - Mode Switch":
     check result.modeTransition.isSome
     check result.modeTransition.get == EditorMode.Normal
 
-  test "Switch to Command mode":
+  test "Switch to Replace mode":
     let buf = newTextBuffer()
     let handler = createTestHandler(buf)
 
-    let result = handler.handleModeSwitch(EditorMode.Command)
+    let result = handler.handleModeSwitch(EditorMode.Replace)
 
     check result.kind == imrHandled
     check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Command
+    check result.modeTransition.get == EditorMode.Replace
 
 suite "InsertModeHandler - Result Helpers":
   test "isHandled returns true for handled results":

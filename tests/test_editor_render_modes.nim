@@ -46,7 +46,7 @@ suite "renderFiler - Basic behavior":
     var buffer = createTestBuffer()
 
     # FilerState is None by default
-    check e.state.filerState.isNone
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].filerState.isNone
 
     # Should not crash
     e.renderFiler(buffer)
@@ -56,7 +56,7 @@ suite "renderFiler - Basic behavior":
     var buffer = createTestBuffer()
 
     # Set up a filer state with no entries
-    e.state.filerState = some(
+    e.windowManager.windows[e.windowManager.activeWindowIndex].filerState = some(
       FilerState(
         currentPath: "/tmp",
         entries: @[],
@@ -97,7 +97,7 @@ suite "renderFiler - Basic behavior":
         ),
       ]
 
-    e.state.filerState = some(
+    e.windowManager.windows[e.windowManager.activeWindowIndex].filerState = some(
       FilerState(
         currentPath: "/tmp/test",
         entries: entries,
@@ -131,7 +131,7 @@ suite "renderFiler - Basic behavior":
         )
       ]
 
-    e.state.filerState = some(
+    e.windowManager.windows[e.windowManager.activeWindowIndex].filerState = some(
       FilerState(
         currentPath: "/home",
         entries: entries,
@@ -170,7 +170,7 @@ suite "renderFiler - Basic behavior":
         ),
       ]
 
-    e.state.filerState = some(
+    e.windowManager.windows[e.windowManager.activeWindowIndex].filerState = some(
       FilerState(
         currentPath: "/home",
         entries: entries,
@@ -200,7 +200,7 @@ suite "renderFiler - Basic behavior":
         )
       ]
 
-    e.state.filerState = some(
+    e.windowManager.windows[e.windowManager.activeWindowIndex].filerState = some(
       FilerState(
         currentPath: "/usr/bin",
         entries: entries,
@@ -221,7 +221,7 @@ suite "renderFiler - Basic behavior":
     let longPath =
       "/home/user/very/long/path/that/should/be/truncated/somewhere/in/the/middle/of/the/path/display/area"
 
-    e.state.filerState = some(
+    e.windowManager.windows[e.windowManager.activeWindowIndex].filerState = some(
       FilerState(
         currentPath: longPath,
         entries: @[],
@@ -239,7 +239,7 @@ suite "renderBufferManager - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    check e.state.bufferManagerState.isNone
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].bufferManagerState.isNone
     e.renderBufferManager(buffer)
 
   test "Render with empty buffer manager state":
@@ -247,7 +247,8 @@ suite "renderBufferManager - Basic behavior":
     var buffer = createTestBuffer()
 
     let bmState = newBufferManagerState()
-    e.state.bufferManagerState = some(bmState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].bufferManagerState =
+      some(bmState)
 
     e.renderBufferManager(buffer)
 
@@ -264,7 +265,8 @@ suite "renderBufferManager - Basic behavior":
       ]
     bmState.selectedIndex = 1
 
-    e.state.bufferManagerState = some(bmState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].bufferManagerState =
+      some(bmState)
 
     e.renderBufferManager(buffer)
     check e.state.screenCursor.y >= 0
@@ -287,7 +289,8 @@ suite "renderBufferManager - Basic behavior":
     bmState.selectedIndex = 45
     bmState.topLine = 40
 
-    e.state.bufferManagerState = some(bmState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].bufferManagerState =
+      some(bmState)
 
     e.renderBufferManager(buffer)
 
@@ -296,7 +299,7 @@ suite "renderConfigMode - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    check e.state.configModeState.isNone
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState.isNone
     e.renderConfigMode(buffer)
 
   test "Render config mode with items":
@@ -304,7 +307,8 @@ suite "renderConfigMode - Basic behavior":
     var buffer = createTestBuffer()
 
     let configState = newConfigModeState(e.config)
-    e.state.configModeState = some(configState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState =
+      some(configState)
 
     e.renderConfigMode(buffer)
 
@@ -313,7 +317,7 @@ suite "renderBackupManager - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    check e.state.backupManagerState.isNone
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].backupManagerState.isNone
     e.renderBackupManager(buffer)
 
   test "Render backup manager with empty entries":
@@ -322,7 +326,8 @@ suite "renderBackupManager - Basic behavior":
 
     let bkState = newBackupManagerState()
     bkState.sourceFilePath = "/tmp/test.txt"
-    e.state.backupManagerState = some(bkState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].backupManagerState =
+      some(bkState)
 
     e.renderBackupManager(buffer)
     # Should show "No backup files found" message
@@ -348,7 +353,8 @@ suite "renderBackupManager - Basic behavior":
       ]
     bkState.selectedIndex = 0
 
-    e.state.backupManagerState = some(bkState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].backupManagerState =
+      some(bkState)
 
     e.renderBackupManager(buffer)
     check e.state.screenCursor.y >= 0
@@ -358,7 +364,7 @@ suite "renderDiffViewer - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    check e.state.diffViewerState.isNone
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].diffViewerState.isNone
     e.renderDiffViewer(buffer)
 
   test "Render diff viewer with empty lines":
@@ -368,7 +374,8 @@ suite "renderDiffViewer - Basic behavior":
     let dvState = newDiffViewerState()
     dvState.sourceFilePath = "/tmp/current.txt"
     dvState.backupFilePath = "/tmp/backup.txt"
-    e.state.diffViewerState = some(dvState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].diffViewerState =
+      some(dvState)
 
     e.renderDiffViewer(buffer)
     # Should show "No diff content" message
@@ -392,7 +399,8 @@ suite "renderDiffViewer - Basic behavior":
       ]
     dvState.selectedLine = 4
 
-    e.state.diffViewerState = some(dvState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].diffViewerState =
+      some(dvState)
 
     e.renderDiffViewer(buffer)
     check e.state.screenCursor.y >= 0
@@ -429,7 +437,7 @@ suite "renderDebugMode - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    check e.state.debugViewerState.isNone
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].debugViewerState.isNone
     e.renderDebugMode(buffer)
 
   test "Render debug mode with empty lines":
@@ -437,7 +445,8 @@ suite "renderDebugMode - Basic behavior":
     var buffer = createTestBuffer()
 
     let debugState = newDebugViewerState()
-    e.state.debugViewerState = some(debugState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].debugViewerState =
+      some(debugState)
 
     e.renderDebugMode(buffer)
 
@@ -453,7 +462,8 @@ suite "renderDebugMode - Basic behavior":
       ]
     debugState.selectedLine = 2
 
-    e.state.debugViewerState = some(debugState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].debugViewerState =
+      some(debugState)
 
     e.renderDebugMode(buffer)
     check e.state.screenCursor.y >= 0
@@ -463,7 +473,7 @@ suite "renderReferencesViewer - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    check e.state.referencesViewerState.isNone
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].referencesViewerState.isNone
     e.renderReferencesViewer(buffer)
 
   test "Render references viewer with items":
@@ -477,7 +487,8 @@ suite "renderReferencesViewer - Basic behavior":
       ]
     let refState = newReferencesViewerState(items, "REFERENCES")
 
-    e.state.referencesViewerState = some(refState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].referencesViewerState =
+      some(refState)
 
     e.renderReferencesViewer(buffer)
     check e.state.screenCursor.y >= 0
@@ -487,7 +498,7 @@ suite "renderDocumentSymbolViewer - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    check e.state.documentSymbolViewerState.isNone
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].documentSymbolViewerState.isNone
     e.renderDocumentSymbolViewer(buffer)
 
   test "Render document symbol viewer with empty items":
@@ -499,7 +510,8 @@ suite "renderDocumentSymbolViewer - Basic behavior":
       items: @[], selectedIndex: 0, topLine: 0, filePath: "/test/file.nim"
     )
 
-    e.state.documentSymbolViewerState = some(symState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].documentSymbolViewerState =
+      some(symState)
 
     e.renderDocumentSymbolViewer(buffer)
 
@@ -508,7 +520,7 @@ suite "renderCallHierarchyViewer - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    check e.state.callHierarchyViewerState.isNone
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].callHierarchyViewerState.isNone
     e.renderCallHierarchyViewer(buffer)
 
   test "Render call hierarchy viewer with empty items":
@@ -518,7 +530,8 @@ suite "renderCallHierarchyViewer - Basic behavior":
     # Create state with empty items using the constructor
     let chState = newCallHierarchyViewerState(@[], chvkIncoming)
 
-    e.state.callHierarchyViewerState = some(chState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].callHierarchyViewerState =
+      some(chState)
 
     e.renderCallHierarchyViewer(buffer)
 
@@ -527,7 +540,7 @@ suite "renderHelpViewer - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    check e.state.helpViewerState.isNone
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].helpViewerState.isNone
     e.renderHelpViewer(buffer)
 
   test "Render help viewer with content":
@@ -543,7 +556,8 @@ suite "renderHelpViewer - Basic behavior":
       ]
     helpState.selectedIndex = 3
 
-    e.state.helpViewerState = some(helpState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].helpViewerState =
+      some(helpState)
 
     e.renderHelpViewer(buffer)
     check e.state.screenCursor.y >= 0
@@ -556,7 +570,8 @@ suite "renderHelpViewer - Basic behavior":
     helpState.lines = @["# Main Header", "Regular line", "# Another Header"]
     helpState.selectedIndex = 0
 
-    e.state.helpViewerState = some(helpState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].helpViewerState =
+      some(helpState)
 
     e.renderHelpViewer(buffer)
 
@@ -670,7 +685,7 @@ suite "Filer - Various file types with icons":
         ),
       ]
 
-    e.state.filerState = some(
+    e.windowManager.windows[e.windowManager.activeWindowIndex].filerState = some(
       FilerState(
         currentPath: "/test",
         entries: entries,
@@ -719,7 +734,7 @@ suite "Filer - Various file types with icons":
         ),
       ]
 
-    e.state.filerState = some(
+    e.windowManager.windows[e.windowManager.activeWindowIndex].filerState = some(
       FilerState(
         currentPath: "/test",
         entries: entries,
@@ -742,7 +757,7 @@ suite "Status line visibility":
     var buffer = createTestBuffer()
 
     # Test filer
-    e.state.filerState = some(
+    e.windowManager.windows[e.windowManager.activeWindowIndex].filerState = some(
       FilerState(
         currentPath: "/tmp",
         entries: @[],
@@ -756,7 +771,8 @@ suite "Status line visibility":
 
     # Test buffer manager
     let bmState = newBufferManagerState()
-    e.state.bufferManagerState = some(bmState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].bufferManagerState =
+      some(bmState)
     e.renderBufferManager(buffer)
 
   test "Render modes with status line shown":
@@ -767,7 +783,7 @@ suite "Status line visibility":
 
     var buffer = createTestBuffer()
 
-    e.state.filerState = some(
+    e.windowManager.windows[e.windowManager.activeWindowIndex].filerState = some(
       FilerState(
         currentPath: "/tmp",
         entries: @[],
@@ -815,7 +831,7 @@ suite "Screen cursor positioning":
         ),
       ]
 
-    e.state.filerState = some(
+    e.windowManager.windows[e.windowManager.activeWindowIndex].filerState = some(
       FilerState(
         currentPath: "/test",
         entries: entries,
@@ -829,7 +845,8 @@ suite "Screen cursor positioning":
     e.renderFiler(buffer)
     let y0 = e.state.screenCursor.y
 
-    e.state.filerState.get.selectedIndex = 2
+    e.windowManager.windows[e.windowManager.activeWindowIndex].filerState.get.selectedIndex =
+      2
     e.renderFiler(buffer)
     let y2 = e.state.screenCursor.y
 
@@ -848,7 +865,8 @@ suite "Screen cursor positioning":
       ]
     bmState.selectedIndex = 0
 
-    e.state.bufferManagerState = some(bmState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].bufferManagerState =
+      some(bmState)
 
     e.renderBufferManager(buffer)
     let y0 = e.state.screenCursor.y

@@ -855,9 +855,7 @@ proc overwriteColorSegmentBlock*[T](
     )
     highlight.overwrite(colorSegment)
 
-# =============================================================================
 # LSP Semantic Tokens Support
-# =============================================================================
 
 proc semanticTokenTypeToColor*(
     typeName: string, modifiers: seq[string] = @[]

@@ -710,9 +710,7 @@ suite "GapBuffer - Iterator Edge Cases":
     check lines ==
       @["", ""] # "\n\n" = 2 empty lines (newline is terminator, not separator)
 
-# =============================================================================
 # Low-level Linear Index API Tests
-# =============================================================================
 
 suite "GapBuffer - Linear Index Insert":
   test "insert into empty buffer":
@@ -1504,9 +1502,7 @@ suite "GapBuffer - String Conversion Extended":
       result.add(ch)
     check result == "日本"
 
-# =============================================================================
 # Additional API Tests
-# =============================================================================
 
 suite "GapBuffer - findLineEnd":
   test "findLineEnd single line":

@@ -28,35 +28,37 @@ import editor_types, logger, render_utils, sidebar
 # Window state management procedures
 
 proc saveActiveWindowState*(e: Editor) =
-  ## Save current EditorState cursor and viewport to the active window
+  ## Save viewport scroll position to the active window before switching
+  ## Note: cursor and mode are already stored directly in EditorWindow (single source of truth)
+  ## For overlay modes (Command, Search, Rename), save the base mode instead
+  ## This preserves the "real" mode (Filer, Normal, etc.) when splitting from command line
   if e.windowManager.windows.len > 0 and
       e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    activeWindow.cursor = e.state.cursor
-    # Also save viewport scroll position from motionController
-    activeWindow.viewport.topLine =
+    # Save viewport scroll position from motionController
+    e.activeWindow.viewport.topLine =
       e.executer.motionController.viewportManager.viewport.topLine
-    activeWindow.viewport.leftColumn =
+    e.activeWindow.viewport.leftColumn =
       e.executer.motionController.viewportManager.viewport.leftColumn
+    # For overlay modes, save the base mode to the window
+    if e.state.hasOverlay:
+      e.activeWindow.mode = e.state.baseMode
 
 proc restoreActiveWindowState(e: Editor) =
-  ## Restore the active window's cursor and viewport to EditorState
+  ## Restore viewport scroll position from the active window after switching
+  ## Note: cursor and mode are accessed directly from EditorWindow
   if e.windowManager.windows.len > 0 and
       e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.state.cursor = activeWindow.cursor
     # Restore viewport scroll position to motionController
     e.executer.motionController.viewportManager.viewport.topLine =
-      activeWindow.viewport.topLine
+      e.activeWindow.viewport.topLine
     e.executer.motionController.viewportManager.viewport.leftColumn =
-      activeWindow.viewport.leftColumn
+      e.activeWindow.viewport.leftColumn
 
 proc syncActiveWindow*(e: Editor) =
   ## Sync the active window's buffer and viewport with the executor and motion controller
-  let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-  e.executer.buffer = activeWindow.buffer
-  e.executer.motionController.executor.buffer = activeWindow.buffer
-  e.executer.motionController.viewportManager.viewport = activeWindow.viewport
+  e.executer.buffer = e.activeWindow.buffer
+  e.executer.motionController.executor.buffer = e.activeWindow.buffer
+  e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
   e.restoreActiveWindowState()
   e.state.needsFullRedraw = true
 
@@ -187,6 +189,7 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
   # Adjust cursor Y for tab line offset
   cursorPos.y += tabLineOffset
   e.state.screenCursor = cursorPos
+  # Note: cursorVisible is set by each mode's render function
 
 # Window split procedures
 
@@ -196,7 +199,7 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   e.saveActiveWindowState()
 
   let bufferResult =
-    e.windowManager.vsplit(e.textBuffer, e.viewport, e.state.cursor, filename)
+    e.windowManager.vsplit(e.textBuffer, e.viewport, e.cursor, filename)
   if bufferResult.isErr:
     return err(bufferResult.error)
 
@@ -217,10 +220,14 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
 
+  # New window is in Normal mode, so update state to match
+  # This ensures command handler returns to Normal mode, not the previous special mode
+  e.setMode(EditorMode.Normal)
+  e.state.previousMode = EditorMode.Normal
+
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.setActiveWindowScreenCursor(activeWindow)
+    e.setActiveWindowScreenCursor(e.activeWindow)
 
   ok(())
 
@@ -230,7 +237,7 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   e.saveActiveWindowState()
 
   let bufferResult =
-    e.windowManager.vsplitWithBuffer(e.textBuffer, e.viewport, e.state.cursor, buffer)
+    e.windowManager.vsplitWithBuffer(e.textBuffer, e.viewport, e.cursor, buffer)
   if bufferResult.isErr:
     return err(bufferResult.error)
 
@@ -251,10 +258,14 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
 
+  # New window is in Normal mode, so update state to match
+  # This ensures command handler returns to Normal mode, not the previous special mode
+  e.setMode(EditorMode.Normal)
+  e.state.previousMode = EditorMode.Normal
+
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.setActiveWindowScreenCursor(activeWindow)
+    e.setActiveWindowScreenCursor(e.activeWindow)
 
   ok(())
 
@@ -264,7 +275,7 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   e.saveActiveWindowState()
 
   let bufferResult = e.windowManager.hsplit(
-    e.textBuffer, e.viewport, e.state.cursor, e.state.display.multiStatusLine, filename
+    e.textBuffer, e.viewport, e.cursor, e.state.display.multiStatusLine, filename
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
@@ -286,10 +297,14 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
 
+  # New window is in Normal mode, so update state to match
+  # This ensures command handler returns to Normal mode, not the previous special mode
+  e.setMode(EditorMode.Normal)
+  e.state.previousMode = EditorMode.Normal
+
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.setActiveWindowScreenCursor(activeWindow)
+    e.setActiveWindowScreenCursor(e.activeWindow)
 
   ok(())
 
@@ -299,7 +314,7 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   e.saveActiveWindowState()
 
   let bufferResult = e.windowManager.hsplitWithBuffer(
-    e.textBuffer, e.viewport, e.state.cursor, e.state.display.multiStatusLine, buffer
+    e.textBuffer, e.viewport, e.cursor, e.state.display.multiStatusLine, buffer
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
@@ -327,10 +342,14 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
 
+  # New window is in Normal mode, so update state to match
+  # This ensures command handler returns to Normal mode, not the previous special mode
+  e.setMode(EditorMode.Normal)
+  e.state.previousMode = EditorMode.Normal
+
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.setActiveWindowScreenCursor(activeWindow)
+    e.setActiveWindowScreenCursor(e.activeWindow)
 
   ok(())
 
@@ -345,19 +364,18 @@ proc enew*(e: Editor): Result[(), string] =
   logDebug("editor", "enew: buffer added, buffers.len: " & $e.buffers.len)
 
   # Replace the buffer in the active window
-  let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-  activeWindow.buffer = newBuffer
-  activeWindow.cursor = BufferPosition(line: 0, column: 0)
-  activeWindow.viewport.topLine = 0
-  activeWindow.viewport.leftColumn = 0
+  e.activeWindow.buffer = newBuffer
+  e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
+  e.activeWindow.viewport.topLine = 0
+  e.activeWindow.viewport.leftColumn = 0
 
   # Update executor and motion controller references
   e.executer.buffer = newBuffer
   e.executer.motionController.executor.buffer = newBuffer
-  e.executer.motionController.viewportManager.viewport = activeWindow.viewport
+  e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
 
   # Reset cursor
-  e.state.cursor = BufferPosition(line: 0, column: 0)
+  e.cursor = BufferPosition(line: 0, column: 0)
 
   e.state.needsFullRedraw = true
   ok(())
@@ -390,8 +408,7 @@ proc switchToNextWindow*(e: Editor) =
 
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.setActiveWindowScreenCursor(activeWindow)
+    e.setActiveWindowScreenCursor(e.activeWindow)
 
 proc switchToPrevWindow*(e: Editor) =
   ## Switch to the previous window (Ctrl-w, j)
@@ -409,8 +426,7 @@ proc switchToPrevWindow*(e: Editor) =
 
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.setActiveWindowScreenCursor(activeWindow)
+    e.setActiveWindowScreenCursor(e.activeWindow)
 
 proc closeWindow*(e: Editor): bool =
   ## Close the active window
@@ -432,7 +448,6 @@ proc closeWindow*(e: Editor): bool =
 
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.setActiveWindowScreenCursor(activeWindow)
+    e.setActiveWindowScreenCursor(e.activeWindow)
 
   return false

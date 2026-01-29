@@ -165,7 +165,7 @@ proc getCodeLensItemsForLine*(e: Editor, line: int): seq[CodeLensItem] =
 
 proc getCodeLensItemsForCurrentLine*(e: Editor): seq[CodeLensItem] =
   ## Get cached CodeLens items for the current cursor line
-  e.getCodeLensItemsForLine(e.state.cursor.line)
+  e.getCodeLensItemsForLine(e.cursor.line)
 
 proc executeCodeLensItem*(
     e: Editor, item: CodeLensItem
@@ -268,8 +268,8 @@ proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlig
 
   e.state.lspCache.documentHighlightCache = DocumentHighlightCache(
     itemsByLine: itemsByLine,
-    cursorLine: e.state.cursor.line,
-    cursorColumn: e.state.cursor.column,
+    cursorLine: e.cursor.line,
+    cursorColumn: e.cursor.column,
     changeSeq: activeBuffer.changeSeq,
     isValid: true,
   )
@@ -283,9 +283,8 @@ proc doUpdateDocumentHighlightCache(e: Editor) =
     return
 
   # Start async request
-  let reqResult = e.lsp.startDocumentHighlightRequest(
-    activeBuffer, e.state.cursor.line, e.state.cursor.column
-  )
+  let reqResult =
+    e.lsp.startDocumentHighlightRequest(activeBuffer, e.cursor.line, e.cursor.column)
   if reqResult.isOk:
     e.state.lspCache.pendingDocumentHighlightRequestId = reqResult.get
   else:
@@ -332,8 +331,8 @@ proc updateDocumentHighlightCache*(e: Editor) =
   # Check if cursor position changed
   # (same line and column means no need to update)
   if e.state.lspCache.documentHighlightCache.isValid and
-      e.state.lspCache.documentHighlightCache.cursorLine == e.state.cursor.line and
-      e.state.lspCache.documentHighlightCache.cursorColumn == e.state.cursor.column and
+      e.state.lspCache.documentHighlightCache.cursorLine == e.cursor.line and
+      e.state.lspCache.documentHighlightCache.cursorColumn == e.cursor.column and
       e.state.lspCache.documentHighlightCache.changeSeq == activeBuffer.changeSeq:
     return
 
@@ -345,9 +344,7 @@ proc updateDocumentHighlightCache*(e: Editor) =
   if elapsed >= threshold:
     e.doUpdateDocumentHighlightCache()
 
-# =============================================================================
 # Semantic Tokens (LSP-based syntax highlighting)
-# =============================================================================
 
 proc invalidateSemanticTokensCache*(e: Editor) =
   ## Invalidate the semantic tokens cache, forcing re-request on next update

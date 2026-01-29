@@ -312,9 +312,7 @@ const
   ValidSplitTypes* = ["horizontal", "vertical"]
   ValidLspTraceLevels* = ["off", "messages", "verbose"]
 
-# ============================================================================
 # Integrated load functions (validate + load in one step)
-# ============================================================================
 
 proc loadStandardConfig(
     table: TomlTableRef, config: var StandardConfig, vr: var ValidationResult

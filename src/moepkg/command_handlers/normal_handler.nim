@@ -67,6 +67,7 @@ type
     case kind*: NormalModeResultKind
     of nmrHandled:
       modeTransition*: Option[EditorMode]
+      overlayTransition*: Option[OverlayKind]
     of nmrUnhandled:
       discard
     of nmrError:
@@ -169,6 +170,7 @@ proc executeCommand*(
     buffer: buffer,
     state: state,
     viewport: viewport,
+    cursor: state.cursor,
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
     clipboardConfig: handler.clipboardConfig,
@@ -177,6 +179,7 @@ proc executeCommand*(
   )
 
   let r = handler.commandRegistry.execute(ctx, commandId, args)
+  state.cursor = ctx.cursor
   if r.isOk:
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   else:
@@ -197,23 +200,20 @@ proc handleMotionCommand*(
   state.cursor = r.value
   return Result[(), string].ok ()
 
-proc handleModeSwitch*(
+proc handleModeSwitchToOverlay*(
     handler: NormalModeHandler,
-    targetMode: EditorMode,
+    overlay: OverlayKind,
     state: EditorState,
-    buffer: TextBuffer,
     commandName: string = "",
 ): NormalModeResult =
-  ## Handle mode switching commands
-  case targetMode
-  of EditorMode.Insert:
-    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
-  of EditorMode.Command:
+  ## Handle overlay mode switching commands
+  case overlay
+  of okCommand:
     # Initialize command mode state
     state.commandText = ":"
     state.commandCursor = 0 # Cursor starts after the ":"
-    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Command))
-  of EditorMode.Search:
+    return NormalModeResult(kind: nmrHandled, overlayTransition: some(okCommand))
+  of okSearch:
     # Initialize search mode state
     state.search.text = ""
     # Save current cursor position for incsearch cancellation
@@ -225,7 +225,22 @@ proc handleModeSwitch*(
       state.search.direction = Forward
     # Reset history navigation index
     state.search.historyIndex = -1
-    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Search))
+    return NormalModeResult(kind: nmrHandled, overlayTransition: some(okSearch))
+  of okRename:
+    # Rename mode is entered through LSP rename command, not mode switch
+    return NormalModeResult(kind: nmrHandled)
+
+proc handleModeSwitch*(
+    handler: NormalModeHandler,
+    targetMode: EditorMode,
+    state: EditorState,
+    buffer: TextBuffer,
+    commandName: string = "",
+): NormalModeResult =
+  ## Handle mode switching commands
+  case targetMode
+  of EditorMode.Insert:
+    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
   of EditorMode.Visual:
     # Initialize visual selection at current cursor position (character-wise)
     state.initSelection(buffer, vskChar)
@@ -274,9 +289,6 @@ proc handleModeSwitch*(
     return NormalModeResult(
       kind: nmrHandled, modeTransition: some(EditorMode.DocumentSymbol)
     )
-  of EditorMode.Rename:
-    # Rename mode is entered through LSP rename command, not mode switch
-    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   of EditorMode.CallHierarchy:
     return
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.CallHierarchy))
@@ -514,6 +526,7 @@ proc handleNormalModeKey*(
           buffer: buffer,
           state: state,
           viewport: viewport,
+          cursor: state.cursor,
           motionController: handler.motionController,
           keyBindingRegistry: handler.keyBindingRegistry,
           clipboardConfig: handler.clipboardConfig,
@@ -522,6 +535,7 @@ proc handleNormalModeKey*(
         )
 
         let cmdResult = handler.commandRegistry.execute(ctx, textObjectCommandId, @[])
+        state.cursor = ctx.cursor
         if cmdResult.isOk:
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
         else:
@@ -561,6 +575,7 @@ proc handleNormalModeKey*(
       buffer: buffer,
       state: state,
       viewport: viewport,
+      cursor: state.cursor,
       motionController: handler.motionController,
       keyBindingRegistry: handler.keyBindingRegistry,
       clipboardConfig: handler.clipboardConfig,
@@ -570,12 +585,15 @@ proc handleNormalModeKey*(
 
     # Execute the motion command directly through CommandRegistry
     let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
+    state.cursor = ctx.cursor
     if cmdResult.isOk:
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
       return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
   of ctModeSwitch:
     return handler.handleModeSwitch(cmd.targetMode, state, buffer, cmd.name)
+  of ctOverlaySwitch:
+    return handler.handleModeSwitchToOverlay(cmd.targetOverlay, state, cmd.name)
   of ctAction:
     # Handle various actions based on command ID
     case cmd.commandId
@@ -673,6 +691,7 @@ proc handleNormalModeKey*(
         buffer: buffer,
         state: state,
         viewport: viewport,
+        cursor: state.cursor,
         motionController: handler.motionController,
         keyBindingRegistry: handler.keyBindingRegistry,
         clipboardConfig: handler.clipboardConfig,
@@ -680,6 +699,7 @@ proc handleNormalModeKey*(
         notificationConfig: handler.notificationConfig,
       )
       let cmdResult = handler.commandRegistry.execute(ctx, cmd.commandId, cmd.args)
+      state.cursor = ctx.cursor
       if cmdResult.isOk:
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
@@ -690,6 +710,7 @@ proc handleNormalModeKey*(
       buffer: buffer,
       state: state,
       viewport: viewport,
+      cursor: state.cursor,
       motionController: handler.motionController,
       keyBindingRegistry: handler.keyBindingRegistry,
       clipboardConfig: handler.clipboardConfig,
@@ -697,6 +718,7 @@ proc handleNormalModeKey*(
       notificationConfig: handler.notificationConfig,
     )
     let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
+    state.cursor = ctx.cursor
     if cmdResult.isOk:
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
@@ -738,6 +760,7 @@ proc handleNormalModeKey*(
       buffer: buffer,
       state: state,
       viewport: viewport,
+      cursor: state.cursor,
       motionController: handler.motionController,
       keyBindingRegistry: handler.keyBindingRegistry,
       clipboardConfig: handler.clipboardConfig,
@@ -746,6 +769,7 @@ proc handleNormalModeKey*(
     )
     # Use executeCommand to handle numeric prefixes properly
     let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
+    state.cursor = ctx.cursor
     if cmdResult.isOk:
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
@@ -765,3 +789,10 @@ proc getModeTransition*(nmResult: NormalModeResult): Option[EditorMode] =
     nmResult.modeTransition
   else:
     none(EditorMode)
+
+proc getOverlayTransition*(nmResult: NormalModeResult): Option[OverlayKind] =
+  ## Get the overlay transition if any
+  if nmResult.kind == nmrHandled:
+    nmResult.overlayTransition
+  else:
+    none(OverlayKind)

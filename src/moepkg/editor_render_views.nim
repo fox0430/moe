@@ -24,7 +24,8 @@ import std/strutils
 import pkg/celina
 
 import
-  editor_types, editor_window, editor_render_window, render_utils, statusline, tabline
+  editor_types, editor_window, editor_render_window, editor_render_modes, render_utils,
+  statusline, tabline
 
 proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
   ## Update viewport size from buffer area and return true if resized
@@ -80,9 +81,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
   # If terminal was resized, rebuild window layout
   if wasResized and oldWidth > 0 and oldHeight > 0 and e.viewport.width > 0 and
       e.viewport.height > 0:
-    # Save current state to window before resize
-    if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-      e.windowManager.windows[e.windowManager.activeWindowIndex].cursor = e.state.cursor
+    # Note: cursor is now stored directly in EditorWindow (single source of truth)
 
     e.windowManager.resizeWindows(
       e.viewport.width, e.viewport.height, oldWidth, oldHeight,
@@ -92,20 +91,15 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     # After resize, sync viewport from window to motion controller
     # (ViewPort is value type, so must sync all fields)
     if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-      let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
       e.executer.motionController.viewportManager.viewport.topLine =
-        activeWindow.viewport.topLine
+        e.activeWindow.viewport.topLine
       e.executer.motionController.viewportManager.viewport.leftColumn =
-        activeWindow.viewport.leftColumn
+        e.activeWindow.viewport.leftColumn
       e.executer.motionController.viewportManager.viewport.width =
-        activeWindow.viewport.width
+        e.activeWindow.viewport.width
       e.executer.motionController.viewportManager.viewport.height =
-        activeWindow.viewport.height
-  else:
-    # Normal case: sync active window's cursor with state cursor
-    if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-      # Update window cursor from editor state
-      e.windowManager.windows[e.windowManager.activeWindowIndex].cursor = e.state.cursor
+        e.activeWindow.viewport.height
+  # Note: In normal case, cursor is already in EditorWindow (single source of truth)
 
   # Find the maximum bottom Y coordinate (to determine bottom windows)
   let maxBottomY = findMaxBottomY(e.windowManager.windows)
@@ -149,10 +143,92 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
         window.viewport.width, e.state.display.showTabLine,
       )
 
-    # Render window (LogViewer uses normal buffer rendering now)
-    e.renderWindow(
-      buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
-    )
+    # Render window content based on window's mode
+    # Special modes only render when active (they use activeWindow state internally)
+    # For overlay modes (Command, Search, Rename), use the base mode for background rendering
+    let renderMode =
+      if isActiveWindow and e.state.hasOverlay:
+        e.state.baseMode # Use the underlying mode when overlay is active
+      else:
+        window.mode
+
+    # Render based on mode - some special modes support per-window rendering
+    case renderMode
+    of EditorMode.Filer:
+      # Filer supports per-window rendering
+      e.renderWindowFiler(buffer, window, isBottomWindow, tabLineOffset)
+    of EditorMode.Config:
+      # Config supports per-window rendering
+      e.renderWindowConfig(buffer, window, isBottomWindow, tabLineOffset)
+    of EditorMode.BufferManager:
+      # These modes use activeWindow internally, only render when active
+      if isActiveWindow:
+        e.renderBufferManager(buffer)
+      else:
+        e.renderWindow(
+          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        )
+    of EditorMode.Help:
+      if isActiveWindow:
+        e.renderHelpViewer(buffer)
+      else:
+        e.renderWindow(
+          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        )
+    of EditorMode.BackupManager:
+      if isActiveWindow:
+        e.renderBackupManager(buffer)
+      else:
+        e.renderWindow(
+          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        )
+    of EditorMode.DiffViewer:
+      if isActiveWindow:
+        e.renderDiffViewer(buffer)
+      else:
+        e.renderWindow(
+          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        )
+    of EditorMode.Debug:
+      if isActiveWindow:
+        e.renderDebugMode(buffer)
+      else:
+        e.renderWindow(
+          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        )
+    of EditorMode.References:
+      if isActiveWindow:
+        e.renderReferencesViewer(buffer)
+      else:
+        e.renderWindow(
+          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        )
+    of EditorMode.DocumentSymbol:
+      if isActiveWindow:
+        e.renderDocumentSymbolViewer(buffer)
+      else:
+        e.renderWindow(
+          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        )
+    of EditorMode.CallHierarchy:
+      if isActiveWindow:
+        e.renderCallHierarchyViewer(buffer)
+      else:
+        e.renderWindow(
+          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        )
+    of EditorMode.RecentFile:
+      if isActiveWindow:
+        e.renderRecentFileMode(buffer)
+      else:
+        e.renderWindow(
+          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        )
+    else:
+      # Normal buffer rendering (Normal, Insert, Visual, Command, Search, etc.)
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
 
     # Render per-window status line if multi-status line mode is enabled
     # (and merge is disabled - merge shows only one status line at bottom)
@@ -171,8 +247,24 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
 
   # Set cursor to active window position
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-    e.setActiveWindowScreenCursor(activeWindow)
+    e.setActiveWindowScreenCursor(e.activeWindow)
+
+    # Set cursor visibility based on mode
+    # Special modes (Filer, Config, etc.) set cursorVisible in their render functions
+    # Normal modes need cursor visible
+    case e.activeWindow.mode
+    of EditorMode.Filer:
+      e.state.cursorVisible = false
+    of EditorMode.Config:
+      # Config mode sets cursorVisible in renderWindowConfig based on edit state
+      discard
+    of EditorMode.BufferManager, EditorMode.Help, EditorMode.BackupManager,
+        EditorMode.DiffViewer, EditorMode.Debug, EditorMode.References,
+        EditorMode.DocumentSymbol, EditorMode.CallHierarchy, EditorMode.RecentFile:
+      e.state.cursorVisible = false
+    else:
+      # Normal, Insert, Visual, etc. - cursor should be visible
+      e.state.cursorVisible = true
 
 proc renderBottomLines*(e: Editor, buffer: var Buffer) =
   ## Render status line and command line at the bottom of the screen
@@ -187,8 +279,8 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
       e.config.statusLine.merge:
     e.state.renderStatusLine(e.activeBuffer(), buffer, statusLineY, e.config.statusLine)
 
-  # Handle command line
-  if e.state.mode == EditorMode.Command:
+  # Handle command line based on overlay state
+  if e.state.isCommandOverlay:
     buffer.setString(buffer.area.x, commandLineY, e.state.commandText, commandStyle())
     # Cursor position: ":" + commandCursor (0-based after ":")
     e.state.screenCursor.x = 1 + e.state.commandCursor
@@ -205,13 +297,13 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
       renderCommandCompletionPopup(
         buffer, e.state.commandCompletionManager.menu, popupPos
       )
-  elif e.state.mode == EditorMode.Search:
+  elif e.state.isSearchOverlay:
     let searchChar = if e.state.search.direction == Forward: "/" else: "?"
     let searchPrompt = searchChar & e.state.search.text
     buffer.setString(buffer.area.x, commandLineY, searchPrompt, commandStyle())
     e.state.screenCursor.x = searchPrompt.len
     e.state.screenCursor.y = buffer.area.height - 1
-  elif e.state.mode == EditorMode.Rename:
+  elif e.state.isRenameOverlay:
     let renamePrompt = "Rename: " & e.state.renameState.text
     buffer.setString(buffer.area.x, commandLineY, renamePrompt, commandStyle())
     e.state.screenCursor.x = renamePrompt.len

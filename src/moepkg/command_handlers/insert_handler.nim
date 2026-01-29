@@ -58,6 +58,7 @@ type
     case kind*: InsertModeResultKind
     of imrHandled:
       modeTransition*: Option[EditorMode]
+      overlayTransition*: Option[OverlayKind]
     of imrUnhandled:
       discard
     of imrError:
@@ -96,12 +97,15 @@ proc executeCommand*(
     buffer: buffer,
     state: state,
     viewport: viewport,
+    cursor: state.cursor, # Initialize cursor from state
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
     notificationConfig: handler.notificationConfig,
   )
 
   let cmdResult = handler.commandRegistry.execute(ctx, commandId, args)
+  # Sync cursor back from context to state
+  state.cursor = ctx.cursor
   if cmdResult.isOk:
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
   else:
@@ -585,6 +589,9 @@ proc handleInsertModeKey*(
     case cmd.kind
     of ctModeSwitch:
       return handler.handleModeSwitch(cmd.targetMode)
+    of ctOverlaySwitch:
+      # Overlay switches not supported in insert mode
+      return InsertModeResult(kind: imrUnhandled)
     of ctMotion:
       # Cancel completion on motion
       handler.completionManager.cancelCompletion()
@@ -657,3 +664,10 @@ proc getModeTransition*(imResult: InsertModeResult): Option[EditorMode] =
     imResult.modeTransition
   else:
     none(EditorMode)
+
+proc getOverlayTransition*(imResult: InsertModeResult): Option[OverlayKind] =
+  ## Get the overlay transition if any
+  if imResult.kind == imrHandled:
+    imResult.overlayTransition
+  else:
+    none(OverlayKind)

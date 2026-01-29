@@ -77,8 +77,6 @@ proc getStatusLineModeStyle(mode: EditorMode): Style =
     getThemeStyle(EditorColorPairIndex.statusLineReplaceMode, {StyleModifier.Bold})
   of EditorMode.Filer:
     getThemeStyle(EditorColorPairIndex.statusLineFilerMode, {StyleModifier.Bold})
-  of EditorMode.Command, EditorMode.Search:
-    getThemeStyle(EditorColorPairIndex.statusLineExMode, {StyleModifier.Bold})
   else:
     getThemeStyle(EditorColorPairIndex.statusLineNormalMode, {StyleModifier.Bold})
 
@@ -95,10 +93,16 @@ proc getStatusLineModeLabelStyle(mode: EditorMode): Style =
     getThemeStyle(EditorColorPairIndex.statusLineReplaceModeLabel, {StyleModifier.Bold})
   of EditorMode.Filer:
     getThemeStyle(EditorColorPairIndex.statusLineFilerModeLabel, {StyleModifier.Bold})
-  of EditorMode.Command, EditorMode.Search:
-    getThemeStyle(EditorColorPairIndex.statusLineExModeLabel, {StyleModifier.Bold})
   else:
     getThemeStyle(EditorColorPairIndex.statusLineNormalModeLabel, {StyleModifier.Bold})
+
+proc getOverlayStyle(overlay: OverlayKind): Style =
+  ## Get the status line background style for overlay modes
+  getThemeStyle(EditorColorPairIndex.statusLineExMode, {StyleModifier.Bold})
+
+proc getOverlayLabelStyle(overlay: OverlayKind): Style =
+  ## Get the status line label style for overlay modes
+  getThemeStyle(EditorColorPairIndex.statusLineExModeLabel, {StyleModifier.Bold})
 
 proc buildFileDisplay(textBuffer: TextBuffer, config: StatusLineConfig): string =
   ## Build the file display text based on config settings
@@ -193,7 +197,11 @@ proc parseSetupText(
       else:
         ""
     encoding = encodingToString(textBuffer.encoding)
-    modeStr = modeLabel(state.mode)
+    modeStr =
+      if state.overlay.isSome:
+        overlayLabel(state.overlay.get().kind)
+      else:
+        modeLabel(state.mode)
     filePath =
       if textBuffer.filePath.isSome:
         textBuffer.filePath.get()
@@ -301,16 +309,27 @@ proc renderStatusLine*(
   if not state.display.showStatusLine:
     return
 
-  let
-    modeLabelStyle = getStatusLineModeLabelStyle(state.mode)
-    statusLineStyle = getStatusLineModeStyle(state.mode)
-
-  # Build mode label (always shown in single status line mode)
-  let modeLabelText =
-    if config.mode:
-      fmt" {modeLabel(state.mode)} "
+  # Use overlay styles if an overlay is active, otherwise use mode styles
+  let (modeLabelStyle, statusLineStyle, modeLabelText) =
+    if state.overlay.isSome:
+      let overlay = state.overlay.get()
+      let labelStyle = getOverlayLabelStyle(overlay.kind)
+      let lineStyle = getOverlayStyle(overlay.kind)
+      let labelText =
+        if config.mode:
+          fmt" {overlayLabel(overlay.kind)} "
+        else:
+          ""
+      (labelStyle, lineStyle, labelText)
     else:
-      ""
+      let labelStyle = getStatusLineModeLabelStyle(state.mode)
+      let lineStyle = getStatusLineModeStyle(state.mode)
+      let labelText =
+        if config.mode:
+          fmt" {modeLabel(state.mode)} "
+        else:
+          ""
+      (labelStyle, lineStyle, labelText)
 
   # Build git info (displayed before filename)
   let gitInfoText = buildGitInfo(textBuffer, config, true)
@@ -384,17 +403,30 @@ proc renderWindowStatusLine*(
   if not state.display.showStatusLine or not state.display.multiStatusLine:
     return
 
-  let
-    modeLabelStyle = getStatusLineModeLabelStyle(state.mode)
-    statusLineStyle = getStatusLineModeStyle(state.mode)
-
   # Build mode label (show for active window, or inactive if showModeInactive)
   let showMode = config.mode and (isActiveWindow or config.showModeInactive)
-  let modeLabelText =
-    if showMode:
-      fmt" {modeLabel(state.mode)} "
+
+  # Use overlay styles if an overlay is active, otherwise use mode styles
+  let (modeLabelStyle, statusLineStyle, modeLabelText) =
+    if state.overlay.isSome:
+      let overlay = state.overlay.get()
+      let labelStyle = getOverlayLabelStyle(overlay.kind)
+      let lineStyle = getOverlayStyle(overlay.kind)
+      let labelText =
+        if showMode:
+          fmt" {overlayLabel(overlay.kind)} "
+        else:
+          ""
+      (labelStyle, lineStyle, labelText)
     else:
-      ""
+      let labelStyle = getStatusLineModeLabelStyle(state.mode)
+      let lineStyle = getStatusLineModeStyle(state.mode)
+      let labelText =
+        if showMode:
+          fmt" {modeLabel(state.mode)} "
+        else:
+          ""
+      (labelStyle, lineStyle, labelText)
 
   # Build git info (displayed before filename)
   let gitInfoText = buildGitInfo(textBuffer, config, isActiveWindow)

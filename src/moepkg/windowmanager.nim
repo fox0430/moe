@@ -23,7 +23,7 @@ import std/[options, algorithm]
 
 import pkg/results
 
-import types, buffer, cursor
+import types, buffer, cursor, modes
 
 type EditorWindowManager* = ref object ## Manages multiple split windows
   windows*: seq[EditorWindow]
@@ -431,6 +431,7 @@ proc vsplit*(
     ),
     cursor: BufferPosition(line: 0, column: 0),
     active: true,
+    mode: EditorMode.Normal, # New windows start in Normal mode
   )
 
   # Insert new window right after the active window
@@ -490,6 +491,7 @@ proc vsplitWithBuffer*(
     ),
     cursor: BufferPosition(line: 0, column: 0),
     active: true,
+    mode: EditorMode.Normal, # New windows start in Normal mode
   )
 
   # Insert new window right after the active window
@@ -585,6 +587,7 @@ proc hsplit*(
     ),
     cursor: BufferPosition(line: 0, column: 0),
     active: true,
+    mode: EditorMode.Normal, # New windows start in Normal mode
   )
 
   # Insert new window right after the active window
@@ -660,6 +663,7 @@ proc hsplitWithBuffer*(
     ),
     cursor: BufferPosition(line: 0, column: 0),
     active: true,
+    mode: EditorMode.Normal, # New windows start in Normal mode
   )
 
   # Insert new window right after the active window

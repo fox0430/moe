@@ -225,8 +225,8 @@ suite "Editor - saveBufferCursorPosition":
 
     discard e.loadFile(testFile)
 
-    # Set cursor position
-    e.state.cursor = BufferPosition(line: 0, column: 3)
+    # Set cursor position (use e.cursor to sync both EditorWindow and EditorState)
+    e.cursor = BufferPosition(line: 0, column: 3)
 
     # Save cursor position
     e.saveBufferCursorPosition(e.textBuffer)
@@ -248,7 +248,7 @@ suite "Editor - saveBufferCursorPosition":
       removeFile(testFile)
 
     discard e.loadFile(testFile)
-    e.state.cursor = BufferPosition(line: 0, column: 5)
+    e.cursor = BufferPosition(line: 0, column: 5)
 
     e.saveBufferCursorPosition(e.textBuffer)
 

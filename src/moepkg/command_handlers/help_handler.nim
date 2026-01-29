@@ -22,9 +22,7 @@
 ## This module handles commands specific to Help Viewer mode.
 ## The help viewer displays editor help information.
 
-import std/options
-
-import ../[types, keybindings, helpviewer]
+import ../[keybindings, helpviewer]
 
 type
   HelpViewerResultKind* = enum
@@ -50,20 +48,13 @@ proc newHelpViewerHandler*(): HelpViewerHandler =
 
 proc handleHelpViewerModeKey*(
     handler: HelpViewerHandler,
-    state: EditorState,
+    helpState: HelpViewerState,
     viewportHeight: int,
     keyCombo: KeyCombo,
 ): HelpViewerResult =
   ## Handle a key press in Help Viewer mode
   ##
   ## Returns a HelpViewerResult indicating what action should be taken
-
-  if state.helpViewerState.isNone:
-    return HelpViewerResult(
-      kind: hvrError, errorMessage: "Help viewer state not initialized"
-    )
-
-  let helpState = state.helpViewerState.get
 
   # Handle 'gg' command (two g presses)
   if handler.waitingForG:

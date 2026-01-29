@@ -57,20 +57,13 @@ proc newBufferManagerHandler*(): BufferManagerHandler =
 
 proc handleBufferManagerModeKey*(
     handler: BufferManagerHandler,
-    state: EditorState,
+    bmState: BufferManagerState,
     viewportHeight: int,
     keyCombo: KeyCombo,
 ): BufferManagerResult =
   ## Handle a key press in Buffer Manager mode
   ##
   ## Returns a BufferManagerResult indicating what action should be taken
-
-  if state.bufferManagerState.isNone:
-    return BufferManagerResult(
-      kind: bmrError, errorMessage: "Buffer manager state not initialized"
-    )
-
-  let bmState = state.bufferManagerState.get
 
   # Handle 'gg' command (two g presses)
   if handler.waitingForG:

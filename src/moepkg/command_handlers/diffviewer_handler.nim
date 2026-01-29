@@ -32,9 +32,7 @@
 ## - q/Esc: Close diff viewer
 ## - :: Enter command mode
 
-import std/options
-
-import ../[types, diffviewer, keybindings]
+import ../[diffviewer, keybindings]
 
 type
   DiffViewerResultKind* = enum
@@ -60,20 +58,13 @@ proc newDiffViewerHandler*(): DiffViewerHandler =
 
 proc handleDiffViewerModeKey*(
     handler: DiffViewerHandler,
-    state: EditorState,
+    dvState: DiffViewerState,
     viewportHeight: int,
     keyCombo: KeyCombo,
 ): DiffViewerResult =
   ## Handle a key press in Diff Viewer mode
   ##
   ## Returns a DiffViewerResult indicating what action should be taken
-
-  if state.diffViewerState.isNone:
-    return DiffViewerResult(
-      kind: dvrError, errorMessage: "Diff viewer state not initialized"
-    )
-
-  let dvState = state.diffViewerState.get
 
   # Handle 'gg' command (two g presses)
   if handler.waitingForG:

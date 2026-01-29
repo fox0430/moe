@@ -101,7 +101,7 @@ proc createTestHandler(buf: TextBuffer): NormalModeHandler =
     motionController,
     keyBindingRegistry,
     commandRegistry,
-    ClipboardConfig(enable: false, tool: ctXclip),
+    ClipboardConfig(enable: false, tool: cbtXclip),
     SmoothScrollConfig(enable: false, friction: 80.0, airDrag: 2.0),
     NotificationConfig(),
   )
@@ -125,13 +125,13 @@ suite "NormalModeHandler - Constructor":
     let motionController =
       newMotionController(buf, createTestState(), createTestViewport())
 
-    let clipboardConfig = ClipboardConfig(enable: true, tool: ctXsel)
+    let clipboardConfig = ClipboardConfig(enable: true, tool: cbtXsel)
     let handler = newNormalModeHandler(
       motionController, keyBindingRegistry, commandRegistry, clipboardConfig
     )
 
     check handler.clipboardConfig.enable == true
-    check handler.clipboardConfig.tool == ctXsel
+    check handler.clipboardConfig.tool == cbtXsel
 
 suite "NormalModeHandler - Mode Switching":
   test "Switch to Insert mode":
@@ -146,49 +146,47 @@ suite "NormalModeHandler - Mode Switching":
     check result.modeTransition.isSome
     check result.modeTransition.get == EditorMode.Insert
 
-  test "Switch to Command mode":
+  test "Switch to Command overlay":
     let buf = newTextBuffer()
     let handler = createTestHandler(buf)
     let state = createTestState()
 
-    let result = handler.handleModeSwitch(EditorMode.Command, state, buf)
+    let result = handler.handleModeSwitchToOverlay(okCommand, state)
 
     check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Command
+    check result.overlayTransition.isSome
+    check result.overlayTransition.get == okCommand
     check state.commandText == ":"
     check state.commandCursor == 0
 
-  test "Switch to Search mode (forward)":
+  test "Switch to Search overlay (forward)":
     let buf = newTextBuffer()
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.cursor = BufferPosition(line: 5, column: 10)
 
-    let result =
-      handler.handleModeSwitch(EditorMode.Search, state, buf, "switch-to-search")
+    let result = handler.handleModeSwitchToOverlay(okSearch, state, "switch-to-search")
 
     check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Search
+    check result.overlayTransition.isSome
+    check result.overlayTransition.get == okSearch
     check state.search.text == ""
     check state.search.direction == Forward
     check state.search.startPos.line == 5
     check state.search.startPos.column == 10
 
-  test "Switch to Search mode (backward)":
+  test "Switch to Search overlay (backward)":
     let buf = newTextBuffer()
     let handler = createTestHandler(buf)
     let state = createTestState()
     state.cursor = BufferPosition(line: 3, column: 5)
 
-    let result = handler.handleModeSwitch(
-      EditorMode.Search, state, buf, "switch-to-search-backward"
-    )
+    let result =
+      handler.handleModeSwitchToOverlay(okSearch, state, "switch-to-search-backward")
 
     check result.kind == nmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Search
+    check result.overlayTransition.isSome
+    check result.overlayTransition.get == okSearch
     check state.search.direction == Backward
 
   test "Switch to Visual mode":
@@ -377,6 +375,42 @@ suite "NormalModeHandler - Result Helpers":
   test "getModeTransition returns none for error results":
     let result = NormalModeResult(kind: nmrError, errorMessage: "error")
     let transition = result.getModeTransition
+    check transition.isNone
+
+  test "getOverlayTransition returns overlay for handled with overlay transition":
+    let result = NormalModeResult(
+      kind: nmrHandled,
+      modeTransition: none(EditorMode),
+      overlayTransition: some(okCommand),
+    )
+    let transition = result.getOverlayTransition
+    check transition.isSome
+    check transition.get == okCommand
+
+  test "getOverlayTransition returns search overlay":
+    let result = NormalModeResult(
+      kind: nmrHandled,
+      modeTransition: none(EditorMode),
+      overlayTransition: some(okSearch),
+    )
+    let transition = result.getOverlayTransition
+    check transition.isSome
+    check transition.get == okSearch
+
+  test "getOverlayTransition returns none for handled without overlay transition":
+    let result =
+      NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
+    let transition = result.getOverlayTransition
+    check transition.isNone
+
+  test "getOverlayTransition returns none for error results":
+    let result = NormalModeResult(kind: nmrError, errorMessage: "error")
+    let transition = result.getOverlayTransition
+    check transition.isNone
+
+  test "getOverlayTransition returns none for unhandled results":
+    let result = NormalModeResult(kind: nmrUnhandled)
+    let transition = result.getOverlayTransition
     check transition.isNone
 
 suite "NormalModeHandler - Macro Recording State":
@@ -775,15 +809,16 @@ suite "NormalModeHandler - All Mode Switches":
     check result.modeTransition.isSome
     check result.modeTransition.get == EditorMode.DocumentSymbol
 
-  test "Switch to Rename mode (no transition)":
+  test "Switch to Rename overlay (no transition)":
     let buf = newTextBuffer()
     let handler = createTestHandler(buf)
     let state = createTestState()
 
-    let result = handler.handleModeSwitch(EditorMode.Rename, state, buf)
+    let result = handler.handleModeSwitchToOverlay(okRename, state)
 
     check result.kind == nmrHandled
-    check result.modeTransition.isNone
+    check result.overlayTransition.isNone
+      # Rename is entered through LSP, not mode switch
 
   test "Switch to CallHierarchy mode":
     let buf = newTextBuffer()

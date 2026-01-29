@@ -114,8 +114,6 @@ suite "isVisualMode - Comprehensive":
   test "All non-visual modes return false":
     check renderHelpers.isVisualMode(EditorMode.Normal) == false
     check renderHelpers.isVisualMode(EditorMode.Insert) == false
-    check renderHelpers.isVisualMode(EditorMode.Command) == false
-    check renderHelpers.isVisualMode(EditorMode.Search) == false
     check renderHelpers.isVisualMode(EditorMode.Replace) == false
     check renderHelpers.isVisualMode(EditorMode.Filer) == false
     check renderHelpers.isVisualMode(EditorMode.LogViewer) == false
@@ -123,12 +121,11 @@ suite "isVisualMode - Comprehensive":
     check renderHelpers.isVisualMode(EditorMode.BufferManager) == false
     check renderHelpers.isVisualMode(EditorMode.Config) == false
     check renderHelpers.isVisualMode(EditorMode.Debug) == false
-    check renderHelpers.isVisualMode(EditorMode.Rename) == false
 
 suite "getVisualSelection - Detailed":
   test "Default hasSelection is false":
     let e = createTestEditor()
-    let result = e.getVisualSelection()
+    let result = e.getVisualSelection(EditorMode.Normal)
     check result.hasSelection == false
     check result.selStart.line == 0
     check result.selStart.column == 0
@@ -143,7 +140,7 @@ suite "getVisualSelection - Detailed":
     e.state.visualSelection.start = BufferPosition(line: 1, column: 5)
     e.state.visualSelection.current = BufferPosition(line: 3, column: 10)
 
-    let result = e.getVisualSelection()
+    let result = e.getVisualSelection(EditorMode.Visual)
     check result.hasSelection == true
 
   test "VisualLine mode":
@@ -154,7 +151,7 @@ suite "getVisualSelection - Detailed":
     e.state.visualSelection.start = BufferPosition(line: 2, column: 0)
     e.state.visualSelection.current = BufferPosition(line: 5, column: 0)
 
-    let result = e.getVisualSelection()
+    let result = e.getVisualSelection(EditorMode.VisualLine)
     check result.hasSelection == true
 
   test "VisualBlock mode":
@@ -165,7 +162,7 @@ suite "getVisualSelection - Detailed":
     e.state.visualSelection.start = BufferPosition(line: 0, column: 2)
     e.state.visualSelection.current = BufferPosition(line: 4, column: 8)
 
-    let result = e.getVisualSelection()
+    let result = e.getVisualSelection(EditorMode.VisualBlock)
     check result.hasSelection == true
 
   test "windowActive=false disables selection":
@@ -175,7 +172,7 @@ suite "getVisualSelection - Detailed":
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
     e.state.visualSelection.current = BufferPosition(line: 1, column: 5)
 
-    let result = e.getVisualSelection(windowActive = false)
+    let result = e.getVisualSelection(EditorMode.Visual, windowActive = false)
     check result.hasSelection == false
 
 suite "shouldShowIndentationGuide - Detailed":
@@ -374,6 +371,7 @@ suite "getSelectionStyle - Basic":
       pos = BufferPosition(line: 0, column: 5),
       cursorLine = 0,
       cursorCol = 5,
+      windowMode = EditorMode.Normal,
     )
     # At cursor position, should return cursor char style
     check true
@@ -390,6 +388,7 @@ suite "getSelectionStyle - Basic":
       pos = BufferPosition(line: 0, column: 0),
       cursorLine = 0,
       cursorCol = 5,
+      windowMode = EditorMode.Normal,
     )
     check true
 
@@ -408,6 +407,7 @@ suite "getSelectionStyle - Basic":
       pos = BufferPosition(line: 0, column: 5),
       cursorLine = 0,
       cursorCol = 10,
+      windowMode = EditorMode.Visual,
     )
     check true
 
@@ -423,6 +423,7 @@ suite "getSelectionStyle - Matching paren":
       pos = BufferPosition(line: 0, column: 6),
       cursorLine = 0,
       cursorCol = 0,
+      windowMode = EditorMode.Normal,
     )
     check true
 
@@ -444,6 +445,7 @@ suite "getSelectionStyle - Search highlight":
       pos = BufferPosition(line: 0, column: 0),
       cursorLine = 5, # Cursor on different line
       cursorCol = 0,
+      windowMode = EditorMode.Normal,
     )
     check true
 
@@ -462,6 +464,7 @@ suite "getSelectionStyle - Search highlight":
       pos = BufferPosition(line: 0, column: 0),
       cursorLine = 5,
       cursorCol = 0,
+      windowMode = EditorMode.Normal,
     )
     check true
 
@@ -479,6 +482,7 @@ suite "getSelectionStyle - Search highlight":
       pos = BufferPosition(line: 0, column: 0),
       cursorLine = 5,
       cursorCol = 0,
+      windowMode = EditorMode.Normal,
     )
     check true
 
@@ -496,6 +500,7 @@ suite "getSelectionStyle - Cursor line":
       pos = BufferPosition(line: 0, column: 3),
       cursorLine = 0,
       cursorCol = 5,
+      windowMode = EditorMode.Normal,
     )
     check true
 
@@ -511,6 +516,7 @@ suite "getSelectionStyle - Cursor line":
       pos = BufferPosition(line: 0, column: 3),
       cursorLine = 0,
       cursorCol = 5,
+      windowMode = EditorMode.Normal,
     )
     check true
 

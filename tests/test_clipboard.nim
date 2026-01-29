@@ -33,7 +33,7 @@ suite "clipboard: getClipboardCommand":
     if isSkipTest():
       skip()
     else:
-      let cmd = getClipboardCommand(ctXclip, ClipboardOperation.read)
+      let cmd = getClipboardCommand(cbtXclip, ClipboardOperation.read)
       check cmd.isSome
       check cmd.get() == @["xclip", "-selection", "clipboard", "-o"]
 
@@ -41,7 +41,7 @@ suite "clipboard: getClipboardCommand":
     if isSkipTest():
       skip()
     else:
-      let cmd = getClipboardCommand(ctXclip, ClipboardOperation.write)
+      let cmd = getClipboardCommand(cbtXclip, ClipboardOperation.write)
       check cmd.isSome
       check cmd.get() == @["xclip", "-selection", "clipboard", "-i"]
 
@@ -49,7 +49,7 @@ suite "clipboard: getClipboardCommand":
     if isSkipTest():
       skip()
     else:
-      let cmd = getClipboardCommand(ctXsel, ClipboardOperation.read)
+      let cmd = getClipboardCommand(cbtXsel, ClipboardOperation.read)
       check cmd.isSome
       check cmd.get() == @["xsel", "--clipboard", "--output"]
 
@@ -57,7 +57,7 @@ suite "clipboard: getClipboardCommand":
     if isSkipTest():
       skip()
     else:
-      let cmd = getClipboardCommand(ctXsel, ClipboardOperation.write)
+      let cmd = getClipboardCommand(cbtXsel, ClipboardOperation.write)
       check cmd.isSome
       check cmd.get() == @["xsel", "--clipboard", "--input"]
 
@@ -65,7 +65,7 @@ suite "clipboard: getClipboardCommand":
     if isSkipTest():
       skip()
     else:
-      let cmd = getClipboardCommand(ctWlClipboard, ClipboardOperation.read)
+      let cmd = getClipboardCommand(cbtWlClipboard, ClipboardOperation.read)
       check cmd.isSome
       check cmd.get() == @["wl-paste", "-n"]
 
@@ -73,7 +73,7 @@ suite "clipboard: getClipboardCommand":
     if isSkipTest():
       skip()
     else:
-      let cmd = getClipboardCommand(ctWlClipboard, ClipboardOperation.write)
+      let cmd = getClipboardCommand(cbtWlClipboard, ClipboardOperation.write)
       check cmd.isSome
       check cmd.get() == @["wl-copy"]
 
@@ -81,7 +81,7 @@ suite "clipboard: getClipboardCommand":
     if isSkipTest():
       skip()
     else:
-      let cmd = getClipboardCommand(ctWin32yank, ClipboardOperation.read)
+      let cmd = getClipboardCommand(cbtWin32yank, ClipboardOperation.read)
       check cmd.isSome
       check cmd.get() == @["win32yank.exe", "-o", "--lf"]
 
@@ -89,7 +89,7 @@ suite "clipboard: getClipboardCommand":
     if isSkipTest():
       skip()
     else:
-      let cmd = getClipboardCommand(ctWin32yank, ClipboardOperation.write)
+      let cmd = getClipboardCommand(cbtWin32yank, ClipboardOperation.write)
       check cmd.isSome
       check cmd.get() == @["win32yank.exe", "-i", "--crlf"]
 
@@ -97,7 +97,7 @@ suite "clipboard: getClipboardCommand":
     if isSkipTest():
       skip()
     else:
-      let cmd = getClipboardCommand(ctPbcopy, ClipboardOperation.read)
+      let cmd = getClipboardCommand(cbtPbcopy, ClipboardOperation.read)
       check cmd.isSome
       check cmd.get() == @["pbpaste"]
 
@@ -105,7 +105,7 @@ suite "clipboard: getClipboardCommand":
     if isSkipTest():
       skip()
     else:
-      let cmd = getClipboardCommand(ctPbcopy, ClipboardOperation.write)
+      let cmd = getClipboardCommand(cbtPbcopy, ClipboardOperation.write)
       check cmd.isSome
       check cmd.get() == @["pbcopy"]
 
@@ -131,10 +131,10 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       skip()
     else:
       let testText = "moe editor clipboard test - xclip"
-      let writeResult = writeToClipboardSync(ctXclip, testText)
+      let writeResult = writeToClipboardSync(cbtXclip, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(ctXclip)
+      let readResult = readFromClipboardSync(cbtXclip)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -143,10 +143,10 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       skip()
     else:
       let testText = "moe editor clipboard test - xsel"
-      let writeResult = writeToClipboardSync(ctXsel, testText)
+      let writeResult = writeToClipboardSync(cbtXsel, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(ctXsel)
+      let readResult = readFromClipboardSync(cbtXsel)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -155,10 +155,10 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       skip()
     else:
       let testText = "moe editor clipboard test - wl-clipboard"
-      let writeResult = writeToClipboardSync(ctWlClipboard, testText)
+      let writeResult = writeToClipboardSync(cbtWlClipboard, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(ctWlClipboard)
+      let readResult = readFromClipboardSync(cbtWlClipboard)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -167,10 +167,10 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       skip()
     else:
       let testText = "line1\nline2\nline3"
-      let writeResult = writeToClipboardSync(ctXsel, testText)
+      let writeResult = writeToClipboardSync(cbtXsel, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(ctXsel)
+      let readResult = readFromClipboardSync(cbtXsel)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -179,10 +179,10 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       skip()
     else:
       let testText = "日本語テスト 🎉 emoji"
-      let writeResult = writeToClipboardSync(ctXsel, testText)
+      let writeResult = writeToClipboardSync(cbtXsel, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(ctXsel)
+      let readResult = readFromClipboardSync(cbtXsel)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -191,10 +191,10 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       skip()
     else:
       let testText = ""
-      let writeResult = writeToClipboardSync(ctXsel, testText)
+      let writeResult = writeToClipboardSync(cbtXsel, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(ctXsel)
+      let readResult = readFromClipboardSync(cbtXsel)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -203,10 +203,10 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       skip()
     else:
       let testText = "line1\nline2\nline3"
-      let writeResult = writeToClipboardSync(ctWlClipboard, testText)
+      let writeResult = writeToClipboardSync(cbtWlClipboard, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(ctWlClipboard)
+      let readResult = readFromClipboardSync(cbtWlClipboard)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -215,10 +215,10 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       skip()
     else:
       let testText = "日本語テスト 🎉 emoji"
-      let writeResult = writeToClipboardSync(ctWlClipboard, testText)
+      let writeResult = writeToClipboardSync(cbtWlClipboard, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(ctWlClipboard)
+      let readResult = readFromClipboardSync(cbtWlClipboard)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -227,9 +227,9 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       skip()
     else:
       let testText = ""
-      let writeResult = writeToClipboardSync(ctWlClipboard, testText)
+      let writeResult = writeToClipboardSync(cbtWlClipboard, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(ctWlClipboard)
+      let readResult = readFromClipboardSync(cbtWlClipboard)
       check readResult.isOk
       check readResult.get() == testText

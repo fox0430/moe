@@ -57,6 +57,7 @@ type
         rfmrUnhandled:
       discard
     modeTransition*: Option[EditorMode]
+    overlayTransition*: Option[OverlayKind]
 
   RecentFileModeHandler* = ref object
     waitingForG*: bool # Waiting for second 'g' in 'gg' command
@@ -146,9 +147,8 @@ proc handleRecentFileModeKey*(
       handler.waitingForG = true
       return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
     of ":":
-      return RecentFileModeResult(
-        kind: rfmrEnterCommand, modeTransition: some(EditorMode.Command)
-      )
+      return
+        RecentFileModeResult(kind: rfmrEnterCommand, overlayTransition: some(okCommand))
     of "h", "l":
       # No-op for horizontal movement keys (vim compatibility)
       return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))

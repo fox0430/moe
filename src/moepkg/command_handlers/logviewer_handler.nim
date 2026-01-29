@@ -74,9 +74,8 @@ proc handleLogViewerModeKey*(
   ##
   ## Returns a LogViewerResult indicating what action should be taken
 
-  if state.logViewerState.isNone:
-    return
-      LogViewerResult(kind: lvrError, errorMessage: "Log viewer state not initialized")
+  # Note: LogViewerState is now stored in EditorWindow, not EditorState
+  # The state check is done by the caller (handler_manager.nim)
 
   let
     maxLine = max(0, buffer.len - 1)

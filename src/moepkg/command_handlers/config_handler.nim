@@ -133,20 +133,13 @@ proc handleEnumPopupKey(
 
 proc handleConfigModeKey*(
     handler: ConfigModeHandler,
-    state: EditorState,
+    configState: ConfigModeState,
     viewportHeight: int,
     keyCombo: KeyCombo,
 ): ConfigModeResult =
   ## Handle a key press in Configuration mode
   ##
   ## Returns a ConfigModeResult indicating what action should be taken
-
-  if state.configModeState.isNone:
-    return ConfigModeResult(
-      kind: cmrError, errorMessage: "Configuration mode state not initialized"
-    )
-
-  let configState = state.configModeState.get
 
   # If in edit mode, handle separately
   if configState.isEditing():

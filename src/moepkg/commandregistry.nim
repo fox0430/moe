@@ -152,6 +152,8 @@ type
     buffer*: buffer.TextBuffer
     state*: EditorState
     viewport*: ViewPort
+    cursor*: BufferPosition
+      # Current cursor position (single source of truth during command execution)
     motionController*: MotionController
     keyBindingRegistry*: keybindings.KeyBindingRegistry
     clipboardConfig*: ClipboardConfig
@@ -401,19 +403,19 @@ proc executeOperatorOnRange(
       return err(delResult.error)
 
     # Move cursor to start of deletion
-    ctx.state.cursor = range.start
+    ctx.cursor = range.start
     # Clamp cursor to valid position
-    if ctx.state.cursor.line >= ctx.buffer.len:
-      ctx.state.cursor.line = max(0, ctx.buffer.len - 1)
-    if ctx.state.cursor.line < ctx.buffer.len:
-      let line = ctx.buffer.getLine(ctx.state.cursor.line)
-      ctx.state.cursor.column = min(ctx.state.cursor.column, max(0, line.charLen - 1))
+    if ctx.cursor.line >= ctx.buffer.len:
+      ctx.cursor.line = max(0, ctx.buffer.len - 1)
+    if ctx.cursor.line < ctx.buffer.len:
+      let line = ctx.buffer.getLine(ctx.cursor.line)
+      ctx.cursor.column = min(ctx.cursor.column, max(0, line.charLen - 1))
 
     # Restore viewport position to where it was before the operator started
     # Use savedViewportTopLine which was saved when operator (d/c/y) was pressed
     let newBufferLen = ctx.buffer.len
     let restoredTopLine = ctx.state.savedViewportTopLine
-    let cursorLine = ctx.state.cursor.line
+    let cursorLine = ctx.cursor.line
 
     # Restore viewport, but ensure cursor remains visible
     # Cases:
@@ -466,15 +468,15 @@ proc executeOperatorOnRange(
       return err(delResult.error)
 
     # Move cursor to start of change
-    ctx.state.cursor = range.start
+    ctx.cursor = range.start
     # Clamp cursor
-    if ctx.state.cursor.line >= ctx.buffer.len:
-      ctx.state.cursor.line = max(0, ctx.buffer.len - 1)
+    if ctx.cursor.line >= ctx.buffer.len:
+      ctx.cursor.line = max(0, ctx.buffer.len - 1)
 
     # Restore viewport position (same logic as OpDelete)
     let newBufferLen = ctx.buffer.len
     let restoredTopLine = ctx.state.savedViewportTopLine
-    let cursorLine = ctx.state.cursor.line
+    let cursorLine = ctx.cursor.line
 
     # Restore viewport, but ensure cursor remains visible
     if restoredTopLine >= newBufferLen:
@@ -552,8 +554,8 @@ proc executeCommand*(
       let motionCmd = MotionCommand(motion: cmd.motion, count: cmd.count)
       logDebug(
         "command",
-        "Executing motion, current cursor=(" & $ctx.state.cursor.line & "," &
-          $ctx.state.cursor.column & ")",
+        "Executing motion, current cursor=(" & $ctx.cursor.line & "," &
+          $ctx.cursor.column & ")",
       )
 
       # Record jump before big movements (like gg, G, Ctrl-d, Ctrl-u, etc.)
@@ -571,13 +573,13 @@ proc executeCommand*(
         cmd.motion in
         {Motion.PageUp, Motion.PageDown, Motion.HalfPageUp, Motion.HalfPageDown}
       let prevTopLine = ctx.motionController.viewportManager.viewport.topLine
-      let prevCursorLine = ctx.state.cursor.line
+      let prevCursorLine = ctx.cursor.line
 
       # For smooth scroll motions, don't update viewport in executeMotion
       # The animation will handle viewport updates
       let skipViewportUpdate = isScrollMotion and ctx.smoothScrollConfig.enable
       let r = ctx.motionController.executeMotion(
-        motionCmd, ctx.state.cursor, updateViewport = not skipViewportUpdate
+        motionCmd, ctx.cursor, updateViewport = not skipViewportUpdate
       )
       if r.isErr:
         return err(r.error)
@@ -618,35 +620,46 @@ proc executeCommand*(
 
         if targetCursorLine != prevCursorLine:
           # Restore original cursor position - animation will interpolate from here
-          ctx.state.cursor.line = prevCursorLine
+          ctx.cursor.line = prevCursorLine
           startScrollAnimation(
             ctx.state.scrollAnimation, prevCursorLine, targetCursorLine,
             ctx.smoothScrollConfig,
           )
         else:
           # No scroll needed, just update cursor
-          ctx.state.cursor = r.value
+          ctx.cursor = r.value
       elif isScrollMotion:
         # Smooth scroll disabled, just update cursor
-        ctx.state.cursor = r.value
+        ctx.cursor = r.value
       else:
-        ctx.state.cursor = r.value
+        ctx.cursor = r.value
 
       logDebug(
         "command",
-        "Cursor after assignment=(" & $ctx.state.cursor.line & "," &
-          $ctx.state.cursor.column & ")",
+        "Cursor after assignment=(" & $ctx.cursor.line & "," & $ctx.cursor.column & ")",
       )
       return Result[(), string].ok ()
   of ctModeSwitch:
     # Handle mode switching
     ctx.state.mode = cmd.targetMode
-    # Initialize command text when entering Command mode
-    if cmd.targetMode == EditorMode.Command:
-      ctx.state.commandText = ":"
-      ctx.state.commandCursor = 0 # Cursor starts after the ":"
-      ctx.state.statusMessage = "" # Clear any status message
     # Clear any pending key sequences when switching modes
+    if ctx.keyBindingRegistry != nil:
+      ctx.keyBindingRegistry.clearSequence
+    return ok(())
+  of ctOverlaySwitch:
+    # Handle overlay mode switching
+    case cmd.targetOverlay
+    of okCommand:
+      ctx.state.enterCommandOverlay()
+    of okSearch:
+      # Search direction is determined by command name
+      let direction = if cmd.name == "switch-to-search-backward": Backward else: Forward
+      ctx.state.enterSearchOverlay(direction)
+    of okRename:
+      # Rename is typically entered via LSP, not keybinding
+      discard
+    ctx.state.statusMessage = "" # Clear any status message
+    # Clear any pending key sequences when switching overlays
     if ctx.keyBindingRegistry != nil:
       ctx.keyBindingRegistry.clearSequence
     return ok(())
@@ -717,10 +730,10 @@ proc executeCommand*(
         return ok(())
       else:
         # No pending operator - just move cursor
-        let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
+        let r = ctx.motionController.executeMotion(motionCmd, ctx.cursor)
         if r.isErr:
           return err(r.error)
-        ctx.state.cursor = r.value
+        ctx.cursor = r.value
         return Result[(), string].ok ()
     of "till":
       # Execute till character motion
@@ -814,10 +827,10 @@ proc executeCommand*(
         return ok(())
       else:
         # No pending operator - just move cursor
-        let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
+        let r = ctx.motionController.executeMotion(motionCmd, ctx.cursor)
         if r.isErr:
           return err(r.error)
-        ctx.state.cursor = r.value
+        ctx.cursor = r.value
         return Result[(), string].ok ()
     of "replace":
       # Execute replace character action (r command)
@@ -826,14 +839,14 @@ proc executeCommand*(
         return err("No character specified for replace")
 
       let actualCount = max(1, count)
-      let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+      let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
       # Check if we're at or past the end of the line
-      if ctx.state.cursor.column >= lineContent.charLen:
+      if ctx.cursor.column >= lineContent.charLen:
         return err("Nothing to replace")
 
       # Calculate how many characters we can actually replace
-      let charsAvailable = lineContent.charLen - ctx.state.cursor.column
+      let charsAvailable = lineContent.charLen - ctx.cursor.column
       let charsToReplace = min(actualCount, charsAvailable)
 
       # Begin transaction for all replace operations
@@ -844,9 +857,7 @@ proc executeCommand*(
 
       # Replace each character
       for i in 0 ..< charsToReplace:
-        let pos = BufferPosition(
-          line: ctx.state.cursor.line, column: ctx.state.cursor.column + i
-        )
+        let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
 
         # Delete original character
         let delResult = ctx.buffer.deleteRange(pos, pos)
@@ -875,7 +886,7 @@ proc executeCommand*(
       )
 
       # Move cursor to the last replaced character (Vim behavior)
-      ctx.state.cursor.column += charsToReplace - 1
+      ctx.cursor.column += charsToReplace - 1
 
       # Clear the numeric prefix
       if ctx.keyBindingRegistry != nil:
@@ -1040,10 +1051,10 @@ proc registerMotionCommand(
         else:
           1
       let cmd = MotionCommand(motion: motion, count: count)
-      let r = ctx.motionController.executeMotion(cmd, ctx.state.cursor)
+      let r = ctx.motionController.executeMotion(cmd, ctx.cursor)
       if r.isErr:
         return err(r.error)
-      ctx.state.cursor = r.value
+      ctx.cursor = r.value
       return Result[(), string].ok (),
     0,
     maxArgs,
@@ -1113,21 +1124,25 @@ proc handleAppendEnd(ctx: CommandContext): Result[(), string] =
 proc handleVisualMoveLeft(ctx: CommandContext): Result[(), string] =
   ## Move left in visual mode and update selection
   visualMoveLeft(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor # Sync ctx.cursor from state
   Result[(), string].ok ()
 
 proc handleVisualMoveRight(ctx: CommandContext): Result[(), string] =
   ## Move right in visual mode and update selection
   visualMoveRight(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor # Sync ctx.cursor from state
   Result[(), string].ok ()
 
 proc handleVisualMoveUp(ctx: CommandContext): Result[(), string] =
   ## Move up in visual mode and update selection
   visualMoveUp(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor # Sync ctx.cursor from state
   Result[(), string].ok ()
 
 proc handleVisualMoveDown(ctx: CommandContext): Result[(), string] =
   ## Move down in visual mode and update selection
   visualMoveDown(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor # Sync ctx.cursor from state
   Result[(), string].ok ()
 
 proc handleVisualDelete(ctx: CommandContext): Result[(), string] =
@@ -1173,41 +1188,49 @@ proc handleVisualJoinLines(ctx: CommandContext): Result[(), string] =
 proc handleVisualMoveHome(ctx: CommandContext): Result[(), string] =
   ## Move to beginning of line in visual mode
   visualMoveHome(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualMoveEnd(ctx: CommandContext): Result[(), string] =
   ## Move to end of line in visual mode
   visualMoveEnd(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualMoveFirstNonBlank(ctx: CommandContext): Result[(), string] =
   ## Move to first non-blank character in visual mode
   visualMoveFirstNonBlank(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualMoveFirstLine(ctx: CommandContext): Result[(), string] =
   ## Move to first line in visual mode
   visualMoveFirstLine(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualMoveLastLine(ctx: CommandContext, count: int = 0): Result[(), string] =
   ## Move to last line (or specific line number) in visual mode
   visualMoveLastLine(ctx.buffer, ctx.state, count)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualMoveWord(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Move to next word in visual mode
   visualMoveWord(ctx.buffer, ctx.state, count)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualMoveWordBack(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Move to previous word in visual mode
   visualMoveWordBack(ctx.buffer, ctx.state, count)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualMoveWordEnd(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Move to end of word in visual mode
   visualMoveWordEnd(ctx.buffer, ctx.state, count)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualMoveParagraphForward(
@@ -1215,6 +1238,7 @@ proc handleVisualMoveParagraphForward(
 ): Result[(), string] =
   ## Move to next paragraph in visual mode
   visualMoveParagraphForward(ctx.buffer, ctx.state, count)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualMoveParagraphBackward(
@@ -1222,6 +1246,7 @@ proc handleVisualMoveParagraphBackward(
 ): Result[(), string] =
   ## Move to previous paragraph in visual mode
   visualMoveParagraphBackward(ctx.buffer, ctx.state, count)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualToInsertMode(ctx: CommandContext): Result[(), string] =
@@ -1299,7 +1324,7 @@ proc handleClipboardPaste(ctx: CommandContext): Result[(), string] =
     return Result[(), string].ok () # Nothing to paste
 
   # Insert text at cursor position
-  let insertResult = ctx.buffer.insertText(ctx.state.cursor, clipboardText)
+  let insertResult = ctx.buffer.insertText(ctx.cursor, clipboardText)
   if insertResult.isErr:
     return err(insertResult.error)
 
@@ -1373,9 +1398,8 @@ proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
   for i in 1 .. actualCount:
     if isFullLine:
       # Paste on new line below current line (Vim 'p' behavior for linewise yank)
-      let currentLine = ctx.buffer.getLine(ctx.state.cursor.line)
-      let pastePos =
-        BufferPosition(line: ctx.state.cursor.line, column: currentLine.charLen)
+      let currentLine = ctx.buffer.getLine(ctx.cursor.line)
+      let pastePos = BufferPosition(line: ctx.cursor.line, column: currentLine.charLen)
 
       # Insert the paste content
       # Remove trailing newline from pasteText and add newline prefix
@@ -1389,16 +1413,16 @@ proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
         return err(insertResult.error)
 
       # Move cursor to the start of pasted line (next line)
-      ctx.state.cursor.line = ctx.state.cursor.line + 1
-      ctx.state.cursor.column = 0
+      ctx.cursor.line = ctx.cursor.line + 1
+      ctx.cursor.column = 0
     else:
       # Paste after cursor position (Vim 'p' behavior for characterwise yank)
-      let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
-      var pastePos = ctx.state.cursor
+      let lineContent = ctx.buffer.getLine(ctx.cursor.line)
+      var pastePos = ctx.cursor
 
       # Move one character right if not at end of line (only for first paste)
-      if i == 1 and ctx.state.cursor.column < lineContent.charLen:
-        pastePos.column = ctx.state.cursor.column + 1
+      if i == 1 and ctx.cursor.column < lineContent.charLen:
+        pastePos.column = ctx.cursor.column + 1
 
       let insertResult = ctx.buffer.insertText(pastePos, pasteText)
       if insertResult.isErr:
@@ -1408,7 +1432,7 @@ proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
         return err(insertResult.error)
 
       # Update cursor position for next paste
-      ctx.state.cursor.column = pastePos.column + pasteText.len
+      ctx.cursor.column = pastePos.column + pasteText.len
 
   # Commit transaction if we started one
   if actualCount > 1:
@@ -1486,7 +1510,7 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
   for i in 1 .. actualCount:
     if isFullLine:
       # Paste on new line above current line (Vim 'P' behavior for linewise yank)
-      let pastePos = BufferPosition(line: ctx.state.cursor.line, column: 0)
+      let pastePos = BufferPosition(line: ctx.cursor.line, column: 0)
 
       # Insert the paste content
       # Remove trailing newline from pasteText and add newline suffix
@@ -1500,10 +1524,10 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
         return err(insertResult.error)
 
       # Cursor stays at current line (which is now the pasted content)
-      ctx.state.cursor.column = 0
+      ctx.cursor.column = 0
     else:
       # Paste at cursor position (Vim 'P' behavior for characterwise yank)
-      let pastePos = ctx.state.cursor
+      let pastePos = ctx.cursor
 
       let insertResult = ctx.buffer.insertText(pastePos, pasteText)
       if insertResult.isErr:
@@ -1513,7 +1537,7 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
         return err(insertResult.error)
 
       # Update cursor position for next paste
-      ctx.state.cursor.column = pastePos.column + pasteText.len
+      ctx.cursor.column = pastePos.column + pasteText.len
 
   # Commit transaction if we started one
   if actualCount > 1:
@@ -1535,16 +1559,16 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
 
   logDebug("delete", "handleDeleteChar called with count=" & $count)
   let actualCount = max(1, count)
-  let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+  let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
   # Check if we're at or past the end of the line
-  if ctx.state.cursor.column >= lineContent.charLen:
+  if ctx.cursor.column >= lineContent.charLen:
     return err("Nothing to delete")
 
   # Auto-delete paren logic (only for single character deletion)
   if ctx.state.display.autoDeleteParen and actualCount == 1:
     let lineCharLen = lineContent.charLen
-    let cursorCol = ctx.state.cursor.column
+    let cursorCol = ctx.cursor.column
 
     # Check if we can apply auto-delete (need at least 2 characters)
     if cursorCol + 1 < lineCharLen:
@@ -1566,13 +1590,13 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
               return err(txnResult.error)
 
             # Delete opening paren
-            let delResult1 = ctx.buffer.deleteRange(ctx.state.cursor, ctx.state.cursor)
+            let delResult1 = ctx.buffer.deleteRange(ctx.cursor, ctx.cursor)
             if delResult1.isErr:
               discard ctx.buffer.commitTransaction()
               return err(delResult1.error)
 
             # Delete closing paren (now at cursor position)
-            let delResult2 = ctx.buffer.deleteRange(ctx.state.cursor, ctx.state.cursor)
+            let delResult2 = ctx.buffer.deleteRange(ctx.cursor, ctx.cursor)
             if delResult2.isErr:
               discard ctx.buffer.commitTransaction()
               return err(delResult2.error)
@@ -1586,10 +1610,10 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
             ctx.state.yankIsLine = false
 
             # Adjust cursor if it's now past the end of the line (Vim behavior)
-            let updatedLineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+            let updatedLineContent = ctx.buffer.getLine(ctx.cursor.line)
             let updatedLineLen = updatedLineContent.charLen
-            if updatedLineLen > 0 and ctx.state.cursor.column >= updatedLineLen:
-              ctx.state.cursor.column = updatedLineLen - 1
+            if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
+              ctx.cursor.column = updatedLineLen - 1
 
             ctx.state.needsFullRedraw = true
 
@@ -1600,7 +1624,7 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
 
   # Normal delete logic
   # Calculate how many characters we can actually delete
-  let charsAvailable = lineContent.charLen - ctx.state.cursor.column
+  let charsAvailable = lineContent.charLen - ctx.cursor.column
   let charsToDelete = min(actualCount, charsAvailable)
 
   # Extract the characters to be deleted (for yank register)
@@ -1608,7 +1632,7 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
   let runes = lineContent.toRunes()
   var deletedText = ""
   for i in 0 ..< charsToDelete:
-    let runeIdx = ctx.state.cursor.column + i
+    let runeIdx = ctx.cursor.column + i
     if runeIdx < runes.len:
       deletedText.add($runes[runeIdx])
 
@@ -1626,8 +1650,8 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
   for i in 0 ..< charsToDelete:
     # deleteRange is inclusive, so endPos should be at the same column as cursor
     # to delete only one character
-    let endPos = ctx.state.cursor
-    let delResult = ctx.buffer.deleteRange(ctx.state.cursor, endPos)
+    let endPos = ctx.cursor
+    let delResult = ctx.buffer.deleteRange(ctx.cursor, endPos)
     if delResult.isErr:
       if charsToDelete > 1:
         discard ctx.buffer.commitTransaction()
@@ -1651,10 +1675,10 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
   )
 
   # Adjust cursor if it's now past the end of the line (Vim behavior)
-  let newLineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+  let newLineContent = ctx.buffer.getLine(ctx.cursor.line)
   let newLineLen = newLineContent.charLen
-  if newLineLen > 0 and ctx.state.cursor.column >= newLineLen:
-    ctx.state.cursor.column = newLineLen - 1
+  if newLineLen > 0 and ctx.cursor.column >= newLineLen:
+    ctx.cursor.column = newLineLen - 1
 
   ctx.state.needsFullRedraw = true
   return Result[(), string].ok ()
@@ -1668,15 +1692,14 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
   let actualCount = max(1, count)
 
   # Check if we're at the beginning of the line
-  if ctx.state.cursor.column == 0:
+  if ctx.cursor.column == 0:
     return err("Nothing to delete")
 
-  let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+  let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
   # Auto-delete paren logic (only for single character deletion)
-  if ctx.state.display.autoDeleteParen and actualCount == 1 and
-      ctx.state.cursor.column >= 2:
-    let cursorCol = ctx.state.cursor.column
+  if ctx.state.display.autoDeleteParen and actualCount == 1 and ctx.cursor.column >= 2:
+    let cursorCol = ctx.cursor.column
 
     try:
       # Get character before cursor (to be deleted) and the one before that
@@ -1696,14 +1719,14 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
             return err(txnResult.error)
 
           # Delete the character before cursor (closing paren)
-          let pos1 = BufferPosition(line: ctx.state.cursor.line, column: cursorCol - 1)
+          let pos1 = BufferPosition(line: ctx.cursor.line, column: cursorCol - 1)
           let delResult1 = ctx.buffer.deleteRange(pos1, pos1)
           if delResult1.isErr:
             discard ctx.buffer.commitTransaction()
             return err(delResult1.error)
 
           # Delete the opening paren (now at column - 1)
-          let pos2 = BufferPosition(line: ctx.state.cursor.line, column: cursorCol - 2)
+          let pos2 = BufferPosition(line: ctx.cursor.line, column: cursorCol - 2)
           let delResult2 = ctx.buffer.deleteRange(pos2, pos2)
           if delResult2.isErr:
             discard ctx.buffer.commitTransaction()
@@ -1718,7 +1741,7 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
           ctx.state.yankIsLine = false
 
           # Move cursor back by 2
-          ctx.state.cursor.column = cursorCol - 2
+          ctx.cursor.column = cursorCol - 2
           ctx.state.needsFullRedraw = true
 
           return Result[(), string].ok ()
@@ -1728,11 +1751,11 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
 
   # Normal delete logic
   # Calculate how many characters we can actually delete
-  let charsAvailable = ctx.state.cursor.column
+  let charsAvailable = ctx.cursor.column
   let charsToDelete = min(actualCount, charsAvailable)
 
   # Calculate the start position for deletion
-  let startColumn = ctx.state.cursor.column - charsToDelete
+  let startColumn = ctx.cursor.column - charsToDelete
 
   # Extract the characters to be deleted (for yank register)
   # Get the line content and extract the substring
@@ -1755,7 +1778,7 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
 
   # Delete the characters (delete from startColumn multiple times)
   for i in 0 ..< charsToDelete:
-    let startPos = BufferPosition(line: ctx.state.cursor.line, column: startColumn)
+    let startPos = BufferPosition(line: ctx.cursor.line, column: startColumn)
     # deleteRange is inclusive, so endPos should be the same as startPos
     # to delete only one character
     let endPos = startPos
@@ -1772,7 +1795,7 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
       return err(txnResult.error)
 
   # Move cursor to the position where deletion started
-  ctx.state.cursor.column = startColumn
+  ctx.cursor.column = startColumn
 
   # Also write to system clipboard if enabled
   if ctx.clipboardConfig.enable:
@@ -1795,10 +1818,10 @@ proc handleSubstituteChar(ctx: CommandContext, count: int = 1): Result[(), strin
 
   logDebug("substitute", "handleSubstituteChar called with count=" & $count)
   let actualCount = max(1, count)
-  let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+  let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
   # Check if we're at or past the end of the line
-  if ctx.state.cursor.column >= lineContent.charLen:
+  if ctx.cursor.column >= lineContent.charLen:
     # At end of line, just enter insert mode
     ctx.state.mode = EditorMode.Insert
     let transactionResult = ctx.buffer.beginTransaction("Substitute")
@@ -1808,14 +1831,14 @@ proc handleSubstituteChar(ctx: CommandContext, count: int = 1): Result[(), strin
     return Result[(), string].ok ()
 
   # Calculate how many characters we can actually delete
-  let charsAvailable = lineContent.charLen - ctx.state.cursor.column
+  let charsAvailable = lineContent.charLen - ctx.cursor.column
   let charsToDelete = min(actualCount, charsAvailable)
 
   # Extract the characters to be deleted (for yank register)
   let runes = lineContent.toRunes()
   var deletedText = ""
   for i in 0 ..< charsToDelete:
-    let runeIdx = ctx.state.cursor.column + i
+    let runeIdx = ctx.cursor.column + i
     if runeIdx < runes.len:
       deletedText.add($runes[runeIdx])
 
@@ -1835,8 +1858,8 @@ proc handleSubstituteChar(ctx: CommandContext, count: int = 1): Result[(), strin
 
   # Delete the characters
   for i in 0 ..< charsToDelete:
-    let endPos = ctx.state.cursor
-    let delResult = ctx.buffer.deleteRange(ctx.state.cursor, endPos)
+    let endPos = ctx.cursor
+    let delResult = ctx.buffer.deleteRange(ctx.cursor, endPos)
     if delResult.isErr:
       discard ctx.buffer.rollbackTransaction()
       return err(delResult.error)
@@ -1859,7 +1882,7 @@ proc handleSubstituteLine(ctx: CommandContext, count: int = 1): Result[(), strin
 
   logDebug("substitute", "handleSubstituteLine called with count=" & $count)
   let actualCount = max(1, count)
-  let startLine = ctx.state.cursor.line
+  let startLine = ctx.cursor.line
   let endLine = min(startLine + actualCount - 1, ctx.buffer.len - 1)
 
   # Extract lines for yank register
@@ -1923,8 +1946,8 @@ proc handleSubstituteLine(ctx: CommandContext, count: int = 1): Result[(), strin
         return err("Failed to insert indent: " & insertResult.error)
 
   # Move cursor to beginning of line (after indent)
-  ctx.state.cursor.line = startLine
-  ctx.state.cursor.column = indent.len
+  ctx.cursor.line = startLine
+  ctx.cursor.column = indent.len
 
   # Enter Insert mode (transaction remains open for insert mode input)
   ctx.state.mode = EditorMode.Insert
@@ -1945,14 +1968,14 @@ proc handleToggleCase(ctx: CommandContext, count: int = 1): Result[(), string] =
 
   logDebug("toggle", "handleToggleCase called with count=" & $count)
   let actualCount = max(1, count)
-  let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+  let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
   # Check if we're at or past the end of the line
-  if ctx.state.cursor.column >= lineContent.charLen:
+  if ctx.cursor.column >= lineContent.charLen:
     return err("Nothing to toggle")
 
   # Calculate how many characters we can actually toggle
-  let charsAvailable = lineContent.charLen - ctx.state.cursor.column
+  let charsAvailable = lineContent.charLen - ctx.cursor.column
   let charsToToggle = min(actualCount, charsAvailable)
 
   # Begin transaction for all toggle operations (to group as single undo)
@@ -1963,7 +1986,7 @@ proc handleToggleCase(ctx: CommandContext, count: int = 1): Result[(), string] =
   # Toggle each character
   let runes = lineContent.toRunes()
   for i in 0 ..< charsToToggle:
-    let runeIdx = ctx.state.cursor.column + i
+    let runeIdx = ctx.cursor.column + i
     if runeIdx < runes.len:
       let originalChar = $runes[runeIdx]
 
@@ -1978,9 +2001,7 @@ proc handleToggleCase(ctx: CommandContext, count: int = 1): Result[(), string] =
 
       # Only perform replacement if the character actually changed
       if originalChar != toggledChar:
-        let pos = BufferPosition(
-          line: ctx.state.cursor.line, column: ctx.state.cursor.column + i
-        )
+        let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
 
         # Delete original character
         let delResult = ctx.buffer.deleteRange(pos, pos)
@@ -2000,12 +2021,12 @@ proc handleToggleCase(ctx: CommandContext, count: int = 1): Result[(), string] =
     return err(commitResult.error)
 
   # Move cursor to the right by the number of characters toggled
-  ctx.state.cursor.column += charsToToggle
+  ctx.cursor.column += charsToToggle
 
   # Keep cursor within line bounds
-  let finalLineContent = ctx.buffer.getLine(ctx.state.cursor.line)
-  if ctx.state.cursor.column > finalLineContent.charLen:
-    ctx.state.cursor.column = max(0, finalLineContent.charLen)
+  let finalLineContent = ctx.buffer.getLine(ctx.cursor.line)
+  if ctx.cursor.column > finalLineContent.charLen:
+    ctx.cursor.column = max(0, finalLineContent.charLen)
 
   # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand =
@@ -2020,7 +2041,7 @@ proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
 
   logDebug("delete", "handleDeleteLine called with count=" & $count)
   let actualCount = max(1, count)
-  let startLine = ctx.state.cursor.line
+  let startLine = ctx.cursor.line
   let endLine = min(startLine + actualCount - 1, ctx.buffer.len - 1)
 
   # Build text from lines to be deleted (for yank register)
@@ -2044,9 +2065,9 @@ proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
         return err(delResult.error)
 
   # Adjust cursor position if needed
-  if ctx.state.cursor.line >= ctx.buffer.len:
-    ctx.state.cursor.line = max(0, ctx.buffer.len - 1)
-  ctx.state.cursor.column = 0
+  if ctx.cursor.line >= ctx.buffer.len:
+    ctx.cursor.line = max(0, ctx.buffer.len - 1)
+  ctx.cursor.column = 0
 
   # Also write to system clipboard if enabled
   if ctx.clipboardConfig.enable:
@@ -2091,7 +2112,7 @@ proc handleYankLine(ctx: CommandContext, count: int = 1): Result[(), string] =
   logDebug("yank", "handleYankLine called with count=" & $count)
   let actualCount = max(1, count) # Ensure at least 1 line
   logDebug("yank", "actualCount=" & $actualCount)
-  let startLine = ctx.state.cursor.line
+  let startLine = ctx.cursor.line
   let endLine = min(startLine + actualCount - 1, ctx.buffer.len - 1)
 
   # Build text from multiple lines
@@ -2147,7 +2168,7 @@ proc handleJoinLines(ctx: CommandContext, count: int = 1): Result[(), string] =
   let actualCount = max(1, count)
 
   # Join lines using the buffer's joinLines function
-  let joinResult = ctx.buffer.joinLines(ctx.state.cursor.line, actualCount)
+  let joinResult = ctx.buffer.joinLines(ctx.cursor.line, actualCount)
   if joinResult.isErr:
     return err(joinResult.error)
 
@@ -2165,17 +2186,17 @@ proc handleShowCharInfo(ctx: CommandContext): Result[(), string] =
   ## Displays character info in status message
 
   logDebug("charinfo", "handleShowCharInfo called")
-  let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+  let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
   # Check if cursor is at valid position
-  if ctx.state.cursor.column >= lineContent.charLen:
+  if ctx.cursor.column >= lineContent.charLen:
     ctx.state.statusMessage = "No character under cursor"
     return Result[(), string].ok ()
 
   # Get the character at cursor position
   let runes = lineContent.toRunes()
-  if ctx.state.cursor.column < runes.len:
-    let ch = runes[ctx.state.cursor.column]
+  if ctx.cursor.column < runes.len:
+    let ch = runes[ctx.cursor.column]
     let codepoint = ch.int32
 
     # Format the message like Vim: <c>  123,  Hex 7b,  Oct 173
@@ -2201,7 +2222,7 @@ proc setPendingOperator(
   ctx.state.savedViewportTopLine = ctx.motionController.viewportManager.viewport.topLine
   ctx.state.editState.pendingOperator = some(
     PendingOperator(
-      operatorType: operatorType, operatorCount: count, startPos: ctx.state.cursor
+      operatorType: operatorType, operatorCount: count, startPos: ctx.cursor
     )
   )
   ctx.state.statusMessage = statusMsg
@@ -2214,7 +2235,7 @@ proc handleOperatorYank(ctx: CommandContext, count: int = 1): Result[(), string]
   if ctx.state.editState.pendingOperator.isSome and
       ctx.state.editState.pendingOperator.get.operatorType == OpYank:
     # Execute line yank
-    let startLine = ctx.state.cursor.line
+    let startLine = ctx.cursor.line
     let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
     let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
 
@@ -2254,7 +2275,7 @@ proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), strin
   if ctx.state.editState.pendingOperator.isSome and
       ctx.state.editState.pendingOperator.get.operatorType == OpDelete:
     # Execute line deletion
-    let startLine = ctx.state.cursor.line
+    let startLine = ctx.cursor.line
     let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
     let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
     let lineCount = endLine - startLine + 1
@@ -2291,8 +2312,8 @@ proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), strin
       return err("Failed to commit transaction: " & commitResult.error)
 
     # Move cursor to beginning of line
-    ctx.state.cursor.line = min(startLine, ctx.buffer.len - 1)
-    ctx.state.cursor.column = 0
+    ctx.cursor.line = min(startLine, ctx.buffer.len - 1)
+    ctx.cursor.column = 0
 
     # Record this command for repeat (.)
     ctx.state.editState.lastEditCommand =
@@ -2369,11 +2390,11 @@ proc handleTextObjectAround(ctx: CommandContext): Result[(), string] =
   else:
     # No pending operator - enter Append mode (move cursor right, then Insert)
     # Move cursor one position to the right if not at end of line
-    if ctx.state.cursor.line < ctx.buffer.len:
-      let currentLine = ctx.buffer.getLine(ctx.state.cursor.line)
+    if ctx.cursor.line < ctx.buffer.len:
+      let currentLine = ctx.buffer.getLine(ctx.cursor.line)
       # Use charLen for proper multi-byte character support
-      if ctx.state.cursor.column < currentLine.charLen:
-        ctx.state.cursor.column += 1
+      if ctx.cursor.column < currentLine.charLen:
+        ctx.cursor.column += 1
     # Enter Insert mode
     ctx.state.mode = EditorMode.Insert
     # Begin transaction for insert mode edit
@@ -2389,7 +2410,7 @@ proc handleScrollCursorTop(ctx: CommandContext, args: seq[string]): Result[(), s
   ## Scroll the viewport to place cursor line at the top (zt command)
   ## Cursor position doesn't change, only the viewport
 
-  ctx.motionController.viewportManager.viewport.topLine = ctx.state.cursor.line
+  ctx.motionController.viewportManager.viewport.topLine = ctx.cursor.line
   return ok(())
 
 proc handleScrollCursorCenter(
@@ -2404,7 +2425,7 @@ proc handleScrollCursorCenter(
     ctx.motionController.viewportManager.viewport.height - reservedLines
 
   # Center the cursor line
-  let targetTopLine = ctx.state.cursor.line - (visibleHeight div 2)
+  let targetTopLine = ctx.cursor.line - (visibleHeight div 2)
 
   # Clamp to valid range
   ctx.motionController.viewportManager.viewport.topLine = max(0, targetTopLine)
@@ -2423,7 +2444,7 @@ proc handleScrollCursorBottom(
     ctx.motionController.viewportManager.viewport.height - reservedLines
 
   # Place cursor at the bottom of viewport
-  let targetTopLine = ctx.state.cursor.line - visibleHeight + 1
+  let targetTopLine = ctx.cursor.line - visibleHeight + 1
 
   # Clamp to valid range
   ctx.motionController.viewportManager.viewport.topLine = max(0, targetTopLine)
@@ -2434,7 +2455,7 @@ proc handleScrollCursorBottom(
 
 proc handleFoldOpen(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Open fold at cursor position (zo command)
-  if ctx.buffer.foldState.openFold(ctx.state.cursor.line):
+  if ctx.buffer.foldState.openFold(ctx.cursor.line):
     ctx.state.needsFullRedraw = true
     return ok(())
   else:
@@ -2443,15 +2464,14 @@ proc handleFoldOpen(ctx: CommandContext, args: seq[string]): Result[(), string] 
 
 proc handleFoldClose(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Close fold at cursor position (zc command)
-  if ctx.buffer.foldState.closeFold(ctx.state.cursor.line):
+  if ctx.buffer.foldState.closeFold(ctx.cursor.line):
     ctx.state.needsFullRedraw = true
     # Ensure cursor is not on a hidden line after closing
-    if ctx.buffer.foldState.isLineInCollapsedFold(ctx.state.cursor.line):
-      ctx.state.cursor.line =
-        ctx.buffer.foldState.getPrevVisibleLine(ctx.state.cursor.line)
+    if ctx.buffer.foldState.isLineInCollapsedFold(ctx.cursor.line):
+      ctx.cursor.line = ctx.buffer.foldState.getPrevVisibleLine(ctx.cursor.line)
       # Clamp column to new line's length
-      let lineLen = ctx.buffer.getLine(ctx.state.cursor.line).charLen
-      ctx.state.cursor.column = min(ctx.state.cursor.column, max(0, lineLen - 1))
+      let lineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
+      ctx.cursor.column = min(ctx.cursor.column, max(0, lineLen - 1))
     return ok(())
   else:
     ctx.state.statusMessage = "No fold found"
@@ -2459,14 +2479,13 @@ proc handleFoldClose(ctx: CommandContext, args: seq[string]): Result[(), string]
 
 proc handleFoldToggle(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Toggle fold at cursor position (za command)
-  if ctx.buffer.foldState.toggleFold(ctx.state.cursor.line):
+  if ctx.buffer.foldState.toggleFold(ctx.cursor.line):
     ctx.state.needsFullRedraw = true
     # Ensure cursor is not on a hidden line after closing
-    if ctx.buffer.foldState.isLineInCollapsedFold(ctx.state.cursor.line):
-      ctx.state.cursor.line =
-        ctx.buffer.foldState.getPrevVisibleLine(ctx.state.cursor.line)
-      let lineLen = ctx.buffer.getLine(ctx.state.cursor.line).charLen
-      ctx.state.cursor.column = min(ctx.state.cursor.column, max(0, lineLen - 1))
+    if ctx.buffer.foldState.isLineInCollapsedFold(ctx.cursor.line):
+      ctx.cursor.line = ctx.buffer.foldState.getPrevVisibleLine(ctx.cursor.line)
+      let lineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
+      ctx.cursor.column = min(ctx.cursor.column, max(0, lineLen - 1))
     return ok(())
   else:
     ctx.state.statusMessage = "No fold found"
@@ -2483,12 +2502,11 @@ proc handleFoldCloseAll(ctx: CommandContext, args: seq[string]): Result[(), stri
   ctx.buffer.foldState.closeAllFolds()
   ctx.state.needsFullRedraw = true
   # Ensure cursor is not on a hidden line
-  if ctx.buffer.foldState.isLineInCollapsedFold(ctx.state.cursor.line):
-    ctx.state.cursor.line =
-      ctx.buffer.foldState.getPrevVisibleLine(ctx.state.cursor.line)
+  if ctx.buffer.foldState.isLineInCollapsedFold(ctx.cursor.line):
+    ctx.cursor.line = ctx.buffer.foldState.getPrevVisibleLine(ctx.cursor.line)
     # Clamp column to new line's length
-    let lineLen = ctx.buffer.getLine(ctx.state.cursor.line).charLen
-    ctx.state.cursor.column = min(ctx.state.cursor.column, max(0, lineLen - 1))
+    let lineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
+    ctx.cursor.column = min(ctx.cursor.column, max(0, lineLen - 1))
   return ok(())
 
 proc handleFoldCreate(ctx: CommandContext, args: seq[string]): Result[(), string] =
@@ -2517,7 +2535,7 @@ proc handleFoldCreate(ctx: CommandContext, args: seq[string]): Result[(), string
 
 proc handleFoldDelete(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Delete fold at cursor position (zd command)
-  if ctx.buffer.foldState.deleteFold(ctx.state.cursor.line):
+  if ctx.buffer.foldState.deleteFold(ctx.cursor.line):
     ctx.state.statusMessage = "Fold deleted"
     ctx.state.needsFullRedraw = true
     return ok(())
@@ -2589,11 +2607,11 @@ proc findNumberAtOrAfterColumn(
 
 proc handleIncrementNumber(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Increment the number at or after cursor (Ctrl-A command)
-  if ctx.state.cursor.line >= ctx.buffer.len:
+  if ctx.cursor.line >= ctx.buffer.len:
     return err("Cursor out of bounds")
 
-  let line = ctx.buffer.getLine(ctx.state.cursor.line)
-  let col = ctx.state.cursor.column
+  let line = ctx.buffer.getLine(ctx.cursor.line)
+  let col = ctx.cursor.column
 
   # Find number at or after cursor position
   let (found, startPos, endPos, value) = findNumberAtOrAfterColumn(line, col)
@@ -2615,7 +2633,7 @@ proc handleIncrementNumber(ctx: CommandContext, args: seq[string]): Result[(), s
   if txnResult.isErr:
     return err(txnResult.error)
 
-  let lineIdx = ctx.state.cursor.line
+  let lineIdx = ctx.cursor.line
   let delResult = ctx.buffer.deleteLine(lineIdx)
   if delResult.isErr:
     discard ctx.buffer.rollbackTransaction()
@@ -2631,17 +2649,17 @@ proc handleIncrementNumber(ctx: CommandContext, args: seq[string]): Result[(), s
     return err(commitResult.error)
 
   # Move cursor to start of the number
-  ctx.state.cursor.column = startPos
+  ctx.cursor.column = startPos
 
   return ok(())
 
 proc handleDecrementNumber(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Decrement the number at or after cursor (Ctrl-X command)
-  if ctx.state.cursor.line >= ctx.buffer.len:
+  if ctx.cursor.line >= ctx.buffer.len:
     return err("Cursor out of bounds")
 
-  let line = ctx.buffer.getLine(ctx.state.cursor.line)
-  let col = ctx.state.cursor.column
+  let line = ctx.buffer.getLine(ctx.cursor.line)
+  let col = ctx.cursor.column
 
   # Find number at or after cursor position
   let (found, startPos, endPos, value) = findNumberAtOrAfterColumn(line, col)
@@ -2663,7 +2681,7 @@ proc handleDecrementNumber(ctx: CommandContext, args: seq[string]): Result[(), s
   if txnResult.isErr:
     return err(txnResult.error)
 
-  let lineIdx = ctx.state.cursor.line
+  let lineIdx = ctx.cursor.line
   let delResult = ctx.buffer.deleteLine(lineIdx)
   if delResult.isErr:
     discard ctx.buffer.rollbackTransaction()
@@ -2679,7 +2697,7 @@ proc handleDecrementNumber(ctx: CommandContext, args: seq[string]): Result[(), s
     return err(commitResult.error)
 
   # Move cursor to start of the number
-  ctx.state.cursor.column = startPos
+  ctx.cursor.column = startPos
 
   return ok(())
 
@@ -2899,10 +2917,8 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Command Mode",
     "Switch to command mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      # Clear command text when entering command mode
-      ctx.state.commandText = ":"
-      ctx.state.commandCursor = 0 # Cursor starts after the ":"
-      handleModeSwitch(ctx, EditorMode.Command),
+      ctx.state.enterCommandOverlay()
+      ok(()),
     0,
     0,
   )
@@ -3401,7 +3417,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Auto Indent Line",
     "Auto indent current line to match previous line (== command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let currentLine = ctx.state.cursor.line
+      let currentLine = ctx.cursor.line
 
       # Can't auto indent first line or empty line
       if currentLine == 0:
@@ -3466,7 +3482,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         return err(commitResult.error)
 
       # Move cursor to first non-blank character
-      ctx.state.cursor.column = prevIndent
+      ctx.cursor.column = prevIndent
       ctx.state.needsFullRedraw = true
 
       return Result[(), string].ok (),
@@ -3503,14 +3519,14 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
   proc clampCursorToBuffer(ctx: CommandContext) =
     ## Clamp cursor position to valid buffer range
     if ctx.buffer.len == 0:
-      ctx.state.cursor = BufferPosition(line: 0, column: 0)
+      ctx.cursor = BufferPosition(line: 0, column: 0)
     else:
-      if ctx.state.cursor.line >= ctx.buffer.len:
-        ctx.state.cursor.line = ctx.buffer.len - 1
-      let line = ctx.buffer.getLine(ctx.state.cursor.line)
+      if ctx.cursor.line >= ctx.buffer.len:
+        ctx.cursor.line = ctx.buffer.len - 1
+      let line = ctx.buffer.getLine(ctx.cursor.line)
       let maxCol = max(0, line.charLen - 1)
-      if ctx.state.cursor.column > maxCol:
-        ctx.state.cursor.column = maxCol
+      if ctx.cursor.column > maxCol:
+        ctx.cursor.column = maxCol
 
   registry.register(
     builtin(bcEditUndo),
@@ -3529,7 +3545,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         lastCursorPos = some(r.value)
 
       if lastCursorPos.isSome:
-        ctx.state.cursor = lastCursorPos.get
+        ctx.cursor = lastCursorPos.get
         clampCursorToBuffer(ctx)
 
       return Result[(), string].ok (),
@@ -3554,7 +3570,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         lastCursorPos = some(r.value)
 
       if lastCursorPos.isSome:
-        ctx.state.cursor = lastCursorPos.get
+        ctx.cursor = lastCursorPos.get
         clampCursorToBuffer(ctx)
 
       return Result[(), string].ok (),
@@ -3601,7 +3617,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
           PendingOperator(
             operatorType: lastCmd.operator,
             operatorCount: lastCmd.operatorCount,
-            startPos: ctx.state.cursor,
+            startPos: ctx.cursor,
           )
         )
         # Save viewport position for restoration after operator
@@ -3612,7 +3628,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         let effectiveCount = lastCmd.motionCount * lastCmd.operatorCount
         let motionCmd = MotionCommand(motion: lastCmd.motion, count: effectiveCount)
         let r = ctx.motionController.executeMotion(
-          motionCmd, ctx.state.cursor, updateViewport = false
+          motionCmd, ctx.cursor, updateViewport = false
         )
         if r.isErr:
           ctx.state.editState.pendingOperator = none(PendingOperator)
@@ -3620,7 +3636,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
 
         # Calculate the range
         let range =
-          calculateOperatorRange(ctx.buffer, ctx.state.cursor, r.value, lastCmd.motion)
+          calculateOperatorRange(ctx.buffer, ctx.cursor, r.value, lastCmd.motion)
 
         # Execute the operator on the range
         let op = ctx.state.editState.pendingOperator.get
@@ -3660,18 +3676,17 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         case lastCmd.substituteKind
         of skChar:
           # Repeat s command - delete characters then insert text
-          let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+          let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
           # Check if we're at or past the end of the line
-          if ctx.state.cursor.column >= lineContent.charLen:
+          if ctx.cursor.column >= lineContent.charLen:
             # At end of line, just insert text
-            let insertResult =
-              ctx.buffer.insertText(ctx.state.cursor, lastCmd.substituteText)
+            let insertResult = ctx.buffer.insertText(ctx.cursor, lastCmd.substituteText)
             if insertResult.isErr:
               return err("Failed to insert text: " & insertResult.error)
           else:
             # Delete characters
-            let charsAvailable = lineContent.charLen - ctx.state.cursor.column
+            let charsAvailable = lineContent.charLen - ctx.cursor.column
             let charsToDelete = min(lastCmd.substituteCount, charsAvailable)
 
             # Begin transaction
@@ -3682,14 +3697,13 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
 
             # Delete the characters
             for i in 0 ..< charsToDelete:
-              let delResult = ctx.buffer.deleteRange(ctx.state.cursor, ctx.state.cursor)
+              let delResult = ctx.buffer.deleteRange(ctx.cursor, ctx.cursor)
               if delResult.isErr:
                 discard ctx.buffer.rollbackTransaction()
                 return err(delResult.error)
 
             # Insert the recorded text
-            let insertResult =
-              ctx.buffer.insertText(ctx.state.cursor, lastCmd.substituteText)
+            let insertResult = ctx.buffer.insertText(ctx.cursor, lastCmd.substituteText)
             if insertResult.isErr:
               discard ctx.buffer.rollbackTransaction()
               return err("Failed to insert text: " & insertResult.error)
@@ -3702,22 +3716,22 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
           # Move cursor to last inserted character (Vim behavior)
           let numNewlines = lastCmd.substituteText.count('\n')
           if numNewlines > 0:
-            ctx.state.cursor.line += numNewlines
+            ctx.cursor.line += numNewlines
             let lines = lastCmd.substituteText.split('\n')
             let lastLine = lines[^1]
             # Position cursor on last character (or at column 0 if empty)
-            ctx.state.cursor.column = max(0, lastLine.charLen - 1)
+            ctx.cursor.column = max(0, lastLine.charLen - 1)
           else:
             # Single line - move cursor to last inserted character
-            ctx.state.cursor.column += lastCmd.substituteText.charLen
-            if ctx.state.cursor.column > 0:
-              ctx.state.cursor.column -= 1 # Stay on last inserted character
+            ctx.cursor.column += lastCmd.substituteText.charLen
+            if ctx.cursor.column > 0:
+              ctx.cursor.column -= 1 # Stay on last inserted character
 
           ctx.state.needsFullRedraw = true
           return ok(())
         of skLine:
           # Repeat S or cc command - delete lines then insert text
-          let startLine = ctx.state.cursor.line
+          let startLine = ctx.cursor.line
           let endLine = min(startLine + lastCmd.substituteCount - 1, ctx.buffer.len - 1)
 
           # Begin transaction
@@ -3761,21 +3775,21 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
           # Move cursor to last inserted character (Vim behavior)
           let numNewlines = lastCmd.substituteText.count('\n')
           if numNewlines > 0:
-            ctx.state.cursor.line = startLine + numNewlines
+            ctx.cursor.line = startLine + numNewlines
             let lines = lastCmd.substituteText.split('\n')
             let lastLine = lines[^1]
             # Position cursor on last character (or at column 0 if empty)
-            ctx.state.cursor.column = max(0, lastLine.charLen - 1)
+            ctx.cursor.column = max(0, lastLine.charLen - 1)
           else:
-            ctx.state.cursor.line = startLine
+            ctx.cursor.line = startLine
             # Position cursor on last character (or at column 0 if empty)
-            ctx.state.cursor.column = max(0, lastCmd.substituteText.charLen - 1)
+            ctx.cursor.column = max(0, lastCmd.substituteText.charLen - 1)
 
           ctx.state.needsFullRedraw = true
           return ok(())
       of lecInsertText:
         # Repeat insert text
-        let insertResult = ctx.buffer.insertText(ctx.state.cursor, lastCmd.insertedText)
+        let insertResult = ctx.buffer.insertText(ctx.cursor, lastCmd.insertedText)
         if insertResult.isErr:
           return err("Failed to repeat insert: " & insertResult.error)
 
@@ -3784,32 +3798,32 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         let numNewlines = lastCmd.insertedText.count('\n')
         if numNewlines > 0:
           # Multi-line insertion - move to last line
-          ctx.state.cursor.line += numNewlines
+          ctx.cursor.line += numNewlines
           let lines = lastCmd.insertedText.split('\n')
           let lastLine = lines[^1]
           # Position cursor on last character (or at column 0 if last line is empty)
-          ctx.state.cursor.column = max(0, lastLine.charLen - 1)
+          ctx.cursor.column = max(0, lastLine.charLen - 1)
         else:
           # Single line insertion - move cursor to last inserted character
           if lastCmd.insertedText.len > 0:
-            ctx.state.cursor.column += lastCmd.insertedText.charLen
+            ctx.cursor.column += lastCmd.insertedText.charLen
             # Move back one to be on the last character, not after it
-            if ctx.state.cursor.column > 0:
-              ctx.state.cursor.column -= 1
+            if ctx.cursor.column > 0:
+              ctx.cursor.column -= 1
           # If empty string, cursor stays at current position
 
         ctx.state.needsFullRedraw = true
         return ok(())
       of lecReplaceChar:
         # Repeat replace character (r command)
-        let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+        let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
         # Check if we're at or past the end of the line
-        if ctx.state.cursor.column >= lineContent.charLen:
+        if ctx.cursor.column >= lineContent.charLen:
           return err("Nothing to replace")
 
         # Calculate how many characters we can actually replace
-        let charsAvailable = lineContent.charLen - ctx.state.cursor.column
+        let charsAvailable = lineContent.charLen - ctx.cursor.column
         let charsToReplace = min(lastCmd.replaceCount, charsAvailable)
 
         # Begin transaction
@@ -3820,9 +3834,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
 
         # Replace each character
         for i in 0 ..< charsToReplace:
-          let pos = BufferPosition(
-            line: ctx.state.cursor.line, column: ctx.state.cursor.column + i
-          )
+          let pos = BufferPosition(line: ctx.cursor.line, column: ctx.cursor.column + i)
           let delResult = ctx.buffer.deleteRange(pos, pos)
           if delResult.isErr:
             discard ctx.buffer.rollbackTransaction()
@@ -3839,7 +3851,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
           return err(commitResult.error)
 
         # Move cursor to the last replaced character
-        ctx.state.cursor.column += charsToReplace - 1
+        ctx.cursor.column += charsToReplace - 1
         ctx.state.needsFullRedraw = true
         return ok(())
       of lecJoinLines:
@@ -3933,7 +3945,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Delete from cursor to end of line (D command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       # Calculate range from cursor to end of line
-      let startPos = ctx.state.cursor
+      let startPos = ctx.cursor
       let line = ctx.buffer.getLine(startPos.line)
       let lineLen = line.charLen
 
@@ -3971,7 +3983,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Change from cursor to end of line (C command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       # Calculate range from cursor to end of line
-      let startPos = ctx.state.cursor
+      let startPos = ctx.cursor
       let line = ctx.buffer.getLine(startPos.line)
       let lineLen = line.charLen
 
@@ -4044,7 +4056,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
 
         # Calculate text object range
         let rangeResult =
-          calculateTextObjectRange(ctx.buffer, ctx.state.cursor, kind, textObj.modifier)
+          calculateTextObjectRange(ctx.buffer, ctx.cursor, kind, textObj.modifier)
         if rangeResult.isErr:
           return err(rangeResult.error)
 
@@ -4120,12 +4132,11 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     )
 
     # Execute the search (findNext or findPrev)
-    let searchResult =
-      searchProc(ctx.buffer, searchText, ctx.state.cursor, shouldIgnoreCase)
+    let searchResult = searchProc(ctx.buffer, searchText, ctx.cursor, shouldIgnoreCase)
 
     if searchResult.isSome:
       let newPos = searchResult.get
-      ctx.state.cursor = newPos
+      ctx.cursor = newPos
 
       # Update viewport to follow cursor
       let lineCount = ctx.buffer.len
@@ -4337,14 +4348,14 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Match Bracket",
     "Jump to matching bracket (%)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let matchResult = findMatchingBracketAtCursor(ctx.buffer, ctx.state.cursor)
+      let matchResult = findMatchingBracketAtCursor(ctx.buffer, ctx.cursor)
       if matchResult.isErr:
         return err(matchResult.error)
 
       # Record jump before moving to matching bracket
       recordJump(ctx.state)
 
-      ctx.state.cursor = matchResult.value
+      ctx.cursor = matchResult.value
       return Result[(), string].ok (),
     0,
     0,
@@ -4356,7 +4367,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Search Word Forward",
     "Search for word under cursor forward (*)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let wordInfo = getWordInfoUnderCursor(ctx.buffer, ctx.state.cursor)
+      let wordInfo = getWordInfoUnderCursor(ctx.buffer, ctx.cursor)
       if wordInfo.isNone:
         return err("No word under cursor")
 
@@ -4372,11 +4383,10 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       ctx.state.search.wholeWord = true
 
       # Remember original word position to skip it after wrap-around
-      let originalWordPos =
-        BufferPosition(line: ctx.state.cursor.line, column: info.startCol)
+      let originalWordPos = BufferPosition(line: ctx.cursor.line, column: info.startCol)
 
       # Search from word end position to skip current word
-      var searchPos = BufferPosition(line: ctx.state.cursor.line, column: info.endCol)
+      var searchPos = BufferPosition(line: ctx.cursor.line, column: info.endCol)
       let ignoreCase = shouldIgnoreCase(
         info.word, ctx.state.search.ignorecase, ctx.state.search.smartcase
       )
@@ -4404,7 +4414,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
 
         # Check if this is a whole word match
         if isWholeWordMatch(ctx.buffer, newPos, wordLen):
-          ctx.state.cursor = newPos
+          ctx.cursor = newPos
 
           # Update viewport to follow cursor
           let lineCount = ctx.buffer.len
@@ -4435,7 +4445,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Search Word Backward",
     "Search for word under cursor backward (#)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let wordInfo = getWordInfoUnderCursor(ctx.buffer, ctx.state.cursor)
+      let wordInfo = getWordInfoUnderCursor(ctx.buffer, ctx.cursor)
       if wordInfo.isNone:
         return err("No word under cursor")
 
@@ -4451,11 +4461,10 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       ctx.state.search.wholeWord = true
 
       # Remember original word position to skip it after wrap-around
-      let originalWordPos =
-        BufferPosition(line: ctx.state.cursor.line, column: info.startCol)
+      let originalWordPos = BufferPosition(line: ctx.cursor.line, column: info.startCol)
 
       # Search from word start position to skip current word
-      var searchPos = BufferPosition(line: ctx.state.cursor.line, column: info.startCol)
+      var searchPos = BufferPosition(line: ctx.cursor.line, column: info.startCol)
       let ignoreCase = shouldIgnoreCase(
         info.word, ctx.state.search.ignorecase, ctx.state.search.smartcase
       )
@@ -4483,7 +4492,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
 
         # Check if this is a whole word match
         if isWholeWordMatch(ctx.buffer, newPos, wordLen):
-          ctx.state.cursor = newPos
+          ctx.cursor = newPos
 
           # Update viewport to follow cursor
           let lineCount = ctx.buffer.len

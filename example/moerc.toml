@@ -34,8 +34,6 @@ liveReloadOfConf = false               # Live config reload - Set to true to aut
 
 incrementalSearch = true               # Incremental search
 
-popupWindowInExmode = true             # 📝 Ex mode popup (not yet applied)
-
 autoDeleteParen = true                 # Auto-delete matching parens - Set to false to disable
 
 liveReloadOfFile = false               # Auto-reload when file changed externally
