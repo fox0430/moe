@@ -26,7 +26,6 @@ import std/[unittest, options]
 import pkg/results
 
 import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/cursor {.all.}
 import ../src/moepkg/types {.all.}
 import ../src/moepkg/motion {.all.}
 import ../src/moepkg/commandregistry {.all.}

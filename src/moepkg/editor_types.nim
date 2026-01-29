@@ -25,13 +25,13 @@ import std/tables
 import pkg/celina
 
 import
-  buffer, cursor, types, commands, commandregistry, modes, commandline, commandconfig,
+  buffer, types, commands, commandregistry, modes, commandline, commandconfig,
   windowmanager, lspintegration, recentfilemode, config, persist
 import keybindings except Command
 import command_handlers/handler_manager
 
 export
-  buffer, cursor, types, commands, commandregistry, modes, commandline, commandconfig,
+  buffer, types, commands, commandregistry, modes, commandline, commandconfig,
   windowmanager, lspintegration, recentfilemode, config, persist, handler_manager,
   tables, celina
 

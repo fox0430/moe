@@ -20,7 +20,6 @@
 import std/[unittest, options]
 
 import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/cursor {.all.}
 
 suite "Buffer Search - Basic findNext":
   test "findNext finds first occurrence":
@@ -245,6 +244,33 @@ suite "Buffer Search - isPositionInSearchMatch":
     check not buf.isPositionInSearchMatch(BufferPosition(line: -1, column: 0), "hello")
     check not buf.isPositionInSearchMatch(BufferPosition(line: 10, column: 0), "hello")
     check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 100), "hello")
+
+  test "isPositionInSearchMatch with empty search pattern":
+    let buf = newTextBuffer("hello world hello again")
+    # Empty pattern should not match any position
+    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 0), "")
+    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 6), "")
+
+  test "isPositionInSearchMatch with multiple matches":
+    let buf = newTextBuffer("hello world hello again")
+    # First "hello" at column 0
+    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 0), "hello")
+    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 4), "hello")
+    # "world" at column 6
+    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 6), "world")
+    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 5), "world")
+    # Second "hello" at column 12
+    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 12), "hello")
+    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 16), "hello")
+
+  test "isPositionInSearchMatch with Unicode pattern":
+    let buf = newTextBuffer("日本語 世界 日本語")
+    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 0), "日本語")
+    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 2), "日本語")
+    check not buf.isPositionInSearchMatch(
+      BufferPosition(line: 0, column: 3), "日本語"
+    )
+    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 4), "世界")
 
 suite "Buffer Search - Edge cases":
   test "Single character buffer":

@@ -21,7 +21,7 @@
 
 import std/[unittest, options]
 import pkg/results
-import ../src/moepkg/[windowmanager, types, buffer, cursor]
+import ../src/moepkg/[windowmanager, types, buffer]
 
 proc createTestWindow(x, y, width, height: int, active = false): EditorWindow =
   ## Create a test window with specified viewport

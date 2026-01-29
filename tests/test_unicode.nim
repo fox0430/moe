@@ -1,6 +1,25 @@
-import std/unittest
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
 
-import ../src/moepkg/[gapbuffer, buffer, unicode_utils]
+import std/[unittest, unicode]
+
+import ../src/moepkg/[gapbuffer, buffer, unicode_utils, render_utils]
 
 suite "GapBuffer - Unicode Support":
   test "Create buffer with Japanese text":
@@ -86,6 +105,11 @@ suite "Unicode Character Count":
     check text.charLen == 0
     check text.len == 0
 
+  test "charLen vs len (byte length)":
+    let text = "漢字"
+    check text.charLen == 2 # 2 characters
+    check text.len == 6 # 6 bytes (each CJK char is 3 bytes in UTF-8)
+
 suite "Unicode Position Conversion":
   test "charToBytePos with ASCII":
     let text = "Hello"
@@ -114,6 +138,21 @@ suite "Unicode Position Conversion":
     check byteToCharPos(text, 6) == 2 # Byte 6 -> char 2
     check byteToCharPos(text, 15) == 5 # Byte 15 -> char 5
 
+  test "Extract substring using character positions":
+    let text = "ab漢cd"
+    # Extract using charToBytePos
+    let start0 = charToBytePos(text, 0)
+    let end2 = charToBytePos(text, 2)
+    check text[start0 ..< end2] == "ab"
+
+    let start2 = charToBytePos(text, 2)
+    let end3 = charToBytePos(text, 3)
+    check text[start2 ..< end3] == "漢"
+
+    let start3 = charToBytePos(text, 3)
+    let end5 = charToBytePos(text, 5)
+    check text[start3 ..< end5] == "cd"
+
 suite "Line Wrapping with Unicode":
   test "Wrap calculation with Japanese characters":
     let text = "これは日本語のテストです"
@@ -136,7 +175,6 @@ suite "Line Wrapping with Unicode":
 
   test "Extract wrapped line segments":
     let text = "これは日本語のテストです"
-    let maxWidth = 5
 
     # First wrap: characters 0..4 (5 chars)
     let startByte1 = charToBytePos(text, 0)
@@ -155,3 +193,141 @@ suite "Line Wrapping with Unicode":
     let endByte3 = charToBytePos(text, text.charLen)
     let segment3 = text[startByte3 ..< endByte3]
     check segment3.charLen == 2
+
+suite "Display Width - runeWidth":
+  test "ASCII characters have width 1":
+    check runeWidth("a".runeAt(0)) == 1
+    check runeWidth("A".runeAt(0)) == 1
+    check runeWidth("1".runeAt(0)) == 1
+    check runeWidth(" ".runeAt(0)) == 1
+
+  test "CJK characters have width 2":
+    check runeWidth("漢".runeAt(0)) == 2
+    check runeWidth("字".runeAt(0)) == 2
+    check runeWidth("日".runeAt(0)) == 2
+    check runeWidth("本".runeAt(0)) == 2
+    check runeWidth("한".runeAt(0)) == 2
+    check runeWidth("글".runeAt(0)) == 2
+    check runeWidth("中".runeAt(0)) == 2
+    check runeWidth("文".runeAt(0)) == 2
+
+  test "Emoji have width 2":
+    check runeWidth("👋".runeAt(0)) == 2
+    check runeWidth("🌍".runeAt(0)) == 2
+    check runeWidth("😀".runeAt(0)) == 2
+
+suite "Display Width - displayWidthUpToWithTabs":
+  test "Calculates correct width for ASCII":
+    let text = "hello"
+    check displayWidthUpToWithTabs(text, 0, 4) == 0
+    check displayWidthUpToWithTabs(text, 1, 4) == 1
+    check displayWidthUpToWithTabs(text, 5, 4) == 5
+
+  test "Calculates correct width for CJK":
+    let text = "漢字"
+    check displayWidthUpToWithTabs(text, 0, 4) == 0
+    check displayWidthUpToWithTabs(text, 1, 4) == 2 # '漢' has width 2
+    check displayWidthUpToWithTabs(text, 2, 4) == 4 # '漢字' has width 4
+
+  test "Calculates correct width for mixed text":
+    let text = "ab漢cd"
+    check displayWidthUpToWithTabs(text, 0, 4) == 0 # Before 'a'
+    check displayWidthUpToWithTabs(text, 1, 4) == 1 # After 'a'
+    check displayWidthUpToWithTabs(text, 2, 4) == 2 # After 'ab'
+    check displayWidthUpToWithTabs(text, 3, 4) == 4 # After 'ab漢' (a=1, b=1, 漢=2)
+    check displayWidthUpToWithTabs(text, 4, 4) == 5 # After 'ab漢c'
+    check displayWidthUpToWithTabs(text, 5, 4) == 6 # After 'ab漢cd'
+
+  test "Handles tab character":
+    let text = "ab\tcd"
+    # 'a'=1, 'b'=1, tab expands to next tab stop
+    # At position 2, displayWidth=2, next tabStop is 4, so tab adds 2
+    check displayWidthUpToWithTabs(text, 2, 4) == 2 # Before tab
+    check displayWidthUpToWithTabs(text, 3, 4) == 4
+      # After tab (2 + 2 spaces to reach tabStop 4)
+
+  test "Negative charPos returns 0":
+    let text = "hello"
+    check displayWidthUpToWithTabs(text, -1, 4) == 0
+    check displayWidthUpToWithTabs(text, -10, 4) == 0
+
+  test "Invalid tabStop uses default":
+    let text = "hello"
+    check displayWidthUpToWithTabs(text, 3, 0) == 3 # Uses tabStop=1
+    check displayWidthUpToWithTabs(text, 3, -5) == 3 # Uses tabStop=1
+
+suite "Display Width - displayWidthSubstr":
+  test "ASCII text":
+    let text = "hello world"
+    # Within maxWidth=5, we can fit "hello" (5 chars, 5 width)
+    let (charCount, actualWidth) = displayWidthSubstr(text, 0, 5)
+    check charCount == 5
+    check actualWidth == 5
+
+  test "CJK text":
+    let text = "漢字日本"
+    # maxWidth=5 can fit "漢字" (2 chars, 4 width) but not "漢字日" (3 chars, 6 width)
+    let (charCount, actualWidth) = displayWidthSubstr(text, 0, 5)
+    check charCount == 2
+    check actualWidth == 4
+
+  test "Mixed text":
+    let text = "ab漢cd"
+    # maxWidth=4 can fit "ab漢" (3 chars: a=1, b=1, 漢=2)
+    let (charCount, actualWidth) = displayWidthSubstr(text, 0, 4)
+    check charCount == 3
+    check actualWidth == 4
+
+  test "With offset":
+    let text = "hello漢字world"
+    # Starting from char 5 (at '漢'), maxWidth=10
+    # "漢字world" = 2+2+5 = 9 width, 7 chars
+    let (charCount, actualWidth) = displayWidthSubstr(text, 5, 10)
+    check charCount == 7
+    check actualWidth == 9
+
+  test "Stops before exceeding maxWidth":
+    let text = "a漢b"
+    # maxWidth=2 can only fit 'a' (1 width), cannot fit '漢' (would be 3 total)
+    let (charCount, actualWidth) = displayWidthSubstr(text, 0, 2)
+    check charCount == 1
+    check actualWidth == 1
+
+  test "Exact fit":
+    let text = "漢字"
+    # maxWidth=4 exactly fits both characters
+    let (charCount, actualWidth) = displayWidthSubstr(text, 0, 4)
+    check charCount == 2
+    check actualWidth == 4
+
+suite "Rendering Width Simulation":
+  test "ASCII":
+    var displayX = 0
+    let text = "hello"
+    for rune in text.runes:
+      displayX += runeWidth(rune)
+    check displayX == 5
+
+  test "CJK":
+    var displayX = 0
+    let text = "漢字日本"
+    for rune in text.runes:
+      displayX += runeWidth(rune)
+    check displayX == 8 # Each CJK char has width 2
+
+  test "Mixed text":
+    var displayX = 0
+    let text = "ab漢cd"
+    for rune in text.runes:
+      displayX += runeWidth(rune)
+    check displayX == 6 # a(1) + b(1) + 漢(2) + c(1) + d(1)
+
+  test "Complex text":
+    var displayX = 0
+    let text = "CJK characters: 漢字 日本語 中文 한글"
+    for rune in text.runes:
+      displayX += runeWidth(rune)
+    # "CJK characters: " = 16 chars (width 16)
+    # "漢字 日本語 中文 한글" = 漢(2) + 字(2) + space(1) + 日(2) + 本(2) + 語(2) + space(1) + 中(2) + 文(2) + space(1) + 한(2) + 글(2) = 21
+    # Total: 16 + 21 = 37
+    check displayX == 37

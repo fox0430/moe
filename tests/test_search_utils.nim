@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, paths]
+import std/[unittest, os, strutils]
 
 import pkg/results
 
@@ -203,3 +203,143 @@ suite "Search History - Path Functions":
       let path = getSearchHistoryPath().get.string
       check path.len > 0
       check path == cacheDir / "moe" / "search_history"
+
+suite "hasUpperCase":
+  test "empty string":
+    check not hasUpperCase("")
+
+  test "lowercase only":
+    check not hasUpperCase("abc")
+    check not hasUpperCase("hello world")
+
+  test "uppercase only":
+    check hasUpperCase("ABC")
+    check hasUpperCase("HELLO WORLD")
+
+  test "mixed case":
+    check hasUpperCase("Hello")
+    check hasUpperCase("heLLo")
+    check hasUpperCase("abcD")
+
+  test "numbers and symbols":
+    check not hasUpperCase("123")
+    check not hasUpperCase("!@#$%")
+    check not hasUpperCase("abc123")
+    check hasUpperCase("abc123A")
+
+  test "unicode characters":
+    # Only ASCII uppercase is checked
+    check not hasUpperCase("日本語")
+    check not hasUpperCase("αβγ")
+    check hasUpperCase("日本語A")
+
+suite "shouldIgnoreCase":
+  test "ignorecase false always returns false":
+    check not shouldIgnoreCase("abc", ignorecase = false, smartcase = false)
+    check not shouldIgnoreCase("ABC", ignorecase = false, smartcase = false)
+    check not shouldIgnoreCase("abc", ignorecase = false, smartcase = true)
+    check not shouldIgnoreCase("ABC", ignorecase = false, smartcase = true)
+
+  test "ignorecase true without smartcase":
+    check shouldIgnoreCase("abc", ignorecase = true, smartcase = false)
+    check shouldIgnoreCase("ABC", ignorecase = true, smartcase = false)
+
+  test "smartcase with lowercase search":
+    check shouldIgnoreCase("abc", ignorecase = true, smartcase = true)
+    check shouldIgnoreCase("hello world", ignorecase = true, smartcase = true)
+
+  test "smartcase with uppercase search":
+    check not shouldIgnoreCase("ABC", ignorecase = true, smartcase = true)
+    check not shouldIgnoreCase("Hello", ignorecase = true, smartcase = true)
+    check not shouldIgnoreCase("helloWorld", ignorecase = true, smartcase = true)
+
+suite "prepareSearchString":
+  test "case sensitive":
+    check prepareSearchString("Hello", ignorecase = false) == "Hello"
+    check prepareSearchString("ABC", ignorecase = false) == "ABC"
+
+  test "case insensitive":
+    check prepareSearchString("Hello", ignorecase = true) == "hello"
+    check prepareSearchString("ABC", ignorecase = true) == "abc"
+    check prepareSearchString("MixedCASE", ignorecase = true) == "mixedcase"
+
+  test "already lowercase":
+    check prepareSearchString("hello", ignorecase = true) == "hello"
+
+  test "empty string":
+    check prepareSearchString("", ignorecase = false) == ""
+    check prepareSearchString("", ignorecase = true) == ""
+
+suite "loadSearchHistory and saveSearchHistory":
+  var originalHistory: seq[string] = @[]
+  var historyPath: string = ""
+  var pathAvailable: bool = false
+
+  setup:
+    # Get the actual history path used by the module
+    let setupPathResult = getSearchHistoryPath()
+    if setupPathResult.isOk:
+      historyPath = setupPathResult.get.string
+      pathAvailable = true
+      # Backup existing history if it exists
+      if fileExists(historyPath):
+        originalHistory = loadSearchHistory()
+
+  teardown:
+    # Restore original history
+    if historyPath.len > 0:
+      if originalHistory.len > 0:
+        discard saveSearchHistory(originalHistory)
+      elif fileExists(historyPath):
+        removeFile(historyPath)
+
+  test "load from non-existent file returns empty":
+    # loadSearchHistory uses getSearchHistoryPath internally,
+    # so we test the general behavior
+    let history = loadSearchHistory()
+    # Should not crash, returns empty or existing history
+    check history.len >= 0
+
+  test "saveSearchHistory respects limit":
+    if not pathAvailable:
+      skip()
+    else:
+      var history: seq[string] = @[]
+      for i in 0 ..< 100:
+        history.add("search" & $i)
+
+      # Save with limit 50
+      let result = saveSearchHistory(history, 50)
+      check result.isOk
+
+      # Load and verify
+      let loaded = loadSearchHistory(50)
+      check loaded.len <= 50
+
+  test "saveSearchHistory and loadSearchHistory roundtrip":
+    if not pathAvailable:
+      skip()
+    else:
+      let testHistory = @["pattern1", "pattern2", "pattern3"]
+      let saveResult = saveSearchHistory(testHistory)
+      check saveResult.isOk
+
+      let loaded = loadSearchHistory()
+      check loaded.len >= 3
+      # The first entries should match (most recent first)
+      check loaded[0] == "pattern1"
+      check loaded[1] == "pattern2"
+      check loaded[2] == "pattern3"
+
+  test "saveSearchHistory skips empty entries":
+    if not pathAvailable:
+      skip()
+    else:
+      let historyWithEmpty = @["pattern1", "", "pattern2", "", "pattern3"]
+      let saveResult = saveSearchHistory(historyWithEmpty)
+      check saveResult.isOk
+
+      let loaded = loadSearchHistory()
+      # Empty entries should be filtered out on save
+      for entry in loaded:
+        check entry.len > 0

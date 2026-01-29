@@ -20,8 +20,6 @@
 import std/[strformat, monotimes, times, os, options]
 
 import pkg/[celina, results, chronos]
-import pkg/celina/async/async_buffer as celinaBuffer
-import pkg/celina/async/async_terminal as asyncTerminal
 
 import
   moepkg/
@@ -74,19 +72,6 @@ proc lspPollingTask(editor: Editor, running: ptr bool) {.async.} =
           discard
     await sleepAsync(pollInterval)
 
-proc setRawAnsiCursor(style: CursorStyle) =
-  let escSeq =
-    case style
-    of CursorStyle.Default: CursorStyleDefault
-    of CursorStyle.BlinkingBlock: CursorStyleBlinkingBlock
-    of CursorStyle.SteadyBlock: CursorStyleSteadyBlock
-    of CursorStyle.BlinkingUnderline: CursorStyleBlinkingUnderline
-    of CursorStyle.SteadyUnderline: CursorStyleSteadyUnderline
-    of CursorStyle.BlinkingBar: CursorStyleBlinkingBar
-    of CursorStyle.SteadyBar: CursorStyleSteadyBar
-  stdout.write(escSeq)
-  stdout.flushFile()
-
 proc runEditor(
     editor: Editor, app: AsyncApp, cmdLineConfig: CmdLineConfig, log: Logger
 ) {.async.} =
@@ -116,12 +101,10 @@ proc runEditor(
 
           return shouldContinue
 
-    app.onRenderAsync proc(asyncBuf: celinaBuffer.AsyncBuffer): Future[void] {.async.} =
+    app.onRenderAsync proc(buffer: var Buffer) =
       {.cast(gcsafe).}:
         {.cast(raises: []).}:
-          # Direct access to internal buffer (single lock, no copy)
-          asyncBuf.withBufferAsync:
-            editor.render(buffer)
+          editor.render(buffer)
 
           # Set cursor style based on editor mode (unless disabled)
           if not editor.config.standard.disableChangeCursor:
@@ -131,16 +114,13 @@ proc runEditor(
                 toCursorStyle(editor.config.standard.insertModeCursor)
               else:
                 toCursorStyle(editor.config.standard.normalModeCursor)
-            # Set cursor style via ANSI escape sequence (no async API available)
-            setRawAnsiCursor(cursorStyle)
+            app.setCursorStyle(cursorStyle)
 
-      # Set cursor position and visibility (using celina async API)
-      if editor.state.cursorVisible:
-        await asyncTerminal.showCursorAt(
-          editor.state.screenCursor.x, editor.state.screenCursor.y
-        )
-      else:
-        await asyncTerminal.hideCursor()
+          # Set cursor position and visibility
+          if editor.state.cursorVisible:
+            app.showCursorAt(editor.state.screenCursor.x, editor.state.screenCursor.y)
+          else:
+            app.hideCursor()
 
     # Run the async main loop
     # Note: Bracketed Paste Mode is enabled via AppConfig(bracketedPaste: true)
@@ -152,7 +132,7 @@ proc runEditor(
     # Restore cursor to default style on exit
     if not editor.config.standard.disableChangeCursor:
       let cursorStyle = toCursorStyle(editor.config.standard.defaultCursor)
-      setRawAnsiCursor(cursorStyle)
+      terminal.setCursorStyle(cursorStyle)
 
     # Cleanup background processes before exiting
     cleanupBackgroundProcesses()

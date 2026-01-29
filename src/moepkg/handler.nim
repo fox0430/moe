@@ -23,8 +23,8 @@ import pkg/[celina, results, chronos]
 from pkg/celina/core/mouse_logic import MouseButton
 
 import
-  editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
-  filer, quickrunutils, helpviewer, buffermanager, backupmanager, backup, diffviewer,
+  editor, keybindings, modes, buffer, logger, types, motion, search_utils, filer,
+  quickrunutils, helpviewer, buffermanager, backupmanager, backup, diffviewer,
   command_completion, build, render_utils, sidebar, debugviewer, configloader,
   references_viewer, documentsymbol_viewer, callhierarchy_viewer, messagelog,
   commandline, color, theme
@@ -2421,7 +2421,8 @@ proc handleEvent*(e: Editor, event: Event): bool =
     if activeWin.backupManagerState.isSome:
       let bkState = activeWin.backupManagerState.get
       # Backup current buffer before restore (in case user wants to undo)
-      discard e.buffer.backupBuffer(e.config.autoBackup)
+      discard
+        backupBuffer(e.buffer.filePath, e.buffer.getTextString(), e.config.autoBackup)
       if bkState.restoreBackup(backupIndex):
         # Reload the buffer from the restored file
         if e.buffer.filePath.isSome:

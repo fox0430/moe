@@ -23,7 +23,7 @@ import std/[unittest, options]
 import pkg/results
 import
   ../src/moepkg/
-    [commands, buffer, types, config, commandregistry, keybindings, modes, cursor]
+    [commands, buffer, types, config, commandregistry, keybindings, modes, motion]
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
@@ -404,3 +404,105 @@ suite "CommandExecutor - Integration":
     # Move to first line
     exec.executeMotion(Motion.FirstLine, 1)
     check exec.cursor.line == 0
+
+suite "ViewportManager - Goto Line Scrolling":
+  proc createTestBuffer(lineCount: int): TextBuffer =
+    ## Create a buffer with specified number of lines
+    var lines = ""
+    for i in 1 .. lineCount:
+      if i > 1:
+        lines.add("\n")
+      lines.add("Line " & $i)
+    result = newTextBuffer(lines)
+
+  test "viewport scrolls when jumping to line far below":
+    let buffer = createTestBuffer(100)
+    let viewportManager = ViewportManager(
+      viewport: ViewPort(topLine: 0, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+    )
+
+    # Jump to line 100 (0-based index: 99)
+    let targetLine = 99
+    let cursorPos = CursorPosition(x: 0, y: targetLine)
+
+    viewportManager.updateViewport(
+      cursorPos, buffer.len, showStatusLine = true, reservedLines = 2
+    )
+
+    # Line 100 should be visible
+    let visibleHeight = viewportManager.viewport.height - 2
+    let maxVisibleLine = viewportManager.viewport.topLine + visibleHeight - 1
+
+    check targetLine >= viewportManager.viewport.topLine
+    check targetLine <= maxVisibleLine
+    check viewportManager.viewport.topLine > 70
+
+  test "viewport scrolls when jumping to line far above":
+    let buffer = createTestBuffer(100)
+    let viewportManager = ViewportManager(
+      viewport: ViewPort(topLine: 80, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+    )
+
+    # Jump to line 10 (0-based index: 9)
+    let targetLine = 9
+    let cursorPos = CursorPosition(x: 0, y: targetLine)
+
+    viewportManager.updateViewport(
+      cursorPos, buffer.len, showStatusLine = true, reservedLines = 2
+    )
+
+    check targetLine >= viewportManager.viewport.topLine
+    check viewportManager.viewport.topLine <= 9
+
+  test "viewport does not scroll if target line is already visible":
+    let buffer = createTestBuffer(100)
+    let initialTopLine = 40
+    let viewportManager = ViewportManager(
+      viewport: ViewPort(
+        topLine: initialTopLine, leftColumn: 0, height: 20, width: 80, x: 0, y: 0
+      )
+    )
+
+    # Jump to line 50 (already visible)
+    let targetLine = 50
+    let cursorPos = CursorPosition(x: 0, y: targetLine)
+
+    viewportManager.updateViewport(
+      cursorPos, buffer.len, showStatusLine = true, reservedLines = 2
+    )
+
+    check viewportManager.viewport.topLine >= initialTopLine - 1
+    check viewportManager.viewport.topLine <= initialTopLine + 1
+
+  test "viewport scrolls to first line":
+    let buffer = createTestBuffer(100)
+    let viewportManager = ViewportManager(
+      viewport: ViewPort(topLine: 80, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+    )
+
+    let cursorPos = CursorPosition(x: 0, y: 0)
+
+    viewportManager.updateViewport(
+      cursorPos, buffer.len, showStatusLine = true, reservedLines = 2
+    )
+
+    check viewportManager.viewport.topLine == 0
+
+  test "viewport scrolls to last line":
+    let buffer = createTestBuffer(100)
+    let viewportManager = ViewportManager(
+      viewport: ViewPort(topLine: 0, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
+    )
+
+    let lastLine = buffer.len - 1
+    let cursorPos = CursorPosition(x: 0, y: lastLine)
+
+    viewportManager.updateViewport(
+      cursorPos, buffer.len, showStatusLine = true, reservedLines = 2
+    )
+
+    let visibleHeight = viewportManager.viewport.height - 2
+    let maxVisibleLine = viewportManager.viewport.topLine + visibleHeight - 1
+
+    check lastLine >= viewportManager.viewport.topLine
+    check lastLine <= maxVisibleLine

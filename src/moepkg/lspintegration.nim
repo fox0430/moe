@@ -24,7 +24,7 @@ import std/[options, json, strutils, algorithm, tables, times, unicode]
 
 import pkg/[results, chronos]
 
-import buffer, cursor, types, lspservice, messagelog, unicode_utils
+import buffer, types, lspservice, messagelog, unicode_utils
 import lsp/protocol/types as lspTypes
 
 export lspservice

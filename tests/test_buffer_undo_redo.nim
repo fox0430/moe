@@ -21,7 +21,7 @@ import std/[unittest, options, strutils]
 
 import pkg/results
 
-import ../src/moepkg/[buffer, cursor]
+import ../src/moepkg/buffer
 import ../src/moepkg/syntax/highlite
 
 suite "Buffer - Undo/Redo Basic Operations":

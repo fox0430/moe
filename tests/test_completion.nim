@@ -21,7 +21,7 @@ import std/[unittest, options, strutils]
 
 import pkg/results
 
-import ../src/moepkg/[buffer, cursor, completion]
+import ../src/moepkg/[buffer, completion]
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
 suite "Completion - extractWords":

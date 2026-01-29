@@ -23,7 +23,7 @@ import std/[options, algorithm]
 
 import pkg/results
 
-import types, buffer, cursor, modes
+import types, buffer, modes
 
 type EditorWindowManager* = ref object ## Manages multiple split windows
   windows*: seq[EditorWindow]

@@ -21,7 +21,7 @@ import std/options
 
 import pkg/results
 
-import types, buffer, motion, commandregistry, keybindings, config, cursor
+import types, buffer, motion, commandregistry, keybindings, config
 
 type CommandExecutor* = ref object
   motionController*: MotionController

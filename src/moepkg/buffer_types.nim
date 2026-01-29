@@ -17,11 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-type
-  CursorPosition* = object
-    x*: int
-    y*: int
+## Basic buffer types shared across modules
+## This module has no dependencies to avoid circular imports
 
-  BufferPosition* = object
-    line*: int
-    column*: int
+type BufferPosition* = object
+  line*: int
+  column*: int

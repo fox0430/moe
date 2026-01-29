@@ -26,10 +26,7 @@ import std/[options, tables]
 import pkg/results
 
 import
-  ../[
-    types, buffer, modes, motion, keybindings, commandregistry, config, registers,
-    cursor,
-  ]
+  ../[types, buffer, modes, motion, keybindings, commandregistry, config, registers]
 import visual_handler, insert_commands
 
 type

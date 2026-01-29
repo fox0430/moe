@@ -906,10 +906,12 @@ proc loadConfigFromToml*(
   if toml.hasKey("Persist"):
     loadPersistConfig(toml["Persist"].getTable(), config.persist, vr)
 
-  if toml.hasKey("StartUp.FileOpen"):
-    loadStartUpFileOpenConfig(
-      toml["StartUp.FileOpen"].getTable(), config.startUpFileOpen, vr
-    )
+  if toml.hasKey("StartUp"):
+    let startUpTable = toml["StartUp"].getTable()
+    if startUpTable.hasKey("FileOpen"):
+      loadStartUpFileOpenConfig(
+        startUpTable["FileOpen"].getTable(), config.startUpFileOpen, vr
+      )
 
   if toml.hasKey("Lsp"):
     loadLspConfig(toml["Lsp"].getTable(), config.lsp, vr)

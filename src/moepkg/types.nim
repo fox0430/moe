@@ -22,14 +22,15 @@ import std/[options, monotimes, times, tables, strutils, json]
 import pkg/celina
 
 import
-  cursor, modes, buffer, registers, filer, logviewer, helpviewer, command_completion,
+  modes, buffer, registers, filer, logviewer, helpviewer, command_completion,
   messagelog, buffermanager, backupmanager, diffviewer, debugviewer, configmode,
-  references_viewer, documentsymbol_viewer, callhierarchy_viewer, hoverpopup
+  references_viewer, documentsymbol_viewer, callhierarchy_viewer, hoverpopup,
+  buffer_types
 
 export
   buffer.SidebarItemKind, registers, command_completion, logviewer, helpviewer,
   buffermanager, backupmanager, diffviewer, debugviewer, configmode, references_viewer,
-  documentsymbol_viewer, callhierarchy_viewer, hoverpopup
+  documentsymbol_viewer, callhierarchy_viewer, hoverpopup, buffer_types
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -58,6 +59,10 @@ type
     currentCursorLine*: float # Current cursor line (fractional for smooth animation)
     targetCursorLine*: int # Target cursor line
     lastUpdateTime*: MonoTime # Last physics update time
+
+  CursorPosition* = object
+    x*: int
+    y*: int
 
   EditorWindow* = ref object
     ## Represents a split window with its own buffer and viewport

@@ -23,7 +23,7 @@
 ## that are independent of CommandContext for better testability
 
 import std/[strutils, unicode]
-import ../[buffer, types, modes, cursor]
+import ../[buffer, types, modes]
 
 proc getLineIndent*(line: string): string =
   ## Extract leading whitespace (spaces and tabs) from a line

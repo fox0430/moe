@@ -26,7 +26,7 @@ import std/[options, strutils]
 
 import pkg/results
 
-import ../[buffer, types, cursor, registers, motion, modes]
+import ../[buffer, types, registers, motion, modes]
 import insert_commands
 
 proc getSelectionRange*(

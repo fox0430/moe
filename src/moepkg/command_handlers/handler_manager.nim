@@ -28,7 +28,7 @@ import pkg/[results, celina]
 
 import
   ../[
-    types, buffer, cursor, modes, motion, keybindings, commandline, commandconfig,
+    types, buffer, modes, motion, keybindings, commandline, commandconfig,
     commandregistry, config, stringbuilder, filer, recentfilemode, lspintegration,
   ]
 import ../lsp/protocol/types as lspTypes

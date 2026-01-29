@@ -111,7 +111,7 @@ proc saveSearchHistory*(
   let historyPath = getSearchHistoryPath()
   if historyPath.isErr:
     logError("search_utils", historyPath.error)
-    return
+    return Result[(), string].err(historyPath.error)
 
   let
     pathSplited = historyPath.get.splitPath
@@ -120,13 +120,16 @@ proc saveSearchHistory*(
     try:
       createDir(pathHeadStr)
     except CatchableError as e:
-      logError("search_utils", fmt"Failed to create dir: {e.msg}: {pathHeadStr}")
+      let errMsg = fmt"Failed to create dir: {e.msg}: {pathHeadStr}"
+      logError("search_utils", errMsg)
+      return Result[(), string].err(errMsg)
 
   let historyPathStr = historyPath.get.string
 
   if historyPathStr.len == 0:
-    logDebug("search_utils", fmt"history file not found: {historyPathStr}")
-    return
+    let errMsg = "History path is empty"
+    logDebug("search_utils", errMsg)
+    return Result[(), string].err(errMsg)
 
   try:
     # Take only the most recent entries
@@ -148,5 +151,6 @@ proc saveSearchHistory*(
         content.add("\n")
 
     writeFile(historyPathStr, content)
+    return Result[(), string].ok(())
   except CatchableError as e:
-    return err(e.msg)
+    return Result[(), string].err(e.msg)

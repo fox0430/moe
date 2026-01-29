@@ -23,13 +23,11 @@ import
 
 import pkg/celina
 
+import color, buffer_types
 import syntax/highlite
-import cursor
-import color
 import lsp/protocol/types
 
-export SourceLanguage
-export EditorColorPairIndex
+export SourceLanguage, EditorColorPairIndex
 
 type
   # Runes type alias for sequence of Unicode characters

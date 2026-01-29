@@ -28,7 +28,7 @@ import std/[os, times, oids, json, options, strutils, algorithm]
 
 import pkg/results
 
-import buffer, config, logger
+import config, logger
 
 const
   BackupJsonFilename = "backup.json"
@@ -229,21 +229,23 @@ proc cleanupOldBackups(baseBackupDir, sourceFilePath: string, maxFiles: int) {.u
     return
   cleanupOldBackupsInDir(backupDir, maxFiles)
 
-proc backupBuffer*(buffer: TextBuffer, config: AutoBackupConfig): BackupResult =
-  ## Backup the buffer to the backup directory
+proc backupBuffer*(
+    filePath: Option[string], content: string, config: AutoBackupConfig
+): BackupResult =
+  ## Backup the buffer content to the backup directory
   ## Returns Ok with backup file path on success, Err with message on failure
   ##
   ## Conditions checked:
-  ## - Buffer must have a file path
+  ## - filePath must be Some
   ## - Source file directory must not be in dirToExclude
   ## - Content must be different from the most recent backup
 
-  # Check if buffer has a file path
-  if buffer.filePath.isNone:
+  # Check if file path exists
+  if filePath.isNone:
     return err("No file path")
 
   let
-    sourceFilePath = absolutePath(buffer.filePath.get)
+    sourceFilePath = absolutePath(filePath.get)
     sourceFileDir = sourceFilePath.parentDir
     baseBackupDir = getBaseBackupDir(config)
 
@@ -267,8 +269,8 @@ proc backupBuffer*(buffer: TextBuffer, config: AutoBackupConfig): BackupResult =
   if backupDir.len == 0:
     return err("Failed to create backup directory")
 
-  # Get current buffer content
-  let currentContent = buffer.getTextString()
+  # Use provided content
+  let currentContent = content
 
   # Check if content is different from most recent backup
   # Use *InDir version to avoid redundant getBackupDirForSource call

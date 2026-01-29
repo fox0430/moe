@@ -22,7 +22,6 @@
 import std/[unittest, options, tables]
 
 import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/cursor {.all.}
 import ../src/moepkg/types {.all.}
 import ../src/moepkg/modes {.all.}
 import ../src/moepkg/registers {.all.}

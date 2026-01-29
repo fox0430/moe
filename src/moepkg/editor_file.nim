@@ -326,7 +326,8 @@ proc autoBackup*(e: Editor) =
 
     # Only backup modified buffers with a file path
     if buffer.isModified and buffer.filePath.isSome:
-      let backupResult = backupBuffer(buffer, e.config.autoBackup)
+      let backupResult =
+        backupBuffer(buffer.filePath, buffer.getTextString(), e.config.autoBackup)
 
       if backupResult.isOk:
         backedUpBuffers.add(buffer)

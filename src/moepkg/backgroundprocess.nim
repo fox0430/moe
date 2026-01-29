@@ -92,7 +92,7 @@ proc readAllOutput*(
 
   try:
     while not stdout.atEof():
-      let line = await stdout.readLine()
+      let line = await stdout.readLine(sep = "\n")
       lines.add(line)
   except AsyncStreamError:
     discard

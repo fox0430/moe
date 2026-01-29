@@ -26,7 +26,7 @@ import std/[options, unicode, monotimes, times]
 
 import pkg/results
 
-import buffer, cursor, types, unicode_utils, logger, render_utils, config
+import buffer, types, unicode_utils, logger, render_utils, config
 
 type
   # Motion command with count

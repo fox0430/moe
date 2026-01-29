@@ -27,8 +27,8 @@ import std/[tables, options, strutils, unicode]
 import pkg/results
 
 import
-  types, buffer, motion, keybindings, modes, cursor, search_utils, clipboard, config,
-  logger, unicode_utils, registers
+  types, buffer, motion, keybindings, modes, search_utils, clipboard, config, logger,
+  unicode_utils, registers
 
 import command_handlers/[visual_commands, insert_commands, normal_commands]
 
