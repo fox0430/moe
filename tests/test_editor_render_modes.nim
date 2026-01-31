@@ -49,7 +49,7 @@ suite "renderFiler - Basic behavior":
     check e.windowManager.windows[e.windowManager.activeWindowIndex].filerState.isNone
 
     # Should not crash
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
 
   test "Render with empty filer state":
     let e = createTestEditor()
@@ -68,7 +68,7 @@ suite "renderFiler - Basic behavior":
     )
 
     # Should not crash
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
 
   test "Render filer with entries":
     let e = createTestEditor()
@@ -109,7 +109,7 @@ suite "renderFiler - Basic behavior":
     )
 
     # Should not crash and should update screen cursor
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
 
     # Verify screen cursor was set
     check e.state.screenCursor.y >= 0
@@ -142,7 +142,7 @@ suite "renderFiler - Basic behavior":
       )
     )
 
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
 
   test "Render filer with symlink":
     let e = createTestEditor()
@@ -181,7 +181,7 @@ suite "renderFiler - Basic behavior":
       )
     )
 
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
 
   test "Render filer with executable file":
     let e = createTestEditor()
@@ -211,7 +211,7 @@ suite "renderFiler - Basic behavior":
       )
     )
 
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
 
   test "Render filer with long path truncation":
     let e = createTestEditor()
@@ -232,7 +232,7 @@ suite "renderFiler - Basic behavior":
       )
     )
 
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
 
 suite "renderBufferManager - Basic behavior":
   test "Render with no buffer manager state does nothing":
@@ -293,24 +293,6 @@ suite "renderBufferManager - Basic behavior":
       some(bmState)
 
     e.renderBufferManager(buffer)
-
-suite "renderConfigMode - Basic behavior":
-  test "Render with no config mode state does nothing":
-    let e = createTestEditor()
-    var buffer = createTestBuffer()
-
-    check e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState.isNone
-    e.renderConfigMode(buffer)
-
-  test "Render config mode with items":
-    let e = createTestEditor()
-    var buffer = createTestBuffer()
-
-    let configState = newConfigModeState(e.config)
-    e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState =
-      some(configState)
-
-    e.renderConfigMode(buffer)
 
 suite "renderBackupManager - Basic behavior":
   test "Render with no backup manager state does nothing":
@@ -696,7 +678,7 @@ suite "Filer - Various file types with icons":
       )
     )
 
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
 
   test "Render filer without icons":
     let e = createTestEditor()
@@ -745,7 +727,7 @@ suite "Filer - Various file types with icons":
       )
     )
 
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
 
 suite "Status line visibility":
   test "Render modes with status line hidden":
@@ -767,7 +749,7 @@ suite "Status line visibility":
         previousPath: none(string),
       )
     )
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
 
     # Test buffer manager
     let bmState = newBufferManagerState()
@@ -793,7 +775,7 @@ suite "Status line visibility":
         previousPath: none(string),
       )
     )
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
 
 suite "Screen cursor positioning":
   test "Filer cursor position changes with selection":
@@ -842,12 +824,12 @@ suite "Screen cursor positioning":
       )
     )
 
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
     let y0 = e.state.screenCursor.y
 
     e.windowManager.windows[e.windowManager.activeWindowIndex].filerState.get.selectedIndex =
       2
-    e.renderFiler(buffer)
+    e.renderFiler(buffer, e.activeWindow, true, 0)
     let y2 = e.state.screenCursor.y
 
     check y2 > y0
@@ -876,3 +858,63 @@ suite "Screen cursor positioning":
     let y2 = e.state.screenCursor.y
 
     check y2 > y0
+
+suite "renderConfig - Basic behavior":
+  test "Render with no config state does nothing":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    # ConfigModeState is None by default
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState.isNone
+
+    # Should not crash
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+
+  test "Render with config state":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    # Set up config mode state
+    let configState = newConfigModeState(e.config)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState =
+      some(configState)
+
+    # Should not crash
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+
+  test "Render config with selection":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    let configState = newConfigModeState(e.config)
+    configState.selectedIndex = 1
+    e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState =
+      some(configState)
+
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+
+  test "Render config with status line hidden":
+    var config = newEditorConfig()
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+    e.state.display.showStatusLine = false
+    var buffer = createTestBuffer()
+
+    let configState = newConfigModeState(e.config)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState =
+      some(configState)
+
+    e.renderConfig(buffer, e.activeWindow, true, 0)
+
+  test "Render config with status line shown":
+    var config = newEditorConfig()
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+    e.state.display.showStatusLine = true
+    var buffer = createTestBuffer()
+
+    let configState = newConfigModeState(e.config)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState =
+      some(configState)
+
+    e.renderConfig(buffer, e.activeWindow, true, 0)

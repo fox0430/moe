@@ -86,7 +86,7 @@ proc pathToIcon(entry: FileEntry): string =
   of "el", "lisp", "scm": "λ "
   else: "📄 "
 
-proc renderWindowFiler*(
+proc renderFiler*(
     e: Editor,
     buffer: var Buffer,
     window: EditorWindow,
@@ -197,10 +197,6 @@ proc renderWindowFiler*(
   # Hide cursor when not in edit mode
   e.state.cursorVisible = false
 
-proc renderFiler*(e: Editor, buffer: var Buffer) =
-  ## Render the file explorer view (full screen mode - calls per-window version)
-  e.renderWindowFiler(buffer, e.activeWindow, true, 0)
-
 proc renderBufferManager*(e: Editor, buffer: var Buffer) =
   ## Render the buffer manager view
   if e.activeWindow.bufferManagerState.isNone:
@@ -278,178 +274,7 @@ proc renderBufferManager*(e: Editor, buffer: var Buffer) =
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = listStartY + (bmState.selectedIndex - bmState.topLine)
 
-proc renderConfigMode*(e: Editor, buffer: var Buffer) =
-  ## Render the configuration mode view
-  if e.activeWindow.configModeState.isNone:
-    return
-
-  # Calculate reserved lines at bottom: status line (if shown) + command line
-  let reservedBottom =
-    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
-
-  let
-    configState = e.activeWindow.configModeState.get
-    headerY = buffer.area.y
-    listStartY = buffer.area.y + 1
-    listEndY = buffer.area.y + buffer.area.height - reservedBottom
-    width = buffer.area.width
-
-  # Render header
-  var headerText = "-- Configuration --"
-  if headerText.len < width:
-    headerText = headerText & ' '.repeat(width - headerText.len)
-  buffer.setString(
-    buffer.area.x,
-    headerY,
-    headerText,
-    getThemeStyle(EditorColorPairIndex.viewerHeader, {StyleModifier.Bold}),
-  )
-
-  # Calculate max name width for alignment
-  var maxNameWidth = 0
-  for item in configState.items:
-    if item.kind != cvkSection:
-      maxNameWidth = max(maxNameWidth, item.displayName.len + item.depth * 2)
-  maxNameWidth = min(maxNameWidth + 4, width div 2) # Limit to half of width
-
-  # Ensure selected entry is visible
-  let visibleLines = listEndY - listStartY
-  configState.ensureSelectedVisible(visibleLines)
-
-  # Render config entries
-  var screenY = listStartY
-  let isEditMode = configState.isEditing()
-  let editInfo = configState.getEditInfo()
-
-  for i in configState.topLine ..< configState.items.len:
-    if screenY >= listEndY:
-      break
-
-    let
-      item = configState.items[i]
-      isSelected = i == configState.selectedIndex
-      isBeingEdited = isSelected and isEditMode and item.kind in {cvkInt, cvkString}
-
-    # Build display line
-    var displayLine: string
-    if isBeingEdited:
-      # Show edit buffer
-      let indent = "  ".repeat(item.depth)
-      let name = item.displayName.alignLeft(maxNameWidth - item.depth * 2)
-      displayLine = indent & name & " : " & editInfo.buffer
-    else:
-      displayLine = formatItemForDisplay(item, maxNameWidth)
-
-    # Truncate if too long, or pad to full width for consistent background
-    if displayLine.len > width:
-      displayLine = displayLine[0 ..< width - 3] & "..."
-    elif displayLine.len < width:
-      displayLine = displayLine & ' '.repeat(width - displayLine.len)
-
-    # Apply style (use theme background color to match clearBuffer)
-    let style =
-      if isBeingEdited:
-        # Edit mode style - yellow background
-        getThemeStyle(EditorColorPairIndex.configModeEditMode)
-      elif isSelected:
-        getThemeStyle(EditorColorPairIndex.viewerSelectedLine)
-      elif item.kind == cvkSection:
-        getThemeStyle(EditorColorPairIndex.configModeSection, {StyleModifier.Bold})
-      elif item.kind == cvkBool:
-        if item.boolValue:
-          getThemeStyle(EditorColorPairIndex.configModeBoolTrue)
-        else:
-          getThemeStyle(EditorColorPairIndex.configModeBoolFalse)
-      elif item.kind == cvkEnum:
-        getThemeStyle(EditorColorPairIndex.configModeEnum)
-      elif item.kind == cvkInt:
-        getThemeStyle(EditorColorPairIndex.configModeInt)
-      else:
-        normalStyle()
-
-    buffer.setString(buffer.area.x, screenY, displayLine, style)
-    inc screenY
-
-  # Clear remaining lines (when sections are collapsed)
-  let emptyLine = ' '.repeat(width)
-  while screenY < listEndY:
-    buffer.setString(buffer.area.x, screenY, emptyLine, normalStyle())
-    inc screenY
-
-  # Render enum popup if open
-  let isEnumPopupOpen = configState.isEnumPopupOpen()
-  if isEnumPopupOpen:
-    let enumInfo = configState.getEnumPopupInfo()
-    if enumInfo.options.len > 0:
-      # Calculate popup dimensions
-      var popupWidth = 0
-      for opt in enumInfo.options:
-        popupWidth = max(popupWidth, opt.len)
-      popupWidth += 4 # padding and border
-      let popupHeight = enumInfo.options.len + 2 # options + border
-
-      # Calculate popup position (near the value display position)
-      let selectedY = listStartY + (configState.selectedIndex - configState.topLine)
-      let selectedItem = configState.getSelectedItem()
-      var valueX = maxNameWidth + 5 # indent + name + " : "
-      if selectedItem.isSome:
-        valueX =
-          selectedItem.get.depth * 2 + maxNameWidth - selectedItem.get.depth * 2 + 3
-
-      var popupX = valueX
-      var popupY = selectedY + 1
-      # Adjust if popup goes off screen
-      if popupX + popupWidth > width:
-        popupX = max(0, width - popupWidth)
-      if popupY + popupHeight > listEndY:
-        popupY = max(listStartY, selectedY - popupHeight)
-      if popupX < 0:
-        popupX = 0
-
-      let
-        borderStyle = getThemeStyle(EditorColorPairIndex.configModePopupBg)
-        popupNormalStyle = getThemeStyle(EditorColorPairIndex.configModePopupBg)
-        selectedStyle = getThemeStyle(
-          EditorColorPairIndex.configModePopupSelected, {StyleModifier.Bold}
-        )
-
-      # Draw top border
-      let topBorder = "┌" & "─".repeat(popupWidth - 2) & "┐"
-      buffer.setString(buffer.area.x + popupX, popupY, topBorder, borderStyle)
-
-      # Draw options
-      for i, opt in enumInfo.options:
-        let
-          y = popupY + 1 + i
-          isSelected = i == enumInfo.selectedIndex
-          style = if isSelected: selectedStyle else: popupNormalStyle
-          line = "│ " & opt.alignLeft(popupWidth - 4) & " │"
-        buffer.setString(buffer.area.x + popupX, y, line, style)
-
-      # Draw bottom border
-      let bottomBorder = "└" & "─".repeat(popupWidth - 2) & "┘"
-      buffer.setString(
-        buffer.area.x + popupX, popupY + popupHeight - 1, bottomBorder, borderStyle
-      )
-
-  # Set cursor position and visibility - only visible in edit mode
-  if isEditMode:
-    # Position cursor within the edit buffer
-    let selectedItem = configState.getSelectedItem()
-    if selectedItem.isSome:
-      let item = selectedItem.get
-      let indent = item.depth * 2
-      let nameWidth = maxNameWidth - item.depth * 2
-      # cursor x = indent + name + " : " + edit cursor position
-      e.state.screenCursor.x = indent + nameWidth + 3 + editInfo.cursor
-      e.state.screenCursor.y =
-        listStartY + (configState.selectedIndex - configState.topLine)
-      e.state.cursorVisible = true
-  else:
-    # Hide cursor when not in edit mode
-    e.state.cursorVisible = false
-
-proc renderWindowConfig*(
+proc renderConfig*(
     e: Editor,
     buffer: var Buffer,
     window: EditorWindow,
@@ -472,21 +297,10 @@ proc renderWindowConfig*(
   let
     configState = window.configModeState.get
     headerY = window.viewport.y + tabLineOffset
-    listStartY = window.viewport.y + tabLineOffset + 1
+    listStartY = window.viewport.y + tabLineOffset
     listEndY = window.viewport.y + window.viewport.height - reservedBottom
     width = window.viewport.width
     startX = window.viewport.x
-
-  # Render header
-  var headerText = "-- Configuration --"
-  if headerText.len < width:
-    headerText = headerText & ' '.repeat(width - headerText.len)
-  buffer.setString(
-    startX,
-    headerY,
-    headerText,
-    getThemeStyle(EditorColorPairIndex.viewerHeader, {StyleModifier.Bold}),
-  )
 
   # Calculate max name width for alignment
   var maxNameWidth = 0
@@ -538,15 +352,6 @@ proc renderWindowConfig*(
         getThemeStyle(EditorColorPairIndex.viewerSelectedLine)
       elif item.kind == cvkSection:
         getThemeStyle(EditorColorPairIndex.configModeSection, {StyleModifier.Bold})
-      elif item.kind == cvkBool:
-        if item.boolValue:
-          getThemeStyle(EditorColorPairIndex.configModeBoolTrue)
-        else:
-          getThemeStyle(EditorColorPairIndex.configModeBoolFalse)
-      elif item.kind == cvkEnum:
-        getThemeStyle(EditorColorPairIndex.configModeEnum)
-      elif item.kind == cvkInt:
-        getThemeStyle(EditorColorPairIndex.configModeInt)
       else:
         normalStyle()
 

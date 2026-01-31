@@ -156,10 +156,10 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     case renderMode
     of EditorMode.Filer:
       # Filer supports per-window rendering
-      e.renderWindowFiler(buffer, window, isBottomWindow, tabLineOffset)
+      e.renderFiler(buffer, window, isBottomWindow, tabLineOffset)
     of EditorMode.Config:
       # Config supports per-window rendering
-      e.renderWindowConfig(buffer, window, isBottomWindow, tabLineOffset)
+      e.renderConfig(buffer, window, isBottomWindow, tabLineOffset)
     of EditorMode.BufferManager:
       # These modes use activeWindow internally, only render when active
       if isActiveWindow:
