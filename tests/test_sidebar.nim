@@ -385,3 +385,142 @@ suite "Sidebar - Style functions":
   test "emptyStyle has default foreground":
     let style = emptyStyle()
     check style.fg.kind == Default
+
+suite "Sidebar - resizeSidebar edge cases":
+  test "Resize sidebar to zero height":
+    var sidebar = initSidebar(5)
+    sidebar.setSidebarLine(0, "+ ", GitAdded)
+
+    sidebar.resizeSidebar(0)
+
+    check sidebar.buffer.len == 0
+
+  test "Resize from zero height to positive":
+    var sidebar = initSidebar(0)
+
+    sidebar.resizeSidebar(3)
+
+    check sidebar.buffer.len == 3
+    for y in 0 ..< 3:
+      check sidebar.buffer[y].len == sidebar.width
+      for x in 0 ..< sidebar.width:
+        check sidebar.buffer[y][x].kind == Empty
+
+suite "Sidebar - globalMarkerConfig":
+  test "Custom marker config affects git markers":
+    let originalConfig = globalMarkerConfig
+
+    globalMarkerConfig.gitAdded = "A "
+    globalMarkerConfig.gitChanged = "M "
+
+    var sidebar = initSidebar(3)
+    sidebar.updateSidebarForGitAdded(0)
+    sidebar.updateSidebarForGitChanged(1)
+
+    check sidebar.buffer[0][0].text == "A"
+    check sidebar.buffer[0][1].text == " "
+    check sidebar.buffer[1][0].text == "M"
+    check sidebar.buffer[1][1].text == " "
+
+    globalMarkerConfig = originalConfig
+
+  test "Custom marker config affects syntax markers":
+    let originalConfig = globalMarkerConfig
+
+    globalMarkerConfig.syntaxError = "EE"
+    globalMarkerConfig.syntaxWarning = "WW"
+
+    var sidebar = initSidebar(2)
+    sidebar.updateSidebarForSyntaxError(0)
+    sidebar.updateSidebarForSyntaxWarning(1)
+
+    check sidebar.buffer[0][0].text == "E"
+    check sidebar.buffer[0][1].text == "E"
+    check sidebar.buffer[1][0].text == "W"
+    check sidebar.buffer[1][1].text == "W"
+
+    globalMarkerConfig = originalConfig
+
+suite "Sidebar - generateSidebarFromBuffer edge cases":
+  test "Generate sidebar from empty buffer":
+    let buf = newTextBuffer()
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 3)
+
+    check sidebar.buffer.len == 3
+    for y in 0 ..< 3:
+      for x in 0 ..< sidebar.width:
+        check sidebar.buffer[y][x].kind == Empty
+
+  test "Generate sidebar with GitDeleted marker":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+    buf.setLineMarker(0, GitDeleted)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 2)
+
+    check sidebar.buffer[0][0].kind == GitDeleted
+    check sidebar.buffer[0][0].text == "_"
+    check sidebar.buffer[1][0].kind == Empty
+
+  test "Generate sidebar with GitChangedAndDeleted marker":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1")
+    buf.setLineMarker(0, GitChangedAndDeleted)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 1)
+
+    check sidebar.buffer[0][0].kind == GitChangedAndDeleted
+    check sidebar.buffer[0][0].text == "~"
+    check sidebar.buffer[0][1].text == "_"
+
+  test "Generate sidebar with SyntaxWarning marker":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1")
+    buf.setLineMarker(0, SyntaxWarning)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 1)
+
+    check sidebar.buffer[0][0].kind == SyntaxWarning
+
+  test "Generate sidebar with topLine beyond buffer":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+    buf.setLineMarker(0, GitAdded)
+
+    let sidebar = generateSidebarFromBuffer(buf, 10, 3)
+
+    check sidebar.buffer.len == 3
+    for y in 0 ..< 3:
+      for x in 0 ..< sidebar.width:
+        check sidebar.buffer[y][x].kind == Empty
+
+  test "Generate sidebar with zero height":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1")
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 0)
+
+    check sidebar.buffer.len == 0
+
+  test "Generate sidebar with all marker kinds":
+    let buf = newTextBuffer()
+    discard buf.insertText(
+      BufferPosition(line: 0, column: 0),
+      "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6",
+    )
+    buf.setLineMarker(0, GitAdded)
+    buf.setLineMarker(1, GitChanged)
+    buf.setLineMarker(2, GitDeleted)
+    buf.setLineMarker(3, GitChangedAndDeleted)
+    buf.setLineMarker(4, SyntaxError)
+    buf.setLineMarker(5, SyntaxWarning)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 6)
+
+    check sidebar.buffer[0][0].kind == GitAdded
+    check sidebar.buffer[1][0].kind == GitChanged
+    check sidebar.buffer[2][0].kind == GitDeleted
+    check sidebar.buffer[3][0].kind == GitChangedAndDeleted
+    check sidebar.buffer[4][0].kind == SyntaxError
+    check sidebar.buffer[5][0].kind == SyntaxWarning

@@ -1251,14 +1251,6 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
   # Configuration mode specific
   of "configModeSection":
     return some(EditorColorPairIndex.configModeSection)
-  of "configModeBoolTrue":
-    return some(EditorColorPairIndex.configModeBoolTrue)
-  of "configModeBoolFalse":
-    return some(EditorColorPairIndex.configModeBoolFalse)
-  of "configModeEnum":
-    return some(EditorColorPairIndex.configModeEnum)
-  of "configModeInt":
-    return some(EditorColorPairIndex.configModeInt)
   of "configModeEditMode":
     return some(EditorColorPairIndex.configModeEditMode)
   of "configModePopupBg":

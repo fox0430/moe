@@ -23,8 +23,8 @@
 ## that don't depend heavily on Editor state. Extracted from editor.nim to
 ## improve modularity and prepare for additional rendering features.
 
-import pkg/celina
 import std/unicode
+import pkg/celina
 
 import types, buffer, unicode_utils, color
 

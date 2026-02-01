@@ -199,7 +199,6 @@ const ArgumentRequiredActions* = {
   claMan, # requires page name
   claTheme, # requires theme name
   claLspExecuteCommand, # requires command
-  claHelp, # optional but user may want to specify topic
   claVSplit, # optional but user may want to specify file
   claHSplit, # optional but user may want to specify file
   claFiler, # optional but user may want to specify path

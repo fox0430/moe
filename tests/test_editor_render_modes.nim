@@ -523,7 +523,7 @@ suite "renderHelpViewer - Basic behavior":
     var buffer = createTestBuffer()
 
     check e.windowManager.windows[e.windowManager.activeWindowIndex].helpViewerState.isNone
-    e.renderHelpViewer(buffer)
+    e.renderHelpViewer(buffer, e.activeWindow, true, 0)
 
   test "Render help viewer with content":
     let e = createTestEditor()
@@ -541,7 +541,7 @@ suite "renderHelpViewer - Basic behavior":
     e.windowManager.windows[e.windowManager.activeWindowIndex].helpViewerState =
       some(helpState)
 
-    e.renderHelpViewer(buffer)
+    e.renderHelpViewer(buffer, e.activeWindow, true, 0)
     check e.state.screenCursor.y >= 0
 
   test "Render help viewer with header styling":
@@ -555,7 +555,7 @@ suite "renderHelpViewer - Basic behavior":
     e.windowManager.windows[e.windowManager.activeWindowIndex].helpViewerState =
       some(helpState)
 
-    e.renderHelpViewer(buffer)
+    e.renderHelpViewer(buffer, e.activeWindow, true, 0)
 
 suite "Filer - Various file types with icons":
   test "Render filer with various file extensions":

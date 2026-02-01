@@ -93,7 +93,6 @@ const CommandDescriptions = {
   "set": "Set option",
   "se": "Set option",
   # Help
-  "h": "Show help",
   "help": "Show help",
   # Substitute
   "s": "Substitute",

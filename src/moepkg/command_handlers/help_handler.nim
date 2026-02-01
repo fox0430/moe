@@ -62,11 +62,9 @@ proc handleHelpViewerModeKey*(
     if not keyCombo.isSpecial and keyCombo.char == "g":
       helpState.moveToFirst()
       return HelpViewerResult(kind: hvrHandled)
-    # If not 'g', fall through to normal handling
-
-  # Escape or q to quit
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
-    return HelpViewerResult(kind: hvrQuit)
+    else:
+      # If not 'g', Cancel command.
+      discard
 
   # Check for special keys first
   if keyCombo.isSpecial:
@@ -96,8 +94,6 @@ proc handleHelpViewerModeKey*(
     case keyCombo.char
     of ":":
       return HelpViewerResult(kind: hvrEnterCommand)
-    of "q":
-      return HelpViewerResult(kind: hvrQuit)
     of "j":
       helpState.moveDown()
       helpState.ensureSelectedVisible(viewportHeight)

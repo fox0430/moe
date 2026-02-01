@@ -311,10 +311,6 @@ type
 
     # Configuration mode specific
     configModeSection
-    configModeBoolTrue
-    configModeBoolFalse
-    configModeEnum
-    configModeInt
     configModeEditMode
     configModePopupBg
     configModePopupSelected

@@ -331,3 +331,241 @@ suite "Rendering Width Simulation":
     # "漢字 日本語 中文 한글" = 漢(2) + 字(2) + space(1) + 日(2) + 本(2) + 語(2) + space(1) + 中(2) + 文(2) + space(1) + 한(2) + 글(2) = 21
     # Total: 16 + 21 = 37
     check displayX == 37
+
+suite "getCharAtPos":
+  test "ASCII string":
+    let text = "Hello"
+    let (rune0, size0) = getCharAtPos(text, 0)
+    check rune0 == Rune('H')
+    check size0 == 1
+
+    let (rune4, size4) = getCharAtPos(text, 4)
+    check rune4 == Rune('o')
+    check size4 == 1
+
+  test "Japanese string":
+    let text = "こんにちは"
+    let (rune0, size0) = getCharAtPos(text, 0)
+    check rune0 == "こ".runeAt(0)
+    check size0 == 3
+
+    let (rune2, size2) = getCharAtPos(text, 2)
+    check rune2 == "に".runeAt(0)
+    check size2 == 3
+
+  test "Mixed content":
+    let text = "ab漢cd"
+    let (rune2, size2) = getCharAtPos(text, 2)
+    check rune2 == "漢".runeAt(0)
+    check size2 == 3
+
+    let (rune3, size3) = getCharAtPos(text, 3)
+    check rune3 == Rune('c')
+    check size3 == 1
+
+  test "Out of bounds returns null rune":
+    let text = "Hello"
+    let (rune, size) = getCharAtPos(text, 10)
+    check rune == Rune(0)
+    check size == 0
+
+  test "Empty string":
+    let text = ""
+    let (rune, size) = getCharAtPos(text, 0)
+    check rune == Rune(0)
+    check size == 0
+
+suite "deleteCharAt":
+  test "Delete ASCII character":
+    let text = "Hello"
+    check deleteCharAt(text, 0) == "ello"
+    check deleteCharAt(text, 2) == "Helo"
+    check deleteCharAt(text, 4) == "Hell"
+
+  test "Delete Japanese character":
+    let text = "こんにちは"
+    check deleteCharAt(text, 0) == "んにちは"
+    check deleteCharAt(text, 2) == "こんちは"
+    check deleteCharAt(text, 4) == "こんにち"
+
+  test "Delete from mixed content":
+    let text = "ab漢cd"
+    check deleteCharAt(text, 2) == "abcd"
+    check deleteCharAt(text, 0) == "b漢cd"
+    check deleteCharAt(text, 4) == "ab漢c"
+
+  test "Delete out of bounds returns original":
+    let text = "Hello"
+    check deleteCharAt(text, 10) == "Hello"
+
+  test "Delete from empty string":
+    let text = ""
+    check deleteCharAt(text, 0) == ""
+
+suite "displayWidth":
+  test "ASCII string":
+    check displayWidth("Hello") == 5
+    check displayWidth("") == 0
+
+  test "CJK string":
+    check displayWidth("漢字") == 4
+    check displayWidth("日本語") == 6
+
+  test "Mixed content":
+    check displayWidth("ab漢cd") == 6 # a(1) + b(1) + 漢(2) + c(1) + d(1)
+    check displayWidth("Hello世界") == 9 # 5 + 4
+
+  test "Emoji":
+    check displayWidth("👋🌍") == 4
+
+suite "displayWidthUpTo":
+  test "ASCII string":
+    let text = "Hello"
+    check displayWidthUpTo(text, 0) == 0
+    check displayWidthUpTo(text, 3) == 3
+    check displayWidthUpTo(text, 5) == 5
+
+  test "CJK string":
+    let text = "漢字日本"
+    check displayWidthUpTo(text, 0) == 0
+    check displayWidthUpTo(text, 1) == 2 # '漢' has width 2
+    check displayWidthUpTo(text, 2) == 4 # '漢字' has width 4
+    check displayWidthUpTo(text, 4) == 8
+
+  test "Mixed content":
+    let text = "ab漢cd"
+    check displayWidthUpTo(text, 0) == 0
+    check displayWidthUpTo(text, 2) == 2 # 'ab'
+    check displayWidthUpTo(text, 3) == 4 # 'ab漢'
+    check displayWidthUpTo(text, 5) == 6 # 'ab漢cd'
+
+  test "Beyond string length":
+    let text = "Hello"
+    check displayWidthUpTo(text, 10) == 5
+
+suite "charToBytePosCached":
+  test "Basic caching":
+    var cache = CursorPosCache()
+    let text = "こんにちは"
+
+    # First call - cache miss
+    let pos1 = charToBytePosCached(text, 2, cache, 0, 1)
+    check pos1 == 6
+    check cache.charPos == 2
+    check cache.bytePos == 6
+    check cache.line == 0
+    check cache.changeSeq == 1
+
+  test "Cache hit - same position":
+    var cache = CursorPosCache()
+    let text = "こんにちは"
+
+    discard charToBytePosCached(text, 2, cache, 0, 1)
+    let pos2 = charToBytePosCached(text, 2, cache, 0, 1)
+    check pos2 == 6
+
+  test "Cache hit - forward movement":
+    var cache = CursorPosCache()
+    let text = "こんにちは"
+
+    discard charToBytePosCached(text, 2, cache, 0, 1)
+    let pos3 = charToBytePosCached(text, 4, cache, 0, 1)
+    check pos3 == 12
+
+  test "Cache hit - backward movement":
+    var cache = CursorPosCache()
+    let text = "こんにちは"
+
+    discard charToBytePosCached(text, 4, cache, 0, 1)
+    let pos1 = charToBytePosCached(text, 1, cache, 0, 1)
+    check pos1 == 3
+
+  test "Cache invalidation on line change":
+    var cache = CursorPosCache()
+    let text = "こんにちは"
+
+    discard charToBytePosCached(text, 2, cache, 0, 1)
+    let pos2 = charToBytePosCached(text, 2, cache, 1, 1) # Different line
+    check pos2 == 6
+    check cache.line == 1
+
+  test "Cache invalidation on changeSeq change":
+    var cache = CursorPosCache()
+    let text = "こんにちは"
+
+    discard charToBytePosCached(text, 2, cache, 0, 1)
+    let pos2 = charToBytePosCached(text, 2, cache, 0, 2) # Different changeSeq
+    check pos2 == 6
+    check cache.changeSeq == 2
+
+  test "Position 0 or negative":
+    var cache = CursorPosCache()
+    let text = "Hello"
+
+    check charToBytePosCached(text, 0, cache, 0, 1) == 0
+    check charToBytePosCached(text, -1, cache, 0, 1) == 0
+
+suite "Parenthesis utilities":
+  test "isOpeningParen":
+    check isOpeningParen('(') == true
+    check isOpeningParen('[') == true
+    check isOpeningParen('{') == true
+    check isOpeningParen('"') == true
+    check isOpeningParen('\'') == true
+    check isOpeningParen(')') == false
+    check isOpeningParen('a') == false
+
+  test "getClosingChar":
+    check getClosingChar('(') == ')'
+    check getClosingChar('[') == ']'
+    check getClosingChar('{') == '}'
+    check getClosingChar('"') == '"'
+    check getClosingChar('\'') == '\''
+    check getClosingChar('a') == '\0'
+
+  test "isMatchingPair":
+    check isMatchingPair('(', ')') == true
+    check isMatchingPair('[', ']') == true
+    check isMatchingPair('{', '}') == true
+    check isMatchingPair('"', '"') == true
+    check isMatchingPair('\'', '\'') == true
+    check isMatchingPair('(', ']') == false
+    check isMatchingPair('a', 'b') == false
+
+suite "Bracket utilities (Rune)":
+  test "isOpenBracket":
+    check isOpenBracket(Rune('(')) == true
+    check isOpenBracket(Rune('[')) == true
+    check isOpenBracket(Rune('{')) == true
+    check isOpenBracket(Rune(')')) == false
+    check isOpenBracket(Rune('"')) == false
+    check isOpenBracket(Rune('a')) == false
+
+  test "isCloseBracket":
+    check isCloseBracket(Rune(')')) == true
+    check isCloseBracket(Rune(']')) == true
+    check isCloseBracket(Rune('}')) == true
+    check isCloseBracket(Rune('(')) == false
+    check isCloseBracket(Rune('"')) == false
+
+  test "isBracket":
+    check isBracket(Rune('(')) == true
+    check isBracket(Rune(')')) == true
+    check isBracket(Rune('[')) == true
+    check isBracket(Rune(']')) == true
+    check isBracket(Rune('{')) == true
+    check isBracket(Rune('}')) == true
+    check isBracket(Rune('a')) == false
+    check isBracket(Rune('"')) == false
+
+  test "correspondingCloseBracket":
+    check correspondingCloseBracket(Rune('(')) == Rune(')')
+    check correspondingCloseBracket(Rune('[')) == Rune(']')
+    check correspondingCloseBracket(Rune('{')) == Rune('}')
+    check correspondingCloseBracket(Rune('a')) == Rune('a') # Returns same
+
+  test "correspondingOpenBracket":
+    check correspondingOpenBracket(Rune(')')) == Rune('(')
+    check correspondingOpenBracket(Rune(']')) == Rune('[')
+    check correspondingOpenBracket(Rune('}')) == Rune('{')
+    check correspondingOpenBracket(Rune('a')) == Rune('a') # Returns same

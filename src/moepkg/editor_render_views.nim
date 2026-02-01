@@ -169,12 +169,8 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
           buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
         )
     of EditorMode.Help:
-      if isActiveWindow:
-        e.renderHelpViewer(buffer)
-      else:
-        e.renderWindow(
-          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
-        )
+      # Help supports per-window rendering
+      e.renderHelpViewer(buffer, window, isBottomWindow, tabLineOffset)
     of EditorMode.BackupManager:
       if isActiveWindow:
         e.renderBackupManager(buffer)

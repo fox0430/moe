@@ -236,10 +236,6 @@ const DefaultColors*: ThemeColors = [
 
   # Configuration mode specific
   EditorColorPairIndex.configModeSection: makeColorPair("#5fff5f", "#000000"),
-  EditorColorPairIndex.configModeBoolTrue: makeColorPair("#5faf5f", "#000000"),
-  EditorColorPairIndex.configModeBoolFalse: makeColorPair("#af5f5f", "#000000"),
-  EditorColorPairIndex.configModeEnum: makeColorPair("#87afd7", "#000000"),
-  EditorColorPairIndex.configModeInt: makeColorPair("#d7af5f", "#000000"),
   EditorColorPairIndex.configModeEditMode: makeColorPair("#000000", "#ffd700"),
   EditorColorPairIndex.configModePopupBg: makeColorPair("#ffffff", "#303030"),
   EditorColorPairIndex.configModePopupSelected: makeColorPair("#ffffff", "#005faf"),

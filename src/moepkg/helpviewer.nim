@@ -78,7 +78,7 @@ yy or Y    - Copy a line
 y{         - Yank to the previous blank line
 y}         - Yank to the next blank line
 yl         - Yank a character
-yt any     - Ynak characters to a any character
+yt any     - Yank characters to a any character
 p          - Paste the clipboard
 n          - Search forwards
 :          - Start Ex mode
@@ -226,17 +226,17 @@ G  - Go to the last line
 # References mode
 
 j     - Go down
-k     - Go down
-g     - Go to the first line
+k     - Go up
+gg    - Go to the first line
 G     - Go to the last line
 Enter - Jump to the destination
-ESC   - Quit References mode
+Esc   - Quit References mode
 
 # Call hierarchy viewer mode
 
 j     - Go down
-k     - Go down
-g     - Go to the first line
+k     - Go up
+gg    - Go to the first line
 G     - Go to the last line
 Enter - Jump to the destination
 i     - Incoming call
@@ -279,7 +279,7 @@ vs filename - Open in a vertical split window
 sv          - Horizontal split window
 sp filename - Open in a horizontal split window
 
-livereload on or livereload on - Change setting of live reload of configuration file
+livereload on or livereload off - Change setting of live reload of configuration file
 theme themeName - Change color theme; for example theme dark
 tab on or tab off - Change setting to tab line
 syntax on or syntax off - Change setting to syntax highlighting
@@ -287,7 +287,7 @@ tabstop number - Change setting to tabStop; for example tabstop 2
 paren on or paren off - Change setting to auto close paren
 indent on or indent off - Change setting to auto indent
 linenum on or linenum off - Change setting to display line number
-statusLine on or statusLine on - Change setting to display status bar
+statusLine on or statusLine off - Change setting to display status bar
 realtimesearch on or realtimesearch off - Change setting to real-time search
 deleteparen on or deleteparen off - Change setting to auto delete paren
 smoothscroll on or smoothscroll off - Change setting to smooth scroll
@@ -310,7 +310,7 @@ lspFold - LSP Folding Range
 lspFormat - LSP Document Formatting
 
 log - Open a log viewer for editor log
-lspLog- Open a log viewer for LSP log
+lspLog - Open a log viewer for LSP log
 
 lspRestart - Restart the current LSP server
 lspCallHierarchyIncoming - Show incoming calls (callers) at cursor
@@ -333,12 +333,13 @@ debug - Open debug mode
 ju or jumps - Open Jump list viewer
 """
 
-import std/strutils
+import std/[strutils, options]
 
 type HelpViewerState* = ref object
   lines*: seq[string] # Help lines to display
   selectedIndex*: int # Currently selected line index (cursor position)
   topLine*: int # Scroll position (first visible line)
+  searchQuery*: string # Current search query
 
 proc newHelpViewerState*(): HelpViewerState =
   ## Create a new help viewer state
@@ -346,7 +347,7 @@ proc newHelpViewerState*(): HelpViewerState =
   for line in HelpSentences.splitLines:
     lines.add(line)
 
-  HelpViewerState(lines: lines, selectedIndex: 0, topLine: 0)
+  HelpViewerState(lines: lines, selectedIndex: 0, topLine: 0, searchQuery: "")
 
 proc lineCount*(state: HelpViewerState): int =
   ## Get the number of lines in the help
@@ -402,3 +403,79 @@ proc ensureSelectedVisible*(state: HelpViewerState, viewportHeight: int) =
   # Ensure topLine is not negative
   if state.topLine < 0:
     state.topLine = 0
+
+proc setSearchQuery*(state: HelpViewerState, query: string) =
+  ## Set the search query
+  state.searchQuery = query
+
+proc clearSearch*(state: HelpViewerState) =
+  ## Clear the search query
+  state.searchQuery = ""
+
+proc hasSearchQuery*(state: HelpViewerState): bool =
+  ## Check if there is an active search query
+  state.searchQuery.len > 0
+
+proc isLineMatched*(state: HelpViewerState, index: int): bool =
+  ## Check if a line matches the current search query (case-insensitive)
+  if not state.hasSearchQuery:
+    return false
+  if index < 0 or index >= state.lines.len:
+    return false
+  state.lines[index].toLowerAscii.contains(state.searchQuery.toLowerAscii)
+
+proc searchForward*(state: HelpViewerState): Option[int] =
+  ## Search forward from current position.
+  ## Returns the line index if found, none otherwise.
+  if not state.hasSearchQuery:
+    return none(int)
+
+  let query = state.searchQuery.toLowerAscii
+  # Search from next line to end
+  for i in (state.selectedIndex + 1) ..< state.lines.len:
+    if state.lines[i].toLowerAscii.contains(query):
+      state.selectedIndex = i
+      return some(i)
+
+  # Wrap around: search from beginning to current position
+  for i in 0 ..< state.selectedIndex:
+    if state.lines[i].toLowerAscii.contains(query):
+      state.selectedIndex = i
+      return some(i)
+
+  none(int)
+
+proc searchBackward*(state: HelpViewerState): Option[int] =
+  ## Search backward from current position.
+  ## Returns the line index if found, none otherwise.
+  if not state.hasSearchQuery:
+    return none(int)
+
+  let query = state.searchQuery.toLowerAscii
+  # Search from previous line to beginning
+  for i in countdown(state.selectedIndex - 1, 0):
+    if state.lines[i].toLowerAscii.contains(query):
+      state.selectedIndex = i
+      return some(i)
+
+  # Wrap around: search from end to current position
+  for i in countdown(state.lines.high, state.selectedIndex + 1):
+    if state.lines[i].toLowerAscii.contains(query):
+      state.selectedIndex = i
+      return some(i)
+
+  none(int)
+
+proc searchFirst*(state: HelpViewerState): Option[int] =
+  ## Search from the beginning of the document.
+  ## Returns the line index if found, none otherwise.
+  if not state.hasSearchQuery:
+    return none(int)
+
+  let query = state.searchQuery.toLowerAscii
+  for i in 0 ..< state.lines.len:
+    if state.lines[i].toLowerAscii.contains(query):
+      state.selectedIndex = i
+      return some(i)
+
+  none(int)

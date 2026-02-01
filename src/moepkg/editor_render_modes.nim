@@ -943,33 +943,36 @@ proc renderCallHierarchyViewer*(e: Editor, buffer: var Buffer) =
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = listStartY + (chState.selectedIndex - chState.topLine)
 
-proc renderHelpViewer*(e: Editor, buffer: var Buffer) =
-  ## Render the help viewer view
-  if e.activeWindow.helpViewerState.isNone:
+proc renderHelpViewer*(
+    e: Editor,
+    buffer: var Buffer,
+    window: EditorWindow,
+    isBottomWindow: bool,
+    tabLineOffset: int,
+) =
+  ## Render the help viewer view within a window's viewport
+  if window.helpViewerState.isNone:
     return
 
-  # Calculate reserved lines at bottom: status line (if shown) + command line
+  # Calculate reserved lines at bottom for bottom windows only
   let reservedBottom =
-    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
+    if isBottomWindow and e.state.display.showStatusLine:
+      StatusAndCommandReserve
+    elif isBottomWindow:
+      CommandLineReserve
+    else:
+      0
 
   let
-    helpState = e.activeWindow.helpViewerState.get
-    headerY = buffer.area.y
-    listStartY = buffer.area.y + 1
-    listEndY = buffer.area.y + buffer.area.height - reservedBottom
-    width = buffer.area.width
-
-  # Render header
-  let headerText = "-- HELP --"
-  buffer.setString(
-    buffer.area.x,
-    headerY,
-    headerText,
-    getThemeStyle(EditorColorPairIndex.viewerHeader, {StyleModifier.Bold}),
-  )
+    helpState = window.helpViewerState.get
+    listStartY = window.viewport.y + tabLineOffset
+    listEndY = window.viewport.y + window.viewport.height - reservedBottom
+    width = window.viewport.width
+    startX = window.viewport.x
 
   # Ensure selected line is visible
-  helpState.ensureSelectedVisible(buffer.area.height - 1 - reservedBottom)
+  let visibleLines = listEndY - listStartY
+  helpState.ensureSelectedVisible(visibleLines)
 
   # Render help lines
   var screenY = listStartY
@@ -980,29 +983,35 @@ proc renderHelpViewer*(e: Editor, buffer: var Buffer) =
     let
       line = helpState.getLine(i)
       isSelected = i == helpState.selectedIndex
-      isHeader = line.len > 0 and line[0] == '#'
 
-    # Truncate if too long
+    # Truncate if too long, or pad to full width for consistent background
     var displayLine =
       if line.len > width:
-        line[0 ..< width - 3] & "..."
+        ' ' & line[0 ..< width - 3] & "..."
+      elif line.len < width:
+        ' ' & line & ' '.repeat(width - line.len)
       else:
-        line
+        ' ' & line
 
     # Apply style (use theme background)
     let style =
       if isSelected:
         getThemeStyle(EditorColorPairIndex.viewerSelectedLine)
-      elif isHeader:
-        getThemeStyle(
-          EditorColorPairIndex.helpViewerSectionHeader, {StyleModifier.Bold}
-        )
       else:
         normalStyle()
 
-    buffer.setString(buffer.area.x, screenY, displayLine, style)
+    buffer.setString(startX, screenY, displayLine, style)
+    inc screenY
+
+  # Clear remaining lines
+  let emptyLine = ' '.repeat(width)
+  while screenY < listEndY:
+    buffer.setString(startX, screenY, emptyLine, normalStyle())
     inc screenY
 
   # Set cursor position (hidden in help viewer mode, but set to selected line)
-  e.state.screenCursor.x = 0
+  e.state.screenCursor.x = startX
   e.state.screenCursor.y = listStartY + (helpState.selectedIndex - helpState.topLine)
+
+  # Hide cursor in help viewer mode
+  e.state.cursorVisible = false
