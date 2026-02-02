@@ -54,7 +54,7 @@ const
     "try", "tuple", "type", "using", "var", "when", "while", "xor", "yield",
   ]
 
-  NimBooleans* = ["true", "false"]
+  NimBooleans* = ["false", "true"]
 
   NimSpecialVars* = ["result"]
 
@@ -64,7 +64,7 @@ const
     "closure", "codegendecl", "compile", "compileTime", "computedGoto", "constructor",
     "deprecated", "discardable", "dynlib", "effects", "emit", "error", "experimental",
     "explain", "exportc", "extern", "fastcall", "fatal", "final", "floatChecks",
-    "gcsafe", "gensym", "global", "guard", "header", "hint", "hint", "hints", "importc",
+    "gcsafe", "gensym", "global", "guard", "header", "hint", "hints", "importc",
     "importcpp", "importobjc", "incompletestruct", "infChecks", "inheritable", "inject",
     "injectstmt", "inline", "intdefine", "line", "linearScanEnd", "link", "locks",
     "nanChecks", "nilChecks", "nimcall", "noInit", "noReturn", "noRewrite",
