@@ -187,9 +187,17 @@ proc clikeNextToken*(
           break
         else:
           inc(pos)
-    of '(', ')', '[', ']', '{', '}', ':', ',', ';', '.':
+    of '(', ')', '[', ']', '{', '}', ',', ';', '.':
       inc(pos)
       g.kind = gtPunctuation
+    of ':':
+      inc(pos)
+      if g.buf[pos] == ':':
+        # C++ scope resolution operator ::
+        inc(pos)
+        g.kind = gtOperator
+      else:
+        g.kind = gtPunctuation
     of '\0':
       g.kind = gtEof
     else:
