@@ -281,30 +281,32 @@ sp filename - Open in a horizontal split window
 
 livereload on or livereload off - Change setting of live reload of configuration file
 theme themeName - Change color theme; for example theme dark
-tab on or tab off - Change setting to tab line
+multistatusline on or multistatusline off - Change setting to show status line for each window
 syntax on or syntax off - Change setting to syntax highlighting
 tabstop number - Change setting to tabStop; for example tabstop 2
 paren on or paren off - Change setting to auto close paren
-indent on or indent off - Change setting to auto indent
-linenum on or linenum off - Change setting to display line number
+autoindent on or autoindent off - Change setting to auto indent
+number on or number off - Change setting to display line number
 statusLine on or statusLine off - Change setting to display status bar
-realtimesearch on or realtimesearch off - Change setting to real-time search
+incsearch on or incsearch off - Change setting to incremental search
 deleteparen on or deleteparen off - Change setting to auto delete paren
 smoothscroll on or smoothscroll off - Change setting to smooth scroll
-scrollMinDelay number - Set smooth scroll min delay; for example scrollMinDelay 10
-scrollMaxDelay number - Set smooth scroll max delay; for example scrollMaxDelay 10
+scrollfriction number - Set smooth scroll friction; for example scrollfriction 10
+scrollairdrag number - Set smooth scroll air drag; for example scrollairdrag 10
 highlightcurrentword on or highlightcurrentword off - Change setting to highlight other uses of the current word
 clipboard on or clipboard off - Change setting to system clipboard
 highlightfullspace on or highlightfullspace off - Change setting to highlight full width space
 buildonsave on or buildonsave off - Change setting to build on save
 indentationlines on  or indentationlines off - Change setting to indentation lines
 showGitInactive on or showGitInactive off - Change status line setting to show/hide git branch name in inactive window
-noh - Turn off highlights
+nohlsearch - Turn off search highlights
+hlsearch on or hlsearch off - Change setting to highlight search results
+highlightparen on or highlightparen off - Change setting to highlight matching parentheses
 icon - Setting show/hidden icons in filer mode
 deleteTrailingSpaces - Delete trailing spaces
 ignorecase - Change setting to ignorecase
 smartcase - Change setting to smartcase
-highlightCurrentLine on or highlightCurrentLine off - Change the highlight setting of the current line
+cursorline on or cursorline off - Change the highlight setting of the current line
 build - Build the current buffer
 lspFold - LSP Folding Range
 lspFormat - LSP Document Formatting
@@ -326,7 +328,7 @@ recent - Open recent file selection mode (Only supported on Linux)
 
 backup - Open backup file manager
 
-conf - Open configuration mode
+config - Open configuration mode
 
 debug - Open debug mode
 

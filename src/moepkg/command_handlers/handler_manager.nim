@@ -1203,6 +1203,20 @@ proc handleHelpViewerMode*(
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
+  of hvrEnterSearch:
+    # Enter search mode (forward) from help viewer
+    state.search.direction = Forward
+    state.search.historyIndex = -1
+    return HandlerResult(
+      kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
+    )
+  of hvrEnterSearchBackward:
+    # Enter search mode (backward) from help viewer
+    state.search.direction = Backward
+    state.search.historyIndex = -1
+    return HandlerResult(
+      kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
+    )
   of hvrQuit:
     return HandlerResult(kind: hrHelpViewerQuit)
   of hvrUnhandled:

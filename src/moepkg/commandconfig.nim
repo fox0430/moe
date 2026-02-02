@@ -132,10 +132,9 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("deleteTrailingSpaces", claStripWhitespace)
 
   # Filer (file explorer)
-  config.addAlias("Filer", claFiler)
   config.addAlias("filer", claFiler)
-  config.addAlias("Ex", claFiler)
-  config.addAlias("Explore", claFiler)
+  config.addAlias("ex", claFiler)
+  config.addAlias("explore", claFiler)
 
   # Log viewer
   config.addAlias("log", claLogViewer)
@@ -178,7 +177,7 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("config", claConfig)
 
   # Put config file
-  config.addAlias("putConfigFile", claPutConfigFile)
+  config.addAlias("putconfigfile", claPutConfigFile)
 
   # Manual
   config.addAlias("man", claMan)
@@ -186,14 +185,14 @@ proc loadDefaultConfig*(config: CommandConfig) =
   # Theme
   config.addAlias("theme", claTheme)
 
-  # LSP commands
-  config.addAlias("lspLog", claLspLog)
-  config.addAlias("lspFormat", claLspFormat)
-  config.addAlias("lspRestart", claLspRestart)
-  config.addAlias("lspFold", claLspFold)
-  config.addAlias("lspExeCommand", claLspExecuteCommand)
-  config.addAlias("lspCallHierarchyIncoming", claLspCallHierarchyIncoming)
-  config.addAlias("lspCallHierarchyOutgoing", claLspCallHierarchyOutgoing)
+  # LSP commands (lowercase - parser converts input to lowercase)
+  config.addAlias("lsplog", claLspLog)
+  config.addAlias("lspformat", claLspFormat)
+  config.addAlias("lsprestart", claLspRestart)
+  config.addAlias("lspfold", claLspFold)
+  config.addAlias("lspexecommand", claLspExecuteCommand)
+  config.addAlias("lspcallhierarchyincoming", claLspCallHierarchyIncoming)
+  config.addAlias("lspcallhierarchyoutgoing", claLspCallHierarchyOutgoing)
 
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser

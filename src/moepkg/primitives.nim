@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-## Basic buffer types shared across modules
+## Primitive types shared across modules
 ## This module has no dependencies to avoid circular imports
 
 type BufferPosition* = object

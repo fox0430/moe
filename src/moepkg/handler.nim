@@ -171,6 +171,14 @@ proc finalizeSearch(e: Editor) =
       # If incsearch is disabled, perform search now
       discard e.executeSearchFromCurrentPosition()
 
+    # Sync search query to help viewer state if in Help mode
+    if e.state.mode == EditorMode.Help:
+      let window = e.activeWindow
+      if window.helpViewerState.isSome:
+        let helpState = window.helpViewerState.get
+        helpState.setSearchQuery(e.state.search.text)
+        discard helpState.searchFirst()
+
   # Exit overlay and return to base mode
   # The base mode (Normal, LogViewer, Filer, etc.) is preserved
   e.state.exitOverlay()

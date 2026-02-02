@@ -101,10 +101,13 @@ proc runEditor(
 
           return shouldContinue
 
-    app.onRenderAsync proc(buffer: var Buffer) =
+    app.onRenderAsync proc(
+        asyncBuffer: async_buffer.AsyncBuffer
+    ): Future[void] {.async.} =
       {.cast(gcsafe).}:
         {.cast(raises: []).}:
-          editor.render(buffer)
+          asyncBuffer.withBuffer:
+            editor.render(buffer)
 
           # Set cursor style based on editor mode (unless disabled)
           if not editor.config.standard.disableChangeCursor:
@@ -114,13 +117,16 @@ proc runEditor(
                 toCursorStyle(editor.config.standard.insertModeCursor)
               else:
                 toCursorStyle(editor.config.standard.normalModeCursor)
-            app.setCursorStyle(cursorStyle)
+            setCursorStyle(cursorStyle)
 
           # Set cursor position and visibility
           if editor.state.cursorVisible:
-            app.showCursorAt(editor.state.screenCursor.x, editor.state.screenCursor.y)
+            terminal.setCursorPos(
+              editor.state.screenCursor.x, editor.state.screenCursor.y
+            )
+            terminal.showCursor()
           else:
-            app.hideCursor()
+            terminal.hideCursor()
 
     # Run the async main loop
     # Note: Bracketed Paste Mode is enabled via AppConfig(bracketedPaste: true)

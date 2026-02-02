@@ -569,3 +569,242 @@ suite "Bracket utilities (Rune)":
     check correspondingOpenBracket(Rune(']')) == Rune('[')
     check correspondingOpenBracket(Rune('}')) == Rune('{')
     check correspondingOpenBracket(Rune('a')) == Rune('a') # Returns same
+
+suite "4-byte Emoji (Surrogate Pairs) Tests":
+  test "charToBytePos with 4-byte emoji":
+    # 🎉 (U+1F389) is a 4-byte emoji
+    let text = "a🎉b"
+    check charToBytePos(text, 0) == 0 # 'a' at byte 0
+    check charToBytePos(text, 1) == 1 # '🎉' at byte 1
+    check charToBytePos(text, 2) == 5 # 'b' at byte 5 (1 + 4)
+    check charToBytePos(text, 3) == 6 # After 'b'
+
+  test "byteToCharPos with 4-byte emoji":
+    let text = "a🎉b"
+    check byteToCharPos(text, 0) == 0 # Byte 0 -> char 0 ('a')
+    check byteToCharPos(text, 1) == 1 # Byte 1 -> char 1 ('🎉')
+    check byteToCharPos(text, 5) == 2 # Byte 5 -> char 2 ('b')
+
+  test "getCharAtPos with 4-byte emoji":
+    let text = "a🎉b"
+    let (rune1, size1) = getCharAtPos(text, 1)
+    check rune1 == "🎉".runeAt(0)
+    check size1 == 4
+
+  test "deleteCharAt with 4-byte emoji":
+    let text = "a🎉b"
+    check deleteCharAt(text, 1) == "ab"
+
+  test "displayWidth with 4-byte emoji":
+    check displayWidth("🎉") == 2
+    check displayWidth("a🎉b") == 4 # 1 + 2 + 1
+
+  test "displayWidthUpTo with 4-byte emoji":
+    let text = "a🎉b"
+    check displayWidthUpTo(text, 0) == 0
+    check displayWidthUpTo(text, 1) == 1 # 'a'
+    check displayWidthUpTo(text, 2) == 3 # 'a' + '🎉'
+    check displayWidthUpTo(text, 3) == 4 # 'a' + '🎉' + 'b'
+
+  test "Multiple 4-byte emoji":
+    let text = "🎉🎊🎁"
+    check text.len == 12 # 3 * 4 bytes
+    check charToBytePos(text, 0) == 0
+    check charToBytePos(text, 1) == 4
+    check charToBytePos(text, 2) == 8
+    check charToBytePos(text, 3) == 12
+    check displayWidth(text) == 6 # 3 * 2
+
+  test "Mixed ASCII, CJK, and 4-byte emoji":
+    let text = "Hi漢🎉字!"
+    # 'H'=1B, 'i'=1B, '漢'=3B, '🎉'=4B, '字'=3B, '!'=1B = 13 bytes
+    check text.len == 13
+    check charToBytePos(text, 0) == 0 # 'H'
+    check charToBytePos(text, 1) == 1 # 'i'
+    check charToBytePos(text, 2) == 2 # '漢'
+    check charToBytePos(text, 3) == 5 # '🎉'
+    check charToBytePos(text, 4) == 9 # '字'
+    check charToBytePos(text, 5) == 12 # '!'
+    check charToBytePos(text, 6) == 13 # End
+    # Display width: H(1) + i(1) + 漢(2) + 🎉(2) + 字(2) + !(1) = 9
+    check displayWidth(text) == 9
+
+  test "Emoji sequences (skin tone modifiers)":
+    # 👋🏻 = 👋 (U+1F44B, 4 bytes) + 🏻 (U+1F3FB, 4 bytes)
+    let text = "👋🏻"
+    check text.len == 8 # 4 + 4 bytes
+    # Note: This counts as 2 Unicode code points, though it renders as 1 glyph
+    let (_, size0) = getCharAtPos(text, 0)
+    check size0 == 4
+    let (_, size1) = getCharAtPos(text, 1)
+    check size1 == 4
+
+  test "charToBytePosCached with 4-byte emoji":
+    var cache = CursorPosCache()
+    let text = "a🎉b🎊c"
+    # 'a'=1B, '🎉'=4B, 'b'=1B, '🎊'=4B, 'c'=1B = 11 bytes
+
+    let pos1 = charToBytePosCached(text, 1, cache, 0, 1)
+    check pos1 == 1 # '🎉' starts at byte 1
+
+    let pos3 = charToBytePosCached(text, 3, cache, 0, 1) # Forward movement
+    check pos3 == 6 # '🎊' starts at byte 6 (1 + 4 + 1)
+
+    let pos4 = charToBytePosCached(text, 4, cache, 0, 1)
+    check pos4 == 10 # 'c' starts at byte 10
+
+suite "Robustness Tests - Edge Cases and Invalid Input":
+  test "charToBytePos with position beyond string length":
+    let text = "Hello"
+    check charToBytePos(text, 100) == 5 # Should return end of string
+
+  test "byteToCharPos with position beyond string length":
+    let text = "Hello"
+    check byteToCharPos(text, 100) == 5 # Should return character count
+
+  test "charToBytePos with negative position":
+    let text = "Hello"
+    check charToBytePos(text, -1) == 0 # Should handle gracefully
+
+  test "displayWidthUpTo with position beyond string length":
+    let text = "漢字"
+    check displayWidthUpTo(text, 100) == 4 # Should return total width
+
+  test "displayWidthSubstr with offset beyond string length":
+    let text = "Hello"
+    let (charCount, actualWidth) = displayWidthSubstr(text, 100, 10)
+    # When offset > string length, charCount becomes negative (currentChar - startChar)
+    # This reflects current implementation behavior
+    check charCount == -95 # 5 - 100
+    check actualWidth == 0
+
+  test "displayWidthSubstr with maxWidth 0":
+    let text = "Hello"
+    let (charCount, actualWidth) = displayWidthSubstr(text, 0, 0)
+    check charCount == 0
+    check actualWidth == 0
+
+  test "deleteCharAt with negative position":
+    let text = "Hello"
+    check deleteCharAt(text, -1) == "Hello" # Should return original
+
+  test "getCharAtPos with negative position":
+    let text = "Hello"
+    let (rune, size) = getCharAtPos(text, -1)
+    check rune == Rune(0)
+    check size == 0
+
+  test "Single character strings":
+    check charToBytePos("a", 0) == 0
+    check charToBytePos("a", 1) == 1
+    check charToBytePos("漢", 0) == 0
+    check charToBytePos("漢", 1) == 3
+    check charToBytePos("🎉", 0) == 0
+    check charToBytePos("🎉", 1) == 4
+
+  test "Very long string with mixed content":
+    var text = ""
+    for i in 0 ..< 100:
+      text.add("a漢🎉")
+    # Each iteration: 'a'=1B + '漢'=3B + '🎉'=4B = 8 bytes, 3 chars
+    check text.len == 800
+    check charToBytePos(text, 0) == 0
+    check charToBytePos(text, 3) == 8 # After first "a漢🎉"
+    check charToBytePos(text, 300) == 800 # End of string
+
+  test "String with only spaces":
+    let text = "     "
+    check charToBytePos(text, 2) == 2
+    check displayWidth(text) == 5
+    check deleteCharAt(text, 2) == "    "
+
+  test "String with tabs":
+    let text = "\t\t"
+    check charToBytePos(text, 0) == 0
+    check charToBytePos(text, 1) == 1
+    check charToBytePos(text, 2) == 2
+    let (rune, size) = getCharAtPos(text, 0)
+    check rune == Rune('\t')
+    check size == 1
+
+  test "String with newlines":
+    let text = "a\nb\nc"
+    check charToBytePos(text, 0) == 0 # 'a'
+    check charToBytePos(text, 1) == 1 # '\n'
+    check charToBytePos(text, 2) == 2 # 'b'
+    let (rune, size) = getCharAtPos(text, 1)
+    check rune == Rune('\n')
+    check size == 1
+
+  test "String with null character":
+    let text = "a\x00b"
+    check text.len == 3
+    check charToBytePos(text, 1) == 1
+    let (rune, size) = getCharAtPos(text, 1)
+    check rune == Rune(0)
+    check size == 1
+
+  test "Unicode control characters":
+    # Zero-width space (U+200B)
+    let text = "a\u200Bb"
+    check text.len == 5 # 'a'=1B + ZWSP=3B + 'b'=1B
+    let (_, size) = getCharAtPos(text, 1)
+    check size == 3
+
+  test "charToBytePosCached robustness":
+    var cache = CursorPosCache()
+    let text = "Hello"
+
+    # Multiple calls with same parameters should be consistent
+    for i in 0 ..< 10:
+      check charToBytePosCached(text, 3, cache, 0, 1) == 3
+
+    # Rapid line changes
+    for line in 0 ..< 5:
+      check charToBytePosCached(text, 2, cache, line, 1) == 2
+      check cache.line == line
+
+    # Rapid changeSeq changes
+    for seq in 1 .. 5:
+      check charToBytePosCached(text, 2, cache, 0, seq) == 2
+      check cache.changeSeq == seq
+
+  test "displayWidthSubstr edge cases":
+    # Empty string
+    let (c1, w1) = displayWidthSubstr("", 0, 10)
+    check c1 == 0
+    check w1 == 0
+
+    # maxWidth exactly matches one wide character
+    let (c2, w2) = displayWidthSubstr("漢字", 0, 2)
+    check c2 == 1
+    check w2 == 2
+
+    # maxWidth is 1 (cannot fit any wide character)
+    let (c3, w3) = displayWidthSubstr("漢字", 0, 1)
+    check c3 == 0
+    check w3 == 0
+
+  test "Bracket functions with non-bracket characters":
+    check isOpenBracket(Rune('a')) == false
+    check isOpenBracket(Rune(' ')) == false
+    check isOpenBracket(Rune('\n')) == false
+    check isCloseBracket(Rune('z')) == false
+    check isBracket(Rune('!')) == false
+
+  test "correspondingBracket with edge cases":
+    # Non-bracket returns itself
+    check correspondingCloseBracket(Rune(' ')) == Rune(' ')
+    check correspondingOpenBracket(Rune('\t')) == Rune('\t')
+    check correspondingCloseBracket("漢".runeAt(0)) == "漢".runeAt(0)
+
+  test "Repeated operations on same string":
+    let text = "テスト文字列"
+    # Ensure repeated calls produce consistent results
+    for _ in 0 ..< 10:
+      check charToBytePos(text, 3) == 9
+      check byteToCharPos(text, 9) == 3
+      check displayWidth(text) == 12
+      let (rune, size) = getCharAtPos(text, 2)
+      check rune == "ト".runeAt(0)
+      check size == 3

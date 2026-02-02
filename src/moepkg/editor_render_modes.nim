@@ -985,11 +985,12 @@ proc renderHelpViewer*(
       isSelected = i == helpState.selectedIndex
 
     # Truncate if too long, or pad to full width for consistent background
+    # Account for leading space in width calculations
     var displayLine =
-      if line.len > width:
-        ' ' & line[0 ..< width - 3] & "..."
-      elif line.len < width:
-        ' ' & line & ' '.repeat(width - line.len)
+      if line.len > width - 1:
+        ' ' & line[0 ..< width - 4] & "..."
+      elif line.len < width - 1:
+        ' ' & line & ' '.repeat(width - line.len - 1)
       else:
         ' ' & line
 

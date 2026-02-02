@@ -23,7 +23,7 @@ import
 
 import pkg/celina
 
-import color, buffer_types
+import color, primitives
 import syntax/highlite
 import lsp/protocol/types
 

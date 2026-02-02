@@ -96,11 +96,10 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
         g.state = gtWhitespace
       inc(pos)
   of '<':
-    g.kind = gtOperator
     inc(pos)
     if pos + 2 < g.buf.len and g.buf[pos] == '!' and g.buf[pos + 1] == '-' and
         g.buf[pos + 2] == '-':
-      # Reset position to include the opening <
+      # HTML comment <!--
       pos = g.pos
       g.kind = gtLongComment
       g.state = gtLongComment
@@ -123,6 +122,12 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
             inc(pos)
         else:
           inc(pos)
+    elif g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
+      # Tag start: <tag, </tag, or <!DOCTYPE
+      g.kind = gtTagStart
+    else:
+      # Less-than operator
+      g.kind = gtOperator
   of 'A' .. 'Z', 'a' .. 'z', '_':
     # Tag name or attribute
     g.kind = gtIdentifier
@@ -135,7 +140,7 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
       g.kind = gtKeyword
   of '>':
     inc(pos)
-    g.kind = gtOperator
+    g.kind = gtTagEnd
   of '\"', '\'':
     let quote = g.buf[pos]
     inc(pos)
@@ -164,9 +169,9 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
     g.kind = gtOperator
   of '/':
     if pos + 1 < g.buf.len and g.buf[pos + 1] == '>':
-      # Self-closing tag
+      # Self-closing tag />
       inc(pos, 2)
-      g.kind = gtOperator
+      g.kind = gtTagEnd
     else:
       inc(pos)
       g.kind = gtOperator

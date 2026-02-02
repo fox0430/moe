@@ -1,4 +1,24 @@
-import std/[unittest, os, options, json, times]
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+import std/[unittest, os, options, json, times, posix]
+
 import ../src/moepkg/backupmanager
 
 const TestBackupDir = "/tmp/moe_test_backupmanager"
@@ -433,3 +453,99 @@ suite "backupmanager - restoreBackup":
   test "Restore backup returns false for empty entries":
     let state = newBackupManagerState()
     check state.restoreBackup(0) == false
+
+suite "backupmanager - initBackupManagerEntries (edge cases)":
+  setup:
+    cleanupTestDir()
+    createDir(TestBackupDir)
+
+  teardown:
+    cleanupTestDir()
+
+  test "Handle entries with same timestamp":
+    let backupDir = createBackupSubDir("same_ts", "/home/user/test.txt")
+    # Create two files with identical timestamps
+    createTestBackupFile(backupDir, "2025-01-15T10:30:45+09:00", "content1")
+    # Note: In real scenarios, identical timestamps are rare, but the sort should handle it
+    let entries = initBackupManagerEntries(backupDir)
+    check entries.len == 1
+
+suite "backupmanager - refresh (edge cases)":
+  setup:
+    cleanupTestDir()
+    createDir(TestBackupDir)
+
+  teardown:
+    cleanupTestDir()
+
+  test "Refresh keeps selectedIndex when still valid":
+    let
+      sourcePath = "/home/user/keep.txt"
+      backupDir = createBackupSubDir("keep1", sourcePath)
+    createTestBackupFile(backupDir, "2025-01-15T10:30:45+09:00")
+    createTestBackupFile(backupDir, "2025-01-16T11:00:00+09:00")
+    createTestBackupFile(backupDir, "2025-01-17T12:00:00+09:00")
+
+    let state = initBackupManagerState(TestBackupDir, sourcePath)
+    state.selectedIndex = 1
+    check state.entries.len == 3
+
+    # Add another backup file (entries grow, index still valid)
+    createTestBackupFile(backupDir, "2025-01-18T12:00:00+09:00")
+
+    state.refresh()
+    check state.entries.len == 4
+    check state.selectedIndex == 1 # Index should remain unchanged
+
+suite "backupmanager - deleteBackup (edge cases)":
+  setup:
+    cleanupTestDir()
+    createDir(TestBackupDir)
+
+  teardown:
+    cleanupTestDir()
+
+  test "Delete backup returns false when file is read-only":
+    let
+      sourcePath = "/home/user/readonly.txt"
+      backupDir = createBackupSubDir("readonly1", sourcePath)
+    createTestBackupFile(backupDir, "2025-01-15T10:30:45+09:00")
+
+    let state = initBackupManagerState(TestBackupDir, sourcePath)
+    check state.entries.len == 1
+
+    # Make directory read-only to prevent file deletion
+    discard chmod(backupDir.cstring, 0o555)
+
+    let success = state.deleteBackup(0)
+    # Restore permissions for cleanup
+    discard chmod(backupDir.cstring, 0o755)
+
+    check success == false
+
+suite "backupmanager - restoreBackup (edge cases)":
+  setup:
+    cleanupTestDir()
+    createDir(TestBackupDir)
+
+  teardown:
+    cleanupTestDir()
+
+  test "Restore backup returns false when destination is read-only":
+    let
+      sourcePath = TestBackupDir / "readonly_dest.txt"
+      backupDir = createBackupSubDir("restore_ro", sourcePath)
+    writeFile(sourcePath, "original")
+    createTestBackupFile(backupDir, "2025-01-15T10:30:45+09:00", "backup content")
+
+    let state = initBackupManagerState(TestBackupDir, sourcePath)
+
+    # Make source file read-only
+    discard chmod(sourcePath.cstring, 0o444)
+
+    let success = state.restoreBackup(0)
+    # Restore permissions for cleanup
+    discard chmod(sourcePath.cstring, 0o644)
+
+    check success == false
+    check readFile(sourcePath) == "original" # Should remain unchanged

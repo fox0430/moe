@@ -28,6 +28,8 @@ type
   HelpViewerResultKind* = enum
     hvrHandled # Command was handled successfully
     hvrEnterCommand # Enter command mode
+    hvrEnterSearch # Enter search mode (forward)
+    hvrEnterSearchBackward # Enter search mode (backward)
     hvrQuit # Close help viewer and return to previous mode
     hvrUnhandled # Command was not handled
     hvrError # Error occurred
@@ -63,8 +65,8 @@ proc handleHelpViewerModeKey*(
       helpState.moveToFirst()
       return HelpViewerResult(kind: hvrHandled)
     else:
-      # If not 'g', Cancel command.
-      discard
+      # If not 'g', cancel and discard this input to avoid double processing
+      return HelpViewerResult(kind: hvrUnhandled)
 
   # Check for special keys first
   if keyCombo.isSpecial:
@@ -94,6 +96,20 @@ proc handleHelpViewerModeKey*(
     case keyCombo.char
     of ":":
       return HelpViewerResult(kind: hvrEnterCommand)
+    of "/":
+      return HelpViewerResult(kind: hvrEnterSearch)
+    of "?":
+      return HelpViewerResult(kind: hvrEnterSearchBackward)
+    of "n":
+      # Search forward for next match
+      discard helpState.searchForward()
+      helpState.ensureSelectedVisible(viewportHeight)
+      return HelpViewerResult(kind: hvrHandled)
+    of "N":
+      # Search backward for previous match
+      discard helpState.searchBackward()
+      helpState.ensureSelectedVisible(viewportHeight)
+      return HelpViewerResult(kind: hvrHandled)
     of "j":
       helpState.moveDown()
       helpState.ensureSelectedVisible(viewportHeight)

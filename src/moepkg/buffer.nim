@@ -23,7 +23,7 @@ import std/[unicode, options, strutils, deques, os, times]
 
 import pkg/results
 
-import gapbuffer, unicode_utils, encoding, highlight, logger, search_utils, buffer_types
+import gapbuffer, unicode_utils, encoding, highlight, logger, search_utils, primitives
 
 export CharacterEncoding, encodingToString, detectCharacterEncoding
 export BufferPosition

@@ -24,13 +24,12 @@ import pkg/celina
 import
   modes, buffer, registers, filer, logviewer, helpviewer, command_completion,
   messagelog, buffermanager, backupmanager, diffviewer, debugviewer, configmode,
-  references_viewer, documentsymbol_viewer, callhierarchy_viewer, hoverpopup,
-  buffer_types
+  references_viewer, documentsymbol_viewer, callhierarchy_viewer, hoverpopup, primitives
 
 export
   buffer.SidebarItemKind, registers, command_completion, logviewer, helpviewer,
   buffermanager, backupmanager, diffviewer, debugviewer, configmode, references_viewer,
-  documentsymbol_viewer, callhierarchy_viewer, hoverpopup, buffer_types
+  documentsymbol_viewer, callhierarchy_viewer, hoverpopup, primitives
 
 type
   SidebarItem* = object ## Single cell in the sidebar
