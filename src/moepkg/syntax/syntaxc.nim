@@ -144,30 +144,33 @@ proc clikeNextToken*(
       inc(pos)
       case g.buf[pos]
       of 'b', 'B':
+        g.kind = gtBinNumber
         inc(pos)
         while g.buf[pos] in binChars:
           inc(pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
           inc(pos)
       of 'x', 'X':
+        g.kind = gtHexNumber
         inc(pos)
         while g.buf[pos] in hexChars:
           inc(pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
           inc(pos)
       of '0' .. '7':
+        g.kind = gtOctNumber
         inc(pos)
         while g.buf[pos] in octChars:
           inc(pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
           inc(pos)
       else:
         pos = generalNumber(g, pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
           inc(pos)
     of '1' .. '9':
       pos = generalNumber(g, pos)
-      if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+      while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
         inc(pos)
     of '\'':
       pos = generalStrLit(g, pos)
@@ -177,7 +180,7 @@ proc clikeNextToken*(
       g.kind = gtStringLit
       while true:
         case g.buf[pos]
-        of '\0':
+        of '\0', '\r', '\n':
           break
         of '\"':
           inc(pos)
@@ -193,7 +196,6 @@ proc clikeNextToken*(
     of ':':
       inc(pos)
       if g.buf[pos] == ':':
-        # C++ scope resolution operator ::
         inc(pos)
         g.kind = gtOperator
       else:
