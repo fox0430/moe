@@ -3,5 +3,5 @@
 Fixed
 .....
 
-- `#2349`_ Fix Nim sytnax
+- `#2349`_ Fix Nim syntax
 
