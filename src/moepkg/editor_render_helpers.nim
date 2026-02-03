@@ -112,8 +112,6 @@ proc getSelectionStyle*(
 ): Style =
   ## Get the appropriate style for a character based on selection state and syntax
   ## windowMode: The mode of the window being rendered (for correct per-window highlighting)
-  # Check if this is the cursor position
-  let isCursorPos = (pos.line == cursorLine and pos.column == cursorCol)
 
   # Check if this position is the matching paren (highlight matching paren)
   let isMatchingParen =
@@ -136,9 +134,6 @@ proc getSelectionStyle*(
   elif isMatchingParen:
     # Highlight matching paren with special style
     parenPairStyle()
-  elif isCursorPos:
-    # Cursor position: always use gray foreground color
-    cursorCharStyle()
   elif isInCurrentWord:
     # Highlight other occurrences of the current word
     # (disabled in Search mode to avoid interfering with search highlighting)

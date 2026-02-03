@@ -78,15 +78,6 @@ proc cursorLineHighlightStyle*(): Style =
   ## Get current line background highlight style from theme
   getThemeStyle(EditorColorPairIndex.currentLineBg)
 
-proc cursorCharStyle*(): Style =
-  ## Get cursor character style (uses default with custom foreground)
-  let colorPair = getThemeColor(EditorColorPairIndex.default)
-  Style(
-    fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 180, g: 180, b: 180)),
-    bg: colorPair.background.rgb.toColorValue,
-    modifiers: {},
-  )
-
 proc indentationLineStyle*(): Style =
   ## Get indentation guide style (slightly darker than background)
   let colorPair = getThemeColor(EditorColorPairIndex.default)
