@@ -37,33 +37,32 @@ import syntaxhtml
 const javaScriptkeywords* = [
   "Array", "ArrayBuffer", "Attr", "BigInt64Array", "BigUint64Array", "Boolean",
   "Buffer", "CDATASection", "CharacterData", "Collator", "Comment", "DOMException",
-  "DOMImplementation", "DOMSTRING_SIZE_ERR", "DataViewDate", "DateTimeFormat",
+  "DOMImplementation", "DOMSTRING_SIZE_ERR", "DataView", "Date", "DateTimeFormat",
   "Document", "DocumentFragment", "DocumentType", "Element", "Entity",
   "EntityReference", "Error", "Float32Array", "Float64Array", "Function",
   "HIERARCHY_REQUEST_ERR", "INDEX_SIZE_ERR", "INUSE_ATTRIBUTE_ERR",
   "INVALID_ACCESS_ERR", "INVALID_CHARACTER_ERR", "INVALID_MODIFICATION_ERR",
   "INVALID_STATE_ERR", "Int16Array", "Int32Array", "Int8Array", "Intl", "Iterator",
-  "JSON", "Map", "MathNumber", "NAMESPACE_ERR", "NOT_FOUND_ERR", "NOT_SUPPORTED_ERR",
+  "JSON", "Map", "Math", "NAMESPACE_ERR", "NOT_FOUND_ERR", "NOT_SUPPORTED_ERR",
   "NO_DATA_ALLOWED_ERR", "NO_MODIFICATION_ALLOWED_ERR", "NamedNodeMap", "Node",
-  "NodeList", "Notation", "NumberFormat", "Object", "Object", "ParallelArray",
+  "NodeList", "Notation", "Number", "NumberFormat", "Object", "ParallelArray",
   "ProcessingInstruction", "Promise", "PromiseProxy", "Reflect", "RegExp", "SYNTAX_ERR",
-  "Set", "String", "String", "Symbol", "Text", "Uint16Array", "Uint32Array",
-  "Uint8Array", "Uint8ClampedArray", "Uint8ClampedArray", "WRONG_DOCUMENT_ERR",
-  "WeakMap", "WeakSet", "WebAssembly", "abstract", "apply", "arguments", "as", "assert",
-  "async", "await", "boolean", "break", "byte", "catch", "catchexport", "char",
-  "charAt", "class", "console", "console", "const", "constructor", "continue",
-  "decodeURI", "decodeURIComponent", "delete", "do", "document", "double", "else",
-  "encodeURI", "encodeURIComponenteval", "enum", "except", "false", "fetch", "filter",
-  "final", "finally", "float", "for", "from", "function", "global", "globalThis",
-  "goto", "if", "implementsprotected", "import", "in", "indexOf", "instanceof", "int",
-  "interface", "is", "isFinite", "isNaN", "join", "keys", "let", "log", "long",
-  "native", "new", "null", "map", "onblur", "onclick", "oncontextmenu", "ondblclick",
-  "onfocus", "onkeydown", "onkeypress", "onkeyup", "onmousedown", "onmousemove",
-  "onmouseout", "onmouseover", "onmouseup", "onresize", "or", "package", "parseFloat",
-  "parseIntuneval", "pass", "private", "public", "push", "reduce", "reject", "require",
-  "resolve", "return", "short", "static", "switch", "synchronized", "then", "throw",
-  "throws", "transient", "true", "try", "typeof", "value", "var", "void", "volatile",
-  "while", "window", "yield",
+  "Set", "String", "Symbol", "Text", "Uint16Array", "Uint32Array", "Uint8Array",
+  "Uint8ClampedArray", "WRONG_DOCUMENT_ERR", "WeakMap", "WeakSet", "WebAssembly",
+  "abstract", "apply", "arguments", "as", "assert", "async", "await", "boolean",
+  "break", "byte", "case", "catch", "char", "charAt", "class", "console", "const",
+  "constructor", "continue", "default", "decodeURI", "decodeURIComponent", "delete",
+  "do", "document", "double", "else", "encodeURI", "encodeURIComponent", "enum", "eval",
+  "except", "export", "false", "fetch", "filter", "final", "finally", "float", "for",
+  "from", "function", "global", "globalThis", "goto", "if", "implements", "import",
+  "in", "indexOf", "instanceof", "int", "interface", "is", "isFinite", "isNaN", "join",
+  "keys", "let", "log", "long", "map", "native", "new", "null", "onblur", "onclick",
+  "oncontextmenu", "ondblclick", "onfocus", "onkeydown", "onkeypress", "onkeyup",
+  "onmousedown", "onmousemove", "onmouseout", "onmouseover", "onmouseup", "onresize",
+  "or", "package", "parseFloat", "parseInt", "pass", "private", "protected", "public",
+  "push", "reduce", "reject", "require", "resolve", "return", "short", "static",
+  "switch", "synchronized", "then", "throw", "throws", "transient", "true", "try",
+  "typeof", "uneval", "value", "var", "void", "volatile", "while", "window", "yield",
 ]
 
 # Template literal depth and brace depth are now tracked in GeneralTokenizer
@@ -216,6 +215,11 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
           break
         else:
           inc(pos)
+    else:
+      # Division operator or /=
+      g.kind = gtOperator
+      if g.buf[pos] == '=':
+        inc(pos)
   of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
     var id = ""
     while g.buf[pos] in symChars:
@@ -363,9 +367,17 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
           inc(pos)
       else:
         inc(pos)
-  of '(', ')', '[', ']', ':', ',', ';', '.':
+  of '(', ')', '[', ']', ':', ',', ';':
     inc(pos)
     g.kind = gtPunctuation
+  of '.':
+    inc(pos)
+    if g.buf[pos] == '.' and g.buf[pos + 1] == '.':
+      # Spread operator ...
+      inc(pos, 2)
+      g.kind = gtOperator
+    else:
+      g.kind = gtPunctuation
   of '{':
     inc(pos)
     if g.braceDepthStack.len > 0:
