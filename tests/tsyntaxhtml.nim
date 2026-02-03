@@ -51,17 +51,17 @@ suite "syntax: HTML":
     const Code = "<div>"
     let tokenList = tokens(Code)
     check tokenList.len == 3
-    check tokenList[0].kind == gtOperator # <
+    check tokenList[0].kind == gtTagStart # <
     check tokenList[1].kind == gtKeyword # div (should be recognized as keyword)
-    check tokenList[2].kind == gtOperator # >
+    check tokenList[2].kind == gtTagEnd # >
 
   test "HTML keywords":
     const Code = "<html>"
     let tokenList = tokens(Code)
     check tokenList.len == 3
-    check tokenList[0].kind == gtOperator # <
+    check tokenList[0].kind == gtTagStart # <
     check tokenList[1].kind == gtKeyword # html (should be recognized as keyword)
-    check tokenList[2].kind == gtOperator # >
+    check tokenList[2].kind == gtTagEnd # >
 
   test "HTML comment":
     const Code = "<!-- comment -->"
@@ -73,7 +73,7 @@ suite "syntax: HTML":
     const Code = "<div class=\"container\" id='main'>"
     let tokenList = tokens(Code)
     check tokenList.len >= 8
-    check tokenList[0].kind == gtOperator # <
+    check tokenList[0].kind == gtTagStart # <
     check tokenList[1].kind == gtKeyword # div
     check tokenList[2].kind == gtWhitespace # space
     check tokenList[3].kind == gtIdentifier # class
@@ -84,7 +84,7 @@ suite "syntax: HTML":
     const Code = "<img src=\"test.jpg\" />"
     let tokenList = tokens(Code)
     check tokenList.len >= 6
-    check tokenList[0].kind == gtOperator # <
+    check tokenList[0].kind == gtTagStart # <
     check tokenList[1].kind == gtKeyword # img
     # Should have attributes and self-closing />
 
@@ -92,7 +92,7 @@ suite "syntax: HTML":
     const Code = "<!DOCTYPE html>"
     let tokenList = tokens(Code)
     check tokenList.len >= 4
-    check tokenList[0].kind == gtOperator # <
+    check tokenList[0].kind == gtTagStart # <
     # DOCTYPE should be handled appropriately
 
   test "Nested HTML tags":
@@ -100,14 +100,18 @@ suite "syntax: HTML":
     let tokenList = tokens(Code)
     check tokenList.len >= 10
     # Check that opening and closing tags are properly tokenized
-    var operatorCount = 0
+    var tagStartCount = 0
+    var tagEndCount = 0
     var keywordCount = 0
     for token in tokenList:
-      if token.kind == gtOperator:
-        inc operatorCount
+      if token.kind == gtTagStart:
+        inc tagStartCount
+      elif token.kind == gtTagEnd:
+        inc tagEndCount
       elif token.kind == gtKeyword:
         inc keywordCount
-    check operatorCount >= 8 # < > < > < </ > </ >
+    check tagStartCount >= 6 # <div, <p, <span, </span, </p, </div
+    check tagEndCount >= 6 # corresponding >
     check keywordCount >= 4 # div p span p div
 
   test "HTML entities":
@@ -120,9 +124,9 @@ suite "syntax: HTML":
     const Code = "<p>This is text content</p>"
     let tokenList = tokens(Code)
     check tokenList.len >= 5
-    check tokenList[0].kind == gtOperator # <
+    check tokenList[0].kind == gtTagStart # <
     check tokenList[1].kind == gtKeyword # p
-    check tokenList[2].kind == gtOperator # >
+    check tokenList[2].kind == gtTagEnd # >
     # Text content should be present
     # Closing tag should be present
 
@@ -147,7 +151,7 @@ suite "syntax: HTML":
       "<input type=\"text\" name=\"username\" placeholder=\"Enter name\" required disabled>"
     let tokenList = tokens(Code)
     check tokenList.len >= 12
-    check tokenList[0].kind == gtOperator # <
+    check tokenList[0].kind == gtTagStart # <
     check tokenList[1].kind == gtKeyword # input
     # Should have multiple attribute-value pairs
 
@@ -164,20 +168,20 @@ suite "syntax: HTML":
     const Code = "<custom-element data-value=\"test\">content</custom-element>"
     let tokenList = tokens(Code)
     check tokenList.len >= 6
-    check tokenList[0].kind == gtOperator # <
+    check tokenList[0].kind == gtTagStart # <
     check tokenList[1].kind == gtIdentifier # custom-element (not a standard HTML tag)
 
   test "Empty tags":
     const Code = "<div></div>"
     let tokenList = tokens(Code)
     check tokenList.len == 7
-    check tokenList[0].kind == gtOperator # <
+    check tokenList[0].kind == gtTagStart # <
     check tokenList[1].kind == gtKeyword # div
-    check tokenList[2].kind == gtOperator # >
-    check tokenList[3].kind == gtOperator # <
+    check tokenList[2].kind == gtTagEnd # >
+    check tokenList[3].kind == gtTagStart # <
     check tokenList[4].kind == gtOperator # /
     check tokenList[5].kind == gtKeyword # div
-    check tokenList[6].kind == gtOperator # >
+    check tokenList[6].kind == gtTagEnd # >
 
   test "HTML5 semantic elements":
     const Code = "<article><header><nav><main><section><aside><footer>"

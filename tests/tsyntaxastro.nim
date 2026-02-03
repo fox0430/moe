@@ -178,7 +178,7 @@ const { title, count = 0 }: Props = Astro.props;
     let result = tokens(Code)
 
     # Should parse as HTML (no frontmatter delimiters)
-    check result[0].kind == gtOperator # <
+    check result[0].kind == gtTagStart # < followed by tag name is a tag start
     check result[1].kind == gtKeyword # div is recognized as HTML keyword
 
   test "Complex Astro component":
