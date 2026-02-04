@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -28,7 +28,7 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
 
   var pos = g.pos
   g.start = g.pos
-  if g.state == gtStringLit:
+  if g.state in {gtStringLit, gtKey}:
     if g.buf[pos] == '\\':
       g.kind = gtEscapeSequence
       inc(pos)
@@ -38,7 +38,7 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
       else:
         inc(pos)
     else:
-      g.kind = gtStringLit
+      g.kind = g.state
       while true:
         case g.buf[pos]
         of '\\':
