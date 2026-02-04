@@ -64,8 +64,7 @@
 ##   for l in ["C", "c++", "jAvA", "Nim", "c#"]: echo getSourceLanguage(l)
 ##
 
-import std/strutils
-from std/algorithm import binarySearch
+import std/[strutils, algorithm]
 
 type
   TokenClass* = enum
@@ -199,10 +198,7 @@ proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.inStyle = false
   g.astroInFrontmatter = false
   g.astroFirstLine = true
-  var pos = 0 # skip initial whitespace:
-  while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
-    inc(pos)
-  g.pos = pos
+  g.pos = 0
 
 proc generalNumber*(g: var GeneralTokenizer, position: int): int =
   const decChars = {'0' .. '9'}
