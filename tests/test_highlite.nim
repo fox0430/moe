@@ -572,8 +572,8 @@ suite "highlite - getNextToken with langMarkdown":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("# Heading")
     g.getNextToken(langMarkdown)
-    # Markdown tokenizer returns gtPunctuation for `#`
-    check g.kind == gtPunctuation
+    # Markdown tokenizer returns gtBuiltin for `#` at line start (heading)
+    check g.kind == gtBuiltin
 
   test "getNextToken tokenizes Markdown code block marker":
     var g: GeneralTokenizer
