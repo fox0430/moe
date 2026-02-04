@@ -178,22 +178,16 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
       inc(pos)
   of '<':
     # Check for generic types or JSX tags
+    # If preceded by an identifier character, treat as generic type (not JSX)
+    let prevIsIdentChar = pos > 0 and g.buf[pos - 1] in symChars
     if pos + 1 < g.buf.len:
-      # Check if this is a generic type (preceded by identifier character without space)
-      # e.g., identity<T>, Array<string>, Map<K, V>
-      if pos > 0 and g.buf[pos - 1] in symChars:
-        # Previous character is part of an identifier, so this is a generic type
-        g.kind = gtOperator
-        inc(pos)
-        while g.buf[pos] in opChars and g.buf[pos] != '>':
-          inc(pos)
-      elif g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
+      if g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'} and not prevIsIdentChar:
         # This looks like JSX/TSX, switch to JSX mode
         g.inJsxMode = true
         htmlNextToken(g)
         return
       else:
-        # Could be less-than operator
+        # Generic type <T> or less-than operator
         g.kind = gtOperator
         inc(pos)
         while g.buf[pos] in opChars and g.buf[pos] != '>':
