@@ -26,7 +26,7 @@ import std/[options, tables]
 import pkg/results
 
 import
-  ../[types, buffer, modes, motion, keybindings, commandregistry, config, registers]
+  ../[types, buffer, modes, motion, key_bindings, command_registry, config, registers]
 import visual_handler, insert_commands
 
 type
@@ -337,7 +337,7 @@ proc handleInsertModeEntry*(
   return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
 
 # All text manipulation (delete, yank, change) is now handled by the
-# operator+motion system in commandregistry.nim
+# operator+motion system in command_registry.nim
 
 # Forward declaration for recursive call in playbackMacro
 proc handleNormalModeKey*(
@@ -604,7 +604,7 @@ proc handleNormalModeKey*(
       return handler.handleInsertModeEntry(buffer, state, "open-below")
     of "insert.line.above":
       return handler.handleInsertModeEntry(buffer, state, "open-above")
-    # dd, yy, cc are handled by operator doubling in commandregistry
+    # dd, yy, cc are handled by operator doubling in command_registry
     of "edit.undo":
       let r = buffer.undo()
       if r.isOk:

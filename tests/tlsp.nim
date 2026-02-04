@@ -23,8 +23,8 @@ import pkg/results
 
 import ../src/moepkg/lsp/jsonrpc
 import ../src/moepkg/lsp/protocol/[types, enums]
-import ../src/moepkg/lspservice
-import ../src/moepkg/lspintegration
+import ../src/moepkg/lsp_service
+import ../src/moepkg/lsp_integration
 
 suite "LSP JSON-RPC":
   test "encodeRequest":

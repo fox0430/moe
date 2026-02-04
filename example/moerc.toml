@@ -101,7 +101,7 @@ setupText = "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} 
 
 [Highlight]
 
-currentLine = true                     # Highlight current line - synced with standard.cursorLine
+currentLine = true                     # Highlight current line
 
 reservedWord = ["TODO", "WIP", "NOTE"] # Highlight reserved words
 

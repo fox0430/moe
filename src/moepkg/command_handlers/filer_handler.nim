@@ -23,7 +23,7 @@
 
 import std/options
 
-import ../[filer, keybindings]
+import ../[filer, key_bindings]
 
 type
   FilerResultKind* = enum

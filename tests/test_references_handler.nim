@@ -20,7 +20,7 @@
 import std/unittest
 import ../src/moepkg/references_viewer
 import ../src/moepkg/command_handlers/references_handler
-import ../src/moepkg/keybindings
+import ../src/moepkg/key_bindings
 
 suite "ReferencesHandler - Handler creation":
   test "newReferencesHandler creates handler":

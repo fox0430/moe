@@ -31,8 +31,7 @@
 #    distribution, for details about the copyright.
 #
 
-import highlite
-import syntaxhtml
+import tokenizer, syntaxhtml
 
 const javaScriptkeywords* = [
   "Array", "ArrayBuffer", "Attr", "BigInt64Array", "BigUint64Array", "Boolean",

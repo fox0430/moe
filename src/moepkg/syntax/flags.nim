@@ -65,8 +65,7 @@ const
   ## The lexing rules for Haskell.
   flagsHaskell*: TokenizerFlags = {
     hasCurlyDashComments, hasCurlyDashPipeComments, hasDashFunction,
-    hasDoubleDashCaretComments, hasDoubleDashComments, hasNestedComments,
-    hasPreprocessor, hasSharpFunction,
+    hasDoubleDashComments, hasNestedComments, hasPreprocessor, hasSharpFunction,
   }
 
   ## The lexing rules for Markdown.

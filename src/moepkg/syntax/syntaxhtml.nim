@@ -31,7 +31,7 @@
 #    distribution, for details about the copyright.
 #
 
-import highlite
+import tokenizer
 
 const htmlKeywords* = [
   "a", "abbr", "address", "area", "article", "aside", "audio", "base", "bdi", "bdo",

@@ -25,10 +25,10 @@ import
   editor_types, editor_window, editor_file, editor_lsp, editor_codelens, editor_render
 
 import
-  statusline, render_utils, gitdiff, logger, configloader, keybindconfig, search_utils,
-  completion, signaturehelp, hoverpopup, command_completion, motion, color, gapbuffer,
-  debugviewer, messagelog
-import keybindings except Command
+  status_line, render_utils, git_diff, logger, config_loader, keybind_config,
+  search_utils, completion, signature_help, hover_popup, command_completion, motion,
+  color, gap_buffer, debug_viewer, message_log
+import key_bindings except Command
 import command_handlers/insert_handler
 
 export
@@ -42,6 +42,20 @@ proc findBufferByPath*(e: Editor, path: string): int =
     if buf.filePath.isSome and absolutePath(buf.filePath.get) == absPath:
       return i
   return -1
+
+proc addBufferToWindowList*(e: Editor, buffer: TextBuffer) =
+  ## Add a buffer to the active window's bufferList if not already present
+  var found = false
+  for buf in e.activeWindow.bufferList:
+    if buf == buffer:
+      found = true
+      break
+  if not found:
+    e.activeWindow.bufferList.add(buffer)
+    logDebug(
+      "editor",
+      "Added buffer to window bufferList, len: " & $e.activeWindow.bufferList.len,
+    )
 
 proc switchToBufferByIndex*(e: Editor, index: int) =
   ## Switch the current window to display the buffer at the given index
@@ -61,6 +75,9 @@ proc switchToBufferByIndex*(e: Editor, index: int) =
   if e.activeWindow.buffer == targetBuffer:
     logDebug("editor", "Already on this buffer")
     return
+
+  # Add buffer to window's bufferList if not already there
+  e.addBufferToWindowList(targetBuffer)
 
   e.activeWindow.buffer = targetBuffer
   e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
@@ -96,59 +113,91 @@ proc currentBufferIndex*(e: Editor): int =
   logDebug("editor", "currentBufferIndex: no match found, returning -1")
   return -1
 
+proc windowBufferIndex*(e: Editor): int =
+  ## Get the index of the current buffer in the window's bufferList
+  ## Returns -1 if not found
+  let currentBuffer = e.activeWindow.buffer
+  for i, buf in e.activeWindow.bufferList:
+    if buf == currentBuffer:
+      return i
+  return -1
+
+proc switchToWindowBuffer*(e: Editor, windowIndex: int) =
+  ## Switch to a buffer in the window's bufferList by index
+  if windowIndex < 0 or windowIndex >= e.activeWindow.bufferList.len:
+    return
+
+  let targetBuffer = e.activeWindow.bufferList[windowIndex]
+
+  # Don't switch if already on this buffer
+  if e.activeWindow.buffer == targetBuffer:
+    return
+
+  e.activeWindow.buffer = targetBuffer
+  e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
+  e.activeWindow.viewport.topLine = 0
+  e.activeWindow.viewport.leftColumn = 0
+
+  # Sync the executor and motion controller
+  e.syncActiveWindow()
+
+  # Update screen cursor
+  e.setActiveWindowScreenCursor(e.activeWindow)
+  logDebug("editor", "Switched to window buffer at index: " & $windowIndex)
+
 proc switchToNextBuffer*(e: Editor) =
-  ## Switch to the next buffer in the buffer list (:bnext)
-  if e.buffers.len <= 1:
+  ## Switch to the next buffer in the window's bufferList (:bnext)
+  if e.activeWindow.bufferList.len <= 1:
     e.state.statusMessage = "No more buffers"
     return
 
-  let currentIdx = e.currentBufferIndex()
-  let nextIdx = (currentIdx + 1) mod e.buffers.len
-  e.switchToBufferByIndex(nextIdx)
+  let currentIdx = e.windowBufferIndex()
+  let nextIdx = (currentIdx + 1) mod e.activeWindow.bufferList.len
+  e.switchToWindowBuffer(nextIdx)
   e.state.statusMessage = ""
 
 proc switchToPrevBuffer*(e: Editor) =
-  ## Switch to the previous buffer in the buffer list (:bprev)
-  if e.buffers.len <= 1:
+  ## Switch to the previous buffer in the window's bufferList (:bprev)
+  if e.activeWindow.bufferList.len <= 1:
     e.state.statusMessage = "No more buffers"
     return
 
-  let currentIdx = e.currentBufferIndex()
+  let currentIdx = e.windowBufferIndex()
   let prevIdx =
     if currentIdx == 0:
-      e.buffers.len - 1
+      e.activeWindow.bufferList.len - 1
     else:
       currentIdx - 1
-  e.switchToBufferByIndex(prevIdx)
+  e.switchToWindowBuffer(prevIdx)
   e.state.statusMessage = ""
 
 proc switchToFirstBuffer*(e: Editor) =
-  ## Switch to the first buffer in the buffer list (:bfirst)
-  if e.buffers.len <= 1:
+  ## Switch to the first buffer in the window's bufferList (:bfirst)
+  if e.activeWindow.bufferList.len <= 1:
     e.state.statusMessage = "Already at first buffer"
     return
 
-  let currentIdx = e.currentBufferIndex()
+  let currentIdx = e.windowBufferIndex()
   if currentIdx == 0:
     e.state.statusMessage = "Already at first buffer"
     return
 
-  e.switchToBufferByIndex(0)
+  e.switchToWindowBuffer(0)
   e.state.statusMessage = ""
 
 proc switchToLastBuffer*(e: Editor) =
-  ## Switch to the last buffer in the buffer list (:blast)
-  if e.buffers.len <= 1:
+  ## Switch to the last buffer in the window's bufferList (:blast)
+  if e.activeWindow.bufferList.len <= 1:
     e.state.statusMessage = "Already at last buffer"
     return
 
-  let lastIdx = e.buffers.len - 1
-  let currentIdx = e.currentBufferIndex()
+  let lastIdx = e.activeWindow.bufferList.len - 1
+  let currentIdx = e.windowBufferIndex()
   if currentIdx == lastIdx:
     e.state.statusMessage = "Already at last buffer"
     return
 
-  e.switchToBufferByIndex(lastIdx)
+  e.switchToWindowBuffer(lastIdx)
   e.state.statusMessage = ""
 
 proc switchToBuffer*(e: Editor, arg: string): bool =
@@ -343,10 +392,10 @@ proc editFile*(e: Editor, path: string): Result[(), string] =
   logDebug("editor", "editFile called with path: " & path)
   logDebug("editor", "Current buffers.len: " & $e.buffers.len)
 
-  # Check if buffer already exists in the buffer list
+  # Check if buffer already exists in the global buffer list
   let existingIndex = e.findBufferByPath(path)
   if existingIndex >= 0:
-    # Buffer already exists, switch to it
+    # Buffer already exists, switch to it (also adds to window's bufferList)
     logDebug("editor", "Buffer already exists at index: " & $existingIndex)
     e.switchToBufferByIndex(existingIndex)
     return ok(())
@@ -363,11 +412,14 @@ proc editFile*(e: Editor, path: string): Result[(), string] =
     # New file: set the path for saving later
     newBuffer.filePath = some(path)
 
-  # Add new buffer to the buffer list
+  # Add new buffer to the global buffer list
   e.buffers.add(newBuffer)
   logDebug("editor", "Added new buffer, buffers.len now: " & $e.buffers.len)
 
-  # Switch to the new buffer
+  # Add new buffer to the active window's bufferList
+  e.addBufferToWindowList(newBuffer)
+
+  # Switch to the new buffer (sets active window's buffer)
   e.switchToBufferByIndex(e.buffers.len - 1)
   ok(())
 
@@ -398,7 +450,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   cmdRegistry.registerBuiltinCommands
   keyRegistry.setupDefaultBindings
 
-  # Load custom keybindings from TOML
+  # Load custom key_bindings from TOML
   keyRegistry.loadDefaultKeybindings()
 
   # Load command configuration
@@ -571,6 +623,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   result.windowManager.windows.add(
     EditorWindow(
       buffer: result.textBuffer,
+      bufferList: @[result.textBuffer], # Initialize with initial buffer
       viewport: result.viewport,
       cursor: BufferPosition(line: 0, column: 0),
       active: true,

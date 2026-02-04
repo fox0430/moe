@@ -24,8 +24,8 @@ import std/[options, strutils, os]
 import pkg/celina
 
 import
-  editor_types, color, render_utils, filer, buffermanager, helpviewer, configmode,
-  backupmanager, diffviewer, recentfilemode, debugviewer, references_viewer,
+  editor_types, color, render_utils, filer, buffer_manager, help_viewer, config_mode,
+  backup_manager, diff_viewer, recent_file_mode, debug_viewer, references_viewer,
   documentsymbol_viewer, callhierarchy_viewer
 
 proc pathToIcon(entry: FileEntry): string =
@@ -682,21 +682,32 @@ proc renderRecentFileMode*(e: Editor, buffer: var Buffer) =
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = listStartY + (state.selectedIndex - state.topLine)
 
-proc renderDebugMode*(e: Editor, buffer: var Buffer) =
+proc renderDebugMode*(
+    e: Editor,
+    buffer: var Buffer,
+    window: EditorWindow,
+    isBottomWindow: bool,
+    tabLineOffset: int,
+) =
   ## Render the debug viewer
-  if e.activeWindow.debugViewerState.isNone:
+  if window.debugViewerState.isNone:
     return
 
-  # Calculate reserved lines at bottom: status line (if shown) + command line
+  # Calculate reserved lines at bottom for bottom windows only
   let reservedBottom =
-    if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
+    if isBottomWindow and e.state.display.showStatusLine:
+      StatusAndCommandReserve
+    elif isBottomWindow:
+      CommandLineReserve
+    else:
+      0
 
   let
-    debugState = e.activeWindow.debugViewerState.get
-    headerY = buffer.area.y
-    listStartY = buffer.area.y + 1
-    listEndY = buffer.area.y + buffer.area.height - reservedBottom
-    width = buffer.area.width
+    debugState = window.debugViewerState.get
+    listStartY = window.viewport.y + tabLineOffset
+    listEndY = window.viewport.y + window.viewport.height - reservedBottom
+    width = window.viewport.width
+    startX = window.viewport.x
     viewportHeight = listEndY - listStartY
 
   # Get theme colors
@@ -704,27 +715,18 @@ proc renderDebugMode*(e: Editor, buffer: var Buffer) =
 
   # Fill entire area with default background first
   let emptyLine = spaces(width)
-  for y in buffer.area.y ..< listEndY:
-    buffer.setString(buffer.area.x, y, emptyLine, defaultStyle)
-
-  # Render header
-  let headerText = "-- DEBUG --"
-  buffer.setString(
-    buffer.area.x,
-    headerY,
-    headerText,
-    getThemeStyle(EditorColorPairIndex.viewerHeader, {StyleModifier.Bold}),
-  )
+  for y in listStartY ..< listEndY:
+    buffer.setString(startX, y, emptyLine, defaultStyle)
 
   # Handle empty list
   if debugState.lines.len == 0:
     buffer.setString(
-      buffer.area.x,
+      startX,
       listStartY,
       "No debug information available",
       getThemeStyle(EditorColorPairIndex.viewerEmptyMessage),
     )
-    e.state.screenCursor.x = 0
+    e.state.screenCursor.x = startX
     e.state.screenCursor.y = listStartY
     return
 
@@ -758,11 +760,11 @@ proc renderDebugMode*(e: Editor, buffer: var Buffer) =
 
     # Pad line to fill width for consistent background
     let paddedLine = displayLine & spaces(max(0, width - displayLine.len))
-    buffer.setString(buffer.area.x, screenY, paddedLine, style)
+    buffer.setString(startX, screenY, paddedLine, style)
     inc screenY
 
   # Set cursor position
-  e.state.screenCursor.x = 0
+  e.state.screenCursor.x = startX
   e.state.screenCursor.y = listStartY + (debugState.selectedLine - debugState.topLine)
 
 proc renderReferencesViewer*(e: Editor, buffer: var Buffer) =

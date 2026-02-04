@@ -22,7 +22,7 @@ import std/[unittest, options]
 import ../src/moepkg/lsp/protocol/types as lspTypes
 import ../src/moepkg/callhierarchy_viewer
 import ../src/moepkg/command_handlers/callhierarchy_handler
-import ../src/moepkg/keybindings
+import ../src/moepkg/key_bindings
 
 proc makeCallHierarchyItem(
     name: string,

@@ -1,4 +1,4 @@
-import highlite, syntaxc
+import tokenizer, syntaxc
 
 const javaKeywords* = [
   "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class",

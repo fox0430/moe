@@ -22,7 +22,7 @@ import std/[unittest, os, strutils]
 import pkg/chronos
 
 import ../src/moepkg/build {.all.}
-import ../src/moepkg/syntax/highlite
+import ../src/moepkg/syntax/tokenizer
 
 suite "Build - parseCommandString":
   test "Parse simple command":

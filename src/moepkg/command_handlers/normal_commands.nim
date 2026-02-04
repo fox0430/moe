@@ -22,7 +22,7 @@
 ## This module provides Normal mode specific command implementations
 ## that are independent of CommandContext for better testability
 
-import ../[types, modes, keybindings]
+import ../[types, modes, key_bindings]
 
 proc switchMode*(
     state: EditorState, targetMode: EditorMode, keyBindingRegistry: KeyBindingRegistry

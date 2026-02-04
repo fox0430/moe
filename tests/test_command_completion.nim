@@ -19,7 +19,7 @@
 
 import std/[unittest, os, strutils]
 
-import ../src/moepkg/[command_completion, commandline]
+import ../src/moepkg/[command_completion, command_line]
 
 suite "CommandCompletion - fuzzyMatch":
   test "Exact match":

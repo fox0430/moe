@@ -19,7 +19,7 @@
 
 import std/unittest
 
-import ../src/moepkg/syntax/highlite
+import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/syntax/syntaxtypescript
 
 suite "syntaxtypescript - typescriptKeywords constant":

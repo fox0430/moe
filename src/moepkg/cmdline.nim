@@ -24,7 +24,7 @@
 
 import std/[os, strutils, terminal]
 
-import appinfo
+import app_info
 
 type CmdLineConfig* = object ## Command line configuration
   debugEnabled*: bool ## Enable debug logging

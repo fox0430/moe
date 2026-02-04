@@ -19,7 +19,7 @@
 
 import std/[unittest, options, strutils]
 import pkg/results
-import ../src/moepkg/[buffer, commandline, commandconfig, commandregistry, modes]
+import ../src/moepkg/[buffer, command_line, command_config, command_registry, modes]
 import ../src/moepkg/command_handlers/command_handler
 
 proc setupHandler(): CommandModeHandler =

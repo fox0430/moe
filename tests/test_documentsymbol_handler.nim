@@ -20,7 +20,7 @@
 import std/[unittest, options]
 
 import ../src/moepkg/lsp/protocol/types as lspTypes
-import ../src/moepkg/[documentsymbol_viewer, keybindings]
+import ../src/moepkg/[documentsymbol_viewer, key_bindings]
 import ../src/moepkg/command_handlers/documentsymbol_handler
 
 proc makeDocumentSymbol(

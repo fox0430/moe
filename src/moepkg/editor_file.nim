@@ -23,7 +23,7 @@ import std/[options, strformat, os, monotimes, times]
 
 import pkg/results
 
-import editor_types, logger, gitdiff, backup, search_utils
+import editor_types, logger, git_diff, backup, search_utils
 
 proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
   ## Refresh git diff information for the active buffer

@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, os, strutils]
-import ../src/moepkg/[filer, keybindings]
+import ../src/moepkg/[filer, key_bindings]
 import ../src/moepkg/command_handlers/filer_handler
 
 suite "FilerHandler - Handler creation":

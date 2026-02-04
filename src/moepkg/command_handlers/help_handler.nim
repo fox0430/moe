@@ -22,7 +22,7 @@
 ## This module handles commands specific to Help Viewer mode.
 ## The help viewer displays editor help information.
 
-import ../[keybindings, helpviewer]
+import ../[key_bindings, help_viewer]
 
 type
   HelpViewerResultKind* = enum

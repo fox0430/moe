@@ -34,7 +34,7 @@
 import std/strutils
 from std/algorithm import binarySearch
 
-import flags, highlite, lexer
+import flags, tokenizer, lexer
 
 const
   HexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f', '_'}

@@ -28,7 +28,7 @@ import pkg/chronos/asyncproc
 
 import jsonrpc
 import protocol/types
-import ../appinfo
+import ../app_info
 import ../logger
 
 export types, chronos

@@ -19,7 +19,7 @@
 
 import std/[unittest, unicode]
 
-import ../src/moepkg/[gapbuffer, buffer, unicode_utils, render_utils]
+import ../src/moepkg/[gap_buffer, buffer, unicode_utils, render_utils]
 
 suite "GapBuffer - Unicode Support":
   test "Create buffer with Japanese text":

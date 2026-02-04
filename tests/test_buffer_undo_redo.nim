@@ -22,7 +22,7 @@ import std/[unittest, options, strutils]
 import pkg/results
 
 import ../src/moepkg/buffer
-import ../src/moepkg/syntax/highlite
+import ../src/moepkg/syntax/tokenizer
 
 suite "Buffer - Undo/Redo Basic Operations":
   test "undo insertText single character":

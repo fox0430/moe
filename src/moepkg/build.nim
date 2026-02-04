@@ -21,9 +21,10 @@ import std/[strformat, strutils]
 
 import pkg/[results, chronos]
 
-import syntax/highlite, backgroundprocess
+import background_process
+import syntax/tokenizer
 
-export backgroundprocess
+export background_process
 
 type
   BuildCommand = tuple[cmd: string, args: seq[string]]

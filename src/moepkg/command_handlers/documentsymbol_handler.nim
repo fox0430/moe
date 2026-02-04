@@ -24,7 +24,7 @@
 
 import std/options
 
-import ../[types, keybindings, documentsymbol_viewer]
+import ../[types, key_bindings, documentsymbol_viewer]
 
 type
   DocumentSymbolResultKind* = enum

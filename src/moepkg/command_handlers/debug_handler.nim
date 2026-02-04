@@ -21,13 +21,12 @@
 ##
 ## This module handles key events in Debug mode.
 
-import ../[keybindings, debugviewer]
+import ../[key_bindings, debug_viewer]
 
 type
   DebugViewerResultKind* = enum
     dvrHandled # Command was handled successfully
     dvrEnterCommand # Enter command mode
-    dvrQuit # Close debug viewer and return to previous mode
     dvrUnhandled # Command was not handled
     dvrError # Error occurred
 
@@ -51,7 +50,6 @@ proc handleDebugModeKey*(
   ## Handle key press in Debug mode
   ##
   ## Key bindings:
-  ## - Escape, q: Exit debug mode
   ## - j, Down: Scroll down
   ## - k, Up: Scroll up
   ## - g, Home: Go to top
@@ -90,8 +88,6 @@ proc handleDebugModeKey*(
   # Handle character keys
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
     case keyCombo.char
-    of "q":
-      return DebugViewerResult(kind: dvrQuit)
     of "j":
       debugState.scrollDown(viewportHeight)
       return DebugViewerResult(kind: dvrHandled)

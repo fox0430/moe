@@ -25,15 +25,15 @@ import pkg/results
 
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/types {.all.}
-import ../src/moepkg/keybindings {.all.}
+import ../src/moepkg/key_bindings {.all.}
 import ../src/moepkg/modes {.all.}
 import ../src/moepkg/motion {.all.}
-import ../src/moepkg/commandregistry {.all.}
+import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/config {.all.}
 import ../src/moepkg/registers {.all.}
 import ../src/moepkg/completion {.all.}
-import ../src/moepkg/signaturehelp {.all.}
-import ../src/moepkg/syntax/highlite {.all.}
+import ../src/moepkg/signature_help {.all.}
+import ../src/moepkg/syntax/tokenizer {.all.}
 import ../src/moepkg/command_handlers/insert_handler {.all.}
 
 proc createTestState(): EditorState =
@@ -868,7 +868,7 @@ suite "InsertModeHandler - Unhandled Keys":
     let keyCombo = KeyCombo(isSpecial: false, char: "x", modifiers: {kmCtrl, kmShift})
     let result = handler.handleInsertModeKey(buf, state, keyCombo)
 
-    # May be handled or unhandled depending on keybindings
+    # May be handled or unhandled depending on key_bindings
     check result.kind in {imrHandled, imrUnhandled}
 
 suite "InsertModeHandler - Signature Help Helpers":

@@ -21,7 +21,7 @@
 
 import std/[unittest, os, options, strutils]
 import pkg/results
-import ../src/moepkg/[editor, buffer, config, configloader, gapbuffer]
+import ../src/moepkg/[editor, buffer, config, config_loader, gap_buffer]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -560,3 +560,271 @@ suite "Editor - newEditor":
     let e = newEditor(config, vr)
 
     check "Config error" in e.state.statusMessage
+
+suite "Editor - Window bufferList (per-window tabs)":
+  test "Initial window has bufferList with initial buffer":
+    let e = createTestEditor()
+
+    check e.activeWindow.bufferList.len == 1
+    check e.activeWindow.bufferList[0] == e.textBuffer
+
+  test "addBufferToWindowList adds buffer to window's list":
+    let e = createTestEditor()
+    let newBuffer = newTextBuffer()
+
+    e.addBufferToWindowList(newBuffer)
+
+    check e.activeWindow.bufferList.len == 2
+    check e.activeWindow.bufferList[1] == newBuffer
+
+  test "addBufferToWindowList does not add duplicate buffer":
+    let e = createTestEditor()
+    let existingBuffer = e.textBuffer
+
+    e.addBufferToWindowList(existingBuffer)
+
+    check e.activeWindow.bufferList.len == 1
+
+  test "editFile adds buffer to window's bufferList":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_window_edit.txt"
+
+    writeFile(testFile, "test content")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+
+    check e.activeWindow.bufferList.len == 2
+    check e.activeWindow.buffer == e.activeWindow.bufferList[1]
+
+  test "windowBufferIndex returns correct index":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_window_index.txt"
+
+    writeFile(testFile, "test content")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+
+    check e.windowBufferIndex() == 1
+
+    e.switchToWindowBuffer(0)
+    check e.windowBufferIndex() == 0
+
+  test "switchToWindowBuffer switches within window's bufferList":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_switch_window.txt"
+
+    writeFile(testFile, "test content")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+    e.switchToWindowBuffer(0)
+
+    check e.activeWindow.buffer == e.activeWindow.bufferList[0]
+
+  test "switchToNextBuffer cycles through window's bufferList":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_next_window.txt"
+
+    writeFile(testFile, "test content")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+    e.switchToWindowBuffer(0)
+
+    e.switchToNextBuffer()
+    check e.windowBufferIndex() == 1
+
+    e.switchToNextBuffer()
+    check e.windowBufferIndex() == 0 # Wraps around
+
+  test "switchToPrevBuffer cycles through window's bufferList":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_prev_window.txt"
+
+    writeFile(testFile, "test content")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+
+    e.switchToPrevBuffer()
+    check e.windowBufferIndex() == 0
+
+    e.switchToPrevBuffer()
+    check e.windowBufferIndex() == 1 # Wraps around
+
+suite "Editor - Window bufferList with splits":
+  test "vsplit creates new window with only current buffer":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_vsplit_buflist.txt"
+
+    writeFile(testFile, "test content")
+    defer:
+      removeFile(testFile)
+
+    # Open file in first window
+    discard e.editFile(testFile)
+    check e.activeWindow.bufferList.len == 2
+
+    # Create vsplit
+    discard e.vsplit()
+
+    # New window should only have the current buffer
+    check e.activeWindow.bufferList.len == 1
+
+  test "hsplit creates new window with only current buffer":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_hsplit_buflist.txt"
+
+    writeFile(testFile, "test content")
+    defer:
+      removeFile(testFile)
+
+    # Open file in first window
+    discard e.editFile(testFile)
+    check e.activeWindow.bufferList.len == 2
+
+    # Create hsplit
+    discard e.hsplit()
+
+    # New window should only have the current buffer
+    check e.activeWindow.bufferList.len == 1
+
+  test "Windows have independent bufferLists":
+    let e = createTestEditor()
+    let testFile1 = "/tmp/moe_test_indep1.txt"
+    let testFile2 = "/tmp/moe_test_indep2.txt"
+
+    writeFile(testFile1, "content1")
+    writeFile(testFile2, "content2")
+    defer:
+      removeFile(testFile1)
+      removeFile(testFile2)
+
+    # Open file in first window
+    discard e.editFile(testFile1)
+    let window1BufferCount = e.activeWindow.bufferList.len
+
+    # Create vsplit and open different file
+    discard e.vsplit()
+    discard e.editFile(testFile2)
+
+    # Window 2 should have 2 buffers now
+    let window2 = e.activeWindow
+    check window2.bufferList.len == 2
+
+    # Switch back to window 1 and verify its bufferList is unchanged
+    e.switchToPrevWindow()
+    check e.activeWindow.bufferList.len == window1BufferCount
+
+suite "Editor - enew with window bufferList":
+  test "enew adds new buffer to window's bufferList":
+    let e = createTestEditor()
+    let initialCount = e.activeWindow.bufferList.len
+
+    discard e.enew()
+
+    check e.activeWindow.bufferList.len == initialCount + 1
+    check e.activeWindow.buffer == e.activeWindow.bufferList[^1]
+
+suite "Editor - switchToFirstBuffer and switchToLastBuffer with bufferList":
+  test "switchToFirstBuffer uses window's bufferList":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_first_buflist.txt"
+
+    writeFile(testFile, "test content")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+    check e.windowBufferIndex() == 1
+
+    e.switchToFirstBuffer()
+    check e.windowBufferIndex() == 0
+
+  test "switchToLastBuffer uses window's bufferList":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_last_buflist.txt"
+
+    writeFile(testFile, "test content")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+    e.switchToWindowBuffer(0)
+    check e.windowBufferIndex() == 0
+
+    e.switchToLastBuffer()
+    check e.windowBufferIndex() == 1
+
+  test "switchToFirstBuffer with single buffer shows message":
+    let e = createTestEditor()
+    check e.activeWindow.bufferList.len == 1
+
+    e.switchToFirstBuffer()
+    check "Already at first buffer" in e.state.statusMessage
+
+  test "switchToLastBuffer with single buffer shows message":
+    let e = createTestEditor()
+    check e.activeWindow.bufferList.len == 1
+
+    e.switchToLastBuffer()
+    check "Already at last buffer" in e.state.statusMessage
+
+suite "Editor - switchToBufferByIndex adds to window bufferList":
+  test "switchToBufferByIndex adds buffer to window's bufferList":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_switch_add.txt"
+
+    writeFile(testFile, "test content")
+    defer:
+      removeFile(testFile)
+
+    # Add buffer to global list via editFile
+    discard e.editFile(testFile)
+
+    # Create a split (new window has e.textBuffer which is the initial buffer)
+    # Note: vsplit uses e.textBuffer, not activeWindow.buffer
+    discard e.vsplit()
+    check e.activeWindow.bufferList.len == 1
+    check e.activeWindow.buffer == e.textBuffer # Initial buffer
+
+    # Switch to buffer index 1 (testFile buffer) - should add to window's bufferList
+    e.switchToBufferByIndex(1)
+    check e.activeWindow.bufferList.len == 2
+
+  test "switchToBufferByIndex does not duplicate in bufferList":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_switch_nodup.txt"
+
+    writeFile(testFile, "test content")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+    let bufferListLen = e.activeWindow.bufferList.len
+
+    # Switch to same buffer again
+    e.switchToBufferByIndex(1)
+    check e.activeWindow.bufferList.len == bufferListLen
+
+suite "Editor - Edge cases with single buffer":
+  test "switchToNextBuffer with single buffer shows message":
+    let e = createTestEditor()
+    check e.activeWindow.bufferList.len == 1
+
+    e.switchToNextBuffer()
+    check "No more buffers" in e.state.statusMessage
+
+  test "switchToPrevBuffer with single buffer shows message":
+    let e = createTestEditor()
+    check e.activeWindow.bufferList.len == 1
+
+    e.switchToPrevBuffer()
+    check "No more buffers" in e.state.statusMessage

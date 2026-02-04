@@ -23,8 +23,8 @@ import std/[unittest, options, times]
 import pkg/celina
 import
   ../src/moepkg/[
-    editor, config, configloader, filer, buffermanager, diffviewer, recentfilemode,
-    backupmanager, debugviewer, helpviewer, configmode, references_viewer,
+    editor, config, config_loader, filer, buffer_manager, diff_viewer, recent_file_mode,
+    backup_manager, debug_viewer, help_viewer, config_mode, references_viewer,
     documentsymbol_viewer, callhierarchy_viewer,
   ]
 import ../src/moepkg/editor_render_modes
@@ -418,23 +418,25 @@ suite "renderDebugMode - Basic behavior":
   test "Render with no debug viewer state does nothing":
     let e = createTestEditor()
     var buffer = createTestBuffer()
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
-    check e.windowManager.windows[e.windowManager.activeWindowIndex].debugViewerState.isNone
-    e.renderDebugMode(buffer)
+    check window.debugViewerState.isNone
+    e.renderDebugMode(buffer, window, isBottomWindow = true, tabLineOffset = 0)
 
   test "Render debug mode with empty lines":
     let e = createTestEditor()
     var buffer = createTestBuffer()
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
     let debugState = newDebugViewerState()
-    e.windowManager.windows[e.windowManager.activeWindowIndex].debugViewerState =
-      some(debugState)
+    window.debugViewerState = some(debugState)
 
-    e.renderDebugMode(buffer)
+    e.renderDebugMode(buffer, window, isBottomWindow = true, tabLineOffset = 0)
 
   test "Render debug mode with debug information":
     let e = createTestEditor()
     var buffer = createTestBuffer()
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
     let debugState = newDebugViewerState()
     debugState.lines =
@@ -444,10 +446,9 @@ suite "renderDebugMode - Basic behavior":
       ]
     debugState.selectedLine = 2
 
-    e.windowManager.windows[e.windowManager.activeWindowIndex].debugViewerState =
-      some(debugState)
+    window.debugViewerState = some(debugState)
 
-    e.renderDebugMode(buffer)
+    e.renderDebugMode(buffer, window, isBottomWindow = true, tabLineOffset = 0)
     check e.state.screenCursor.y >= 0
 
 suite "renderReferencesViewer - Basic behavior":

@@ -23,7 +23,7 @@ import std/[options, unicode]
 
 import pkg/results
 
-import ../[types, buffer, modes, keybindings, motion, commandregistry]
+import ../[types, buffer, modes, key_bindings, motion, command_registry]
 
 type
   ReplaceModeResultKind* = enum

@@ -23,11 +23,11 @@ import pkg/[celina, results, chronos]
 from pkg/celina/core/mouse_logic import MouseButton
 
 import
-  editor, keybindings, modes, buffer, logger, types, motion, search_utils, filer,
-  quickrunutils, helpviewer, buffermanager, backupmanager, backup, diffviewer,
-  command_completion, build, render_utils, sidebar, debugviewer, configloader,
-  references_viewer, documentsymbol_viewer, callhierarchy_viewer, messagelog,
-  commandline, color, theme
+  editor, key_bindings, modes, buffer, logger, types, motion, search_utils, filer,
+  quick_run_utils, help_viewer, buffer_manager, backup_manager, backup, diff_viewer,
+  command_completion, build, render_utils, sidebar, debug_viewer, config_loader,
+  references_viewer, documentsymbol_viewer, callhierarchy_viewer, message_log,
+  command_line, color, theme
 import command_handlers/handler_manager
 
 # Track running background processes for cleanup on exit
@@ -407,7 +407,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         # Handle window close - may also quit if last window
         # Clear special mode state in the window being closed
         let activeWin = e.activeWindow
-        case e.state.previousMode
+        case e.state.mode
         of EditorMode.LogViewer:
           activeWin.logViewerState = none(LogViewerState)
         of EditorMode.Filer:
@@ -432,9 +432,10 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           activeWin.callHierarchyViewerState = none(CallHierarchyViewerState)
         else:
           discard
-        # Reset window mode before closing
+        # Reset mode before closing
         e.state.previousMode = EditorMode.Normal
         activeWin.mode = EditorMode.Normal
+        e.setMode(EditorMode.Normal)
         let shouldQuit = e.closeWindow
         if shouldQuit:
           return false # Last window closed, quit editor
@@ -963,9 +964,14 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.timing.lastDebugUpdate = getMonoTime()
           if e.state.timing.debugUpdateInterval == 0:
             e.state.timing.debugUpdateInterval = 500 # Default: 500ms
-        # Return to Normal mode - exit overlay first
-        e.state.exitOverlay()
-        e.setMode(EditorMode.Normal)
+          # Initialize debug viewer state
+          let debugState = newDebugViewerState()
+          debugState.lines = debugLines
+          e.activeWindow.debugViewerState = some(debugState)
+          # Enter debug mode
+          e.state.exitOverlay()
+          e.state.previousMode = e.state.baseMode
+          e.setMode(EditorMode.Debug)
       elif r.shouldJumpList():
         # Handle jump list command (:ju, :jump)
         # Display jump list temporarily like Vim using tempMessages
@@ -1406,11 +1412,11 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       # Stay in Recent File mode so user can select another file
       e.state.needsFullRedraw = true
       return true
-    # Load the file
-    let loadResult = e.loadFile(filePath)
-    if loadResult.isErr:
-      logError("handler", "Failed to open file: " & loadResult.error)
-      e.state.statusMessage = "Error: " & loadResult.error
+    # Open the file (Adds to window's bufferList as new tab)
+    let editResult = e.editFile(filePath)
+    if editResult.isErr:
+      logError("handler", "Failed to open file: " & editResult.error)
+      e.state.statusMessage = "Error: " & editResult.error
     else:
       e.state.statusMessage = "Opened: " & filePath
     e.state.previousMode = e.state.mode
@@ -1465,14 +1471,6 @@ proc handleDebugModeEvent(e: Editor, event: Event): bool =
   let r = handleDebugModeKey(activeWin.debugViewerState.get, viewportHeight, keyCombo)
 
   case r.kind
-  of dvrQuit:
-    activeWin.mode = EditorMode.Normal
-    activeWin.debugViewerState = none(DebugViewerState)
-    e.state.previousMode = e.state.mode
-    e.setMode(EditorMode.Normal)
-    e.state.statusMessage = ""
-    e.state.needsFullRedraw = true
-    return true
   of dvrEnterCommand:
     e.state.enterCommandOverlay()
     e.state.needsFullRedraw = true
@@ -2055,17 +2053,16 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   # Handle Filer mode results
   if r.kind == hrFilerOpenFile:
-    # Open file from filer
-    let loadResult = e.loadFile(r.filerFilePath)
-    if loadResult.isErr:
-      e.state.setStatusMessage("Error: " & loadResult.error)
+    # Open file from filer (Adds to window's bufferList as new tab)
+    let editResult = e.editFile(r.filerFilePath)
+    if editResult.isErr:
+      e.state.setStatusMessage("Error: " & editResult.error)
     else:
       # Clear filer state and switch to Normal mode
       let activeWin = e.activeWindow
       activeWin.mode = EditorMode.Normal
       activeWin.filerState = none(FilerState)
       e.setMode(EditorMode.Normal)
-      e.cursor = BufferPosition(line: 0, column: 0)
       # Filer screen notification (controlled by config)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:

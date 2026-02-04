@@ -24,7 +24,7 @@
 
 import std/options
 
-import ../[types, configmode, keybindings]
+import ../[types, config_mode, key_bindings]
 
 type
   ConfigModeResultKind* = enum

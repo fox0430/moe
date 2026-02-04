@@ -21,7 +21,7 @@ import std/options
 
 import pkg/results
 
-import types, buffer, motion, commandregistry, keybindings, config
+import types, buffer, motion, command_registry, key_bindings, config
 
 type CommandExecutor* = ref object
   motionController*: MotionController
@@ -102,7 +102,7 @@ proc execute*(e: CommandExecutor, command: string): Result[(), string] =
   return r
 
 proc executeKeybinding*(
-    e: CommandExecutor, binding: keybindings.Command
+    e: CommandExecutor, binding: key_bindings.Command
 ): Result[(), string] =
   ## Execute a keybinding command
   let ctx = CommandContext(

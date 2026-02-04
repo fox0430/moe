@@ -24,7 +24,7 @@
 
 import std/options
 
-import ../[types, keybindings, callhierarchy_viewer]
+import ../[types, key_bindings, callhierarchy_viewer]
 import ../lsp/protocol/types as lspTypes
 
 type

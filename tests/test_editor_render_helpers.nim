@@ -21,7 +21,7 @@
 
 import std/[unittest, options, tables]
 import pkg/results
-import ../src/moepkg/[editor, buffer, config, configloader, modes, types, color]
+import ../src/moepkg/[editor, buffer, config, config_loader, modes, types, color]
 import ../src/moepkg/editor_render_helpers as renderHelpers
 
 proc createTestEditor(): Editor =

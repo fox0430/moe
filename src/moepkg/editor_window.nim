@@ -205,7 +205,7 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
 
   let newBuffer = bufferResult.get
 
-  # Add the new buffer to the buffer list if it's not already there
+  # Add the new buffer to the global buffer list if it's not already there
   var found = false
   for buf in e.buffers:
     if buf == newBuffer:
@@ -216,6 +216,9 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
     # Set reserved words for syntax highlighting on new buffer
     newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
     logDebug("editor", "vsplit: buffer added, buffers.len: " & $e.buffers.len)
+
+  # Note: New window's bufferList is initialized in window_manager.vsplit
+  # with only the new buffer (per-window tabs)
 
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
@@ -357,11 +360,18 @@ proc enew*(e: Editor): Result[(), string] =
   ## Create a new empty buffer and add it to the buffer list
   let newBuffer = newTextBuffer()
 
-  # Add the new buffer to the buffer list
+  # Add the new buffer to the global buffer list
   e.buffers.add(newBuffer)
   # Set reserved words for syntax highlighting on new buffer
   newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
   logDebug("editor", "enew: buffer added, buffers.len: " & $e.buffers.len)
+
+  # Add the new buffer to the active window's bufferList
+  e.activeWindow.bufferList.add(newBuffer)
+  logDebug(
+    "editor",
+    "enew: buffer added to window bufferList, len: " & $e.activeWindow.bufferList.len,
+  )
 
   # Replace the buffer in the active window
   e.activeWindow.buffer = newBuffer

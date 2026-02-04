@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import highlite
+import tokenizer
 
 const
   SymChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
@@ -28,7 +28,7 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
 
   var pos = g.pos
   g.start = g.pos
-  if g.state == gtStringLit:
+  if g.state in {gtStringLit, gtKey}:
     if g.buf[pos] == '\\':
       g.kind = gtEscapeSequence
       inc(pos)
@@ -38,7 +38,7 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
       else:
         inc(pos)
     else:
-      g.kind = gtStringLit
+      g.kind = g.state
       while true:
         case g.buf[pos]
         of '\\':

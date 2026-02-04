@@ -19,9 +19,9 @@
 
 import std/[unittest, os, options, json, times, posix]
 
-import ../src/moepkg/backupmanager
+import ../src/moepkg/backup_manager
 
-const TestBackupDir = "/tmp/moe_test_backupmanager"
+const TestBackupDir = "/tmp/moe_test_backup_manager"
 
 proc cleanupTestDir() =
   if dirExists(TestBackupDir):
@@ -39,7 +39,7 @@ proc createTestBackupFile(
 ) =
   writeFile(backupDir / timestamp, content)
 
-suite "backupmanager - newBackupManagerState":
+suite "backup_manager - newBackupManagerState":
   test "Create new state with default values":
     let state = newBackupManagerState()
     check state.entries.len == 0
@@ -49,7 +49,7 @@ suite "backupmanager - newBackupManagerState":
     check state.backupDir == ""
     check state.baseBackupDir == ""
 
-suite "backupmanager - initBackupManagerEntries":
+suite "backup_manager - initBackupManagerEntries":
   setup:
     cleanupTestDir()
     createDir(TestBackupDir)
@@ -108,7 +108,7 @@ suite "backupmanager - initBackupManagerEntries":
     check entries.len == 1
     check entries[0].fullPath == backupDir / "2025-01-15T10:30:45+09:00"
 
-suite "backupmanager - initBackupManagerState":
+suite "backup_manager - initBackupManagerState":
   setup:
     cleanupTestDir()
     createDir(TestBackupDir)
@@ -137,7 +137,7 @@ suite "backupmanager - initBackupManagerState":
     check state.backupDir == ""
     check state.entries.len == 0
 
-suite "backupmanager - refresh":
+suite "backup_manager - refresh":
   setup:
     cleanupTestDir()
     createDir(TestBackupDir)
@@ -194,7 +194,7 @@ suite "backupmanager - refresh":
     check state.entries.len == 0
     check state.selectedIndex == 0
 
-suite "backupmanager - moveUp":
+suite "backup_manager - moveUp":
   test "Move up decrements selectedIndex":
     let state = newBackupManagerState()
     state.entries =
@@ -241,7 +241,7 @@ suite "backupmanager - moveUp":
     check state.selectedIndex == 0
     check state.topLine == 0
 
-suite "backupmanager - moveDown":
+suite "backup_manager - moveDown":
   test "Move down increments selectedIndex":
     let state = newBackupManagerState()
     state.entries =
@@ -277,7 +277,7 @@ suite "backupmanager - moveDown":
     state.moveDown()
     check state.selectedIndex == 0
 
-suite "backupmanager - moveToFirst":
+suite "backup_manager - moveToFirst":
   test "Move to first sets selectedIndex to 0":
     let state = newBackupManagerState()
     state.entries =
@@ -292,7 +292,7 @@ suite "backupmanager - moveToFirst":
     check state.selectedIndex == 0
     check state.topLine == 0
 
-suite "backupmanager - moveToLast":
+suite "backup_manager - moveToLast":
   test "Move to last sets selectedIndex to last entry":
     let state = newBackupManagerState()
     state.entries =
@@ -313,7 +313,7 @@ suite "backupmanager - moveToLast":
     state.moveToLast()
     check state.selectedIndex == 0
 
-suite "backupmanager - getSelectedEntry":
+suite "backup_manager - getSelectedEntry":
   test "Get selected entry returns correct entry":
     let state = newBackupManagerState()
     let t = now()
@@ -351,20 +351,20 @@ suite "backupmanager - getSelectedEntry":
     let entry = state.getSelectedEntry()
     check entry.isNone
 
-suite "backupmanager - formatTimestamp":
+suite "backup_manager - formatTimestamp":
   test "Format timestamp correctly":
     let dt = dateTime(2025, mJan, 15, 10, 30, 45, zone = utc())
     let formatted = formatTimestamp(dt)
     check formatted == "2025-01-15 10:30:45"
 
-suite "backupmanager - formatEntry":
+suite "backup_manager - formatEntry":
   test "Format entry uses formatTimestamp":
     let dt = dateTime(2025, mJan, 15, 10, 30, 45, zone = utc())
     let entry = BackupEntry(filename: "test", timestamp: dt, fullPath: "/test")
     let formatted = formatEntry(entry)
     check formatted == "2025-01-15 10:30:45"
 
-suite "backupmanager - deleteBackup":
+suite "backup_manager - deleteBackup":
   setup:
     cleanupTestDir()
     createDir(TestBackupDir)
@@ -403,7 +403,7 @@ suite "backupmanager - deleteBackup":
     let state = newBackupManagerState()
     check state.deleteBackup(0) == false
 
-suite "backupmanager - restoreBackup":
+suite "backup_manager - restoreBackup":
   setup:
     cleanupTestDir()
     createDir(TestBackupDir)
@@ -454,7 +454,7 @@ suite "backupmanager - restoreBackup":
     let state = newBackupManagerState()
     check state.restoreBackup(0) == false
 
-suite "backupmanager - initBackupManagerEntries (edge cases)":
+suite "backup_manager - initBackupManagerEntries (edge cases)":
   setup:
     cleanupTestDir()
     createDir(TestBackupDir)
@@ -470,7 +470,7 @@ suite "backupmanager - initBackupManagerEntries (edge cases)":
     let entries = initBackupManagerEntries(backupDir)
     check entries.len == 1
 
-suite "backupmanager - refresh (edge cases)":
+suite "backup_manager - refresh (edge cases)":
   setup:
     cleanupTestDir()
     createDir(TestBackupDir)
@@ -497,7 +497,7 @@ suite "backupmanager - refresh (edge cases)":
     check state.entries.len == 4
     check state.selectedIndex == 1 # Index should remain unchanged
 
-suite "backupmanager - deleteBackup (edge cases)":
+suite "backup_manager - deleteBackup (edge cases)":
   setup:
     cleanupTestDir()
     createDir(TestBackupDir)
@@ -523,7 +523,7 @@ suite "backupmanager - deleteBackup (edge cases)":
 
     check success == false
 
-suite "backupmanager - restoreBackup (edge cases)":
+suite "backup_manager - restoreBackup (edge cases)":
   setup:
     cleanupTestDir()
     createDir(TestBackupDir)

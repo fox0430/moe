@@ -22,8 +22,8 @@
 import std/[unittest, options, tables]
 
 import ../src/moepkg/types {.all.}
-import ../src/moepkg/keybindings {.all.}
-import ../src/moepkg/configmode {.all.}
+import ../src/moepkg/key_bindings {.all.}
+import ../src/moepkg/config_mode {.all.}
 import ../src/moepkg/config {.all.}
 import ../src/moepkg/registers {.all.}
 import ../src/moepkg/modes {.all.}

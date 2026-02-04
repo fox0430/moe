@@ -23,7 +23,7 @@ import std/[options, monotimes, tables, json, times, strutils]
 
 import pkg/[results, chronos]
 
-import editor_types, logger, highlight, lspintegration
+import editor_types, logger, highlight, lsp_integration
 
 proc hasCodeLensSupport*(e: Editor): bool =
   ## Check if CodeLens is supported for the current buffer

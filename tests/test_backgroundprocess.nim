@@ -21,7 +21,7 @@ import std/[unittest, os, strutils]
 
 import pkg/chronos
 
-import ../src/moepkg/backgroundprocess {.all.}
+import ../src/moepkg/background_process {.all.}
 
 suite "BackgroundProcess - BackgroundProcessCommand":
   test "Create BackgroundProcessCommand":

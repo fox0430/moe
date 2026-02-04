@@ -25,7 +25,7 @@ import pkg/celina
 
 import
   editor_types, editor_window, editor_render_window, editor_render_modes, render_utils,
-  statusline, tabline
+  status_line, tab_line
 
 proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
   ## Update viewport size from buffer area and return true if resized
@@ -132,15 +132,16 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     )
 
     # Render tab line for this window if enabled
+    # Use window-local buffer list (per-window tabs)
     if e.state.display.showTabLine:
       let buffersToShow =
-        if e.buffers.len > 0:
-          e.buffers
+        if window.bufferList.len > 0:
+          window.bufferList
         else:
-          @[e.textBuffer]
+          @[window.buffer]
       renderWindowTabLine(
-        buffersToShow, window.buffer, buffer, window.viewport.y, window.viewport.x,
-        window.viewport.width, e.state.display.showTabLine,
+        buffersToShow, window.buffer, e.state.mode, buffer, window.viewport.y,
+        window.viewport.x, window.viewport.width, e.state.display.showTabLine,
       )
 
     # Render window content based on window's mode
@@ -186,12 +187,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
           buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
         )
     of EditorMode.Debug:
-      if isActiveWindow:
-        e.renderDebugMode(buffer)
-      else:
-        e.renderWindow(
-          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
-        )
+      e.renderDebugMode(buffer, window, isBottomWindow, tabLineOffset)
     of EditorMode.References:
       if isActiveWindow:
         e.renderReferencesViewer(buffer)

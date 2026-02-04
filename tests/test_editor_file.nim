@@ -21,7 +21,7 @@
 
 import std/[unittest, os, options, monotimes, times, strutils]
 import pkg/results
-import ../src/moepkg/[editor, buffer, config, configloader]
+import ../src/moepkg/[editor, buffer, config, config_loader]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing

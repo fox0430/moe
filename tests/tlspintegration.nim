@@ -21,7 +21,7 @@ import std/[unittest, json, options, tables, times, strutils]
 
 import pkg/results
 
-import ../src/moepkg/lspintegration
+import ../src/moepkg/lsp_integration
 import ../src/moepkg/lsp/protocol/types as lspTypes
 import ../src/moepkg/buffer
 

@@ -24,8 +24,8 @@ import std/[options, strutils, json]
 import pkg/results
 
 import
-  editor_types, editor_file, signaturehelp, documentsymbol_viewer, references_viewer,
-  callhierarchy_viewer, lspservice, lspintegration, buffer
+  editor_types, editor_file, signature_help, documentsymbol_viewer, references_viewer,
+  callhierarchy_viewer, lsp_service, lsp_integration, buffer
 import lsp/protocol/types as lspTypes
 
 proc maybeUpdateLsp*(e: Editor) =
@@ -150,7 +150,7 @@ proc jumpToLspLocation(e: Editor, loc: lspTypes.Location, resultKind: string): b
   ## Jump to a single LSP location
   ## Returns true if successful
   let activeBuffer = e.activeBuffer()
-  let path = lspservice.uriToPath(loc.uri)
+  let path = lsp_service.uriToPath(loc.uri)
 
   # Add current position to jump list before jumping
   e.addToJumpList()
@@ -227,7 +227,7 @@ proc handleLspLocations(
     # Multiple locations - open References viewer mode
     var items: seq[ReferenceItem] = @[]
     for loc in locations:
-      let path = lspservice.uriToPath(loc.uri)
+      let path = lsp_service.uriToPath(loc.uri)
       items.add(
         ReferenceItem(
           path: path,
@@ -941,8 +941,8 @@ proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
 
     let activeBuffer = e.activeBuffer()
 
-    # Use lspintegration's refreshLspFolds
-    let foldResult = await lspintegration.refreshLspFolds(e.lsp, activeBuffer)
+    # Use lsp_integration's refreshLspFolds
+    let foldResult = await lsp_integration.refreshLspFolds(e.lsp, activeBuffer)
     if foldResult.isErr:
       e.state.statusMessage = "LSP fold failed: " & foldResult.error
       return
@@ -1036,7 +1036,7 @@ proc jumpToDocumentLink(e: Editor, link: lspTypes.DocumentLink): bool =
 
   # Check if the target is a file:// URI
   if target.startsWith("file://"):
-    let path = lspservice.uriToPath(target)
+    let path = lsp_service.uriToPath(target)
     let activeBuffer = e.activeBuffer()
 
     # Add current position to jump list before jumping

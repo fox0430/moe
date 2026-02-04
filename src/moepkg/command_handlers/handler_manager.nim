@@ -28,20 +28,20 @@ import pkg/[results, celina]
 
 import
   ../[
-    types, buffer, modes, motion, keybindings, commandline, commandconfig,
-    commandregistry, config, stringbuilder, filer, recentfilemode, lspintegration,
+    types, buffer, modes, motion, key_bindings, command_line, command_config,
+    command_registry, config, string_builder, filer, recent_file_mode, lsp_integration,
   ]
 import ../lsp/protocol/types as lspTypes
 import
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
-  filer_handler, logviewer_handler, help_handler, buffermanager_handler,
-  backupmanager_handler, diffviewer_handler, recentfilemode_handler, debug_handler,
+  filer_handler, log_viewer_handler, help_handler, buffer_manager_handler,
+  backup_manager_handler, diff_viewer_handler, recent_file_mode_handler, debug_handler,
   config_handler, references_handler, documentsymbol_handler, callhierarchy_handler
 
 export
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
-  filer_handler, logviewer_handler, help_handler, buffermanager_handler,
-  backupmanager_handler, diffviewer_handler, recentfilemode_handler, debug_handler,
+  filer_handler, log_viewer_handler, help_handler, buffer_manager_handler,
+  backup_manager_handler, diff_viewer_handler, recent_file_mode_handler, debug_handler,
   config_handler, references_handler, documentsymbol_handler, callhierarchy_handler
 
 type
@@ -438,7 +438,7 @@ proc extractInsertedText(transaction: buffer.BufferTransaction): string =
   ## Extract net inserted text from a transaction
   ## Handles insertions and deletions (backspace during insert mode)
   ## Optimized with StringBuilder for O(n) instead of O(n²) performance
-  var sb = stringbuilder.newStringBuilder()
+  var sb = newStringBuilder()
   for change in transaction.changes:
     case change.kind
     of buffer.ckInsertText:
@@ -1361,7 +1361,7 @@ proc handleConfigMode*(
 
 proc handleRecentFileMode*(
     manager: HandlerManager,
-    state: recentfilemode.RecentFileModeState,
+    state: RecentFileModeState,
     viewportHeight: int,
     keyCombo: KeyCombo,
 ): HandlerResult =

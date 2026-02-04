@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, options, strutils]
-import ../src/moepkg/[config, configmode]
+import ../src/moepkg/[config, config_mode]
 
 suite "ConfigMode - ConfigModeState initialization":
   test "newConfigModeState creates valid state":

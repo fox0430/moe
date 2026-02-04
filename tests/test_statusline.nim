@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-## Tests for statusline.nim - Status line rendering for moe editor
+## Tests for status_line.nim - Status line rendering for moe editor
 
 import std/[unittest, options, tables, strutils]
 
@@ -27,9 +27,9 @@ import ../src/moepkg/types {.all.}
 import ../src/moepkg/modes {.all.}
 import ../src/moepkg/registers {.all.}
 import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/statusline {.all.}
+import ../src/moepkg/status_line {.all.}
 import ../src/moepkg/config {.all.}
-import ../src/moepkg/syntax/highlite {.all.}
+import ../src/moepkg/syntax/tokenizer {.all.}
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
@@ -316,7 +316,7 @@ suite "StatusLine - buildFileDisplay":
     let textBuffer = createTestTextBuffer()
     let config = createTestStatusLineConfig()
 
-    let result = buildFileDisplay(textBuffer, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
 
     check result == " [No Name]"
 
@@ -325,7 +325,7 @@ suite "StatusLine - buildFileDisplay":
     var config = createTestStatusLineConfig()
     config.directory = true
 
-    let result = buildFileDisplay(textBuffer, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
 
     check result == " /path/to/file.nim"
 
@@ -335,7 +335,7 @@ suite "StatusLine - buildFileDisplay":
     config.directory = false
     config.filename = true
 
-    let result = buildFileDisplay(textBuffer, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
 
     check result == " file.nim"
 
@@ -345,7 +345,7 @@ suite "StatusLine - buildFileDisplay":
     config.directory = false
     config.changedMark = true
 
-    let result = buildFileDisplay(textBuffer, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
 
     check result == " file.nim [+]"
 
@@ -355,7 +355,7 @@ suite "StatusLine - buildFileDisplay":
     config.directory = false
     config.changedMark = false
 
-    let result = buildFileDisplay(textBuffer, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
 
     check result == " file.nim"
 
@@ -365,7 +365,7 @@ suite "StatusLine - buildFileDisplay":
     config.directory = false
     config.changedMark = true
 
-    let result = buildFileDisplay(textBuffer, config)
+    let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
 
     check result == " file.nim"
 

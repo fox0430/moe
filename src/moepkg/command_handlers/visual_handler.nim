@@ -26,7 +26,7 @@ import std/options
 
 import pkg/results
 
-import ../[buffer, config, modes, motion, types, keybindings, commandregistry]
+import ../[buffer, config, modes, motion, types, key_bindings, command_registry]
 
 type
   VisualModeResultKind* = enum

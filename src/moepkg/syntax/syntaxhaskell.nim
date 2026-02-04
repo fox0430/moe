@@ -1,6 +1,38 @@
-import flags
-import highlite
-import lexer
+#=====================================================
+#Nim -- a Compiler for Nim. https://nim-lang.org/
+#
+#Copyright (C) 2006-2020 Andreas Rumpf. All rights reserved.
+#
+#Permission is hereby granted, free of charge, to any person obtaining a copy
+#of this software and associated documentation files (the "Software"), to deal
+#in the Software without restriction, including without limitation the rights
+#to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#copies of the Software, and to permit persons to whom the Software is
+#furnished to do so, subject to the following conditions:
+#
+#The above copyright notice and this permission notice shall be included in
+#all copies or substantial portions of the Software.
+#
+#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+#THE SOFTWARE.
+#
+#[ MIT license: http://www.opensource.org/licenses/mit-license.php ]#
+#
+#
+#            Nim's Runtime Library
+#        (c) Copyright 2012 Andreas Rumpf
+#
+#    See the file "copying.txt", included in this
+#    distribution, for details about the copyright.
+#
+
+import flags, tokenizer, lexer
+from lexer/end_lexer import endLine
 
 const haskellKeywords* = [
   "_", "case", "class", "data", "default", "deriving", "do", "else", "if", "import",
@@ -54,7 +86,15 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
       while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
         inc(pos)
     of '-':
-      pos = g.lexDash(pos, flagsHaskell)
+      # Check for -- line comment
+      if g.buf[pos + 1] == '-':
+        g.kind = gtComment
+        pos = g.endLine(pos)
+      else:
+        # Treat as operator (including ->, etc.)
+        g.kind = gtOperator
+        while g.buf[pos] in opChars:
+          inc(pos)
     of '{':
       pos = g.lexCurlyOpen(pos, flagsHaskell)
     of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
@@ -70,19 +110,23 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
       inc(pos)
       case g.buf[pos]
       of 'b', 'B':
+        g.kind = gtBinNumber
         inc(pos)
         while g.buf[pos] in binChars:
           inc(pos)
         if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
           inc(pos)
       of 'x', 'X':
+        g.kind = gtHexNumber
         inc(pos)
         while g.buf[pos] in hexChars:
           inc(pos)
         if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
           inc(pos)
-      of '0' .. '7':
-        inc(pos)
+      of 'o', 'O', '0' .. '7':
+        g.kind = gtOctNumber
+        if g.buf[pos] in {'o', 'O'}:
+          inc(pos)
         while g.buf[pos] in octChars:
           inc(pos)
         if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:

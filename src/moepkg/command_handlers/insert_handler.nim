@@ -33,8 +33,8 @@ import pkg/results
 
 import
   ../[
-    types, buffer, config, modes, keybindings, motion, commandregistry, unicode_utils,
-    completion, signaturehelp, lspintegration,
+    types, buffer, config, modes, key_bindings, motion, command_registry, unicode_utils,
+    completion, signature_help, lsp_integration,
   ]
 import insert_commands
 

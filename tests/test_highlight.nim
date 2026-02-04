@@ -20,7 +20,7 @@
 import std/[unittest, unicode]
 
 import ../src/moepkg/highlight
-import ../src/moepkg/syntax/highlite
+import ../src/moepkg/syntax/tokenizer
 
 suite "Highlight - Basic Initialization":
   test "initHighlight with empty buffer":

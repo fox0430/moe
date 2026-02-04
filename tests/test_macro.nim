@@ -27,7 +27,7 @@ import pkg/results
 
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/types {.all.}
-import ../src/moepkg/keybindings {.all.}
+import ../src/moepkg/key_bindings {.all.}
 import ../src/moepkg/modes {.all.}
 
 suite "Macro Recording":

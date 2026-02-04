@@ -24,10 +24,10 @@ import std/[unittest, options]
 
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/types {.all.}
-import ../src/moepkg/keybindings {.all.}
+import ../src/moepkg/key_bindings {.all.}
 import ../src/moepkg/modes {.all.}
 import ../src/moepkg/motion {.all.}
-import ../src/moepkg/commandregistry {.all.}
+import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/registers {.all.}
 import ../src/moepkg/command_handlers/handler_manager {.all.}
 

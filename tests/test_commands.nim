@@ -23,7 +23,7 @@ import std/[unittest, options]
 import pkg/results
 import
   ../src/moepkg/
-    [commands, buffer, types, config, commandregistry, keybindings, modes, motion]
+    [commands, buffer, types, config, command_registry, key_bindings, modes, motion]
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing

@@ -24,7 +24,7 @@
 
 import std/options
 
-import ../[types, keybindings, references_viewer]
+import ../[types, key_bindings, references_viewer]
 
 type
   ReferencesResultKind* = enum

@@ -24,7 +24,7 @@ import
 import pkg/celina
 
 import color, primitives
-import syntax/highlite
+import syntax/tokenizer
 import lsp/protocol/types
 
 export SourceLanguage, EditorColorPairIndex

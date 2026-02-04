@@ -22,11 +22,10 @@ import std/[strformat, monotimes, times, os, options]
 import pkg/[celina, results, chronos]
 
 import
-  moepkg/
-    [
-      editor, handler, modes, logger, cmdline, filer, lspintegration, config,
-      configloader,
-    ]
+  moepkg/[
+    editor, handler, modes, logger, cmdline, filer, lsp_integration, config,
+    config_loader,
+  ]
 
 proc toCursorStyle(ct: CursorType): CursorStyle =
   ## Convert config CursorType to celina CursorStyle

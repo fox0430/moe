@@ -22,14 +22,16 @@ import std/[options, monotimes, times, tables, strutils, json]
 import pkg/celina
 
 import
-  modes, buffer, registers, filer, logviewer, helpviewer, command_completion,
-  messagelog, buffermanager, backupmanager, diffviewer, debugviewer, configmode,
-  references_viewer, documentsymbol_viewer, callhierarchy_viewer, hoverpopup, primitives
+  modes, buffer, registers, filer, log_viewer, help_viewer, command_completion,
+  message_log, buffer_manager, backup_manager, diff_viewer, debug_viewer, config_mode,
+  references_viewer, documentsymbol_viewer, callhierarchy_viewer, hover_popup,
+  primitives
 
 export
-  buffer.SidebarItemKind, registers, command_completion, logviewer, helpviewer,
-  buffermanager, backupmanager, diffviewer, debugviewer, configmode, references_viewer,
-  documentsymbol_viewer, callhierarchy_viewer, hoverpopup, primitives
+  buffer.SidebarItemKind, registers, command_completion, log_viewer, help_viewer,
+  buffer_manager, backup_manager, diff_viewer, debug_viewer, config_mode,
+  references_viewer, documentsymbol_viewer, callhierarchy_viewer, hover_popup,
+  primitives
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -66,6 +68,7 @@ type
   EditorWindow* = ref object
     ## Represents a split window with its own buffer and viewport
     buffer*: TextBuffer
+    bufferList*: seq[TextBuffer] # Window-local buffer list
     viewport*: ViewPort
     cursor*: BufferPosition # Window-local cursor position
     active*: bool # Whether this is the active window

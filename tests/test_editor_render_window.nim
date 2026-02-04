@@ -22,7 +22,7 @@
 
 import std/[unittest, strutils]
 import pkg/celina
-import ../src/moepkg/[editor, buffer, config, configloader, render_utils]
+import ../src/moepkg/[editor, buffer, config, config_loader, render_utils]
 import ../src/moepkg/editor_render_window
 
 proc createTestEditor(): Editor =

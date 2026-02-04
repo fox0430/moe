@@ -31,9 +31,7 @@
 #    distribution, for details about the copyright.
 #
 
-import highlite
-import syntaxjavascript
-import syntaxhtml
+import tokenizer, syntaxjavascript, syntaxhtml
 
 # Astro file state tracking is now in GeneralTokenizer
 

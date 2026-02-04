@@ -26,7 +26,7 @@ import std/[algorithm, strutils, unicode, tables, os]
 
 import pkg/celina
 
-import commandline
+import command_line
 
 type
   CommandCompletionState* = enum

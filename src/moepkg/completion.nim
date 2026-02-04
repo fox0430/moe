@@ -27,8 +27,8 @@ import std/[algorithm, sequtils, strutils, unicode, sets, options, json]
 
 import pkg/celina
 
-import buffer, worddictionary
-import syntax/highlite
+import buffer, word_dictionary
+import syntax/tokenizer
 import lsp/protocol/types as lspTypes
 
 export lspTypes

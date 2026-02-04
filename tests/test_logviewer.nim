@@ -17,14 +17,14 @@
 #                                                                              #
 #[############################################################################]#
 
-## Tests for logviewer.nim
+## Tests for log_viewer.nim
 ## This module tests the Log Viewer state management functionality.
 
 import std/unittest
 
-import ../src/moepkg/logviewer
+import ../src/moepkg/log_viewer
 
-suite "logviewer: LogContentKind":
+suite "log_viewer: LogContentKind":
   test "lckEditor enum value":
     check lckEditor == LogContentKind.lckEditor
 
@@ -34,7 +34,7 @@ suite "logviewer: LogContentKind":
   test "Enum values are distinct":
     check lckEditor != lckLsp
 
-suite "logviewer: newLogViewerState":
+suite "log_viewer: newLogViewerState":
   test "Create with default kind (lckEditor)":
     let state = newLogViewerState()
 
@@ -53,7 +53,7 @@ suite "logviewer: newLogViewerState":
     check state != nil
     check state.contentKind == lckLsp
 
-suite "logviewer: LogViewerState fields":
+suite "log_viewer: LogViewerState fields":
   test "contentKind is readable":
     let state = newLogViewerState(lckLsp)
 
