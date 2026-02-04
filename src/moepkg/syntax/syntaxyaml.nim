@@ -22,14 +22,14 @@
 #
 # [ MIT license: http://www.opensource.org/licenses/mit-license.php ]
 
-import flags
-import highlite
-import lexer
+import flags, highlite, lexer
 
 proc yamlPlainStrLit(g: var GeneralTokenizer, pos: var int) =
   g.kind = gtStringLit
   while g.buf[pos] notin {'\0', '\t' .. '\r', ',', ']', '}'}:
     if g.buf[pos] == ':' and g.buf[pos + 1] in {'\0', '\t' .. '\r', ' '}:
+      break
+    if g.buf[pos] == ' ' and g.buf[pos + 1] == '#':
       break
     inc(pos)
 
@@ -130,19 +130,44 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
   elif g.state == gtCharLit:
     # abusing gtCharLit as single-quoted string lit
     g.kind = gtStringLit
-    inc(pos) # skip the starting '
-    while true:
-      case g.buf[pos]
-      of '\'':
-        inc(pos)
-        if g.buf[pos] == '\'':
-          inc(pos)
-          g.kind = gtEscapeSequence
+    # Check if we're at an escape sequence ''
+    if g.buf[pos] == '\'' and g.buf[pos + 1] == '\'':
+      inc(pos, 2)
+      g.kind = gtEscapeSequence
+    elif g.buf[pos] == '\'':
+      inc(pos) # skip the starting '
+      while true:
+        case g.buf[pos]
+        of '\'':
+          if g.buf[pos + 1] == '\'':
+            # Escape sequence, return content first if any
+            if pos > g.pos + 1:
+              break
+            inc(pos, 2)
+            g.kind = gtEscapeSequence
+          else:
+            inc(pos)
+            g.state = gtOther
+          break
         else:
-          g.state = gtOther
-        break
-      else:
-        inc(pos)
+          inc(pos)
+    else:
+      # Continue reading after previous token
+      while true:
+        case g.buf[pos]
+        of '\'':
+          if g.buf[pos + 1] == '\'':
+            # Escape sequence, return content first if any
+            if pos > g.pos:
+              break
+            inc(pos, 2)
+            g.kind = gtEscapeSequence
+          else:
+            inc(pos)
+            g.state = gtOther
+          break
+        else:
+          inc(pos)
   elif g.state == gtCommand:
     # gtCommand means 'block scalar header'
     case g.buf[pos]
@@ -295,6 +320,9 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       inc(pos)
       g.state = gtStringLit
       g.kind = gtStringLit
+      # Continue reading string content until escape or end quote
+      while g.buf[pos] notin {'\0', '\\', '\"'}:
+        inc(pos)
     of '\'':
       g.state = gtCharLit
       g.kind = gtNone
