@@ -1,28 +1,60 @@
+#=====================================================
+#Nim -- a Compiler for Nim. https://nim-lang.org/
+#
+#Copyright (C) 2006-2020 Andreas Rumpf. All rights reserved.
+#
+#Permission is hereby granted, free of charge, to any person obtaining a copy
+#of this software and associated documentation files (the "Software"), to deal
+#in the Software without restriction, including without limitation the rights
+#to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#copies of the Software, and to permit persons to whom the Software is
+#furnished to do so, subject to the following conditions:
+#
+#The above copyright notice and this permission notice shall be included in
+#all copies or substantial portions of the Software.
+#
+#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+#THE SOFTWARE.
+#
+#[ MIT license: http://www.opensource.org/licenses/mit-license.php ]#
+#
+#
+#            Nim's Runtime Library
+#        (c) Copyright 2012 Andreas Rumpf
+#
+#    See the file "copying.txt", included in this
+#    distribution, for details about the copyright.
+#
+
 import std/algorithm
 
-import flags
-import highlite
+import flags, highlite
 
 const
   rustKeywords* = [
-    "abstract", "as", "async", "await", "become", "box", "break", "const", "continue",
-    "crate", "do", "dyn", "else", "enum", "extern", "final", "fn", "for", "if", "impl",
-    "in", "let", "loop", "macro", "match", "mod", "move", "mut", "override", "priv",
-    "pub", "ref", "return", "Self", "self", "static", "struct", "super", "trait", "try",
-    "type", "typeof", "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
+    "Self", "abstract", "as", "async", "await", "become", "box", "break", "const",
+    "continue", "crate", "do", "dyn", "else", "enum", "extern", "final", "fn", "for",
+    "if", "impl", "in", "let", "loop", "macro", "match", "mod", "move", "mut",
+    "override", "priv", "pub", "ref", "return", "self", "static", "struct", "super",
+    "trait", "try", "type", "typeof", "unsafe", "unsized", "use", "virtual", "where",
+    "while", "yield",
   ]
 
-  rustBooleans = ["true", "false"]
+  rustBooleans = ["false", "true"]
 
-  # Types, traits etc,
   rustBuiltins* = [
     "AsMut", "AsRef", "Box", "Clone", "Copy", "Default", "DoubleEndedIterator", "Drop",
-    "Eq", "Error", "ErrSliceConcatExt", "ExactSizeIterator", "Extend", "Fn", "FnMut",
+    "Eq", "ErrSliceConcatExt", "Error", "ExactSizeIterator", "Extend", "Fn", "FnMut",
     "FnOnce", "From", "Into", "IntoIterator", "Iterator", "None", "Ok", "Option", "Ord",
     "PartialEq", "PartialOrd", "Result", "Self", "Send", "Sized", "Some", "String",
-    "Sync", "ToOwned", "ToString", "Variant", "Variant", "Vec", "bool", "char", "f32",
-    "f64", "i128", "i16", "i32", "i64", "i8", "isize", "str", "u128", "u16", "u32",
-    "u64", "u8", "usize",
+    "Sync", "ToOwned", "ToString", "Variant", "Vec", "bool", "char", "f32", "f64",
+    "i128", "i16", "i32", "i64", "i8", "isize", "str", "u128", "u16", "u32", "u64",
+    "u8", "usize",
   ]
 
 proc rustGetKeyword(id: string): TokenClass =
@@ -38,7 +70,7 @@ proc rustGetKeyword(id: string): TokenClass =
 template isCharLit*(g: var GeneralTokenizer, position: int): bool =
   (g.buf.high > pos + 1) and (g.buf[position + 2] == '\'')
 
-proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
+proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
   const
     hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
     octChars = {'0' .. '7'}
@@ -135,30 +167,40 @@ proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
       inc(pos)
       case g.buf[pos]
       of 'b', 'B':
+        g.kind = gtBinNumber
         inc(pos)
         while g.buf[pos] in binChars:
           inc(pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
           inc(pos)
       of 'x', 'X':
+        g.kind = gtHexNumber
         inc(pos)
         while g.buf[pos] in hexChars:
           inc(pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
           inc(pos)
-      of '0' .. '7':
+      of 'o', 'O':
+        g.kind = gtOctNumber
         inc(pos)
         while g.buf[pos] in octChars:
           inc(pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
+          inc(pos)
+      of '0' .. '7':
+        g.kind = gtOctNumber
+        inc(pos)
+        while g.buf[pos] in octChars:
+          inc(pos)
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
           inc(pos)
       else:
         pos = generalNumber(g, pos)
-        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
           inc(pos)
     of '1' .. '9':
       pos = generalNumber(g, pos)
-      if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+      while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
         inc(pos)
     of '\'':
       # TODO: Maybe need to fix Rust lifetime.
@@ -185,9 +227,30 @@ proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
           break
         else:
           inc(pos)
-    of '(', ')', '[', ']', '{', '}', ':', ',', ';', '.':
+    of '(', ')', '[', ']', '{', '}', ',', ';':
       inc(pos)
       g.kind = gtPunctuation
+    of ':':
+      inc(pos)
+      if g.buf[pos] == ':':
+        inc(pos)
+        g.kind = gtOperator
+      else:
+        g.kind = gtPunctuation
+    of '.':
+      inc(pos)
+      if g.buf[pos] == '.' and g.buf[pos + 1] == '.':
+        # ... (rest pattern)
+        inc(pos, 2)
+        g.kind = gtOperator
+      elif g.buf[pos] == '.':
+        # .. (range) or ..= (inclusive range)
+        inc(pos)
+        if g.buf[pos] == '=':
+          inc(pos)
+        g.kind = gtOperator
+      else:
+        g.kind = gtPunctuation
     of '\0':
       g.kind = gtEof
     else:
@@ -202,6 +265,3 @@ proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
   if g.kind != gtEof and g.length <= 0:
     assert false, "rustNextToken: produced an empty token"
   g.pos = pos
-
-proc rustNextToken*(g: var GeneralTokenizer) =
-  rustNextToken(g, {})
