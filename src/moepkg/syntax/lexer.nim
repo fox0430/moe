@@ -183,7 +183,7 @@ proc lexHash*(lexer: var GeneralTokenizer, position: int, flags: TokenizerFlags)
     if hasHashComments in flags:
       lexer.kind = gtComment
       result = lexer.lexHashLineComment(result, flags)
-    elif hasHashHeadings in flags and lexer.state == gtWhitespace:
+    elif hasHashHeadings in flags and lexer.state in {gtWhitespace, low(TokenClass)}:
       lexer.kind = gtBuiltin
       lexer.state = gtBuiltin
       result = lexer.endLine(result)
