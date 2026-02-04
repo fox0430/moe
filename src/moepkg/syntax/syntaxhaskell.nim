@@ -32,7 +32,7 @@
 #
 
 import flags, highlite, lexer
-from lexer/end_lexer import endLine
+from lexer/endlexer import endLine
 
 const haskellKeywords* = [
   "_", "case", "class", "data", "default", "deriving", "do", "else", "if", "import",
