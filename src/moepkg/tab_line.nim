@@ -47,10 +47,10 @@ proc getCurrentTabStyle(): Style =
 proc buildTabText(buf: TextBuffer, mode: EditorMode, isActive: bool): string =
   ## Build the display text for a single tab
   ## Format: " filename[+] " where [+] indicates modified
-  ## For special modes (non-file-edit modes) and active tab, show mode label
+  ## For special modes (non-file-edit modes), show mode label
 
-  # For special modes and active tab, show mode label instead of filename
-  if isActive and not mode.isFileEditMode:
+  # For special modes, always show mode label instead of filename
+  if not mode.isFileEditMode:
     return " " & modeLabel(mode) & " "
 
   let
@@ -68,6 +68,7 @@ proc renderTabLine*(
     tabLineX: int,
     tabLineWidth: int,
     showTabLine: bool,
+    isActiveWindow: bool = true,
 ) =
   ## Render the tab line showing all open buffers
   ##
@@ -80,6 +81,7 @@ proc renderTabLine*(
   ## - tabLineX: X coordinate for the start of the tab line
   ## - tabLineWidth: Width of the tab line area
   ## - showTabLine: Whether the tab line should be shown
+  ## - isActiveWindow: Whether this window is the active window
 
   if not showTabLine:
     return
@@ -94,7 +96,12 @@ proc renderTabLine*(
   # First, render all tabs (visible content)
   for buf in buffers:
     let
-      isActive = (buf.id == activeBuffer.id)
+      # For special modes (non-file-edit modes), use isActiveWindow to determine highlight
+      isActive =
+        if mode.isFileEditMode:
+          buf.id == activeBuffer.id
+        else:
+          isActiveWindow
       style = if isActive: currentTabStyle else: tabStyle
       tabText = buildTabText(buf, mode, isActive)
       tabWidth = displayWidth(tabText)
@@ -122,6 +129,7 @@ proc renderWindowTabLine*(
     windowX: int,
     windowWidth: int,
     showTabLine: bool,
+    isActiveWindow: bool,
 ) =
   ## Render tab line for a specific window (split view)
   ## The window's buffer will be highlighted as active
@@ -135,10 +143,11 @@ proc renderWindowTabLine*(
   ## - windowX: X coordinate of the window
   ## - windowWidth: Width of the window
   ## - showTabLine: Whether the tab line should be shown
+  ## - isActiveWindow: Whether this window is the active window
 
   renderTabLine(
     buffers, windowActiveBuffer, mode, displayBuffer, windowY, windowX, windowWidth,
-    showTabLine,
+    showTabLine, isActiveWindow,
   )
 
 proc renderSingleViewTabLine*(

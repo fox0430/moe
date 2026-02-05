@@ -140,8 +140,9 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
         else:
           @[window.buffer]
       renderWindowTabLine(
-        buffersToShow, window.buffer, e.state.mode, buffer, window.viewport.y,
+        buffersToShow, window.buffer, window.mode, buffer, window.viewport.y,
         window.viewport.x, window.viewport.width, e.state.display.showTabLine,
+        isActiveWindow,
       )
 
     # Render window content based on window's mode

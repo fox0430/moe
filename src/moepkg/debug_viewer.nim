@@ -18,9 +18,8 @@
 #[############################################################################]#
 
 ## Debug mode viewer for displaying internal editor state
-## Similar to the debug mode in the original moe editor
 
-import std/[strutils, options]
+import std/[strutils, options, times]
 
 import modes
 
@@ -48,6 +47,180 @@ proc addSection(lines: var seq[string], title: string) =
 proc addField(lines: var seq[string], name: string, value: string) =
   let paddedName = name.alignLeft(24)
   lines.add("  " & paddedName & " : " & value)
+
+proc generateWindowNodeInfo*(
+    lines: var seq[string],
+    currentWindow: bool,
+    index: int,
+    windowIndex: int,
+    bufferIndex: int,
+    parentIndex: int,
+    childLen: int,
+    splitType: string,
+    isActualWin: bool,
+    y, x, h, w: int,
+    currentLine: int,
+    currentColumn: int,
+    expandedColumn: int,
+    cursor: string,
+    config:
+      tuple[
+        enable: bool,
+        currentWindow: bool,
+        index: bool,
+        windowIndex: bool,
+        bufferIndex: bool,
+        parentIndex: bool,
+        childLen: bool,
+        splitType: bool,
+        haveCursesWin: bool,
+        y: bool,
+        x: bool,
+        h: bool,
+        w: bool,
+        currentLine: bool,
+        currentColumn: bool,
+        expandedColumn: bool,
+        cursor: bool,
+      ],
+) =
+  ## Generate debug info for a WindowNode (with full config support)
+  if not config.enable:
+    return
+
+  lines.addSection("WindowNode")
+
+  if config.currentWindow:
+    lines.addField("currentWindow", formatBool(currentWindow))
+  if config.index:
+    lines.addField("index", $index)
+  if config.windowIndex:
+    lines.addField("windowIndex", $windowIndex)
+  if config.bufferIndex:
+    lines.addField("bufferIndex", $bufferIndex)
+  if config.parentIndex:
+    lines.addField("parentIndex", $parentIndex)
+  if config.childLen:
+    lines.addField("child length", $childLen)
+  if config.splitType:
+    lines.addField("splitType", splitType)
+  if config.haveCursesWin:
+    lines.addField("IsActualWin", formatBool(isActualWin))
+  if config.y:
+    lines.addField("y", $y)
+  if config.x:
+    lines.addField("x", $x)
+  if config.h:
+    lines.addField("h", $h)
+  if config.w:
+    lines.addField("w", $w)
+  if config.currentLine:
+    lines.addField("currentLine", $currentLine)
+  if config.currentColumn:
+    lines.addField("currentColumn", $currentColumn)
+  if config.expandedColumn:
+    lines.addField("expandedColumn", $expandedColumn)
+  if config.cursor:
+    lines.addField("cursor", cursor)
+
+# EditorView info (with full config support for original moe compatibility)
+
+proc generateEditorViewInfo*(
+    lines: var seq[string],
+    widthOfLineNum: int,
+    height: int,
+    width: int,
+    originalLine: seq[int],
+    start: seq[int],
+    length: seq[int],
+    config:
+      tuple[
+        enable: bool,
+        widthOfLineNum: bool,
+        height: bool,
+        width: bool,
+        originalLine: bool,
+        start: bool,
+        length: bool,
+      ],
+) =
+  ## Generate debug info for EditorView (with full config support)
+  if not config.enable:
+    return
+
+  lines.addSection("editorview")
+
+  if config.widthOfLineNum:
+    lines.addField("widthOfLineNum", $widthOfLineNum)
+  if config.height:
+    lines.addField("height", $height)
+  if config.width:
+    lines.addField("width", $width)
+  if config.originalLine:
+    lines.addField("originalLine", $originalLine)
+  if config.start:
+    lines.addField("start", $start)
+  if config.length:
+    lines.addField("length", $length)
+
+proc generateBufferStatusInfo*(
+    lines: var seq[string],
+    bufferIndex: int,
+    path: string,
+    openDir: string,
+    currentMode: string,
+    prevMode: string,
+    language: string,
+    encoding: string,
+    countChange: int,
+    cmdLoop: int,
+    lastSaveTime: DateTime,
+    bufferLen: int,
+    config:
+      tuple[
+        enable: bool,
+        bufferIndex: bool,
+        path: bool,
+        openDir: bool,
+        currentMode: bool,
+        prevMode: bool,
+        language: bool,
+        encoding: bool,
+        countChange: bool,
+        cmdLoop: bool,
+        lastSaveTime: bool,
+        bufferLen: bool,
+      ],
+) =
+  ## Generate debug info for BufferStatus (with full config support)
+  if not config.enable:
+    return
+
+  if bufferIndex == 0:
+    lines.addSection("bufStatus")
+
+  if config.bufferIndex:
+    lines.addField("bufferIndex", $bufferIndex)
+  if config.path:
+    lines.addField("path", path)
+  if config.openDir:
+    lines.addField("openDir", openDir)
+  if config.currentMode:
+    lines.addField("currentMode", currentMode)
+  if config.prevMode:
+    lines.addField("prevMode", prevMode)
+  if config.language:
+    lines.addField("language", language)
+  if config.encoding:
+    lines.addField("encoding", encoding)
+  if config.countChange:
+    lines.addField("countChange", $countChange)
+  if config.cmdLoop:
+    lines.addField("cmdLoop", $cmdLoop)
+  if config.lastSaveTime:
+    lines.addField("lastSaveTime", $lastSaveTime)
+  if config.bufferLen:
+    lines.addField("buffer length", $bufferLen)
 
 proc generateWindowInfo*(
     lines: var seq[string],

@@ -340,6 +340,20 @@ suite "syntaxtoml - tomlNextToken escape sequences":
 
     g.tomlNextToken()
     check g.kind == gtEscapeSequence
+    check g.length == 4 # \x41 is 4 characters
+
+  test "hex escape followed by text":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\x41BC\"")
+    g.tomlNextToken() # "
+    check g.kind == gtStringLit
+
+    g.tomlNextToken() # \x41
+    check g.kind == gtEscapeSequence
+    check g.length == 4
+
+    g.tomlNextToken() # BC"
+    check g.kind == gtStringLit
 
 suite "syntaxtoml - tomlNextToken tables":
   test "simple table":
@@ -655,3 +669,1033 @@ suite "syntaxtoml - tomlNextToken edge cases":
     g.tomlNextToken()
     check g.kind == gtEscapeSequence
     check g.state == gtNone
+
+suite "syntaxtoml - standard escape sequences":
+  test "escape backslash":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\\\b\"")
+    g.tomlNextToken() # "a
+    check g.kind == gtStringLit
+    check g.state == gtStringLit
+
+    g.tomlNextToken() # \\
+    check g.kind == gtEscapeSequence
+
+    g.tomlNextToken() # b"
+    check g.kind == gtStringLit
+    check g.state == gtNone
+
+  test "escape double quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\\"b\"")
+    g.tomlNextToken() # "a
+    check g.kind == gtStringLit
+
+    g.tomlNextToken() # \"
+    check g.kind == gtEscapeSequence
+
+    g.tomlNextToken() # b"
+    check g.kind == gtStringLit
+    check g.state == gtNone
+
+  test "escape newline":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\nb\"")
+    g.tomlNextToken() # "a
+    check g.kind == gtStringLit
+
+    g.tomlNextToken() # \n
+    check g.kind == gtEscapeSequence
+
+    g.tomlNextToken() # b"
+    check g.kind == gtStringLit
+    check g.state == gtNone
+
+  test "escape tab":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\tb\"")
+    g.tomlNextToken() # "a
+    check g.kind == gtStringLit
+
+    g.tomlNextToken() # \t
+    check g.kind == gtEscapeSequence
+
+    g.tomlNextToken() # b"
+    check g.kind == gtStringLit
+    check g.state == gtNone
+
+  test "escape carriage return":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\rb\"")
+    g.tomlNextToken() # "a
+    check g.kind == gtStringLit
+
+    g.tomlNextToken() # \r
+    check g.kind == gtEscapeSequence
+
+    g.tomlNextToken() # b"
+    check g.kind == gtStringLit
+    check g.state == gtNone
+
+  test "escape backspace":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\bb\"")
+    g.tomlNextToken() # "a
+    check g.kind == gtStringLit
+
+    g.tomlNextToken() # \b
+    check g.kind == gtEscapeSequence
+
+    g.tomlNextToken() # b"
+    check g.kind == gtStringLit
+    check g.state == gtNone
+
+  test "escape form feed":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\fb\"")
+    g.tomlNextToken() # "a
+    check g.kind == gtStringLit
+
+    g.tomlNextToken() # \f
+    check g.kind == gtEscapeSequence
+
+    g.tomlNextToken() # b"
+    check g.kind == gtStringLit
+    check g.state == gtNone
+
+  test "multiple escape sequences":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\n\\t\\r\"")
+
+    g.tomlNextToken() # "
+    check g.kind == gtStringLit
+    check g.state == gtStringLit
+
+    g.tomlNextToken() # \n
+    check g.kind == gtEscapeSequence
+
+    # Consecutive escapes don't have string tokens between them
+    g.tomlNextToken() # \t
+    check g.kind == gtEscapeSequence
+
+    g.tomlNextToken() # \r
+    check g.kind == gtEscapeSequence
+
+    g.tomlNextToken() # "
+    check g.kind == gtStringLit
+    check g.state == gtNone
+
+suite "syntaxtoml - unicode escape sequences":
+  test "unicode 4 digit escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\u0041\"")
+    g.tomlNextToken() # "
+    check g.kind == gtStringLit
+
+    g.tomlNextToken() # \u0041
+    check g.kind == gtEscapeSequence
+    check g.length == 6 # \u0041 is 6 characters
+
+    g.tomlNextToken() # "
+    check g.kind == gtStringLit
+    check g.state == gtNone
+
+  test "unicode 8 digit escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\U0001F600\"")
+    g.tomlNextToken() # "
+    check g.kind == gtStringLit
+
+    g.tomlNextToken() # \U0001F600
+    check g.kind == gtEscapeSequence
+    check g.length == 10 # \U0001F600 is 10 characters
+
+    g.tomlNextToken() # "
+    check g.kind == gtStringLit
+    check g.state == gtNone
+
+  test "unicode escape followed by text":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\u0041hello\"")
+    g.tomlNextToken() # "
+    check g.kind == gtStringLit
+
+    g.tomlNextToken() # \u0041
+    check g.kind == gtEscapeSequence
+    check g.length == 6
+
+    g.tomlNextToken() # hello"
+    check g.kind == gtStringLit
+
+suite "syntaxtoml - multiline strings":
+  test "multiline basic string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"hello\nworld\"\"\"")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+
+  test "multiline literal string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'''hello\nworld'''")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+
+  test "empty multiline basic string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"\"\"\"")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+
+  test "empty multiline literal string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("''''''")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+
+suite "syntaxtoml - invalid number suffixes":
+  test "invalid binary digit":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0b102")
+    g.tomlNextToken()
+    # Should still tokenize (syntax highlighter is lenient)
+    check g.kind == gtDecNumber
+
+  test "invalid hex digit":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0xGHI")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+
+  test "invalid octal digit":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0o89")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+
+  test "binary with trailing letter":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0b11abc")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+
+  test "hex with trailing invalid":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0xFFzzz")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+
+  test "octal with trailing letter":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0o77xyz")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+
+suite "syntaxtoml - single quote string handling":
+  test "single quote does not process escape":
+    # In TOML, single-quoted strings are literal (no escape processing)
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'hello\\nworld'")
+    g.tomlNextToken()
+    # Should consume entire string as one token (no escape processing)
+    check g.kind == gtStringLit
+    check g.length == 14
+
+  test "single quote with backslash":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'C:\\path\\to\\file'")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+
+  test "single quote preserves content":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\t\\n\\r'")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+    check g.length == 8
+
+suite "syntaxtoml - quoted table names":
+  test "table with quoted key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[\"table.name\"]")
+    g.tomlNextToken()
+    check g.kind == gtTable
+
+  test "table with single quoted key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("['table.name']")
+    g.tomlNextToken()
+    check g.kind == gtTable
+
+  test "array of tables with quoted key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[[\"array.name\"]]")
+    g.tomlNextToken()
+    check g.kind == gtTable
+
+  test "table with mixed quoted and unquoted":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[section.\"sub.key\"]")
+    g.tomlNextToken()
+    check g.kind == gtTable
+
+suite "syntaxtoml - tomlNumberAndDate helper":
+  test "positive sign only returns identifier":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("+abc")
+    g.tomlNextToken()
+    check g.kind == gtIdentifier
+
+  test "negative sign only returns identifier":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("-abc")
+    g.tomlNextToken()
+    check g.kind == gtIdentifier
+
+  test "positive inf":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("+inf")
+    g.tomlNextToken()
+    check g.kind == gtFloatNumber
+    check g.length == 4
+
+  test "negative inf":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("-inf")
+    g.tomlNextToken()
+    check g.kind == gtFloatNumber
+    check g.length == 4
+
+  test "positive nan":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("+nan")
+    g.tomlNextToken()
+    check g.kind == gtFloatNumber
+    check g.length == 4
+
+  test "negative nan":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("-nan")
+    g.tomlNextToken()
+    check g.kind == gtFloatNumber
+    check g.length == 4
+
+  test "number with underscore separators":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1_000_000")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 9
+
+  test "float with exponent and sign":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("6.022e+23")
+    g.tomlNextToken()
+    check g.kind == gtFloatNumber
+    check g.length == 9
+
+suite "syntaxtoml - isTableHeader helper":
+  test "array start is not table header":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[1, 2, 3]")
+    g.tomlNextToken()
+    check g.kind == gtPunctuation
+    check g.length == 1
+
+  test "empty brackets not table":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[]")
+    g.tomlNextToken()
+    check g.kind == gtPunctuation
+    check g.length == 1
+
+  test "table with space after bracket":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[ section ]")
+    g.tomlNextToken()
+    check g.kind == gtTable
+
+  test "array of tables detection":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[[ items ]]")
+    g.tomlNextToken()
+    check g.kind == gtTable
+
+suite "syntaxtoml - tomlTable helper":
+  test "table closes at newline":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[section]\nkey = 1")
+    g.tomlNextToken()
+    check g.kind == gtTable
+    check g.length == 9
+
+  test "array of tables closes properly":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[[items]]\nname = \"x\"")
+    g.tomlNextToken()
+    check g.kind == gtTable
+    check g.length == 9 # [[items]] is 9 characters (indices 0-8)
+
+  test "nested table name":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[a.b.c.d]")
+    g.tomlNextToken()
+    check g.kind == gtTable
+    check g.length == 9
+
+suite "syntaxtoml - complex nested structures":
+  test "nested inline tables":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("data = {inner = {value = 1}}")
+
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+
+    check gtIdentifier in tokens
+    check gtDecNumber in tokens
+
+  test "array of inline tables":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("items = [{a = 1}, {b = 2}]")
+
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+
+    check gtIdentifier in tokens
+    check gtDecNumber in tokens
+    check gtPunctuation in tokens
+
+  test "mixed array types":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("mixed = [1, \"two\", 3.0, true]")
+
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+
+    check gtDecNumber in tokens
+    check gtStringLit in tokens
+    check gtFloatNumber in tokens
+    check gtBoolean in tokens
+
+  test "deeply nested sections":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[a.b.c.d.e.f]")
+    g.tomlNextToken()
+    check g.kind == gtTable
+    check g.length == 13
+
+suite "syntaxtoml - gtNone state handling":
+  test "at sign produces gtOperator":
+    # @ is in opChars, so it's treated as an operator
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("@")
+    g.tomlNextToken()
+    check g.kind == gtOperator
+    check g.length == 1
+
+  test "backtick produces gtNone":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("`")
+    g.tomlNextToken()
+    check g.kind == gtNone
+
+  test "tilde produces operator":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("~")
+    g.tomlNextToken()
+    # ~ is in opChars
+    check g.kind == gtOperator
+
+  test "recovery after gtNone":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("` valid")
+    g.tomlNextToken() # `
+    check g.kind == gtNone
+
+    g.tomlNextToken() # space
+    check g.kind == gtWhitespace
+
+    g.tomlNextToken() # valid
+    check g.kind == gtIdentifier
+
+suite "syntaxtoml - array handling":
+  test "simple array":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[1, 2, 3]")
+
+    g.tomlNextToken() # [
+    check g.kind == gtPunctuation
+    check g.length == 1
+
+    g.tomlNextToken() # 1
+    check g.kind == gtDecNumber
+
+    g.tomlNextToken() # ,
+    check g.kind == gtPunctuation
+
+    g.tomlNextToken() # space
+    check g.kind == gtWhitespace
+
+    g.tomlNextToken() # 2
+    check g.kind == gtDecNumber
+
+  test "nested array":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("matrix = [[1, 2], [3, 4]]")
+
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+
+    check gtIdentifier in tokens # matrix
+    check gtPunctuation in tokens # [, ], ,
+    check gtDecNumber in tokens # 1, 2, 3, 4
+
+  test "string array":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[\"a\", \"b\", \"c\"]")
+
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+
+    check gtPunctuation in tokens
+    check gtStringLit in tokens
+
+  test "date array":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[2024-01-01, 2024-01-02]")
+
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+
+    check gtPunctuation in tokens
+    check gtDate in tokens
+
+  test "trailing comma in array":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[1, 2, 3,]")
+
+    var tokens: seq[TokenClass] = @[]
+    var punctCount = 0
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind == gtPunctuation:
+        punctCount.inc
+      tokens.add(g.kind)
+
+    # [, 3 commas, ] = 5 punctuation marks
+    check punctCount == 5
+
+  test "multiline array":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(
+      """[
+  1,
+  2,
+  3
+]"""
+    )
+
+    var tokens: seq[TokenClass] = @[]
+    var numCount = 0
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind == gtDecNumber:
+        numCount.inc
+      tokens.add(g.kind)
+
+    check numCount == 3
+    check gtWhitespace in tokens
+
+  test "array with comments":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(
+      """[
+  1, # first
+  2, # second
+]"""
+    )
+
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+
+    check gtComment in tokens
+    check gtDecNumber in tokens
+
+  test "empty nested array":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("arr = [[]]")
+
+    var tokens: seq[TokenClass] = @[]
+    var punctCount = 0
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind == gtPunctuation:
+        punctCount.inc
+      tokens.add(g.kind)
+
+    # = [, [, ], ] = 4 punctuation (= is operator)
+    check punctCount == 4
+
+  test "array vs table header distinction":
+    # [section] is table, [1] is array
+    var g1: GeneralTokenizer
+    g1.initGeneralTokenizer("[section]")
+    g1.tomlNextToken()
+    check g1.kind == gtTable
+
+    var g2: GeneralTokenizer
+    g2.initGeneralTokenizer("[1]")
+    g2.tomlNextToken()
+    check g2.kind == gtPunctuation # [ as array start
+
+  test "float array":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[1.0, 2.5, 3.14]")
+
+    var tokens: seq[TokenClass] = @[]
+    var floatCount = 0
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind == gtFloatNumber:
+        floatCount.inc
+      tokens.add(g.kind)
+
+    check floatCount == 3
+
+  test "boolean array":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[true, false, true]")
+
+    var tokens: seq[TokenClass] = @[]
+    var boolCount = 0
+    while true:
+      g.tomlNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind == gtBoolean:
+        boolCount.inc
+      tokens.add(g.kind)
+
+    check boolCount == 3
+
+suite "syntaxtoml - escape sequence edge cases":
+  test "incomplete hex escape \\x with no digits":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\x\"")
+    g.tomlNextToken() # "
+    check g.kind == gtStringLit
+
+    g.tomlNextToken() # \x
+    check g.kind == gtEscapeSequence
+    check g.length == 2 # Just \x
+
+  test "incomplete hex escape \\x with one digit":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\x4\"")
+    g.tomlNextToken() # "
+    g.tomlNextToken() # \x4
+    check g.kind == gtEscapeSequence
+    check g.length == 3 # \x4
+
+  test "hex escape with invalid char":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\xGG\"")
+    g.tomlNextToken() # "
+    g.tomlNextToken() # \x (G is not hex)
+    check g.kind == gtEscapeSequence
+    check g.length == 2
+
+  test "incomplete unicode \\u with less than 4 digits":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\u00\"")
+    g.tomlNextToken() # "
+    g.tomlNextToken() # \u00
+    check g.kind == gtEscapeSequence
+    check g.length == 4 # \u00
+
+  test "incomplete unicode \\U with less than 8 digits":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\U0001\"")
+    g.tomlNextToken() # "
+    g.tomlNextToken() # \U0001
+    check g.kind == gtEscapeSequence
+    check g.length == 6 # \U0001
+
+  test "escape at end of input":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\")
+    g.tomlNextToken() # "
+    check g.kind == gtStringLit
+    check g.state == gtStringLit
+
+    g.tomlNextToken() # \
+    check g.kind == gtEscapeSequence
+
+  test "double backslash":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\\\\"")
+    g.tomlNextToken() # "
+    g.tomlNextToken() # \\
+    check g.kind == gtEscapeSequence
+    check g.length == 2
+
+    g.tomlNextToken() # "
+    check g.kind == gtStringLit
+    check g.state == gtNone
+
+suite "syntaxtoml - multiline string edge cases":
+  test "empty multiline basic string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"\"\"\"")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+    check g.length == 6
+
+  test "empty multiline literal string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("''''''")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+    check g.length == 6
+
+  test "multiline with single quote inside":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"say \"hello\"\"\"\"")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+
+  test "multiline with double quote inside":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'''say ''wow'''")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+
+  test "unterminated multiline basic string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"unclosed")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+    # Should consume until EOF
+
+  test "unterminated multiline literal string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'''unclosed")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+
+  test "multiline with only newlines":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"\n\n\n\"\"\"")
+    g.tomlNextToken()
+    check g.kind == gtStringLit
+
+suite "syntaxtoml - number edge cases":
+  test "positive zero":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("+0")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 2
+
+  test "negative zero":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("-0")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 2
+
+  test "leading zeros in hex":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0x00FF")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 6
+
+  test "single underscore between digits":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1_2")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 3
+
+  test "multiple underscores":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1__2")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+
+  test "float with leading dot":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(".5")
+    g.tomlNextToken()
+    # Leading dot is operator, not number
+    check g.kind == gtOperator
+
+  test "exponent only":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1e")
+    g.tomlNextToken()
+    check g.kind == gtFloatNumber
+
+  test "very large number":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("99999999999999999999")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 20
+
+  test "binary all ones":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0b11111111")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 10
+
+  test "octal max":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0o777")
+    g.tomlNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 5
+
+suite "syntaxtoml - table edge cases":
+  test "table with spaces in name":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[\"key with spaces\"]")
+    g.tomlNextToken()
+    check g.kind == gtTable
+
+  test "deeply nested dotted table":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[a.b.c.d.e.f.g.h]")
+    g.tomlNextToken()
+    check g.kind == gtTable
+
+  test "array of tables deeply nested":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[[a.b.c.d]]")
+    g.tomlNextToken()
+    check g.kind == gtTable
+
+  test "table followed immediately by key":
+    # Note: tomlTable reads until newline, so key=1 is included in table token
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[section]\nkey=1")
+
+    g.tomlNextToken() # [section]
+    check g.kind == gtTable
+    check g.length == 9
+
+    g.tomlNextToken() # newline
+    check g.kind == gtWhitespace
+
+    g.tomlNextToken() # key
+    check g.kind == gtIdentifier
+
+  test "empty table name":
+    # [\"\"] is technically valid TOML with empty quoted key
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[\"\"]")
+    g.tomlNextToken()
+    check g.kind == gtTable
+
+suite "syntaxtoml - comment edge cases":
+  test "empty comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#")
+    g.tomlNextToken()
+    check g.kind == gtComment
+    check g.length == 1
+
+  test "comment with only spaces":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#   ")
+    g.tomlNextToken()
+    check g.kind == gtComment
+    check g.length == 4
+
+  test "comment with hash inside":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("# comment ## more")
+    g.tomlNextToken()
+    check g.kind == gtComment
+
+  test "multiple comments":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("# line1\n# line2")
+
+    g.tomlNextToken() # # line1
+    check g.kind == gtComment
+
+    g.tomlNextToken() # newline
+    check g.kind == gtWhitespace
+
+    g.tomlNextToken() # # line2
+    check g.kind == gtComment
+
+suite "syntaxtoml - identifier edge cases":
+  test "single character identifier":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("a")
+    g.tomlNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 1
+
+  test "identifier starting with underscore":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("_private")
+    g.tomlNextToken()
+    check g.kind == gtIdentifier
+
+  test "identifier with many underscores":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("__double__underscore__")
+    g.tomlNextToken()
+    check g.kind == gtIdentifier
+
+  test "identifier resembling keyword prefix":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("trueish")
+    g.tomlNextToken()
+    check g.kind == gtIdentifier # Not boolean
+
+  test "identifier resembling keyword prefix false":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("falsehood")
+    g.tomlNextToken()
+    check g.kind == gtIdentifier
+
+  test "CJK identifier":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("日本語キー")
+    g.tomlNextToken()
+    check g.kind == gtIdentifier
+
+  test "mixed ascii and unicode":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key_キー_123")
+    g.tomlNextToken()
+    check g.kind == gtIdentifier
+
+suite "syntaxtoml - operator and punctuation edge cases":
+  test "consecutive operators":
+    # Note: + and - are handled by tomlNumberAndDate, so use other operators
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("*/&|")
+    g.tomlNextToken()
+    check g.kind == gtOperator
+    check g.length == 4
+
+  test "all punctuation marks":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[]{},")
+
+    g.tomlNextToken() # [
+    check g.kind == gtPunctuation
+    g.tomlNextToken() # ]
+    check g.kind == gtPunctuation
+    g.tomlNextToken() # {
+    check g.kind == gtPunctuation
+    g.tomlNextToken() # }
+    check g.kind == gtPunctuation
+    g.tomlNextToken() # ,
+    check g.kind == gtPunctuation
+
+  test "equals sign":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("=")
+    g.tomlNextToken()
+    check g.kind == gtOperator
+
+  test "dot as operator":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(".")
+    g.tomlNextToken()
+    check g.kind == gtOperator
+
+suite "syntaxtoml - whitespace edge cases":
+  test "only whitespace":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("   \t\t\n\n")
+    g.tomlNextToken()
+    check g.kind == gtWhitespace
+
+  test "carriage return":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\r\n")
+    g.tomlNextToken()
+    check g.kind == gtWhitespace
+
+  test "mixed whitespace types":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(" \t \n \r\n ")
+    g.tomlNextToken()
+    check g.kind == gtWhitespace
+
+suite "syntaxtoml - date/time edge cases":
+  test "date with timezone offset":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("2024-01-15T10:30:00+09:00")
+    g.tomlNextToken()
+    check g.kind == gtDate
+
+  test "date with negative timezone":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("2024-01-15T10:30:00-05:00")
+    g.tomlNextToken()
+    check g.kind == gtDate
+
+  test "time with microseconds":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("10:30:00.123456")
+    g.tomlNextToken()
+    check g.kind == gtDate
+
+  test "minimal date":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("2024-01-01")
+    g.tomlNextToken()
+    check g.kind == gtDate
+    check g.length == 10
+
+  test "minimal time":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("00:00:00")
+    g.tomlNextToken()
+    check g.kind == gtDate
+    check g.length == 8
