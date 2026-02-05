@@ -48,7 +48,8 @@ proc tomlNumberAndDate(g: var GeneralTokenizer, position: int): int =
 
     if id in [InfStr, NanStr]:
       g.kind = gtFloatNumber
-    elif id.len > 0:
+    else:
+      # Incomplete number (e.g., just "-" or "+")
       g.kind = gtIdentifier
   else:
     while g.buf[pos] in DecChars:
@@ -77,6 +78,14 @@ proc tomlNumberAndDate(g: var GeneralTokenizer, position: int): int =
   return pos
 
 proc isTableHeader(g: GeneralTokenizer, position: int): bool =
+  # Check if [ is at the start of a line (after optional whitespace)
+  var checkPos = position - 1
+  while checkPos >= 0 and g.buf[checkPos] in {' ', '\t'}:
+    dec(checkPos)
+
+  if checkPos >= 0 and g.buf[checkPos] notin {'\n', '\r'}:
+    return false # Not at line start, must be array literal
+
   var pos = position + 1
 
   # Skip whitespace
