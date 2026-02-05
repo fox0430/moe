@@ -84,7 +84,7 @@ suite "Config - newEditorConfig defaults":
     check config.standard.incrementalSearch == true
     check config.standard.popupWindowInExmode == true
     check config.standard.autoDeleteParen == true
-    check config.standard.liveReloadOfFile == false
+    check config.standard.liveReloadOfFile == true
     check config.standard.colorMode == cm24bit
     check config.standard.mouse == false
 

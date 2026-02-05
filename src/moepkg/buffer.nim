@@ -104,6 +104,8 @@ type
     endOfLine*: bool # Whether file should end with newline
     lastFileModTime*: Option[Time]
       # File modification time when loaded (for external change detection)
+    externalModWarned*: bool
+      # Whether the user has been warned about external modification (reset on load/save)
 
     # Undo/Redo stacks (using Deque for O(1) operations at both ends)
     undoStack*: Deque[BufferChange]
@@ -1278,6 +1280,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
       b.lastFileModTime = none(Time)
   else:
     b.lastFileModTime = none(Time)
+  b.externalModWarned = false
 
   # Reset change tracking - file was just loaded
   b.changeSeq = 0
@@ -1365,6 +1368,7 @@ proc saveFile*(buffer: TextBuffer, path: string): Result[(), string] =
       buffer.lastFileModTime = some(getFileInfo(path).lastWriteTime)
     except OSError:
       buffer.lastFileModTime = none(Time)
+    buffer.externalModWarned = false
 
   return Result[(), string].ok ()
 

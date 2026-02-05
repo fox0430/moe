@@ -725,14 +725,11 @@ proc maybeReloadExternallyModifiedFile*(e: Editor) =
 
   # If buffer has unsaved changes, warn the user instead of reloading
   if activeBuffer.isModified:
-    e.state.setStatusMessage(
-      "Warning: " & filePath & " changed on disk (buffer has unsaved changes)"
-    )
-    # Update lastFileModTime to avoid repeated warnings
-    try:
-      activeBuffer.lastFileModTime = some(getFileInfo(filePath).lastWriteTime)
-    except OSError:
-      discard
+    if not activeBuffer.externalModWarned:
+      e.state.setStatusMessage(
+        "Warning: " & filePath & " changed on disk (buffer has unsaved changes)"
+      )
+      activeBuffer.externalModWarned = true
     return
 
   # Reload the file

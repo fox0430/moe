@@ -616,7 +616,29 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         # Set pending background flag to be handled by handleEventAsync
         e.state.pendingBackground = true
 
-      if r.shouldSave():
+      if r.shouldSave() and e.state.mode == EditorMode.Config:
+        # In Config mode, :w saves the configuration file instead of a buffer
+        let configPath = getConfigPath()
+
+        # Backup existing config file if it exists
+        if fileExists(configPath):
+          let backupPath = configPath & ".bac"
+          try:
+            copyFile(configPath, backupPath)
+            logInfo("config", "Backed up existing config to: " & backupPath)
+          except CatchableError as ex:
+            e.state.setStatusMessage("Failed to backup config: " & ex.msg)
+            logError("config", "Failed to backup config: " & ex.msg)
+
+        if not e.state.statusMessage.startsWith("Failed"):
+          let saveResult = saveConfig(e.config)
+          if saveResult.isOk:
+            e.state.setStatusMessage("Config saved: " & configPath)
+            logInfo("config", "Config saved: " & configPath)
+          else:
+            e.state.setStatusMessage("Failed to save config: " & saveResult.error)
+            logError("config", "Failed to save config: " & saveResult.error)
+      elif r.shouldSave():
         # Handle file save
         let saveResult = e.saveFile(r.getSaveFilename(), r.getForceSave())
         if saveResult.isErr:
@@ -1029,14 +1051,20 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
       elif r.shouldEnterConfigMode():
-        # Enter configuration mode - save base mode (before overlay), not Command mode
-        let baseModeBeforeOverlay = e.state.baseMode
-        e.state.exitOverlay()
-        e.state.previousMode = baseModeBeforeOverlay
-        e.setMode(EditorMode.Config)
-        let activeWin = e.activeWindow
-        activeWin.mode = EditorMode.Config
-        activeWin.configModeState = some(newConfigModeState(e.config))
+        # Enter configuration mode in a vertical split (like debug viewer)
+        let configBuffer = newTextBuffer("")
+        configBuffer.readOnly = true
+        let splitResult = e.vsplitWithBuffer(configBuffer)
+        if splitResult.isErr:
+          e.state.setStatusMessage("Failed to open config: " & splitResult.error)
+        else:
+          let baseModeBeforeOverlay = e.state.baseMode
+          e.state.exitOverlay()
+          e.state.previousMode = baseModeBeforeOverlay
+          e.setMode(EditorMode.Config)
+          let activeWin = e.activeWindow
+          activeWin.mode = EditorMode.Config
+          activeWin.configModeState = some(newConfigModeState(e.config))
       elif r.shouldQuickRun() or r.shouldBuild():
         # QuickRun and Build already set mode to Normal above
         discard

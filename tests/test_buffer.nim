@@ -685,3 +685,125 @@ suite "Buffer - Performance Stats":
     check stats.backend == "GapBuffer"
     check stats.memoryUsage > 0
     check stats.length == 2
+
+suite "Buffer - isExternallyModified":
+  test "Returns false when buffer has no file path":
+    let buf = newTextBuffer("hello")
+    check not buf.isExternallyModified()
+
+  test "Returns false when file does not exist":
+    let buf = newTextBuffer("hello", some("/tmp/nonexistent_test_file_12345"))
+    buf.lastFileModTime = some(getTime())
+    check not buf.isExternallyModified()
+
+  test "Returns false when lastFileModTime is none":
+    let path = "/tmp/test_isExternallyModified_none.txt"
+    writeFile(path, "hello")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer("hello", some(path))
+    buf.lastFileModTime = none(Time)
+    check not buf.isExternallyModified()
+
+  test "Returns false when file has not been modified":
+    let path = "/tmp/test_isExternallyModified_unmodified.txt"
+    writeFile(path, "hello")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check not buf.isExternallyModified()
+
+  test "Returns true when file is modified externally":
+    let path = "/tmp/test_isExternallyModified_modified.txt"
+    writeFile(path, "hello")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+
+    # Set lastFileModTime to the past so any write will be newer
+    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    writeFile(path, "modified")
+
+    check buf.isExternallyModified()
+
+suite "Buffer - reloadFile":
+  test "Returns error when buffer has no file path":
+    let buf = newTextBuffer("hello")
+    let res = buf.reloadFile()
+    check res.isErr
+
+  test "Reloads file content from disk":
+    let path = "/tmp/test_reloadFile.txt"
+    writeFile(path, "original")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf[0] == "original"
+
+    writeFile(path, "updated")
+    let res = buf.reloadFile()
+    check res.isOk
+    check buf[0] == "updated"
+
+  test "Updates lastFileModTime after reload":
+    let path = "/tmp/test_reloadFile_modtime.txt"
+    writeFile(path, "v1")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+
+    # Force old timestamp
+    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    writeFile(path, "v2")
+
+    check buf.isExternallyModified()
+    discard buf.reloadFile()
+    check not buf.isExternallyModified()
+
+suite "Buffer - externalModWarned":
+  test "externalModWarned does not affect isExternallyModified":
+    let path = "/tmp/test_externalModWarned_doesnt_mask.txt"
+    writeFile(path, "hello")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+
+    # Simulate external modification
+    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    writeFile(path, "modified")
+
+    buf.externalModWarned = true
+    # isExternallyModified should still return true even when warned
+    check buf.isExternallyModified()
+
+  test "loadFile resets externalModWarned":
+    let path = "/tmp/test_externalModWarned_load.txt"
+    writeFile(path, "hello")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    buf.externalModWarned = true
+    discard buf.loadFile(path)
+    check buf.externalModWarned == false
+
+  test "saveFile resets externalModWarned":
+    let path = "/tmp/test_externalModWarned_save.txt"
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer("hello")
+    buf.externalModWarned = true
+    discard buf.saveFile(path)
+    check buf.externalModWarned == false

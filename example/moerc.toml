@@ -36,7 +36,7 @@ incrementalSearch = true               # Incremental search
 
 autoDeleteParen = true                 # Auto-delete matching parens - Set to false to disable
 
-liveReloadOfFile = false               # Auto-reload when file changed externally
+liveReloadOfFile = true                # Auto-reload when file changed externally
 
 colorMode = "24bit"                    # Color mode: "8", "16", "256", "24bit", "none"
 

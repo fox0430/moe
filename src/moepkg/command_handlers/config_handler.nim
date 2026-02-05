@@ -281,9 +281,6 @@ proc handleConfigModeKey*(
         else:
           discard
       return ConfigModeResult(kind: cmrHandled)
-    of "w", "W":
-      # Save config
-      return ConfigModeResult(kind: cmrSaveConfig)
     else:
       discard
 
