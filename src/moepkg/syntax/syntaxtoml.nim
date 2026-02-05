@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/strutils
+
 import highlite, flags, lexer
 
 const
@@ -48,6 +49,7 @@ proc tomlNumberAndDate(g: var GeneralTokenizer, position: int): int =
     if id in [InfStr, NanStr]:
       g.kind = gtFloatNumber
     else:
+      # Incomplete number (e.g., just "-" or "+")
       g.kind = gtIdentifier
   else:
     while g.buf[pos] in DecChars:
@@ -75,12 +77,37 @@ proc tomlNumberAndDate(g: var GeneralTokenizer, position: int): int =
 
   return pos
 
+proc isTableHeader(g: GeneralTokenizer, position: int): bool =
+  # Check if [ is at the start of a line (after optional whitespace)
+  var checkPos = position - 1
+  while checkPos >= 0 and g.buf[checkPos] in {' ', '\t'}:
+    dec(checkPos)
+
+  if checkPos >= 0 and g.buf[checkPos] notin {'\n', '\r'}:
+    return false # Not at line start, must be array literal
+
+  var pos = position + 1
+
+  # Skip whitespace
+  while g.buf[pos] in {' ', '\t'}:
+    inc(pos)
+
+  # [[...]] is array of tables
+  if g.buf[pos] == '[':
+    return true
+
+  # Check if it looks like a table name (identifier)
+  if g.buf[pos] in {'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF', '"', '\''}:
+    return true
+
+  return false
+
 proc tomlTable(g: var GeneralTokenizer, position: int): int =
   var pos = position
 
   g.kind = gtTable
 
-  while not (g.buf[pos] in {'\n', '\r', '\0', '[', '['}):
+  while not (g.buf[pos] in {'\n', '\r', '\0', '['}):
     inc(pos)
 
   if g.buf[pos] == '[':
@@ -148,6 +175,7 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
       else:
         g.kind = gtIdentifier
     of '0':
+      g.kind = gtDecNumber
       inc(pos)
       case g.buf[pos]
       of 'b', 'B':
@@ -162,7 +190,7 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
           inc(pos)
         if g.buf[pos] in Letters:
           inc(pos)
-      of '0' .. '7':
+      of 'o', 'O':
         inc(pos)
         while g.buf[pos] in OctChars:
           inc(pos)
@@ -177,7 +205,11 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
       if g.buf[pos] in Letters:
         inc(pos)
     of '[':
-      pos = tomlTable(g, pos)
+      if g.isTableHeader(pos):
+        pos = tomlTable(g, pos)
+      else:
+        g.kind = gtPunctuation
+        inc(pos)
     of '\"', '\'':
       inc(pos)
       g.kind = gtStringLit
@@ -193,6 +225,9 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
           break
         else:
           inc(pos)
+    of ']', ',', '{', '}':
+      g.kind = gtPunctuation
+      inc(pos)
     of '\0':
       g.kind = gtEof
     else:

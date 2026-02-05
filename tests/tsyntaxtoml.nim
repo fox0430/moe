@@ -104,7 +104,7 @@ str2 = '''Here are two quotation marks: "". Simple enough.'''
         Gt(kind: gtWhitespace, start: 103, length: 1, buf: "", pos: 104, state: gtEof),
         Gt(kind: gtOperator, start: 104, length: 1, buf: "", pos: 105, state: gtEof),
         Gt(kind: gtWhitespace, start: 105, length: 1, buf: "", pos: 106, state: gtEof),
-        Gt(kind: gtNone, start: 106, length: 1, buf: "", pos: 107, state: gtEof),
+        Gt(kind: gtPunctuation, start: 106, length: 1, buf: "", pos: 107, state: gtEof),
         Gt(kind: gtWhitespace, start: 107, length: 1, buf: "", pos: 108, state: gtEof),
         Gt(kind: gtIdentifier, start: 108, length: 4, buf: "", pos: 112, state: gtEof),
         Gt(kind: gtWhitespace, start: 112, length: 1, buf: "", pos: 113, state: gtEof),
@@ -112,7 +112,7 @@ str2 = '''Here are two quotation marks: "". Simple enough.'''
         Gt(kind: gtWhitespace, start: 114, length: 1, buf: "", pos: 115, state: gtEof),
         Gt(kind: gtStringLit, start: 115, length: 5, buf: "", pos: 120, state: gtEof),
         Gt(kind: gtWhitespace, start: 120, length: 1, buf: "", pos: 121, state: gtEof),
-        Gt(kind: gtNone, start: 121, length: 1, buf: "", pos: 122, state: gtEof),
+        Gt(kind: gtPunctuation, start: 121, length: 1, buf: "", pos: 122, state: gtEof),
         Gt(kind: gtWhitespace, start: 122, length: 1, buf: "", pos: 123, state: gtEof),
         Gt(kind: gtIdentifier, start: 123, length: 4, buf: "", pos: 127, state: gtEof),
         Gt(kind: gtWhitespace, start: 127, length: 1, buf: "", pos: 128, state: gtEof),
@@ -564,5 +564,52 @@ str2 = '''Here are two quotation marks: "". Simple enough.'''
     check tokens(Code) ==
       @[
         GT(kind: gtTable, start: 0, length: 10, buf: "", pos: 10, state: gtEof),
-        GT(kind: gtNone, start: 10, length: 1, buf: "", pos: 11, state: gtEof),
+        GT(kind: gtPunctuation, start: 10, length: 1, buf: "", pos: 11, state: gtEof),
+      ]
+
+  test "Array":
+    const Code = "arr = [1, 2, 3]"
+    check tokens(Code) ==
+      @[
+        GT(kind: gtIdentifier, start: 0, length: 3, buf: "", pos: 3, state: gtEof),
+        GT(kind: gtWhitespace, start: 3, length: 1, buf: "", pos: 4, state: gtEof),
+        GT(kind: gtOperator, start: 4, length: 1, buf: "", pos: 5, state: gtEof),
+        GT(kind: gtWhitespace, start: 5, length: 1, buf: "", pos: 6, state: gtEof),
+        GT(kind: gtPunctuation, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
+        GT(kind: gtDecNumber, start: 7, length: 1, buf: "", pos: 8, state: gtEof),
+        GT(kind: gtPunctuation, start: 8, length: 1, buf: "", pos: 9, state: gtEof),
+        GT(kind: gtWhitespace, start: 9, length: 1, buf: "", pos: 10, state: gtEof),
+        GT(kind: gtDecNumber, start: 10, length: 1, buf: "", pos: 11, state: gtEof),
+        GT(kind: gtPunctuation, start: 11, length: 1, buf: "", pos: 12, state: gtEof),
+        GT(kind: gtWhitespace, start: 12, length: 1, buf: "", pos: 13, state: gtEof),
+        GT(kind: gtDecNumber, start: 13, length: 1, buf: "", pos: 14, state: gtEof),
+        GT(kind: gtPunctuation, start: 14, length: 1, buf: "", pos: 15, state: gtEof),
+      ]
+
+  test "Array of strings":
+    const Code = """arr = ["a", "b"]"""
+    check tokens(Code) ==
+      @[
+        GT(kind: gtIdentifier, start: 0, length: 3, buf: "", pos: 3, state: gtEof),
+        GT(kind: gtWhitespace, start: 3, length: 1, buf: "", pos: 4, state: gtEof),
+        GT(kind: gtOperator, start: 4, length: 1, buf: "", pos: 5, state: gtEof),
+        GT(kind: gtWhitespace, start: 5, length: 1, buf: "", pos: 6, state: gtEof),
+        GT(kind: gtPunctuation, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
+        GT(kind: gtStringLit, start: 7, length: 3, buf: "", pos: 10, state: gtEof),
+        GT(kind: gtPunctuation, start: 10, length: 1, buf: "", pos: 11, state: gtEof),
+        GT(kind: gtWhitespace, start: 11, length: 1, buf: "", pos: 12, state: gtEof),
+        GT(kind: gtStringLit, start: 12, length: 3, buf: "", pos: 15, state: gtEof),
+        GT(kind: gtPunctuation, start: 15, length: 1, buf: "", pos: 16, state: gtEof),
+      ]
+
+  test "Empty array":
+    const Code = "arr = []"
+    check tokens(Code) ==
+      @[
+        GT(kind: gtIdentifier, start: 0, length: 3, buf: "", pos: 3, state: gtEof),
+        GT(kind: gtWhitespace, start: 3, length: 1, buf: "", pos: 4, state: gtEof),
+        GT(kind: gtOperator, start: 4, length: 1, buf: "", pos: 5, state: gtEof),
+        GT(kind: gtWhitespace, start: 5, length: 1, buf: "", pos: 6, state: gtEof),
+        GT(kind: gtPunctuation, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
+        GT(kind: gtPunctuation, start: 7, length: 1, buf: "", pos: 8, state: gtEof),
       ]
