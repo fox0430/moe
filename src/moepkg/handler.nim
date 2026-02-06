@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, os, strutils, tables, monotimes, unicode]
+import std/[options, os, strutils, sequtils, tables, monotimes, unicode]
 
 import pkg/[celina, results, chronos]
 from pkg/celina/core/mouse_logic import MouseButton
@@ -25,9 +25,9 @@ from pkg/celina/core/mouse_logic import MouseButton
 import
   editor, key_bindings, modes, buffer, logger, types, motion, search_utils, filer,
   quick_run_utils, help_viewer, buffer_manager, backup_manager, backup, diff_viewer,
-  command_completion, build, render_utils, sidebar, debug_viewer, config_loader,
+  command_completion, build, render_utils, debug_viewer, config_loader,
   references_viewer, documentsymbol_viewer, callhierarchy_viewer, message_log,
-  command_line, color, theme
+  command_line, color, theme, tab_line
 import command_handlers/handler_manager
 
 # Track running background processes for cleanup on exit
@@ -79,18 +79,17 @@ proc getBufferInfos(e: Editor): seq[BufferInfo] =
 proc updateViewportForCursor(e: Editor, pos: BufferPosition) =
   ## Update viewport to follow cursor position
   ## Common helper to avoid code duplication in search operations
-  let activeBuffer = e.activeBuffer()
-  let lineCount = activeBuffer.len
-  let cursorPos = CursorPosition(x: pos.column, y: pos.line)
+  let
+    activeBuffer = e.activeBuffer()
+    lineCount = activeBuffer.len
+    cursorPos = CursorPosition(x: pos.column, y: pos.line)
+    lineNumOffset = calculateViewportOffset(
+      activeBuffer, e.state.display.showLineNumbers, e.state.display.showSidebar
+    )
 
   e.handlerManager.motionController.viewportManager.updateViewport(
-    cursorPos,
-    lineCount,
-    e.state.display.showStatusLine,
-    e.state.viewportReservedLines,
-    false, # Force immediate scroll
-    activeBuffer,
-    0, # lineNumOffset
+    cursorPos, lineCount, e.state.display.showStatusLine, e.state.viewportReservedLines,
+    e.state.display.lineWrap, activeBuffer, lineNumOffset, e.state.display.tabStop,
   )
 
 proc executeSearchFromCurrentPosition(e: Editor): bool =
@@ -501,6 +500,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         case opt
         of bsoNumber:
           e.config.standard.number = val
+          e.state.display.showLineNumbers = val
           e.state.setStatusMessage("number = " & $val)
         of bsoCursorLine:
           e.config.highlight.currentLine = val
@@ -508,6 +508,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.setStatusMessage("cursorline = " & $val)
         of bsoStatusLine:
           e.config.standard.statusLine = val
+          e.state.display.showStatusLine = val
           e.state.setStatusMessage("statusline = " & $val)
         of bsoSyntax:
           e.config.standard.syntax = val
@@ -583,6 +584,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         case opt
         of isoTabStop:
           e.config.standard.tabStop = val
+          e.state.display.tabStop = val
           e.state.setStatusMessage("tabstop = " & $val)
         e.state.needsFullRedraw = true
 
@@ -680,6 +682,12 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             if e.config.notification.screenNotifications and
                 e.config.notification.buildOnSaveScreenNotify:
               e.state.setStatusMessage("Building: " & savedPath)
+
+          # Syntax check on save if enabled (only for supported languages)
+          if e.config.syntaxChecker.enable and
+              syntaxCheckCommand(savedPath, activeBuffer.language).isOk:
+            e.state.pendingSyntaxCheck =
+              (path: savedPath, language: activeBuffer.language.ord)
 
       if r.shouldSaveAndQuit():
         # Handle file save and quit
@@ -1589,16 +1597,21 @@ proc screenToBufferPosition(
     vp: ViewPort,
     buffer: TextBuffer,
     mouseX, mouseY: int,
-    lineNumOffset, reservedLines: int,
+    lineNumOffset, sidebarWidth, reservedLines: int,
     lineWrap: bool,
+    tabStop: int = 4,
 ): Option[BufferPosition] =
   ## Convert screen coordinates to buffer position.
   ## Returns none if click is outside the text area.
-  ## Note: lineWrap handling is simplified; accurate wrap calculation would
-  ## require iterating through wrapped lines.
+  ## Handles line wrap mode with display-width-based segment calculation.
+  ##
+  ## lineNumOffset: line number area width (from calculateLineNumOffset)
+  ## sidebarWidth: sidebar area width (from calculateSidebarWidth)
+  ## These are separate parameters to match the rendering calculation exactly.
   let
+    totalOffset = sidebarWidth + lineNumOffset
     screenY = mouseY - vp.y
-    screenX = mouseX - vp.x - lineNumOffset
+    screenX = mouseX - vp.x - totalOffset
 
   # Check if click is within the text area
   if screenY < 0 or screenY >= vp.height - reservedLines:
@@ -1606,30 +1619,60 @@ proc screenToBufferPosition(
   if screenX < 0:
     return none(BufferPosition)
 
-  # Calculate buffer line
-  var bufferLine = vp.topLine + screenY
-  if bufferLine >= buffer.len:
-    bufferLine = max(0, buffer.len - 1)
+  if lineWrap:
+    # Must match renderWindowLineWrapped: maxWidth = viewport.width - sidebarWidth - lineNumOffset
+    let maxWidth = max(1, vp.width - sidebarWidth - lineNumOffset)
+    # Walk through buffer lines, accumulating screen rows for each wrapped line
+    var currentScreenY = 0
+    var bufferLine = vp.topLine
+    var wrapSegment = 0
 
-  # Calculate buffer column
-  var bufferColumn =
-    if lineWrap:
-      screenX
-    else:
-      vp.leftColumn + screenX
+    while bufferLine < buffer.len:
+      let line = buffer.getLine(bufferLine)
+      let wrapCount = calculateWrapCount(line, maxWidth, tabStop)
+      if currentScreenY + wrapCount > screenY:
+        wrapSegment = screenY - currentScreenY
+        break
+      currentScreenY += wrapCount
+      bufferLine += 1
 
-  # Clamp column to valid range
-  if bufferLine >= 0 and bufferLine < buffer.len:
-    let lineLen = buffer[bufferLine].len
-    bufferColumn = clamp(bufferColumn, 0, max(0, lineLen - 1))
+    if bufferLine >= buffer.len:
+      bufferLine = max(0, buffer.len - 1)
 
-  return some(BufferPosition(line: bufferLine, column: bufferColumn))
+    # Find the start character of the wrapSegment-th segment
+    let line = buffer.getLine(bufferLine)
+    var segStart = 0
+    for i in 0 ..< wrapSegment:
+      let (charCount, _) = displayWidthSubstrWithTabs(line, segStart, maxWidth, tabStop)
+      segStart += max(1, charCount)
+
+    # Convert screenX to a character offset within this segment
+    var bufferColumn = segStart + screenXToCharIndex(line, segStart, screenX, tabStop)
+
+    # Clamp column to valid range
+    if bufferLine >= 0 and bufferLine < buffer.len:
+      let lineCharLen = buffer.getLine(bufferLine).charLen
+      bufferColumn = clamp(bufferColumn, 0, max(0, lineCharLen - 1))
+
+    return some(BufferPosition(line: bufferLine, column: bufferColumn))
+  else:
+    # No-wrap mode: simple calculation
+    var bufferLine = vp.topLine + screenY
+    if bufferLine >= buffer.len:
+      bufferLine = max(0, buffer.len - 1)
+
+    var bufferColumn = vp.leftColumn + screenX
+
+    # Clamp column to valid range
+    if bufferLine >= 0 and bufferLine < buffer.len:
+      let lineLen = buffer[bufferLine].len
+      bufferColumn = clamp(bufferColumn, 0, max(0, lineLen - 1))
+
+    return some(BufferPosition(line: bufferLine, column: bufferColumn))
 
 proc calculateLineNumOffsetForMouse(e: Editor, buffer: TextBuffer): int =
-  ## Calculate the total offset for line numbers and sidebar
-  let sidebarWidth = if e.state.display.showSidebar: DefaultSidebarWidth else: 0
-  calculateLineNumOffset(buffer, e.state.display.showLineNumbers) + sidebarWidth +
-    LineNumberPadding
+  ## Calculate line number offset (matching rendering calculation)
+  calculateLineNumOffset(buffer, e.state.display.showLineNumbers)
 
 proc handleMouseEvent(e: Editor, event: Event): bool =
   ## Handle mouse events for cursor movement
@@ -1652,6 +1695,28 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
   }:
     # Multiple windows mode
     if e.windowManager.windows.len > 1:
+      # Check tab line click first
+      if e.state.display.showTabLine:
+        for i, window in e.windowManager.windows:
+          let vp = window.viewport
+          if mouse.y == vp.y and mouse.x >= vp.x and mouse.x < vp.x + vp.width:
+            let buffersToShow =
+              if window.bufferList.len > 0:
+                window.bufferList
+              else:
+                @[window.buffer]
+            let tabIdx =
+              hitTestTabLine(buffersToShow, window.mode, vp.x, vp.width, mouse.x)
+            if tabIdx >= 0:
+              # Switch to clicked window if not already active
+              if i != e.windowManager.activeWindowIndex:
+                e.windowManager.activeWindowIndex = i
+                for j, w in e.windowManager.windows.mpairs:
+                  w.active = (j == i)
+              e.switchToWindowBuffer(tabIdx)
+              e.state.needsFullRedraw = true
+              return true
+
       for i, window in e.windowManager.windows:
         let vp = window.viewport
         # Check if click is within this window's viewport
@@ -1659,11 +1724,12 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
             mouse.y < vp.y + vp.height:
           let
             lineNumOffset = e.calculateLineNumOffsetForMouse(window.buffer)
+            sidebarWidth = e.calculateSidebarWidth()
             # Each window has its own status line
             reservedLines = if e.state.display.showStatusLine: 1 else: 0
             posOpt = screenToBufferPosition(
-              vp, window.buffer, mouse.x, mouse.y, lineNumOffset, reservedLines,
-              e.state.display.lineWrap,
+              vp, window.buffer, mouse.x, mouse.y, lineNumOffset, sidebarWidth,
+              reservedLines, e.state.display.lineWrap, e.state.display.tabStop,
             )
 
           if posOpt.isNone:
@@ -1686,17 +1752,32 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       return false
 
     # Single window mode
+    # Check tab line click first
+    if e.state.display.showTabLine and mouse.y == 0:
+      let buffersToShow =
+        if e.activeWindow.bufferList.len > 0:
+          e.activeWindow.bufferList
+        else:
+          @[e.activeBuffer()]
+      let tabIdx =
+        hitTestTabLine(buffersToShow, e.state.mode, 0, e.viewport.width, mouse.x)
+      if tabIdx >= 0:
+        e.switchToWindowBuffer(tabIdx)
+        e.state.needsFullRedraw = true
+        return true
+
     let
       activeBuffer = e.activeBuffer()
       lineNumOffset = e.calculateLineNumOffsetForMouse(activeBuffer)
+      sidebarWidth = e.calculateSidebarWidth()
       # Status line + command line
       reservedLines = if e.state.display.showStatusLine: 2 else: 1
       # Account for tab line offset
       tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
       adjustedMouseY = mouse.y - tabLineOffset
       posOpt = screenToBufferPosition(
-        e.viewport, activeBuffer, mouse.x, adjustedMouseY, lineNumOffset, reservedLines,
-        e.state.display.lineWrap,
+        e.viewport, activeBuffer, mouse.x, adjustedMouseY, lineNumOffset, sidebarWidth,
+        reservedLines, e.state.display.lineWrap, e.state.display.tabStop,
       )
 
     if posOpt.isNone:
@@ -1945,6 +2026,47 @@ proc handleEvent*(e: Editor, event: Event): bool =
           e.state.command = "window_cmd"
           return true
 
+  # Ctrl-W window commands for special/viewer modes
+  # Normal mode handles Ctrl-W above; extend to non-editing modes here
+  if e.state.mode notin {
+    EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
+    EditorMode.VisualLine, EditorMode.Replace,
+  } and event.kind == EventKind.Key:
+    let keyComboOpt = eventToKeyCombo(event)
+    if keyComboOpt.isSome:
+      let keyCombo = keyComboOpt.get
+
+      # Cancel window command mode on Escape
+      if e.state.command == "window_cmd" and keyCombo.isSpecial and
+          keyCombo.special == skEscape:
+        e.state.command = ""
+        return true
+
+      # Handle second key after Ctrl-w
+      if e.state.command == "window_cmd":
+        e.state.command = ""
+        if not keyCombo.isSpecial:
+          if keyCombo.char == "j":
+            e.switchToPrevWindow
+            e.syncStateFromWindow()
+            return true
+          elif keyCombo.char == "k":
+            e.switchToNextWindow
+            e.syncStateFromWindow()
+            return true
+          elif keyCombo.char == "c":
+            let shouldQuit = e.closeWindow()
+            if shouldQuit:
+              return false
+            e.syncStateFromWindow()
+            return true
+        return true # Unknown window command, cancel
+
+      # Ctrl-w to enter window command mode
+      if not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char == "w":
+        e.state.command = "window_cmd"
+        return true
+
   # For other modes, use the unified handler manager with active buffer
   let activeBuffer = e.activeBuffer
 
@@ -2020,6 +2142,11 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   # Sync EditorState back to EditorWindow after handler call
   e.syncStateToWindow()
+
+  # Sync display settings when in Config mode (config changes update EditorConfig
+  # but the cached display state needs to be kept in sync)
+  if e.currentMode == EditorMode.Config:
+    e.applyConfigSettings(e.config)
 
   # For LogViewer mode, update viewport to follow cursor
   # (LogViewer handles cursor directly without using MotionController)
@@ -2697,19 +2824,64 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if statusMsg.len > 0:
     e.state.setStatusMessage(statusMsg)
 
+  # Show syntax check message for current cursor line (if no other status message)
+  if statusMsg.len == 0 and e.state.syntaxCheckResults.errors.len > 0:
+    let activeBuf = e.activeBuffer()
+    let activePath = if activeBuf.filePath.isSome: activeBuf.filePath.get else: ""
+    if activePath.len > 0 and activePath == e.state.syntaxCheckResults.path:
+      let syntaxMsg =
+        formattedMessage(e.state.syntaxCheckResults.errors, e.activeWindow.cursor.line)
+      if syntaxMsg.isSome:
+        e.state.statusMessage = syntaxMsg.get
+
   return true # Continue running
 
 proc hasPendingAsyncOperations*(e: Editor): bool =
   ## Check if there are pending async operations
   e.state.pendingShellCommand.len > 0 or e.state.pendingManPage.len > 0 or
     e.state.pendingBackground or e.state.pendingBuildOnSave.path.len > 0 or
-    e.state.pendingQuickRun.cmd.len > 0
+    e.state.pendingQuickRun.cmd.len > 0 or e.state.pendingSyntaxCheck.path.len > 0
 
 type
   BuildInfo =
     tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
   QuickRunInfo =
     tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
+  SyntaxCheckInfo = tuple[path: string, language: int]
+
+proc runSyntaxCheckAsync(
+    editor: Editor, info: SyntaxCheckInfo
+): Future[void] {.async: (raises: []).} =
+  ## Run syntax check process in background and apply results to buffer
+  {.cast(gcsafe).}:
+    try:
+      let checkResult =
+        await startBackgroundSyntaxCheck(info.path, SourceLanguage(info.language))
+      if checkResult.isErr:
+        editor.state.setStatusMessage("Syntax check error: " & checkResult.error)
+      else:
+        let checkProcess = checkResult.get
+        addRunningProcess(checkProcess.process)
+        let output = await checkProcess.waitForAsync()
+        removeRunningProcess(checkProcess.process)
+        let errors = parseNimCheckResult(info.path, output)
+        # Apply markers to buffer
+        let bufIdx = editor.findBufferByPath(info.path)
+        if bufIdx >= 0:
+          applySyntaxCheckToBuffer(editor.buffers[bufIdx], errors)
+        # Store results for status message display
+        editor.state.syntaxCheckResults = (path: info.path, errors: errors)
+        let errorCount = errors.countIt(it.messageType == SyntaxCheckMessageType.error)
+        let warnCount = errors.countIt(it.messageType == SyntaxCheckMessageType.warning)
+        if errorCount > 0 or warnCount > 0:
+          editor.state.setStatusMessage(
+            "Syntax check: " & $errorCount & " error(s), " & $warnCount & " warning(s)"
+          )
+        else:
+          editor.state.setStatusMessage("Syntax check: OK")
+      editor.state.needsFullRedraw = true
+    except Exception as ex:
+      editor.state.setStatusMessage("Syntax check error: " & ex.msg)
 
 proc runBuildAsync(
     editor: Editor, info: BuildInfo
@@ -2843,6 +3015,12 @@ proc handlePendingAsyncOperationsImpl(
       let qrInfo = e.state.pendingQuickRun
       e.state.pendingQuickRun = (cmd: "", args: @[], filePath: "", isTempFile: false)
       asyncSpawn runQuickRunAsync(e, qrInfo)
+
+    # Handle pending syntax check - spawn as background task
+    if e.state.pendingSyntaxCheck.path.len > 0:
+      let checkInfo = e.state.pendingSyntaxCheck
+      e.state.pendingSyntaxCheck = (path: "", language: 0)
+      asyncSpawn runSyntaxCheckAsync(e, checkInfo)
 
 proc handlePendingAsyncOperations*(
     e: Editor

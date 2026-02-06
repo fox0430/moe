@@ -107,7 +107,7 @@ suite "screenToBufferPosition - Basic":
       reservedLines = 2
 
     let result = screenToBufferPosition(
-      vp, buffer, 0, 0, lineNumOffset, reservedLines, lineWrap = false
+      vp, buffer, 0, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -123,7 +123,7 @@ suite "screenToBufferPosition - Basic":
 
     # Click at x=5, which is x=1 in text area (5 - 4 = 1)
     let result = screenToBufferPosition(
-      vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
+      vp, buffer, 5, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -138,7 +138,7 @@ suite "screenToBufferPosition - Basic":
       reservedLines = 2
 
     let result = screenToBufferPosition(
-      vp, buffer, 3, 1, lineNumOffset, reservedLines, lineWrap = false
+      vp, buffer, 3, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -154,7 +154,14 @@ suite "screenToBufferPosition - Basic":
 
     # Click at y=23 is within reserved lines (height=24, reserved=2)
     let result = screenToBufferPosition(
-      vp, buffer, 0, 23, lineNumOffset, reservedLines, lineWrap = false
+      vp,
+      buffer,
+      0,
+      23,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = false,
     )
 
     check result.isNone
@@ -168,7 +175,7 @@ suite "screenToBufferPosition - Basic":
 
     # Click at x=2 is within line number area
     let result = screenToBufferPosition(
-      vp, buffer, 2, 0, lineNumOffset, reservedLines, lineWrap = false
+      vp, buffer, 2, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
     )
 
     check result.isNone
@@ -185,7 +192,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
       reservedLines = 2
 
     let result = screenToBufferPosition(
-      vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false
+      vp, buffer, 3, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -200,7 +207,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
       reservedLines = 2
 
     let result = screenToBufferPosition(
-      vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = false
+      vp, buffer, 3, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -218,7 +225,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
       reservedLines = 2
 
     let result = screenToBufferPosition(
-      vp, buffer, 5, 0, lineNumOffset, reservedLines, lineWrap = false
+      vp, buffer, 5, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
     )
 
     check result.isSome
@@ -235,7 +242,14 @@ suite "screenToBufferPosition - Column Clamping":
 
     # Click at x=50, but line only has 2 chars
     let result = screenToBufferPosition(
-      vp, buffer, 50, 0, lineNumOffset, reservedLines, lineWrap = false
+      vp,
+      buffer,
+      50,
+      0,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = false,
     )
 
     check result.isSome
@@ -251,7 +265,14 @@ suite "screenToBufferPosition - Column Clamping":
 
     # Click on empty line at x=10
     let result = screenToBufferPosition(
-      vp, buffer, 10, 1, lineNumOffset, reservedLines, lineWrap = false
+      vp,
+      buffer,
+      10,
+      1,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = false,
     )
 
     check result.isSome
@@ -268,7 +289,14 @@ suite "screenToBufferPosition - Line Clamping":
 
     # Click at y=10, but buffer only has 1 line
     let result = screenToBufferPosition(
-      vp, buffer, 5, 10, lineNumOffset, reservedLines, lineWrap = false
+      vp,
+      buffer,
+      5,
+      10,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = false,
     )
 
     check result.isSome
@@ -283,7 +311,14 @@ suite "screenToBufferPosition - Line Clamping":
 
     # Click at y=10, topLine=5, so bufferLine = 15, but only 7 lines
     let result = screenToBufferPosition(
-      vp, buffer, 0, 10, lineNumOffset, reservedLines, lineWrap = false
+      vp,
+      buffer,
+      0,
+      10,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = false,
     )
 
     check result.isSome
@@ -299,7 +334,14 @@ suite "screenToBufferPosition - Viewport Position":
 
     # Click at absolute (12, 6) which is relative (2, 1) to viewport
     let result = screenToBufferPosition(
-      vp, buffer, 12, 6, lineNumOffset, reservedLines, lineWrap = false
+      vp,
+      buffer,
+      12,
+      6,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = false,
     )
 
     check result.isSome
@@ -315,7 +357,14 @@ suite "screenToBufferPosition - Viewport Position":
 
     # Click at y=3, viewport starts at y=5
     let result = screenToBufferPosition(
-      vp, buffer, 15, 3, lineNumOffset, reservedLines, lineWrap = false
+      vp,
+      buffer,
+      15,
+      3,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = false,
     )
 
     check result.isNone
@@ -330,12 +379,153 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
     # With lineWrap=true, leftColumn should be ignored
     let result = screenToBufferPosition(
-      vp, buffer, 3, 0, lineNumOffset, reservedLines, lineWrap = true
+      vp, buffer, 3, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
     )
 
     check result.isSome
     check result.get.line == 0
     check result.get.column == 3 # screenX directly (not leftColumn + screenX)
+
+  test "Click on second wrap segment":
+    # Line "abcdefghij" (10 chars), viewport width=5, so wraps at col 5
+    # Screen row 0 = "abcde" (chars 0-4), row 1 = "fghij" (chars 5-9)
+    let
+      vp = createTestViewport(0, 0, 5, 24, 0, 0)
+      buffer = newTextBuffer("abcdefghij")
+      lineNumOffset = 0
+      reservedLines = 2
+
+    # Click on screen row 1 (second wrap segment), col 2 => char 7 ('h')
+    let result = screenToBufferPosition(
+      vp, buffer, 2, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 7
+
+  test "Click after wrapped line goes to next buffer line":
+    # Line 0: "abcde" (5 chars, 1 screen row at width=10)
+    # Line 1: "fghij" (5 chars, 1 screen row)
+    let
+      vp = createTestViewport(0, 0, 10, 24, 0, 0)
+      buffer = newTextBuffer("abcde\nfghij")
+      lineNumOffset = 0
+      reservedLines = 2
+
+    # Click on screen row 1 => line 1
+    let result = screenToBufferPosition(
+      vp, buffer, 2, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+    )
+
+    check result.isSome
+    check result.get.line == 1
+    check result.get.column == 2
+
+  test "Click with wrap and line number offset":
+    # viewport width=15, lineNumOffset=5, so maxWidth=10 for text
+    # Line: "abcdefghijklmno" (15 chars)
+    # Segment 0 (row 0): chars 0-9 (10 cols)
+    # Segment 1 (row 1): chars 10-14 (5 cols)
+    let
+      vp = createTestViewport(0, 0, 15, 24, 0, 0)
+      buffer = newTextBuffer("abcdefghijklmno")
+      lineNumOffset = 5
+      reservedLines = 2
+
+    # Click at x=7 on row 1 => screenX = 7-5=2, segment 1, char 12 ('m')
+    let result = screenToBufferPosition(
+      vp, buffer, 7, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 12
+
+  test "Click with wrap and sidebar":
+    # viewport width=17, sidebarWidth=2, lineNumOffset=5, so maxWidth=10 for text
+    # Line: "abcdefghijklmno" (15 chars)
+    # Segment 0 (row 0): chars 0-9 (10 cols)
+    # Segment 1 (row 1): chars 10-14 (5 cols)
+    let
+      vp = createTestViewport(0, 0, 17, 24, 0, 0)
+      buffer = newTextBuffer("abcdefghijklmno")
+      lineNumOffset = 5
+      sidebarWidth = 2
+      reservedLines = 2
+
+    # Click at x=9 on row 1 => screenX = 9-2-5=2, segment 1, char 12 ('m')
+    let result = screenToBufferPosition(
+      vp, buffer, 9, 1, lineNumOffset, sidebarWidth, reservedLines, lineWrap = true
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 12
+
+  test "Click on wrap with wide characters":
+    # "あいうえお" = 5 CJK chars = 10 display cols
+    # maxWidth=6: segment 0 = "あいう" (3 chars, 6 cols), segment 1 = "えお" (2 chars, 4 cols)
+    let
+      vp = createTestViewport(0, 0, 6, 24, 0, 0)
+      buffer = newTextBuffer("あいうえお")
+      lineNumOffset = 0
+      reservedLines = 2
+
+    # Click on row 1, col 0 => first char of segment 1 = char 3 ('え')
+    let result = screenToBufferPosition(
+      vp, buffer, 0, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 3
+
+  test "Click on wrap with tabs":
+    # "\tabcdefgh" with tabStop=4: tab=4 cols, then "abcdef"=6 cols = 10 cols for first 7 chars
+    # maxWidth=10: segment 0 = "\tabcdef" (7 chars, 10 cols)
+    # segment 1 = "gh" (2 chars, 2 cols)
+    let
+      vp = createTestViewport(0, 0, 10, 24, 0, 0)
+      buffer = newTextBuffer("\tabcdefgh")
+      lineNumOffset = 0
+      reservedLines = 2
+
+    # Click on row 1, col 1 => char 8 ('h')
+    let result = screenToBufferPosition(
+      vp,
+      buffer,
+      1,
+      1,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = true,
+      tabStop = 4,
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 8
+
+  test "Multiple buffer lines with wrapping":
+    # Line 0: "abcdefghij" (10 chars) => 2 rows at maxWidth=5
+    # Line 1: "klmno" (5 chars) => 1 row
+    # Screen: row 0="abcde", row 1="fghij", row 2="klmno"
+    let
+      vp = createTestViewport(0, 0, 5, 24, 0, 0)
+      buffer = newTextBuffer("abcdefghij\nklmno")
+      lineNumOffset = 0
+      reservedLines = 2
+
+    # Click on row 2, col 1 => line 1, char 1 ('l')
+    let result = screenToBufferPosition(
+      vp, buffer, 1, 2, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = true
+    )
+
+    check result.isSome
+    check result.get.line == 1
+    check result.get.column == 1
 
 suite "Background Process Management":
   test "addRunningProcess adds process to list":

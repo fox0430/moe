@@ -120,6 +120,26 @@ proc renderTabLine*(
     let background = " ".repeat(remainingWidth)
     displayBuffer.setString(currentX, tabLineY, background, tabStyle)
 
+proc hitTestTabLine*(
+    buffers: seq[TextBuffer],
+    mode: EditorMode,
+    tabLineX: int,
+    tabLineWidth: int,
+    mouseX: int,
+): int =
+  ## Return the tab index at the given mouse X coordinate, or -1 if none.
+  var currentX = tabLineX
+  for i, buf in buffers:
+    let
+      tabText = buildTabText(buf, mode, false)
+      tabWidth = displayWidth(tabText)
+    if currentX + tabWidth > tabLineX + tabLineWidth:
+      break
+    if mouseX >= currentX and mouseX < currentX + tabWidth:
+      return i
+    currentX += tabWidth
+  return -1
+
 proc renderWindowTabLine*(
     buffers: seq[TextBuffer],
     windowActiveBuffer: TextBuffer,

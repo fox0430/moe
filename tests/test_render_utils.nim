@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, strutils]
 
 import ../src/moepkg/render_utils {.all.}
 import ../src/moepkg/buffer
@@ -47,27 +47,200 @@ suite "formatLineNumber":
 
 suite "calculateWrapCount":
   test "empty line":
-    check calculateWrapCount(0, 80) == 1
+    check calculateWrapCount("", 80, 4) == 1
 
   test "line shorter than max width":
-    check calculateWrapCount(40, 80) == 1
-    check calculateWrapCount(79, 80) == 1
+    check calculateWrapCount("a".repeat(40), 80, 4) == 1
+    check calculateWrapCount("a".repeat(79), 80, 4) == 1
 
   test "line exactly at max width":
-    check calculateWrapCount(80, 80) == 1
+    check calculateWrapCount("a".repeat(80), 80, 4) == 1
 
   test "line longer than max width":
-    check calculateWrapCount(81, 80) == 2
-    check calculateWrapCount(160, 80) == 2
-    check calculateWrapCount(161, 80) == 3
+    check calculateWrapCount("a".repeat(81), 80, 4) == 2
+    check calculateWrapCount("a".repeat(160), 80, 4) == 2
+    check calculateWrapCount("a".repeat(161), 80, 4) == 3
 
   test "very long line":
-    check calculateWrapCount(320, 80) == 4
-    check calculateWrapCount(400, 80) == 5
+    check calculateWrapCount("a".repeat(320), 80, 4) == 4
+    check calculateWrapCount("a".repeat(400), 80, 4) == 5
 
   test "small max width":
-    check calculateWrapCount(10, 5) == 2
-    check calculateWrapCount(15, 5) == 3
+    check calculateWrapCount("a".repeat(10), 5, 4) == 2
+    check calculateWrapCount("a".repeat(15), 5, 4) == 3
+
+  test "line with tabs":
+    # Tab at start of 10-col line: tab takes 4 cols, leaves 6 cols for text
+    # "\thello" = 4 + 5 = 9 cols, fits in 10
+    check calculateWrapCount("\thello", 10, 4) == 1
+    # "\thelloworld" = 4 + 10 = 14 cols, wraps at 10
+    check calculateWrapCount("\thelloworld", 10, 4) == 2
+
+  test "line with wide characters":
+    # Each CJK character is 2 display columns
+    # 5 CJK chars = 10 cols, fits in 10
+    check calculateWrapCount("あいうえお", 10, 4) == 1
+    # 6 CJK chars = 12 cols, wraps at 10
+    check calculateWrapCount("あいうえおか", 10, 4) == 2
+
+suite "displayWidthSubstrWithTabs":
+  test "ASCII only - fits in maxWidth":
+    let (chars, width) = displayWidthSubstrWithTabs("hello", 0, 10, 4)
+    check chars == 5
+    check width == 5
+
+  test "ASCII only - exceeds maxWidth":
+    let (chars, width) = displayWidthSubstrWithTabs("hello world", 0, 5, 4)
+    check chars == 5
+    check width == 5
+
+  test "startChar offset":
+    # "world" starting from char 6
+    let (chars, width) = displayWidthSubstrWithTabs("hello world", 6, 10, 4)
+    check chars == 5 # "world"
+    check width == 5
+
+  test "tab at segment start":
+    # Tab at position 0 expands to 4 columns (tabStop=4)
+    let (chars, width) = displayWidthSubstrWithTabs("\thello", 0, 10, 4)
+    check chars == 6 # tab + "hello" = 4+5=9 cols, fits in 10
+    check width == 9
+
+  test "tab at segment start - tight fit":
+    let (chars, width) = displayWidthSubstrWithTabs("\thello", 0, 4, 4)
+    check chars == 1 # only the tab fits (4 cols == maxWidth)
+    check width == 4
+
+  test "tab expansion relative to segment start":
+    # When starting mid-line, tab expansion is relative to segment start
+    # "ab\tcd" starting from char 2 (the tab): tab at col 0 of segment = 4 cols
+    let (chars, width) = displayWidthSubstrWithTabs("ab\tcd", 2, 10, 4)
+    check chars == 3 # tab + "cd" = 4+2=6 cols
+    check width == 6
+
+  test "wide characters":
+    # Each CJK char is 2 cols; maxWidth=5 fits 2 chars (4 cols), not 3 (6 cols)
+    let (chars, width) = displayWidthSubstrWithTabs("あいう", 0, 5, 4)
+    check chars == 2
+    check width == 4
+
+  test "wide character at boundary":
+    # maxWidth=5, "aaaa" = 4 cols, next is "あ" (2 cols) => 6 > 5, won't fit
+    let (chars, width) = displayWidthSubstrWithTabs("aaaaあ", 0, 5, 4)
+    check chars == 4
+    check width == 4
+
+  test "empty string":
+    let (chars, width) = displayWidthSubstrWithTabs("", 0, 10, 4)
+    check chars == 0
+    check width == 0
+
+  test "maxWidth zero or one":
+    # Single ASCII char fits in width 1
+    let (chars, width) = displayWidthSubstrWithTabs("a", 0, 1, 4)
+    check chars == 1
+    check width == 1
+
+  test "tab with tabStop 8":
+    let (chars, width) = displayWidthSubstrWithTabs("\thello", 0, 10, 8)
+    check chars == 3 # tab(8) + "he" = 10
+    check width == 10
+
+suite "screenXToCharIndex":
+  test "ASCII at position 0":
+    check screenXToCharIndex("hello", 0, 0, 4) == 0
+
+  test "ASCII at position 3":
+    check screenXToCharIndex("hello", 0, 3, 4) == 3
+
+  test "past end of string":
+    check screenXToCharIndex("hi", 0, 10, 4) == 2
+
+  test "with startChar offset":
+    # "world" starting from char 6; displayX=2 => 2 chars into "world"
+    check screenXToCharIndex("hello world", 6, 2, 4) == 2
+
+  test "tab character":
+    # "\thello": tab expands to 4 cols. displayX=3 is within the tab
+    check screenXToCharIndex("\thello", 0, 3, 4) == 0
+    # displayX=4 is right after tab, on 'h'
+    check screenXToCharIndex("\thello", 0, 4, 4) == 1
+
+  test "wide characters":
+    # "あいう": あ=cols 0-1, い=cols 2-3, う=cols 4-5
+    check screenXToCharIndex("あいう", 0, 0, 4) == 0
+    check screenXToCharIndex("あいう", 0, 1, 4) == 0
+    check screenXToCharIndex("あいう", 0, 2, 4) == 1
+    check screenXToCharIndex("あいう", 0, 4, 4) == 2
+
+  test "empty string":
+    check screenXToCharIndex("", 0, 5, 4) == 0
+
+suite "cursorWrapPosition":
+  test "no wrap - cursor in first segment":
+    let (wrapLine, col) = cursorWrapPosition("hello", 3, 10, 4)
+    check wrapLine == 0
+    check col == 3
+
+  test "wrap - cursor in second segment":
+    # "abcdefghij" (10 chars), maxWidth=5
+    # Segment 0: "abcde" (chars 0-4, 5 cols)
+    # Segment 1: "fghij" (chars 5-9, 5 cols)
+    let (wrapLine, col) = cursorWrapPosition("abcdefghij", 7, 5, 4)
+    check wrapLine == 1
+    check col == 2 # 'h' is 2 cols into second segment
+
+  test "cursor at segment boundary":
+    # "abcdefghij", maxWidth=5
+    # Cursor at char 5 ('f') should be at start of segment 1
+    let (wrapLine, col) = cursorWrapPosition("abcdefghij", 5, 5, 4)
+    check wrapLine == 1
+    check col == 0
+
+  test "cursor at last char of first segment":
+    let (wrapLine, col) = cursorWrapPosition("abcdefghij", 4, 5, 4)
+    check wrapLine == 0
+    check col == 4
+
+  test "wide char at wrap boundary":
+    # maxWidth=5: "aaaa" = 4 cols, "あ" (2 cols) doesn't fit => seg0 = "aaaa" (4 cols)
+    # seg1 starts at char 4 = "あbc"
+    let (wrapLine, col) = cursorWrapPosition("aaaaあbc", 4, 5, 4)
+    check wrapLine == 1
+    check col == 0 # "あ" is at the start of segment 1
+
+  test "wide char at wrap boundary - col in second segment":
+    # seg1 = "あbc": cursor at char 5 ('b') = displayCol 2
+    let (wrapLine, col) = cursorWrapPosition("aaaaあbc", 5, 5, 4)
+    check wrapLine == 1
+    check col == 2
+
+  test "tab causes early wrap":
+    # maxWidth=6, "\tabcdefg": tab=4 cols, then "ab"=2 cols fills 6.
+    # seg0 = "\tab" (3 chars, 6 cols), seg1 = "cdefg"
+    let (wrapLine0, col0) = cursorWrapPosition("\tabcdefg", 1, 6, 4) # 'a' in seg0
+    check wrapLine0 == 0
+    check col0 == 4 # after tab (4 cols)
+
+    let (wrapLine1, col1) = cursorWrapPosition("\tabcdefg", 3, 6, 4) # 'c' in seg1
+    check wrapLine1 == 1
+    check col1 == 0
+
+  test "empty string":
+    let (wrapLine, col) = cursorWrapPosition("", 0, 10, 4)
+    check wrapLine == 0
+    check col == 0
+
+  test "single character":
+    let (wrapLine, col) = cursorWrapPosition("a", 0, 10, 4)
+    check wrapLine == 0
+    check col == 0
+
+  test "three segments":
+    # 15 chars, maxWidth=5 => 3 segments
+    let (wrapLine, col) = cursorWrapPosition("abcdefghijklmno", 12, 5, 4)
+    check wrapLine == 2
+    check col == 2 # 'm' is at col 2 of segment 2
 
 suite "displayWidthWithTabs":
   test "empty string":

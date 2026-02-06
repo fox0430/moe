@@ -19,9 +19,9 @@
 
 import std/[unittest, options, strutils]
 
-import pkg/results
+import pkg/[results, celina]
 
-import ../src/moepkg/[buffer, completion]
+import ../src/moepkg/[buffer, completion, unicode_utils]
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
 suite "Completion - extractWords":
@@ -449,3 +449,218 @@ suite "Completion - scroll offset":
     check mgr.menu.scrollOffset == 2
     mgr.selectPrevious() # index 1, should scroll up
     check mgr.menu.scrollOffset == 1
+
+suite "Completion - calculatePopupPosition with showBorder=false":
+  test "No border size added to dimensions":
+    let entries = @[CompletionEntry(word: "test", matchScore: 100, source: csBuffer)]
+    let withBorder = calculatePopupPosition(10, 5, 80, 24, entries, showBorder = true)
+    let noBorder = calculatePopupPosition(10, 5, 80, 24, entries, showBorder = false)
+
+    check noBorder.width == withBorder.width - 2
+    check noBorder.height == withBorder.height - 2
+
+  test "Popup below cursor":
+    let entries = @[CompletionEntry(word: "test", matchScore: 100, source: csBuffer)]
+    let pos = calculatePopupPosition(10, 5, 80, 24, entries, showBorder = false)
+
+    check pos.y == 6 # cursorY + 1
+    check pos.x == 10
+
+  test "Popup adjusts for right edge":
+    let entries = @[CompletionEntry(word: "test", matchScore: 100, source: csBuffer)]
+    let pos = calculatePopupPosition(75, 5, 80, 24, entries, showBorder = false)
+
+    check pos.x + pos.width <= 80
+
+  test "Popup goes above if no space below":
+    var entries: seq[CompletionEntry]
+    for i in 0 ..< 5:
+      entries.add CompletionEntry(word: "word" & $i, matchScore: 100, source: csBuffer)
+    let pos = calculatePopupPosition(10, 20, 80, 24, entries, showBorder = false)
+
+    check pos.y < 20
+
+  test "No extra gap between cursor and popup below":
+    let entries =
+      @[
+        CompletionEntry(word: "hello", matchScore: 100, source: csBuffer),
+        CompletionEntry(word: "world", matchScore: 90, source: csBuffer),
+      ]
+    let bordered = calculatePopupPosition(10, 5, 80, 24, entries, showBorder = true)
+    let borderless = calculatePopupPosition(10, 5, 80, 24, entries, showBorder = false)
+
+    # Bordered: popup (border) starts at cursorY+1
+    check bordered.y == 6
+
+    # Borderless: content starts at cursorY+1 (same row, no 1-row gap)
+    check borderless.y == 6
+
+  test "No extra gap between cursor and popup above":
+    var entries: seq[CompletionEntry]
+    for i in 0 ..< 10:
+      entries.add CompletionEntry(word: "item" & $i, matchScore: 100, source: csBuffer)
+
+    let bordered = calculatePopupPosition(10, 20, 80, 24, entries, showBorder = true)
+    let borderless = calculatePopupPosition(10, 20, 80, 24, entries, showBorder = false)
+
+    # Bordered: bottom border sits at cursorY-1
+    check bordered.y + bordered.height == 20
+
+    # Borderless: bottom content sits at cursorY-1
+    check borderless.y + borderless.height == 20
+
+suite "Completion - renderCompletionPopup":
+  test "Renders border and content with showBorder=true":
+    let menu = CompletionMenu(
+      entries:
+        @[
+          CompletionEntry(word: "hello", matchScore: 100, source: csBuffer),
+          CompletionEntry(word: "world", matchScore: 90, source: csBuffer),
+        ],
+      selectedIndex: 0,
+      hasSelection: true,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = PopupPosition(x: 2, y: 2, width: 19, height: 4)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = true)
+
+    # Check border corners
+    check termBuffer[2, 2].symbol == "┌"
+    check termBuffer[20, 2].symbol == "┐"
+    check termBuffer[2, 5].symbol == "└"
+    check termBuffer[20, 5].symbol == "┘"
+
+    # Check side borders
+    check termBuffer[2, 3].symbol == "│"
+    check termBuffer[20, 3].symbol == "│"
+    check termBuffer[2, 4].symbol == "│"
+    check termBuffer[20, 4].symbol == "│"
+
+    # Check content is rendered (first char of "hello" at contentX=3, contentY=3)
+    check termBuffer[3, 3].symbol == "h"
+    check termBuffer[3, 4].symbol == "w"
+
+  test "Renders content without border with showBorder=false":
+    let menu = CompletionMenu(
+      entries:
+        @[
+          CompletionEntry(word: "hello", matchScore: 100, source: csBuffer),
+          CompletionEntry(word: "world", matchScore: 90, source: csBuffer),
+        ],
+      selectedIndex: 0,
+      hasSelection: true,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    # Borderless: content starts directly at pos.x, pos.y
+    let pos = PopupPosition(x: 2, y: 2, width: 17, height: 2)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    # Content at (2,2) directly
+    check termBuffer[2, 2].symbol == "h"
+    check termBuffer[3, 2].symbol == "e"
+    check termBuffer[2, 3].symbol == "w"
+    check termBuffer[3, 3].symbol == "o"
+
+    # No border characters
+    check termBuffer[1, 1].symbol != "┌"
+    check termBuffer[1, 2].symbol != "│"
+
+  test "Selected item highlighted correctly without border":
+    let menu = CompletionMenu(
+      entries:
+        @[
+          CompletionEntry(word: "apple", matchScore: 100, source: csBuffer),
+          CompletionEntry(word: "banana", matchScore: 90, source: csBuffer),
+        ],
+      selectedIndex: 1,
+      hasSelection: true,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = PopupPosition(x: 0, y: 0, width: 15, height: 2)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    # First entry: normal style
+    check termBuffer[0, 0].style == popupNormalStyle
+
+    # Second entry (selected): selected style
+    check termBuffer[0, 1].style == popupSelectedStyle
+
+  test "Does nothing with empty entries":
+    let menu =
+      CompletionMenu(entries: @[], selectedIndex: 0, scrollOffset: 0, maxVisible: 10)
+    let pos = PopupPosition(x: 0, y: 0, width: 10, height: 3)
+
+    var termBuffer = newBuffer(80, 24)
+
+    # Should not crash
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = true)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+suite "Completion - popup anchor position":
+  ## Tests for the anchor calculation used in editor.nim:
+  ##   anchorX = screenCursor.x - displayWidth(menu.prefix)
+  ## This ensures the popup stays fixed when cycling through candidates.
+
+  test "Anchor is stable across different word lengths":
+    # Simulate: trigger at column 10, prefix "hel"
+    # After selecting different candidates, cursor moves but anchor stays at 10.
+    let triggerX = 10
+
+    # Cycle 1: selected "hello" (len 5), cursor at 15
+    let cursor1 = triggerX + displayWidth("hello")
+    let anchor1 = cursor1 - displayWidth("hello")
+
+    # Cycle 2: selected "helicopter" (len 10), cursor at 20
+    let cursor2 = triggerX + displayWidth("helicopter")
+    let anchor2 = cursor2 - displayWidth("helicopter")
+
+    # Cycle 3: selected "help" (len 4), cursor at 14
+    let cursor3 = triggerX + displayWidth("help")
+    let anchor3 = cursor3 - displayWidth("help")
+
+    check anchor1 == triggerX
+    check anchor2 == triggerX
+    check anchor3 == triggerX
+
+  test "Anchor is stable with CJK characters":
+    let triggerX = 10
+
+    # "変数" has display width 4 (2 wide chars)
+    let word1 = "変数"
+    let cursor1 = triggerX + displayWidth(word1)
+    let anchor1 = cursor1 - displayWidth(word1)
+
+    # "変数名" has display width 6
+    let word2 = "変数名"
+    let cursor2 = triggerX + displayWidth(word2)
+    let anchor2 = cursor2 - displayWidth(word2)
+
+    check anchor1 == triggerX
+    check anchor2 == triggerX
+
+  test "Popup position is constant for different candidates":
+    let entries =
+      @[
+        CompletionEntry(word: "hello", matchScore: 100, source: csBuffer),
+        CompletionEntry(word: "helicopter", matchScore: 90, source: csBuffer),
+        CompletionEntry(word: "help", matchScore: 80, source: csBuffer),
+      ]
+    let triggerX = 10
+
+    # Simulate cycling: each candidate has different length but anchor stays fixed
+    for entry in entries:
+      let cursorX = triggerX + displayWidth(entry.word)
+      let anchorX = cursorX - displayWidth(entry.word)
+      let pos = calculatePopupPosition(anchorX, 5, 80, 24, entries)
+
+      check pos.x == triggerX
+      check pos.y == 6

@@ -22,8 +22,9 @@
 
 import std/[unittest, strutils]
 import pkg/celina
-import ../src/moepkg/[editor, buffer, config, config_loader, render_utils]
+import ../src/moepkg/[editor, buffer, config, config_loader, render_utils, modes]
 import ../src/moepkg/editor_render_window
+import ../src/moepkg/editor_render_helpers
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -66,6 +67,7 @@ suite "renderWindowLineWrapped - Basic behavior":
       hasSelection: false,
       selStart: BufferPosition(line: 0, column: 0),
       selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 80,
     )
 
     var screenY = 0
@@ -95,6 +97,7 @@ suite "renderWindowLineWrapped - Basic behavior":
       hasSelection: false,
       selStart: BufferPosition(line: 0, column: 0),
       selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 80,
     )
 
     var screenY = 0
@@ -123,6 +126,7 @@ suite "renderWindowLineWrapped - Basic behavior":
       hasSelection: false,
       selStart: BufferPosition(line: 0, column: 0),
       selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 80,
     )
 
     var screenY = 0
@@ -154,6 +158,7 @@ suite "renderWindowLineWrapped - Basic behavior":
       hasSelection: false,
       selStart: BufferPosition(line: 0, column: 0),
       selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 40,
     )
 
     var screenY = 0
@@ -183,6 +188,7 @@ suite "renderWindowLineWrapped - Basic behavior":
       hasSelection: false,
       selStart: BufferPosition(line: 0, column: 0),
       selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 80,
     )
 
     var screenY = 1 # Start after tab line
@@ -211,6 +217,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
       hasSelection: false,
       selStart: BufferPosition(line: 0, column: 0),
       selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 80,
     )
 
     e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
@@ -234,6 +241,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
       hasSelection: false,
       selStart: BufferPosition(line: 0, column: 0),
       selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 80,
     )
 
     e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
@@ -257,6 +265,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
       hasSelection: false,
       selStart: BufferPosition(line: 0, column: 0),
       selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 80,
     )
 
     e.renderWindowLineNoWrap(buffer, window, 4, ctx, 0, 0)
@@ -281,6 +290,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
       hasSelection: false,
       selStart: BufferPosition(line: 0, column: 0),
       selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 80,
     )
 
     e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
@@ -304,6 +314,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
       hasSelection: false,
       selStart: BufferPosition(line: 0, column: 0),
       selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 80,
     )
 
     e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
@@ -328,6 +339,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
       hasSelection: false,
       selStart: BufferPosition(line: 0, column: 0),
       selEnd: BufferPosition(line: 0, column: 0),
+      windowRightEdge: 80,
     )
 
     e.renderWindowLineNoWrap(buffer, window, 4, ctx, 0, 0)
@@ -884,3 +896,179 @@ suite "renderWindow - Edge cases":
     window.viewport.y = 0
 
     e.renderWindow(buffer, window, 4, true, true, 0)
+
+suite "Cursor line highlight - Window boundary clipping":
+  test "Cursor line highlight does not exceed window right edge (no-wrap)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showCursorLine = true
+    e.state.display.lineWrap = false
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
+
+    # Simulate a left window in a vertical split: width=40, starting at x=0
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0
+    window.cursor.column = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    # Cells within window (x < 40) on cursor line should have cursor line style
+    let hlStyle = cursorLineHighlightStyle()
+    # After content "Hi" (2 chars), positions 2..39 should be filled with highlight
+    for x in 2 ..< 40:
+      check buffer[x, 0].style.bg == hlStyle.bg
+
+    # Cells at and beyond window right edge (x >= 40) should NOT have cursor line style
+    for x in 40 ..< 80:
+      check buffer[x, 0].style.bg != hlStyle.bg
+
+  test "Cursor line highlight does not exceed window right edge (wrapped)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showCursorLine = true
+    e.state.display.lineWrap = true
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
+
+    # Left window of vertical split
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.cursor.line = 0
+    window.cursor.column = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let hlStyle = cursorLineHighlightStyle()
+    for x in 2 ..< 40:
+      check buffer[x, 0].style.bg == hlStyle.bg
+
+    for x in 40 ..< 80:
+      check buffer[x, 0].style.bg != hlStyle.bg
+
+  test "Cursor line highlight respects window x offset":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showCursorLine = true
+    e.state.display.lineWrap = false
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
+
+    # Right window of vertical split: width=40, starting at x=40
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 40
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0
+    window.cursor.column = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let hlStyle = cursorLineHighlightStyle()
+    # Content "Hi" starts at x=40, fill from x=42..79
+    for x in 42 ..< 80:
+      check buffer[x, 0].style.bg == hlStyle.bg
+
+    # Cells before the window (x < 40) should NOT have cursor line style
+    for x in 0 ..< 40:
+      check buffer[x, 0].style.bg != hlStyle.bg
+
+  test "Empty line cursor highlight clipped to window boundary":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showCursorLine = true
+    e.state.display.showSidebar = false
+    e.state.display.lineWrap = false
+
+    # Empty buffer (single empty line)
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0
+    window.cursor.column = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let hlStyle = cursorLineHighlightStyle()
+    # Cursor line highlight should fill within window (no sidebar, no line numbers)
+    for x in 0 ..< 40:
+      check buffer[x, 0].style.bg == hlStyle.bg
+
+    # Should NOT fill beyond window
+    for x in 40 ..< 80:
+      check buffer[x, 0].style.bg != hlStyle.bg
+
+  test "fillCursorLineBackground clipped to window boundary":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.display.showCursorLine = true
+
+    # Call fillCursorLineBackground directly with windowRightEdge=30
+    e.fillCursorLineBackground(buffer, 0, 0, 0, 0, 30)
+
+    let hlStyle = cursorLineHighlightStyle()
+    # Should fill positions 0..29
+    for x in 0 ..< 30:
+      check buffer[x, 0].style.bg == hlStyle.bg
+
+    # Should NOT fill positions 30+
+    for x in 30 ..< 80:
+      check buffer[x, 0].style.bg != hlStyle.bg
+
+  test "renderLineSegmentWithSelection clipped to window boundary":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.display.showCursorLine = true
+    e.state.display.showSyntax = false
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "AB")
+
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 30,
+    )
+
+    e.renderLineSegmentWithSelection(
+      e.textBuffer, buffer, "AB", 0, 0, 0, 0, ctx, useRunes = false
+    )
+
+    let hlStyle = cursorLineHighlightStyle()
+    # Cursor line fill should stop before windowRightEdge
+    for x in 2 ..< 30:
+      check buffer[x, 0].style.bg == hlStyle.bg
+
+    # Beyond windowRightEdge should NOT be filled
+    for x in 30 ..< 80:
+      check buffer[x, 0].style.bg != hlStyle.bg

@@ -63,6 +63,7 @@ type
     selStart*: BufferPosition
     selEnd*: BufferPosition
     windowMode*: EditorMode ## Mode of the window being rendered
+    windowRightEdge*: int ## Absolute screen X of window's right edge
 
   IndentInfo* = object
     ## Cached indentation analysis for a line to avoid O(n²) performance

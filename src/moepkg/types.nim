@@ -25,13 +25,13 @@ import
   modes, buffer, registers, filer, log_viewer, help_viewer, command_completion,
   message_log, buffer_manager, backup_manager, diff_viewer, debug_viewer, config_mode,
   references_viewer, documentsymbol_viewer, callhierarchy_viewer, hover_popup,
-  primitives
+  primitives, syntax_checker
 
 export
   buffer.SidebarItemKind, registers, command_completion, log_viewer, help_viewer,
   buffer_manager, backup_manager, diff_viewer, debug_viewer, config_mode,
   references_viewer, documentsymbol_viewer, callhierarchy_viewer, hover_popup,
-  primitives
+  primitives, syntax_checker
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -580,6 +580,10 @@ type
       tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
     pendingQuickRun*:
       tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
+    # Pending syntax check info (for async background processes)
+    pendingSyntaxCheck*: tuple[path: string, language: int]
+    # Active syntax check results (for status message display)
+    syntaxCheckResults*: tuple[path: string, errors: seq[SyntaxCheckError]]
     # LSP Rename state
     renameState*: RenameState # State for LSP rename mode
     # Overlay state for transient modes (Command, Search, Rename)

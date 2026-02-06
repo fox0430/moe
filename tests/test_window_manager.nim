@@ -21,7 +21,8 @@
 
 import std/[unittest, options]
 import pkg/results
-import ../src/moepkg/[window_manager, types, buffer]
+import ../src/moepkg/window_manager {.all.}
+import ../src/moepkg/[types, buffer]
 
 proc createTestWindow(x, y, width, height: int, active = false): EditorWindow =
   ## Create a test window with specified viewport
@@ -506,6 +507,68 @@ suite "EditorWindowManager - Integration":
     check shouldQuit == true
     check wm.windows.len == 1 # Still 1, not removed
 
+  test "Close middle window of 3 hsplits re-equalizes without overlap":
+    let wm = createSingleWindowManager(80, 30)
+
+    # Create 3 horizontal splits
+    discard wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = false,
+    )
+    discard wm.hsplit(
+      wm.windows[1].buffer,
+      wm.windows[1].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = false,
+    )
+    check wm.windows.len == 3
+
+    # Close the middle window
+    wm.deactivateAllWindows()
+    wm.activateWindow(1)
+    discard wm.closeWindow(multiStatusLine = false)
+    check wm.windows.len == 2
+
+    # Verify no overlapping: window 0's bottom should not exceed window 1's top
+    let
+      w0End = wm.windows[0].viewport.y + wm.windows[0].viewport.height
+      w1Start = wm.windows[1].viewport.y
+    check w0End <= w1Start
+
+    # Verify total coverage: windows span the full height
+    check wm.windows[0].viewport.y == 0
+    check wm.windows[1].viewport.y + wm.windows[1].viewport.height == 30
+
+  test "Close middle window of 3 vsplits re-equalizes without overlap":
+    let wm = createSingleWindowManager(80, 24)
+
+    # Create 3 vertical splits
+    discard wm.vsplit(
+      wm.windows[0].buffer, wm.windows[0].viewport, BufferPosition(line: 0, column: 0)
+    )
+    discard wm.vsplit(
+      wm.windows[1].buffer, wm.windows[1].viewport, BufferPosition(line: 0, column: 0)
+    )
+    check wm.windows.len == 3
+
+    # Close the middle window
+    wm.deactivateAllWindows()
+    wm.activateWindow(1)
+    discard wm.closeWindow(multiStatusLine = false)
+    check wm.windows.len == 2
+
+    # Verify no overlapping
+    let
+      w0End = wm.windows[0].viewport.x + wm.windows[0].viewport.width
+      w1Start = wm.windows[1].viewport.x
+    check w0End < w1Start # gap for separator
+
+    # Verify total coverage
+    check wm.windows[0].viewport.x == 0
+    check wm.windows[1].viewport.x + wm.windows[1].viewport.width == 80
+
   test "Switch through all windows":
     let wm = newEditorWindowManager()
     wm.windows.add(createTestWindow(0, 0, 26, 24, active = true))
@@ -604,3 +667,196 @@ suite "EditorWindowManager - bufferList in splits":
 
     # Original window's bufferList should be unchanged
     check wm.windows[0].bufferList.len == originalBufferListLen
+
+suite "EditorWindowManager - Split Size Proportions":
+  # vsplit size checks
+
+  test "2 vsplits produce equal widths totalling original":
+    let wm = createSingleWindowManager(80, 24)
+
+    discard wm.vsplit(
+      wm.windows[0].buffer, wm.windows[0].viewport, BufferPosition(line: 0, column: 0)
+    )
+
+    check wm.windows.len == 2
+    # availableWidth = 80 - 1(sep) = 79, each = 79 div 2 = 39, last = 80 - 40 = 40
+    check wm.windows[0].viewport.x == 0
+    check wm.windows[0].viewport.width == 39
+    check wm.windows[1].viewport.x == 40
+    check wm.windows[1].viewport.width == 40
+    check wm.windows[0].viewport.width + WindowSeparatorWidth +
+      wm.windows[1].viewport.width == 80
+
+  test "3 vsplits produce equal widths totalling original":
+    let wm = createSingleWindowManager(80, 24)
+
+    discard wm.vsplit(
+      wm.windows[0].buffer, wm.windows[0].viewport, BufferPosition(line: 0, column: 0)
+    )
+    discard wm.vsplit(
+      wm.windows[1].buffer, wm.windows[1].viewport, BufferPosition(line: 0, column: 0)
+    )
+
+    check wm.windows.len == 3
+    # availableWidth = 80 - 2(sep) = 78, each = 78 div 3 = 26, last = 80 - 54 = 26
+    check wm.windows[0].viewport.x == 0
+    check wm.windows[0].viewport.width == 26
+    check wm.windows[1].viewport.x == 27
+    check wm.windows[1].viewport.width == 26
+    check wm.windows[2].viewport.x == 54
+    check wm.windows[2].viewport.width == 26
+    check wm.windows[0].viewport.width + WindowSeparatorWidth +
+      wm.windows[1].viewport.width + WindowSeparatorWidth + wm.windows[2].viewport.width ==
+      80
+
+  # hsplit size checks (single status line)
+
+  test "2 hsplits produce correct heights (single status line)":
+    let wm = createSingleWindowManager(80, 24)
+
+    discard wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = false,
+    )
+
+    check wm.windows.len == 2
+    # totalContent = 24 - 1(sep) - 1(status) - 1(cmd) = 21, each = 21 div 2 = 10
+    # Window 0: height=10 (content only), Window 1: height = 24 - 11 = 13
+    check wm.windows[0].viewport.y == 0
+    check wm.windows[0].viewport.height == 10
+    check wm.windows[1].viewport.y == 11
+    check wm.windows[1].viewport.height == 13
+    check wm.windows[0].viewport.height + WindowSeparatorWidth +
+      wm.windows[1].viewport.height == 24
+
+  test "3 hsplits produce correct heights (single status line)":
+    let wm = createSingleWindowManager(80, 24)
+
+    discard wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = false,
+    )
+    discard wm.hsplit(
+      wm.windows[1].buffer,
+      wm.windows[1].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = false,
+    )
+
+    check wm.windows.len == 3
+    # totalContent = 24 - 2(sep) - 1(status) - 1(cmd) = 20, each = 20 div 3 = 6
+    # W0: h=6, W1: h=6, W2: h = 24 - 14 = 10
+    check wm.windows[0].viewport.y == 0
+    check wm.windows[0].viewport.height == 6
+    check wm.windows[1].viewport.y == 7
+    check wm.windows[1].viewport.height == 6
+    check wm.windows[2].viewport.y == 14
+    check wm.windows[2].viewport.height == 10
+    check wm.windows[0].viewport.height + WindowSeparatorWidth +
+      wm.windows[1].viewport.height + WindowSeparatorWidth +
+      wm.windows[2].viewport.height == 24
+
+  # hsplit size checks (multi status line)
+
+  test "2 hsplits produce correct heights (multi status line)":
+    let wm = createSingleWindowManager(80, 24)
+
+    discard wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = true,
+    )
+
+    check wm.windows.len == 2
+    # totalContent = 24 - 0(sep) - 2(status) - 1(cmd) = 21, each = 21 div 2 = 10
+    # W0: h = 10 + 1(status) = 11, W1: h = 24 - 11 = 13
+    check wm.windows[0].viewport.y == 0
+    check wm.windows[0].viewport.height == 11
+    check wm.windows[1].viewport.y == 11
+    check wm.windows[1].viewport.height == 13
+    check wm.windows[0].viewport.height + wm.windows[1].viewport.height == 24
+
+  test "3 hsplits produce correct heights (multi status line)":
+    let wm = createSingleWindowManager(80, 24)
+
+    discard wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = true,
+    )
+    discard wm.hsplit(
+      wm.windows[1].buffer,
+      wm.windows[1].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = true,
+    )
+
+    check wm.windows.len == 3
+    # totalContent = 24 - 0(sep) - 3(status) - 1(cmd) = 20, each = 20 div 3 = 6
+    # W0: h = 6 + 1 = 7, W1: h = 6 + 1 = 7, W2: h = 24 - 14 = 10
+    check wm.windows[0].viewport.y == 0
+    check wm.windows[0].viewport.height == 7
+    check wm.windows[1].viewport.y == 7
+    check wm.windows[1].viewport.height == 7
+    check wm.windows[2].viewport.y == 14
+    check wm.windows[2].viewport.height == 10
+    check wm.windows[0].viewport.height + wm.windows[1].viewport.height +
+      wm.windows[2].viewport.height == 24
+
+  # close + re-equalize size checks
+
+  test "Close middle of 3 vsplits produces same sizes as fresh 2 vsplit":
+    let wm = createSingleWindowManager(80, 24)
+
+    discard wm.vsplit(
+      wm.windows[0].buffer, wm.windows[0].viewport, BufferPosition(line: 0, column: 0)
+    )
+    discard wm.vsplit(
+      wm.windows[1].buffer, wm.windows[1].viewport, BufferPosition(line: 0, column: 0)
+    )
+    check wm.windows.len == 3
+
+    wm.deactivateAllWindows()
+    wm.activateWindow(1)
+    discard wm.closeWindow(multiStatusLine = false)
+    check wm.windows.len == 2
+
+    # Should match a fresh 2-vsplit layout
+    check wm.windows[0].viewport.x == 0
+    check wm.windows[0].viewport.width == 39
+    check wm.windows[1].viewport.x == 40
+    check wm.windows[1].viewport.width == 40
+
+  test "Close middle of 3 hsplits produces same sizes as fresh 2 hsplit":
+    let wm = createSingleWindowManager(80, 24)
+
+    discard wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = false,
+    )
+    discard wm.hsplit(
+      wm.windows[1].buffer,
+      wm.windows[1].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = false,
+    )
+    check wm.windows.len == 3
+
+    wm.deactivateAllWindows()
+    wm.activateWindow(1)
+    discard wm.closeWindow(multiStatusLine = false)
+    check wm.windows.len == 2
+
+    # Should match a fresh 2-hsplit layout
+    check wm.windows[0].viewport.y == 0
+    check wm.windows[0].viewport.height == 10
+    check wm.windows[1].viewport.y == 11
+    check wm.windows[1].viewport.height == 13

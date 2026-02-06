@@ -71,69 +71,6 @@ proc switchToPrevWindow*(wm: EditorWindowManager) =
   let prevIndex = (wm.activeWindowIndex - 1 + wm.windows.len) mod wm.windows.len
   wm.activateWindow(prevIndex)
 
-proc closeWindow*(wm: EditorWindowManager, multiStatusLine: bool): bool =
-  ## Close the active window and redistribute space to remaining windows
-  ## Returns true if this was the last window (editor should quit)
-  ## Note: The last window is never actually deleted - only the quit flag is returned
-
-  # If only one window left, indicate should quit but don't delete the window
-  # This ensures windows.len >= 1 invariant is maintained
-  if wm.windows.len <= 1:
-    return true
-
-  # Store the viewport of the window being closed
-  let
-    closedWindow = wm.windows[wm.activeWindowIndex]
-    closedX = closedWindow.viewport.x
-    closedY = closedWindow.viewport.y
-    closedWidth = closedWindow.viewport.width
-    closedHeight = closedWindow.viewport.height
-
-  # Remove the active window
-  wm.windows.delete(wm.activeWindowIndex)
-
-  # Adjust active index if needed
-  if wm.activeWindowIndex >= wm.windows.len:
-    wm.activeWindowIndex = wm.windows.len - 1
-
-  # Separator offset (WindowSeparatorWidth for single status line, 0 for multi status line)
-  let separatorOffset = if multiStatusLine: 0 else: WindowSeparatorWidth
-
-  # Redistribute the closed window's space to adjacent windows
-  # Find windows that were adjacent to the closed window
-  for window in wm.windows.mitems:
-    # Check if window was to the right of closed window (vertical split case)
-    if window.viewport.x == closedX + closedWidth + WindowSeparatorWidth and
-        window.viewport.y == closedY and window.viewport.height == closedHeight:
-      # Expand this window to the left
-      window.viewport.x = closedX
-      window.viewport.width += closedWidth + WindowSeparatorWidth
-
-    # Check if window was to the left of closed window
-    elif window.viewport.x + window.viewport.width + WindowSeparatorWidth == closedX and
-        window.viewport.y == closedY and window.viewport.height == closedHeight:
-      # Expand this window to the right
-      window.viewport.width += closedWidth + WindowSeparatorWidth
-
-    # Check if window was below closed window (horizontal split case)
-    elif window.viewport.y == closedY + closedHeight + separatorOffset and
-        window.viewport.x == closedX and window.viewport.width == closedWidth:
-      # Expand this window upward
-      window.viewport.y = closedY
-      window.viewport.height += closedHeight + separatorOffset
-
-    # Check if window was above closed window
-    elif window.viewport.y + window.viewport.height + separatorOffset == closedY and
-        window.viewport.x == closedX and window.viewport.width == closedWidth:
-      # Expand this window downward
-      window.viewport.height += closedHeight + separatorOffset
-
-  # Activate the new active window
-  if wm.windows.len > 0:
-    wm.activateWindow(wm.activeWindowIndex)
-
-  return false # Not the last window, don't quit
-
 proc groupWindowsByY*(wm: EditorWindowManager): seq[seq[int]] =
   ## Group windows by their Y coordinate (horizontal groups)
   var groups: seq[seq[int]] = @[]
@@ -383,6 +320,93 @@ proc equalizeHeightsForResize*(
         # No status line for non-last windows
         wm.windows[idx].viewport.height = windowContentHeight
       currentY += wm.windows[idx].viewport.height + separatorOffset
+
+proc closeWindow*(wm: EditorWindowManager, multiStatusLine: bool): bool =
+  ## Close the active window and redistribute space to remaining windows
+  ## Returns true if this was the last window (editor should quit)
+  ## Note: The last window is never actually deleted - only the quit flag is returned
+
+  # If only one window left, indicate should quit but don't delete the window
+  # This ensures windows.len >= 1 invariant is maintained
+  if wm.windows.len <= 1:
+    return true
+
+  # Store the viewport of the window being closed
+  let
+    closedWindow = wm.windows[wm.activeWindowIndex]
+    closedX = closedWindow.viewport.x
+    closedY = closedWindow.viewport.y
+    closedWidth = closedWindow.viewport.width
+    closedHeight = closedWindow.viewport.height
+
+  # Remove the active window
+  wm.windows.delete(wm.activeWindowIndex)
+
+  # Adjust active index if needed
+  if wm.activeWindowIndex >= wm.windows.len:
+    wm.activeWindowIndex = wm.windows.len - 1
+
+  # Redistribute the closed window's space by re-equalizing the group it belonged to.
+  # This correctly handles 3+ windows where the old per-window approach would cause
+  # multiple windows to absorb the same space, resulting in overlapping viewports.
+
+  # Check for horizontal split group (same x and width, stacked vertically)
+  var hSplitGroup: seq[int] = @[]
+  for i in 0 ..< wm.windows.len:
+    if wm.windows[i].viewport.x == closedX and
+        wm.windows[i].viewport.width == closedWidth:
+      hSplitGroup.add(i)
+
+  # Check for vertical split group (same y and height, side by side)
+  var vSplitGroup: seq[int] = @[]
+  for i in 0 ..< wm.windows.len:
+    if wm.windows[i].viewport.y == closedY and
+        wm.windows[i].viewport.height == closedHeight:
+      vSplitGroup.add(i)
+
+  if hSplitGroup.len > 0:
+    # Horizontal split: re-equalize heights in the group
+    var sortedGroup = hSplitGroup
+    sortedGroup.sort(
+      proc(a, b: int): int =
+        cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
+    )
+    let
+      firstY = min(wm.windows[sortedGroup[0]].viewport.y, closedY)
+      lastWin = wm.windows[sortedGroup[^1]]
+      lastEnd =
+        max(lastWin.viewport.y + lastWin.viewport.height, closedY + closedHeight)
+      totalHeight = lastEnd - firstY
+    if sortedGroup.len > 1:
+      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, firstY, multiStatusLine)
+    else:
+      # Single remaining window: expand to cover the closed window's space
+      wm.windows[sortedGroup[0]].viewport.y = firstY
+      wm.windows[sortedGroup[0]].viewport.height = totalHeight
+  elif vSplitGroup.len > 0:
+    # Vertical split: re-equalize widths in the group
+    var sortedGroup = vSplitGroup
+    sortedGroup.sort(
+      proc(a, b: int): int =
+        cmp(wm.windows[a].viewport.x, wm.windows[b].viewport.x)
+    )
+    let
+      firstX = min(wm.windows[sortedGroup[0]].viewport.x, closedX)
+      lastWin = wm.windows[sortedGroup[^1]]
+      lastEnd = max(lastWin.viewport.x + lastWin.viewport.width, closedX + closedWidth)
+      totalWidth = lastEnd - firstX
+    if sortedGroup.len > 1:
+      wm.equalizeWidthsInGroup(sortedGroup, totalWidth, firstX)
+    else:
+      # Single remaining window: expand to cover the closed window's space
+      wm.windows[sortedGroup[0]].viewport.x = firstX
+      wm.windows[sortedGroup[0]].viewport.width = totalWidth
+
+  # Activate the new active window
+  if wm.windows.len > 0:
+    wm.activateWindow(wm.activeWindowIndex)
+
+  return false # Not the last window, don't quit
 
 proc vsplit*(
     wm: EditorWindowManager,

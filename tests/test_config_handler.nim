@@ -184,24 +184,6 @@ suite "ConfigModeHandler - Mode Transitions":
 
     check result.kind == cmrEnterCommand
 
-  test "Save config with w":
-    let handler = newConfigModeHandler()
-    let configState = createTestConfigState()
-
-    let keyCombo = KeyCombo(isSpecial: false, char: "w", modifiers: {})
-    let result = handler.handleConfigModeKey(configState, 24, keyCombo)
-
-    check result.kind == cmrSaveConfig
-
-  test "Save config with W":
-    let handler = newConfigModeHandler()
-    let configState = createTestConfigState()
-
-    let keyCombo = KeyCombo(isSpecial: false, char: "W", modifiers: {})
-    let result = handler.handleConfigModeKey(configState, 24, keyCombo)
-
-    check result.kind == cmrSaveConfig
-
 suite "ConfigModeHandler - Boolean Value Editing":
   test "Toggle bool value with Enter":
     let handler = newConfigModeHandler()

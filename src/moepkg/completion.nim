@@ -482,17 +482,19 @@ proc calculatePopupPosition*(
     termWidth, termHeight: int,
     entries: seq[CompletionEntry],
     maxVisible: int = DefaultMaxVisible,
+    showBorder: bool = true,
 ): PopupPosition =
   ## Calculate popup position and size based on content
   ## Width is determined by longest word (with min/max constraints)
   ## Prefers below cursor, falls back to above if not enough space
   let visibleItems = min(entries.len, maxVisible)
-  let popupHeight = visibleItems + 2 # +2 for border
+  let borderSize = if showBorder: 2 else: 0
+  let popupHeight = visibleItems + borderSize
 
   # Calculate width based on longest word
   let maxWordWidth = calculateMaxWordWidth(entries)
   let contentWidth = max(MinPopupWidth, min(maxWordWidth + PopupPadding, MaxPopupWidth))
-  let popupWidth = contentWidth + 2 # +2 for border
+  let popupWidth = contentWidth + borderSize
 
   var x = cursorX
   var y = cursorY + 1 # Below cursor
@@ -552,39 +554,13 @@ proc renderCompletionPopup*(
       if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
         termBuffer[pos.x + pos.width - 1, pos.y] = cell("┐", popupBorderStyle)
 
-    # Side borders and content
+    # Side borders
     for i in 0 ..< contentHeight:
       let y = contentY + i
       if y >= 0 and y < termBuffer.area.height:
         # Left border
         if pos.x >= 0 and pos.x < termBuffer.area.width:
           termBuffer[pos.x, y] = cell("│", popupBorderStyle)
-
-        # Content
-        let entryIdx = menu.scrollOffset + i
-        if entryIdx < menu.entries.len:
-          let entry = menu.entries[entryIdx]
-          # Only highlight if selection mode is active
-          let isSelected = menu.hasSelection and entryIdx == menu.selectedIndex
-          let style = if isSelected: popupSelectedStyle else: popupNormalStyle
-
-          # Truncate word to fit
-          var displayWord = entry.word
-          if displayWord.len > contentWidth:
-            displayWord = displayWord[0 ..< contentWidth - 1] & "…"
-
-          # Draw word
-          var x = contentX
-          for r in displayWord.runes:
-            if x < contentX + contentWidth and x < termBuffer.area.width:
-              termBuffer[x, y] = cell($r, style)
-              x += runeWidth(r)
-
-          # Fill remaining space with background
-          while x < contentX + contentWidth and x < termBuffer.area.width:
-            termBuffer[x, y] = cell(" ", style)
-            inc x
-
         # Right border
         if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
           termBuffer[pos.x + pos.width - 1, y] = cell("│", popupBorderStyle)
@@ -599,6 +575,34 @@ proc renderCompletionPopup*(
           termBuffer[x, bottomY] = cell("─", popupBorderStyle)
       if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
         termBuffer[pos.x + pos.width - 1, bottomY] = cell("┘", popupBorderStyle)
+
+  # Content (always rendered)
+  for i in 0 ..< contentHeight:
+    let y = contentY + i
+    if y >= 0 and y < termBuffer.area.height:
+      let entryIdx = menu.scrollOffset + i
+      if entryIdx < menu.entries.len:
+        let entry = menu.entries[entryIdx]
+        # Only highlight if selection mode is active
+        let isSelected = menu.hasSelection and entryIdx == menu.selectedIndex
+        let style = if isSelected: popupSelectedStyle else: popupNormalStyle
+
+        # Truncate word to fit
+        var displayWord = entry.word
+        if displayWord.len > contentWidth:
+          displayWord = displayWord[0 ..< contentWidth - 1] & "…"
+
+        # Draw word
+        var x = contentX
+        for r in displayWord.runes:
+          if x < contentX + contentWidth and x < termBuffer.area.width:
+            termBuffer[x, y] = cell($r, style)
+            x += runeWidth(r)
+
+        # Fill remaining space with background
+        while x < contentX + contentWidth and x < termBuffer.area.width:
+          termBuffer[x, y] = cell(" ", style)
+          inc x
 
 # LSP completion support
 

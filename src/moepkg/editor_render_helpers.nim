@@ -304,7 +304,7 @@ proc renderLineSegmentWithSelection*(
           style
       # Render spaces instead of tab character
       for i in 0 ..< spacesToNextTab:
-        if screenX + displayX < buffer.area.width:
+        if screenX + displayX < ctx.windowRightEdge:
           # Check if we should show indentation guide at this position
           if e.shouldShowIndentationGuide(indentInfo, displayX, col):
             buffer.setString(screenX + displayX, screenY, "│", indentationLineStyle())
@@ -330,7 +330,7 @@ proc renderLineSegmentWithSelection*(
         if rune == ' '.Rune or rune == TAB_CHAR or rune == FULLWIDTH_SPACE:
           renderStyle = trailingSpacesStyle()
 
-      if screenX + displayX < buffer.area.width:
+      if screenX + displayX < ctx.windowRightEdge:
         buffer.setString(screenX + displayX, screenY, charStr, renderStyle)
       # Account for character width (wide characters like CJK are width 2)
       displayX += runeWidth(rune)
@@ -363,17 +363,21 @@ proc renderLineSegmentWithSelection*(
 
   # Fill the rest of the line with cursor line highlight if on cursor line
   if e.state.display.showCursorLine and lineIndex == ctx.cursorLine:
-    while screenX + displayX < buffer.area.width:
+    while screenX + displayX < ctx.windowRightEdge:
       buffer.setString(screenX + displayX, screenY, " ", cursorLineHighlightStyle())
       displayX += 1
 
 proc fillCursorLineBackground*(
-    e: Editor, buffer: var Buffer, screenX, screenY: int, lineIndex, cursorLine: int
+    e: Editor,
+    buffer: var Buffer,
+    screenX, screenY: int,
+    lineIndex, cursorLine: int,
+    windowRightEdge: int,
 ) =
   ## Fill the rest of the line with cursor line background if on cursor line
   if e.state.display.showCursorLine and lineIndex == cursorLine:
     var displayX = 0
-    while screenX + displayX < buffer.area.width:
+    while screenX + displayX < windowRightEdge:
       buffer.setString(screenX + displayX, screenY, " ", cursorLineHighlightStyle())
       displayX += 1
 

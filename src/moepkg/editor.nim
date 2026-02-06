@@ -27,7 +27,7 @@ import
 import
   status_line, render_utils, git_diff, logger, config_loader, keybind_config,
   search_utils, completion, signature_help, hover_popup, command_completion, motion,
-  color, gap_buffer, debug_viewer, message_log
+  color, gap_buffer, debug_viewer, message_log, unicode_utils
 import key_bindings except Command
 import command_handlers/insert_handler
 
@@ -743,7 +743,7 @@ proc maybeReloadExternallyModifiedFile*(e: Editor) =
   else:
     e.state.setStatusMessage("Failed to reload file: " & reloadResult.error)
 
-proc applyConfigSettings(e: Editor, newConfig: EditorConfig) =
+proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## Apply configuration settings to the editor
   ## Updates display settings, search settings, and other runtime state
   ## Note: Some settings require editor restart to take effect
@@ -1247,9 +1247,14 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
   if e.state.mode == EditorMode.Insert:
     let completionMgr = e.handlerManager.insertHandler.completionManager
     if completionMgr.isActive():
+      # Anchor the popup to the start of the word being completed, not the
+      # current cursor position. This prevents the popup from shifting when
+      # cycling through candidates of different lengths.
+      let anchorX = e.state.screenCursor.x - displayWidth(completionMgr.menu.prefix)
       let popupPos = calculatePopupPosition(
-        e.state.screenCursor.x, e.state.screenCursor.y, buffer.area.width,
-        buffer.area.height, completionMgr.menu.entries, completionMgr.menu.maxVisible,
+        anchorX, e.state.screenCursor.y, buffer.area.width, buffer.area.height,
+        completionMgr.menu.entries, completionMgr.menu.maxVisible,
+        e.config.autocomplete.windowBorder,
       )
       renderCompletionPopup(
         buffer, completionMgr.menu, popupPos, e.config.autocomplete.windowBorder

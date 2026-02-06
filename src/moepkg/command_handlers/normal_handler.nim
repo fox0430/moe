@@ -26,7 +26,10 @@ import std/[options, tables]
 import pkg/results
 
 import
-  ../[types, buffer, modes, motion, key_bindings, command_registry, config, registers]
+  ../[
+    types, buffer, modes, motion, key_bindings, command_registry, config, registers,
+    render_utils,
+  ]
 import visual_handler, insert_commands
 
 type
@@ -128,10 +131,14 @@ proc updateCursorToJumpPosition(
     else:
       min(pos.column, max(0, lineCharLen - 1))
 
-  let cursorPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
+  let
+    cursorPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
+    lineNumOffset = calculateViewportOffset(
+      buffer, state.display.showLineNumbers, state.display.showSidebar
+    )
   handler.motionController.viewportManager.updateViewport(
     cursorPos, buffer.len, state.display.showStatusLine, state.viewportReservedLines,
-    state.display.lineWrap, buffer, 0,
+    state.display.lineWrap, buffer, lineNumOffset, state.display.tabStop,
   )
   return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 

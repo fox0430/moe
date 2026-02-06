@@ -109,23 +109,18 @@ proc calculateWindowCursor*(
     for lineIdx in viewport.topLine ..< maxVisibleLine:
       if lineIdx >= 0 and lineIdx < buffer.len:
         let line = buffer.getLine(lineIdx)
-        let lineCharLen = line.charLen
 
-        if lineCharLen == 0:
-          screenY += 1
-        else:
-          let wrappedLines = calculateWrapCount(lineCharLen, maxWidth)
-          screenY += wrappedLines
+        let wrappedLines = calculateWrapCount(line, maxWidth, e.state.display.tabStop)
+        screenY += wrappedLines
 
         if screenY >= viewport.height - reservedLines:
           return CursorPosition(x: 0, y: 0)
 
     let
       cursorLineText = buffer.getLine(cursor.line)
-      displayWidthUpToCursor =
-        displayWidthUpToWithTabs(cursorLineText, cursor.column, e.state.display.tabStop)
-      wrapLineIndex = displayWidthUpToCursor div maxWidth
-      wrapLineColumn = displayWidthUpToCursor mod maxWidth
+      (wrapLineIndex, wrapLineColumn) = cursorWrapPosition(
+        cursorLineText, cursor.column, maxWidth, e.state.display.tabStop
+      )
 
     screenY += wrapLineIndex
 

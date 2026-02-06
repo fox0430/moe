@@ -887,6 +887,7 @@ proc calculateScreenLine(
     targetLine: int,
     lineWrap: bool,
     maxWidth: int,
+    tabStop: int = 4,
 ): int =
   ## Calculate screen line position of targetLine starting from startLine
   ## Returns the number of screen lines from startLine to targetLine
@@ -895,12 +896,8 @@ proc calculateScreenLine(
     if lineIdx >= 0 and lineIdx < buffer.len:
       if lineWrap:
         let line = buffer.getLine(lineIdx)
-        let lineCharLen = line.charLen
-        if lineCharLen == 0:
-          result += 1
-        else:
-          let wrappedLines = ((lineCharLen - 1) div maxWidth) + 1
-          result += wrappedLines
+        let wrappedLines = calculateWrapCount(line, maxWidth, tabStop)
+        result += wrappedLines
       else:
         result += 1
 
@@ -913,6 +910,7 @@ proc updateViewport*(
     lineWrap: bool = false,
     buffer: buffer.TextBuffer = nil,
     lineNumOffset: int = 0,
+    tabStop: int = 4,
 ) =
   ## Update viewport to keep cursor visible with 1-line scrolling
 
@@ -940,12 +938,15 @@ proc updateViewport*(
 
     # Calculate cursor's screen line position relative to topLine
     var cursorScreenLine = calculateScreenLine(
-      buffer, mgr.viewport.topLine, clampedCursorY, lineWrap, maxWidth
+      buffer, mgr.viewport.topLine, clampedCursorY, lineWrap, maxWidth, tabStop
     )
 
     # Add offset within the cursor's wrapped line
     if clampedCursorY >= 0 and clampedCursorY < buffer.len:
-      let wrapLineIndex = clampedCursorX div maxWidth
+      let
+        cursorLine = buffer.getLine(clampedCursorY)
+        (wrapLineIndex, _) =
+          cursorWrapPosition(cursorLine, clampedCursorX, maxWidth, tabStop)
       cursorScreenLine += wrapLineIndex
 
     let visibleHeight = mgr.viewport.height - actualReservedLines
@@ -962,11 +963,13 @@ proc updateViewport*(
 
       # Increment topLine until cursor is within visible area
       while targetTopLine <= clampedCursorY:
-        let testScreenLine =
-          calculateScreenLine(buffer, targetTopLine, clampedCursorY, lineWrap, maxWidth)
+        let testScreenLine = calculateScreenLine(
+          buffer, targetTopLine, clampedCursorY, lineWrap, maxWidth, tabStop
+        )
         let testWrapOffset =
           if clampedCursorY >= 0 and clampedCursorY < buffer.len:
-            clampedCursorX div maxWidth
+            let cursorLine = buffer.getLine(clampedCursorY)
+            cursorWrapPosition(cursorLine, clampedCursorX, maxWidth, tabStop)[0]
           else:
             0
         let totalScreenLine = testScreenLine + testWrapOffset
@@ -1228,22 +1231,17 @@ proc executeMotion*(
   if updateViewport:
     let
       lineCount = controller.executor.buffer.len
-      # Calculate line number offset for viewport calculation (matches renderLineNumbers)
-      showLineNumbers = controller.cursorManager.state.display.showLineNumbers
-      # Include sidebar width to match the calculation in editor.nim
-      sidebarWidth =
-        if controller.cursorManager.state.display.showSidebar:
-          2 # DefaultSidebarWidth from sidebar.nim
-        else:
-          0
-      lineNumOffset =
-        calculateLineNumOffset(controller.executor.buffer, showLineNumbers) +
-        sidebarWidth
+      lineNumOffset = calculateViewportOffset(
+        controller.executor.buffer,
+        controller.cursorManager.state.display.showLineNumbers,
+        controller.cursorManager.state.display.showSidebar,
+      )
 
     controller.viewportManager.updateViewport(
       newPos, lineCount, controller.cursorManager.state.display.showStatusLine,
       controller.cursorManager.state.viewportReservedLines, lineWrap,
       controller.executor.buffer, lineNumOffset,
+      controller.cursorManager.state.display.tabStop,
     )
 
   # Disable horizontal scrolling when line wrap is enabled

@@ -25,7 +25,7 @@ import pkg/celina
 
 import
   editor_types, editor_window, editor_render_window, editor_render_modes, render_utils,
-  status_line, tab_line
+  status_line, tab_line, buffer
 
 proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
   ## Update viewport size from buffer area and return true if resized
@@ -43,13 +43,36 @@ proc adjustViewportForCursor(
     cursor: BufferPosition,
     visibleHeight, textAreaWidth: int,
     lineWrap: bool,
+    textBuffer: TextBuffer = nil,
+    tabStop: int = 4,
 ) =
   ## Adjust viewport to keep cursor visible (scroll if cursor is off-screen)
   # Vertical adjustment
-  if cursor.line >= viewport.topLine + visibleHeight:
-    viewport.topLine = max(0, cursor.line - visibleHeight + 1)
-  elif cursor.line < viewport.topLine:
-    viewport.topLine = cursor.line
+  if lineWrap and not textBuffer.isNil:
+    let maxWidth = max(1, textAreaWidth)
+
+    if cursor.line < viewport.topLine:
+      viewport.topLine = cursor.line
+    else:
+      # Count screen lines from topLine through cursor.line (inclusive)
+      var totalScreenLines = 0
+      for lineIdx in viewport.topLine .. min(cursor.line, textBuffer.len - 1):
+        totalScreenLines +=
+          calculateWrapCount(textBuffer.getLine(lineIdx), maxWidth, tabStop)
+
+      if totalScreenLines > visibleHeight:
+        # Cursor is below viewport — scroll down incrementally (O(n))
+        var newTopLine = viewport.topLine
+        while totalScreenLines > visibleHeight and newTopLine < cursor.line:
+          totalScreenLines -=
+            calculateWrapCount(textBuffer.getLine(newTopLine), maxWidth, tabStop)
+          newTopLine += 1
+        viewport.topLine = newTopLine
+  else:
+    if cursor.line >= viewport.topLine + visibleHeight:
+      viewport.topLine = max(0, cursor.line - visibleHeight + 1)
+    elif cursor.line < viewport.topLine:
+      viewport.topLine = cursor.line
 
   # Horizontal adjustment (only when line wrap is disabled)
   if not lineWrap:
@@ -122,13 +145,12 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       reservedLines = e.calculateReservedLines(isBottomWindow)
       visibleHeight = max(1, window.viewport.height - reservedLines - tabLineOffset)
       sidebarWidth = e.calculateSidebarWidth()
-      textAreaWidth =
-        max(0, window.viewport.width - sidebarWidth - lineNumOffset - LineNumberPadding)
+      textAreaWidth = max(0, window.viewport.width - sidebarWidth - lineNumOffset)
 
     # Adjust viewport to keep cursor visible
     adjustViewportForCursor(
       window.viewport, window.cursor, visibleHeight, textAreaWidth,
-      e.state.display.lineWrap,
+      e.state.display.lineWrap, window.buffer, e.state.display.tabStop,
     )
 
     # Render tab line for this window if enabled

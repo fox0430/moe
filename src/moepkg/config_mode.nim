@@ -325,6 +325,15 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
       c.standard.colorMode = parseEnum[ColorMode](v),
     enumOptions: @["8", "16", "256", "24bit", "none"],
   )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "mouse",
+    section: "Standard",
+    boolGet: proc(c: EditorConfig): bool =
+      c.standard.mouse,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.standard.mouse = v,
+  )
 
   # Clipboard section
   result.add ConfigItemDescriptor(

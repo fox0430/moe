@@ -23,9 +23,7 @@ import std/[options, strutils, unicode]
 
 import pkg/celina
 
-import
-  editor_types, editor_window, editor_render_helpers, render_utils, unicode_utils,
-  sidebar
+import editor_types, editor_window, editor_render_helpers, render_utils, sidebar
 
 proc renderWindowLineWrapped*(
     e: Editor,
@@ -67,7 +65,12 @@ proc renderWindowLineWrapped*(
     # Fill with cursor line highlight if on cursor line
     let textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
     e.fillCursorLineBackground(
-      buffer, textScreenX, actualScreenY, lineIndex, window.cursor.line
+      buffer,
+      textScreenX,
+      actualScreenY,
+      lineIndex,
+      window.cursor.line,
+      window.viewport.x + window.viewport.width,
     )
     inc screenY
     inc lineIndex
@@ -75,18 +78,23 @@ proc renderWindowLineWrapped*(
 
   var
     startCharCol = 0
+    startByteCol = 0
     wrapLineCount = 0
 
   # Don't render if already past visible area
   if screenY >= maxScreenY:
     return
 
+  let tabStop = e.state.display.tabStop
+
   while startCharCol < lineCharLen and screenY < maxScreenY:
+    # Use byte-position-aware function to avoid O(n) skip per segment
     let
-      endCharCol = min(startCharCol + maxWidth, lineCharLen)
-      startBytePos = charToBytePos(line, startCharCol)
-      endBytePos = charToBytePos(line, endCharCol)
-      displayLine = line[startBytePos ..< endBytePos]
+      (charCount, _, endBytePos) =
+        displayWidthSubstrFromByte(line, startByteCol, maxWidth, tabStop)
+      endCharCol = min(startCharCol + max(1, charCount), lineCharLen)
+      actualEndByte = if endCharCol >= lineCharLen: line.len else: endBytePos
+      displayLine = line[startByteCol ..< actualEndByte]
       textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
       currentActualScreenY = window.viewport.y + screenY
 
@@ -121,7 +129,8 @@ proc renderWindowLineWrapped*(
 
     inc screenY
     inc wrapLineCount
-    startCharCol += maxWidth
+    startCharCol = endCharCol
+    startByteCol = actualEndByte
 
     if screenY >= maxScreenY:
       break
@@ -185,7 +194,12 @@ proc renderWindowLineNoWrap*(
   else:
     # Empty line or scrolled past line end - fill with cursor line highlight if on cursor line
     e.fillCursorLineBackground(
-      buffer, textScreenX, actualScreenY, lineIndex, window.cursor.line
+      buffer,
+      textScreenX,
+      actualScreenY,
+      lineIndex,
+      window.cursor.line,
+      window.viewport.x + window.viewport.width,
     )
 
 proc renderWindowSidebar*(
@@ -279,6 +293,7 @@ proc renderWindow*(
     selStart: selStart,
     selEnd: selEnd,
     windowMode: window.mode,
+    windowRightEdge: window.viewport.x + window.viewport.width,
   )
 
   var

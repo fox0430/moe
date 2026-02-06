@@ -28,7 +28,7 @@ import pkg/results
 
 import
   types, buffer, motion, key_bindings, modes, search_utils, clipboard, config, logger,
-  unicode_utils, registers
+  unicode_utils, registers, render_utils
 
 import command_handlers/[visual_commands, insert_commands, normal_commands]
 
@@ -4139,17 +4139,17 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       ctx.cursor = newPos
 
       # Update viewport to follow cursor
-      let lineCount = ctx.buffer.len
-      let cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
+      let
+        lineCount = ctx.buffer.len
+        cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
+        lineNumOffset = calculateViewportOffset(
+          ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar
+        )
 
       ctx.motionController.viewportManager.updateViewport(
-        cursorPos,
-        lineCount,
-        ctx.state.display.showStatusLine,
-        ctx.state.viewportReservedLines,
-        false, # Force immediate scroll for search
-        ctx.buffer,
-        0, # lineNumOffset
+        cursorPos, lineCount, ctx.state.display.showStatusLine,
+        ctx.state.viewportReservedLines, ctx.state.display.lineWrap, ctx.buffer,
+        lineNumOffset, ctx.state.display.tabStop,
       )
 
       ctx.state.statusMessage = "Found: " & searchText
@@ -4417,12 +4417,18 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
           ctx.cursor = newPos
 
           # Update viewport to follow cursor
-          let lineCount = ctx.buffer.len
-          let cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
+          let
+            lineCount = ctx.buffer.len
+            cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
+            lineNumOffset = calculateViewportOffset(
+              ctx.buffer, ctx.state.display.showLineNumbers,
+              ctx.state.display.showSidebar,
+            )
 
           ctx.motionController.viewportManager.updateViewport(
             cursorPos, lineCount, ctx.state.display.showStatusLine,
-            ctx.state.viewportReservedLines, false, ctx.buffer, 0,
+            ctx.state.viewportReservedLines, ctx.state.display.lineWrap, ctx.buffer,
+            lineNumOffset, ctx.state.display.tabStop,
           )
 
           ctx.state.statusMessage = "Found: " & info.word
@@ -4495,12 +4501,18 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
           ctx.cursor = newPos
 
           # Update viewport to follow cursor
-          let lineCount = ctx.buffer.len
-          let cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
+          let
+            lineCount = ctx.buffer.len
+            cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
+            lineNumOffset = calculateViewportOffset(
+              ctx.buffer, ctx.state.display.showLineNumbers,
+              ctx.state.display.showSidebar,
+            )
 
           ctx.motionController.viewportManager.updateViewport(
             cursorPos, lineCount, ctx.state.display.showStatusLine,
-            ctx.state.viewportReservedLines, false, ctx.buffer, 0,
+            ctx.state.viewportReservedLines, ctx.state.display.lineWrap, ctx.buffer,
+            lineNumOffset, ctx.state.display.tabStop,
           )
 
           ctx.state.statusMessage = "Found: " & info.word

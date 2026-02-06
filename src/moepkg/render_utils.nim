@@ -143,12 +143,129 @@ proc formatLineNumber*(lineIndex: int, width: int): string =
   ## Format a line number string with proper alignment
   align($(lineIndex + LineNumberBase), width - LineNumberPadding) & " "
 
-proc calculateWrapCount*(lineCharLen: int, maxWidth: int): int =
-  ## Calculate how many screen lines a logical line will take when wrapped
-  if lineCharLen == 0:
-    1
-  else:
-    ((lineCharLen - 1) div maxWidth) + 1
+proc displayWidthSubstrWithTabs*(
+    text: string, startChar: int, maxWidth: int, tabStop: int
+): (int, int) =
+  ## Calculate how many characters from startChar fit within maxWidth display columns,
+  ## accounting for tab characters expanded relative to the segment start.
+  ## Returns (charCount, actualDisplayWidth)
+  let safeTabStop = if tabStop > 0: tabStop else: 1
+  var
+    currentChar = 0
+    currentWidth = 0
+    charCount = 0
+
+  for rune in text.runes:
+    if currentChar < startChar:
+      currentChar += 1
+      continue
+
+    let w =
+      if rune == TAB_CHAR:
+        safeTabStop - (currentWidth mod safeTabStop)
+      else:
+        runeWidth(rune)
+
+    if currentWidth + w > maxWidth:
+      break
+
+    currentWidth += w
+    charCount += 1
+    currentChar += 1
+
+  return (charCount, currentWidth)
+
+proc displayWidthSubstrFromByte*(
+    text: string, startByte: int, maxWidth: int, tabStop: int
+): (int, int, int) =
+  ## Calculate segment boundary starting from a byte position.
+  ## Returns (charCount, actualDisplayWidth, endBytePosition).
+  ## Unlike displayWidthSubstrWithTabs, this starts directly from startByte
+  ## instead of scanning from the beginning, avoiding O(startChar) skip overhead.
+  let safeTabStop = if tabStop > 0: tabStop else: 1
+  var
+    bytePos = startByte
+    currentWidth = 0
+    charCount = 0
+
+  while bytePos < text.len:
+    let
+      rune = text.runeAt(bytePos)
+      runeBytes = runeLenAt(text, bytePos)
+      w =
+        if rune == TAB_CHAR:
+          safeTabStop - (currentWidth mod safeTabStop)
+        else:
+          runeWidth(rune)
+
+    if charCount > 0 and currentWidth + w > maxWidth:
+      # Character doesn't fit — return without including it
+      return (charCount, currentWidth, bytePos)
+
+    currentWidth += w
+    charCount += 1
+    bytePos += runeBytes
+
+  return (charCount, currentWidth, bytePos)
+
+proc screenXToCharIndex*(
+    text: string, startChar: int, targetDisplayX: int, tabStop: int
+): int =
+  ## Return the character offset (from startChar) corresponding to targetDisplayX
+  ## display columns within a wrap segment starting at startChar.
+  ## For multi-column characters (tabs, wide chars), clicking anywhere within the
+  ## character's display width selects that character.
+  let safeTabStop = if tabStop > 0: tabStop else: 1
+  var
+    currentChar = 0
+    currentWidth = 0
+    charOffset = 0
+
+  for rune in text.runes:
+    if currentChar < startChar:
+      currentChar += 1
+      continue
+
+    let w =
+      if rune == TAB_CHAR:
+        safeTabStop - (currentWidth mod safeTabStop)
+      else:
+        runeWidth(rune)
+
+    # If targetDisplayX falls within this character's range, stop here
+    if currentWidth + w > targetDisplayX:
+      break
+
+    currentWidth += w
+    charOffset += 1
+    currentChar += 1
+
+  return charOffset
+
+proc calculateWrapCount*(text: string, maxWidth: int, tabStop: int): int =
+  ## Calculate how many screen lines a logical line will take when wrapped.
+  ## Uses display width (accounting for tabs and wide characters).
+  ## Single-pass O(n) implementation — iterates runes once without re-scanning.
+  if text.len == 0:
+    return 1
+  let safeTabStop = if tabStop > 0: tabStop else: 1
+  result = 1
+  var segmentWidth = 0
+
+  for rune in text.runes:
+    let w =
+      if rune == TAB_CHAR:
+        safeTabStop - (segmentWidth mod safeTabStop)
+      else:
+        runeWidth(rune)
+
+    if segmentWidth > 0 and segmentWidth + w > maxWidth:
+      # This character starts a new segment
+      result += 1
+      # Recalculate width in new segment context (tab width depends on position)
+      segmentWidth = if rune == TAB_CHAR: safeTabStop else: w
+    else:
+      segmentWidth += w
 
 proc clearBuffer*(buffer: var Buffer) =
   ## Clear the entire buffer to prevent rendering artifacts
@@ -170,6 +287,14 @@ proc calculateLineNumOffset*(buffer: TextBuffer, showLineNumber: bool = true): i
     len($buffer.len) + LineNumberSpacer
   else:
     0
+
+proc calculateViewportOffset*(
+    buffer: TextBuffer, showLineNumbers, showSidebar: bool
+): int =
+  ## Calculate the total line number + sidebar offset for viewport width calculations.
+  ## Matches the rendering layout: sidebarWidth + lineNumOffset.
+  calculateLineNumOffset(buffer, showLineNumbers) + (if showSidebar: 2 else: 0)
+    # DefaultSidebarWidth = 2
 
 proc findMaxBottomY*(windows: seq[EditorWindow]): int =
   ## Find the maximum bottom Y coordinate among all windows
@@ -236,6 +361,50 @@ proc displayWidthWithTabs*(text: string, tabStop: int): int =
       result += spacesToNextTab
     else:
       result += runeWidth(rune)
+
+proc cursorWrapPosition*(
+    text: string, cursorChar: int, maxWidth: int, tabStop: int
+): (int, int) =
+  ## Calculate which wrap segment the cursor falls in and its display column
+  ## within that segment. Returns (wrapLineIndex, displayColumnInSegment).
+  ## Single-pass O(n) implementation — iterates runes once without re-scanning.
+  if text.len == 0 or cursorChar <= 0:
+    return (0, 0)
+
+  let safeTabStop = if tabStop > 0: tabStop else: 1
+  var
+    segmentWidth = 0
+    wrapLine = 0
+    charIndex = 0
+
+  for rune in text.runes:
+    let w =
+      if rune == TAB_CHAR:
+        safeTabStop - (segmentWidth mod safeTabStop)
+      else:
+        runeWidth(rune)
+
+    if segmentWidth > 0 and segmentWidth + w > maxWidth:
+      # This character starts a new segment
+      wrapLine += 1
+      let newW = if rune == TAB_CHAR: safeTabStop else: w
+
+      # Check if cursor is at (or past) this character
+      if charIndex >= cursorChar:
+        return (wrapLine, 0)
+
+      segmentWidth = newW
+    else:
+      # Check if cursor is at (or past) this character
+      if charIndex >= cursorChar:
+        return (wrapLine, segmentWidth)
+
+      segmentWidth += w
+
+    charIndex += 1
+
+  # Cursor is at or past end of text — return current segment position
+  return (wrapLine, segmentWidth)
 
 proc isWhitespace(rune: Rune): bool =
   ## Check if a rune is a whitespace character (space, tab, full-width space)

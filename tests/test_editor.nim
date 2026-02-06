@@ -21,7 +21,7 @@
 
 import std/[unittest, os, options, strutils]
 import pkg/results
-import ../src/moepkg/[editor, buffer, config, config_loader, gap_buffer]
+import ../src/moepkg/[editor, buffer, config, config_loader, config_mode, gap_buffer]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -828,3 +828,179 @@ suite "Editor - Edge cases with single buffer":
 
     e.switchToPrevBuffer()
     check "No more buffers" in e.state.statusMessage
+
+suite "Editor - applyConfigSettings syncs display state":
+  test "Syncs showLineNumbers from config.standard.number":
+    let e = createTestEditor()
+
+    e.config.standard.number = false
+    e.applyConfigSettings(e.config)
+    check e.state.display.showLineNumbers == false
+
+    e.config.standard.number = true
+    e.applyConfigSettings(e.config)
+    check e.state.display.showLineNumbers == true
+
+  test "Syncs showStatusLine from config.standard.statusLine":
+    let e = createTestEditor()
+
+    e.config.standard.statusLine = false
+    e.applyConfigSettings(e.config)
+    check e.state.display.showStatusLine == false
+
+    e.config.standard.statusLine = true
+    e.applyConfigSettings(e.config)
+    check e.state.display.showStatusLine == true
+
+  test "Syncs tabStop from config.standard.tabStop":
+    let e = createTestEditor()
+
+    e.config.standard.tabStop = 8
+    e.applyConfigSettings(e.config)
+    check e.state.display.tabStop == 8
+
+    e.config.standard.tabStop = 4
+    e.applyConfigSettings(e.config)
+    check e.state.display.tabStop == 4
+
+  test "Syncs showSyntax from config.standard.syntax":
+    let e = createTestEditor()
+
+    e.config.standard.syntax = false
+    e.applyConfigSettings(e.config)
+    check e.state.display.showSyntax == false
+
+  test "Syncs showIndentationLines from config.standard.indentationLines":
+    let e = createTestEditor()
+
+    e.config.standard.indentationLines = true
+    e.applyConfigSettings(e.config)
+    check e.state.display.showIndentationLines == true
+
+  test "Syncs showSidebar from config.standard.sidebar":
+    let e = createTestEditor()
+
+    e.config.standard.sidebar = true
+    e.applyConfigSettings(e.config)
+    check e.state.display.showSidebar == true
+
+  test "Syncs expandTab from config.standard.expandTab":
+    let e = createTestEditor()
+
+    e.config.standard.expandTab = false
+    e.applyConfigSettings(e.config)
+    check e.state.display.expandTab == false
+
+  test "Syncs autoIndent from config.standard.autoIndent":
+    let e = createTestEditor()
+
+    e.config.standard.autoIndent = false
+    e.applyConfigSettings(e.config)
+    check e.state.display.autoIndent == false
+
+  test "Syncs autoCloseParen from config.standard.autoCloseParen":
+    let e = createTestEditor()
+
+    e.config.standard.autoCloseParen = true
+    e.applyConfigSettings(e.config)
+    check e.state.display.autoCloseParen == true
+
+  test "Syncs autoDeleteParen from config.standard.autoDeleteParen":
+    let e = createTestEditor()
+
+    e.config.standard.autoDeleteParen = true
+    e.applyConfigSettings(e.config)
+    check e.state.display.autoDeleteParen == true
+
+  test "Syncs search settings from config":
+    let e = createTestEditor()
+
+    e.config.standard.ignorecase = false
+    e.config.standard.smartcase = false
+    e.config.standard.incrementalSearch = false
+    e.applyConfigSettings(e.config)
+
+    check e.state.search.ignorecase == false
+    check e.state.search.smartcase == false
+    check e.state.search.incsearch == false
+
+suite "Editor - Config mode changes sync to display via applyConfigSettings":
+  test "Config mode toggle number syncs to display":
+    let e = createTestEditor()
+    let configState = newConfigModeState(e.config)
+
+    # Find the "number" bool item
+    for i, item in configState.items:
+      if item.kind == cvkBool and item.displayName == "number":
+        configState.selectedIndex = i
+        break
+
+    let originalDisplay = e.state.display.showLineNumbers
+
+    # Toggle in config mode (updates EditorConfig)
+    configState.toggleBoolValue()
+    check e.config.standard.number == not originalDisplay
+
+    # Simulate what handleEvent now does for config mode
+    e.applyConfigSettings(e.config)
+    check e.state.display.showLineNumbers == not originalDisplay
+
+  test "Config mode toggle statusLine syncs to display":
+    let e = createTestEditor()
+    let configState = newConfigModeState(e.config)
+
+    for i, item in configState.items:
+      if item.kind == cvkBool and item.displayName == "statusLine":
+        configState.selectedIndex = i
+        break
+
+    let original = e.state.display.showStatusLine
+
+    configState.toggleBoolValue()
+    e.applyConfigSettings(e.config)
+    check e.state.display.showStatusLine == not original
+
+  test "Config mode change tabStop syncs to display":
+    let e = createTestEditor()
+    let configState = newConfigModeState(e.config)
+
+    for i, item in configState.items:
+      if item.kind == cvkInt and item.displayName == "tabStop":
+        configState.selectedIndex = i
+        break
+
+    let original = e.state.display.tabStop
+
+    configState.incrementIntValue()
+    e.applyConfigSettings(e.config)
+    check e.state.display.tabStop == original + 1
+
+  test "Config mode toggle syntax syncs to display":
+    let e = createTestEditor()
+    let configState = newConfigModeState(e.config)
+
+    for i, item in configState.items:
+      if item.kind == cvkBool and item.displayName == "syntax":
+        configState.selectedIndex = i
+        break
+
+    let original = e.state.display.showSyntax
+
+    configState.toggleBoolValue()
+    e.applyConfigSettings(e.config)
+    check e.state.display.showSyntax == not original
+
+  test "Config mode toggle sidebar syncs to display":
+    let e = createTestEditor()
+    let configState = newConfigModeState(e.config)
+
+    for i, item in configState.items:
+      if item.kind == cvkBool and item.displayName == "sidebar":
+        configState.selectedIndex = i
+        break
+
+    let original = e.state.display.showSidebar
+
+    configState.toggleBoolValue()
+    e.applyConfigSettings(e.config)
+    check e.state.display.showSidebar == not original
