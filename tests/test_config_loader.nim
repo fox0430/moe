@@ -19,7 +19,7 @@
 
 import std/[unittest, os, strutils, tables, options]
 import pkg/results
-import ../src/moepkg/[config_loader, config]
+import ../src/moepkg/[config_loader, config, color, theme]
 
 var testFileCounter {.global.} = 0
 
@@ -889,3 +889,285 @@ tabStop = "four"
     let (_, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
     check "Standard.tabStop" in vr.errors[0].name
+
+suite "Config - getConfigPath":
+  test "Path ends with moerc.toml":
+    let path = getConfigPath()
+    check path.endsWith("moerc.toml")
+
+  test "Path contains moe directory":
+    let path = getConfigPath()
+    check "moe" in path
+
+  test "Path is not empty":
+    let path = getConfigPath()
+    check path.len > 0
+
+suite "Config - loadConfig":
+  test "loadConfig returns Ok":
+    let result = loadConfig()
+    check result.isOk
+
+  test "loadConfig returns default values":
+    let result = loadConfig()
+    check result.isOk
+    let (config, _) = result.get
+    # tabStop default is 2
+    check config.standard.tabStop == 2
+    check config.standard.number == true
+
+suite "Config - loadThemeFromToml":
+  test "Non-existent file returns error with 'not found'":
+    let result = loadThemeFromToml("/nonexistent/path/theme.toml")
+    check result.isErr
+    check "not found" in result.error.toLowerAscii
+
+  test "Invalid TOML returns error with 'parse'":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_invalid_" & $testFileCounter & ".toml"
+    writeFile(testFile, "this is not valid = = = toml [[[")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isErr
+    check "parse" in result.error.toLowerAscii
+
+  test "Missing [Colors] section returns error":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_nocolor_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Other]\nkey = \"value\"\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isErr
+    check "Colors" in result.error
+
+  test "Valid [Colors] section returns Ok":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_valid_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nforeground = \"#ff0000\"\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isOk
+
+  test "Foreground color override":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_fg_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nforeground = \"#ff0000\"\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isOk
+    let colors = result.get
+    check colors[EditorColorPairIndex.default].foreground.rgb.red == 255
+    check colors[EditorColorPairIndex.default].foreground.rgb.green == 0
+    check colors[EditorColorPairIndex.default].foreground.rgb.blue == 0
+
+  test "Background color override":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_bg_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nbackground = \"#00ff00\"\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isOk
+    let colors = result.get
+    check colors[EditorColorPairIndex.default].background.rgb.green == 255
+
+  test "Keyword foreground color":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_kw_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nforeground = \"#ffffff\"\nkeyword = \"#0000ff\"\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isOk
+    let colors = result.get
+    check colors[EditorColorPairIndex.keyword].foreground.rgb.blue == 255
+    check colors[EditorColorPairIndex.keyword].foreground.rgb.red == 0
+
+  test "Keyword background color via Bg suffix":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_kwbg_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nkeywordBg = \"#112233\"\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isOk
+    let colors = result.get
+    check colors[EditorColorPairIndex.keyword].background.rgb.red == 0x11
+    check colors[EditorColorPairIndex.keyword].background.rgb.green == 0x22
+    check colors[EditorColorPairIndex.keyword].background.rgb.blue == 0x33
+
+  test "termDefault color is processed (rgb.red == -1)":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_td_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nforeground = \"termDefault\"\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isOk
+    let colors = result.get
+    check colors[EditorColorPairIndex.default].foreground.rgb.red == -1
+
+  test "Unknown color key is ignored and returns Ok":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_unk_" & $testFileCounter & ".toml"
+    writeFile(
+      testFile, "[Colors]\nforeground = \"#ffffff\"\nnonExistentKey = \"#123456\"\n"
+    )
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isOk
+
+suite "Config - loadTheme":
+  test "tkDefault returns DefaultColors":
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let result = loadTheme(config)
+    check result.isOk
+    let colors = result.get
+    check colors == DefaultColors
+
+  test "tkConfig with valid file returns Ok":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_loadtheme_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nforeground = \"#aabbcc\"\n")
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = testFile
+    let result = loadTheme(config)
+    check result.isOk
+
+  test "tkConfig with non-existent file returns error":
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = "/nonexistent/theme.toml"
+    let result = loadTheme(config)
+    check result.isErr
+
+suite "Config - initTheme":
+  test "tkDefault does not crash":
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    initTheme(config)
+
+  test "Non-existent theme file falls back to default":
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = "/nonexistent/theme.toml"
+    initTheme(config)
+    # Should not crash; falls back to default theme
+
+suite "Config - saveConfigToToml":
+  test "Save default config to file":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    let config = newEditorConfig()
+    let result = saveConfigToToml(config, testFile)
+    check result.isOk
+    check fileExists(testFile)
+
+  test "Saved config is valid TOML and can be reloaded":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_reload_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    let config = newEditorConfig()
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+
+  test "tabStop value round-trips":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_tabstop_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.standard.tabStop = 8
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.standard.tabStop == 8
+
+  test "Boolean setting round-trips":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_bool_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.standard.number = false
+    config.standard.syntax = false
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.standard.number == false
+    check loaded.standard.syntax == false
+
+  test "Parent directory is created automatically":
+    inc testFileCounter
+    let testDir = "/tmp/moe_test_save_dir_" & $testFileCounter
+    let testFile = testDir / "subdir" / "config.toml"
+    defer:
+      removeDir(testDir)
+
+    let config = newEditorConfig()
+    let result = saveConfigToToml(config, testFile)
+    check result.isOk
+    check fileExists(testFile)
+
+  test "Output contains expected section headers":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_sections_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    let config = newEditorConfig()
+    let result = saveConfigToToml(config, testFile)
+    check result.isOk
+
+    let content = readFile(testFile)
+    check "[Standard]" in content
+    check "[Clipboard]" in content
+    check "[StatusLine]" in content
+    check "[Highlight]" in content
+    check "[AutoBackup]" in content
+    check "[Notification]" in content
+    check "[Lsp]" in content
+
+suite "Config - saveConfig":
+  test "Default config does not crash":
+    let config = newEditorConfig()
+    # saveConfig writes to the real config path; we just verify no crash.
+    # The result may be Ok or Err depending on file system permissions.
+    discard saveConfig(config)

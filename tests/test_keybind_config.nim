@@ -464,3 +464,17 @@ suite "KeybindConfig - Undo/Redo keybindings":
     let binding = keyRegistry.findBinding(EditorMode.Normal, ctrlR)
     check binding.isSome
     check binding.get.name == "redo"
+
+suite "KeybindConfig - loadDefaultKeybindings":
+  test "Does not crash":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    registry.loadDefaultKeybindings()
+
+  test "Existing bindings are preserved":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+    let countBefore = registry.bindings[EditorMode.Normal].len
+    registry.loadDefaultKeybindings()
+    # Existing bindings should still be present (count >= before)
+    check registry.bindings[EditorMode.Normal].len >= countBefore
