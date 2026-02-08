@@ -1806,3 +1806,117 @@ suite "handleMouseEvent":
 
     # Should have switched to the bottom window
     check currentMainWindowNode.windowIndex == 1
+
+  test "Scroll up":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toSeqRunes(
+      @[
+        "line 1", "line 2", "line 3", "line 4", "line 5", "line 6", "line 7", "line 8",
+        "line 9", "line 10",
+      ]
+    ).toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    # Move cursor to line 5
+    currentMainWindowNode.currentLine = 5
+    currentMainWindowNode.currentColumn = 0
+
+    # Simulate scroll up (button code 64)
+    let input = "\e[<64;1;1M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    # Cursor should have moved up by 3 lines (ScrollLines = 3)
+    check currentMainWindowNode.currentLine == 2
+
+  test "Scroll up at top of file":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["line 1", "line 2", "line 3"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 0
+
+    # Simulate scroll up (button code 64)
+    let input = "\e[<64;1;1M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    # Should clamp to line 0
+    check currentMainWindowNode.currentLine == 0
+
+  test "Scroll down":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toSeqRunes(
+      @[
+        "line 1", "line 2", "line 3", "line 4", "line 5", "line 6", "line 7", "line 8",
+        "line 9", "line 10",
+      ]
+    ).toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentColumn = 0
+
+    # Simulate scroll down (button code 65)
+    let input = "\e[<65;1;1M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    # Cursor should have moved down by 3 lines (ScrollLines = 3)
+    check currentMainWindowNode.currentLine == 5
+
+  test "Scroll down at end of file":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["line 1", "line 2", "line 3"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentColumn = 0
+
+    # Simulate scroll down (button code 65)
+    let input = "\e[<65;1;1M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    # Should clamp to last line
+    check currentMainWindowNode.currentLine == 2
+
+  test "Scroll ignored when mouse disabled":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer =
+      toSeqRunes(@["line 1", "line 2", "line 3", "line 4", "line 5"]).toGapBuffer
+
+    status.settings.standard.mouse = false
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentColumn = 0
+
+    # Simulate scroll up (button code 64)
+    let input = "\e[<64;1;1M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    # Cursor should not have moved
+    check currentMainWindowNode.currentLine == 2
