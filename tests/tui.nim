@@ -221,3 +221,21 @@ suite "parseMouseEvent":
     let event = getLastMouseEvent()
     check event.isSome
     check event.get.bstate == mmask_t(MouseButton2Pressed)
+
+  test "Scroll up (button code 64)":
+    let input = "\e[<64;10;20M"
+    check parseMouseEvent(input) == true
+    let event = getLastMouseEvent()
+    check event.isSome
+    check event.get.bstate == mmask_t(MouseButton4Pressed)
+    check event.get.x == 9
+    check event.get.y == 19
+
+  test "Scroll down (button code 65)":
+    let input = "\e[<65;10;20M"
+    check parseMouseEvent(input) == true
+    let event = getLastMouseEvent()
+    check event.isSome
+    check event.get.bstate == mmask_t(MouseButton5Pressed)
+    check event.get.x == 9
+    check event.get.y == 19

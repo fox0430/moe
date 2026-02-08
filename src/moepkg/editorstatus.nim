@@ -1962,14 +1962,24 @@ proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
 
   return key.get
 
-proc handleMouseEvent*(status: EditorStatus) =
+proc handleMouseEvent*(status: var EditorStatus) =
   ## Handle mouse event and move cursor
+  const ScrollLines = 3
+
   if not status.settings.standard.mouse:
     return
 
   let mouseEvent = getLastMouseEvent()
   if mouseEvent.isSome:
     let event = mouseEvent.get
+
+    # Handle scroll wheel events
+    if (event.bstate and MouseMask(MouseButton4Pressed)) != 0:
+      status.scrollUpNumberOfLines(ScrollLines)
+      return
+    elif (event.bstate and MouseMask(MouseButton5Pressed)) != 0:
+      status.scrollDownNumberOfLines(ScrollLines)
+      return
 
     # Only handle left button press
     if (event.bstate and MouseMask(MouseButton1Pressed)) != 0:

@@ -149,6 +149,8 @@ const
   MouseButton3Pressed* = BUTTON3_PRESSED
   MouseButton3Released* = BUTTON3_RELEASED
   MouseButton3Clicked* = BUTTON3_CLICKED
+  MouseButton4Pressed* = BUTTON4_PRESSED # Scroll up
+  MouseButton5Pressed* = BUTTON5_PRESSED # Scroll down
 
   KeySequences = {
     UpKey: @["\eOA", "\e[A"],
@@ -716,7 +718,16 @@ proc parseMouseEvent(s: string): bool =
     mouseEvent.y = y.cint
 
     # Determine button state
-    if lastChar == 'M':
+    if (buttons and 64) != 0:
+      # Scroll event (bit 6 set)
+      case buttons and 3
+      of 0:
+        mouseEvent.bstate = mmask_t(BUTTON4_PRESSED) # Scroll up
+      of 1:
+        mouseEvent.bstate = mmask_t(BUTTON5_PRESSED) # Scroll down
+      else:
+        mouseEvent.bstate = 0
+    elif lastChar == 'M':
       # Button press
       case buttons mod 4
       of 0:
