@@ -371,6 +371,16 @@ iterator parseReservedWord(
 proc getEditorColorPair(
     kind: TokenClass, language: SourceLanguage
 ): EditorColorPairIndex =
+  # Diff language uses dedicated color pairs
+  if language == langDiff:
+    return
+      case kind
+      of gtStringLit: EditorColorPairIndex.diffViewerAddedLine
+      of gtComment: EditorColorPairIndex.diffViewerDeletedLine
+      of gtPreprocessor: EditorColorPairIndex.diffViewerHeader
+      of gtKeyword: EditorColorPairIndex.diffViewerMeta
+      else: EditorColorPairIndex.default
+
   case kind
   of gtOperator:
     EditorColorPairIndex.operator

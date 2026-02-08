@@ -27,7 +27,7 @@ import
   quick_run_utils, help_viewer, buffer_manager, backup_manager, backup, diff_viewer,
   command_completion, build, render_utils, debug_viewer, config_loader,
   references_viewer, documentsymbol_viewer, callhierarchy_viewer, message_log,
-  command_line, color, theme, tab_line
+  command_line, color, theme, tab_line, recent_file_mode
 import command_handlers/handler_manager
 
 # Track running background processes for cleanup on exit
@@ -412,25 +412,57 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         of EditorMode.Filer:
           activeWin.filerState = none(FilerState)
         of EditorMode.Help:
+          if activeWin.helpViewerState.isSome and
+              activeWin.helpViewerState.get.originalBuffer != nil:
+            activeWin.buffer = activeWin.helpViewerState.get.originalBuffer
           activeWin.helpViewerState = none(HelpViewerState)
         of EditorMode.BufferManager:
+          if activeWin.bufferManagerState.isSome and
+              activeWin.bufferManagerState.get.originalBuffer != nil:
+            activeWin.buffer = activeWin.bufferManagerState.get.originalBuffer
           activeWin.bufferManagerState = none(BufferManagerState)
         of EditorMode.BackupManager:
           activeWin.backupManagerState = none(BackupManagerState)
         of EditorMode.DiffViewer:
+          if activeWin.diffViewerState.isSome and
+              activeWin.diffViewerState.get.originalBuffer != nil:
+            activeWin.buffer = activeWin.diffViewerState.get.originalBuffer
           activeWin.diffViewerState = none(DiffViewerState)
         of EditorMode.Debug:
           activeWin.debugViewerState = none(DebugViewerState)
         of EditorMode.Config:
           activeWin.configModeState = none(ConfigModeState)
         of EditorMode.References:
+          if activeWin.referencesViewerState.isSome and
+              activeWin.referencesViewerState.get.originalBuffer != nil:
+            activeWin.buffer = activeWin.referencesViewerState.get.originalBuffer
           activeWin.referencesViewerState = none(ReferencesViewerState)
         of EditorMode.DocumentSymbol:
+          if activeWin.documentSymbolViewerState.isSome and
+              activeWin.documentSymbolViewerState.get.originalBuffer != nil:
+            activeWin.buffer = activeWin.documentSymbolViewerState.get.originalBuffer
           activeWin.documentSymbolViewerState = none(DocumentSymbolViewerState)
         of EditorMode.CallHierarchy:
+          if activeWin.callHierarchyViewerState.isSome and
+              activeWin.callHierarchyViewerState.get.originalBuffer != nil:
+            activeWin.buffer = activeWin.callHierarchyViewerState.get.originalBuffer
           activeWin.callHierarchyViewerState = none(CallHierarchyViewerState)
+        of EditorMode.RecentFile:
+          if e.recentFileModeState.originalBuffer != nil:
+            activeWin.buffer = e.recentFileModeState.originalBuffer
+            e.recentFileModeState.originalBuffer = nil
         else:
           discard
+        # For special modes with split windows, remove the buffer from the list
+        if e.state.mode in {
+          EditorMode.LogViewer, EditorMode.BackupManager, EditorMode.DiffViewer,
+          EditorMode.Debug, EditorMode.Config,
+        }:
+          if e.windowManager.windows.len > 1:
+            let buf = activeWin.buffer
+            let idx = e.buffers.find(buf)
+            if idx >= 0:
+              e.buffers.delete(idx)
         # Reset mode before closing
         e.state.previousMode = EditorMode.Normal
         activeWin.mode = EditorMode.Normal
@@ -860,7 +892,13 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         e.setMode(EditorMode.Help)
         let activeWin = e.activeWindow
         activeWin.mode = EditorMode.Help
-        activeWin.helpViewerState = some(newHelpViewerState())
+        let helpState = newHelpViewerState()
+        helpState.originalBuffer = activeWin.buffer
+        activeWin.buffer = helpState.createHelpTextBuffer()
+        activeWin.cursor = BufferPosition(line: 0, column: 0)
+        activeWin.viewport.topLine = 0
+        activeWin.viewport.leftColumn = 0
+        activeWin.helpViewerState = some(helpState)
       elif r.shouldEnterBufferManager():
         # Enter buffer manager mode - save base mode, exit overlay
         let baseModeBeforeOverlay = e.state.baseMode
@@ -872,21 +910,34 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         bmState.previousWindowIndex = e.windowManager.activeWindowIndex
         let activeWin = e.activeWindow
         activeWin.mode = EditorMode.BufferManager
+        bmState.originalBuffer = activeWin.buffer
+        activeWin.buffer = bmState.createBufferManagerTextBuffer()
+        activeWin.cursor = BufferPosition(line: 0, column: 0)
+        activeWin.viewport.topLine = 0
+        activeWin.viewport.leftColumn = 0
         activeWin.bufferManagerState = some(bmState)
       elif r.shouldEnterBackupManager():
-        # Enter backup manager mode - save base mode, exit overlay
-        let baseModeBeforeOverlay = e.state.baseMode
-        e.state.exitOverlay()
-        e.state.previousMode = baseModeBeforeOverlay
-        e.setMode(EditorMode.BackupManager)
+        # Enter backup manager mode in a vertical split
+        # Capture source file path before split (split changes active buffer)
         let baseBackupDir = e.config.autoBackup.getBaseBackupDir()
         var sourceFilePath = ""
         if e.buffer.filePath.isSome:
           sourceFilePath = absolutePath(e.buffer.filePath.get)
-        let activeWin = e.activeWindow
-        activeWin.mode = EditorMode.BackupManager
-        activeWin.backupManagerState =
-          some(initBackupManagerState(baseBackupDir, sourceFilePath))
+        let bkState = initBackupManagerState(baseBackupDir, sourceFilePath)
+        let bkBuffer = bkState.createBackupManagerTextBuffer()
+        let splitResult = e.vsplitWithBuffer(bkBuffer)
+        if splitResult.isErr:
+          e.state.setStatusMessage(
+            "Failed to open backup manager: " & splitResult.error
+          )
+        else:
+          let baseModeBeforeOverlay = e.state.baseMode
+          e.state.exitOverlay()
+          e.state.previousMode = baseModeBeforeOverlay
+          e.setMode(EditorMode.BackupManager)
+          let activeWin = e.activeWindow
+          activeWin.mode = EditorMode.BackupManager
+          activeWin.backupManagerState = some(bkState)
       elif r.shouldEnterRecentFileMode():
         # Enter recent file mode - save base mode, exit overlay
         let baseModeBeforeOverlay = e.state.baseMode
@@ -899,6 +950,12 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.previousMode = baseModeBeforeOverlay
           e.setMode(EditorMode.RecentFile)
           e.state.statusMessage = ""
+          let activeWin = e.activeWindow
+          e.recentFileModeState.originalBuffer = activeWin.buffer
+          activeWin.buffer = e.recentFileModeState.createRecentFileTextBuffer()
+          activeWin.cursor = BufferPosition(line: 0, column: 0)
+          activeWin.viewport.topLine = 0
+          activeWin.viewport.leftColumn = 0
       elif r.shouldEnterDebugViewer():
         # Open debug info in a vertical split (like log viewer)
         var debugLines: seq[string] = @[]
@@ -981,9 +1038,10 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.lspCache.locations.isSome, e.state.lspCache.codeLensCache.isValid,
           debugConfig.lsp.enable,
         )
-        let debugContent = debugLines.join("\n")
-        let debugBuffer = newTextBuffer(debugContent)
-        debugBuffer.readOnly = true
+        # Initialize debug viewer state
+        let debugState = newDebugViewerState()
+        debugState.lines = debugLines
+        let debugBuffer = debugState.createDebugTextBuffer()
         let splitResult = e.vsplitWithBuffer(debugBuffer)
         if splitResult.isErr:
           e.state.setStatusMessage("Failed to open debug: " & splitResult.error)
@@ -994,9 +1052,6 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.timing.lastDebugUpdate = getMonoTime()
           if e.state.timing.debugUpdateInterval == 0:
             e.state.timing.debugUpdateInterval = 500 # Default: 500ms
-          # Initialize debug viewer state
-          let debugState = newDebugViewerState()
-          debugState.lines = debugLines
           e.activeWindow.debugViewerState = some(debugState)
           # Enter debug mode
           e.state.exitOverlay()
@@ -1418,6 +1473,11 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
   )
 
   if r.shouldQuitRecentFileMode():
+    # Restore original buffer
+    let activeWin = e.activeWindow
+    if e.recentFileModeState.originalBuffer != nil:
+      activeWin.buffer = e.recentFileModeState.originalBuffer
+      e.recentFileModeState.originalBuffer = nil
     e.state.previousMode = e.state.mode
     e.setMode(EditorMode.Normal)
     e.state.statusMessage = ""
@@ -1448,6 +1508,11 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       # Stay in Recent File mode so user can select another file
       e.state.needsFullRedraw = true
       return true
+    # Restore original buffer before opening file
+    let activeWin = e.activeWindow
+    if e.recentFileModeState.originalBuffer != nil:
+      activeWin.buffer = e.recentFileModeState.originalBuffer
+      e.recentFileModeState.originalBuffer = nil
     # Open the file (Adds to window's bufferList as new tab)
     let editResult = e.editFile(filePath)
     if editResult.isErr:
@@ -1679,14 +1744,83 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
   ## Returns true if the event was handled, false otherwise
   if event.kind != EventKind.Mouse:
     return false
+  if not e.config.standard.mouse:
+    return false
 
   let mouse = event.mouse
 
-  # Only handle left button press (not release, move, or drag)
-  if mouse.button != mouse_logic.MouseButton.Left:
+  # Only handle left button press and wheel events
+  if mouse.button notin {
+    mouse_logic.MouseButton.Left, mouse_logic.MouseButton.WheelUp,
+    mouse_logic.MouseButton.WheelDown,
+  }:
     return false
   if mouse.kind != celina.MouseEventKind.Press:
     return false
+
+  # Handle wheel scroll events
+  if mouse.button in {
+    mouse_logic.MouseButton.WheelUp, mouse_logic.MouseButton.WheelDown
+  }:
+    const scrollLines = 3
+
+    # Handle Filer mode scroll
+    if e.state.mode == EditorMode.Filer and e.activeWindow.filerState.isSome:
+      var filerState = e.activeWindow.filerState.get
+      if filerState.entries.len > 0:
+        if mouse.button == mouse_logic.MouseButton.WheelUp:
+          filerState.selectedIndex = max(0, filerState.selectedIndex - scrollLines)
+        else:
+          filerState.selectedIndex =
+            min(filerState.entries.len - 1, filerState.selectedIndex + scrollLines)
+        # Adjust topLine to keep selectedIndex visible
+        let viewportHeight = e.viewport.height - FilerHeaderLines
+        if viewportHeight > 0:
+          if filerState.selectedIndex < filerState.topLine:
+            filerState.topLine = filerState.selectedIndex
+          elif filerState.selectedIndex >= filerState.topLine + viewportHeight:
+            filerState.topLine = filerState.selectedIndex - viewportHeight + 1
+        e.activeWindow.filerState = some(filerState)
+        e.state.needsFullRedraw = true
+      return true
+
+    # Handle text editing modes
+    if e.state.mode in {
+      EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualLine,
+      EditorMode.VisualBlock, EditorMode.Replace,
+    }:
+      # Determine target window by mouse position
+      var targetIdx = e.windowManager.activeWindowIndex
+      if e.windowManager.windows.len > 1:
+        for i, window in e.windowManager.windows:
+          let vp = window.viewport
+          if mouse.x >= vp.x and mouse.x < vp.x + vp.width and mouse.y >= vp.y and
+              mouse.y < vp.y + vp.height:
+            targetIdx = i
+            break
+
+      let window = e.windowManager.windows[targetIdx]
+      let curLine = window.cursor.line
+      let maxLine = window.buffer.len - 1
+      let newLine =
+        if mouse.button == mouse_logic.MouseButton.WheelUp:
+          max(0, curLine - scrollLines)
+        else:
+          min(maxLine, curLine + scrollLines)
+
+      if newLine != curLine:
+        window.cursor = BufferPosition(line: newLine, column: window.cursor.column)
+        # Clamp column to line length
+        let lineLen = window.buffer[newLine].len
+        if lineLen > 0:
+          window.cursor.column = min(window.cursor.column, lineLen - 1)
+        else:
+          window.cursor.column = 0
+        e.state.needsFullRedraw = true
+
+      return true
+
+    return true
 
   # Handle mouse click in text editing modes
   if e.state.mode in {
@@ -2305,8 +2439,12 @@ proc handleEvent*(e: Editor, event: Event): bool =
     activeWin.mode = EditorMode.Normal
     activeWin.logViewerState = none(LogViewerState)
     e.setMode(EditorMode.Normal)
-    # Close the window if we're in split view
+    # Remove the split buffer from the buffer list and close the window
     if e.windowManager.windows.len > 1:
+      let buf = activeWin.buffer
+      let idx = e.buffers.find(buf)
+      if idx >= 0:
+        e.buffers.delete(idx)
       discard e.closeWindow()
     return true
 
@@ -2340,6 +2478,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if r.kind == hrHelpViewerQuit:
     # Close help viewer and return to Normal mode
     let activeWin = e.activeWindow
+    if activeWin.helpViewerState.isSome and
+        activeWin.helpViewerState.get.originalBuffer != nil:
+      activeWin.buffer = activeWin.helpViewerState.get.originalBuffer
     activeWin.mode = EditorMode.Normal
     activeWin.helpViewerState = none(HelpViewerState)
     e.setMode(EditorMode.Normal)
@@ -2348,6 +2489,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if r.shouldReferencesQuit():
     # Close references viewer and return to Normal mode
     let activeWin = e.activeWindow
+    if activeWin.referencesViewerState.isSome and
+        activeWin.referencesViewerState.get.originalBuffer != nil:
+      activeWin.buffer = activeWin.referencesViewerState.get.originalBuffer
     activeWin.mode = EditorMode.Normal
     activeWin.referencesViewerState = none(ReferencesViewerState)
     e.setMode(EditorMode.Normal)
@@ -2358,6 +2502,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
     let target = r.getReferencesJumpTarget()
     # Close references viewer first
     let activeWin = e.activeWindow
+    if activeWin.referencesViewerState.isSome and
+        activeWin.referencesViewerState.get.originalBuffer != nil:
+      activeWin.buffer = activeWin.referencesViewerState.get.originalBuffer
     activeWin.mode = EditorMode.Normal
     activeWin.referencesViewerState = none(ReferencesViewerState)
     e.setMode(EditorMode.Normal)
@@ -2368,6 +2515,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if r.shouldDocumentSymbolQuit():
     # Close document symbol viewer and return to Normal mode
     let activeWin = e.activeWindow
+    if activeWin.documentSymbolViewerState.isSome and
+        activeWin.documentSymbolViewerState.get.originalBuffer != nil:
+      activeWin.buffer = activeWin.documentSymbolViewerState.get.originalBuffer
     activeWin.mode = EditorMode.Normal
     activeWin.documentSymbolViewerState = none(DocumentSymbolViewerState)
     e.setMode(EditorMode.Normal)
@@ -2379,6 +2529,8 @@ proc handleEvent*(e: Editor, event: Event): bool =
     let activeWin = e.activeWindow
     let filePath = activeWin.documentSymbolViewerState.get.filePath
     # Close document symbol viewer first
+    if activeWin.documentSymbolViewerState.get.originalBuffer != nil:
+      activeWin.buffer = activeWin.documentSymbolViewerState.get.originalBuffer
     activeWin.mode = EditorMode.Normal
     activeWin.documentSymbolViewerState = none(DocumentSymbolViewerState)
     e.setMode(EditorMode.Normal)
@@ -2393,6 +2545,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
     e.state.lspCache.pendingCallHierarchyRequestId = 0
     e.state.lspCache.pendingCallHierarchyKind = chrkNone
     let activeWin = e.activeWindow
+    if activeWin.callHierarchyViewerState.isSome and
+        activeWin.callHierarchyViewerState.get.originalBuffer != nil:
+      activeWin.buffer = activeWin.callHierarchyViewerState.get.originalBuffer
     activeWin.mode = EditorMode.Normal
     activeWin.callHierarchyViewerState = none(CallHierarchyViewerState)
     e.setMode(EditorMode.Normal)
@@ -2411,6 +2566,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
     e.state.lspCache.pendingCallHierarchyRequestId = 0
     e.state.lspCache.pendingCallHierarchyKind = chrkNone
     let activeWin = e.activeWindow
+    if activeWin.callHierarchyViewerState.isSome and
+        activeWin.callHierarchyViewerState.get.originalBuffer != nil:
+      activeWin.buffer = activeWin.callHierarchyViewerState.get.originalBuffer
     activeWin.mode = EditorMode.Normal
     activeWin.callHierarchyViewerState = none(CallHierarchyViewerState)
     e.setMode(EditorMode.Normal)
@@ -2436,6 +2594,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if r.shouldBufferManagerQuit():
     # Close buffer manager and return to Normal mode
     let activeWin = e.activeWindow
+    if activeWin.bufferManagerState.isSome and
+        activeWin.bufferManagerState.get.originalBuffer != nil:
+      activeWin.buffer = activeWin.bufferManagerState.get.originalBuffer
     activeWin.mode = EditorMode.Normal
     activeWin.bufferManagerState = none(BufferManagerState)
     e.setMode(EditorMode.Normal)
@@ -2444,10 +2605,14 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if r.shouldBufferManagerSelectBuffer():
     # Select the buffer and switch to it
     let bufferIndex = r.getBufferManagerSelectBufferIndex()
+    let activeWin = e.activeWindow
+    # Restore original buffer before switching
+    if activeWin.bufferManagerState.isSome and
+        activeWin.bufferManagerState.get.originalBuffer != nil:
+      activeWin.buffer = activeWin.bufferManagerState.get.originalBuffer
     if bufferIndex >= 0 and bufferIndex < e.buffers.len:
       e.switchToBufferByIndex(bufferIndex)
     # Close buffer manager and return to Normal mode
-    let activeWin = e.activeWindow
     activeWin.mode = EditorMode.Normal
     activeWin.bufferManagerState = none(BufferManagerState)
     e.setMode(EditorMode.Normal)
@@ -2477,10 +2642,15 @@ proc handleEvent*(e: Editor, event: Event): bool =
           e.executer.buffer = e.activeBuffer()
           e.executer.motionController.executor.buffer = e.activeBuffer()
 
-        # Update buffer manager entries
+        # Update buffer manager entries and regenerate TextBuffer
         let activeWin = e.activeWindow
         if activeWin.bufferManagerState.isSome:
-          activeWin.bufferManagerState.get.updateEntries(e.getBufferInfos())
+          let bmState = activeWin.bufferManagerState.get
+          bmState.updateEntries(e.getBufferInfos())
+          activeWin.buffer = bmState.createBufferManagerTextBuffer()
+          activeWin.cursor.line =
+            min(bmState.selectedIndex + 1, activeWin.buffer.len - 1)
+          activeWin.cursor.column = 0
     else:
       # Cannot delete the only buffer
       e.state.setStatusMessage("Cannot delete the last buffer")
@@ -2493,6 +2663,13 @@ proc handleEvent*(e: Editor, event: Event): bool =
     activeWin.mode = EditorMode.Normal
     activeWin.backupManagerState = none(BackupManagerState)
     e.setMode(EditorMode.Normal)
+    # Remove the split buffer from the buffer list and close the window
+    if e.windowManager.windows.len > 1:
+      let buf = activeWin.buffer
+      let idx = e.buffers.find(buf)
+      if idx >= 0:
+        e.buffers.delete(idx)
+      discard e.closeWindow()
     return true
 
   # Handle Diff Viewer mode results
@@ -2503,6 +2680,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # (e.g., BackupManager -> DiffViewer -> Command -> DiffViewer -> quit
     #  would incorrectly stay in DiffViewer if we used previousMode)
     let activeWin = e.activeWindow
+    # Restore original buffer before clearing diff state
+    if activeWin.diffViewerState.isSome and
+        activeWin.diffViewerState.get.originalBuffer != nil:
+      activeWin.buffer = activeWin.diffViewerState.get.originalBuffer
     activeWin.mode = EditorMode.BackupManager
     activeWin.diffViewerState = none(DiffViewerState)
     e.setMode(EditorMode.BackupManager)
@@ -2515,6 +2696,13 @@ proc handleEvent*(e: Editor, event: Event): bool =
     activeWin.mode = e.state.previousMode
     activeWin.configModeState = none(ConfigModeState)
     e.setMode(e.state.previousMode)
+    # Remove the split buffer from the buffer list and close the window
+    if e.windowManager.windows.len > 1:
+      let buf = activeWin.buffer
+      let idx = e.buffers.find(buf)
+      if idx >= 0:
+        e.buffers.delete(idx)
+      discard e.closeWindow()
     return true
 
   if r.shouldConfigSaveConfig():
@@ -2568,10 +2756,14 @@ proc handleEvent*(e: Editor, event: Event): bool =
     return true
 
   if r.shouldBackupManagerRefresh():
-    # Refresh backup list
+    # Refresh backup list and regenerate TextBuffer
     let activeWin = e.activeWindow
     if activeWin.backupManagerState.isSome:
-      activeWin.backupManagerState.get.refresh()
+      let bkState = activeWin.backupManagerState.get
+      bkState.refresh()
+      activeWin.buffer = bkState.createBackupManagerTextBuffer()
+      activeWin.cursor.line = min(bkState.selectedIndex + 1, activeWin.buffer.len - 1)
+      activeWin.cursor.column = 0
     return true
 
   if r.shouldBackupManagerRestore():
@@ -2582,7 +2774,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       let bkState = activeWin.backupManagerState.get
       # Backup current buffer before restore (in case user wants to undo)
       discard
-        backupBuffer(e.buffer.filePath, e.buffer.getTextString(), e.config.autoBackup)
+        backupBuffer(e.buffer.filePath, e.buffer.getFileContent(), e.config.autoBackup)
       if bkState.restoreBackup(backupIndex):
         # Reload the buffer from the restored file
         if e.buffer.filePath.isSome:
@@ -2624,6 +2816,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
       let bkState = activeWin.backupManagerState.get
       if bkState.deleteBackup(backupIndex):
         e.state.setStatusMessage("Backup deleted")
+        # Regenerate TextBuffer after deletion
+        activeWin.buffer = bkState.createBackupManagerTextBuffer()
+        activeWin.cursor.line = min(bkState.selectedIndex + 1, activeWin.buffer.len - 1)
+        activeWin.cursor.column = 0
       else:
         e.state.setStatusMessage("Failed to delete backup")
     return true
@@ -2638,6 +2834,12 @@ proc handleEvent*(e: Editor, event: Event): bool =
         let entry = bkState.entries[backupIndex]
         # Initialize diff viewer with source and backup paths
         let dvState = initDiffViewerState(bkState.sourceFilePath, entry.fullPath)
+        # Save original buffer and replace with diff content TextBuffer
+        dvState.originalBuffer = activeWin.buffer
+        activeWin.buffer = dvState.createDiffTextBuffer()
+        activeWin.cursor = BufferPosition(line: 0, column: 0)
+        activeWin.viewport.topLine = 0
+        activeWin.viewport.leftColumn = 0
         activeWin.diffViewerState = some(dvState)
         e.state.previousMode = e.state.mode
         e.setMode(EditorMode.DiffViewer)

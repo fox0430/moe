@@ -25,6 +25,7 @@
 import std/[strformat, strutils, options]
 
 import lsp/protocol/[types, enums]
+import buffer
 
 type
   SymbolItem* = object
@@ -40,6 +41,7 @@ type
     selectedIndex*: int # Currently selected item index
     topLine*: int # Scroll position (first visible line)
     filePath*: string # File path for the symbols
+    originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
 
 proc symbolKindToString*(kind: SymbolKind): string =
   ## Convert SymbolKind to a short display string
@@ -204,3 +206,12 @@ proc ensureSelectedVisible*(state: DocumentSymbolViewerState, viewportHeight: in
 
   if state.topLine < 0:
     state.topLine = 0
+
+proc createDocumentSymbolTextBuffer*(state: DocumentSymbolViewerState): TextBuffer =
+  ## Create a TextBuffer from document symbols for rendering via the normal view path
+  var content = "-- SYMBOLS (" & $state.itemCount() & ") --"
+  for i in 0 ..< state.itemCount:
+    content.add('\n')
+    content.add(state.getLine(i))
+  result = newTextBuffer(content)
+  result.readOnly = true

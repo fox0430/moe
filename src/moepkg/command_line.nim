@@ -55,7 +55,7 @@ type
     claLogViewer # :log (open log viewer)
     claQuickRun # :run (quick run)
     claBufferManager # :buffers, :ls (open buffer manager)
-    claBackupManager # :backups (open backup manager)
+    claBackupManager # :backup (open backup manager)
     claRecentFile # :recent (open recent file selection mode)
     claClearSearchHighlight # :noh, :nohlsearch (clear search highlighting)
     claShellCommand # :! (execute shell command)

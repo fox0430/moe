@@ -25,6 +25,7 @@
 import std/[strformat, strutils, options]
 
 import lsp/protocol/types as lspTypes
+import buffer
 
 type
   CallHierarchyViewKind* = enum
@@ -38,6 +39,7 @@ type
     topLine*: int ## Scroll position (first visible line)
     viewKind*: CallHierarchyViewKind ## Type of view (prepare/incoming/outgoing)
     title*: string ## Title for the list
+    originalBuffer*: TextBuffer ## Saved original buffer (restored on exit)
 
 proc newCallHierarchyViewerState*(
     items: seq[lspTypes.CallHierarchyItem], viewKind: CallHierarchyViewKind
@@ -139,3 +141,12 @@ proc ensureSelectedVisible*(state: CallHierarchyViewerState, viewportHeight: int
   # Ensure topLine is not negative
   if state.topLine < 0:
     state.topLine = 0
+
+proc createCallHierarchyTextBuffer*(state: CallHierarchyViewerState): TextBuffer =
+  ## Create a TextBuffer from call hierarchy items for rendering via the normal view path
+  var content = "-- " & state.title & " (" & $state.itemCount() & ") --"
+  for i in 0 ..< state.itemCount:
+    content.add('\n')
+    content.add(state.getLine(i))
+  result = newTextBuffer(content)
+  result.readOnly = true

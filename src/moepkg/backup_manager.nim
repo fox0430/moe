@@ -22,7 +22,7 @@
 
 import std/[options, os, times, algorithm]
 
-import backup
+import backup, buffer
 
 const BackupDateFormat = "yyyy-MM-dd'T'HH:mm:sszzz"
 
@@ -174,3 +174,15 @@ proc restoreBackup*(state: BackupManagerState, index: int): bool =
     return true
   except OSError:
     return false
+
+proc createBackupManagerTextBuffer*(state: BackupManagerState): TextBuffer =
+  ## Create a TextBuffer from backup entries for rendering via the normal view path
+  var content = "-- Backup Manager: " & state.sourceFilePath & " --"
+  if state.entries.len == 0:
+    content.add("\nNo backup files found")
+  else:
+    for entry in state.entries:
+      content.add('\n')
+      content.add(formatEntry(entry))
+  result = newTextBuffer(content)
+  result.readOnly = true

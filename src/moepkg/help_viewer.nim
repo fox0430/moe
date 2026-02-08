@@ -337,11 +337,14 @@ ju or jumps - Open Jump list viewer
 
 import std/[strutils, options]
 
+import buffer
+
 type HelpViewerState* = ref object
   lines*: seq[string] # Help lines to display
   selectedIndex*: int # Currently selected line index (cursor position)
   topLine*: int # Scroll position (first visible line)
   searchQuery*: string # Current search query
+  originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
 
 proc newHelpViewerState*(): HelpViewerState =
   ## Create a new help viewer state
@@ -481,3 +484,16 @@ proc searchFirst*(state: HelpViewerState): Option[int] =
       return some(i)
 
   none(int)
+
+proc createHelpTextBuffer*(state: HelpViewerState): TextBuffer =
+  ## Create a TextBuffer from help lines for rendering via the normal view path
+  var content = ""
+  for i, line in state.lines:
+    if i > 0:
+      content.add('\n')
+    if line.len > 0:
+      content.add(' ' & line)
+    else:
+      content.add("")
+  result = newTextBuffer(content)
+  result.readOnly = true

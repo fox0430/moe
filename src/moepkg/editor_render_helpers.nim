@@ -101,6 +101,13 @@ proc getDocumentHighlightStyle*(kind: int): Style =
   else: # Text or unknown
     documentHighlightTextStyle()
 
+proc hasSyntaxHighlight(
+    e: Editor, buffer: TextBuffer, windowMode: EditorMode
+): bool {.inline.} =
+  e.state.display.showSyntax and
+    (windowMode.isFileEditMode or buffer.language != langNone) and
+    not buffer.highlight.isNil
+
 proc getSelectionStyle*(
     e: Editor,
     buffer: TextBuffer,
@@ -170,8 +177,7 @@ proc getSelectionStyle*(
         pos, searchPattern, shouldIgnoreCase, e.state.search.wholeWord
       ):
         searchHighlightStyle()
-      elif e.state.display.showSyntax and windowMode.isFileEditMode and
-          not buffer.highlight.isNil:
+      elif e.hasSyntaxHighlight(buffer, windowMode):
         # Apply syntax highlighting from buffer
         # Update highlight if needed (after text edits)
         buffer.updateHighlight()
@@ -193,8 +199,7 @@ proc getSelectionStyle*(
           cursorLineHighlightStyle()
         else:
           normalStyle()
-    elif e.state.display.showSyntax and windowMode.isFileEditMode and
-        not buffer.highlight.isNil:
+    elif e.hasSyntaxHighlight(buffer, windowMode):
       # Apply syntax highlighting from buffer
       # Update highlight if needed (after text edits)
       buffer.updateHighlight()
@@ -216,8 +221,7 @@ proc getSelectionStyle*(
         cursorLineHighlightStyle()
       else:
         normalStyle()
-  elif e.state.display.showSyntax and windowMode.isFileEditMode and
-      not buffer.highlight.isNil:
+  elif e.hasSyntaxHighlight(buffer, windowMode):
     # Apply syntax highlighting from buffer
     # Update highlight if needed (after text edits)
     buffer.updateHighlight()
@@ -263,6 +267,10 @@ proc getVisualSelection*(
       selEnd: BufferPosition(line: 0, column: 0),
     )
 
+proc fillLine*(buffer: var Buffer, x, y, width: int, style: Style) =
+  ## Fill a line with spaces at the given position and width
+  buffer.setString(x, y, " ".repeat(width), style)
+
 proc renderLineSegmentWithSelection*(
     e: Editor,
     textBuffer: TextBuffer,
@@ -298,7 +306,8 @@ proc renderLineSegmentWithSelection*(
         e.state.display.tabStop - (displayX mod e.state.display.tabStop)
       # Determine style for tab (trailing space highlighting takes priority)
       let tabStyle =
-        if e.config.highlight.trailingSpaces and col >= trailingSpaceStart:
+        if e.config.highlight.trailingSpaces and col >= trailingSpaceStart and
+            ctx.windowMode.isFileEditMode:
           trailingSpacesStyle()
         else:
           style
@@ -321,12 +330,14 @@ proc renderLineSegmentWithSelection*(
         charStr = "│"
         renderStyle = indentationLineStyle()
 
-      # Highlight full-width space if enabled
-      if rune == FULLWIDTH_SPACE and e.config.highlight.fullWidthSpace:
+      # Highlight full-width space if enabled (only in file edit modes)
+      if rune == FULLWIDTH_SPACE and e.config.highlight.fullWidthSpace and
+          ctx.windowMode.isFileEditMode:
         renderStyle = fullWidthSpaceStyle()
 
-      # Highlight trailing spaces if enabled
-      if e.config.highlight.trailingSpaces and col >= trailingSpaceStart:
+      # Highlight trailing spaces if enabled (only in file edit modes)
+      if e.config.highlight.trailingSpaces and col >= trailingSpaceStart and
+          ctx.windowMode.isFileEditMode:
         if rune == ' '.Rune or rune == TAB_CHAR or rune == FULLWIDTH_SPACE:
           renderStyle = trailingSpacesStyle()
 

@@ -20,9 +20,11 @@
 ## Diff Viewer module
 ## Provides a UI for viewing diffs between files
 
-import std/[options, osproc, strutils, os]
+import std/[options, osproc, strutils, os, unicode]
 
 import pkg/results
+
+import buffer, highlight, syntax/tokenizer
 
 type
   DiffLineKind* = enum
@@ -43,6 +45,7 @@ type
     sourceFilePath*: string # Path of the source file (current version)
     backupFilePath*: string # Path of the backup file (old version)
     errorMessage*: string # Error message if diff failed
+    originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
 
 proc newDiffViewerState*(): DiffViewerState =
   DiffViewerState(
@@ -103,6 +106,10 @@ proc initDiffViewerBuffer*(
     for line in cmdResult.output.splitLines:
       lines.add(DiffLine(text: line, kind: classifyDiffLine(line)))
 
+  if lines.len > 1 and lines[^1].text.len == 0:
+    # Rmove the last empty line
+    return Result[seq[DiffLine], string].ok lines[0 .. lines.high - 1]
+
   return Result[seq[DiffLine], string].ok lines
 
 proc initDiffViewerState*(
@@ -150,3 +157,20 @@ proc getSelectedLine*(state: DiffViewerState): Option[DiffLine] =
     some(state.lines[state.selectedLine])
   else:
     none(DiffLine)
+
+proc createDiffTextBuffer*(state: DiffViewerState): TextBuffer =
+  ## Create a TextBuffer from diff lines for rendering via the normal view path
+  var content = ""
+  for i, line in state.lines:
+    if i > 0:
+      content.add('\n')
+    content.add(line.text)
+  result = newTextBuffer(content)
+  result.language = langDiff
+  result.readOnly = true
+
+  # Initialize syntax highlighting for diff language
+  var runesBuffer: seq[seq[Rune]] = @[]
+  for i in 0 ..< result.len:
+    runesBuffer.add(result.getLine(i).toRunes())
+  result.highlight = initHighlight(runesBuffer, @[], langDiff)

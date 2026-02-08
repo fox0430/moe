@@ -1323,33 +1323,34 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 
   return Result[(), string].ok ()
 
+proc getFileContent*(buffer: TextBuffer): string =
+  ## Get the buffer content as it would be written to a file,
+  ## with proper trailing newline handling based on endOfLine setting.
+  result = buffer.getTextString
+
+  if buffer.endOfLine:
+    # Ensure content ends with newline
+    if result.len == 0 or
+        not (result.endsWith("\n") or result.endsWith("\r\n") or result.endsWith("\r")):
+      case buffer.lineEnding
+      of LF:
+        result.add('\n')
+      of CRLF:
+        result.add("\r\n")
+      of CR:
+        result.add('\r')
+  else:
+    # Remove ONE trailing newline if present (endOfLine=false)
+    if result.len > 0:
+      if result.endsWith("\r\n"):
+        result.setLen(result.len - 2)
+      elif result.endsWith("\n") or result.endsWith("\r"):
+        result.setLen(result.len - 1)
+
 proc saveFile*(buffer: TextBuffer, path: string): Result[(), string] =
   case buffer.backendKind
   of GapBuffer:
-    # Get full content
-    var content = buffer.getTextString
-
-    # Handle trailing newline according to endOfLine setting
-    if buffer.endOfLine:
-      # Ensure file ends with newline
-      if content.len == 0 or
-          not (
-            content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r")
-          ):
-        case buffer.lineEnding
-        of LF:
-          content.add('\n')
-        of CRLF:
-          content.add("\r\n")
-        of CR:
-          content.add('\r')
-    else:
-      # Remove ONE trailing newline if present (endOfLine=false)
-      if content.len > 0:
-        if content.endsWith("\r\n"):
-          content.setLen(content.len - 2)
-        elif content.endsWith("\n") or content.endsWith("\r"):
-          content.setLen(content.len - 1)
+    let content = buffer.getFileContent
 
     # Write to file
     try:

@@ -142,7 +142,6 @@ const CommandDescriptions = {
   "ls": "Open buffer manager",
   "files": "Open buffer manager",
   # Backup manager
-  "backups": "Open backup manager",
   "backup": "Open backup manager",
   # Recent file
   "recent": "Open recent files",

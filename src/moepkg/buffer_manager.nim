@@ -22,6 +22,8 @@
 
 import std/options
 
+import buffer
+
 type
   BufferEntry* = object ## Represents a buffer entry in the buffer manager list
     index*: int # Index in the window list
@@ -34,6 +36,7 @@ type
     selectedIndex*: int # Currently selected entry index
     topLine*: int # Scroll position (first visible line)
     previousWindowIndex*: int # Window index to return to when closing
+    originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
 
   BufferInfo* = object ## Information about a buffer for initializing buffer manager
     filePath*: Option[string]
@@ -93,3 +96,12 @@ proc formatEntry*(entry: BufferEntry): string =
     activeMark = if entry.active: "* " else: "  "
     indexStr = $entry.index & ": "
   result = activeMark & indexStr & modifiedMark & entry.name
+
+proc createBufferManagerTextBuffer*(state: BufferManagerState): TextBuffer =
+  ## Create a TextBuffer from buffer manager entries for rendering via the normal view path
+  var content = "-- Buffer Manager --"
+  for entry in state.entries:
+    content.add('\n')
+    content.add(formatEntry(entry))
+  result = newTextBuffer(content)
+  result.readOnly = true

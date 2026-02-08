@@ -26,6 +26,8 @@ import std/[os, options, uri, strutils]
 
 import pkg/results
 
+import buffer
+
 type
   RecentFileEntry* = object
     path*: string
@@ -34,6 +36,7 @@ type
     files*: seq[RecentFileEntry]
     selectedIndex*: int
     topLine*: int
+    originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
 
 proc newRecentFileModeState*(): RecentFileModeState =
   ## Create a new RecentFileModeState
@@ -150,3 +153,12 @@ proc selectedFileExists*(state: RecentFileModeState): bool =
   if selected.isNone:
     return false
   return fileExists(selected.get)
+
+proc createRecentFileTextBuffer*(state: RecentFileModeState): TextBuffer =
+  ## Create a TextBuffer from recent files for rendering via the normal view path
+  var content = "-- Recent Files --"
+  for entry in state.files:
+    content.add('\n')
+    content.add(entry.path)
+  result = newTextBuffer(content)
+  result.readOnly = true

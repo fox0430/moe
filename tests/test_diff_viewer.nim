@@ -20,11 +20,16 @@
 ## Tests for diff_viewer.nim
 ## This module tests the Diff Viewer data structures and operations.
 
-import std/[unittest, options, os, strutils]
+import std/[unittest, options, os, strutils, unicode]
 
 import pkg/results
 
 import ../src/moepkg/diff_viewer {.all.}
+import ../src/moepkg/buffer
+import ../src/moepkg/syntax/tokenizer
+import ../src/moepkg/syntax/syntaxdiff
+import ../src/moepkg/highlight
+import ../src/moepkg/color
 
 # Re-export Result type for tests
 export results
@@ -784,3 +789,242 @@ suite "diff_viewer: DiffViewerState field access":
 
     check state.selectedLine == 10
     check state.lines.len == 2
+
+suite "diff_viewer: createDiffTextBuffer":
+  test "Creates TextBuffer with correct content":
+    let state = newDiffViewerState()
+    state.lines =
+      @[
+        DiffLine(text: "+added line", kind: dlkAdded),
+        DiffLine(text: "-deleted line", kind: dlkDeleted),
+        DiffLine(text: " context line", kind: dlkNormal),
+      ]
+
+    let buf = state.createDiffTextBuffer()
+
+    check buf.len == 3
+    check buf.getLine(0) == "+added line"
+    check buf.getLine(1) == "-deleted line"
+    check buf.getLine(2) == " context line"
+
+  test "Sets language to langDiff":
+    let state = newDiffViewerState()
+    state.lines = @[DiffLine(text: "test", kind: dlkNormal)]
+
+    let buf = state.createDiffTextBuffer()
+
+    check buf.language == langDiff
+
+  test "Sets readOnly to true":
+    let state = newDiffViewerState()
+    state.lines = @[DiffLine(text: "test", kind: dlkNormal)]
+
+    let buf = state.createDiffTextBuffer()
+
+    check buf.readOnly == true
+
+  test "Initializes highlight (not nil)":
+    let state = newDiffViewerState()
+    state.lines =
+      @[
+        DiffLine(text: "+added", kind: dlkAdded),
+        DiffLine(text: "-deleted", kind: dlkDeleted),
+      ]
+
+    let buf = state.createDiffTextBuffer()
+
+    check not buf.highlight.isNil
+    check buf.highlight.colorSegments.len > 0
+
+  test "Empty diff lines":
+    let state = newDiffViewerState()
+    state.lines = @[]
+
+    let buf = state.createDiffTextBuffer()
+
+    check buf.readOnly == true
+    check buf.language == langDiff
+
+  test "Highlight assigns correct colors for diff line types":
+    let state = newDiffViewerState()
+    state.lines =
+      @[
+        DiffLine(text: "+added line", kind: dlkAdded),
+        DiffLine(text: "-deleted line", kind: dlkDeleted),
+        DiffLine(text: "@@ -1,3 +1,4 @@", kind: dlkHeader),
+        DiffLine(text: "diff --git a/f b/f", kind: dlkMeta),
+        DiffLine(text: " context line", kind: dlkNormal),
+      ]
+
+    let buf = state.createDiffTextBuffer()
+
+    check not buf.highlight.isNil
+    # Added line → diffViewerAddedLine
+    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.diffViewerAddedLine
+    # Deleted line → diffViewerDeletedLine
+    check buf.highlight.getColorPair(1, 0) == EditorColorPairIndex.diffViewerDeletedLine
+    # Header line → diffViewerHeader
+    check buf.highlight.getColorPair(2, 0) == EditorColorPairIndex.diffViewerHeader
+    # Meta line → diffViewerMeta
+    check buf.highlight.getColorPair(3, 0) == EditorColorPairIndex.diffViewerMeta
+    # Context line → default
+    check buf.highlight.getColorPair(4, 0) == EditorColorPairIndex.default
+
+  test "Single line diff":
+    let state = newDiffViewerState()
+    state.lines = @[DiffLine(text: "(No differences)", kind: dlkNormal)]
+
+    let buf = state.createDiffTextBuffer()
+
+    check buf.len == 1
+    check buf.getLine(0) == "(No differences)"
+    check not buf.highlight.isNil
+
+suite "diff_viewer: diffNextToken":
+  test "Added line (+) produces gtStringLit":
+    var g: GeneralTokenizer
+    initGeneralTokenizer(g, "+added line\n")
+    g.diffNextToken()
+
+    check g.kind == gtStringLit
+    check g.length == 12 # "+added line\n"
+
+  test "Deleted line (-) produces gtComment":
+    var g: GeneralTokenizer
+    initGeneralTokenizer(g, "-deleted line\n")
+    g.diffNextToken()
+
+    check g.kind == gtComment
+
+  test "Hunk header (@@) produces gtPreprocessor":
+    var g: GeneralTokenizer
+    initGeneralTokenizer(g, "@@ -1,3 +1,4 @@\n")
+    g.diffNextToken()
+
+    check g.kind == gtPreprocessor
+
+  test "Meta line (diff) produces gtKeyword":
+    var g: GeneralTokenizer
+    initGeneralTokenizer(g, "diff --git a/foo b/foo\n")
+    g.diffNextToken()
+
+    check g.kind == gtKeyword
+
+  test "Meta line (index) produces gtKeyword":
+    var g: GeneralTokenizer
+    initGeneralTokenizer(g, "index 1234..abcd 100644\n")
+    g.diffNextToken()
+
+    check g.kind == gtKeyword
+
+  test "Meta line (new file) produces gtKeyword":
+    var g: GeneralTokenizer
+    initGeneralTokenizer(g, "new file mode 100644\n")
+    g.diffNextToken()
+
+    check g.kind == gtKeyword
+
+  test "Context line produces gtNone":
+    var g: GeneralTokenizer
+    initGeneralTokenizer(g, " context line\n")
+    g.diffNextToken()
+
+    check g.kind == gtNone
+
+  test "Empty input produces gtEof":
+    var g: GeneralTokenizer
+    initGeneralTokenizer(g, "")
+    g.diffNextToken()
+
+    check g.kind == gtEof
+    check g.length == 0
+
+  test "Multiple lines tokenized sequentially":
+    var g: GeneralTokenizer
+    initGeneralTokenizer(g, "+added\n-deleted\n normal\n")
+
+    g.diffNextToken()
+    check g.kind == gtStringLit
+
+    g.diffNextToken()
+    check g.kind == gtComment
+
+    g.diffNextToken()
+    check g.kind == gtNone
+
+    g.diffNextToken()
+    check g.kind == gtEof
+
+  test "Line without trailing newline":
+    var g: GeneralTokenizer
+    initGeneralTokenizer(g, "+no newline")
+    g.diffNextToken()
+
+    check g.kind == gtStringLit
+    check g.length == 11 # "+no newline" (no \n)
+
+  test "getNextToken dispatches to diffNextToken for langDiff":
+    var g: GeneralTokenizer
+    initGeneralTokenizer(g, "+added\n-deleted\n")
+
+    g.getNextToken(langDiff)
+    check g.kind == gtStringLit
+
+    g.getNextToken(langDiff)
+    check g.kind == gtComment
+
+    g.getNextToken(langDiff)
+    check g.kind == gtEof
+
+suite "diff_viewer: initHighlight with langDiff":
+  test "Highlight maps added line to diffViewerAddedLine":
+    let runesBuffer = @["+added line".toRunes()]
+    let hl = initHighlight(runesBuffer, @[], langDiff)
+
+    check hl.colorSegments.len > 0
+    check hl.getColorPair(0, 0) == EditorColorPairIndex.diffViewerAddedLine
+
+  test "Highlight maps deleted line to diffViewerDeletedLine":
+    let runesBuffer = @["-deleted line".toRunes()]
+    let hl = initHighlight(runesBuffer, @[], langDiff)
+
+    check hl.colorSegments.len > 0
+    check hl.getColorPair(0, 0) == EditorColorPairIndex.diffViewerDeletedLine
+
+  test "Highlight maps hunk header to diffViewerHeader":
+    let runesBuffer = @["@@ -1,3 +1,4 @@".toRunes()]
+    let hl = initHighlight(runesBuffer, @[], langDiff)
+
+    check hl.colorSegments.len > 0
+    check hl.getColorPair(0, 0) == EditorColorPairIndex.diffViewerHeader
+
+  test "Highlight maps meta line to diffViewerMeta":
+    let runesBuffer = @["diff --git a/foo b/foo".toRunes()]
+    let hl = initHighlight(runesBuffer, @[], langDiff)
+
+    check hl.colorSegments.len > 0
+    check hl.getColorPair(0, 0) == EditorColorPairIndex.diffViewerMeta
+
+  test "Highlight maps context line to default":
+    let runesBuffer = @[" context line".toRunes()]
+    let hl = initHighlight(runesBuffer, @[], langDiff)
+
+    check hl.colorSegments.len > 0
+    check hl.getColorPair(0, 0) == EditorColorPairIndex.default
+
+  test "Multi-line diff highlight":
+    let runesBuffer =
+      @[
+        "+added".toRunes(),
+        "-deleted".toRunes(),
+        "@@ -1,3 +1,4 @@".toRunes(),
+        "diff --git a/f b/f".toRunes(),
+        " context".toRunes(),
+      ]
+    let hl = initHighlight(runesBuffer, @[], langDiff)
+
+    check hl.getColorPair(0, 0) == EditorColorPairIndex.diffViewerAddedLine
+    check hl.getColorPair(1, 0) == EditorColorPairIndex.diffViewerDeletedLine
+    check hl.getColorPair(2, 0) == EditorColorPairIndex.diffViewerHeader
+    check hl.getColorPair(3, 0) == EditorColorPairIndex.diffViewerMeta
+    check hl.getColorPair(4, 0) == EditorColorPairIndex.default

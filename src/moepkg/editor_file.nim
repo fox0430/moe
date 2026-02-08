@@ -327,20 +327,18 @@ proc autoBackup*(e: Editor) =
     # Only backup modified buffers with a file path
     if buffer.isModified and buffer.filePath.isSome:
       let backupResult =
-        backupBuffer(buffer.filePath, buffer.getTextString(), e.config.autoBackup)
+        backupBuffer(buffer.filePath, buffer.getFileContent(), e.config.autoBackup)
 
       if backupResult.isOk:
         backedUpBuffers.add(buffer)
         backupCount += 1
         backupPaths.add(backupResult.get)
-      elif backupResult.error != "No changes since last backup":
-        logError("editor", "Auto backup failed: " & backupResult.error)
 
-  # Show notification and update last backup time only if any files were backed up
+  # Always update last backup time to prevent repeated checks every frame
+  e.state.timing.lastAutoBackup = now
+
+  # Show notification if any files were backed up
   if backupCount > 0:
-    # Update last backup time only when backup actually occurred
-    e.state.timing.lastAutoBackup = now
-
     # Log notification
     if e.config.notification.logNotifications and
         e.config.notification.autoBackupLogNotify:

@@ -1293,8 +1293,6 @@ proc handleBackupManagerMode*(
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
-  of bkmrQuit:
-    return HandlerResult(kind: hrBackupManagerQuit)
   of bkmrUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of bkmrError:

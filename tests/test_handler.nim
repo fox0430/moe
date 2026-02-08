@@ -25,10 +25,16 @@
 
 import std/[unittest, options, tables]
 
+import pkg/celina
+import pkg/celina/core/mouse_logic
+
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/types {.all.}
 import ../src/moepkg/modes {.all.}
 import ../src/moepkg/registers {.all.}
+import ../src/moepkg/editor {.all.}
+import ../src/moepkg/config {.all.}
+import ../src/moepkg/filer {.all.}
 import ../src/moepkg/handler {.all.}
 
 proc createTestViewport(x, y, width, height, topLine, leftColumn: int): ViewPort =
@@ -723,3 +729,242 @@ suite "Rename Mode - State":
 
     check state.renameState.cursorLine == 100
     check state.renameState.cursorColumn == 50
+
+proc createTestEditorWithBuffer(content: string): Editor =
+  ## Create a minimal editor for mouse scroll testing
+  let config = newEditorConfig()
+  config.standard.mouse = true
+  result = newEditor(config)
+  result.textBuffer = newTextBuffer(content)
+  result.windowManager.windows[0].buffer = result.textBuffer
+  result.windowManager.windows[0].bufferList = @[result.textBuffer]
+  result.viewport =
+    ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+  result.windowManager.windows[0].viewport = result.viewport
+  result.state.mode = EditorMode.Normal
+
+proc makeWheelEvent(button: MouseButton, x, y: int): Event =
+  Event(
+    kind: EventKind.Mouse,
+    mouse: MouseEvent(kind: MouseEventKind.Press, button: button, x: x, y: y),
+  )
+
+suite "handleMouseEvent - Mouse Disabled":
+  test "Wheel event ignored when mouse is disabled":
+    let e = createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4\nline5")
+    e.config.standard.mouse = false
+
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 5)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == false
+    check e.windowManager.windows[0].cursor.line == 0
+
+  test "Left click ignored when mouse is disabled":
+    let e = createTestEditorWithBuffer("line0\nline1\nline2")
+    e.config.standard.mouse = false
+
+    let event = Event(
+      kind: EventKind.Mouse,
+      mouse: MouseEvent(
+        kind: MouseEventKind.Press, button: mouse_logic.MouseButton.Left, x: 3, y: 1
+      ),
+    )
+    let handled = e.handleMouseEvent(event)
+
+    check handled == false
+    check e.windowManager.windows[0].cursor.line == 0
+
+suite "handleMouseEvent - Wheel Scroll":
+  test "WheelDown scrolls cursor down by 3 lines":
+    let e = createTestEditorWithBuffer(
+      "line0\nline1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9"
+    )
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 5)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].cursor.line == 3
+
+  test "WheelUp scrolls cursor up by 3 lines":
+    let e = createTestEditorWithBuffer(
+      "line0\nline1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9"
+    )
+    e.windowManager.windows[0].cursor = BufferPosition(line: 6, column: 0)
+
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelUp, 10, 5)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].cursor.line == 3
+
+  test "WheelUp clamps to line 0":
+    let e = createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4")
+    e.windowManager.windows[0].cursor = BufferPosition(line: 1, column: 0)
+
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelUp, 10, 5)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].cursor.line == 0
+
+  test "WheelDown clamps to last line":
+    let e = createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4")
+    e.windowManager.windows[0].cursor = BufferPosition(line: 3, column: 0)
+
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 5)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].cursor.line == 4
+
+  test "WheelDown clamps column to line length":
+    let e = createTestEditorWithBuffer("long line here\nhi\nshort\nanother\nmore\nend")
+    # Start on long line with column beyond short line's length
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 10)
+
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 5)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].cursor.line == 3
+    # "another" has len 7, so max column is 6
+    check e.windowManager.windows[0].cursor.column <= 6
+
+  test "Wheel event sets needsFullRedraw":
+    let e =
+      createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4\nline5\nline6")
+    e.state.needsFullRedraw = false
+
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 5)
+    discard e.handleMouseEvent(event)
+
+    check e.state.needsFullRedraw == true
+
+  test "Non-press mouse event is ignored":
+    let e = createTestEditorWithBuffer("line0\nline1\nline2\nline3")
+    let event = Event(
+      kind: EventKind.Mouse,
+      mouse: MouseEvent(
+        kind: MouseEventKind.Release,
+        button: mouse_logic.MouseButton.WheelDown,
+        x: 10,
+        y: 5,
+      ),
+    )
+
+    let handled = e.handleMouseEvent(event)
+    check handled == false
+
+  test "Right button click is ignored":
+    let e = createTestEditorWithBuffer("line0\nline1")
+    let event = Event(
+      kind: EventKind.Mouse,
+      mouse: MouseEvent(
+        kind: MouseEventKind.Press, button: mouse_logic.MouseButton.Right, x: 10, y: 5
+      ),
+    )
+
+    let handled = e.handleMouseEvent(event)
+    check handled == false
+
+suite "handleMouseEvent - Wheel Scroll Multi-Window":
+  test "WheelDown on non-active window scrolls that window":
+    let e = createTestEditorWithBuffer(
+      "line0\nline1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9"
+    )
+    # Shrink first window to left half
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0)
+    # Create a second window for the right half
+    let buf2 = newTextBuffer("a0\na1\na2\na3\na4\na5\na6\na7\na8\na9")
+    let win2 = EditorWindow(
+      buffer: buf2,
+      bufferList: @[buf2],
+      viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
+      cursor: BufferPosition(line: 0, column: 0),
+      active: false,
+      mode: EditorMode.Normal,
+    )
+    e.windowManager.windows.add(win2)
+
+    # Wheel event at x=50 (within second window's viewport: x=40..79)
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 50, 5)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    # Second window should scroll, not first
+    check e.windowManager.windows[1].cursor.line == 3
+    check e.windowManager.windows[0].cursor.line == 0
+
+suite "handleMouseEvent - Wheel Scroll Filer Mode":
+  test "WheelDown scrolls filer selection down":
+    let e = createTestEditorWithBuffer("")
+    e.state.mode = EditorMode.Filer
+
+    var filerState = FilerState(
+      currentPath: "/tmp", entries: @[], selectedIndex: 0, showHidden: false, topLine: 0
+    )
+    # Add dummy entries
+    for i in 0 ..< 20:
+      filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
+    e.windowManager.windows[0].filerState = some(filerState)
+
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 5)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].filerState.get.selectedIndex == 3
+
+  test "WheelUp scrolls filer selection up":
+    let e = createTestEditorWithBuffer("")
+    e.state.mode = EditorMode.Filer
+
+    var filerState = FilerState(
+      currentPath: "/tmp", entries: @[], selectedIndex: 5, showHidden: false, topLine: 0
+    )
+    for i in 0 ..< 20:
+      filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
+    e.windowManager.windows[0].filerState = some(filerState)
+
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelUp, 10, 5)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].filerState.get.selectedIndex == 2
+
+  test "WheelUp clamps filer selection to 0":
+    let e = createTestEditorWithBuffer("")
+    e.state.mode = EditorMode.Filer
+
+    var filerState = FilerState(
+      currentPath: "/tmp", entries: @[], selectedIndex: 1, showHidden: false, topLine: 0
+    )
+    for i in 0 ..< 10:
+      filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
+    e.windowManager.windows[0].filerState = some(filerState)
+
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelUp, 10, 5)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].filerState.get.selectedIndex == 0
+
+  test "WheelDown clamps filer selection to last entry":
+    let e = createTestEditorWithBuffer("")
+    e.state.mode = EditorMode.Filer
+
+    var filerState = FilerState(
+      currentPath: "/tmp", entries: @[], selectedIndex: 8, showHidden: false, topLine: 0
+    )
+    for i in 0 ..< 10:
+      filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
+    e.windowManager.windows[0].filerState = some(filerState)
+
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 5)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].filerState.get.selectedIndex == 9

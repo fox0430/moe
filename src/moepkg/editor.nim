@@ -1110,24 +1110,25 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     debugConfig.lsp.enable,
   )
 
-  # Create new buffer with updated content
-  let debugContent = debugLines.join("\n")
-  let newDebugBuffer = newTextBuffer(debugContent)
-  newDebugBuffer.readOnly = true
+  # Update debug viewer state and create new buffer
+  if foundWindow.debugViewerState.isSome:
+    let debugState = foundWindow.debugViewerState.get
+    debugState.lines = debugLines
+    let newDebugBuffer = debugState.createDebugTextBuffer()
 
-  # Preserve scroll position
-  let savedTopLine = foundWindow.viewport.topLine
-  let savedLeftColumn = foundWindow.viewport.leftColumn
+    # Preserve scroll position
+    let savedTopLine = foundWindow.viewport.topLine
+    let savedLeftColumn = foundWindow.viewport.leftColumn
 
-  # Replace buffer in the window
-  foundWindow.buffer = newDebugBuffer
+    # Replace buffer in the window
+    foundWindow.buffer = newDebugBuffer
 
-  # Restore scroll position (clamped to valid range)
-  foundWindow.viewport.topLine = min(savedTopLine, max(0, newDebugBuffer.len - 1))
-  foundWindow.viewport.leftColumn = savedLeftColumn
+    # Restore scroll position (clamped to valid range)
+    foundWindow.viewport.topLine = min(savedTopLine, max(0, newDebugBuffer.len - 1))
+    foundWindow.viewport.leftColumn = savedLeftColumn
 
-  # Update the reference in state
-  e.state.debugBuffer = newDebugBuffer
+    # Update the reference in state
+    e.state.debugBuffer = newDebugBuffer
   e.state.timing.lastDebugUpdate = now
   e.state.needsFullRedraw = true
 

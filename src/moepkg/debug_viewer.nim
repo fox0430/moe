@@ -21,7 +21,7 @@
 
 import std/[strutils, options, times]
 
-import modes
+import modes, buffer
 
 type DebugViewerState* = ref object ## State for the debug mode viewer
   lines*: seq[string] # Debug information lines
@@ -441,3 +441,13 @@ proc pageDown*(state: DebugViewerState, visibleHeight: int) =
   state.selectedLine = min(state.lines.len - 1, state.selectedLine + pageSize)
   let maxTopLine = max(0, state.lines.len - visibleHeight)
   state.topLine = min(maxTopLine, state.topLine + pageSize)
+
+proc createDebugTextBuffer*(state: DebugViewerState): TextBuffer =
+  ## Create a TextBuffer from debug lines for rendering via the normal view path
+  var content = ""
+  for i, line in state.lines:
+    if i > 0:
+      content.add('\n')
+    content.add(line)
+  result = newTextBuffer(content)
+  result.readOnly = true

@@ -22,7 +22,9 @@
 ## This module provides the data structures and operations for the references viewer mode.
 ## Used to display and navigate LSP references, definitions, call hierarchy results.
 
-import std/[strformat, options]
+import std/[strformat, strutils, options]
+
+import buffer
 
 type
   ReferenceItem* = object
@@ -36,6 +38,7 @@ type
     selectedIndex*: int # Currently selected item index
     topLine*: int # Scroll position (first visible line)
     title*: string # Title for the list (e.g., "References", "Definitions")
+    originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
 
 proc newReferencesViewerState*(
     items: seq[ReferenceItem], title: string = "References"
@@ -112,3 +115,12 @@ proc ensureSelectedVisible*(state: ReferencesViewerState, viewportHeight: int) =
   # Ensure topLine is not negative
   if state.topLine < 0:
     state.topLine = 0
+
+proc createReferencesTextBuffer*(state: ReferencesViewerState): TextBuffer =
+  ## Create a TextBuffer from references for rendering via the normal view path
+  var content = "-- " & state.title.toUpperAscii() & " (" & $state.itemCount() & ") --"
+  for i in 0 ..< state.itemCount:
+    content.add('\n')
+    content.add(state.getLine(i))
+  result = newTextBuffer(content)
+  result.readOnly = true

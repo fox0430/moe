@@ -19,7 +19,7 @@
 
 ## View rendering procedures (split view, single view, bottom lines)
 
-import std/strutils
+import std/[options, strutils]
 
 import pkg/celina
 
@@ -184,61 +184,78 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     of EditorMode.Config:
       # Config supports per-window rendering
       e.renderConfig(buffer, window, isBottomWindow, tabLineOffset)
-    of EditorMode.BufferManager:
-      # These modes use activeWindow internally, only render when active
-      if isActiveWindow:
-        e.renderBufferManager(buffer)
-      else:
-        e.renderWindow(
-          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
-        )
     of EditorMode.Help:
-      # Help supports per-window rendering
-      e.renderHelpViewer(buffer, window, isBottomWindow, tabLineOffset)
+      # Sync help viewer selection to window cursor
+      if window.helpViewerState.isSome:
+        window.cursor.line = window.helpViewerState.get.selectedIndex
+        window.cursor.column = 0
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
+    of EditorMode.BufferManager:
+      # Sync buffer manager selection to window cursor (header at line 0)
+      if window.bufferManagerState.isSome:
+        window.cursor.line = window.bufferManagerState.get.selectedIndex + 1
+        window.cursor.column = 0
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
     of EditorMode.BackupManager:
-      if isActiveWindow:
-        e.renderBackupManager(buffer)
-      else:
-        e.renderWindow(
-          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
-        )
+      # Sync backup manager selection to window cursor (header at line 0)
+      if window.backupManagerState.isSome:
+        window.cursor.line = window.backupManagerState.get.selectedIndex + 1
+        window.cursor.column = 0
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
     of EditorMode.DiffViewer:
-      if isActiveWindow:
-        e.renderDiffViewer(buffer)
-      else:
-        e.renderWindow(
-          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
-        )
+      # Sync diff viewer selection to window cursor for normal view rendering
+      if window.diffViewerState.isSome:
+        window.cursor.line = window.diffViewerState.get.selectedLine
+        window.cursor.column = 0
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
     of EditorMode.Debug:
-      e.renderDebugMode(buffer, window, isBottomWindow, tabLineOffset)
+      # Sync debug viewer selection to window cursor
+      if window.debugViewerState.isSome:
+        window.cursor.line = window.debugViewerState.get.selectedLine
+        window.cursor.column = 0
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
     of EditorMode.References:
-      if isActiveWindow:
-        e.renderReferencesViewer(buffer)
-      else:
-        e.renderWindow(
-          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
-        )
+      # Sync references selection to window cursor (header at line 0)
+      if window.referencesViewerState.isSome:
+        window.cursor.line = window.referencesViewerState.get.selectedIndex + 1
+        window.cursor.column = 0
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
     of EditorMode.DocumentSymbol:
-      if isActiveWindow:
-        e.renderDocumentSymbolViewer(buffer)
-      else:
-        e.renderWindow(
-          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
-        )
+      # Sync document symbol selection to window cursor (header at line 0)
+      if window.documentSymbolViewerState.isSome:
+        window.cursor.line = window.documentSymbolViewerState.get.selectedIndex + 1
+        window.cursor.column = 0
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
     of EditorMode.CallHierarchy:
-      if isActiveWindow:
-        e.renderCallHierarchyViewer(buffer)
-      else:
-        e.renderWindow(
-          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
-        )
+      # Sync call hierarchy selection to window cursor (header at line 0)
+      if window.callHierarchyViewerState.isSome:
+        window.cursor.line = window.callHierarchyViewerState.get.selectedIndex + 1
+        window.cursor.column = 0
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
     of EditorMode.RecentFile:
-      if isActiveWindow:
-        e.renderRecentFileMode(buffer)
-      else:
-        e.renderWindow(
-          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
-        )
+      # Sync recent file selection to window cursor (header at line 0)
+      if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+        window.cursor.line = e.recentFileModeState.selectedIndex + 1
+        window.cursor.column = 0
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
     else:
       # Normal buffer rendering (Normal, Insert, Visual, Command, Search, etc.)
       e.renderWindow(

@@ -20,8 +20,10 @@
 ## Tests for editor_render_helpers.nim
 
 import std/[unittest, options, tables]
-import pkg/results
-import ../src/moepkg/[editor, buffer, config, config_loader, modes, types, color]
+import pkg/[results, celina]
+import
+  ../src/moepkg/
+    [editor, buffer, config, config_loader, modes, types, color, render_utils]
 import ../src/moepkg/editor_render_helpers as renderHelpers
 
 proc createTestEditor(): Editor =
@@ -530,3 +532,258 @@ suite "IndentInfo structure":
     let info = IndentInfo(leadingWhitespaceEnd: 5, hasContent: true)
     check info.leadingWhitespaceEnd == 5
     check info.hasContent == true
+
+suite "renderLineSegmentWithSelection - trailing space highlight":
+  proc setupEditor(mode: EditorMode): (Editor, TextBuffer, var Buffer, RenderContext) =
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.config.highlight.fullWidthSpace = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("hello   ")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: mode,
+      windowRightEdge: 80,
+    )
+    (e, tb, buf, ctx)
+
+  test "Normal mode highlights trailing spaces":
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("hello   ")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "hello   ", 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    # Trailing spaces (columns 5, 6, 7) should have trailing space style
+    check buf[5, 0].style == trailingStyle
+    check buf[6, 0].style == trailingStyle
+    check buf[7, 0].style == trailingStyle
+
+  test "Help mode does not highlight trailing spaces":
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("hello   ")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Help,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "hello   ", 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    # Trailing spaces should NOT have trailing space style in Help mode
+    check buf[5, 0].style != trailingStyle
+    check buf[6, 0].style != trailingStyle
+    check buf[7, 0].style != trailingStyle
+
+  test "BufferManager mode does not highlight trailing spaces":
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("entry   ")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.BufferManager,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "entry   ", 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    check buf[5, 0].style != trailingStyle
+
+  test "DiffViewer mode does not highlight trailing spaces":
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("diff   ")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.DiffViewer,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "diff   ", 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    check buf[4, 0].style != trailingStyle
+
+suite "renderLineSegmentWithSelection - full-width space highlight":
+  test "Normal mode highlights full-width space":
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.fullWidthSpace = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let text = "ab" & $FULLWIDTH_SPACE & "cd"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    let fwStyle = fullWidthSpaceStyle()
+    # Full-width space at column 2 (takes 2 display cells) should be highlighted
+    check buf[2, 0].style == fwStyle
+
+  test "Help mode does not highlight full-width space":
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.fullWidthSpace = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let text = "ab" & $FULLWIDTH_SPACE & "cd"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Help,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    let fwStyle = fullWidthSpaceStyle()
+    check buf[2, 0].style != fwStyle
+
+  test "Debug mode does not highlight full-width space":
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.fullWidthSpace = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let text = "ab" & $FULLWIDTH_SPACE & "cd"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Debug,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    let fwStyle = fullWidthSpaceStyle()
+    check buf[2, 0].style != fwStyle
+
+suite "renderLineSegmentWithSelection - tab trailing space highlight":
+  test "Normal mode highlights trailing tab":
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+    e.state.display.tabStop = 4
+
+    let text = "ab\t"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    # Tab at column 2 expands to spaces; column 2 should have trailing style
+    check buf[2, 0].style == trailingStyle
+
+  test "Help mode does not highlight trailing tab":
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+    e.state.display.tabStop = 4
+
+    let text = "ab\t"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Help,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    check buf[2, 0].style != trailingStyle

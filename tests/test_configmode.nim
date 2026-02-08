@@ -1532,6 +1532,196 @@ suite "ConfigMode - formatItemForDisplay cvkString":
     check "myString" in result
     check "hello world" in result
 
+suite "ConfigMode - Theme section":
+  test "Theme section header exists":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var found = false
+    for item in state.items:
+      if item.kind == cvkSection and item.displayName == "Theme":
+        found = true
+        break
+    check found
+
+  test "Theme kind enum has correct value":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var kindIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum and item.section == "Theme" and item.displayName == "kind":
+        kindIndex = i
+        break
+
+    check kindIndex >= 0
+    check state.items[kindIndex].enumValue == $cfg.theme.kind
+    check state.items[kindIndex].enumOptions == @["default", "config", "vscode"]
+
+  test "Theme kind enum change applies to config":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var kindIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum and item.section == "Theme" and item.displayName == "kind":
+        kindIndex = i
+        break
+
+    check kindIndex >= 0
+    state.selectedIndex = kindIndex
+    state.items[kindIndex].enumValue = "vscode"
+    state.applyChange(kindIndex)
+    check cfg.theme.kind == tkVscode
+
+  test "Theme path string has correct value":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var pathIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathIndex = i
+        break
+
+    check pathIndex >= 0
+    check state.items[pathIndex].stringValue == cfg.theme.path
+
+  test "Theme path string edit applies to config":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var pathIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathIndex = i
+        break
+
+    check pathIndex >= 0
+    state.selectedIndex = pathIndex
+
+    # Test editing via startEdit/confirmEdit
+    state.startEdit()
+    check state.editMode == true
+    check state.editBuffer == cfg.theme.path
+
+    state.editBuffer = "/new/theme/path.toml"
+    state.editCursor = state.editBuffer.len
+    let result = state.confirmEdit()
+    check result == true
+    check cfg.theme.path == "/new/theme/path.toml"
+
+  test "Theme path is visible when kind is config":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+
+    var found = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        found = true
+        break
+    check found
+
+  test "Theme path is hidden when kind is default":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkDefault
+    let state = newConfigModeState(cfg)
+
+    var found = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        found = true
+        break
+    check not found
+
+  test "Theme path is hidden when kind is vscode":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkVscode
+    let state = newConfigModeState(cfg)
+
+    var found = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        found = true
+        break
+    check not found
+
+  test "Changing kind to config shows path":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkDefault
+    let state = newConfigModeState(cfg)
+
+    # path should not exist
+    var pathFound = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathFound = true
+        break
+    check not pathFound
+
+    # Change kind to config
+    var kindIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum and item.section == "Theme" and item.displayName == "kind":
+        kindIndex = i
+        break
+
+    check kindIndex >= 0
+    state.selectedIndex = kindIndex
+    state.items[kindIndex].enumValue = "config"
+    state.applyChange(kindIndex)
+
+    # Now path should be visible
+    pathFound = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathFound = true
+        break
+    check pathFound
+
+  test "Changing kind from config hides path":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+
+    # path should exist
+    var pathFound = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathFound = true
+        break
+    check pathFound
+
+    # Change kind to vscode
+    var kindIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum and item.section == "Theme" and item.displayName == "kind":
+        kindIndex = i
+        break
+
+    check kindIndex >= 0
+    state.selectedIndex = kindIndex
+    state.items[kindIndex].enumValue = "vscode"
+    state.applyChange(kindIndex)
+
+    # Now path should be hidden
+    pathFound = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathFound = true
+        break
+    check not pathFound
+
 suite "ConfigMode - Bool value edge case":
   test "Bool item displays false correctly":
     let item = ConfigItem(

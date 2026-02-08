@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json, options, strutils]
+import std/[unittest, json, options, strutils, os, tables]
 
 import ../src/moepkg/color {.all.}
 import ../src/moepkg/theme
@@ -130,7 +130,37 @@ suite "vscode_theme - isCurrentVsCodeThemePackage":
     let json = %*{"contributes": {"themes": "not an array"}}
     check not isCurrentVsCodeThemePackage(json, "Dark+")
 
-  test "returns false when theme has no label":
+  test "returns true when theme id matches":
+    let json =
+      %*{
+        "contributes": {
+          "themes": [
+            {
+              "label": "%darkModernThemeLabel%",
+              "id": "Default Dark Modern",
+              "path": "./themes/dark_modern.json",
+            }
+          ]
+        }
+      }
+    check isCurrentVsCodeThemePackage(json, "Default Dark Modern")
+
+  test "returns true when theme id matches but label is NLS placeholder":
+    let json =
+      %*{
+        "contributes": {
+          "themes": [
+            {
+              "label": "%darkPlusColorThemeLabel%",
+              "id": "Default Dark+",
+              "path": "./themes/dark_plus.json",
+            }
+          ]
+        }
+      }
+    check isCurrentVsCodeThemePackage(json, "Default Dark+")
+
+  test "returns false when theme has no label or id":
     let json = %*{"contributes": {"themes": [{"path": "./themes/dark.json"}]}}
     check not isCurrentVsCodeThemePackage(json, "Dark+")
 
@@ -624,6 +654,45 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
 
     check result[EditorColorPairIndex.lineNum].background.rgb.red == 0x1e
 
+  test "resolveThemeIncludes merges colors and tokenColors":
+    # Simulate include chain: child includes base
+    let baseDir = getTempDir() / "moe_test_theme_include"
+    createDir(baseDir)
+    defer:
+      removeDir(baseDir)
+
+    # Write base theme
+    let baseTheme =
+      %*{
+        "colors": {"editor.foreground": "#aaaaaa", "editor.background": "#111111"},
+        "tokenColors": [{"scope": "comment", "settings": {"foreground": "#6a9955"}}],
+      }
+    writeFile(baseDir / "base.json", $baseTheme)
+
+    # Child theme overrides foreground and adds keyword token
+    let childTheme =
+      %*{
+        "include": "./base.json",
+        "colors": {"editor.foreground": "#cccccc"},
+        "tokenColors": [{"scope": "keyword", "settings": {"foreground": "#569cd6"}}],
+      }
+
+    let resolved = resolveThemeIncludes(childTheme, baseDir)
+    let result = makeColorThemeFromVSCodeThemeFile(resolved)
+
+    # Child overrides foreground
+    check result[EditorColorPairIndex.default].foreground.rgb ==
+      Rgb(red: 0xcc, green: 0xcc, blue: 0xcc)
+    # Base provides background
+    check result[EditorColorPairIndex.default].background.rgb ==
+      Rgb(red: 0x11, green: 0x11, blue: 0x11)
+    # Base provides comment color
+    check result[EditorColorPairIndex.comment].foreground.rgb ==
+      Rgb(red: 0x6a, green: 0x99, blue: 0x55)
+    # Child provides keyword color
+    check result[EditorColorPairIndex.keyword].foreground.rgb ==
+      Rgb(red: 0x56, green: 0x9c, blue: 0xd6)
+
   test "empty theme returns DefaultColors base":
     let themeJson = %*{"colors": {}, "tokenColors": []}
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
@@ -654,6 +723,87 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.parenPair].foreground.rgb.red == 0xff
     check result[EditorColorPairIndex.parenPair].foreground.rgb.green == 0xd7
     check result[EditorColorPairIndex.parenPair].foreground.rgb.blue == 0x00
+
+suite "vscode_theme - findTokenSettings":
+  test "exact match":
+    var t = initTable[string, JsonNode]()
+    t["keyword"] = %*{"foreground": "#ff0000"}
+    let r = t.findTokenSettings("keyword")
+    check r != nil
+    check r{"foreground"}.getStr == "#ff0000"
+
+  test "exact match takes priority over parent":
+    var t = initTable[string, JsonNode]()
+    t["keyword"] = %*{"foreground": "#111111"}
+    t["keyword.control"] = %*{"foreground": "#222222"}
+    let r = t.findTokenSettings("keyword.control")
+    check r != nil
+    check r{"foreground"}.getStr == "#222222"
+
+  test "parent scope match":
+    var t = initTable[string, JsonNode]()
+    t["entity"] = %*{"foreground": "#aaaaaa"}
+    let r = t.findTokenSettings("entity.name.function")
+    check r != nil
+    check r{"foreground"}.getStr == "#aaaaaa"
+
+  test "longest parent scope wins":
+    var t = initTable[string, JsonNode]()
+    t["entity"] = %*{"foreground": "#111111"}
+    t["entity.name"] = %*{"foreground": "#222222"}
+    let r = t.findTokenSettings("entity.name.function")
+    check r != nil
+    check r{"foreground"}.getStr == "#222222"
+
+  test "child scope fallback":
+    var t = initTable[string, JsonNode]()
+    t["keyword.control"] = %*{"foreground": "#cc0000"}
+    let r = t.findTokenSettings("keyword")
+    check r != nil
+    check r{"foreground"}.getStr == "#cc0000"
+
+  test "shortest child scope wins":
+    var t = initTable[string, JsonNode]()
+    t["keyword.control"] = %*{"foreground": "#111111"}
+    t["keyword.control.flow"] = %*{"foreground": "#222222"}
+    let r = t.findTokenSettings("keyword")
+    check r != nil
+    check r{"foreground"}.getStr == "#111111"
+
+  test "no match returns nil":
+    var t = initTable[string, JsonNode]()
+    t["string"] = %*{"foreground": "#ff0000"}
+    let r = t.findTokenSettings("keyword")
+    check r == nil
+
+  test "siblings do not match":
+    var t = initTable[string, JsonNode]()
+    t["keyword.operator"] = %*{"foreground": "#ff0000"}
+    let r = t.findTokenSettings("keyword.control")
+    check r == nil
+
+  test "theme with keyword.control applies to keyword in makeColorTheme":
+    let themeJson =
+      %*{
+        "colors": {},
+        "tokenColors":
+          [{"scope": "keyword.control", "settings": {"foreground": "#c586c0"}}],
+      }
+    let result = makeColorThemeFromVSCodeThemeFile(themeJson)
+    check result[EditorColorPairIndex.keyword].foreground.rgb ==
+      Rgb(red: 0xc5, green: 0x86, blue: 0xc0)
+
+  test "theme with entity.name uses parent for entity.name.function lookup":
+    let themeJson =
+      %*{
+        "colors": {},
+        "tokenColors": [{"scope": "entity.name", "settings": {"foreground": "#4ec9b0"}}],
+      }
+    let result = makeColorThemeFromVSCodeThemeFile(themeJson)
+    check result[EditorColorPairIndex.functionName].foreground.rgb ==
+      Rgb(red: 0x4e, green: 0xc9, blue: 0xb0)
+    check result[EditorColorPairIndex.typeName].foreground.rgb ==
+      Rgb(red: 0x4e, green: 0xc9, blue: 0xb0)
 
 suite "vscode_theme - vsCodeSettingsFilePath":
   test "VSCodium settings path":
@@ -693,3 +843,298 @@ suite "vscode_theme - vsCodeDefaultExtensionsDir":
   test "VSCode default extensions dir":
     let path = vsCodeDefaultExtensionsDir(VsCodeFlavor.VSCode)
     check path == "/opt/visual-studio-code/resources/app/extensions"
+
+suite "vscode_theme - vsCodeStateDbPath":
+  test "VSCodium state db path":
+    let path = vsCodeStateDbPath(VsCodeFlavor.VSCodium)
+    check path.endsWith("VSCodium/User/globalStorage/state.vscdb")
+
+  test "CodeOss state db path":
+    let path = vsCodeStateDbPath(VsCodeFlavor.CodeOss)
+    check path.endsWith("Code - OSS/User/globalStorage/state.vscdb")
+
+  test "VSCode state db path":
+    let path = vsCodeStateDbPath(VsCodeFlavor.VSCode)
+    check path.endsWith("Code/User/globalStorage/state.vscdb")
+
+suite "vscode_theme - readThemeNameFromStateDb":
+  test "reads settingsId from valid data":
+    let tmpFile = getTempDir() / "moe_test_statedb_valid"
+    defer:
+      removeFile(tmpFile)
+    let data =
+      "somegarbage\x00colorThemeData{\"settingsId\":\"Forest Mist\",\"other\":1}\x00more"
+    writeFile(tmpFile, data)
+    let result = readThemeNameFromStateDb(tmpFile)
+    check result.isSome
+    check result.get == "Forest Mist"
+
+  test "returns none when file does not exist":
+    let result = readThemeNameFromStateDb("/nonexistent/path/state.vscdb")
+    check result.isNone
+
+  test "returns none when colorThemeData pattern not found":
+    let tmpFile = getTempDir() / "moe_test_statedb_nopattern"
+    defer:
+      removeFile(tmpFile)
+    writeFile(tmpFile, "productIconThemeData{\"settingsId\":\"Default\"}")
+    let result = readThemeNameFromStateDb(tmpFile)
+    check result.isNone
+
+  test "returns none when settingsId not found after colorThemeData":
+    let tmpFile = getTempDir() / "moe_test_statedb_nosettings"
+    defer:
+      removeFile(tmpFile)
+    writeFile(tmpFile, "colorThemeData{\"otherField\":\"value\"}")
+    let result = readThemeNameFromStateDb(tmpFile)
+    check result.isNone
+
+  test "returns none for empty file":
+    let tmpFile = getTempDir() / "moe_test_statedb_empty"
+    defer:
+      removeFile(tmpFile)
+    writeFile(tmpFile, "")
+    let result = readThemeNameFromStateDb(tmpFile)
+    check result.isNone
+
+  test "returns none when settingsId value is empty":
+    let tmpFile = getTempDir() / "moe_test_statedb_emptyval"
+    defer:
+      removeFile(tmpFile)
+    writeFile(tmpFile, "colorThemeData{\"settingsId\":\"\"}")
+    let result = readThemeNameFromStateDb(tmpFile)
+    check result.isNone
+
+  test "ignores settingsId from productIconThemeData":
+    let tmpFile = getTempDir() / "moe_test_statedb_multi"
+    defer:
+      removeFile(tmpFile)
+    let data =
+      "productIconThemeData{\"settingsId\":\"Default\"}\x00colorThemeData{\"settingsId\":\"Monokai\"}"
+    writeFile(tmpFile, data)
+    let result = readThemeNameFromStateDb(tmpFile)
+    check result.isSome
+    check result.get == "Monokai"
+
+suite "vscode_theme - resolveThemeIncludes (edge cases)":
+  test "returns original when no include field":
+    let themeJson = %*{"colors": {"editor.foreground": "#ffffff"}, "tokenColors": []}
+    let result = resolveThemeIncludes(themeJson, "/tmp")
+    check result{"colors", "editor.foreground"}.getStr == "#ffffff"
+
+  test "returns original when include is not a string":
+    let themeJson = %*{"include": 123, "colors": {}, "tokenColors": []}
+    let result = resolveThemeIncludes(themeJson, "/tmp")
+    check result{"include"} != nil
+
+  test "returns original when include file does not exist":
+    let themeJson =
+      %*{"include": "./nonexistent.json", "colors": {"editor.foreground": "#aaaaaa"}}
+    let result = resolveThemeIncludes(themeJson, "/tmp/no_such_dir")
+    check result{"colors", "editor.foreground"}.getStr == "#aaaaaa"
+
+  test "multi-level include chain (A -> B -> C)":
+    let baseDir = getTempDir() / "moe_test_multi_include"
+    createDir(baseDir)
+    defer:
+      removeDir(baseDir)
+
+    let themeC =
+      %*{
+        "colors": {"editor.background": "#111111"},
+        "tokenColors": [{"scope": "comment", "settings": {"foreground": "#666666"}}],
+      }
+    writeFile(baseDir / "c.json", $themeC)
+
+    let themeB =
+      %*{
+        "include": "./c.json",
+        "colors": {"editor.foreground": "#bbbbbb"},
+        "tokenColors": [],
+      }
+    writeFile(baseDir / "b.json", $themeB)
+
+    let themeA =
+      %*{
+        "include": "./b.json",
+        "colors": {"editor.foreground": "#aaaaaa"},
+        "tokenColors": [{"scope": "keyword", "settings": {"foreground": "#ff0000"}}],
+      }
+
+    let resolved = resolveThemeIncludes(themeA, baseDir)
+    check resolved{"colors", "editor.foreground"}.getStr == "#aaaaaa"
+    check resolved{"colors", "editor.background"}.getStr == "#111111"
+    check resolved{"tokenColors"}.len == 2
+
+  test "base theme with missing colors key":
+    let baseDir = getTempDir() / "moe_test_include_nocol"
+    createDir(baseDir)
+    defer:
+      removeDir(baseDir)
+
+    let baseTheme =
+      %*{"tokenColors": [{"scope": "keyword", "settings": {"foreground": "#ff0000"}}]}
+    writeFile(baseDir / "base.json", $baseTheme)
+
+    let childTheme =
+      %*{
+        "include": "./base.json",
+        "colors": {"editor.foreground": "#cccccc"},
+        "tokenColors": [],
+      }
+
+    let resolved = resolveThemeIncludes(childTheme, baseDir)
+    check resolved{"colors", "editor.foreground"}.getStr == "#cccccc"
+    check resolved{"tokenColors"}.len == 1
+
+  test "base theme with missing tokenColors key":
+    let baseDir = getTempDir() / "moe_test_include_notok"
+    createDir(baseDir)
+    defer:
+      removeDir(baseDir)
+
+    let baseTheme = %*{"colors": {"editor.background": "#222222"}}
+    writeFile(baseDir / "base.json", $baseTheme)
+
+    let childTheme =
+      %*{
+        "include": "./base.json",
+        "colors": {},
+        "tokenColors": [{"scope": "string", "settings": {"foreground": "#00ff00"}}],
+      }
+
+    let resolved = resolveThemeIncludes(childTheme, baseDir)
+    check resolved{"colors", "editor.background"}.getStr == "#222222"
+    check resolved{"tokenColors"}.len == 1
+
+  test "include file with invalid JSON returns original":
+    let baseDir = getTempDir() / "moe_test_include_invalid"
+    createDir(baseDir)
+    defer:
+      removeDir(baseDir)
+
+    writeFile(baseDir / "bad.json", "not valid json{{{")
+
+    let childTheme =
+      %*{
+        "include": "./bad.json",
+        "colors": {"editor.foreground": "#dddddd"},
+        "tokenColors": [],
+      }
+
+    let resolved = resolveThemeIncludes(childTheme, baseDir)
+    check resolved{"colors", "editor.foreground"}.getStr == "#dddddd"
+
+suite "vscode_theme - parseVsCodeThemeJson":
+  test "loads theme file matching by label":
+    let baseDir = getTempDir() / "moe_test_parsetheme"
+    createDir(baseDir)
+    defer:
+      removeDir(baseDir)
+
+    let themeContent = %*{"colors": {"editor.foreground": "#abcdef"}, "tokenColors": []}
+    writeFile(baseDir / "my_theme.json", $themeContent)
+
+    let packageJson =
+      %*{"contributes": {"themes": [{"label": "My Theme", "path": "./my_theme.json"}]}}
+    let result = parseVsCodeThemeJson(packageJson, "My Theme", baseDir / "package.json")
+    check result.isSome
+    check result.get{"colors", "editor.foreground"}.getStr == "#abcdef"
+
+  test "returns none when theme name does not match":
+    let baseDir = getTempDir() / "moe_test_parsetheme_nomatch"
+    createDir(baseDir)
+    defer:
+      removeDir(baseDir)
+
+    let packageJson =
+      %*{"contributes": {"themes": [{"label": "Other Theme", "path": "./other.json"}]}}
+    let result = parseVsCodeThemeJson(packageJson, "My Theme", baseDir / "package.json")
+    check result.isNone
+
+  test "returns none when theme file does not exist":
+    let baseDir = getTempDir() / "moe_test_parsetheme_nofile"
+    createDir(baseDir)
+    defer:
+      removeDir(baseDir)
+
+    let packageJson =
+      %*{
+        "contributes": {"themes": [{"label": "My Theme", "path": "./nonexistent.json"}]}
+      }
+    let result = parseVsCodeThemeJson(packageJson, "My Theme", baseDir / "package.json")
+    check result.isNone
+
+  test "returns none when themes array is missing":
+    let packageJson = %*{"contributes": {}}
+    let result = parseVsCodeThemeJson(packageJson, "My Theme", "/tmp/package.json")
+    check result.isNone
+
+  test "returns none when path field is missing":
+    let packageJson = %*{"contributes": {"themes": [{"label": "My Theme"}]}}
+    let result = parseVsCodeThemeJson(packageJson, "My Theme", "/tmp/package.json")
+    check result.isNone
+
+  test "resolves include chain in loaded theme":
+    let baseDir = getTempDir() / "moe_test_parsetheme_include"
+    createDir(baseDir)
+    defer:
+      removeDir(baseDir)
+
+    let baseTheme =
+      %*{
+        "colors": {"editor.background": "#000000"},
+        "tokenColors": [{"scope": "comment", "settings": {"foreground": "#999999"}}],
+      }
+    writeFile(baseDir / "base.json", $baseTheme)
+
+    let childTheme =
+      %*{
+        "include": "./base.json",
+        "colors": {"editor.foreground": "#ffffff"},
+        "tokenColors": [],
+      }
+    writeFile(baseDir / "child.json", $childTheme)
+
+    let packageJson =
+      %*{"contributes": {"themes": [{"label": "Child Theme", "path": "./child.json"}]}}
+    let result =
+      parseVsCodeThemeJson(packageJson, "Child Theme", baseDir / "package.json")
+    check result.isSome
+    check result.get{"colors", "editor.foreground"}.getStr == "#ffffff"
+    check result.get{"colors", "editor.background"}.getStr == "#000000"
+    check result.get{"tokenColors"}.len == 1
+
+suite "vscode_theme - editor.background propagation":
+  test "applies to all elements with default background":
+    let themeJson = %*{"colors": {"editor.background": "#2d3142"}, "tokenColors": []}
+    let result = makeColorThemeFromVSCodeThemeFile(themeJson)
+    let expectedBg = Rgb(red: 0x2d, green: 0x31, blue: 0x42)
+
+    check result[EditorColorPairIndex.default].background.rgb == expectedBg
+    check result[EditorColorPairIndex.keyword].background.rgb == expectedBg
+    check result[EditorColorPairIndex.operator].background.rgb == expectedBg
+    check result[EditorColorPairIndex.whitespace].background.rgb == expectedBg
+    check result[EditorColorPairIndex.function].background.rgb == expectedBg
+    check result[EditorColorPairIndex.`method`].background.rgb == expectedBg
+    check result[EditorColorPairIndex.namespace].background.rgb == expectedBg
+    check result[EditorColorPairIndex.className].background.rgb == expectedBg
+    check result[EditorColorPairIndex.decorator].background.rgb == expectedBg
+    check result[EditorColorPairIndex.parameter].background.rgb == expectedBg
+    check result[EditorColorPairIndex.property].background.rgb == expectedBg
+    check result[EditorColorPairIndex.enumName].background.rgb == expectedBg
+    check result[EditorColorPairIndex.enumMember].background.rgb == expectedBg
+
+  test "preserves non-default backgrounds":
+    let themeJson = %*{"colors": {"editor.background": "#2d3142"}, "tokenColors": []}
+    let result = makeColorThemeFromVSCodeThemeFile(themeJson)
+    let themeBg = Rgb(red: 0x2d, green: 0x31, blue: 0x42)
+
+    # Status line has non-black default (#09aefa) - should NOT be changed
+    check result[EditorColorPairIndex.statusLineNormalMode].background.rgb != themeBg
+    # Select area has non-black default (#800080) - should NOT be changed
+    check result[EditorColorPairIndex.selectArea].background.rgb != themeBg
+    # Search result has non-black default (#ff0000) - should NOT be changed
+    check result[EditorColorPairIndex.searchResult].background.rgb != themeBg
+    # Current line bg has non-black default (#444444) - should NOT be changed
+    check result[EditorColorPairIndex.currentLineBg].background.rgb != themeBg

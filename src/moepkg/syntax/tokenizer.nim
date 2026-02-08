@@ -134,6 +134,7 @@ type
     langC
     langCpp
     langCsharp
+    langDiff
     langHaskell
     langHtml
     langJava
@@ -170,7 +171,7 @@ const
   wsChars*: set[char] = {'\t' .. '\r', ' '}
 
   sourceLanguageToStr*: array[SourceLanguage, string] = [
-    "none", "Astro", "C", "C++", "C#", "Haskell", "HTML", "Java", "JavaScript",
+    "none", "Astro", "C", "C++", "C#", "Diff", "Haskell", "HTML", "Java", "JavaScript",
     "JavaScriptReact", "Markdown", "Nim", "Python", "Rust", "Shell", "Toml", "Yaml",
     "Json", "TypeScript", "TypeScriptReact",
   ]
@@ -260,9 +261,9 @@ proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
 
 import
-  syntaxastro, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxhtml, syntaxjava,
-  syntaxjavascript, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust, syntaxshell,
-  syntaxyaml, syntaxtoml, syntaxjson, syntaxtypescript
+  syntaxastro, syntaxc, syntaxcpp, syntaxcsharp, syntaxdiff, syntaxhaskell, syntaxhtml,
+  syntaxjava, syntaxjavascript, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust,
+  syntaxshell, syntaxyaml, syntaxtoml, syntaxjson, syntaxtypescript
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -270,6 +271,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langC: g.cNextToken
   of langCpp: g.cppNextToken
   of langCsharp: g.csharpNextToken
+  of langDiff: g.diffNextToken
   of langHaskell: g.haskellNextToken
   of langHtml: g.htmlNextToken
   of langJava: g.javaNextToken

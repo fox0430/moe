@@ -46,11 +46,14 @@ type
   FloatSetter = proc(cfg: EditorConfig, val: float)
   EnumGetter = proc(cfg: EditorConfig): string {.noSideEffect.}
   EnumSetter = proc(cfg: EditorConfig, val: string)
+  StringGetter = proc(cfg: EditorConfig): string {.noSideEffect.}
+  StringSetter = proc(cfg: EditorConfig, val: string)
 
   ## Config item descriptor - defines how to read/write a config value
   ConfigItemDescriptor = object
     displayName: string
     section: string
+    visibleWhen: proc(cfg: EditorConfig): bool {.noSideEffect.}
     case kind: ConfigValueKind
     of cvkBool:
       boolGet: BoolGetter
@@ -68,7 +71,10 @@ type
       enumGet: EnumGetter
       enumSet: EnumSetter
       enumOptions: seq[string]
-    of cvkString, cvkSection:
+    of cvkString:
+      stringGet: StringGetter
+      stringSetter: StringSetter
+    of cvkSection:
       discard
 
   ConfigItem* = object ## Represents a single configuration item in the list
@@ -799,6 +805,32 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
     floatStep: 0.5,
   )
 
+  # Theme section
+  result.add ConfigItemDescriptor(
+    kind: cvkSection, displayName: "Theme", section: "Theme"
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkEnum,
+    displayName: "kind",
+    section: "Theme",
+    enumGet: proc(c: EditorConfig): string =
+      $c.theme.kind,
+    enumSet: proc(c: EditorConfig, v: string) =
+      c.theme.kind = parseEnum[ThemeKind](v),
+    enumOptions: @["default", "config", "vscode"],
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkString,
+    displayName: "path",
+    section: "Theme",
+    visibleWhen: proc(c: EditorConfig): bool =
+      c.theme.kind == tkConfig,
+    stringGet: proc(c: EditorConfig): string =
+      c.theme.path,
+    stringSetter: proc(c: EditorConfig, v: string) =
+      c.theme.path = v,
+  )
+
   # LSP section
   result.add ConfigItemDescriptor(kind: cvkSection, displayName: "Lsp", section: "Lsp")
   result.add ConfigItemDescriptor(
@@ -833,6 +865,8 @@ proc buildItemList*(state: ConfigModeState) =
   let cfg = state.config
 
   for i, desc in configDescriptors:
+    if desc.visibleWhen != nil and not desc.visibleWhen(cfg):
+      continue
     case desc.kind
     of cvkSection:
       state.items.add ConfigItem(
@@ -885,7 +919,14 @@ proc buildItemList*(state: ConfigModeState) =
         enumOptions: desc.enumOptions,
       )
     of cvkString:
-      discard # Not used currently
+      state.items.add ConfigItem(
+        kind: cvkString,
+        displayName: desc.displayName,
+        section: desc.section,
+        depth: 1,
+        descriptorIndex: i,
+        stringValue: desc.stringGet(cfg),
+      )
 
 proc applyChange*(state: ConfigModeState, itemIndex: int) =
   ## Apply a change to the actual config using descriptors
@@ -908,8 +949,20 @@ proc applyChange*(state: ConfigModeState, itemIndex: int) =
     desc.floatSet(cfg, item.floatValue)
   of cvkEnum:
     desc.enumSet(cfg, item.enumValue)
+  of cvkString:
+    desc.stringSetter(cfg, item.stringValue)
   else:
     discard
+
+  # Rebuild to update conditional visibility
+  let savedDescIdx = item.descriptorIndex
+  state.buildItemList()
+  for i, newItem in state.items:
+    if newItem.descriptorIndex == savedDescIdx:
+      state.selectedIndex = i
+      break
+  if state.selectedIndex >= state.items.len:
+    state.selectedIndex = max(0, state.items.len - 1)
 
 # State management
 

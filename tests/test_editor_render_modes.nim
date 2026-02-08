@@ -238,19 +238,20 @@ suite "renderBufferManager - Basic behavior":
   test "Render with no buffer manager state does nothing":
     let e = createTestEditor()
     var buffer = createTestBuffer()
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
-    check e.windowManager.windows[e.windowManager.activeWindowIndex].bufferManagerState.isNone
-    e.renderBufferManager(buffer)
+    check window.bufferManagerState.isNone
+    e.renderBufferManager(buffer, window, true, 0)
 
   test "Render with empty buffer manager state":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     let bmState = newBufferManagerState()
-    e.windowManager.windows[e.windowManager.activeWindowIndex].bufferManagerState =
-      some(bmState)
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    window.bufferManagerState = some(bmState)
 
-    e.renderBufferManager(buffer)
+    e.renderBufferManager(buffer, window, true, 0)
 
   test "Render buffer manager with entries":
     let e = createTestEditor()
@@ -265,10 +266,10 @@ suite "renderBufferManager - Basic behavior":
       ]
     bmState.selectedIndex = 1
 
-    e.windowManager.windows[e.windowManager.activeWindowIndex].bufferManagerState =
-      some(bmState)
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    window.bufferManagerState = some(bmState)
 
-    e.renderBufferManager(buffer)
+    e.renderBufferManager(buffer, window, true, 0)
     check e.state.screenCursor.y >= 0
 
   test "Render buffer manager with scroll position":
@@ -289,18 +290,19 @@ suite "renderBufferManager - Basic behavior":
     bmState.selectedIndex = 45
     bmState.topLine = 40
 
-    e.windowManager.windows[e.windowManager.activeWindowIndex].bufferManagerState =
-      some(bmState)
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    window.bufferManagerState = some(bmState)
 
-    e.renderBufferManager(buffer)
+    e.renderBufferManager(buffer, window, true, 0)
 
 suite "renderBackupManager - Basic behavior":
   test "Render with no backup manager state does nothing":
     let e = createTestEditor()
     var buffer = createTestBuffer()
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
-    check e.windowManager.windows[e.windowManager.activeWindowIndex].backupManagerState.isNone
-    e.renderBackupManager(buffer)
+    check window.backupManagerState.isNone
+    e.renderBackupManager(buffer, window, true, 0)
 
   test "Render backup manager with empty entries":
     let e = createTestEditor()
@@ -308,10 +310,10 @@ suite "renderBackupManager - Basic behavior":
 
     let bkState = newBackupManagerState()
     bkState.sourceFilePath = "/tmp/test.txt"
-    e.windowManager.windows[e.windowManager.activeWindowIndex].backupManagerState =
-      some(bkState)
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    window.backupManagerState = some(bkState)
 
-    e.renderBackupManager(buffer)
+    e.renderBackupManager(buffer, window, true, 0)
     # Should show "No backup files found" message
 
   test "Render backup manager with entries":
@@ -335,19 +337,20 @@ suite "renderBackupManager - Basic behavior":
       ]
     bkState.selectedIndex = 0
 
-    e.windowManager.windows[e.windowManager.activeWindowIndex].backupManagerState =
-      some(bkState)
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    window.backupManagerState = some(bkState)
 
-    e.renderBackupManager(buffer)
+    e.renderBackupManager(buffer, window, true, 0)
     check e.state.screenCursor.y >= 0
 
 suite "renderDiffViewer - Basic behavior":
   test "Render with no diff viewer state does nothing":
     let e = createTestEditor()
     var buffer = createTestBuffer()
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
-    check e.windowManager.windows[e.windowManager.activeWindowIndex].diffViewerState.isNone
-    e.renderDiffViewer(buffer)
+    check window.diffViewerState.isNone
+    e.renderDiffViewer(buffer, window, true, 0)
 
   test "Render diff viewer with empty lines":
     let e = createTestEditor()
@@ -356,10 +359,10 @@ suite "renderDiffViewer - Basic behavior":
     let dvState = newDiffViewerState()
     dvState.sourceFilePath = "/tmp/current.txt"
     dvState.backupFilePath = "/tmp/backup.txt"
-    e.windowManager.windows[e.windowManager.activeWindowIndex].diffViewerState =
-      some(dvState)
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    window.diffViewerState = some(dvState)
 
-    e.renderDiffViewer(buffer)
+    e.renderDiffViewer(buffer, window, true, 0)
     # Should show "No diff content" message
 
   test "Render diff viewer with diff lines":
@@ -381,27 +384,29 @@ suite "renderDiffViewer - Basic behavior":
       ]
     dvState.selectedLine = 4
 
-    e.windowManager.windows[e.windowManager.activeWindowIndex].diffViewerState =
-      some(dvState)
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    window.diffViewerState = some(dvState)
 
-    e.renderDiffViewer(buffer)
+    e.renderDiffViewer(buffer, window, true, 0)
     check e.state.screenCursor.y >= 0
 
 suite "renderRecentFileMode - Basic behavior":
   test "Render recent file mode with empty files":
     let e = createTestEditor()
     var buffer = createTestBuffer()
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
     # RecentFileModeState is not Option-wrapped
     e.recentFileModeState.files = @[]
     e.recentFileModeState.selectedIndex = 0
     e.recentFileModeState.topLine = 0
 
-    e.renderRecentFileMode(buffer)
+    e.renderRecentFileMode(buffer, window, true, 0)
 
   test "Render recent file mode with files":
     let e = createTestEditor()
     var buffer = createTestBuffer()
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
     e.recentFileModeState.files =
       @[
@@ -411,7 +416,7 @@ suite "renderRecentFileMode - Basic behavior":
       ]
     e.recentFileModeState.selectedIndex = 1
 
-    e.renderRecentFileMode(buffer)
+    e.renderRecentFileMode(buffer, window, true, 0)
     check e.state.screenCursor.y >= 0
 
 suite "renderDebugMode - Basic behavior":
@@ -455,9 +460,10 @@ suite "renderReferencesViewer - Basic behavior":
   test "Render with no references viewer state does nothing":
     let e = createTestEditor()
     var buffer = createTestBuffer()
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
-    check e.windowManager.windows[e.windowManager.activeWindowIndex].referencesViewerState.isNone
-    e.renderReferencesViewer(buffer)
+    check window.referencesViewerState.isNone
+    e.renderReferencesViewer(buffer, window, true, 0)
 
   test "Render references viewer with items":
     let e = createTestEditor()
@@ -470,19 +476,20 @@ suite "renderReferencesViewer - Basic behavior":
       ]
     let refState = newReferencesViewerState(items, "REFERENCES")
 
-    e.windowManager.windows[e.windowManager.activeWindowIndex].referencesViewerState =
-      some(refState)
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    window.referencesViewerState = some(refState)
 
-    e.renderReferencesViewer(buffer)
+    e.renderReferencesViewer(buffer, window, true, 0)
     check e.state.screenCursor.y >= 0
 
 suite "renderDocumentSymbolViewer - Basic behavior":
   test "Render with no document symbol viewer state does nothing":
     let e = createTestEditor()
     var buffer = createTestBuffer()
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
-    check e.windowManager.windows[e.windowManager.activeWindowIndex].documentSymbolViewerState.isNone
-    e.renderDocumentSymbolViewer(buffer)
+    check window.documentSymbolViewerState.isNone
+    e.renderDocumentSymbolViewer(buffer, window, true, 0)
 
   test "Render document symbol viewer with empty items":
     let e = createTestEditor()
@@ -493,18 +500,19 @@ suite "renderDocumentSymbolViewer - Basic behavior":
       items: @[], selectedIndex: 0, topLine: 0, filePath: "/test/file.nim"
     )
 
-    e.windowManager.windows[e.windowManager.activeWindowIndex].documentSymbolViewerState =
-      some(symState)
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    window.documentSymbolViewerState = some(symState)
 
-    e.renderDocumentSymbolViewer(buffer)
+    e.renderDocumentSymbolViewer(buffer, window, true, 0)
 
 suite "renderCallHierarchyViewer - Basic behavior":
   test "Render with no call hierarchy viewer state does nothing":
     let e = createTestEditor()
     var buffer = createTestBuffer()
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
 
-    check e.windowManager.windows[e.windowManager.activeWindowIndex].callHierarchyViewerState.isNone
-    e.renderCallHierarchyViewer(buffer)
+    check window.callHierarchyViewerState.isNone
+    e.renderCallHierarchyViewer(buffer, window, true, 0)
 
   test "Render call hierarchy viewer with empty items":
     let e = createTestEditor()
@@ -513,10 +521,10 @@ suite "renderCallHierarchyViewer - Basic behavior":
     # Create state with empty items using the constructor
     let chState = newCallHierarchyViewerState(@[], chvkIncoming)
 
-    e.windowManager.windows[e.windowManager.activeWindowIndex].callHierarchyViewerState =
-      some(chState)
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    window.callHierarchyViewerState = some(chState)
 
-    e.renderCallHierarchyViewer(buffer)
+    e.renderCallHierarchyViewer(buffer, window, true, 0)
 
 suite "renderHelpViewer - Basic behavior":
   test "Render with no help viewer state does nothing":
@@ -754,9 +762,9 @@ suite "Status line visibility":
 
     # Test buffer manager
     let bmState = newBufferManagerState()
-    e.windowManager.windows[e.windowManager.activeWindowIndex].bufferManagerState =
-      some(bmState)
-    e.renderBufferManager(buffer)
+    let window2 = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    window2.bufferManagerState = some(bmState)
+    e.renderBufferManager(buffer, window2, true, 0)
 
   test "Render modes with status line shown":
     var config = newEditorConfig()
@@ -848,14 +856,14 @@ suite "Screen cursor positioning":
       ]
     bmState.selectedIndex = 0
 
-    e.windowManager.windows[e.windowManager.activeWindowIndex].bufferManagerState =
-      some(bmState)
+    let window = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    window.bufferManagerState = some(bmState)
 
-    e.renderBufferManager(buffer)
+    e.renderBufferManager(buffer, window, true, 0)
     let y0 = e.state.screenCursor.y
 
     bmState.selectedIndex = 2
-    e.renderBufferManager(buffer)
+    e.renderBufferManager(buffer, window, true, 0)
     let y2 = e.state.screenCursor.y
 
     check y2 > y0

@@ -152,7 +152,6 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("files", claBufferManager)
 
   # Backup manager
-  config.addAlias("backups", claBackupManager)
   config.addAlias("backup", claBackupManager)
 
   # Recent file

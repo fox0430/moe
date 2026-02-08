@@ -177,11 +177,13 @@ proc main() =
   # Create editor with loaded configuration and validation result
   var editor = newEditor(editorConfig, validationResult)
 
-  # Create async app with config-based mouse setting
+  # Always capture mouse events so the terminal doesn't convert wheel events
+  # to arrow key sequences. When mouse is disabled in config, events are
+  # ignored in handleMouseEvent instead.
   let appConfig = AppConfig(
     title: "moe",
     alternateScreen: true,
-    mouseCapture: editor.config.standard.mouse,
+    mouseCapture: true,
     rawMode: true,
     windowMode: false,
     bracketedPaste: true,

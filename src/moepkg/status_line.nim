@@ -111,9 +111,9 @@ proc buildFileDisplay(
   ## For special modes (non-file-edit modes), show mode label instead of filename
   ## Includes filename, directory, and changed mark as configured
 
-  # For special modes, show mode label instead of filename
+  # For special modes, the mode label is already shown separately
   if not mode.isFileEditMode:
-    return " " & modeLabel(mode) & " "
+    return ""
 
   if textBuffer.filePath.isNone:
     return " [No Name]"

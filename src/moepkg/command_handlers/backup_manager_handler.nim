@@ -31,7 +31,6 @@
 ## - D: Delete selected backup
 ## - r: Refresh backup list
 ## - Enter: Open diff viewer
-## - q/Esc: Close backup manager
 ## - :: Enter command mode
 
 import std/options
@@ -46,7 +45,6 @@ type
     bkmrOpenDiff # Open diff viewer for selected backup
     bkmrRefresh # Refresh the backup list
     bkmrEnterCommand # Enter command mode
-    bkmrQuit # Close backup manager and return to previous mode
     bkmrUnhandled # Command was not handled
     bkmrError # Error occurred
 
@@ -88,10 +86,6 @@ proc handleBackupManagerModeKey*(
       bkState.moveToFirst()
       return BackupManagerResult(kind: bkmrHandled)
     # If not 'g', fall through to normal handling
-
-  # Escape key - quit backup manager
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
-    return BackupManagerResult(kind: bkmrQuit)
 
   # Check for special keys first
   if keyCombo.isSpecial:
@@ -139,8 +133,6 @@ proc handleBackupManagerModeKey*(
     case keyCombo.char
     of ":":
       return BackupManagerResult(kind: bkmrEnterCommand)
-    of "q":
-      return BackupManagerResult(kind: bkmrQuit)
     of "j":
       bkState.moveDown()
       return BackupManagerResult(kind: bkmrHandled)

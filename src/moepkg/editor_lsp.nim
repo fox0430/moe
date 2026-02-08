@@ -240,7 +240,14 @@ proc handleLspLocations(
     # Enter References mode
     e.state.previousMode = e.state.mode
     e.setMode(EditorMode.References)
-    e.activeWindow.referencesViewerState = some(newReferencesViewerState(items, title))
+    let refState = newReferencesViewerState(items, title)
+    let activeWin = e.activeWindow
+    refState.originalBuffer = activeWin.buffer
+    activeWin.buffer = refState.createReferencesTextBuffer()
+    activeWin.cursor = BufferPosition(line: 0, column: 0)
+    activeWin.viewport.topLine = 0
+    activeWin.viewport.leftColumn = 0
+    activeWin.referencesViewerState = some(refState)
     e.state.statusMessage = $locations.len & " " & title.toLowerAscii() & " found"
     return true
 
@@ -512,11 +519,22 @@ proc pollLspCallHierarchy*(e: Editor) =
           items.add(call.`from`)
 
         # Enter CallHierarchy mode (only set previousMode if not already in CallHierarchy)
-        if e.state.mode != EditorMode.CallHierarchy:
+        let chState = newCallHierarchyViewerState(items, chvkIncoming)
+        let activeWin = e.activeWindow
+        # Preserve originalBuffer from previous CallHierarchy state if switching views
+        if e.state.mode == EditorMode.CallHierarchy and
+            activeWin.callHierarchyViewerState.isSome and
+            activeWin.callHierarchyViewerState.get.originalBuffer != nil:
+          chState.originalBuffer = activeWin.callHierarchyViewerState.get.originalBuffer
+        else:
           e.state.previousMode = e.state.mode
+          chState.originalBuffer = activeWin.buffer
         e.setMode(EditorMode.CallHierarchy)
-        e.activeWindow.callHierarchyViewerState =
-          some(newCallHierarchyViewerState(items, chvkIncoming))
+        activeWin.buffer = chState.createCallHierarchyTextBuffer()
+        activeWin.cursor = BufferPosition(line: 0, column: 0)
+        activeWin.viewport.topLine = 0
+        activeWin.viewport.leftColumn = 0
+        activeWin.callHierarchyViewerState = some(chState)
         e.state.statusMessage = $items.len & " incoming calls found"
       else:
         e.state.statusMessage = "No incoming calls found"
@@ -537,11 +555,22 @@ proc pollLspCallHierarchy*(e: Editor) =
           items.add(call.to)
 
         # Enter CallHierarchy mode (only set previousMode if not already in CallHierarchy)
-        if e.state.mode != EditorMode.CallHierarchy:
+        let chState = newCallHierarchyViewerState(items, chvkOutgoing)
+        let activeWin = e.activeWindow
+        # Preserve originalBuffer from previous CallHierarchy state if switching views
+        if e.state.mode == EditorMode.CallHierarchy and
+            activeWin.callHierarchyViewerState.isSome and
+            activeWin.callHierarchyViewerState.get.originalBuffer != nil:
+          chState.originalBuffer = activeWin.callHierarchyViewerState.get.originalBuffer
+        else:
           e.state.previousMode = e.state.mode
+          chState.originalBuffer = activeWin.buffer
         e.setMode(EditorMode.CallHierarchy)
-        e.activeWindow.callHierarchyViewerState =
-          some(newCallHierarchyViewerState(items, chvkOutgoing))
+        activeWin.buffer = chState.createCallHierarchyTextBuffer()
+        activeWin.cursor = BufferPosition(line: 0, column: 0)
+        activeWin.viewport.topLine = 0
+        activeWin.viewport.leftColumn = 0
+        activeWin.callHierarchyViewerState = some(chState)
         e.state.statusMessage = $items.len & " outgoing calls found"
       else:
         e.state.statusMessage = "No outgoing calls found"
@@ -882,7 +911,13 @@ proc pollLspDocumentSymbols*(e: Editor) =
       # Enter DocumentSymbol mode
       e.state.previousMode = e.state.mode
       e.setMode(EditorMode.DocumentSymbol)
-      e.activeWindow.documentSymbolViewerState = some(viewerState)
+      let activeWin = e.activeWindow
+      viewerState.originalBuffer = activeWin.buffer
+      activeWin.buffer = viewerState.createDocumentSymbolTextBuffer()
+      activeWin.cursor = BufferPosition(line: 0, column: 0)
+      activeWin.viewport.topLine = 0
+      activeWin.viewport.leftColumn = 0
+      activeWin.documentSymbolViewerState = some(viewerState)
       e.state.statusMessage = $symbolCount & " symbols found"
     else:
       e.state.statusMessage = "No symbols found"

@@ -22,7 +22,7 @@
 ## This module handles loading color themes from VSCode, VSCodium, and Code-OSS
 ## installations and converting them to moe's ThemeColors format.
 
-import std/[os, options, tables, json, strformat]
+import std/[os, options, tables, json, strformat, strutils]
 import pkg/results
 
 import color, theme
@@ -61,6 +61,38 @@ proc vsCodeDefaultExtensionsDir(): string {.inline.} =
 
 proc vsCodeUserExtensionsDir(): string {.inline.} =
   getHomeDir() / ".vscode/extensions"
+
+proc vsCodeStateDbPath(flavor: VsCodeFlavor): string =
+  case flavor
+  of VsCodeFlavor.VSCodium:
+    return getHomeDir() / ".config/VSCodium/User/globalStorage/state.vscdb"
+  of VsCodeFlavor.CodeOss:
+    return getHomeDir() / ".config/Code - OSS/User/globalStorage/state.vscdb"
+  of VsCodeFlavor.VSCode:
+    return getHomeDir() / ".config/Code/User/globalStorage/state.vscdb"
+
+proc readThemeNameFromStateDb(path: string): Option[string] =
+  ## Read the active color theme name from VSCode's state.vscdb.
+  ## The DB stores a JSON value for key "colorThemeData" containing "settingsId".
+  ## We search for the pattern in the raw file bytes to avoid a SQLite dependency.
+
+  try:
+    let data = readFile(path)
+    # Find the JSON blob: "colorThemeData{" marks the start of the actual data.
+    const keyWithJson = "colorThemeData{"
+    let keyPos = data.find(keyWithJson)
+    if keyPos >= 0:
+      const marker = "\"settingsId\":\""
+      let pos = data.find(marker, keyPos)
+      if pos >= 0:
+        let start = pos + marker.len
+        let endPos = data.find('"', start)
+        if endPos > start:
+          let name = data[start ..< endPos]
+          if name.len > 0:
+            return some(name)
+  except CatchableError:
+    discard
 
 proc vsCodeSettingsFilePath(flavor: VsCodeFlavor): string =
   case flavor
@@ -118,15 +150,95 @@ proc colorFromNode(node: JsonNode): Rgb =
   else:
     return TerminalDefaultRgb
 
+proc matchesThemeName(theme: JsonNode, themeName: string): bool =
+  ## Check if a theme entry matches the given name by label or id.
+  if theme{"label"} != nil and theme{"label"}.getStr == themeName:
+    return true
+  if theme{"id"} != nil and theme{"id"}.getStr == themeName:
+    return true
+
 proc isCurrentVsCodeThemePackage(json: JsonNode, themeName: string): bool =
   ## Return true if `json` is the current VSCode theme.
 
-  if json{"contributes", "themes"} != nil:
-    let themes = json{"contributes", "themes"}
-    if themes != nil and themes.kind == JArray:
-      for t in themes:
-        if t{"label"} != nil and t{"label"}.getStr == themeName:
-          return true
+  let themes = json{"contributes", "themes"}
+  if themes != nil and themes.kind == JArray:
+    for t in themes:
+      if t.matchesThemeName(themeName):
+        return true
+
+proc resolveThemeIncludes(themeJson: JsonNode, themeDir: string): JsonNode =
+  ## Resolve the `include` chain in a VSCode theme file.
+  ## Merges colors and tokenColors from included (base) themes,
+  ## with the current file's values taking priority.
+
+  let includeNode = themeJson{"include"}
+  if includeNode == nil or includeNode.kind != JString:
+    return themeJson
+
+  let includePath = themeDir / includeNode.getStr
+  if not fileExists(includePath):
+    return themeJson
+
+  let baseJson =
+    try:
+      resolveThemeIncludes(json.parseFile(includePath), parentDir(includePath))
+    except CatchableError:
+      return themeJson
+
+  # Merge colors: base first, current overrides
+  var mergedColors = newJObject()
+  if baseJson{"colors"} != nil and baseJson{"colors"}.kind == JObject:
+    for key, val in baseJson["colors"]:
+      mergedColors[key] = val
+  if themeJson{"colors"} != nil and themeJson{"colors"}.kind == JObject:
+    for key, val in themeJson["colors"]:
+      mergedColors[key] = val
+
+  # Merge tokenColors: base first, then current (later entries override in table)
+  var mergedTokenColors = newJArray()
+  if baseJson{"tokenColors"} != nil and baseJson{"tokenColors"}.kind == JArray:
+    for item in baseJson["tokenColors"]:
+      mergedTokenColors.add(item)
+  if themeJson{"tokenColors"} != nil and themeJson{"tokenColors"}.kind == JArray:
+    for item in themeJson["tokenColors"]:
+      mergedTokenColors.add(item)
+
+  result = newJObject()
+  result["colors"] = mergedColors
+  result["tokenColors"] = mergedTokenColors
+
+proc findTokenSettings(tokenNodes: Table[string, JsonNode], scope: string): JsonNode =
+  ## Find the best matching token settings for a scope using TextMate-style
+  ## hierarchical matching.
+  ##
+  ## Priority: exact match > longest parent scope > shortest child scope.
+  ## Returns nil if no match found.
+
+  # 1. Exact match
+  if scope in tokenNodes:
+    return tokenNodes[scope]
+
+  # 2. Longest parent scope (theme scope is a prefix of target)
+  # e.g., scope="entity.name.function", theme has "entity" -> match
+  var bestParentLen = 0
+  var bestParent: JsonNode
+  for key, val in tokenNodes:
+    if scope.startsWith(key & ".") and key.len > bestParentLen:
+      bestParentLen = key.len
+      bestParent = val
+  if bestParentLen > 0:
+    return bestParent
+
+  # 3. Shortest child scope (target is a prefix of theme scope)
+  # e.g., scope="keyword", theme has "keyword.control" -> match
+  var bestChildLen = int.high
+  var bestChild: JsonNode
+  for key, val in tokenNodes:
+    if key.startsWith(scope & ".") and key.len < bestChildLen:
+      bestChildLen = key.len
+      bestChild = val
+  if bestChildLen < int.high:
+    return bestChild
 
 proc parseVsCodeThemeJson(
     packageJson: JsonNode, themeName, extensionDir: string
@@ -134,7 +246,7 @@ proc parseVsCodeThemeJson(
   let themesJson = packageJson{"contributes", "themes"}
   if themesJson != nil and themesJson.kind == JArray:
     for theme in themesJson:
-      if theme{"label"} != nil and theme{"label"}.getStr == themeName:
+      if theme.matchesThemeName(themeName):
         let themePath = theme{"path"}
 
         if themePath != nil and themePath.kind == JString:
@@ -143,7 +255,8 @@ proc parseVsCodeThemeJson(
           if fileExists(themeFilePath):
             result =
               try:
-                some(json.parseFile(themeFilePath))
+                let raw = json.parseFile(themeFilePath)
+                some(resolveThemeIncludes(raw, parentDir(themeFilePath)))
               except CatchableError:
                 none(JsonNode)
 
@@ -169,9 +282,11 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
       else:
         tokenNodes[scope.getStr()] = settings
 
+  let colors = jsonNode{"colors"}
+
   # Editor foreground
-  if jsonNode{"colors"} != nil and jsonNode["colors"].contains("editor.foreground"):
-    let fg = colorFromNode(jsonNode{"colors", "editor.foreground"})
+  if colors != nil and colors.contains("editor.foreground"):
+    let fg = colorFromNode(colors{"editor.foreground"})
 
     result[EditorColorPairIndex.default].foreground = ThemeColor(rgb: fg)
     result[EditorColorPairIndex.commandLine].foreground = ThemeColor(rgb: fg)
@@ -185,138 +300,117 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.variable].foreground = ThemeColor(rgb: fg)
 
   # Editor background
-  if jsonNode{"colors"} != nil and jsonNode["colors"].contains("editor.background"):
-    let bg = colorFromNode(jsonNode{"colors", "editor.background"})
-
-    result[EditorColorPairIndex.default].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.keyword].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.functionName].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.typeName].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.boolean].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.stringLit].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.specialVar].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.binNumber].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.decNumber].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.floatNumber].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.hexNumber].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.octNumber].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.commandLine].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.errorMessage].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.warnMessage].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.currentLineNum].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.file].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.dir].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.pcLink].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.diffViewerAddedLine].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.diffViewerDeletedLine].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.backupManagerCurrentLine].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.configModeCurrentLine].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.preprocessor].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.pragma].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.comment].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.longComment].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.identifier].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.variable].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.lineNum].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.charLit].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.builtin].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.popupWindow].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.popupWinCurrentLine].background = ThemeColor(rgb: bg)
+  # Apply to all elements that still have the default editor background,
+  # preserving elements with intentionally different backgrounds
+  # (e.g., statusLine, selectArea, searchResult).
+  if colors != nil and colors.contains("editor.background"):
+    let bg = colorFromNode(colors{"editor.background"})
+    let defaultBg = DefaultColors[EditorColorPairIndex.default].background.rgb
+    for idx in EditorColorPairIndex:
+      if result[idx].background.rgb == defaultBg:
+        result[idx].background = ThemeColor(rgb: bg)
 
   # Token colors - keyword
-  if tokenNodes.hasKey("keyword"):
-    result[EditorColorPairIndex.keyword].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["keyword"]{"foreground"}))
+  block:
+    let s = tokenNodes.findTokenSettings("keyword")
+    if s != nil:
+      result[EditorColorPairIndex.keyword].foreground =
+        ThemeColor(rgb: colorFromNode(s{"foreground"}))
 
   # Token colors - entity (function, type, etc.)
-  if tokenNodes.hasKey("entity"):
-    let fg = colorFromNode(tokenNodes["entity"]{"foreground"})
-    result[EditorColorPairIndex.functionName].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.typeName].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.boolean].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.builtin].foreground = ThemeColor(rgb: fg)
+  block:
+    let s = tokenNodes.findTokenSettings("entity")
+    if s != nil:
+      let fg = colorFromNode(s{"foreground"})
+      result[EditorColorPairIndex.functionName].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.typeName].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.boolean].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.builtin].foreground = ThemeColor(rgb: fg)
 
   # Token colors - entity.name.function
-  if tokenNodes.hasKey("entity.name.function"):
-    result[EditorColorPairIndex.functionName].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["entity.name.function"]{"foreground"}))
-    result[EditorColorPairIndex.function].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["entity.name.function"]{"foreground"}))
-    result[EditorColorPairIndex.`method`].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["entity.name.function"]{"foreground"}))
+  block:
+    let s = tokenNodes.findTokenSettings("entity.name.function")
+    if s != nil:
+      let fg = colorFromNode(s{"foreground"})
+      result[EditorColorPairIndex.functionName].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.function].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.`method`].foreground = ThemeColor(rgb: fg)
 
   # Token colors - entity.name.type
-  if tokenNodes.hasKey("entity.name.type"):
-    result[EditorColorPairIndex.typeName].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["entity.name.type"]{"foreground"}))
-    result[EditorColorPairIndex.className].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["entity.name.type"]{"foreground"}))
-    result[EditorColorPairIndex.interfaceName].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["entity.name.type"]{"foreground"}))
-    result[EditorColorPairIndex.builtinType].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["entity.name.type"]{"foreground"}))
+  block:
+    let s = tokenNodes.findTokenSettings("entity.name.type")
+    if s != nil:
+      let fg = colorFromNode(s{"foreground"})
+      result[EditorColorPairIndex.typeName].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.className].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.interfaceName].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.builtinType].foreground = ThemeColor(rgb: fg)
 
   # Token colors - string
-  if tokenNodes.hasKey("string"):
-    let fg = colorFromNode(tokenNodes["string"]{"foreground"})
-    result[EditorColorPairIndex.stringLit].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.charLit].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.lspString].foreground = ThemeColor(rgb: fg)
+  block:
+    let s = tokenNodes.findTokenSettings("string")
+    if s != nil:
+      let fg = colorFromNode(s{"foreground"})
+      result[EditorColorPairIndex.stringLit].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.charLit].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.lspString].foreground = ThemeColor(rgb: fg)
 
   # Token colors - variable
-  if tokenNodes.hasKey("variable"):
-    result[EditorColorPairIndex.specialVar].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["variable"]{"foreground"}))
-    result[EditorColorPairIndex.variable].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["variable"]{"foreground"}))
+  block:
+    let s = tokenNodes.findTokenSettings("variable")
+    if s != nil:
+      let fg = colorFromNode(s{"foreground"})
+      result[EditorColorPairIndex.specialVar].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.variable].foreground = ThemeColor(rgb: fg)
 
   # Token colors - constant
-  if tokenNodes.hasKey("constant"):
-    let fg = colorFromNode(tokenNodes["constant"]{"foreground"})
-    result[EditorColorPairIndex.binNumber].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.decNumber].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.floatNumber].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.hexNumber].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.octNumber].foreground = ThemeColor(rgb: fg)
+  block:
+    let s = tokenNodes.findTokenSettings("constant")
+    if s != nil:
+      let fg = colorFromNode(s{"foreground"})
+      result[EditorColorPairIndex.binNumber].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.decNumber].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.floatNumber].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.hexNumber].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.octNumber].foreground = ThemeColor(rgb: fg)
 
   # Token colors - constant.numeric
-  if tokenNodes.hasKey("constant.numeric"):
-    let fg = colorFromNode(tokenNodes["constant.numeric"]{"foreground"})
-    result[EditorColorPairIndex.binNumber].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.decNumber].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.floatNumber].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.hexNumber].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.octNumber].foreground = ThemeColor(rgb: fg)
+  block:
+    let s = tokenNodes.findTokenSettings("constant.numeric")
+    if s != nil:
+      let fg = colorFromNode(s{"foreground"})
+      result[EditorColorPairIndex.binNumber].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.decNumber].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.floatNumber].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.hexNumber].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.octNumber].foreground = ThemeColor(rgb: fg)
 
   # Token colors - comment
-  if tokenNodes.hasKey("comment"):
-    let fg = colorFromNode(tokenNodes["comment"]{"foreground"})
-    result[EditorColorPairIndex.comment].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.longComment].foreground = ThemeColor(rgb: fg)
+  block:
+    let s = tokenNodes.findTokenSettings("comment")
+    if s != nil:
+      let fg = colorFromNode(s{"foreground"})
+      result[EditorColorPairIndex.comment].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.longComment].foreground = ThemeColor(rgb: fg)
 
   # Whitespace foreground
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editorWhitespace.foreground"):
+  if colors != nil and colors.contains("editorWhitespace.foreground"):
     result[EditorColorPairIndex.whitespace].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorWhitespace.foreground"}))
 
   # Line number foreground
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editorLineNumber.foreground"):
+  if colors != nil and colors.contains("editorLineNumber.foreground"):
     result[EditorColorPairIndex.lineNum].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorLineNumber.foreground"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorLineNumber.foreground"}))
 
   # Active line number foreground
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editorLineNumber.activeForeground"):
-    result[EditorColorPairIndex.currentLineNum].foreground = ThemeColor(
-      rgb: colorFromNode(jsonNode{"colors", "editorLineNumber.activeForeground"})
-    )
+  if colors != nil and colors.contains("editorLineNumber.activeForeground"):
+    result[EditorColorPairIndex.currentLineNum].foreground =
+      ThemeColor(rgb: colorFromNode(colors{"editorLineNumber.activeForeground"}))
 
   # Status bar colors
-  if jsonNode{"colors"} != nil and jsonNode["colors"].contains("statusBar.foreground"):
-    let fg = colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+  if colors != nil and colors.contains("statusBar.foreground"):
+    let fg = colorFromNode(colors{"statusBar.foreground"})
     result[EditorColorPairIndex.statusLineNormalMode].foreground = ThemeColor(rgb: fg)
     result[EditorColorPairIndex.statusLineNormalModeLabel].foreground =
       ThemeColor(rgb: fg)
@@ -350,8 +444,8 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
       ThemeColor(rgb: fg)
     result[EditorColorPairIndex.statusLineGitBranch].foreground = ThemeColor(rgb: fg)
 
-  if jsonNode{"colors"} != nil and jsonNode["colors"].contains("statusBar.background"):
-    let bg = colorFromNode(jsonNode{"colors", "statusBar.background"})
+  if colors != nil and colors.contains("statusBar.background"):
+    let bg = colorFromNode(colors{"statusBar.background"})
     result[EditorColorPairIndex.statusLineNormalMode].background = ThemeColor(rgb: bg)
     result[EditorColorPairIndex.statusLineNormalModeLabel].background =
       ThemeColor(rgb: bg)
@@ -386,229 +480,208 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineGitBranch].background = ThemeColor(rgb: bg)
 
   # Tab bar colors
-  if jsonNode{"colors"} != nil and jsonNode["colors"].contains("tab.inactiveForeground"):
+  if colors != nil and colors.contains("tab.inactiveForeground"):
     result[EditorColorPairIndex.tab].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "tab.inactiveForeground"}))
-  if jsonNode{"colors"} != nil and jsonNode["colors"].contains("tab.inactiveBackground"):
+      ThemeColor(rgb: colorFromNode(colors{"tab.inactiveForeground"}))
+  if colors != nil and colors.contains("tab.inactiveBackground"):
     result[EditorColorPairIndex.tab].background =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "tab.inactiveBackground"}))
-  if jsonNode{"colors"} != nil and jsonNode["colors"].contains("tab.activeForeground"):
+      ThemeColor(rgb: colorFromNode(colors{"tab.inactiveBackground"}))
+  if colors != nil and colors.contains("tab.activeForeground"):
     result[EditorColorPairIndex.currentTab].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "tab.activeForeground"}))
-  if jsonNode{"colors"} != nil and jsonNode["colors"].contains("tab.activeBackground"):
+      ThemeColor(rgb: colorFromNode(colors{"tab.activeForeground"}))
+  if colors != nil and colors.contains("tab.activeBackground"):
     result[EditorColorPairIndex.currentTab].background =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "tab.activeBackground"}))
+      ThemeColor(rgb: colorFromNode(colors{"tab.activeBackground"}))
 
   # Selection color
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editor.selectionBackground"):
-    result[EditorColorPairIndex.selectArea].background =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editor.selectionBackground"}))
+  if colors != nil and colors.contains("editor.selectionBackground"):
+    let selBg = colorFromNode(colors{"editor.selectionBackground"})
+    result[EditorColorPairIndex.selectArea].background = ThemeColor(rgb: selBg)
+    result[EditorColorPairIndex.currentWord].background = ThemeColor(rgb: selBg)
+    result[EditorColorPairIndex.parenPair].background = ThemeColor(rgb: selBg)
+    result[EditorColorPairIndex.currentFile].background = ThemeColor(rgb: selBg)
 
   # Search highlight
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editor.findMatchHighlightBackground"):
-    result[EditorColorPairIndex.searchResult].background = ThemeColor(
-      rgb: colorFromNode(jsonNode{"colors", "editor.findMatchHighlightBackground"})
-    )
+  if colors != nil and colors.contains("editor.findMatchHighlightBackground"):
+    result[EditorColorPairIndex.searchResult].background =
+      ThemeColor(rgb: colorFromNode(colors{"editor.findMatchHighlightBackground"}))
 
   # Current line background
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editor.lineHighlightBackground"):
-    result[EditorColorPairIndex.currentLineBg].background = ThemeColor(
-      rgb: colorFromNode(jsonNode{"colors", "editor.lineHighlightBackground"})
-    )
+  if colors != nil and colors.contains("editor.lineHighlightBackground"):
+    result[EditorColorPairIndex.currentLineBg].background =
+      ThemeColor(rgb: colorFromNode(colors{"editor.lineHighlightBackground"}))
 
   # Git diff colors
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("gitDecoration.addedResourceForeground"):
-    result[EditorColorPairIndex.diffViewerAddedLine].foreground = ThemeColor(
-      rgb: colorFromNode(jsonNode{"colors", "gitDecoration.addedResourceForeground"})
-    )
-    result[EditorColorPairIndex.sidebarGitAddedSign].foreground = ThemeColor(
-      rgb: colorFromNode(jsonNode{"colors", "gitDecoration.addedResourceForeground"})
-    )
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("gitDecoration.deletedResourceForeground"):
-    result[EditorColorPairIndex.diffViewerDeletedLine].foreground = ThemeColor(
-      rgb: colorFromNode(jsonNode{"colors", "gitDecoration.deletedResourceForeground"})
-    )
-    result[EditorColorPairIndex.sidebarGitDeletedSign].foreground = ThemeColor(
-      rgb: colorFromNode(jsonNode{"colors", "gitDecoration.deletedResourceForeground"})
-    )
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("gitDecoration.modifiedResourceForeground"):
-    result[EditorColorPairIndex.sidebarGitChangedSign].foreground = ThemeColor(
-      rgb: colorFromNode(jsonNode{"colors", "gitDecoration.modifiedResourceForeground"})
-    )
+  if colors != nil and colors.contains("gitDecoration.addedResourceForeground"):
+    result[EditorColorPairIndex.diffViewerAddedLine].foreground =
+      ThemeColor(rgb: colorFromNode(colors{"gitDecoration.addedResourceForeground"}))
+    result[EditorColorPairIndex.sidebarGitAddedSign].foreground =
+      ThemeColor(rgb: colorFromNode(colors{"gitDecoration.addedResourceForeground"}))
+  if colors != nil and colors.contains("gitDecoration.deletedResourceForeground"):
+    result[EditorColorPairIndex.diffViewerDeletedLine].foreground =
+      ThemeColor(rgb: colorFromNode(colors{"gitDecoration.deletedResourceForeground"}))
+    result[EditorColorPairIndex.sidebarGitDeletedSign].foreground =
+      ThemeColor(rgb: colorFromNode(colors{"gitDecoration.deletedResourceForeground"}))
+  if colors != nil and colors.contains("gitDecoration.modifiedResourceForeground"):
+    result[EditorColorPairIndex.sidebarGitChangedSign].foreground =
+      ThemeColor(rgb: colorFromNode(colors{"gitDecoration.modifiedResourceForeground"}))
 
   # Error/Warning colors
-  if jsonNode{"colors"} != nil and jsonNode["colors"].contains("editorError.foreground"):
+  if colors != nil and colors.contains("editorError.foreground"):
     result[EditorColorPairIndex.errorMessage].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorError.foreground"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorError.foreground"}))
     result[EditorColorPairIndex.syntaxCheckErr].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorError.foreground"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorError.foreground"}))
     result[EditorColorPairIndex.sidebarSyntaxCheckErrSign].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorError.foreground"}))
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editorWarning.foreground"):
+      ThemeColor(rgb: colorFromNode(colors{"editorError.foreground"}))
+  if colors != nil and colors.contains("editorWarning.foreground"):
     result[EditorColorPairIndex.warnMessage].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorWarning.foreground"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorWarning.foreground"}))
     result[EditorColorPairIndex.syntaxCheckWarn].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorWarning.foreground"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorWarning.foreground"}))
     result[EditorColorPairIndex.sidebarSyntaxCheckWarnSign].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorWarning.foreground"}))
-  if jsonNode{"colors"} != nil and jsonNode["colors"].contains("editorInfo.foreground"):
+      ThemeColor(rgb: colorFromNode(colors{"editorWarning.foreground"}))
+  if colors != nil and colors.contains("editorInfo.foreground"):
     result[EditorColorPairIndex.syntaxCheckInfo].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorInfo.foreground"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorInfo.foreground"}))
     result[EditorColorPairIndex.syntaxCheckHint].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorInfo.foreground"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorInfo.foreground"}))
     result[EditorColorPairIndex.sidebarSyntaxCheckInfoSign].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorInfo.foreground"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorInfo.foreground"}))
     result[EditorColorPairIndex.sidebarSyntaxCheckHintSign].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorInfo.foreground"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorInfo.foreground"}))
 
   # Operator
-  if tokenNodes.hasKey("keyword.operator"):
-    result[EditorColorPairIndex.operator].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["keyword.operator"]{"foreground"}))
+  block:
+    let s = tokenNodes.findTokenSettings("keyword.operator")
+    if s != nil:
+      result[EditorColorPairIndex.operator].foreground =
+        ThemeColor(rgb: colorFromNode(s{"foreground"}))
 
   # Namespace/module
-  if tokenNodes.hasKey("entity.name.namespace"):
-    result[EditorColorPairIndex.namespace].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["entity.name.namespace"]{"foreground"}))
+  block:
+    let s = tokenNodes.findTokenSettings("entity.name.namespace")
+    if s != nil:
+      result[EditorColorPairIndex.namespace].foreground =
+        ThemeColor(rgb: colorFromNode(s{"foreground"}))
 
   # Decorator/attribute
-  if tokenNodes.hasKey("entity.name.function.decorator"):
-    result[EditorColorPairIndex.decorator].foreground = ThemeColor(
-      rgb: colorFromNode(tokenNodes["entity.name.function.decorator"]{"foreground"})
-    )
-    result[EditorColorPairIndex.attribute].foreground = ThemeColor(
-      rgb: colorFromNode(tokenNodes["entity.name.function.decorator"]{"foreground"})
-    )
+  block:
+    let s = tokenNodes.findTokenSettings("entity.name.function.decorator")
+    if s != nil:
+      let fg = colorFromNode(s{"foreground"})
+      result[EditorColorPairIndex.decorator].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.attribute].foreground = ThemeColor(rgb: fg)
 
   # Preprocessor
-  if tokenNodes.hasKey("keyword.control.directive"):
-    result[EditorColorPairIndex.preprocessor].foreground = ThemeColor(
-      rgb: colorFromNode(tokenNodes["keyword.control.directive"]{"foreground"})
-    )
-  if tokenNodes.hasKey("meta.preprocessor"):
-    result[EditorColorPairIndex.preprocessor].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["meta.preprocessor"]{"foreground"}))
+  block:
+    let s = tokenNodes.findTokenSettings("keyword.control.directive")
+    if s != nil:
+      result[EditorColorPairIndex.preprocessor].foreground =
+        ThemeColor(rgb: colorFromNode(s{"foreground"}))
+  block:
+    let s = tokenNodes.findTokenSettings("meta.preprocessor")
+    if s != nil:
+      result[EditorColorPairIndex.preprocessor].foreground =
+        ThemeColor(rgb: colorFromNode(s{"foreground"}))
 
   # Macro
-  if tokenNodes.hasKey("entity.name.function.macro"):
-    result[EditorColorPairIndex.`macro`].foreground = ThemeColor(
-      rgb: colorFromNode(tokenNodes["entity.name.function.macro"]{"foreground"})
-    )
+  block:
+    let s = tokenNodes.findTokenSettings("entity.name.function.macro")
+    if s != nil:
+      result[EditorColorPairIndex.`macro`].foreground =
+        ThemeColor(rgb: colorFromNode(s{"foreground"}))
 
   # Enum
-  if tokenNodes.hasKey("entity.name.type.enum"):
-    result[EditorColorPairIndex.enumName].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["entity.name.type.enum"]{"foreground"}))
-  if tokenNodes.hasKey("variable.other.enummember"):
-    result[EditorColorPairIndex.enumMember].foreground = ThemeColor(
-      rgb: colorFromNode(tokenNodes["variable.other.enummember"]{"foreground"})
-    )
+  block:
+    let s = tokenNodes.findTokenSettings("entity.name.type.enum")
+    if s != nil:
+      result[EditorColorPairIndex.enumName].foreground =
+        ThemeColor(rgb: colorFromNode(s{"foreground"}))
+  block:
+    let s = tokenNodes.findTokenSettings("variable.other.enummember")
+    if s != nil:
+      result[EditorColorPairIndex.enumMember].foreground =
+        ThemeColor(rgb: colorFromNode(s{"foreground"}))
 
   # Property
-  if tokenNodes.hasKey("variable.other.property"):
-    result[EditorColorPairIndex.property].foreground = ThemeColor(
-      rgb: colorFromNode(tokenNodes["variable.other.property"]{"foreground"})
-    )
+  block:
+    let s = tokenNodes.findTokenSettings("variable.other.property")
+    if s != nil:
+      result[EditorColorPairIndex.property].foreground =
+        ThemeColor(rgb: colorFromNode(s{"foreground"}))
 
   # Parameter
-  if tokenNodes.hasKey("variable.parameter"):
-    result[EditorColorPairIndex.parameter].foreground =
-      ThemeColor(rgb: colorFromNode(tokenNodes["variable.parameter"]{"foreground"}))
+  block:
+    let s = tokenNodes.findTokenSettings("variable.parameter")
+    if s != nil:
+      result[EditorColorPairIndex.parameter].foreground =
+        ThemeColor(rgb: colorFromNode(s{"foreground"}))
 
   # Inlay hints
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editorInlayHint.foreground"):
+  if colors != nil and colors.contains("editorInlayHint.foreground"):
     result[EditorColorPairIndex.inlayHint].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorInlayHint.foreground"}))
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editorInlayHint.background"):
+      ThemeColor(rgb: colorFromNode(colors{"editorInlayHint.foreground"}))
+  if colors != nil and colors.contains("editorInlayHint.background"):
     result[EditorColorPairIndex.inlayHint].background =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorInlayHint.background"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorInlayHint.background"}))
 
   # Code lens
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editorCodeLens.foreground"):
+  if colors != nil and colors.contains("editorCodeLens.foreground"):
     result[EditorColorPairIndex.codeLens].foreground =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorCodeLens.foreground"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorCodeLens.foreground"}))
 
   # Cursor foreground (used for current line num and other highlights)
-  if jsonNode{"colors"} != nil and jsonNode["colors"].contains(
-    "editorCursor.foreground"
-  ):
-    let fg = colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+  if colors != nil and colors.contains("editorCursor.foreground"):
+    let fg = colorFromNode(colors{"editorCursor.foreground"})
     result[EditorColorPairIndex.currentLineNum].foreground = ThemeColor(rgb: fg)
     result[EditorColorPairIndex.backupManagerCurrentLine].foreground =
       ThemeColor(rgb: fg)
     result[EditorColorPairIndex.configModeCurrentLine].foreground = ThemeColor(rgb: fg)
 
-  # Selection background (current word, paren pair, etc.)
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editor.selectionBackground"):
-    let bg = colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
-    result[EditorColorPairIndex.currentWord].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.parenPair].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.currentFile].background = ThemeColor(rgb: bg)
-
   # Suggest widget (popup window)
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editorSuggestWidget.foreground"):
-    result[EditorColorPairIndex.popupWindow].foreground = ThemeColor(
-      rgb: colorFromNode(jsonNode{"colors", "editorSuggestWidget.foreground"})
-    )
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editorSuggestWidget.background"):
-    result[EditorColorPairIndex.popupWindow].background = ThemeColor(
-      rgb: colorFromNode(jsonNode{"colors", "editorSuggestWidget.background"})
-    )
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editorSuggestWidget.highlightForeground"):
-    result[EditorColorPairIndex.popupWinCurrentLine].foreground = ThemeColor(
-      rgb: colorFromNode(jsonNode{"colors", "editorSuggestWidget.highlightForeground"})
-    )
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editorSuggestWidget.selectedBackground"):
-    result[EditorColorPairIndex.popupWinCurrentLine].background = ThemeColor(
-      rgb: colorFromNode(jsonNode{"colors", "editorSuggestWidget.selectedBackground"})
-    )
+  if colors != nil and colors.contains("editorSuggestWidget.foreground"):
+    result[EditorColorPairIndex.popupWindow].foreground =
+      ThemeColor(rgb: colorFromNode(colors{"editorSuggestWidget.foreground"}))
+  if colors != nil and colors.contains("editorSuggestWidget.background"):
+    result[EditorColorPairIndex.popupWindow].background =
+      ThemeColor(rgb: colorFromNode(colors{"editorSuggestWidget.background"}))
+  if colors != nil and colors.contains("editorSuggestWidget.highlightForeground"):
+    result[EditorColorPairIndex.popupWinCurrentLine].foreground =
+      ThemeColor(rgb: colorFromNode(colors{"editorSuggestWidget.highlightForeground"}))
+  if colors != nil and colors.contains("editorSuggestWidget.selectedBackground"):
+    result[EditorColorPairIndex.popupWinCurrentLine].background =
+      ThemeColor(rgb: colorFromNode(colors{"editorSuggestWidget.selectedBackground"}))
 
   # Git conflict
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("gitDecoration.conflictingResourceForeground"):
+  if colors != nil and colors.contains("gitDecoration.conflictingResourceForeground"):
     result[EditorColorPairIndex.gitConflict].foreground = ThemeColor(
-      rgb:
-        colorFromNode(jsonNode{"colors", "gitDecoration.conflictingResourceForeground"})
+      rgb: colorFromNode(colors{"gitDecoration.conflictingResourceForeground"})
     )
     result[EditorColorPairIndex.replaceText].background = ThemeColor(
-      rgb:
-        colorFromNode(jsonNode{"colors", "gitDecoration.conflictingResourceForeground"})
+      rgb: colorFromNode(colors{"gitDecoration.conflictingResourceForeground"})
     )
 
   # Hyperlink (for filer mode)
-  if tokenNodes.hasKey("markup.underline.link"):
-    let fg = colorFromNode(tokenNodes["markup.underline.link"]{"foreground"})
-    result[EditorColorPairIndex.dir].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.pcLink].foreground = ThemeColor(rgb: fg)
+  block:
+    let s = tokenNodes.findTokenSettings("markup.underline.link")
+    if s != nil:
+      let fg = colorFromNode(s{"foreground"})
+      result[EditorColorPairIndex.dir].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.pcLink].foreground = ThemeColor(rgb: fg)
 
   # Tab active border (used for highlight spaces)
-  if jsonNode{"colors"} != nil and jsonNode["colors"].contains("tab.activeBorder"):
-    let color = colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+  if colors != nil and colors.contains("tab.activeBorder"):
+    let color = colorFromNode(colors{"tab.activeBorder"})
     result[EditorColorPairIndex.highlightFullWidthSpace].background =
       ThemeColor(rgb: color)
     result[EditorColorPairIndex.highlightTrailingSpaces].background =
       ThemeColor(rgb: color)
 
   # Line number background
-  if jsonNode{"colors"} != nil and
-      jsonNode["colors"].contains("editorLineNumber.background"):
+  if colors != nil and colors.contains("editorLineNumber.background"):
     result[EditorColorPairIndex.lineNum].background =
-      ThemeColor(rgb: colorFromNode(jsonNode{"colors", "editorLineNumber.background"}))
+      ThemeColor(rgb: colorFromNode(colors{"editorLineNumber.background"}))
 
   # Paren pair foreground from bracket colors
   if tokenNodes.hasKey("unnamedScope"):
@@ -638,22 +711,25 @@ proc loadVSCodeTheme*(): Result[ThemeColors, string] =
         return
           Result[ThemeColors, string].err(fmt"Failed to load VSCode theme: {e.msg}")
 
-  # The current theme name
-  if settingsJson{"workbench.colorTheme"} == nil or
-      settingsJson{"workbench.colorTheme"}.getStr == "":
-    return Result[ThemeColors, string].err(
-      "Failed to load VSCode theme: Could not find current theme name in settings"
-    )
+  # The current theme name.
+  # 1. Check settings.json (explicit user setting)
+  # 2. Check state.vscdb (VSCode stores the active theme here)
+  # 3. Fall back to "Default Dark Modern"
+  let currentThemeName =
+    if settingsJson{"workbench.colorTheme"} != nil and
+        settingsJson{"workbench.colorTheme"}.getStr != "":
+      settingsJson{"workbench.colorTheme"}.getStr
+    else:
+      let stateDbPath = vsCodeStateDbPath(vsCodeFlavor.get)
+      let fromState = readThemeNameFromStateDb(stateDbPath)
+      if fromState.isSome: fromState.get else: "Default Dark Modern"
 
-  let
-    currentThemeName = settingsJson{"workbench.colorTheme"}.getStr
-
-    extensionDirs = [
-      # Built in themes.
-      vsCodeDefaultExtensionsDir(vsCodeFlavor.get),
-      # User themes.
-      vsCodeUserExtensionsDir(vsCodeFlavor.get),
-    ]
+  let extensionDirs = [
+    # Built in themes.
+    vsCodeDefaultExtensionsDir(vsCodeFlavor.get),
+    # User themes.
+    vsCodeUserExtensionsDir(vsCodeFlavor.get),
+  ]
 
   for dir in extensionDirs:
     if dirExists(dir):
