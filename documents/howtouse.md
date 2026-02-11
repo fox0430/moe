@@ -100,6 +100,8 @@
 | <kbd>**z**</kbd> <kbd>**.**</kbd><br> | Center the screen on the cursor |
 | <kbd>**Z**</kbd> <kbd>**Z**</kbd><br> | Write current file and exit |
 | <kbd>**Z**</kbd> <kbd>**Q**</kbd><br> | Same as `:q!` |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**j**</kbd><br> | Move to the previous window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**k**</kbd><br> | Move to the next window |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd><br> | Close current window |
 | <kbd>**?**</kbd><br> |`keyword` Search backwards |
 | <kbd>**/**</kbd><br> |`keyword` Search forwards |

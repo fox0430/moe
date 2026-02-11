@@ -351,6 +351,7 @@ proc loadStandardConfig(
     table, "colorMode", config.colorMode, vr, section, parseColorMode, ValidColorModes
   )
   loadBool(table, "mouse", config.mouse, vr, section)
+  loadBool(table, "lineWrap", config.lineWrap, vr, section)
 
 proc loadClipboardConfig(
     table: TomlTableRef, config: var ClipboardConfig, vr: var ValidationResult
@@ -1243,6 +1244,8 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.filerSymlinkDir)
   of "filerHiddenFile":
     return some(EditorColorPairIndex.filerHiddenFile)
+  of "filerExecutable":
+    return some(EditorColorPairIndex.filerExecutable)
   # Buffer manager specific
   of "bufferManagerActive":
     return some(EditorColorPairIndex.bufferManagerActive)
@@ -1379,9 +1382,22 @@ proc toTomlBool(val: bool): string =
 proc toTomlString(val: string): string =
   "\"" & val & "\""
 
+proc toTomlOptionString(val: Option[string]): string =
+  if val.isSome:
+    toTomlString(val.get)
+  else:
+    "\"\""
+
+proc toTomlStringArray(val: seq[string]): string =
+  result = "["
+  for i, s in val:
+    if i > 0:
+      result.add ", "
+    result.add toTomlString(s)
+  result.add "]"
+
 proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string] =
   ## Save configuration to a TOML file
-  ## This saves only the settings that are editable in Configuration mode
   var lines: seq[string] = @[]
 
   # Standard section
@@ -1407,12 +1423,28 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "autoDeleteParen = " & toTomlBool(config.standard.autoDeleteParen)
   lines.add "liveReloadOfFile = " & toTomlBool(config.standard.liveReloadOfFile)
   lines.add "colorMode = " & toTomlString($config.standard.colorMode)
+  lines.add "mouse = " & toTomlBool(config.standard.mouse)
+  lines.add "lineWrap = " & toTomlBool(config.standard.lineWrap)
   lines.add ""
 
   # Clipboard section
   lines.add "[Clipboard]"
   lines.add "enable = " & toTomlBool(config.clipboard.enable)
   lines.add "tool = " & toTomlString($config.clipboard.tool)
+  lines.add ""
+
+  # BuildOnSave section
+  lines.add "[BuildOnSave]"
+  lines.add "enable = " & toTomlBool(config.buildOnSave.enable)
+  if config.buildOnSave.workspaceRoot.isSome:
+    lines.add "workspaceRoot = " & toTomlString(config.buildOnSave.workspaceRoot.get)
+  if config.buildOnSave.command.isSome:
+    lines.add "command = " & toTomlString(config.buildOnSave.command.get)
+  lines.add ""
+
+  # TabLine section
+  lines.add "[TabLine]"
+  lines.add "enable = " & toTomlBool(config.tabLine.enable)
   lines.add ""
 
   # StatusLine section
@@ -1427,11 +1459,20 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "gitBranchName = " & toTomlBool(config.statusLine.gitBranchName)
   lines.add "showGitInactive = " & toTomlBool(config.statusLine.showGitInactive)
   lines.add "showModeInactive = " & toTomlBool(config.statusLine.showModeInactive)
+  lines.add "setupText = " & toTomlString(config.statusLine.setupText)
+  lines.add ""
+
+  # Theme section
+  lines.add "[Theme]"
+  lines.add "kind = " & toTomlString($config.theme.kind)
+  if config.theme.path.len > 0:
+    lines.add "path = " & toTomlString(config.theme.path)
   lines.add ""
 
   # Highlight section
   lines.add "[Highlight]"
   lines.add "currentLine = " & toTomlBool(config.highlight.currentLine)
+  lines.add "reservedWord = " & toTomlStringArray(config.highlight.reservedWord)
   lines.add "replaceText = " & toTomlBool(config.highlight.replaceText)
   lines.add "pairOfParen = " & toTomlBool(config.highlight.pairOfParen)
   lines.add "fullWidthSpace = " & toTomlBool(config.highlight.fullWidthSpace)
@@ -1442,8 +1483,12 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   # AutoBackup section
   lines.add "[AutoBackup]"
   lines.add "enable = " & toTomlBool(config.autoBackup.enable)
+  if config.autoBackup.backupDir.isSome:
+    lines.add "backupDir = " & toTomlString(config.autoBackup.backupDir.get)
   lines.add "idleTime = " & $config.autoBackup.idleTime
   lines.add "interval = " & $config.autoBackup.interval
+  if config.autoBackup.dirToExclude.len > 0:
+    lines.add "dirToExclude = " & toTomlStringArray(config.autoBackup.dirToExclude)
   lines.add ""
 
   # Notification section
@@ -1464,6 +1509,20 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "deleteLogNotify = " & toTomlBool(config.notification.deleteLogNotify)
   lines.add "saveScreenNotify = " & toTomlBool(config.notification.saveScreenNotify)
   lines.add "saveLogNotify = " & toTomlBool(config.notification.saveLogNotify)
+  lines.add "quickRunScreenNotify = " &
+    toTomlBool(config.notification.quickRunScreenNotify)
+  lines.add "quickRunLogNotify = " & toTomlBool(config.notification.quickRunLogNotify)
+  lines.add "buildOnSaveScreenNotify = " &
+    toTomlBool(config.notification.buildOnSaveScreenNotify)
+  lines.add "buildOnSaveLogNotify = " &
+    toTomlBool(config.notification.buildOnSaveLogNotify)
+  lines.add "filerScreenNotify = " & toTomlBool(config.notification.filerScreenNotify)
+  lines.add "filerLogNotify = " & toTomlBool(config.notification.filerLogNotify)
+  lines.add "restoreScreenNotify = " &
+    toTomlBool(config.notification.restoreScreenNotify)
+  lines.add "restoreLogNotify = " & toTomlBool(config.notification.restoreLogNotify)
+  lines.add "lspScreenNotify = " & toTomlBool(config.notification.lspScreenNotify)
+  lines.add "lspLogNotify = " & toTomlBool(config.notification.lspLogNotify)
   lines.add ""
 
   # Filer section
@@ -1481,6 +1540,15 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "[AutoSave]"
   lines.add "enable = " & toTomlBool(config.autoSave.enable)
   lines.add "interval = " & $config.autoSave.interval
+  lines.add ""
+
+  # Persist section
+  lines.add "[Persist]"
+  lines.add "exCommand = " & toTomlBool(config.persist.exCommand)
+  lines.add "exCommandHistoryLimit = " & $config.persist.exCommandHistoryLimit
+  lines.add "search = " & toTomlBool(config.persist.search)
+  lines.add "searchHistoryLimit = " & $config.persist.searchHistoryLimit
+  lines.add "cursorPosition = " & toTomlBool(config.persist.cursorPosition)
   lines.add ""
 
   # Git section
@@ -1501,10 +1569,207 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "airDrag = " & $config.smoothScroll.airDrag
   lines.add ""
 
+  # StartUp.FileOpen section
+  lines.add "[StartUp.FileOpen]"
+  lines.add "autoSplit = " & toTomlBool(config.startUpFileOpen.autoSplit)
+  lines.add "splitType = " & toTomlString($config.startUpFileOpen.splitType)
+  lines.add ""
+
+  # QuickRun section
+  lines.add "[QuickRun]"
+  lines.add "saveBufferWhenQuickRun = " &
+    toTomlBool(config.quickRun.saveBufferWhenQuickRun)
+  if config.quickRun.command.isSome:
+    lines.add "command = " & toTomlString(config.quickRun.command.get)
+  lines.add "timeout = " & $config.quickRun.timeout
+  if config.quickRun.nimAdvancedCommand.isSome:
+    lines.add "nimAdvancedCommand = " &
+      toTomlString(config.quickRun.nimAdvancedCommand.get)
+  if config.quickRun.clangOptions.isSome:
+    lines.add "ClangOptions = " & toTomlString(config.quickRun.clangOptions.get)
+  if config.quickRun.cppOptions.isSome:
+    lines.add "CppOptions = " & toTomlString(config.quickRun.cppOptions.get)
+  if config.quickRun.nimOptions.isSome:
+    lines.add "NimOptions = " & toTomlString(config.quickRun.nimOptions.get)
+  if config.quickRun.shOptions.isSome:
+    lines.add "shOptions = " & toTomlString(config.quickRun.shOptions.get)
+  if config.quickRun.bashOptions.isSome:
+    lines.add "bashOptions = " & toTomlString(config.quickRun.bashOptions.get)
+  lines.add ""
+
   # Lsp section
   lines.add "[Lsp]"
   lines.add "enable = " & toTomlBool(config.lsp.enable)
   lines.add "timeout = " & $config.lsp.timeout
+  lines.add ""
+
+  # Lsp feature configs
+  lines.add "[Lsp.Completion]"
+  lines.add "enable = " & toTomlBool(config.lsp.completion.enable)
+  lines.add ""
+
+  lines.add "[Lsp.Declaration]"
+  lines.add "enable = " & toTomlBool(config.lsp.declaration.enable)
+  lines.add "openWindow = " & toTomlBool(config.lsp.declaration.openWindow)
+  lines.add ""
+
+  lines.add "[Lsp.Definition]"
+  lines.add "enable = " & toTomlBool(config.lsp.definition.enable)
+  lines.add "openWindow = " & toTomlBool(config.lsp.definition.openWindow)
+  lines.add ""
+
+  lines.add "[Lsp.TypeDefinition]"
+  lines.add "enable = " & toTomlBool(config.lsp.typeDefinition.enable)
+  lines.add "openWindow = " & toTomlBool(config.lsp.typeDefinition.openWindow)
+  lines.add ""
+
+  lines.add "[Lsp.Implementation]"
+  lines.add "enable = " & toTomlBool(config.lsp.implementation.enable)
+  lines.add "openWindow = " & toTomlBool(config.lsp.implementation.openWindow)
+  lines.add ""
+
+  lines.add "[Lsp.Diagnostics]"
+  lines.add "enable = " & toTomlBool(config.lsp.diagnostics.enable)
+  lines.add ""
+
+  lines.add "[Lsp.SignatureHelp]"
+  lines.add "enable = " & toTomlBool(config.lsp.signatureHelp.enable)
+  lines.add ""
+
+  lines.add "[Lsp.DocumentFormatting]"
+  lines.add "enable = " & toTomlBool(config.lsp.documentFormatting.enable)
+  lines.add ""
+
+  lines.add "[Lsp.FoldingRange]"
+  lines.add "enable = " & toTomlBool(config.lsp.foldingRange.enable)
+  lines.add ""
+
+  lines.add "[Lsp.SelectionRange]"
+  lines.add "enable = " & toTomlBool(config.lsp.selectionRange.enable)
+  lines.add ""
+
+  lines.add "[Lsp.DocumentSymbol]"
+  lines.add "enable = " & toTomlBool(config.lsp.documentSymbol.enable)
+  lines.add ""
+
+  lines.add "[Lsp.Hover]"
+  lines.add "enable = " & toTomlBool(config.lsp.hover.enable)
+  lines.add ""
+
+  lines.add "[Lsp.InlayHint]"
+  lines.add "enable = " & toTomlBool(config.lsp.inlayHint.enable)
+  lines.add ""
+
+  lines.add "[Lsp.InlineValue]"
+  lines.add "enable = " & toTomlBool(config.lsp.inlineValue.enable)
+  lines.add ""
+
+  lines.add "[Lsp.References]"
+  lines.add "enable = " & toTomlBool(config.lsp.references.enable)
+  lines.add ""
+
+  lines.add "[Lsp.CallHierarchy]"
+  lines.add "enable = " & toTomlBool(config.lsp.callHierarchy.enable)
+  lines.add ""
+
+  lines.add "[Lsp.DocumentHighlight]"
+  lines.add "enable = " & toTomlBool(config.lsp.documentHighlight.enable)
+  lines.add ""
+
+  lines.add "[Lsp.DocumentLink]"
+  lines.add "enable = " & toTomlBool(config.lsp.documentLink.enable)
+  lines.add ""
+
+  lines.add "[Lsp.CodeLens]"
+  lines.add "enable = " & toTomlBool(config.lsp.codeLens.enable)
+  lines.add ""
+
+  lines.add "[Lsp.Rename]"
+  lines.add "enable = " & toTomlBool(config.lsp.rename.enable)
+  lines.add ""
+
+  lines.add "[Lsp.SemanticTokens]"
+  lines.add "enable = " & toTomlBool(config.lsp.semanticTokens.enable)
+  lines.add ""
+
+  lines.add "[Lsp.ExecuteCommand]"
+  lines.add "enable = " & toTomlBool(config.lsp.executeCommand.enable)
+  lines.add ""
+
+  # Lsp language server configs
+  for name, server in config.lsp.servers:
+    lines.add "[Lsp." & name & "]"
+    lines.add "extensions = " & toTomlStringArray(server.extensions)
+    lines.add "command = " & toTomlString(server.command)
+    lines.add "trace = " & toTomlString($server.trace)
+    lines.add "rustAnalyzerRunSingle = " & toTomlBool(server.rustAnalyzerRunSingle)
+    lines.add "rustAnalyzerDebugSingle = " & toTomlBool(server.rustAnalyzerDebugSingle)
+    lines.add ""
+
+  # Debug section
+  lines.add "[Debug.WindowNode]"
+  lines.add "enable = " & toTomlBool(config.debug.windowNode.enable)
+  lines.add "currentWindow = " & toTomlBool(config.debug.windowNode.currentWindow)
+  lines.add "index = " & toTomlBool(config.debug.windowNode.index)
+  lines.add "windowIndex = " & toTomlBool(config.debug.windowNode.windowIndex)
+  lines.add "bufferIndex = " & toTomlBool(config.debug.windowNode.bufferIndex)
+  lines.add "parentIndex = " & toTomlBool(config.debug.windowNode.parentIndex)
+  lines.add "childLen = " & toTomlBool(config.debug.windowNode.childLen)
+  lines.add "splitType = " & toTomlBool(config.debug.windowNode.splitType)
+  lines.add "haveCursesWin = " & toTomlBool(config.debug.windowNode.haveCursesWin)
+  lines.add "y = " & toTomlBool(config.debug.windowNode.y)
+  lines.add "x = " & toTomlBool(config.debug.windowNode.x)
+  lines.add "h = " & toTomlBool(config.debug.windowNode.h)
+  lines.add "w = " & toTomlBool(config.debug.windowNode.w)
+  lines.add "currentLine = " & toTomlBool(config.debug.windowNode.currentLine)
+  lines.add "currentColumn = " & toTomlBool(config.debug.windowNode.currentColumn)
+  lines.add "expandedColumn = " & toTomlBool(config.debug.windowNode.expandedColumn)
+  lines.add "cursor = " & toTomlBool(config.debug.windowNode.cursor)
+  lines.add ""
+
+  lines.add "[Debug.EditorView]"
+  lines.add "enable = " & toTomlBool(config.debug.editorView.enable)
+  lines.add "widthOfLineNum = " & toTomlBool(config.debug.editorView.widthOfLineNum)
+  lines.add "height = " & toTomlBool(config.debug.editorView.height)
+  lines.add "width = " & toTomlBool(config.debug.editorView.width)
+  lines.add "originalLine = " & toTomlBool(config.debug.editorView.originalLine)
+  lines.add "start = " & toTomlBool(config.debug.editorView.start)
+  lines.add "length = " & toTomlBool(config.debug.editorView.length)
+  lines.add ""
+
+  lines.add "[Debug.BufferStatus]"
+  lines.add "enable = " & toTomlBool(config.debug.bufferStatus.enable)
+  lines.add "bufferIndex = " & toTomlBool(config.debug.bufferStatus.bufferIndex)
+  lines.add "path = " & toTomlBool(config.debug.bufferStatus.path)
+  lines.add "openDir = " & toTomlBool(config.debug.bufferStatus.openDir)
+  lines.add "currentMode = " & toTomlBool(config.debug.bufferStatus.currentMode)
+  lines.add "prevMode = " & toTomlBool(config.debug.bufferStatus.prevMode)
+  lines.add "language = " & toTomlBool(config.debug.bufferStatus.language)
+  lines.add "encoding = " & toTomlBool(config.debug.bufferStatus.encoding)
+  lines.add "countChange = " & toTomlBool(config.debug.bufferStatus.countChange)
+  lines.add "cmdLoop = " & toTomlBool(config.debug.bufferStatus.cmdLoop)
+  lines.add "lastSaveTime = " & toTomlBool(config.debug.bufferStatus.lastSaveTime)
+  lines.add "bufferLen = " & toTomlBool(config.debug.bufferStatus.bufferLen)
+  lines.add ""
+
+  lines.add "[Debug.Search]"
+  lines.add "enable = " & toTomlBool(config.debug.search.enable)
+  lines.add ""
+
+  lines.add "[Debug.MacroState]"
+  lines.add "enable = " & toTomlBool(config.debug.macroState.enable)
+  lines.add ""
+
+  lines.add "[Debug.Visual]"
+  lines.add "enable = " & toTomlBool(config.debug.visual.enable)
+  lines.add ""
+
+  lines.add "[Debug.JumpList]"
+  lines.add "enable = " & toTomlBool(config.debug.jumpList.enable)
+  lines.add ""
+
+  lines.add "[Debug.Lsp]"
+  lines.add "enable = " & toTomlBool(config.debug.lsp.enable)
   lines.add ""
 
   # Ensure directory exists

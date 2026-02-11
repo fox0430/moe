@@ -57,6 +57,7 @@ type
     bsoHlSearch # highlight search results
     bsoBuildOnSave # build on save
     bsoShowGitInactive # show git branch in inactive window
+    bsoLineWrap # line wrapping
 
   IntSettingOption* = enum
     ## Integer setting options that can be set via :set command
@@ -524,6 +525,15 @@ proc executeSet*(
     return CommandModeResult(
       kind: cmrSetBoolOption, boolOption: bsoShowGitInactive, boolValue: false
     )
+  # Line wrap
+  of "wrap":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoLineWrap, boolValue: true
+    )
+  of "nowrap":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoLineWrap, boolValue: false
+    )
   # Tab stop (integer option)
   of "tabstop", "ts":
     if value.isSome:
@@ -603,20 +613,12 @@ proc executeVSplit*(
     handler: CommandModeHandler, filename: Option[string]
 ): CommandModeResult =
   ## Execute vertical split command (:vs, :vs filename)
-  # If path is a directory, open in Filer mode
-  if filename.isSome and dirExists(filename.get):
-    return
-      CommandModeResult(kind: cmrFiler, filerPath: some(absolutePath(filename.get)))
   return CommandModeResult(kind: cmrVSplit, vsplitFilename: filename)
 
 proc executeHSplit*(
     handler: CommandModeHandler, filename: Option[string]
 ): CommandModeResult =
   ## Execute horizontal split command (:sp, :sp filename)
-  # If path is a directory, open in Filer mode
-  if filename.isSome and dirExists(filename.get):
-    return
-      CommandModeResult(kind: cmrFiler, filerPath: some(absolutePath(filename.get)))
   return CommandModeResult(kind: cmrHSplit, hsplitFilename: filename)
 
 proc executeNew*(handler: CommandModeHandler): CommandModeResult =

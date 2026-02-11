@@ -111,7 +111,16 @@ proc buildFileDisplay(
   ## For special modes (non-file-edit modes), show mode label instead of filename
   ## Includes filename, directory, and changed mark as configured
 
-  # For special modes, the mode label is already shown separately
+  # Filer mode: show directory path
+  if mode == EditorMode.Filer:
+    if textBuffer.filePath.isSome:
+      let path = textBuffer.filePath.get()
+      if dirExists(path):
+        return " " & path & "/"
+      return " " & path
+    return ""
+
+  # For other special modes, the mode label is already shown separately
   if not mode.isFileEditMode:
     return ""
 

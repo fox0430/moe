@@ -104,9 +104,8 @@ proc getDocumentHighlightStyle*(kind: int): Style =
 proc hasSyntaxHighlight(
     e: Editor, buffer: TextBuffer, windowMode: EditorMode
 ): bool {.inline.} =
-  e.state.display.showSyntax and
-    (windowMode.isFileEditMode or buffer.language != langNone) and
-    not buffer.highlight.isNil
+  e.state.display.showSyntax and not buffer.highlight.isNil and
+    (windowMode.isFileEditMode or buffer.language != langNone or buffer.isUtilityBuffer)
 
 proc getSelectionStyle*(
     e: Editor,

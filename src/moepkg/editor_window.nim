@@ -148,9 +148,71 @@ proc calculateWindowCursor*(
 
   return CursorPosition(x: 0, y: 0)
 
-proc calculateSidebarWidth*(e: Editor): int =
+proc calculateSidebarWidth*(e: Editor, mode: EditorMode): int =
   ## Calculate the width occupied by the sidebar (0 if disabled)
-  if e.state.display.showSidebar: DefaultSidebarWidth else: 0
+  if mode.isFileEditMode and e.state.display.showSidebar: DefaultSidebarWidth else: 0
+
+proc restoreOriginalBuffer*(win: EditorWindow, mode: EditorMode) =
+  ## Restore the original buffer for modes that replace the window buffer.
+  case mode
+  of EditorMode.Filer:
+    if win.filerState.isSome and win.filerState.get.originalBuffer != nil:
+      win.buffer = win.filerState.get.originalBuffer
+  of EditorMode.Help:
+    if win.helpViewerState.isSome and win.helpViewerState.get.originalBuffer != nil:
+      win.buffer = win.helpViewerState.get.originalBuffer
+  of EditorMode.BufferManager:
+    if win.bufferManagerState.isSome and win.bufferManagerState.get.originalBuffer != nil:
+      win.buffer = win.bufferManagerState.get.originalBuffer
+  of EditorMode.DiffViewer:
+    if win.diffViewerState.isSome and win.diffViewerState.get.originalBuffer != nil:
+      win.buffer = win.diffViewerState.get.originalBuffer
+  of EditorMode.References:
+    if win.referencesViewerState.isSome and
+        win.referencesViewerState.get.originalBuffer != nil:
+      win.buffer = win.referencesViewerState.get.originalBuffer
+  of EditorMode.DocumentSymbol:
+    if win.documentSymbolViewerState.isSome and
+        win.documentSymbolViewerState.get.originalBuffer != nil:
+      win.buffer = win.documentSymbolViewerState.get.originalBuffer
+  of EditorMode.CallHierarchy:
+    if win.callHierarchyViewerState.isSome and
+        win.callHierarchyViewerState.get.originalBuffer != nil:
+      win.buffer = win.callHierarchyViewerState.get.originalBuffer
+  else:
+    discard
+
+proc clearModeState*(win: EditorWindow, mode: EditorMode) =
+  ## Restore original buffer (if any) and clear the mode state field.
+  win.restoreOriginalBuffer(mode)
+
+  case mode
+  of EditorMode.Filer:
+    win.filerState = none(FilerState)
+  of EditorMode.LogViewer:
+    win.logViewerState = none(LogViewerState)
+  of EditorMode.Help:
+    win.helpViewerState = none(HelpViewerState)
+  of EditorMode.BufferManager:
+    win.bufferManagerState = none(BufferManagerState)
+  of EditorMode.BackupManager:
+    win.backupManagerState = none(BackupManagerState)
+  of EditorMode.DiffViewer:
+    win.diffViewerState = none(DiffViewerState)
+  of EditorMode.Debug:
+    win.debugViewerState = none(DebugViewerState)
+  of EditorMode.Config:
+    win.configModeState = none(ConfigModeState)
+  of EditorMode.References:
+    win.referencesViewerState = none(ReferencesViewerState)
+  of EditorMode.DocumentSymbol:
+    win.documentSymbolViewerState = none(DocumentSymbolViewerState)
+  of EditorMode.CallHierarchy:
+    win.callHierarchyViewerState = none(CallHierarchyViewerState)
+  of EditorMode.RecentFile:
+    win.recentFileModeState = none(RecentFileModeState)
+  else:
+    discard
 
 proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
   ## Calculate and set screen cursor position for the active window
@@ -168,7 +230,7 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
   let
     windowBottomY = window.viewport.y + window.viewport.height
     isBottomWindow = (windowBottomY == maxBottomY)
-    sidebarWidth = e.calculateSidebarWidth()
+    sidebarWidth = e.calculateSidebarWidth(window.mode)
     lineNumOffset =
       calculateLineNumOffset(window.buffer, e.state.display.showLineNumbers) +
       sidebarWidth

@@ -23,7 +23,8 @@
 ## - Background process management
 ## - Search mode event handling helpers
 
-import std/[unittest, options, tables]
+import std/[unittest, options, tables, os]
+from std/strutils import contains
 
 import pkg/celina
 import pkg/celina/core/mouse_logic
@@ -535,18 +536,20 @@ suite "screenToBufferPosition - Line Wrap Mode":
 
 suite "Background Process Management":
   test "addRunningProcess adds process to list":
-    # Clear any existing processes
-    cleanupBackgroundProcesses()
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.cleanupBackgroundProcesses()
 
     # Note: We can't easily create a real BackgroundProcess in tests
     # This test verifies the function exists and can be called
-    check true
+    check editor.runningBackgroundProcesses.len == 0
 
   test "cleanupBackgroundProcesses clears the list":
-    cleanupBackgroundProcesses()
+    let config = newEditorConfig()
+    let editor = newEditor(config)
+    editor.cleanupBackgroundProcesses()
     # After cleanup, the list should be empty
-    # We verify by checking no crash occurs
-    check true
+    check editor.runningBackgroundProcesses.len == 0
 
 suite "hasPendingAsyncOperations":
   test "Returns false when no pending operations":
@@ -843,6 +846,67 @@ suite "handleMouseEvent - Wheel Scroll":
 
     check e.state.needsFullRedraw == true
 
+  test "WheelDown updates viewport topLine when cursor goes below viewport":
+    # Create a buffer with many lines and a small viewport (height=5)
+    var lines: string
+    for i in 0 ..< 30:
+      if i > 0:
+        lines.add "\n"
+      lines.add "line" & $i
+    let e = createTestEditorWithBuffer(lines)
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 5, topLine: 0, leftColumn: 0)
+    e.windowManager.windows[0].cursor = BufferPosition(line: 3, column: 0)
+
+    # Scroll down: cursor moves to line 6, which is outside viewport [0..4]
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 2)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].cursor.line == 6
+    # topLine should adjust so cursor is visible (line 6 at bottom: topLine = 6-5+1 = 2)
+    check e.windowManager.windows[0].viewport.topLine == 2
+
+  test "WheelUp updates viewport topLine when cursor goes above viewport":
+    var lines: string
+    for i in 0 ..< 30:
+      if i > 0:
+        lines.add "\n"
+      lines.add "line" & $i
+    let e = createTestEditorWithBuffer(lines)
+    # Viewport starts at line 10 with height 5 (visible lines 10..14)
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 5, topLine: 10, leftColumn: 0)
+    e.windowManager.windows[0].cursor = BufferPosition(line: 11, column: 0)
+
+    # Scroll up: cursor moves to line 8, which is above viewport topLine=10
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelUp, 10, 2)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].cursor.line == 8
+    check e.windowManager.windows[0].viewport.topLine == 8
+
+  test "WheelDown keeps viewport unchanged when cursor stays visible":
+    var lines: string
+    for i in 0 ..< 30:
+      if i > 0:
+        lines.add "\n"
+      lines.add "line" & $i
+    let e = createTestEditorWithBuffer(lines)
+    e.windowManager.windows[0].viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 10, topLine: 0, leftColumn: 0)
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+
+    # Scroll down: cursor moves to line 3, still within viewport [0..9]
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 2)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].cursor.line == 3
+    # topLine should remain 0 since cursor is still visible
+    check e.windowManager.windows[0].viewport.topLine == 0
+
   test "Non-press mouse event is ignored":
     let e = createTestEditorWithBuffer("line0\nline1\nline2\nline3")
     let event = Event(
@@ -968,3 +1032,363 @@ suite "handleMouseEvent - Wheel Scroll Filer Mode":
 
     check handled == true
     check e.windowManager.windows[0].filerState.get.selectedIndex == 9
+
+proc makeLeftClickEvent(x, y: int): Event =
+  Event(
+    kind: EventKind.Mouse,
+    mouse: MouseEvent(
+      kind: MouseEventKind.Press, button: mouse_logic.MouseButton.Left, x: x, y: y
+    ),
+  )
+
+proc createFilerEditor(
+    entryCount: int, topLine: int = 0, selectedIndex: int = 0
+): Editor =
+  ## Create a minimal editor in Filer mode with dummy entries
+  result = createTestEditorWithBuffer("")
+  result.state.mode = EditorMode.Filer
+  var filerState = FilerState(
+    currentPath: "/tmp",
+    entries: @[],
+    selectedIndex: selectedIndex,
+    showHidden: false,
+    topLine: topLine,
+  )
+  for i in 0 ..< entryCount:
+    filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
+  result.windowManager.windows[0].filerState = some(filerState)
+
+suite "handleMouseEvent - Left Click Filer Mode":
+  test "Click selects correct entry (no tab line)":
+    let e = createFilerEditor(20)
+    e.state.display.showTabLine = false
+    e.state.display.showStatusLine = true
+
+    # Click on y=3 → should select entry 3 (topLine=0, no tab offset)
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 3))
+
+    check handled == true
+    check e.windowManager.windows[0].filerState.get.selectedIndex == 3
+
+  test "Click selects correct entry with tab line offset":
+    let e = createFilerEditor(20)
+    e.state.display.showTabLine = true
+    e.state.display.showStatusLine = true
+
+    # Click on y=3 with tab line → adjustedY = 3 - 1 = 2 → entry 2
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 3))
+
+    check handled == true
+    check e.windowManager.windows[0].filerState.get.selectedIndex == 2
+
+  test "Click selects correct entry with topLine offset":
+    let e = createFilerEditor(20, topLine = 5)
+    e.state.display.showTabLine = false
+    e.state.display.showStatusLine = true
+
+    # Click on y=2, topLine=5 → entry 5 + 2 = 7
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 2))
+
+    check handled == true
+    check e.windowManager.windows[0].filerState.get.selectedIndex == 7
+
+  test "Click selects correct entry with both tab line and topLine":
+    let e = createFilerEditor(20, topLine = 5)
+    e.state.display.showTabLine = true
+    e.state.display.showStatusLine = true
+
+    # Click on y=4, tab offset=1 → adjustedY=3, topLine=5 → entry 8
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 4))
+
+    check handled == true
+    check e.windowManager.windows[0].filerState.get.selectedIndex == 8
+
+  test "Click on tab line area is ignored":
+    let e = createFilerEditor(20)
+    e.state.display.showTabLine = true
+    e.state.display.showStatusLine = true
+
+    # Click on y=0 (tab line row) → adjustedY = -1 → should be ignored
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 0))
+
+    check handled == false
+
+  test "Click on status line area is ignored":
+    # viewport height=24, statusLine+cmdLine=2 reserved lines
+    # valid filer area: y in [0..21] (without tab line)
+    let e = createFilerEditor(20)
+    e.state.display.showTabLine = false
+    e.state.display.showStatusLine = true
+
+    # Click on y=23 (last row, command line area) → adjustedY=23 >= 24-2=22 → ignored
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 23))
+
+    check handled == false
+
+  test "Click beyond entry count is ignored":
+    let e = createFilerEditor(3)
+    e.state.display.showTabLine = false
+    e.state.display.showStatusLine = true
+
+    # Click on y=5, but only 3 entries → clickedIndex=5 >= 3 → ignored
+    let handled = e.handleMouseEvent(makeLeftClickEvent(5, 5))
+
+    check handled == false
+
+proc makeEnterEvent(): Event =
+  Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Enter))
+
+suite "handleCommandModeEvent - exitOverlay after command execution":
+  ## Regression tests: commands that don't manage overlay themselves must still
+  ## exit the command overlay after execution. Previously, converting independent
+  ## if-blocks to a case statement caused these branches to skip exitOverlay().
+
+  test "Overlay exited after :5 (gotoLine)":
+    let e = createTestEditorWithBuffer("l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":5"
+    e.state.commandCursor = 1
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test "Overlay exited after :bn (bufferNext)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":bn"
+    e.state.commandCursor = 2
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test "Overlay exited after :bp (bufferPrev)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":bp"
+    e.state.commandCursor = 2
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test "Overlay exited after :bf (bufferFirst)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":bf"
+    e.state.commandCursor = 2
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test "Overlay exited after :bl (bufferLast)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":bl"
+    e.state.commandCursor = 2
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test "Overlay exited after :noh (clearSearchHighlight)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":noh"
+    e.state.commandCursor = 3
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test "Overlay exited after :set number (setBoolOption)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":set number"
+    e.state.commandCursor = 10
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+    check "number" in e.state.statusMessage
+
+  test "Overlay exited after :set tabstop 4 (setIntOption)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":set tabstop 4"
+    e.state.commandCursor = 13
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+    check "tabstop" in e.state.statusMessage
+
+  test "Overlay exited after :enew":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":enew"
+    e.state.commandCursor = 4
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test "Overlay exited after :stripws (stripWhitespace)":
+    let e = createTestEditorWithBuffer("hello   \nworld  ")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":stripws"
+    e.state.commandCursor = 7
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test "Overlay exited after empty command (just Enter on ':')":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    # commandText is just ":" (default from enterCommandOverlay)
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+suite "handleCommandModeEvent - exitOverlay on self-managed branches":
+  test "Overlay exited after :recent with no xbel file (empty list)":
+    ## When recently-used.xbel doesn't exist, :recent should still succeed
+    ## with an empty file list instead of failing.
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":recent"
+    e.state.commandCursor = 6
+
+    let origHome = getEnv("HOME")
+    putEnv("HOME", "/tmp/moe_test_nonexistent_home")
+    defer:
+      putEnv("HOME", origHome)
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+    check e.state.mode == EditorMode.RecentFile
+
+suite "handleSearchBackspace":
+  test "Remove last ASCII character":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.text = "abc"
+
+    handleSearchBackspace(e)
+
+    check e.state.search.text == "ab"
+
+  test "Remove last multibyte character (Japanese)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.text = "検索"
+
+    handleSearchBackspace(e)
+
+    check e.state.search.text == "検"
+
+  test "Remove last character from mixed ASCII and multibyte":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.text = "abc日本語"
+
+    handleSearchBackspace(e)
+
+    check e.state.search.text == "abc日本"
+
+  test "Backspace on single character leaves empty string":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.text = "x"
+
+    handleSearchBackspace(e)
+
+    check e.state.search.text == ""
+
+  test "Backspace on single multibyte character leaves empty string":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.text = "あ"
+
+    handleSearchBackspace(e)
+
+    check e.state.search.text == ""
+
+  test "Backspace on empty string does nothing":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.text = ""
+
+    handleSearchBackspace(e)
+
+    check e.state.search.text == ""
+
+  test "Backspace sets needsFullRedraw":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.text = "test"
+    e.state.needsFullRedraw = false
+
+    handleSearchBackspace(e)
+
+    check e.state.needsFullRedraw == true
+
+suite "enterFilerInActiveWindow":
+  test "Sets active window to Filer mode":
+    let e = createTestEditorWithBuffer("hello")
+    e.enterFilerInActiveWindow("/tmp")
+
+    check e.state.mode == EditorMode.Filer
+    check e.activeWindow.mode == EditorMode.Filer
+    check e.activeWindow.filerState.isSome
+    check e.activeWindow.cursor == BufferPosition(line: 0, column: 0)
+    check e.activeWindow.viewport.topLine == 0
+    check e.activeWindow.viewport.leftColumn == 0
+
+  test "Preserves original buffer in filer state":
+    let e = createTestEditorWithBuffer("hello")
+    let originalBuf = e.activeWindow.buffer
+    e.enterFilerInActiveWindow("/tmp")
+
+    check e.activeWindow.filerState.get.originalBuffer == originalBuf
+
+  test "Vsplit with directory opens Filer in new split window":
+    let e = createTestEditorWithBuffer("hello")
+    let originalWinCount = e.windowManager.windows.len
+
+    discard e.vsplit(none(string))
+    check e.windowManager.windows.len == originalWinCount + 1
+
+    e.enterFilerInActiveWindow("/tmp")
+    check e.state.mode == EditorMode.Filer
+    check e.activeWindow.mode == EditorMode.Filer
+    check e.activeWindow.filerState.isSome

@@ -208,7 +208,7 @@ suite "ReferencesHandler - Quit commands":
 
     let result = handler.handleReferencesModeKey(state, 10, keyCombo)
 
-    check result.kind == rvrQuit
+    check result.kind == rvrUnhandled
 
   test "Escape key returns quit result":
     let handler = newReferencesHandler()
@@ -218,7 +218,7 @@ suite "ReferencesHandler - Quit commands":
 
     let result = handler.handleReferencesModeKey(state, 10, keyCombo)
 
-    check result.kind == rvrQuit
+    check result.kind == rvrUnhandled
 
 suite "ReferencesHandler - Enter command mode":
   test ": key returns enter command result":
@@ -393,7 +393,7 @@ suite "ReferencesHandler - gg with special key":
     let result = handler.handleReferencesModeKey(state, 10, escKey)
 
     check handler.waitingForG == false
-    check result.kind == rvrQuit
+    check result.kind == rvrUnhandled
     check state.selectedIndex == 1 # Position unchanged
 
   test "g followed by Enter cancels gg and jumps":

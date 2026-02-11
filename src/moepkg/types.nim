@@ -25,13 +25,13 @@ import
   modes, buffer, registers, filer, log_viewer, help_viewer, command_completion,
   message_log, buffer_manager, backup_manager, diff_viewer, debug_viewer, config_mode,
   references_viewer, documentsymbol_viewer, callhierarchy_viewer, hover_popup,
-  primitives, syntax_checker
+  primitives, syntax_checker, recent_file_mode
 
 export
-  buffer.SidebarItemKind, registers, command_completion, log_viewer, help_viewer,
+  buffer.SidebarItemKind, registers, command_completion, filer, log_viewer, help_viewer,
   buffer_manager, backup_manager, diff_viewer, debug_viewer, config_mode,
   references_viewer, documentsymbol_viewer, callhierarchy_viewer, hover_popup,
-  primitives, syntax_checker
+  primitives, syntax_checker, recent_file_mode
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -87,6 +87,7 @@ type
       # Document symbol viewer state
     callHierarchyViewerState*: Option[CallHierarchyViewerState]
       # Call hierarchy viewer state
+    recentFileModeState*: Option[RecentFileModeState] # Recent file mode state
 
   SearchDirection* = enum
     Forward # Search forward (/)
@@ -510,6 +511,10 @@ type
     lastPattern*: string # Last pattern used for preview
     lastReplacement*: string # Last replacement used for preview
 
+  PendingCommand* = enum
+    PendingNone
+    PendingWindowCmd # Ctrl-W prefix: waiting for window subcommand
+
   EditorState* = ref object
     # Note: The single source of truth for mode/cursor is EditorWindow
     # These fields are kept for handler compatibility and synced with EditorWindow
@@ -523,7 +528,7 @@ type
       # Position of matching paren (for highlighting)
     currentWord*: string # Word under cursor (for currentWord highlighting)
     previousMode*: EditorMode # Previous mode for ESC handling
-    command*: string
+    pendingCommand*: PendingCommand
     commandText*: string # Text being typed in command mode
     commandCursor*: int
       # Cursor position within commandText (0-based, after the : prefix)

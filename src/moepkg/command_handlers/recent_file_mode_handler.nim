@@ -27,10 +27,7 @@
 ## - G: Move to last file
 ## - gg: Move to first file
 ## - Enter: Open selected file
-## - :: Enter command mode
-## - Esc: Quit recent file mode
-## - Ctrl-K: Move to next window
-## - Ctrl-J: Move to previous window
+## - : Enter command mode
 
 import std/options
 
@@ -41,9 +38,6 @@ type
     rfmrHandled # Key was handled
     rfmrOpenFile # Open selected file
     rfmrEnterCommand # Enter command mode
-    rfmrQuit # Quit recent file mode
-    rfmrNextWindow # Move to next window (Ctrl-K)
-    rfmrPrevWindow # Move to previous window (Ctrl-J)
     rfmrUnhandled # Key was not handled
     rfmrError # Error occurred
 
@@ -53,8 +47,7 @@ type
       filePath*: string
     of rfmrError:
       errorMessage*: string
-    of rfmrHandled, rfmrEnterCommand, rfmrQuit, rfmrNextWindow, rfmrPrevWindow,
-        rfmrUnhandled:
+    of rfmrHandled, rfmrEnterCommand, rfmrUnhandled:
       discard
     modeTransition*: Option[EditorMode]
     overlayTransition*: Option[OverlayKind]
@@ -85,9 +78,6 @@ proc handleRecentFileModeKey*(
   # Handle special keys
   if keyCombo.isSpecial:
     case keyCombo.special
-    of skEscape:
-      return
-        RecentFileModeResult(kind: rfmrQuit, modeTransition: some(EditorMode.Normal))
     of skEnter:
       let selectedFile = state.selectedFile()
       if selectedFile.isSome:
@@ -113,18 +103,6 @@ proc handleRecentFileModeKey*(
     of skLeft, skRight, skBackspace:
       # No-op for horizontal movement keys (vim compatibility)
       return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
-    else:
-      return RecentFileModeResult(kind: rfmrUnhandled, modeTransition: none(EditorMode))
-
-  # Handle character keys with Ctrl modifier
-  if not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers:
-    case keyCombo.char
-    of "k":
-      return
-        RecentFileModeResult(kind: rfmrNextWindow, modeTransition: none(EditorMode))
-    of "j":
-      return
-        RecentFileModeResult(kind: rfmrPrevWindow, modeTransition: none(EditorMode))
     else:
       return RecentFileModeResult(kind: rfmrUnhandled, modeTransition: none(EditorMode))
 

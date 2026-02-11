@@ -304,6 +304,7 @@ type
     filerSymlink
     filerSymlinkDir
     filerHiddenFile
+    filerExecutable
 
     # Buffer manager specific
     bufferManagerActive

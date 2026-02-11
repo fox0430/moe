@@ -36,7 +36,6 @@ type
     files*: seq[RecentFileEntry]
     selectedIndex*: int
     topLine*: int
-    originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
 
 proc newRecentFileModeState*(): RecentFileModeState =
   ## Create a new RecentFileModeState
@@ -53,13 +52,13 @@ proc getRecentUsedFiles*(xbelPath: string): Result[seq[string], string] =
   ## <bookmark href="file:///home/user/file.txt" ...>
 
   if not fileExists(xbelPath):
-    return Result[seq[string], string].err "File not found: " & xbelPath
+    return Result[seq[string], string].ok @[]
 
   var xbelBuffer: string
   try:
     xbelBuffer = readFile(xbelPath)
   except CatchableError:
-    return Result[seq[string], string].err "Failed to read: " & xbelPath
+    return Result[seq[string], string].ok @[]
 
   var files: seq[string]
   # Parse bookmark href attributes containing file:// URIs
@@ -162,3 +161,4 @@ proc createRecentFileTextBuffer*(state: RecentFileModeState): TextBuffer =
     content.add(entry.path)
   result = newTextBuffer(content)
   result.readOnly = true
+  result.isUtilityBuffer = true

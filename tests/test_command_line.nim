@@ -624,7 +624,7 @@ suite "CommandLine - execute additional commands":
     parser.addAlias("run", claQuickRun)
     parser.addAlias("buffers", claBufferManager)
     parser.addAlias("ls", claBufferManager)
-    parser.addAlias("backups", claBackupManager)
+    parser.addAlias("backup", claBackupManager)
     parser.addAlias("recent", claRecentFile)
     parser.addAlias("bg", claBackground)
     parser.addAlias("ju", claJumpList)
@@ -736,8 +736,8 @@ suite "CommandLine - execute additional commands":
     let result = parser.parseAndExecute(":ls")
     check result.kind == claBufferManager
 
-  test "Execute :backups":
-    let result = parser.parseAndExecute(":backups")
+  test "Execute :backup":
+    let result = parser.parseAndExecute(":backup")
     check result.kind == claBackupManager
 
   test "Execute :recent":

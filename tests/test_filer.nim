@@ -18,7 +18,8 @@
 #[############################################################################]#
 
 import std/[unittest, os, times, options, strutils]
-import ../src/moepkg/filer
+import ../src/moepkg/filer {.all.}
+import ../src/moepkg/[buffer, highlight, color]
 
 suite "Filer - FileEntry":
   test "isDirectory returns true for directory":
@@ -85,7 +86,7 @@ suite "Filer - FilerState creation":
     let state = newFilerState(testDir)
     check state.currentPath == absolutePath(testDir)
     check state.selectedIndex == 0
-    check state.showHidden == false
+    check state.showHidden == true
     check state.topLine == 0
 
   test "newFilerState with previousPath":
@@ -197,20 +198,8 @@ suite "Filer - Hidden files":
   teardown:
     removeDir(testDir)
 
-  test "hidden files are not shown by default":
+  test "hidden files are shown by default":
     let state = newFilerState(testDir)
-    check state.showHidden == false
-    # Should have ".." and "visible.txt" only
-    check state.entries.len == 2
-    var hasHidden = false
-    for entry in state.entries:
-      if entry.name == ".hidden":
-        hasHidden = true
-    check hasHidden == false
-
-  test "toggleHidden shows hidden files":
-    let state = newFilerState(testDir)
-    state.toggleHidden()
     check state.showHidden == true
     # Should have "..", ".hidden", and "visible.txt"
     check state.entries.len == 3
@@ -220,12 +209,24 @@ suite "Filer - Hidden files":
         hasHidden = true
     check hasHidden == true
 
-  test "toggleHidden can hide again":
+  test "toggleHidden hides hidden files":
+    let state = newFilerState(testDir)
+    state.toggleHidden()
+    check state.showHidden == false
+    # Should have ".." and "visible.txt" only
+    check state.entries.len == 2
+    var hasHidden = false
+    for entry in state.entries:
+      if entry.name == ".hidden":
+        hasHidden = true
+    check hasHidden == false
+
+  test "toggleHidden can show again":
     let state = newFilerState(testDir)
     state.toggleHidden()
     state.toggleHidden()
-    check state.showHidden == false
-    check state.entries.len == 2
+    check state.showHidden == true
+    check state.entries.len == 3
 
 suite "Filer - Selection queries":
   setup:
@@ -652,10 +653,24 @@ suite "Filer - File size formatting":
     let info = state.getSelectedInfo()
     check info.contains(" KB")
 
+suite "Filer - Trailing slash normalization":
+  test "newFilerState strips trailing slash":
+    let state = newFilerState("/tmp/")
+    check state.currentPath == "/tmp"
+
+  test "newFilerState preserves root path":
+    let state = newFilerState("/")
+    check state.currentPath == "/"
+
+  test "enterDirectory strips trailing slash":
+    let state = newFilerState("/tmp")
+    check state.enterDirectory("/tmp/") == true
+    check state.currentPath == "/tmp"
+
 suite "Filer - Tilde expansion":
   test "newFilerState expands tilde":
     let state = newFilerState("~")
-    check state.currentPath == expandTilde("~")
+    check state.currentPath == normalizedPath(expandTilde("~"))
     check state.currentPath != "~"
 
 suite "Filer - Refresh behavior":
@@ -689,3 +704,658 @@ suite "Filer - Refresh behavior":
     state.refresh()
 
     check state.selectedIndex < state.entries.len
+
+suite "Filer - pathToIcon":
+  test "Directory icon":
+    let entry = FileEntry(
+      name: "mydir",
+      kind: fekDirectory,
+      size: 0,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekDirectory,
+    )
+    check pathToIcon(entry) == "📁 "
+
+  test "Nim file icon":
+    let entry = FileEntry(
+      name: "main.nim",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "👑 "
+
+  test "Executable file icon":
+    let entry = FileEntry(
+      name: "run",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: true,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "🏃 "
+
+  test "Dockerfile icon":
+    let entry = FileEntry(
+      name: "Dockerfile",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "🐳 "
+
+  test "Unknown extension icon":
+    let entry = FileEntry(
+      name: "data.xyz",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "📄 "
+
+suite "Filer - createFilerTextBuffer":
+  test "Buffer line count equals entries":
+    let entries =
+      @[
+        FileEntry(
+          name: "dir1",
+          kind: fekDirectory,
+          size: 0,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekDirectory,
+        ),
+        FileEntry(
+          name: "file1.txt",
+          kind: fekFile,
+          size: 100,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekFile,
+        ),
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.len == entries.len
+
+  test "Buffer with icons enabled":
+    let entries =
+      @[
+        FileEntry(
+          name: "main.nim",
+          kind: fekFile,
+          size: 100,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekFile,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(true)
+    # Line 0 should contain the icon for .nim files
+    check buf.getLine(0).contains("👑")
+
+  test "Buffer without icons shows kind markers":
+    let entries =
+      @[
+        FileEntry(
+          name: "mydir",
+          kind: fekDirectory,
+          size: 0,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekDirectory,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.getLine(0).contains("▸")
+
+  test "Buffer is read-only and utility":
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: @[],
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.readOnly == true
+    check buf.isUtilityBuffer == true
+
+  test "Highlight segments count matches entries + 1":
+    let entries =
+      @[
+        FileEntry(
+          name: "dir1",
+          kind: fekDirectory,
+          size: 0,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekDirectory,
+        ),
+        FileEntry(
+          name: "file.txt",
+          kind: fekFile,
+          size: 100,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekFile,
+        ),
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check not buf.highlight.isNil
+    # 1 per entry
+    check buf.highlight.colorSegments.len == entries.len
+
+  test "needsBufferRefresh is set after refresh":
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: @[],
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+      needsBufferRefresh: false,
+    )
+    state.refresh()
+    check state.needsBufferRefresh == true
+
+  test "filePath is set to currentPath":
+    let state = FilerState(
+      currentPath: "/home/user",
+      entries: @[],
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.filePath.isSome
+    check buf.filePath.get == "/home/user"
+
+  test "highlightNeedsUpdate is false":
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: @[],
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.highlightNeedsUpdate == false
+
+  test "Directory entry line ends with slash":
+    let entries =
+      @[
+        FileEntry(
+          name: "mydir",
+          kind: fekDirectory,
+          size: 0,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekDirectory,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.getLine(0).endsWith("mydir/")
+
+  test "File entry line does not end with slash":
+    let entries =
+      @[
+        FileEntry(
+          name: "file.txt",
+          kind: fekFile,
+          size: 100,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekFile,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.getLine(0).endsWith("file.txt")
+    check not buf.getLine(0).endsWith("/")
+
+  test "Symlink entry without icons shows @ marker":
+    let entries =
+      @[
+        FileEntry(
+          name: "link",
+          kind: fekSymlink,
+          size: 0,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekFile,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.getLine(0).contains("@ ")
+
+  test "Directory entry highlight uses filerDirectory color":
+    let entries =
+      @[
+        FileEntry(
+          name: "dir1",
+          kind: fekDirectory,
+          size: 0,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekDirectory,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerDirectory
+
+  test "Symlink-to-file highlight uses filerSymlink color":
+    let entries =
+      @[
+        FileEntry(
+          name: "link",
+          kind: fekSymlink,
+          size: 0,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekFile,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerSymlink
+
+  test "Symlink-to-dir highlight uses filerSymlinkDir color":
+    let entries =
+      @[
+        FileEntry(
+          name: "linkdir",
+          kind: fekSymlink,
+          size: 0,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekDirectory,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerSymlinkDir
+
+  test "Hidden file highlight uses filerHiddenFile color":
+    let entries =
+      @[
+        FileEntry(
+          name: ".hidden",
+          kind: fekFile,
+          size: 0,
+          modified: getTime(),
+          isHidden: true,
+          isExecutable: false,
+          targetKind: fekFile,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: true,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerHiddenFile
+
+  test "Executable file highlight uses filerExecutable color":
+    let entries =
+      @[
+        FileEntry(
+          name: "run.sh",
+          kind: fekFile,
+          size: 100,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: true,
+          targetKind: fekFile,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerExecutable
+
+  test "Normal file highlight uses default color":
+    let entries =
+      @[
+        FileEntry(
+          name: "normal.txt",
+          kind: fekFile,
+          size: 100,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekFile,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.highlight.colorSegments[0].color == EditorColorPairIndex.default
+
+  test "Symlink to directory shows folder icon with icons enabled":
+    let entries =
+      @[
+        FileEntry(
+          name: "linkdir",
+          kind: fekSymlink,
+          size: 0,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekDirectory,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(true)
+    check buf.getLine(0).contains("📁")
+
+  test "Symlink to directory line ends with slash":
+    let entries =
+      @[
+        FileEntry(
+          name: "linkdir",
+          kind: fekSymlink,
+          size: 0,
+          modified: getTime(),
+          isHidden: false,
+          isExecutable: false,
+          targetKind: fekDirectory,
+        )
+      ]
+    let state = FilerState(
+      currentPath: "/tmp",
+      entries: entries,
+      selectedIndex: 0,
+      showHidden: false,
+      topLine: 0,
+      previousPath: none(string),
+    )
+    let buf = state.createFilerTextBuffer(false)
+    check buf.getLine(0).endsWith("linkdir/")
+
+suite "Filer - pathToIcon additional":
+  test "Symlink to directory icon":
+    let entry = FileEntry(
+      name: "link",
+      kind: fekSymlink,
+      size: 0,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekDirectory,
+    )
+    check pathToIcon(entry) == "📁 "
+
+  test "Python file icon":
+    let entry = FileEntry(
+      name: "script.py",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "🐍 "
+
+  test "Rust file icon":
+    let entry = FileEntry(
+      name: "main.rs",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "🦀 "
+
+  test "Go file icon":
+    let entry = FileEntry(
+      name: "main.go",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "🐹 "
+
+  test "Shell script icon":
+    let entry = FileEntry(
+      name: "build.sh",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "🐚 "
+
+  test "Dockerfile variant icon":
+    let entry = FileEntry(
+      name: "Dockerfile.dev",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "🐳 "
+
+  test "No extension file icon":
+    let entry = FileEntry(
+      name: "Makefile",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "📄 "
+
+  test "Lock file icon":
+    let entry = FileEntry(
+      name: "package.lock",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "🔒 "
+
+  test "Nix file icon":
+    let entry = FileEntry(
+      name: "default.nix",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "❄ "
+
+  test "TOML file icon":
+    let entry = FileEntry(
+      name: "config.toml",
+      kind: fekFile,
+      size: 100,
+      modified: getTime(),
+      isHidden: false,
+      isExecutable: false,
+      targetKind: fekFile,
+    )
+    check pathToIcon(entry) == "⚙ "
+
+suite "Filer - needsBufferRefresh flag":
+  setup:
+    let testDir = getTempDir() / "moe_test_refresh_flag"
+    createDir(testDir)
+    writeFile(testDir / "a.txt", "")
+    createDir(testDir / "subdir")
+
+  teardown:
+    removeDir(testDir)
+
+  test "enterDirectory sets needsBufferRefresh":
+    let state = newFilerState(testDir)
+    state.needsBufferRefresh = false
+    discard state.enterDirectory(testDir / "subdir")
+    check state.needsBufferRefresh == true
+
+  test "goToParent sets needsBufferRefresh":
+    let state = newFilerState(testDir / "subdir")
+    state.needsBufferRefresh = false
+    discard state.goToParent()
+    check state.needsBufferRefresh == true
+
+  test "toggleHidden sets needsBufferRefresh":
+    let state = newFilerState(testDir)
+    state.needsBufferRefresh = false
+    state.toggleHidden()
+    check state.needsBufferRefresh == true
+
+  test "deleteSelected sets needsBufferRefresh":
+    let state = newFilerState(testDir)
+    # Select a.txt (skip ".." at index 0)
+    for i, e in state.entries:
+      if e.name == "a.txt":
+        state.selectedIndex = i
+        break
+    state.needsBufferRefresh = false
+    discard state.deleteSelected()
+    check state.needsBufferRefresh == true

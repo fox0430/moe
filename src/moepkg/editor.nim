@@ -466,7 +466,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     textBuffer: newTextBuffer(),
     lsp: lspIntegration,
     lastLspChangeSeq: 0,
-    recentFileModeState: newRecentFileModeState(),
     state: EditorState(
       cursor: BufferPosition(line: 0, column: 0),
       preferredColumn: -1,
@@ -492,7 +491,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         showSyntaxChecker: editorConfig.syntaxChecker.enable,
         showCodeLens: true,
         showDocumentHighlight: true,
-        lineWrap: true,
+        lineWrap: editorConfig.standard.lineWrap,
         tabStop: editorConfig.standard.tabStop,
         expandTab: editorConfig.standard.expandTab,
         autoIndent: editorConfig.standard.autoIndent,
@@ -878,10 +877,16 @@ proc maybeUpdateGitDiff*(e: Editor) =
     e.refreshGitDiff(useBuffer = true)
 
 proc enterRecentFileMode*(e: Editor): Result[void, string] =
-  ## Enter Recent File mode by loading recently used files
-  let loadResult = e.recentFileModeState.loadRecentFiles()
+  ## Enter Recent File mode in a vertical split window
+  let state = newRecentFileModeState()
+  let loadResult = state.loadRecentFiles()
   if loadResult.isErr:
     return err(loadResult.error)
+  let recentBuffer = state.createRecentFileTextBuffer()
+  let splitResult = e.vsplitWithBuffer(recentBuffer)
+  if splitResult.isErr:
+    return err(splitResult.error)
+  e.activeWindow.recentFileModeState = some(state)
   ok()
 
 proc startSubstitutePreview*(e: Editor) =

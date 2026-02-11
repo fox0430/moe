@@ -229,6 +229,7 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.filerSymlink: makeColorPairDefaultBg("#00ffff"),
   EditorColorPairIndex.filerSymlinkDir: makeColorPairDefaultBg("#af5fff"),
   EditorColorPairIndex.filerHiddenFile: makeColorPairDefaultBg("#808080"),
+  EditorColorPairIndex.filerExecutable: makeColorPairDefaultBg("#5fff5f"),
 
   # Buffer manager specific
   EditorColorPairIndex.bufferManagerActive: makeColorPairDefaultBg("#5fff5f"),

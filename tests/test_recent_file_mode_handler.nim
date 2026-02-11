@@ -258,7 +258,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - gg and G commands":
     check state.selectedIndex == state.files.high
 
 suite "recent_file_mode_handler: handleRecentFileModeKey - Mode transitions":
-  test "Escape quits recent file mode":
+  test "Escape is unhandled (quit handled at higher level)":
     let
       handler = newRecentFileModeHandler()
       state = createTestState()
@@ -266,9 +266,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Mode transitions":
     let result =
       handler.handleRecentFileModeKey(state, TestViewportHeight, specialKey(skEscape))
 
-    check result.kind == rfmrQuit
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Normal
+    check result.kind == rfmrUnhandled
 
   test ": enters command mode":
     let
@@ -281,29 +279,6 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Mode transitions":
     check result.kind == rfmrEnterCommand
     check result.overlayTransition.isSome
     check result.overlayTransition.get == okCommand
-
-suite "recent_file_mode_handler: handleRecentFileModeKey - Window navigation":
-  test "Ctrl+K moves to next window":
-    let
-      handler = newRecentFileModeHandler()
-      state = createTestState()
-
-    let result =
-      handler.handleRecentFileModeKey(state, TestViewportHeight, charKey("k", {kmCtrl}))
-
-    check result.kind == rfmrNextWindow
-    check result.modeTransition.isNone
-
-  test "Ctrl+J moves to previous window":
-    let
-      handler = newRecentFileModeHandler()
-      state = createTestState()
-
-    let result =
-      handler.handleRecentFileModeKey(state, TestViewportHeight, charKey("j", {kmCtrl}))
-
-    check result.kind == rfmrPrevWindow
-    check result.modeTransition.isNone
 
 suite "recent_file_mode_handler: handleRecentFileModeKey - File opening":
   test "Enter opens selected file":
@@ -470,10 +445,10 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - gg command edge cases
     discard handler.handleRecentFileModeKey(state, TestViewportHeight, charKey("g"))
     check handler.waitingForG == true
 
-    # Escape - cancels waiting and quits
+    # Escape - cancels waiting, unhandled (quit handled at higher level)
     let result =
       handler.handleRecentFileModeKey(state, TestViewportHeight, specialKey(skEscape))
-    check result.kind == rfmrQuit
+    check result.kind == rfmrUnhandled
     check handler.waitingForG == false
     check state.selectedIndex == 10 # Position unchanged
 

@@ -265,7 +265,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Mode transitions":
     let result =
       handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("q"))
 
-    check result.kind == bkmrQuit
+    check result.kind == bkmrUnhandled
 
   test "Escape quits backup manager":
     let
@@ -276,7 +276,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Mode transitions":
       bkState, TestViewportHeight, specialKey(skEscape)
     )
 
-    check result.kind == bkmrQuit
+    check result.kind == bkmrUnhandled
 
 suite "backup_manager_handler: handleBackupManagerModeKey - Backup actions":
   test "R returns restore with index when entry selected":
@@ -539,10 +539,6 @@ suite "backup_manager_handler: BackupManagerResult kinds":
     let result = BackupManagerResult(kind: bkmrEnterCommand)
     check result.kind == bkmrEnterCommand
 
-  test "bkmrQuit result":
-    let result = BackupManagerResult(kind: bkmrQuit)
-    check result.kind == bkmrQuit
-
   test "bkmrUnhandled result":
     let result = BackupManagerResult(kind: bkmrUnhandled)
     check result.kind == bkmrUnhandled
@@ -785,7 +781,7 @@ suite "backup_manager_handler: waitingForG with modifier keys":
     let result =
       handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("q"))
     check handler.waitingForG == false
-    check result.kind == bkmrQuit
+    check result.kind == bkmrUnhandled
 
   test "g followed by G cancels g and moves to last entry":
     let
@@ -820,7 +816,7 @@ suite "backup_manager_handler: waitingForG with modifier keys":
       bkState, TestViewportHeight, specialKey(skEscape)
     )
     check handler.waitingForG == false
-    check result.kind == bkmrQuit
+    check result.kind == bkmrUnhandled
 
   test "g followed by unknown key cancels g and returns unhandled":
     let

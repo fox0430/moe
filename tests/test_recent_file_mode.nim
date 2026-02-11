@@ -59,10 +59,10 @@ suite "RecentFileMode - XBEL parsing":
   teardown:
     removeDir(testDir)
 
-  test "getRecentUsedFiles returns error for non-existent file":
+  test "getRecentUsedFiles returns empty seq for non-existent file":
     let result = getRecentUsedFiles("/non/existent/file.xbel")
-    check result.isErr
-    check "not found" in result.error
+    check result.isOk
+    check result.get.len == 0
 
   test "getRecentUsedFiles parses valid xbel file":
     let xbelPath = testDir / "test.xbel"
@@ -349,14 +349,9 @@ suite "RecentFileMode - loadRecentFiles":
     let state = newRecentFileModeState()
     let result = state.loadRecentFiles()
 
-    let xbelPath = getRecentUsedXbelPath()
-    if fileExists(xbelPath):
-      check result.isOk
-      check state.selectedIndex == 0
-      check state.topLine == 0
-    else:
-      check result.isErr
-      check "not found" in result.error
+    check result.isOk
+    check state.selectedIndex == 0
+    check state.topLine == 0
 
   test "loadRecentFiles resets state on success":
     let state = newRecentFileModeState()

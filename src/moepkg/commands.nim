@@ -94,7 +94,9 @@ proc execute*(e: CommandExecutor, command: string): Result[(), string] =
   let r = e.commandRegistry.execute(ctx, command)
   if r.isOk:
     # Clear command buffer on success
-    e.state.command = ""
+    e.state.pendingCommand = PendingNone
+    e.state.commandText = ""
+    e.state.commandCursor = 0
 
   # Sync cursor back from context
   e.cursor = ctx.cursor

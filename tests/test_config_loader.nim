@@ -78,6 +78,26 @@ colorMode = "24bit"
     check config.standard.tabStop == 4
     check config.standard.colorMode == cm24bit
 
+  test "lineWrap loads from TOML":
+    let tomlStr =
+      """
+[Standard]
+lineWrap = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.lineWrap == false
+
+  test "lineWrap defaults to true when not specified":
+    let tomlStr =
+      """
+[Standard]
+number = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.lineWrap == true
+
   test "Invalid bool type is detected":
     let tomlStr =
       """
@@ -1164,6 +1184,111 @@ suite "Config - saveConfigToToml":
     check "[AutoBackup]" in content
     check "[Notification]" in content
     check "[Lsp]" in content
+
+suite "Config - saveConfigToToml round-trip completeness":
+  # Recursively modify all fields to non-default values via fieldPairs.
+  # When a new field is added to any config type, fieldPairs automatically
+  # includes it, so if saveConfigToToml doesn't save it, the round-trip
+  # comparison will fail.
+  template modifyAllFields(obj: typed) =
+    for name, value in fieldPairs(obj):
+      when value is bool:
+        value = not value
+      elif value is int:
+        value += 1
+      elif value is float:
+        value += 1.0
+      elif value is string:
+        value = value & "_test"
+      elif value is Option[string]:
+        value = some("test_value")
+      elif value is seq[string]:
+        value.add("test_entry")
+      elif value is Table[string, LspServerConfig]:
+        discard # handled separately
+      elif value is enum:
+        if ord(value) < ord(high(typeof(value))):
+          value = succ(value)
+        else:
+          value = pred(value)
+      elif value is object:
+        modifyAllFields(value)
+
+  test "All config fields round-trip through save/load":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_roundtrip_all_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+
+    # Modify all fields to non-default values
+    modifyAllFields(config.standard)
+    modifyAllFields(config.clipboard)
+    modifyAllFields(config.buildOnSave)
+    modifyAllFields(config.tabLine)
+    modifyAllFields(config.statusLine)
+    modifyAllFields(config.highlight)
+    modifyAllFields(config.autoBackup)
+    modifyAllFields(config.quickRun)
+    modifyAllFields(config.notification)
+    modifyAllFields(config.filer)
+    modifyAllFields(config.autocomplete)
+    modifyAllFields(config.autoSave)
+    modifyAllFields(config.persist)
+    modifyAllFields(config.git)
+    modifyAllFields(config.syntaxChecker)
+    modifyAllFields(config.smoothScroll)
+    modifyAllFields(config.startUpFileOpen)
+    modifyAllFields(config.debug)
+    modifyAllFields(config.theme)
+    modifyAllFields(config.lsp)
+
+    # Override Option[string] dir paths with real directories
+    # (loadOptionDirPath validates directory existence)
+    config.buildOnSave.workspaceRoot = some("/tmp")
+    config.autoBackup.backupDir = some("/tmp")
+
+    # Theme: ensure kind != tkConfig so loadFilePath is not used for path
+    config.theme.kind = tkDefault
+    config.theme.path = "test_theme_path"
+
+    # Add a test LSP server
+    config.lsp.servers["testLang"] = LspServerConfig(
+      extensions: @[".test"],
+      command: "test-lsp",
+      trace: ltMessages,
+      rustAnalyzerRunSingle: true,
+      rustAnalyzerDebugSingle: true,
+    )
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, _) = loadResult.get
+
+    check config.standard == loaded.standard
+    check config.clipboard == loaded.clipboard
+    check config.buildOnSave == loaded.buildOnSave
+    check config.tabLine == loaded.tabLine
+    check config.statusLine == loaded.statusLine
+    check config.highlight == loaded.highlight
+    check config.autoBackup == loaded.autoBackup
+    check config.quickRun == loaded.quickRun
+    check config.notification == loaded.notification
+    check config.filer == loaded.filer
+    check config.autocomplete == loaded.autocomplete
+    check config.autoSave == loaded.autoSave
+    check config.persist == loaded.persist
+    check config.git == loaded.git
+    check config.syntaxChecker == loaded.syntaxChecker
+    check config.smoothScroll == loaded.smoothScroll
+    check config.startUpFileOpen == loaded.startUpFileOpen
+    check config.debug == loaded.debug
+    check config.theme == loaded.theme
+    check config.lsp == loaded.lsp
 
 suite "Config - saveConfig":
   test "Default config does not crash":

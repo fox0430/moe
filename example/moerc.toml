@@ -42,6 +42,8 @@ colorMode = "24bit"                    # Color mode: "8", "16", "256", "24bit", 
 
 mouse = true                           # Enable mouse support
 
+lineWrap = true                        # Wrap long lines
+
 [Clipboard]
 
 enable = true                          # Clipboard integration

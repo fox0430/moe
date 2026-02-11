@@ -144,7 +144,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       isActiveWindow = (i == e.windowManager.activeWindowIndex)
       reservedLines = e.calculateReservedLines(isBottomWindow)
       visibleHeight = max(1, window.viewport.height - reservedLines - tabLineOffset)
-      sidebarWidth = e.calculateSidebarWidth()
+      sidebarWidth = e.calculateSidebarWidth(window.mode)
       textAreaWidth = max(0, window.viewport.width - sidebarWidth - lineNumOffset)
 
     # Adjust viewport to keep cursor visible
@@ -179,8 +179,13 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     # Render based on mode - some special modes support per-window rendering
     case renderMode
     of EditorMode.Filer:
-      # Filer supports per-window rendering
-      e.renderFiler(buffer, window, isBottomWindow, tabLineOffset)
+      # Filer uses virtual buffer pattern (like BufferManager)
+      if window.filerState.isSome:
+        window.cursor.line = window.filerState.get.selectedIndex
+        window.cursor.column = 0
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
     of EditorMode.Config:
       # Config supports per-window rendering
       e.renderConfig(buffer, window, isBottomWindow, tabLineOffset)
@@ -250,8 +255,8 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       )
     of EditorMode.RecentFile:
       # Sync recent file selection to window cursor (header at line 0)
-      if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-        window.cursor.line = e.recentFileModeState.selectedIndex + 1
+      if window.recentFileModeState.isSome:
+        window.cursor.line = window.recentFileModeState.get.selectedIndex + 1
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset

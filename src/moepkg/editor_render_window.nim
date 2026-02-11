@@ -41,7 +41,7 @@ proc renderWindowLineWrapped*(
     maxScreenY = visibleHeight + tabLineOffset
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
-    sidebarWidth = e.calculateSidebarWidth()
+    sidebarWidth = e.calculateSidebarWidth(window.mode)
     maxWidth = window.viewport.width - sidebarWidth - lineNumOffset
     lineCharLen = line.charLen
     isCurrentLine = (lineIndex == window.cursor.line)
@@ -150,7 +150,7 @@ proc renderWindowLineNoWrap*(
   let
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
-    sidebarWidth = e.calculateSidebarWidth()
+    sidebarWidth = e.calculateSidebarWidth(window.mode)
     isCurrentLine = (lineIndex == window.cursor.line)
     # Apply currentNumber setting: highlight current line number only if enabled
     lineStyle =
@@ -234,7 +234,7 @@ proc renderFoldLine*(
   ## Render a collapsed fold marker line (vim-style)
   let
     actualScreenY = window.viewport.y + screenY
-    sidebarWidth = e.calculateSidebarWidth()
+    sidebarWidth = e.calculateSidebarWidth(window.mode)
     lineNumScreenX = window.viewport.x + sidebarWidth
     textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
     foldText = window.buffer.formatFoldText(fold)

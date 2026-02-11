@@ -137,7 +137,7 @@ proc runEditor(
       app.setCursorStyle(cursorStyle)
 
     # Cleanup background processes before exiting
-    cleanupBackgroundProcesses()
+    editor.cleanupBackgroundProcesses()
 
     # Shutdown LSP servers before exiting
     editor.shutdown()
@@ -212,7 +212,13 @@ proc main() =
       let activeWin =
         editor.windowManager.windows[editor.windowManager.activeWindowIndex]
       activeWin.mode = EditorMode.Filer
-      activeWin.filerState = some(newFilerState(dirPath))
+      let filerState = newFilerState(dirPath)
+      filerState.originalBuffer = activeWin.buffer
+      activeWin.filerState = some(filerState)
+      activeWin.buffer = filerState.createFilerTextBuffer(editor.config.filer.showIcons)
+      activeWin.cursor = BufferPosition(line: 0, column: 0)
+      activeWin.viewport.topLine = 0
+      activeWin.viewport.leftColumn = 0
     else:
       # Load first file
       block:

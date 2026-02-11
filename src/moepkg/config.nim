@@ -79,6 +79,7 @@ type
     liveReloadOfFile*: bool
     colorMode*: ColorMode
     mouse*: bool
+    lineWrap*: bool
 
   # Clipboard settings
   ClipboardConfig* = object
@@ -420,6 +421,7 @@ proc newEditorConfig*(): EditorConfig =
       liveReloadOfFile: true,
       colorMode: cm24bit,
       mouse: false,
+      lineWrap: true,
     ),
     clipboard: ClipboardConfig(enable: true, tool: detectClipboardTool()),
     buildOnSave: BuildOnSaveConfig(

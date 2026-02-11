@@ -23,6 +23,11 @@
 
 import std/[os, options, algorithm, times, strutils]
 
+import pkg/celina
+
+import buffer, highlight, color
+import syntax/tokenizer
+
 type
   FileEntryKind* = enum
     fekFile
@@ -45,6 +50,8 @@ type
     showHidden*: bool # Whether to show hidden files
     topLine*: int # Scroll position (first visible line)
     previousPath*: Option[string] # Path to return to when closing filer
+    originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
+    needsBufferRefresh*: bool # Flag to trigger buffer regeneration after state changes
 
 proc isHiddenFile(name: string): bool =
   ## Check if a file is hidden (starts with .)
@@ -147,16 +154,18 @@ proc refresh*(state: FilerState) =
   if state.selectedIndex >= state.entries.len:
     state.selectedIndex = max(0, state.entries.len - 1)
 
+  state.needsBufferRefresh = true
+
 proc newFilerState*(
     path: string, previousPath: Option[string] = none(string)
 ): FilerState =
   ## Create a new FilerState for the given directory
-  let normalizedPath = absolutePath(expandTilde(path))
+  let normalizedPath = normalizedPath(absolutePath(expandTilde(path)))
   result = FilerState(
     currentPath: normalizedPath,
     entries: @[],
     selectedIndex: 0,
-    showHidden: false,
+    showHidden: true,
     topLine: 0,
     previousPath: previousPath,
   )
@@ -207,7 +216,7 @@ proc toggleHidden*(state: FilerState) =
 
 proc enterDirectory*(state: FilerState, path: string): bool =
   ## Enter a directory, returns true if successful
-  let normalizedPath = absolutePath(path)
+  let normalizedPath = normalizedPath(absolutePath(path))
   if dirExists(normalizedPath):
     state.currentPath = normalizedPath
     state.selectedIndex = 0
@@ -249,10 +258,10 @@ proc visibleEntries*(state: FilerState, height: int): seq[FileEntry] =
     @[]
 
 proc ensureSelectedVisible*(
-    state: FilerState, viewportHeight: int, reservedLines: int = 3
+    state: FilerState, viewportHeight: int, reservedLines: int = 2
 ) =
   ## Ensure the selected entry is visible in the viewport
-  ## reservedLines: total lines reserved (header + status line + command line)
+  ## reservedLines: total lines reserved (status line + command line)
   let availableHeight = max(1, viewportHeight - reservedLines)
 
   if state.selectedIndex < state.topLine:
@@ -260,14 +269,14 @@ proc ensureSelectedVisible*(
   elif state.selectedIndex >= state.topLine + availableHeight:
     state.topLine = state.selectedIndex - availableHeight + 1
 
-proc halfPageDown*(state: FilerState, viewportHeight: int, reservedLines: int = 3) =
+proc halfPageDown*(state: FilerState, viewportHeight: int, reservedLines: int = 2) =
   ## Move half a page down
   let availableHeight = max(1, viewportHeight - reservedLines)
   let halfPage = max(1, availableHeight div 2)
   state.selectedIndex = min(state.entries.len - 1, state.selectedIndex + halfPage)
   state.ensureSelectedVisible(viewportHeight, reservedLines)
 
-proc halfPageUp*(state: FilerState, viewportHeight: int, reservedLines: int = 3) =
+proc halfPageUp*(state: FilerState, viewportHeight: int, reservedLines: int = 2) =
   ## Move half a page up
   let availableHeight = max(1, viewportHeight - reservedLines)
   let halfPage = max(1, availableHeight div 2)
@@ -356,3 +365,146 @@ proc getSelectedInfo*(state: FilerState): string =
   info.add(" " & timeStr)
 
   return info
+
+proc pathToIcon*(entry: FileEntry): string =
+  ## Get an emoji icon for a file entry based on its type and extension
+  if entry.kind == fekDirectory or entry.targetKind == fekDirectory:
+    return "📁 "
+
+  if entry.isExecutable:
+    return "🏃 "
+
+  let filename = entry.name
+  # Check for Dockerfile
+  if filename == "Dockerfile" or filename.startsWith("Dockerfile."):
+    return "🐳 "
+
+  # Get extension
+  let dotPos = filename.rfind('.')
+  if dotPos < 0:
+    return "📄 "
+
+  let ext = filename[dotPos + 1 .. ^1].toLower()
+  case ext
+  of "nim": "👑 "
+  of "nimble", "rpm", "deb": "📦 "
+  of "py": "🐍 "
+  of "ui", "glade": "🏠 "
+  of "txt", "md", "rst": "📝 "
+  of "cpp", "cxx", "hpp", "cc": "⧺ "
+  of "c", "h": "🅒 "
+  of "java": "🍵 "
+  of "php": "🙈 "
+  of "js", "json", "mjs", "cjs": "🙉 "
+  of "ts", "tsx": "📘 "
+  of "rs": "🦀 "
+  of "go": "🐹 "
+  of "html", "xhtml", "htm": "🏄 "
+  of "css", "scss", "sass": "👚 "
+  of "xml": "༕ "
+  of "cfg", "ini", "conf": "🍳 "
+  of "sh", "bash", "zsh", "fish": "🐚 "
+  of "pdf", "doc", "docx", "odf", "ods", "odt": "🍞 "
+  of "wav", "mp3", "ogg", "flac", "m4a": "🎼 "
+  of "zip", "bz2", "xz", "gz", "tgz", "zst", "tar", "7z", "rar": "🚢 "
+  of "exe", "bin", "elf": "🏃 "
+  of "mp4", "webm", "avi", "mpeg", "mkv", "mov": "🎞 "
+  of "patch", "diff": "💊 "
+  of "lock": "🔒 "
+  of "pem", "crt", "key": "🔏 "
+  of "png", "jpeg", "jpg", "bmp", "gif", "svg", "webp", "ico": "🎨 "
+  of "toml", "yaml", "yml": "⚙ "
+  of "nix": "❄ "
+  of "hs", "lhs": "λ "
+  of "lua": "🌙 "
+  of "rb": "💎 "
+  of "pl", "pm": "🐪 "
+  of "sql": "🗃 "
+  of "vim": "📗 "
+  of "el", "lisp", "scm": "λ "
+  else: "📄 "
+
+proc createFilerTextBuffer*(state: FilerState, showIcons: bool): TextBuffer =
+  ## Create a TextBuffer from filer entries for rendering via the normal view path.
+  ## Sets custom highlight ColorSegments for entry-type coloring.
+  var content = ""
+  var lines: seq[string]
+
+  for i, entry in state.entries:
+    let icon =
+      if showIcons:
+        pathToIcon(entry)
+      else:
+        case entry.kind
+        of fekDirectory: "▸ "
+        of fekSymlink: "@ "
+        of fekFile: "  "
+
+    let name =
+      if entry.isDirectory:
+        entry.name & "/"
+      else:
+        entry.name
+
+    let line = " " & icon & name
+    lines.add(line)
+    if i > 0:
+      content.add('\n')
+    content.add(line)
+
+  result = newTextBuffer(content)
+  result.readOnly = true
+  result.isUtilityBuffer = true
+  result.highlightNeedsUpdate = false
+  result.language = langNone
+  result.filePath = some(state.currentPath)
+
+  # Build custom highlight ColorSegments for entry-type coloring
+  var segments: seq[ColorSegment] = @[]
+
+  # Entry styles
+  for i, entry in state.entries:
+    let row = i
+    let lineLen = max(0, lines[row].high)
+    let (colorIdx, style) =
+      if entry.kind == fekDirectory:
+        (
+          EditorColorPairIndex.filerDirectory,
+          getThemeStyle(EditorColorPairIndex.filerDirectory, {StyleModifier.Bold}),
+        )
+      elif entry.kind == fekSymlink:
+        if entry.targetKind == fekDirectory:
+          (
+            EditorColorPairIndex.filerSymlinkDir,
+            getThemeStyle(EditorColorPairIndex.filerSymlinkDir, {StyleModifier.Bold}),
+          )
+        else:
+          (
+            EditorColorPairIndex.filerSymlink,
+            getThemeStyle(EditorColorPairIndex.filerSymlink),
+          )
+      elif entry.isHidden:
+        (
+          EditorColorPairIndex.filerHiddenFile,
+          getThemeStyle(EditorColorPairIndex.filerHiddenFile),
+        )
+      elif entry.isExecutable:
+        (
+          EditorColorPairIndex.filerExecutable,
+          getThemeStyle(EditorColorPairIndex.filerExecutable, {StyleModifier.Bold}),
+        )
+      else:
+        (EditorColorPairIndex.default, getThemeStyle(EditorColorPairIndex.default))
+
+    segments.add(
+      ColorSegment(
+        firstRow: row,
+        firstColumn: 0,
+        lastRow: row,
+        lastColumn: lineLen,
+        color: colorIdx,
+        style: style,
+      )
+    )
+
+  result.highlight = Highlight(colorSegments: segments)

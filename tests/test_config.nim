@@ -87,6 +87,7 @@ suite "Config - newEditorConfig defaults":
     check config.standard.liveReloadOfFile == true
     check config.standard.colorMode == cm24bit
     check config.standard.mouse == false
+    check config.standard.lineWrap == true
 
   test "Clipboard config defaults":
     let config = newEditorConfig()
@@ -584,6 +585,10 @@ suite "Config - Boolean field toggles":
     # Toggle mouse
     config.standard.mouse = true
     check config.standard.mouse == true
+
+    # Toggle lineWrap
+    config.standard.lineWrap = false
+    check config.standard.lineWrap == false
 
   test "All notification booleans can be disabled":
     let config = newEditorConfig()

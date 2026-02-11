@@ -340,6 +340,15 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
     boolSet: proc(c: EditorConfig, v: bool) =
       c.standard.mouse = v,
   )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "lineWrap",
+    section: "Standard",
+    boolGet: proc(c: EditorConfig): bool =
+      c.standard.lineWrap,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.standard.lineWrap = v,
+  )
 
   # Clipboard section
   result.add ConfigItemDescriptor(
@@ -666,6 +675,96 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
       c.notification.saveLogNotify,
     boolSet: proc(c: EditorConfig, v: bool) =
       c.notification.saveLogNotify = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "quickRunScreenNotify",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.quickRunScreenNotify,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.quickRunScreenNotify = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "quickRunLogNotify",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.quickRunLogNotify,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.quickRunLogNotify = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "buildOnSaveScreenNotify",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.buildOnSaveScreenNotify,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.buildOnSaveScreenNotify = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "buildOnSaveLogNotify",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.buildOnSaveLogNotify,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.buildOnSaveLogNotify = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "filerScreenNotify",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.filerScreenNotify,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.filerScreenNotify = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "filerLogNotify",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.filerLogNotify,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.filerLogNotify = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "restoreScreenNotify",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.restoreScreenNotify,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.restoreScreenNotify = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "restoreLogNotify",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.restoreLogNotify,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.restoreLogNotify = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "lspScreenNotify",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.lspScreenNotify,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.lspScreenNotify = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "lspLogNotify",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.lspLogNotify,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.lspLogNotify = v,
   )
 
   # Filer section

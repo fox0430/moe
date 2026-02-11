@@ -17,8 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, strutils]
-import ../src/moepkg/[config, config_mode]
+import std/[unittest, options, strutils, sets, tables, importutils]
+import ../src/moepkg/config
+import ../src/moepkg/config_mode {.all.}
 
 suite "ConfigMode - ConfigModeState initialization":
   test "newConfigModeState creates valid state":
@@ -1064,6 +1065,27 @@ suite "ConfigMode - applyChange":
     state.toggleBoolValue()
     check cfg.standard.number == not originalValue
 
+  test "applyChange updates config for lineWrap":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find the "lineWrap" bool item (standard.lineWrap)
+    var lineWrapIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkBool and item.displayName == "lineWrap":
+        lineWrapIndex = i
+        break
+
+    check lineWrapIndex >= 0
+    state.selectedIndex = lineWrapIndex
+    check cfg.standard.lineWrap == true
+
+    state.toggleBoolValue()
+    check cfg.standard.lineWrap == false
+
+    state.toggleBoolValue()
+    check cfg.standard.lineWrap == true
+
   test "applyChange updates config for int":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
@@ -1735,3 +1757,91 @@ suite "ConfigMode - Bool value edge case":
 
     let result = formatItemForDisplay(item, 20)
     check "false" in result
+
+suite "ConfigMode - descriptor completeness":
+  privateAccess ConfigItemDescriptor
+
+  # Collect simple (non-nested-object) field names from a config section.
+  # When a new field is added to any config struct, fieldPairs automatically
+  # includes it, so the test detects missing descriptors.
+  template collectFieldNames(
+      obj: typed, section: string, fields: var HashSet[(string, string)]
+  ) =
+    for name, value in fieldPairs(obj):
+      when value is bool:
+        fields.incl((section, name))
+      elif value is int:
+        fields.incl((section, name))
+      elif value is float:
+        fields.incl((section, name))
+      elif value is string:
+        fields.incl((section, name))
+      elif value is Option[string]:
+        fields.incl((section, name))
+      elif value is seq[string]:
+        fields.incl((section, name))
+      elif value is enum:
+        fields.incl((section, name))
+
+  test "All EditorConfig sections are accounted for":
+    ## If a new section is added to EditorConfig, this test fails until it is
+    ## added to either `tested` or `excluded`.
+    let tested = [
+      "standard", "clipboard", "statusLine", "highlight", "autoBackup", "notification",
+      "filer", "autocomplete", "autoSave", "git", "syntaxChecker", "smoothScroll",
+      "theme", "lsp",
+    ].toHashSet
+    let excluded = [
+      "buildOnSave", "tabLine", "quickRun", "persist", "startUpFileOpen", "debug"
+    ].toHashSet
+
+    var cfg = newEditorConfig()
+    for name, value in fieldPairs(cfg[]):
+      if name notin tested and name notin excluded:
+        echo "EditorConfig section not accounted for: " & name
+      check name in tested or name in excluded
+
+  test "All config fields have descriptors or are explicitly excluded":
+    ## If a new field is added to a config struct in a tested section, this
+    ## test fails until a descriptor is added to makeDescriptors() or the
+    ## field is added to the excluded set.
+    var cfg = newEditorConfig()
+
+    # Collect all simple fields from sections that config mode covers
+    var allFields: HashSet[(string, string)]
+    collectFieldNames(cfg.standard, "Standard", allFields)
+    collectFieldNames(cfg.clipboard, "Clipboard", allFields)
+    collectFieldNames(cfg.statusLine, "StatusLine", allFields)
+    collectFieldNames(cfg.highlight, "Highlight", allFields)
+    collectFieldNames(cfg.autoBackup, "AutoBackup", allFields)
+    collectFieldNames(cfg.notification, "Notification", allFields)
+    collectFieldNames(cfg.filer, "Filer", allFields)
+    collectFieldNames(cfg.autocomplete, "Autocomplete", allFields)
+    collectFieldNames(cfg.autoSave, "AutoSave", allFields)
+    collectFieldNames(cfg.git, "Git", allFields)
+    collectFieldNames(cfg.syntaxChecker, "SyntaxChecker", allFields)
+    collectFieldNames(cfg.smoothScroll, "SmoothScroll", allFields)
+    collectFieldNames(cfg.theme, "Theme", allFields)
+    collectFieldNames(cfg.lsp, "Lsp", allFields)
+
+    # Collect (section, displayName) from configDescriptors
+    var descriptorFields: HashSet[(string, string)]
+    for desc in configDescriptors:
+      if desc.kind != cvkSection:
+        descriptorFields.incl((desc.section, desc.displayName))
+
+    # Fields intentionally not in config mode UI
+    # (complex types, dir paths that need filesystem validation, etc.)
+    let excluded = [
+      ("StatusLine", "setupText"),
+      ("Highlight", "reservedWord"),
+      ("AutoBackup", "backupDir"),
+      ("AutoBackup", "dirToExclude"),
+    ].toHashSet
+
+    let missing = allFields - descriptorFields - excluded
+    if missing.len > 0:
+      echo "Fields missing from config mode (add descriptor or exclude):"
+      for item in missing:
+        echo "  " & item[0] & "." & item[1]
+    check missing.len == 0

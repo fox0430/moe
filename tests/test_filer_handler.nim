@@ -304,14 +304,14 @@ suite "FilerHandler - Toggle hidden (. key)":
   test ". toggles hidden files visibility":
     let handler = newFilerHandler()
     let state = newFilerState(testDir)
-    check state.showHidden == false
+    check state.showHidden == true
     let initialLen = state.entries.len
 
     let key = toKeyCombo('.')
     let result = handler.handleFilerModeKey(state, 20, key)
     check result.kind == frHandled
-    check state.showHidden == true
-    check state.entries.len > initialLen
+    check state.showHidden == false
+    check state.entries.len < initialLen
 
 suite "FilerHandler - Delete (D key)":
   setup:

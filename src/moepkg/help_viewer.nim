@@ -113,8 +113,8 @@ f          - Move to next any character on the current line
 F          - Move to previous any character on the current line
 t          - Move to the left of the any character on the current line
 T          - Move to the right of the back any character on the current line
-Ctrl-k     - Move to the next window
-Ctrl-j     - Move to the previous window
+Ctrl-w k   - Move to the next window
+Ctrl-w j   - Move to the previous window
 zt         - Scroll the screen so the cursor is at the top
 zb         - Scroll the screen so the cursor is at the bottom
 z.         - Center the screen on the cursor

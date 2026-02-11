@@ -19,7 +19,7 @@
 
 ## Tests for status_line.nim - Status line rendering for moe editor
 
-import std/[unittest, options, tables, strutils]
+import std/[unittest, options, tables, strutils, os]
 
 import pkg/celina
 
@@ -368,6 +368,24 @@ suite "StatusLine - buildFileDisplay":
     let result = buildFileDisplay(textBuffer, EditorMode.Normal, config)
 
     check result == " file.nim"
+
+  test "Display absolute directory path with trailing slash in Filer mode":
+    # Use an existing directory so dirExists returns true
+    let absPath = getCurrentDir() / "src"
+    let textBuffer = createTestTextBuffer(absPath)
+    let config = createTestStatusLineConfig()
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Filer, config)
+
+    check result == " " & absPath & "/"
+
+  test "Display empty string in Filer mode with no path":
+    let textBuffer = createTestTextBuffer()
+    let config = createTestStatusLineConfig()
+
+    let result = buildFileDisplay(textBuffer, EditorMode.Filer, config)
+
+    check result == ""
 
 suite "StatusLine - parseSetupText":
   test "Parse lineNumber placeholder":
@@ -854,7 +872,8 @@ suite "StatusLine - renderStatusLine additional modes":
     state.mode = EditorMode.Filer
 
     var displayBuffer = createTestBuffer()
-    let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
+    let absPath = getCurrentDir() / "src"
+    let textBuffer = createTestTextBuffer(absPath, false, "test content")
     var config = createTestStatusLineConfig()
     config.mode = true
 

@@ -1462,7 +1462,7 @@ proc clearAllMarkers*(b: TextBuffer) =
 proc updateHighlight*(b: TextBuffer) =
   ## Update syntax highlighting if needed
   ## This should be called before rendering
-  if b.highlightNeedsUpdate:
+  if b.highlightNeedsUpdate and not b.isUtilityBuffer:
     var runesBuffer: seq[Runes] = @[]
     for i in 0 ..< b.len:
       runesBuffer.add(b.getLine(i).toRunes())

@@ -281,7 +281,8 @@ proc clearBuffer*(buffer: var Buffer) =
 proc calculateLineNumOffset*(buffer: TextBuffer, showLineNumber: bool = true): int =
   ## Calculate line number display offset based on buffer size
   ## If showLineNumber is false, returns 0 (line numbers hidden)
-  if not showLineNumber:
+  ## Utility buffers (filer, buffer manager, etc.) never show line numbers
+  if not showLineNumber or buffer.isUtilityBuffer:
     return 0
   if buffer.len > 0:
     len($buffer.len) + LineNumberSpacer

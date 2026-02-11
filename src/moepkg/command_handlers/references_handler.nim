@@ -30,7 +30,6 @@ type
   ReferencesResultKind* = enum
     rvrHandled # Command was handled successfully
     rvrEnterCommand # Enter command mode
-    rvrQuit # Close references viewer and return to previous mode
     rvrJumpToReference # Jump to the selected reference
     rvrUnhandled # Command was not handled
     rvrError # Error occurred
@@ -70,10 +69,6 @@ proc handleReferencesModeKey*(
       return ReferencesResult(kind: rvrHandled)
     # If not 'g', fall through to normal handling
 
-  # Escape or q to quit
-  if keyCombo.isSpecial and keyCombo.special == skEscape:
-    return ReferencesResult(kind: rvrQuit)
-
   # Check for special keys first
   if keyCombo.isSpecial:
     case keyCombo.special
@@ -109,8 +104,6 @@ proc handleReferencesModeKey*(
     case keyCombo.char
     of ":":
       return ReferencesResult(kind: rvrEnterCommand)
-    of "q":
-      return ReferencesResult(kind: rvrQuit)
     of "j":
       refState.moveDown()
       refState.ensureSelectedVisible(viewportHeight)

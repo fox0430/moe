@@ -386,6 +386,20 @@ suite "CommandModeHandler - executeSet Boolean Options":
     check result.boolOption == bsoShowGitInactive
     check result.boolValue == true
 
+  test "Set wrap on":
+    let handler = setupHandler()
+    let result = handler.executeSet("wrap", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoLineWrap
+    check result.boolValue == true
+
+  test "Set nowrap off":
+    let handler = setupHandler()
+    let result = handler.executeSet("nowrap", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoLineWrap
+    check result.boolValue == false
+
   # Test 'no' prefix versions (disable options)
   test "Set nostatusline off":
     let handler = setupHandler()
@@ -627,11 +641,11 @@ suite "CommandModeHandler - executeVSplit and executeHSplit":
     check result.vsplitFilename.isSome
     check result.vsplitFilename.get == "test.nim"
 
-  test "Vertical split with directory opens filer":
+  test "Vertical split with directory":
     let handler = setupHandler()
     let result = handler.executeVSplit(some("/tmp"))
-    check result.kind == cmrFiler
-    check result.filerPath.isSome
+    check result.kind == cmrVSplit
+    check result.vsplitFilename == some("/tmp")
 
   test "Horizontal split without filename":
     let handler = setupHandler()
@@ -645,10 +659,11 @@ suite "CommandModeHandler - executeVSplit and executeHSplit":
     check result.kind == cmrHSplit
     check result.hsplitFilename.isSome
 
-  test "Horizontal split with directory opens filer":
+  test "Horizontal split with directory":
     let handler = setupHandler()
     let result = handler.executeHSplit(some("/tmp"))
-    check result.kind == cmrFiler
+    check result.kind == cmrHSplit
+    check result.hsplitFilename == some("/tmp")
 
 suite "CommandModeHandler - executeNew/executeVnew/executeEnew":
   test "Execute new":
@@ -1219,11 +1234,11 @@ suite "CommandModeHandler - handleCommandModeInput":
     let result = handler.handleCommandModeInput(buffer, ":recent")
     check result.kind == cmrRecentFile
 
-  test "Handle :backups command":
+  test "Handle :backup command":
     let handler = setupHandler()
     let buffer = setupBuffer()
 
-    let result = handler.handleCommandModeInput(buffer, ":backups")
+    let result = handler.handleCommandModeInput(buffer, ":backup")
     check result.kind == cmrBackupManager
 
   test "Handle :theme command":

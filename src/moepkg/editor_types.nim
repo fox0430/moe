@@ -26,14 +26,14 @@ import pkg/celina
 
 import
   buffer, types, commands, command_registry, modes, command_line, command_config,
-  window_manager, lsp_integration, recent_file_mode, config, persist
+  window_manager, lsp_integration, config, persist, background_process
 import key_bindings except Command
 import command_handlers/handler_manager
 
 export
   buffer, types, commands, command_registry, modes, command_line, command_config,
-  window_manager, lsp_integration, recent_file_mode, config, persist, handler_manager,
-  tables, celina
+  window_manager, lsp_integration, config, persist, handler_manager, tables, celina,
+  background_process
 
 type
   Editor* = ref object
@@ -51,9 +51,9 @@ type
     config*: EditorConfig
     lsp*: LspIntegration
     lastLspChangeSeq*: int
-    recentFileModeState*: RecentFileModeState
     app*: AsyncApp
     cursorPositions*: Table[string, CursorPositionEntry]
+    runningBackgroundProcesses*: seq[BackgroundProcess]
 
   RenderContext* = object
     ## Context for rendering operations to reduce parameter passing
