@@ -1126,6 +1126,8 @@ suite "Config - saveConfigToToml":
 
     var config = newEditorConfig()
     config.standard.tabStop = 8
+    config.theme.kind = tkDefault
+    config.theme.path = ""
     let saveResult = saveConfigToToml(config, testFile)
     check saveResult.isOk
 
@@ -1144,6 +1146,8 @@ suite "Config - saveConfigToToml":
     var config = newEditorConfig()
     config.standard.number = false
     config.standard.syntax = false
+    config.theme.kind = tkDefault
+    config.theme.path = ""
     let saveResult = saveConfigToToml(config, testFile)
     check saveResult.isOk
 
