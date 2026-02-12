@@ -12,10 +12,6 @@ tests/*
 
 moe
 
-test.txt
-
-.history
-
 nimble.develop
 nimble.paths
 lasm.log
