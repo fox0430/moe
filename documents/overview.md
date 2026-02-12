@@ -14,7 +14,8 @@ Currently you can use normal mode, visual mode, replace mode, insert mode, ex mo
 I recommend using nimble to install:
 
 ```
-$ nimble install moe
+# Latest developmental state inside Github repository
+$ nimble install moe@#head
 ```
 
 If you want to compile moe or use a version in development:

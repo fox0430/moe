@@ -44,6 +44,8 @@ mouse = true                           # Enable mouse support
 
 lineWrap = true                        # Wrap long lines
 
+mouse = true
+
 [Clipboard]
 
 enable = true                          # Clipboard integration
