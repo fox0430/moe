@@ -31,7 +31,12 @@ import config, color, theme, vscode_theme
 # Configuration validation types and utilities
 
 type
+  InvalidItemKind* = enum
+    iikInvalidValue ## Known key with an invalid value
+    iikUnknownKey ## Unknown key in a section
+
   InvalidItem* = object ## Represents a validation error for a configuration item
+    kind*: InvalidItemKind # Default = iikInvalidValue
     name*: string # The key name that has an invalid value
     val*: string # The invalid value as a string
     expected*: string # Description of expected value
@@ -43,15 +48,21 @@ proc newValidationResult*(): ValidationResult =
   ValidationResult(errors: @[])
 
 proc addError*(vr: var ValidationResult, name, val, expected: string) =
-  vr.errors.add(InvalidItem(name: name, val: val, expected: expected))
+  vr.errors.add(
+    InvalidItem(kind: iikInvalidValue, name: name, val: val, expected: expected)
+  )
 
 proc hasErrors*(vr: ValidationResult): bool =
   vr.errors.len > 0
 
 proc toErrorMessage*(item: InvalidItem): string =
   ## Convert an InvalidItem to a human-readable error message
-  "Invalid value for '" & item.name & "': got '" & item.val & "', expected " &
-    item.expected
+  case item.kind
+  of iikInvalidValue:
+    "Invalid value for '" & item.name & "': got '" & item.val & "', expected " &
+      item.expected
+  of iikUnknownKey:
+    "Unknown key: '" & item.name & "'"
 
 proc toErrorMessages*(vr: ValidationResult): seq[string] =
   ## Convert all validation errors to human-readable messages
@@ -113,6 +124,17 @@ proc fullKey(section, key: string): string {.inline.} =
     section & "." & key
   else:
     key
+
+proc checkUnknownKeys(
+    table: TomlTableRef,
+    validKeys: openArray[string],
+    section: string,
+    vr: var ValidationResult,
+) =
+  ## Report unknown keys in a TOML table section.
+  for key, _ in table:
+    if key notin validKeys:
+      vr.errors.add(InvalidItem(kind: iikUnknownKey, name: fullKey(section, key)))
 
 proc loadBool(
     table: TomlTableRef,
@@ -318,6 +340,14 @@ proc loadStandardConfig(
     table: TomlTableRef, config: var StandardConfig, vr: var ValidationResult
 ) =
   const section = "Standard"
+  const validKeys = [
+    "number", "statusLine", "syntax", "indentationLines", "tabStop", "expandTab",
+    "sidebar", "autoCloseParen", "autoIndent", "ignorecase", "smartcase",
+    "disableChangeCursor", "defaultCursor", "normalModeCursor", "insertModeCursor",
+    "liveReloadOfConf", "incrementalSearch", "popupWindowInExmode", "autoDeleteParen",
+    "liveReloadOfFile", "colorMode", "mouse", "lineWrap",
+  ]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "number", config.number, vr, section)
   loadBool(table, "statusLine", config.statusLine, vr, section)
   loadBool(table, "syntax", config.syntax, vr, section)
@@ -357,6 +387,8 @@ proc loadClipboardConfig(
     table: TomlTableRef, config: var ClipboardConfig, vr: var ValidationResult
 ) =
   const section = "Clipboard"
+  const validKeys = ["enable", "tool"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
   loadEnum(
     table, "tool", config.tool, vr, section, parseClipboardTool, ValidClipboardTools
@@ -366,6 +398,8 @@ proc loadBuildOnSaveConfig(
     table: TomlTableRef, config: var BuildOnSaveConfig, vr: var ValidationResult
 ) =
   const section = "BuildOnSave"
+  const validKeys = ["enable", "workspaceRoot", "command"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
   loadOptionDirPath(table, "workspaceRoot", config.workspaceRoot, vr, section)
   loadOptionString(table, "command", config.command, vr, section)
@@ -374,6 +408,12 @@ proc loadStatusLineConfig(
     table: TomlTableRef, config: var StatusLineConfig, vr: var ValidationResult
 ) =
   const section = "StatusLine"
+  const validKeys = [
+    "multipleStatusLine", "merge", "mode", "filename", "changedMark", "directory",
+    "gitChangedLines", "gitBranchName", "showGitInactive", "showModeInactive",
+    "setupText",
+  ]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "multipleStatusLine", config.multipleStatusLine, vr, section)
   loadBool(table, "merge", config.merge, vr, section)
   loadBool(table, "mode", config.mode, vr, section)
@@ -390,6 +430,8 @@ proc loadGitConfig(
     table: TomlTableRef, config: var GitConfig, vr: var ValidationResult
 ) =
   const section = "Git"
+  const validKeys = ["showChangedLine", "updateInterval"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "showChangedLine", config.showChangedLine, vr, section)
   loadInt(table, "updateInterval", config.updateInterval, vr, section, minVal = 1)
 
@@ -397,12 +439,16 @@ proc loadSyntaxCheckerConfig(
     table: TomlTableRef, config: var SyntaxCheckerConfig, vr: var ValidationResult
 ) =
   const section = "SyntaxChecker"
+  const validKeys = ["enable"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
 
 proc loadThemeConfig(
     table: TomlTableRef, config: var ThemeConfig, vr: var ValidationResult
 ) =
   const section = "Theme"
+  const validKeys = ["kind", "path"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadEnum(table, "kind", config.kind, vr, section, parseThemeKind, ValidThemeKinds)
   # Only validate path if kind is tkConfig (custom theme file)
   if config.kind == tkConfig:
@@ -414,6 +460,8 @@ proc loadAutoSaveConfig(
     table: TomlTableRef, config: var AutoSaveConfig, vr: var ValidationResult
 ) =
   const section = "AutoSave"
+  const validKeys = ["enable", "interval"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
   loadInt(table, "interval", config.interval, vr, section, minVal = 1)
 
@@ -421,6 +469,16 @@ proc loadNotificationConfig(
     table: TomlTableRef, config: var NotificationConfig, vr: var ValidationResult
 ) =
   const section = "Notification"
+  const validKeys = [
+    "screenNotifications", "logNotifications", "autoBackupScreenNotify",
+    "autoBackupLogNotify", "autoSaveScreenNotify", "autoSaveLogNotify",
+    "yankScreenNotify", "yankLogNotify", "deleteScreenNotify", "deleteLogNotify",
+    "saveScreenNotify", "saveLogNotify", "quickRunScreenNotify", "quickRunLogNotify",
+    "buildOnSaveScreenNotify", "buildOnSaveLogNotify", "filerScreenNotify",
+    "filerLogNotify", "restoreScreenNotify", "restoreLogNotify", "lspScreenNotify",
+    "lspLogNotify",
+  ]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "screenNotifications", config.screenNotifications, vr, section)
   loadBool(table, "logNotifications", config.logNotifications, vr, section)
   loadBool(table, "autoBackupScreenNotify", config.autoBackupScreenNotify, vr, section)
@@ -450,6 +508,8 @@ proc loadAutoBackupConfig(
     table: TomlTableRef, config: var AutoBackupConfig, vr: var ValidationResult
 ) =
   const section = "AutoBackup"
+  const validKeys = ["enable", "backupDir", "idleTime", "interval", "dirToExclude"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
   loadOptionDirPath(table, "backupDir", config.backupDir, vr, section)
   loadInt(table, "idleTime", config.idleTime, vr, section, minVal = 1)
@@ -460,6 +520,8 @@ proc loadSmoothScrollConfig(
     table: TomlTableRef, config: var SmoothScrollConfig, vr: var ValidationResult
 ) =
   const section = "SmoothScroll"
+  const validKeys = ["enable", "friction", "airDrag"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
   loadFloat(table, "friction", config.friction, vr, section, minVal = 0.0)
   loadFloat(table, "airDrag", config.airDrag, vr, section, minVal = 0.0)
@@ -468,6 +530,11 @@ proc loadHighlightConfig(
     table: TomlTableRef, config: var HighlightConfig, vr: var ValidationResult
 ) =
   const section = "Highlight"
+  const validKeys = [
+    "currentLine", "reservedWord", "replaceText", "pairOfParen", "fullWidthSpace",
+    "trailingSpaces", "currentWord",
+  ]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "currentLine", config.currentLine, vr, section)
   loadStringArray(table, "reservedWord", config.reservedWord, vr, section)
   loadBool(table, "replaceText", config.replaceText, vr, section)
@@ -480,12 +547,16 @@ proc loadFilerConfig(
     table: TomlTableRef, config: var FilerConfig, vr: var ValidationResult
 ) =
   const section = "Filer"
+  const validKeys = ["showIcons"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "showIcons", config.showIcons, vr, section)
 
 proc loadAutocompleteConfig(
     table: TomlTableRef, config: var AutocompleteConfig, vr: var ValidationResult
 ) =
   const section = "Autocomplete"
+  const validKeys = ["enable", "windowBorder"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
   loadBool(table, "windowBorder", config.windowBorder, vr, section)
 
@@ -493,6 +564,11 @@ proc loadPersistConfig(
     table: TomlTableRef, config: var PersistConfig, vr: var ValidationResult
 ) =
   const section = "Persist"
+  const validKeys = [
+    "exCommand", "exCommandHistoryLimit", "search", "searchHistoryLimit",
+    "cursorPosition",
+  ]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "exCommand", config.exCommand, vr, section)
   loadInt(
     table,
@@ -512,6 +588,11 @@ proc loadQuickRunConfig(
     table: TomlTableRef, config: var QuickRunConfig, vr: var ValidationResult
 ) =
   const section = "QuickRun"
+  const validKeys = [
+    "saveBufferWhenQuickRun", "command", "timeout", "nimAdvancedCommand",
+    "ClangOptions", "CppOptions", "NimOptions", "shOptions", "bashOptions",
+  ]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "saveBufferWhenQuickRun", config.saveBufferWhenQuickRun, vr, section)
   loadOptionString(table, "command", config.command, vr, section)
   loadInt(table, "timeout", config.timeout, vr, section, minVal = 1)
@@ -526,12 +607,16 @@ proc loadTabLineConfig(
     table: TomlTableRef, config: var TabLineConfig, vr: var ValidationResult
 ) =
   const section = "TabLine"
+  const validKeys = ["enable"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
 
 proc loadStartUpFileOpenConfig(
     table: TomlTableRef, config: var StartUpFileOpenConfig, vr: var ValidationResult
 ) =
   const section = "StartUp.FileOpen"
+  const validKeys = ["autoSplit", "splitType"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "autoSplit", config.autoSplit, vr, section)
   loadEnum(
     table, "splitType", config.splitType, vr, section, parseSplitType, ValidSplitTypes
@@ -543,6 +628,12 @@ proc loadDebugWindowNodeConfig(
     vr: var ValidationResult,
     section: string,
 ) =
+  const validKeys = [
+    "enable", "currentWindow", "index", "windowIndex", "bufferIndex", "parentIndex",
+    "childLen", "splitType", "haveCursesWin", "y", "x", "h", "w", "currentLine",
+    "currentColumn", "expandedColumn", "cursor",
+  ]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
   loadBool(table, "currentWindow", config.currentWindow, vr, section)
   loadBool(table, "index", config.index, vr, section)
@@ -567,6 +658,9 @@ proc loadDebugEditorViewConfig(
     vr: var ValidationResult,
     section: string,
 ) =
+  const validKeys =
+    ["enable", "widthOfLineNum", "height", "width", "originalLine", "start", "length"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
   loadBool(table, "widthOfLineNum", config.widthOfLineNum, vr, section)
   loadBool(table, "height", config.height, vr, section)
@@ -581,6 +675,11 @@ proc loadDebugBufferStatusConfig(
     vr: var ValidationResult,
     section: string,
 ) =
+  const validKeys = [
+    "enable", "bufferIndex", "path", "openDir", "currentMode", "prevMode", "language",
+    "encoding", "countChange", "cmdLoop", "lastSaveTime", "bufferLen",
+  ]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
   loadBool(table, "bufferIndex", config.bufferIndex, vr, section)
   loadBool(table, "path", config.path, vr, section)
@@ -600,6 +699,8 @@ proc loadDebugSearchConfig(
     vr: var ValidationResult,
     section: string,
 ) =
+  const validKeys = ["enable"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
 
 proc loadDebugMacroConfig(
@@ -608,6 +709,8 @@ proc loadDebugMacroConfig(
     vr: var ValidationResult,
     section: string,
 ) =
+  const validKeys = ["enable"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
 
 proc loadDebugVisualConfig(
@@ -616,6 +719,8 @@ proc loadDebugVisualConfig(
     vr: var ValidationResult,
     section: string,
 ) =
+  const validKeys = ["enable"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
 
 proc loadDebugJumpListConfig(
@@ -624,6 +729,8 @@ proc loadDebugJumpListConfig(
     vr: var ValidationResult,
     section: string,
 ) =
+  const validKeys = ["enable"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
 
 proc loadDebugLspConfig(
@@ -632,11 +739,18 @@ proc loadDebugLspConfig(
     vr: var ValidationResult,
     section: string,
 ) =
+  const validKeys = ["enable"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
 
 proc loadDebugConfig(
     table: TomlTableRef, config: var DebugConfig, vr: var ValidationResult
 ) =
+  const validKeys = [
+    "WindowNode", "EditorView", "BufferStatus", "Search", "MacroState", "Visual",
+    "JumpList", "Lsp",
+  ]
+  checkUnknownKeys(table, validKeys, "Debug", vr)
   if table.hasKey("WindowNode"):
     loadDebugWindowNodeConfig(
       table["WindowNode"].getTable(), config.windowNode, vr, "Debug.WindowNode"
@@ -670,6 +784,8 @@ proc loadLspFeatureConfig(
     vr: var ValidationResult,
     section: string,
 ) =
+  const validKeys = ["enable"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
 
 proc loadLspOpenWindowConfig(
@@ -678,12 +794,18 @@ proc loadLspOpenWindowConfig(
     vr: var ValidationResult,
     section: string,
 ) =
+  const validKeys = ["enable", "openWindow"]
+  checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
   loadBool(table, "openWindow", config.openWindow, vr, section)
 
 proc loadLspServerConfig(
     table: TomlTableRef, vr: var ValidationResult, section: string
 ): LspServerConfig =
+  const validKeys = [
+    "extensions", "command", "trace", "rustAnalyzerRunSingle", "rustAnalyzerDebugSingle"
+  ]
+  checkUnknownKeys(table, validKeys, section, vr)
   result = LspServerConfig(
     extensions: @[],
     command: "",
@@ -820,7 +942,7 @@ proc loadLspConfig(
     )
 
   # Language server configs (any key that's not a known feature is a language server)
-  let knownKeys = [
+  const knownKeys = [
     "enable", "timeout", "Completion", "Declaration", "Definition", "TypeDefinition",
     "Implementation", "Diagnostics", "SignatureHelp", "DocumentFormatting",
     "FoldingRange", "SelectionRange", "DocumentSymbol", "Hover", "InlayHint",
@@ -828,8 +950,11 @@ proc loadLspConfig(
     "CodeLens", "Rename", "SemanticTokens", "ExecuteCommand",
   ]
   for key, value in table:
-    if key notin knownKeys and value.kind == TomlValueKind.Table:
-      config.servers[key] = loadLspServerConfig(value.getTable(), vr, "Lsp." & key)
+    if key notin knownKeys:
+      if value.kind == TomlValueKind.Table:
+        config.servers[key] = loadLspServerConfig(value.getTable(), vr, "Lsp." & key)
+      else:
+        vr.errors.add(InvalidItem(kind: iikUnknownKey, name: fullKey(section, key)))
 
 proc loadConfigFromToml*(
     path: string
@@ -854,6 +979,15 @@ proc loadConfigFromToml*(
 
   var config = newEditorConfig()
   var vr = newValidationResult()
+
+  # Validate top-level section names
+  const knownSections = [
+    "Standard", "Clipboard", "BuildOnSave", "TabLine", "StatusLine", "Git",
+    "SyntaxChecker", "Theme", "AutoSave", "Notification", "QuickRun", "AutoBackup",
+    "SmoothScroll", "Highlight", "Filer", "Autocomplete", "Persist", "StartUp", "Lsp",
+    "Debug",
+  ]
+  checkUnknownKeys(toml.getTable(), knownSections, "", vr)
 
   # Load each section (validation integrated into loading)
   if toml.hasKey("Standard"):
@@ -909,6 +1043,8 @@ proc loadConfigFromToml*(
 
   if toml.hasKey("StartUp"):
     let startUpTable = toml["StartUp"].getTable()
+    const startUpValidKeys = ["FileOpen"]
+    checkUnknownKeys(startUpTable, startUpValidKeys, "StartUp", vr)
     if startUpTable.hasKey("FileOpen"):
       loadStartUpFileOpenConfig(
         startUpTable["FileOpen"].getTable(), config.startUpFileOpen, vr

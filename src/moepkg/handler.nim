@@ -507,7 +507,10 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           else:
             none(string)
         let splitFilename =
-          if filerPath.isSome: none(string) else: r.vsplitFilename
+          if filerPath.isSome:
+            none(string)
+          else:
+            r.vsplitFilename
         let splitResult = e.vsplit(splitFilename)
         if splitResult.isErr:
           logError("handler", "Vertical split failed: " & splitResult.error)
@@ -522,7 +525,10 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           else:
             none(string)
         let splitFilename =
-          if filerPath.isSome: none(string) else: r.hsplitFilename
+          if filerPath.isSome:
+            none(string)
+          else:
+            r.hsplitFilename
         let splitResult = e.hsplit(splitFilename)
         if splitResult.isErr:
           logError("handler", "Horizontal split failed: " & splitResult.error)

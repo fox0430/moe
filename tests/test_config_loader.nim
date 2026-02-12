@@ -68,7 +68,6 @@ suite "Config Validation - Standard section":
       """
 [Standard]
 number = true
-currentNumber = false
 tabStop = 4
 colorMode = "24bit"
 """
@@ -1300,3 +1299,199 @@ suite "Config - saveConfig":
     # saveConfig writes to the real config path; we just verify no crash.
     # The result may be Ok or Err depending on file system permissions.
     discard saveConfig(config)
+
+suite "Config Validation - Unknown keys":
+  test "Unknown top-level section is detected":
+    let tomlStr =
+      """
+[Standard]
+number = true
+
+[Standrd]
+number = false
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    var found = false
+    for e in vr.errors:
+      if e.kind == iikUnknownKey and e.name == "Standrd":
+        found = true
+    check found
+
+  test "Unknown key in Standard section is detected":
+    let tomlStr =
+      """
+[Standard]
+number = true
+tabStp = 4
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    var found = false
+    for e in vr.errors:
+      if e.kind == iikUnknownKey and e.name == "Standard.tabStp":
+        found = true
+    check found
+
+  test "Unknown key in Clipboard section is detected":
+    let tomlStr =
+      """
+[Clipboard]
+enable = true
+unknownKey = "value"
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    var found = false
+    for e in vr.errors:
+      if e.kind == iikUnknownKey and e.name == "Clipboard.unknownKey":
+        found = true
+    check found
+
+  test "Unknown key in Notification section is detected":
+    let tomlStr =
+      """
+[Notification]
+screenNotifications = true
+typoKey = true
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    var found = false
+    for e in vr.errors:
+      if e.kind == iikUnknownKey and e.name == "Notification.typoKey":
+        found = true
+    check found
+
+  test "Lsp dynamic language server (Table type) is not an error":
+    let tomlStr =
+      """
+[Lsp]
+enable = true
+
+[Lsp.nim]
+extensions = [".nim"]
+command = "nimlsp"
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.lsp.servers.hasKey("nim")
+
+  test "Lsp non-Table unknown key is detected":
+    let tomlStr =
+      """
+[Lsp]
+enable = true
+unknownFlag = true
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    var found = false
+    for e in vr.errors:
+      if e.kind == iikUnknownKey and e.name == "Lsp.unknownFlag":
+        found = true
+    check found
+
+  test "Unknown Debug sub-section is detected":
+    let tomlStr =
+      """
+[Debug.WindowNode]
+enable = true
+
+[Debug.UnknownSection]
+enable = true
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    var found = false
+    for e in vr.errors:
+      if e.kind == iikUnknownKey and e.name == "Debug.UnknownSection":
+        found = true
+    check found
+
+  test "Unknown key in Debug.WindowNode is detected":
+    let tomlStr =
+      """
+[Debug.WindowNode]
+enable = true
+unknownField = true
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    var found = false
+    for e in vr.errors:
+      if e.kind == iikUnknownKey and e.name == "Debug.WindowNode.unknownField":
+        found = true
+    check found
+
+  test "Unknown key in StartUp section is detected":
+    let tomlStr =
+      """
+[StartUp.FileOpen]
+autoSplit = true
+
+[StartUp.UnknownSub]
+key = true
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    var found = false
+    for e in vr.errors:
+      if e.kind == iikUnknownKey and e.name == "StartUp.UnknownSub":
+        found = true
+    check found
+
+  test "Valid full config has no unknown key errors":
+    let tomlStr =
+      """
+[Standard]
+number = true
+tabStop = 4
+
+[Clipboard]
+enable = true
+tool = "xsel"
+
+[StatusLine]
+multipleStatusLine = true
+
+[Git]
+showChangedLine = true
+updateInterval = 500
+
+[Lsp]
+enable = true
+
+[Lsp.Completion]
+enable = true
+
+[Lsp.nim]
+extensions = [".nim"]
+command = "nimlsp"
+
+[Debug.WindowNode]
+enable = true
+
+[StartUp.FileOpen]
+autoSplit = true
+splitType = "vertical"
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+
+  test "toErrorMessage for unknown key":
+    let item = InvalidItem(kind: iikUnknownKey, name: "Standard.typo")
+    let msg = item.toErrorMessage
+    check "Unknown key" in msg
+    check "Standard.typo" in msg
+
+  test "toErrorMessage for invalid value (backward compat)":
+    let item = InvalidItem(
+      kind: iikInvalidValue,
+      name: "Standard.tabStop",
+      val: "0",
+      expected: "integer >= 1",
+    )
+    let msg = item.toErrorMessage
+    check "Invalid value" in msg
+    check "Standard.tabStop" in msg
