@@ -22,8 +22,8 @@ cff-version: 1.2.0
 message: Please cite this software using these information.
 
 # Version information.
-date-released: 2021-12-21
-version: 0.3.0
+date-released: 2026-02-13
+version: 0.4.0
 
 # Project information.
 abstract: A command line based editor inspired by Vim. Written in Nim.
