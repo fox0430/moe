@@ -436,6 +436,15 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     of cmNone: cmkNone
   globalColorMode = applyColorModeFallback(requestedColorMode)
 
+  if requestedColorMode != globalColorMode:
+    editorConfig.standard.colorMode =
+      case globalColorMode
+      of cmk8color: cm8color
+      of cmk16color: cm16color
+      of cmk256color: cm256color
+      of cmk24bit: cm24bit
+      of cmkNone: cmNone
+
   # Initialize theme from configuration
   initTheme(editorConfig)
 
