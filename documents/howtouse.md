@@ -336,34 +336,32 @@
 | `realtimesearch on` or `realtimesearch off` | Change setting to real-time search |
 | `deleteparen on` or `deleteparen off` | Change setting to auto delete paren |
 | `smoothscroll on` or `smoothscroll off` | Change setting to smooth scroll |
-| `scrollMinDelay number` | Set smooth scroll min speed : Example `scrollMinDelay 10` |
-| `scrollMaxDelay number` | Set smooth scroll max speed : Example `scrollMaxDelay 10` |
 | `highlightcurrentword on` or `highlightcurrentword off` | Change setting to highlight other uses of the current word |
 | `clipboard on` or `clipboard off` | Change setting to system clipboard |
 | `highlightfullspace on` or `highlightfullspace off` | Change setting to highlight full width space |
 | `buildonsave on` or `buildonsave off` | Change setting to build on save |
 | `indentationlines on`  or `indentationlines off` | Change setting to indentation lines |
 | `showGitInactive on` or `showGitInactive off` | Change status line setting to show/hide git branch name in inactive window |
-| `noh` | Turn off highlights |
+| `nohlsearch` | Turn off highlights |
 | `icon` | Setting show/hidden icons in filer mode |
-| `deleteTrailingSpaces` | Delete trailing spaces |
+| `deletetrailingspaces` | Delete trailing spaces |
 | `ignorecase` | Change setting to ignorecase |
 | `smartcase` | Change setting to smartcase |
-| `highlightCurrentLine on` or `highlightCurrentLine off` | Change the highlight setting of the current line |
+| `cursorline on` or `cursorline off` | Change the highlight setting of the current line |
 | `build` | Build the current buffer |
-| `lspFold` | LSP Folding Range |
-| `lspFormat` | LSP Document Formatting |
+| `lspfold` | LSP Folding Range |
+| `lspformat` | LSP Document Formatting |
 | `log` | Open a log viewer for editor log |
-| `lspLog` | Open a log viewer for LSP log |
-| `lspRestart` | Restart the current LSP server |
+| `lsplog` | Open a log viewer for LSP log |
+| `lsprestart` | Restart the current LSP server |
 | `help` | Open help |
-| `putConfigFile` | Put a sample configuration file in ~/.config/moe |
+| `putconfigfile` | Put a sample configuration file in ~/.config/moe |
 | `run` | Quick run |
 | `recent` | Open recent file selection mode (Only supported on Linux) |
 | `backup` | Open backup manager |
-| `conf` | Open configuration mode |
+| `config` | Open configuration mode |
 | `debug` | Open debug mode |
-| `ju` or `jumps` | Open Jump list viewer |
+| `jump` | Open Jump list viewer |
 
 </details>
 

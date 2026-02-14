@@ -94,7 +94,6 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("se", claSet)
 
   # Help
-  config.addAlias("h", claHelp)
   config.addAlias("help", claHelp)
 
   # Substitute
@@ -129,7 +128,7 @@ proc loadDefaultConfig*(config: CommandConfig) =
   # Strip whitespace
   config.addAlias("stripwhitespace", claStripWhitespace)
   config.addAlias("stripws", claStripWhitespace)
-  config.addAlias("deleteTrailingSpaces", claStripWhitespace)
+  config.addAlias("deletetrailingspaces", claStripWhitespace)
 
   # Filer (file explorer)
   config.addAlias("filer", claFiler)

@@ -305,24 +305,24 @@ nohlsearch - Turn off search highlights
 hlsearch on or hlsearch off - Change setting to highlight search results
 highlightparen on or highlightparen off - Change setting to highlight matching parentheses
 icon - Setting show/hidden icons in filer mode
-deleteTrailingSpaces - Delete trailing spaces
+deletetrailingspaces - Delete trailing spaces
 ignorecase - Change setting to ignorecase
 smartcase - Change setting to smartcase
 cursorline on or cursorline off - Change the highlight setting of the current line
 build - Build the current buffer
-lspFold - LSP Folding Range
-lspFormat - LSP Document Formatting
+lspfold - LSP Folding Range
+lspformat - LSP Document Formatting
 
 log - Open a log viewer for editor log
-lspLog - Open a log viewer for LSP log
+lsplog - Open a log viewer for LSP log
 
-lspRestart - Restart the current LSP server
-lspCallHierarchyIncoming - Show incoming calls (callers) at cursor
-lspCallHierarchyOutgoing - Show outgoing calls (callees) at cursor
+lsprestart - Restart the current LSP server
+lspcallhierarchyincoming - Show incoming calls (callers) at cursor
+lspcallhierarchyoutgoing - Show outgoing calls (callees) at cursor
 
 help - Open this help
 
-putConfigFile - Put a sample configuration file in ~/.config/moe
+putconfigfile - Put a sample configuration file in ~/.config/moe
 
 run - Quick run
 
@@ -334,7 +334,7 @@ config - Open configuration mode
 
 debug - Open debug mode
 
-ju or jumps - Open Jump list viewer
+jump - Open Jump list viewer
 """
 
 import std/[strutils, options]

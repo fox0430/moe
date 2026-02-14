@@ -123,12 +123,11 @@ const CommandDescriptions = {
   # Strip whitespace
   "stripwhitespace": "Strip trailing whitespace",
   "stripws": "Strip trailing whitespace",
-  "deleteTrailingSpaces": "Strip trailing whitespace",
+  "deletetrailingspaces": "Strip trailing whitespace",
   # Filer (file explorer)
-  "Filer": "Open file explorer",
   "filer": "Open file explorer",
-  "Ex": "Open file explorer",
-  "Explore": "Open file explorer",
+  "ex": "Open file explorer",
+  "explore": "Open file explorer",
   # Log viewer
   "log": "Open log viewer",
   "messages": "Open log viewer",
@@ -146,35 +145,31 @@ const CommandDescriptions = {
   # Recent file
   "recent": "Open recent files",
   # Clear search highlight
-  "noh": "Clear search highlight",
   "nohlsearch": "Clear search highlight",
   # Background
   "bg": "Suspend editor",
   # Jump list
-  "ju": "Show jump list",
   "jump": "Show jump list",
-  "jumps": "Show jump list",
   # Build
   "build": "Build project",
   # Debug mode
   "debug": "Open debug mode",
   # Configuration mode
-  "conf": "Open configuration",
   "config": "Open configuration",
   # Put config file
-  "putConfigFile": "Create config file",
+  "putconfigfile": "Create config file",
   # Manual
   "man": "Show manual",
   # Theme
   "theme": "Select theme",
   # LSP commands
-  "lspLog": "Open LSP log",
-  "lspFormat": "Format with LSP",
-  "lspRestart": "Restart LSP",
-  "lspFold": "Fold with LSP",
-  "lspExeCommand": "Execute LSP command",
-  "lspCallHierarchyIncoming": "Show incoming calls",
-  "lspCallHierarchyOutgoing": "Show outgoing calls",
+  "lsplog": "Open LSP log",
+  "lspformat": "Format with LSP",
+  "lsprestart": "Restart LSP",
+  "lspfold": "Fold with LSP",
+  "lspexecommand": "Execute LSP command",
+  "lspcallhierarchyincoming": "Show incoming calls",
+  "lspcallhierarchyoutgoing": "Show outgoing calls",
 }.toTable
 
 # Commands that take file path arguments

@@ -19,7 +19,7 @@
 
 import std/[unittest, os, strutils]
 
-import ../src/moepkg/[command_completion, command_line]
+import ../src/moepkg/[command_completion, command_line, command_config]
 
 suite "CommandCompletion - fuzzyMatch":
   test "Exact match":
@@ -930,6 +930,17 @@ suite "CommandCompletion - edge cases":
         check cmd.description == "Write (save) file"
       if cmd.command == "wq":
         check cmd.description == "Write and quit"
+
+  test "All default commands have descriptions":
+    let config = newCommandConfig()
+    config.loadDefaultConfig()
+
+    let parser = newCommandLineParser()
+    config.applyToParser(parser)
+
+    let commands = collectCommands(parser)
+    for cmd in commands:
+      check cmd.description.len > 0
 
   test "SetOptions contains common vim options":
     let options = collectSetOptions("")
