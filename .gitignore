@@ -15,4 +15,6 @@ moe
 nimble.develop
 nimble.paths
 lasm.log
-nimbledeps
+moe-debug.log
+
+nimbledeps/

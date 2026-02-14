@@ -169,8 +169,7 @@ Version <= 0.3.0 (Ncurses base)
 - [Ncurses](https://invisible-island.net/ncurses) 6.1 or higher
 
 ```sh
-# Latest developmental state inside Github repository
-nimble install moehead
+nimble install moe
 ```
 
 Check [detail](https://github.com/fox0430/moe/blob/v0.4.0/documents/overview.md)
@@ -179,7 +178,7 @@ Version >= 0.4.0 ([Celina](https://github.com/fox0430/celina) base)
 
 ```sh
 # Latest developmental state inside Github repository
-nimble install moehead
+nimble install moe@#head
 ```
 
 Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md)
