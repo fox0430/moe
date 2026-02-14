@@ -143,6 +143,8 @@ zd         - Delete folding lines
 zD         - Delete all folding lines
 Ctrl-s     - Selection Range (LSP)
 Space o    - Document Symbol (LSP)
+gt         - Switch to the next buffer
+gT         - Switch to the previous buffer
 Ctrl-o     - Jump Back (Jumplist)
 Ctrl-i     - Jump Forward (Jumplist)
 

@@ -1143,7 +1143,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           let activeWin = e.activeWindow
           activeWin.mode = EditorMode.Config
           activeWin.configModeState = some(newConfigModeState(e.config))
-      else:
+      of hrHandled, hrUnhandled, hrError:
         overlayHandled = true
         # Handle mode transitions
         let modeTransition = r.getModeTransition()
@@ -1155,6 +1155,23 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           # Return to the base mode we were in before entering Command overlay
           e.state.exitOverlay()
           e.setMode(e.state.mode) # Sync window mode
+      of hrJumpToBuffer, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,
+          hrFilerDeleteFile, hrFilerShowInfo, hrFilerQuit, hrLogViewerRefresh,
+          hrHelpViewerQuit, hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences,
+          hrDocumentSymbolQuit, hrDocumentSymbolJumpTo, hrEnterDocumentSymbol,
+          hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
+          hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy,
+          hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer, hrBufferManagerQuit,
+          hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
+          hrBackupManagerRefresh, hrBackupManagerQuit, hrDiffViewerQuit,
+          hrEnterDiffViewer, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow,
+          hrPrevWindow, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
+          hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
+          hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
+          hrLspSelectionRange, hrLspDocumentLink, hrLspFormat, hrLspRestart, hrLspFold,
+          hrLspExecuteCommand, hrConfigQuit, hrConfigSaveConfig, hrPutConfigFile,
+          hrDebugViewerQuit, hrLogViewerQuit:
+        discard # Not returned from command mode handler
 
       if not overlayHandled:
         e.state.exitOverlay()
@@ -1488,8 +1505,31 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       e.state.statusMessage = "Opened: " & filePath
     e.state.needsFullRedraw = true
     return true
-  else:
-    discard
+  of hrHandled, hrUnhandled, hrError:
+    discard # Fall through to overlay/mode transition handling
+  of hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrNew, hrVnew, hrEnew,
+      hrEdit, hrSetBoolOption, hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight,
+      hrSave, hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
+      hrBuffer, hrJumpToBuffer, hrBufferDelete, hrStripWhitespace, hrFilerOpenFile,
+      hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerDeleteFile, hrFilerShowInfo,
+      hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrLogViewerRefresh, hrEnterLogViewer,
+      hrHelpViewerQuit, hrEnterHelpViewer, hrQuickRun, hrBufferManagerSelectBuffer,
+      hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrEnterBufferManager,
+      hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
+      hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager,
+      hrDiffViewerQuit, hrEnterDiffViewer, hrRecentFile, hrNextWindow, hrPrevWindow,
+      hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
+      hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
+      hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
+      hrLspSelectionRange, hrLspDocumentLink, hrShellCommand, hrBackground, hrJumpList,
+      hrBuild, hrDebug, hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig,
+      hrPutConfigFile, hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold,
+      hrLspExecuteCommand, hrSubstitute, hrMan, hrReferencesQuit, hrReferencesJumpTo,
+      hrEnterReferences, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
+      hrEnterDocumentSymbol, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
+      hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
+      hrEnterCallHierarchy:
+    discard # Not expected from RecentFile mode handler
 
   # Handle overlay transitions (e.g., entering Command mode with :)
   let overlayTransition = r.getOverlayTransition()
@@ -1931,6 +1971,39 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if event.kind == EventKind.Key and e.state.scrollAnimation.active:
     cancelScrollAnimation(e.state.scrollAnimation)
 
+  # Handle Ctrl-C (Quit event from celina) - Vim-like behavior
+  if event.kind == EventKind.Quit:
+    if e.state.mode == EditorMode.Normal:
+      # Normal mode: show exit message like Vim
+      e.state.statusMessage = "Type :qa and press <Enter> to exit"
+    elif e.state.mode.isFileEditMode:
+      # Other file edit modes (Insert, Visual, Replace, etc.): switch to Normal mode
+      let activeBuffer = e.activeBuffer()
+
+      # Commit transaction when leaving Insert or Replace mode
+      if e.state.mode in {EditorMode.Insert, EditorMode.Replace}:
+        if activeBuffer.inTransaction:
+          discard activeBuffer.commitTransaction()
+        # Clear insert mode tracking state
+        e.state.editState.insertModeStartPos = none(BufferPosition)
+        e.state.editState.substituteContext = none(types.SubstituteContext)
+        e.state.editState.replaceHistory = @[]
+
+      e.state.previousMode = e.state.mode
+      e.setMode(EditorMode.Normal)
+
+      # Adjust cursor (Insert mode allows cursor past end of line)
+      let
+        currentLine = activeBuffer.getLine(e.activeWindow.cursor.line)
+        lineCharLen = currentLine.charLen
+      if lineCharLen == 0:
+        e.activeWindow.cursor.column = 0
+      elif e.activeWindow.cursor.column >= lineCharLen:
+        e.activeWindow.cursor.column = lineCharLen - 1
+
+      e.syncStateToWindow()
+    return true
+
   # Handle mouse events first
   if event.kind == EventKind.Mouse:
     discard e.handleMouseEvent(event)
@@ -2209,6 +2282,13 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Sync EditorState from EditorWindow before handler call
   # (handlers read/write state.cursor and state.mode)
   e.syncStateFromWindow()
+
+  # Update completion manager's other buffers with all FileEditMode buffers
+  var otherBufs: seq[TextBuffer] = @[]
+  for win in e.windowManager.windows:
+    if win.mode.isFileEditMode and win.buffer != activeBuffer:
+      otherBufs.add(win.buffer)
+  e.handlerManager.insertHandler.completionManager.otherBuffers = otherBufs
 
   let r = e.handlerManager.handleEvent(
     activeBuffer, e.state, activeViewport, event, activeWin
@@ -2743,8 +2823,27 @@ proc handleEvent*(e: Editor, event: Event): bool =
   of hrLspExecuteCommand:
     asyncSpawn e.requestLspExecuteCommand(r.hrLspCommand, r.hrLspCommandArgs)
     return true
-  else:
+  of hrBufferNext:
+    e.switchToNextBuffer()
+  of hrBufferPrev:
+    e.switchToPrevBuffer()
+  of hrBufferFirst:
+    e.switchToFirstBuffer()
+  of hrBufferLast:
+    e.switchToLastBuffer()
+  of hrBuffer:
+    discard e.switchToBuffer(r.bufferArg)
+  of hrHandled, hrUnhandled, hrError:
     discard # Fall through to post-processing
+  of hrCloseWindow, hrVSplit, hrHSplit, hrNew, hrVnew, hrEnew, hrEdit, hrSetBoolOption,
+      hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight, hrSave, hrBufferDelete,
+      hrStripWhitespace, hrShellCommand, hrBackground, hrMan, hrSubstitute, hrQuickRun,
+      hrBuild, hrDebug, hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList,
+      hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
+      hrEnterFiler, hrEnterLogViewer, hrEnterHelpViewer, hrEnterBufferManager,
+      hrEnterBackupManager, hrEnterDiffViewer, hrEnterReferences, hrEnterDocumentSymbol,
+      hrEnterCallHierarchy:
+    discard # Handled by handleCommandModeEvent or other code paths
 
   # Handle overlay transitions
   let overlayTransition = r.getOverlayTransition()

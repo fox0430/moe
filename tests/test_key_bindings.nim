@@ -213,6 +213,16 @@ suite "KeyCombo - parseKeyCombo":
   test "Invalid modifier":
     check parseKeyCombo("X-a").isNone
 
+  test "Ctrl + digit is invalid":
+    check parseKeyCombo("C-0").isNone
+    check parseKeyCombo("C-1").isNone
+    check parseKeyCombo("C-9").isNone
+
+  test "Ctrl + symbol is invalid":
+    check parseKeyCombo("C-!").isNone
+    check parseKeyCombo("C-@").isNone
+    check parseKeyCombo("C-/").isNone
+
 suite "KeyCombo - keyComboToString":
   test "Simple character":
     let combo = toKeyCombo('a')

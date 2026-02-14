@@ -856,14 +856,32 @@ proc visualMoveParagraphBackward*(
 
 proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
   ## Switch from visual mode to insert mode (I command)
-  ## Moves cursor to the start of the selection (first line, column 0)
+  ## For block mode: moves cursor to (startLine, startCol) and sets up
+  ## VisualBlockInsertContext for text replication across all selected lines.
+  ## For other modes: moves cursor to (startLine, 0).
 
-  # Move cursor to the start line of selection, column 0
   if state.visualSelection.active:
     let startLine =
       min(state.visualSelection.start.line, state.visualSelection.current.line)
-    state.cursor.line = startLine
-    state.cursor.column = 0
+
+    if state.visualSelection.kind == vskBlock:
+      let startCol =
+        min(state.visualSelection.start.column, state.visualSelection.current.column)
+      let endLine =
+        max(state.visualSelection.start.line, state.visualSelection.current.line)
+      state.cursor.line = startLine
+      state.cursor.column = startCol
+      state.editState.visualBlockInsertContext = some(
+        VisualBlockInsertContext(
+          kind: vbiInsert,
+          startLine: startLine,
+          endLine: endLine,
+          insertColumn: startCol,
+        )
+      )
+    else:
+      state.cursor.line = startLine
+      state.cursor.column = 0
 
   # Clear visual selection
   state.visualSelection.active = false
@@ -874,6 +892,39 @@ proc visualToInsertMode*(buffer: TextBuffer, state: EditorState) =
 
   # Switch to insert mode
   state.mode = EditorMode.Insert
+
+proc visualBlockAppend*(buffer: TextBuffer, state: EditorState) =
+  ## Switch from visual block mode to insert mode at end of block (A command)
+  ## Moves cursor to (startLine, endCol + 1) and sets up
+  ## VisualBlockInsertContext for text replication across all selected lines.
+  if state.visualSelection.active and state.visualSelection.kind == vskBlock:
+    let startLine =
+      min(state.visualSelection.start.line, state.visualSelection.current.line)
+    let endLine =
+      max(state.visualSelection.start.line, state.visualSelection.current.line)
+    let endCol =
+      max(state.visualSelection.start.column, state.visualSelection.current.column)
+
+    state.cursor.line = startLine
+    state.cursor.column = endCol + 1
+    state.editState.visualBlockInsertContext = some(
+      VisualBlockInsertContext(
+        kind: vbiAppend,
+        startLine: startLine,
+        endLine: endLine,
+        insertColumn: endCol + 1,
+      )
+    )
+
+    # Clear visual selection
+    state.visualSelection.active = false
+    state.needsFullRedraw = true
+
+    # Save current mode for returning with ESC
+    state.previousMode = state.mode
+
+    # Switch to insert mode
+    state.mode = EditorMode.Insert
 
 proc visualChange*(buffer: TextBuffer, state: EditorState) =
   ## Delete visual selection and enter insert mode (c command)
@@ -887,14 +938,25 @@ proc visualChange*(buffer: TextBuffer, state: EditorState) =
 
     case state.visualSelection.kind
     of vskBlock:
-      deleteBlockSelection(buffer, state)
-      # Position cursor at the start of the block
       let startCol =
         min(state.visualSelection.start.column, state.visualSelection.current.column)
       let startLine =
         min(state.visualSelection.start.line, state.visualSelection.current.line)
+      let endLine =
+        max(state.visualSelection.start.line, state.visualSelection.current.line)
+      deleteBlockSelection(buffer, state)
+      # Position cursor at the start of the block
       state.cursor.line = startLine
       state.cursor.column = startCol
+      # Set up context for text replication across block lines
+      state.editState.visualBlockInsertContext = some(
+        VisualBlockInsertContext(
+          kind: vbiChange,
+          startLine: startLine,
+          endLine: endLine,
+          insertColumn: startCol,
+        )
+      )
     of vskLine:
       # For line change, delete lines and leave one empty line
       let

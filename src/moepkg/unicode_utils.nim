@@ -246,3 +246,43 @@ proc correspondingOpenBracket*(r: Rune): Rune =
     Rune(ord('['))
   else:
     r # Return same rune if not a closing bracket
+
+proc findMatchingCloseOnLine*(line: string, openCol: int): int =
+  ## Find the matching closing bracket for an opening bracket at openCol.
+  ## Uses nesting-aware matching. Only searches within the same line.
+  ## Only handles (), [], {} (not quotes).
+  ## Returns -1 if no match found.
+  let openRune = line.runeAtPos(openCol)
+  if not isOpenBracket(openRune):
+    return -1
+  let closeRune = correspondingCloseBracket(openRune)
+  var depth = 1
+  for col in (openCol + 1) ..< line.runeLen:
+    let ch = line.runeAtPos(col)
+    if ch == openRune:
+      depth += 1
+    elif ch == closeRune:
+      depth -= 1
+      if depth == 0:
+        return col
+  return -1
+
+proc findMatchingOpenOnLine*(line: string, closeCol: int): int =
+  ## Find the matching opening bracket for a closing bracket at closeCol.
+  ## Uses nesting-aware matching. Only searches within the same line.
+  ## Only handles (), [], {} (not quotes).
+  ## Returns -1 if no match found.
+  let closeRune = line.runeAtPos(closeCol)
+  if not isCloseBracket(closeRune):
+    return -1
+  let openRune = correspondingOpenBracket(closeRune)
+  var depth = 1
+  for col in countdown(closeCol - 1, 0):
+    let ch = line.runeAtPos(col)
+    if ch == closeRune:
+      depth += 1
+    elif ch == openRune:
+      depth -= 1
+      if depth == 0:
+        return col
+  return -1

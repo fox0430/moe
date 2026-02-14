@@ -139,6 +139,8 @@
 | <kbd>**z**</kbd> <kbd>**R**</kbd></br> | Delete fold lines |
 | <kbd>**Ctrl**</kbd> <kbd>**s**</kbd></br> | Selection Range (LSP) |
 | <kbd>**Space**</kbd> <kbd>**o**</kbd></br> | Document Symbol (LSP) |
+| <kbd>**g**</kbd> <kbd>**t**</kbd></br> | Switch to the next buffer |
+| <kbd>**g**</kbd> <kbd>**T**</kbd></br> | Switch to the previous buffer |
 | <kbd>**Ctrl**</kbd> <kbd>**o**</kbd></br> | Jump Back (Jumplist) |
 | <kbd>**Ctrl**</kbd> <kbd>**i**</kbd></br> | Jump Forward (Jumplist) |
 

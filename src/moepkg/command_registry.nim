@@ -112,6 +112,7 @@ type
     bcVisualMoveParagraphForward = "visual.move.paragraph.forward"
     bcVisualMoveParagraphBackward = "visual.move.paragraph.backward"
     bcVisualToInsertMode = "visual.to.insert"
+    bcVisualBlockAppend = "visual.block.append"
     bcVisualChange = "visual.change"
     bcVisualSwapSelection = "visual.swap.selection"
     bcVisualPaste = "visual.paste"
@@ -1252,11 +1253,19 @@ proc handleVisualMoveParagraphBackward(
 proc handleVisualToInsertMode(ctx: CommandContext): Result[(), string] =
   ## Switch from visual mode to insert mode
   visualToInsertMode(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
+  Result[(), string].ok ()
+
+proc handleVisualBlockAppend(ctx: CommandContext): Result[(), string] =
+  ## Append after visual block selection (A command)
+  visualBlockAppend(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualChange(ctx: CommandContext): Result[(), string] =
   ## Delete selection and enter insert mode
   visualChange(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualSwapSelection(ctx: CommandContext): Result[(), string] =
@@ -1567,60 +1576,65 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
 
   # Auto-delete paren logic (only for single character deletion)
   if ctx.state.display.autoDeleteParen and actualCount == 1:
-    let lineCharLen = lineContent.charLen
     let cursorCol = ctx.cursor.column
+    let charAtCursorRune = lineContent.runeAtPos(cursorCol)
 
-    # Check if we can apply auto-delete (need at least 2 characters)
-    if cursorCol + 1 < lineCharLen:
-      try:
-        # Get character at cursor and next character
-        let charAtCursor = $lineContent.runeAtPos(cursorCol)
-        let nextChar = $lineContent.runeAtPos(cursorCol + 1)
+    try:
+      var matchCol = -1
+      if isOpenBracket(charAtCursorRune):
+        matchCol = findMatchingCloseOnLine(lineContent, cursorCol)
+      elif isCloseBracket(charAtCursorRune):
+        matchCol = findMatchingOpenOnLine(lineContent, cursorCol)
 
-        # Check if both are single-byte ASCII characters
-        if charAtCursor.len == 1 and nextChar.len == 1:
-          let openChar = charAtCursor[0]
-          let closeChar = nextChar[0]
+      if matchCol >= 0:
+        let txnResult = ctx.buffer.beginTransaction("delete paren pair")
+        if txnResult.isErr:
+          return err(txnResult.error)
 
-          # Check if it's a matching pair
-          if unicode_utils.isMatchingPair(openChar, closeChar):
-            # Delete both characters
-            let txnResult = ctx.buffer.beginTransaction("delete paren pair")
-            if txnResult.isErr:
-              return err(txnResult.error)
+        # Always delete opening bracket first so undo cursor returns to it
+        let openCol = min(cursorCol, matchCol)
+        let closeCol = max(cursorCol, matchCol)
 
-            # Delete opening paren
-            let delResult1 = ctx.buffer.deleteRange(ctx.cursor, ctx.cursor)
-            if delResult1.isErr:
-              discard ctx.buffer.commitTransaction()
-              return err(delResult1.error)
+        let delResult1 = ctx.buffer.deleteRange(
+          BufferPosition(line: ctx.cursor.line, column: openCol),
+          BufferPosition(line: ctx.cursor.line, column: openCol),
+        )
+        if delResult1.isErr:
+          discard ctx.buffer.commitTransaction()
+          return err(delResult1.error)
 
-            # Delete closing paren (now at cursor position)
-            let delResult2 = ctx.buffer.deleteRange(ctx.cursor, ctx.cursor)
-            if delResult2.isErr:
-              discard ctx.buffer.commitTransaction()
-              return err(delResult2.error)
+        # Close bracket shifted by -1 since open was deleted before it
+        let delResult2 = ctx.buffer.deleteRange(
+          BufferPosition(line: ctx.cursor.line, column: closeCol - 1),
+          BufferPosition(line: ctx.cursor.line, column: closeCol - 1),
+        )
+        if delResult2.isErr:
+          discard ctx.buffer.commitTransaction()
+          return err(delResult2.error)
 
-            let commitResult = ctx.buffer.commitTransaction()
-            if commitResult.isErr:
-              return err(commitResult.error)
+        let commitResult = ctx.buffer.commitTransaction()
+        if commitResult.isErr:
+          return err(commitResult.error)
 
-            # Store in yank register
-            ctx.state.yankRegister = charAtCursor & nextChar
-            ctx.state.yankIsLine = false
+        # Store in yank register
+        ctx.state.yankRegister = $charAtCursorRune
+        ctx.state.yankIsLine = false
 
-            # Adjust cursor if it's now past the end of the line (Vim behavior)
-            let updatedLineContent = ctx.buffer.getLine(ctx.cursor.line)
-            let updatedLineLen = updatedLineContent.charLen
-            if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
-              ctx.cursor.column = updatedLineLen - 1
+        # Adjust cursor: if we deleted a closing bracket, opening was before it
+        if isCloseBracket(charAtCursorRune):
+          ctx.cursor.column -= 1
 
-            ctx.state.needsFullRedraw = true
+        # Adjust cursor if it's now past the end of the line (Vim behavior)
+        let updatedLineContent = ctx.buffer.getLine(ctx.cursor.line)
+        let updatedLineLen = updatedLineContent.charLen
+        if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
+          ctx.cursor.column = updatedLineLen - 1
 
-            return Result[(), string].ok ()
-      except CatchableError:
-        # If auto-delete fails, fall through to normal delete
-        discard
+        ctx.state.needsFullRedraw = true
+        return Result[(), string].ok ()
+    except CatchableError:
+      # If auto-delete fails, fall through to normal delete
+      discard
 
   # Normal delete logic
   # Calculate how many characters we can actually delete
@@ -1698,53 +1712,59 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
   # Auto-delete paren logic (only for single character deletion)
-  if ctx.state.display.autoDeleteParen and actualCount == 1 and ctx.cursor.column >= 2:
+  if ctx.state.display.autoDeleteParen and actualCount == 1:
     let cursorCol = ctx.cursor.column
+    let charBeforeCursorRune = lineContent.runeAtPos(cursorCol - 1)
 
     try:
-      # Get character before cursor (to be deleted) and the one before that
-      let charBeforeCursor = $lineContent.runeAtPos(cursorCol - 1)
-      let charBeforeThat = $lineContent.runeAtPos(cursorCol - 2)
+      var matchCol = -1
+      if isOpenBracket(charBeforeCursorRune):
+        matchCol = findMatchingCloseOnLine(lineContent, cursorCol - 1)
+      elif isCloseBracket(charBeforeCursorRune):
+        matchCol = findMatchingOpenOnLine(lineContent, cursorCol - 1)
 
-      # Check if both are single-byte ASCII characters
-      if charBeforeCursor.len == 1 and charBeforeThat.len == 1:
-        let closeChar = charBeforeCursor[0]
-        let openChar = charBeforeThat[0]
+      if matchCol >= 0:
+        let txnResult = ctx.buffer.beginTransaction("delete paren pair")
+        if txnResult.isErr:
+          return err(txnResult.error)
 
-        # Check if it's a matching pair
-        if unicode_utils.isMatchingPair(openChar, closeChar):
-          # Delete both characters
-          let txnResult = ctx.buffer.beginTransaction("delete paren pair")
-          if txnResult.isErr:
-            return err(txnResult.error)
+        # Always delete opening bracket first so undo cursor returns to it
+        let openCol = min(cursorCol - 1, matchCol)
+        let closeCol = max(cursorCol - 1, matchCol)
 
-          # Delete the character before cursor (closing paren)
-          let pos1 = BufferPosition(line: ctx.cursor.line, column: cursorCol - 1)
-          let delResult1 = ctx.buffer.deleteRange(pos1, pos1)
-          if delResult1.isErr:
-            discard ctx.buffer.commitTransaction()
-            return err(delResult1.error)
+        let delResult1 = ctx.buffer.deleteRange(
+          BufferPosition(line: ctx.cursor.line, column: openCol),
+          BufferPosition(line: ctx.cursor.line, column: openCol),
+        )
+        if delResult1.isErr:
+          discard ctx.buffer.commitTransaction()
+          return err(delResult1.error)
 
-          # Delete the opening paren (now at column - 1)
-          let pos2 = BufferPosition(line: ctx.cursor.line, column: cursorCol - 2)
-          let delResult2 = ctx.buffer.deleteRange(pos2, pos2)
-          if delResult2.isErr:
-            discard ctx.buffer.commitTransaction()
-            return err(delResult2.error)
+        # Close bracket shifted by -1 since open was deleted before it
+        let delResult2 = ctx.buffer.deleteRange(
+          BufferPosition(line: ctx.cursor.line, column: closeCol - 1),
+          BufferPosition(line: ctx.cursor.line, column: closeCol - 1),
+        )
+        if delResult2.isErr:
+          discard ctx.buffer.commitTransaction()
+          return err(delResult2.error)
 
-          let commitResult = ctx.buffer.commitTransaction()
-          if commitResult.isErr:
-            return err(commitResult.error)
+        let commitResult = ctx.buffer.commitTransaction()
+        if commitResult.isErr:
+          return err(commitResult.error)
 
-          # Store in yank register
-          ctx.state.yankRegister = charBeforeThat & charBeforeCursor
-          ctx.state.yankIsLine = false
+        # Store in yank register
+        ctx.state.yankRegister = $charBeforeCursorRune
+        ctx.state.yankIsLine = false
 
-          # Move cursor back by 2
-          ctx.cursor.column = cursorCol - 2
-          ctx.state.needsFullRedraw = true
+        # Cursor adjustment: one bracket was at cursorCol-1, always shift back by 1
+        ctx.cursor.column = cursorCol - 1
+        # If the match was also before cursor, shift back one more
+        if matchCol < cursorCol - 1:
+          ctx.cursor.column -= 1
 
-          return Result[(), string].ok ()
+        ctx.state.needsFullRedraw = true
+        return Result[(), string].ok ()
     except CatchableError:
       # If auto-delete fails, fall through to normal delete
       discard
@@ -3245,6 +3265,16 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Switch from visual mode to insert mode (I command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualToInsertMode(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualBlockAppend),
+    "Visual Block Append",
+    "Append after visual block selection (A command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualBlockAppend(ctx),
     0,
     0,
   )

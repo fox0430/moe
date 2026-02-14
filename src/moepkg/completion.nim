@@ -71,6 +71,8 @@ type
     currentLanguage*: SourceLanguage ## Current buffer's language
     lspRequestId*: Option[int] ## Pending LSP request ID
     lspItems*: seq[CompletionItem] ## Raw LSP completion items
+    otherBuffers*: seq[TextBuffer]
+      ## Other FileEditMode buffers for multi-buffer completion
 
 const
   DefaultMaxVisible* = 10
@@ -158,9 +160,11 @@ proc extractPrefixBeforeCursor*(line: string, col: int): string =
   for i in startIdx ..< col:
     result.add($runes[i])
 
-proc collectBufferWords*(buffer: TextBuffer, excludePos: BufferPosition): seq[string] =
-  ## Collect all unique words from the buffer
-  ## Excludes the word at the current cursor position
+proc collectBufferWords*(
+    buffer: TextBuffer, excludePos: BufferPosition, otherBuffers: seq[TextBuffer] = @[]
+): seq[string] =
+  ## Collect all unique words from the current buffer and other open buffers.
+  ## Excludes the word at the current cursor position.
   var wordSet = initHashSet[string]()
 
   for lineIdx in 0 ..< buffer.len:
@@ -169,6 +173,16 @@ proc collectBufferWords*(buffer: TextBuffer, excludePos: BufferPosition): seq[st
 
     for word in words:
       wordSet.incl(word)
+
+  # Collect words from other open FileEditMode buffers
+  for otherBuf in otherBuffers:
+    if otherBuf == buffer:
+      continue
+    for lineIdx in 0 ..< otherBuf.len:
+      let line = otherBuf.getLine(lineIdx)
+      let words = extractWords(line)
+      for word in words:
+        wordSet.incl(word)
 
   # Get the word at cursor position to exclude it
   let currentLine = buffer.getLine(excludePos.line)
@@ -368,9 +382,10 @@ proc triggerCompletion*(
   mgr.lspItems = @[]
   mgr.lspRequestId = none(int)
 
-  # Collect words from buffer
-  mgr.allWords =
-    collectBufferWords(buffer, BufferPosition(line: cursorLine, column: cursorCol))
+  # Collect words from current buffer and other open buffers
+  mgr.allWords = collectBufferWords(
+    buffer, BufferPosition(line: cursorLine, column: cursorCol), mgr.otherBuffers
+  )
 
   # Update word dictionary with buffer content and language keywords
   mgr.currentLanguage = language
@@ -388,6 +403,9 @@ proc triggerCompletion*(
   mgr.menu.triggerLine = cursorLine
   mgr.menu.triggerCol = cursorCol - prefix.runeLen
 
+  # Reset selection state so popup starts with no selection
+  mgr.menu.hasSelection = false
+
   # Filter entries
   mgr.updateFilter(prefix)
 
@@ -404,6 +422,7 @@ proc cancelCompletion*(mgr: CompletionManager) =
   mgr.menu.selectedIndex = 0
   mgr.menu.scrollOffset = 0
   mgr.menu.prefix = ""
+  mgr.menu.hasSelection = false
   mgr.lspRequestId = none(int)
   mgr.lspItems = @[]
 
@@ -628,6 +647,7 @@ proc setLspItems*(mgr: CompletionManager, items: seq[CompletionItem]) =
   mgr.menu.entries = mgr.filterAndSortEntries(mgr.menu.prefix)
   mgr.menu.selectedIndex = 0
   mgr.menu.scrollOffset = 0
+  mgr.menu.hasSelection = false
 
   if mgr.menu.entries.len > 0:
     mgr.state = csActive
@@ -645,9 +665,10 @@ proc triggerLspCompletion*(
   let line = buffer.getLine(cursorLine)
   let prefix = extractPrefixBeforeCursor(line, cursorCol)
 
-  # Collect buffer words as fallback
-  mgr.allWords =
-    collectBufferWords(buffer, BufferPosition(line: cursorLine, column: cursorCol))
+  # Collect words from current buffer and other open buffers as fallback
+  mgr.allWords = collectBufferWords(
+    buffer, BufferPosition(line: cursorLine, column: cursorCol), mgr.otherBuffers
+  )
 
   # Update word dictionary with buffer content and language keywords
   mgr.currentLanguage = language

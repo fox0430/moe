@@ -149,6 +149,8 @@ type
       # Context for substitute commands (s/S/cc)
     replaceHistory*: seq[ReplaceHistoryEntry] # Replace mode undo history
     insertModeStartPos*: Option[BufferPosition] # Position where Insert mode started
+    visualBlockInsertContext*: Option[VisualBlockInsertContext]
+      # Context for visual block insert/append/change replication
 
   DisplaySettings* = object ## Display and UI settings grouped together
     showTabLine*: bool # Whether to show the tab line
@@ -444,6 +446,19 @@ type
     ## Used to properly record the command for repeat (.)
     kind*: SubstituteKind # Type of substitute operation
     deleteCount*: int # Number of characters or lines deleted
+
+  VisualBlockInsertKind* = enum
+    ## Kind of visual block insert operation
+    vbiInsert # I — insert at block start column
+    vbiAppend # A — append after block end column
+    vbiChange # c — insert after block deletion
+
+  VisualBlockInsertContext* = object
+    ## Context for replicating inserted text across block-selected lines
+    kind*: VisualBlockInsertKind
+    startLine*: int # First line of the block selection
+    endLine*: int # Last line of the block selection
+    insertColumn*: int # Column where text should be inserted/replicated
 
   LspLocationItem* = object ## Single location item for LSP results display
     uri*: string # File URI

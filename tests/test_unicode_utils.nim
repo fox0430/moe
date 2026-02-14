@@ -808,3 +808,75 @@ suite "Robustness Tests - Edge Cases and Invalid Input":
       let (rune, size) = getCharAtPos(text, 2)
       check rune == "ト".runeAt(0)
       check size == 3
+
+suite "findMatchingCloseOnLine":
+  test "Simple paren":
+    check findMatchingCloseOnLine("(hello)", 0) == 6
+
+  test "Simple bracket":
+    check findMatchingCloseOnLine("[hello]", 0) == 6
+
+  test "Simple brace":
+    check findMatchingCloseOnLine("{hello}", 0) == 6
+
+  test "Nested parens":
+    # ((hello))
+    check findMatchingCloseOnLine("((hello))", 0) == 8 # outer
+    check findMatchingCloseOnLine("((hello))", 1) == 7 # inner
+
+  test "Mixed nested brackets":
+    # (a[b{c}d]e)
+    check findMatchingCloseOnLine("(a[b{c}d]e)", 0) == 10 # outer (
+    check findMatchingCloseOnLine("(a[b{c}d]e)", 2) == 8 # [
+    check findMatchingCloseOnLine("(a[b{c}d]e)", 4) == 6 # {
+
+  test "No matching close":
+    check findMatchingCloseOnLine("(hello", 0) == -1
+
+  test "Not an opening bracket":
+    check findMatchingCloseOnLine("hello)", 0) == -1
+
+  test "Quote is not handled":
+    check findMatchingCloseOnLine("\"hello\"", 0) == -1
+
+  test "Empty parens":
+    check findMatchingCloseOnLine("()", 0) == 1
+
+  test "With prefix":
+    check findMatchingCloseOnLine("func(args)", 4) == 9
+
+suite "findMatchingOpenOnLine":
+  test "Simple paren":
+    check findMatchingOpenOnLine("(hello)", 6) == 0
+
+  test "Simple bracket":
+    check findMatchingOpenOnLine("[hello]", 6) == 0
+
+  test "Simple brace":
+    check findMatchingOpenOnLine("{hello}", 6) == 0
+
+  test "Nested parens":
+    # ((hello))
+    check findMatchingOpenOnLine("((hello))", 8) == 0 # outer
+    check findMatchingOpenOnLine("((hello))", 7) == 1 # inner
+
+  test "Mixed nested brackets":
+    # (a[b{c}d]e)
+    check findMatchingOpenOnLine("(a[b{c}d]e)", 10) == 0 # outer )
+    check findMatchingOpenOnLine("(a[b{c}d]e)", 8) == 2 # ]
+    check findMatchingOpenOnLine("(a[b{c}d]e)", 6) == 4 # }
+
+  test "No matching open":
+    check findMatchingOpenOnLine("hello)", 5) == -1
+
+  test "Not a closing bracket":
+    check findMatchingOpenOnLine("(hello", 4) == -1
+
+  test "Quote is not handled":
+    check findMatchingOpenOnLine("\"hello\"", 6) == -1
+
+  test "Empty parens":
+    check findMatchingOpenOnLine("()", 1) == 0
+
+  test "With prefix":
+    check findMatchingOpenOnLine("func(args)", 9) == 4

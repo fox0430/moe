@@ -664,3 +664,170 @@ suite "Completion - popup anchor position":
 
       check pos.x == triggerX
       check pos.y == 6
+
+suite "Completion - hasSelection reset":
+  ## hasSelection must be false when the popup is freshly shown so that
+  ## no candidate appears pre-selected.  Previously, re-triggering
+  ## completion after a first cycle left hasSelection = true.
+
+  test "triggerCompletion resets hasSelection":
+    let mgr = newCompletionManager()
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello hel")
+
+    # First trigger and simulate selection
+    mgr.triggerCompletion(buf, 0, 9)
+    mgr.menu.hasSelection = true
+
+    # Re-trigger — should start with no selection
+    mgr.triggerCompletion(buf, 0, 9)
+
+    check mgr.menu.hasSelection == false
+
+  test "cancelCompletion resets hasSelection":
+    let mgr = newCompletionManager()
+    mgr.state = csActive
+    mgr.menu.entries =
+      @[CompletionEntry(word: "test", matchScore: 100, source: csBuffer)]
+    mgr.menu.hasSelection = true
+
+    mgr.cancelCompletion()
+
+    check mgr.menu.hasSelection == false
+
+  test "setLspItems resets hasSelection":
+    let mgr = newCompletionManager()
+    mgr.menu.prefix = "tes"
+    mgr.state = csPendingLsp
+    mgr.menu.hasSelection = true
+
+    let items =
+      @[
+        CompletionItem(label: "test", kind: some(cikFunction)),
+        CompletionItem(label: "testing", kind: some(cikVariable)),
+      ]
+    mgr.setLspItems(items)
+
+    check mgr.menu.hasSelection == false
+
+  test "triggerLspCompletion resets hasSelection":
+    let mgr = newCompletionManager()
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello hel")
+
+    mgr.menu.hasSelection = true
+
+    mgr.triggerLspCompletion(buf, 0, 9)
+
+    check mgr.menu.hasSelection == false
+
+  test "Re-trigger after selection cycle starts unselected":
+    ## Simulates the full workflow: trigger → select → cancel → re-trigger.
+    let mgr = newCompletionManager()
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello help hel")
+
+    # First completion cycle
+    mgr.triggerCompletion(buf, 0, 14)
+    check mgr.menu.hasSelection == false
+
+    # Simulate Tab press (first press activates selection)
+    mgr.menu.hasSelection = true
+    mgr.selectNext()
+
+    # Cancel
+    mgr.cancelCompletion()
+    check mgr.menu.hasSelection == false
+
+    # Second completion cycle — must start unselected
+    mgr.triggerCompletion(buf, 0, 14)
+    check mgr.menu.hasSelection == false
+    check mgr.menu.selectedIndex == 0
+
+suite "Completion - multi-buffer word collection":
+  test "collectBufferWords includes words from other buffers":
+    let buf1 = newTextBuffer()
+    discard buf1.insertText(BufferPosition(line: 0, column: 0), "hello world\n")
+    let buf2 = newTextBuffer()
+    discard buf2.insertText(BufferPosition(line: 0, column: 0), "foo bar")
+
+    # excludePos on empty line 1 to not exclude any word
+    let words = collectBufferWords(buf1, BufferPosition(line: 1, column: 0), @[buf2])
+    check "foo" in words
+    check "bar" in words
+    check "hello" in words
+    check "world" in words
+
+  test "collectBufferWords deduplicates across buffers":
+    let buf1 = newTextBuffer()
+    discard buf1.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let buf2 = newTextBuffer()
+    discard buf2.insertText(BufferPosition(line: 0, column: 0), "hello other")
+
+    let words = collectBufferWords(buf1, BufferPosition(line: 0, column: 11), @[buf2])
+    var helloCount = 0
+    for w in words:
+      if w == "hello":
+        inc helloCount
+    check helloCount == 1
+
+  test "collectBufferWords skips same buffer in otherBuffers":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    # Passing the same buffer as both current and other should not duplicate
+    let words = collectBufferWords(buf, BufferPosition(line: 0, column: 11), @[buf])
+    var helloCount = 0
+    for w in words:
+      if w == "hello":
+        inc helloCount
+    check helloCount == 1
+
+  test "triggerCompletion uses otherBuffers":
+    let mgr = newCompletionManager()
+    let buf1 = newTextBuffer()
+    discard buf1.insertText(BufferPosition(line: 0, column: 0), "apple app")
+    let buf2 = newTextBuffer()
+    discard buf2.insertText(BufferPosition(line: 0, column: 0), "application approve")
+
+    mgr.otherBuffers = @[buf2]
+    mgr.triggerCompletion(buf1, 0, 9) # prefix = "app"
+
+    # Should have candidates from both buffers
+    var foundApplication = false
+    var foundApprove = false
+    var foundApple = false
+    for entry in mgr.menu.entries:
+      if entry.word == "application":
+        foundApplication = true
+      if entry.word == "approve":
+        foundApprove = true
+      if entry.word == "apple":
+        foundApple = true
+    check foundApplication
+    check foundApprove
+    check foundApple
+
+  test "triggerLspCompletion uses otherBuffers":
+    let mgr = newCompletionManager()
+    let buf1 = newTextBuffer()
+    discard buf1.insertText(BufferPosition(line: 0, column: 0), "alpha alp")
+    let buf2 = newTextBuffer()
+    discard buf2.insertText(BufferPosition(line: 0, column: 0), "alpine alphabet")
+
+    mgr.otherBuffers = @[buf2]
+    mgr.triggerLspCompletion(buf1, 0, 9) # prefix = "alp"
+
+    var foundAlpine = false
+    var foundAlphabet = false
+    var foundAlpha = false
+    for entry in mgr.menu.entries:
+      if entry.word == "alpine":
+        foundAlpine = true
+      if entry.word == "alphabet":
+        foundAlphabet = true
+      if entry.word == "alpha":
+        foundAlpha = true
+    check foundAlpine
+    check foundAlphabet
+    check foundAlpha

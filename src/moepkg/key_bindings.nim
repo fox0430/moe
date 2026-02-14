@@ -246,6 +246,12 @@ proc parseKeyCombo*(s: string): Option[KeyCombo] =
 
   # Set the modifiers once
   combo.modifiers = modifiers
+
+  # Ctrl + non-letter character is not detectable in terminals
+  if kmCtrl in combo.modifiers and not combo.isSpecial and combo.char.len == 1:
+    if combo.char[0] notin {'a' .. 'z', 'A' .. 'Z'}:
+      return none(KeyCombo)
+
   return some(combo)
 
 proc keyComboToString*(keyCombo: KeyCombo): string =
@@ -420,6 +426,21 @@ proc bindSequence*(
   if mode notin registry.sequences:
     registry.sequences[mode] = initTable[seq[KeyCombo], Command]()
 
+  var seqStr = ""
+  for i, k in sequence:
+    if i > 0:
+      seqStr.add(", ")
+    seqStr.add(
+      if k.isSpecial:
+        "<special>"
+      else:
+        "'" & k.char & "'" & " mods=" & $k.modifiers
+    )
+  logDebug(
+    "keybind",
+    "bindSequence: mode=" & $mode & " seq=[" & seqStr & "] cmd=" & command.name,
+  )
+
   registry.sequences[mode][sequence] = command
 
 proc bindKey*(
@@ -536,6 +557,13 @@ proc processKey*(
 ): Option[Command] =
   ## Process a key press, handling both single keys and sequences
 
+  logDebug(
+    "keybind",
+    "processKey: mode=" & $mode & " combo.isSpecial=" & $combo.isSpecial & " combo.char=" &
+      (if not combo.isSpecial: combo.char else: "<special>") & " combo.modifiers=" &
+      $combo.modifiers & " seqKeys.len=" & $registry.sequenceState.keys.len,
+  )
+
   # Check if we're waiting for an arbitrary character (f, t, r commands)
   if registry.sequenceState.waitingForChar and
       registry.sequenceState.pendingCommand.isSome:
@@ -582,8 +610,32 @@ proc processKey*(
   # Update possible sequences based on current keys
   registry.updatePossibleSequences(mode)
 
+  logDebug(
+    "keybind",
+    "processKey: after update, seqKeys.len=" & $registry.sequenceState.keys.len &
+      " possibleSequences.len=" & $registry.sequenceState.possibleSequences.len,
+  )
+
+  # Log current keys in sequence for debugging
+  var keysStr = ""
+  for i, k in registry.sequenceState.keys:
+    if i > 0:
+      keysStr.add(", ")
+    keysStr.add(
+      if k.isSpecial:
+        "<special>"
+      else:
+        "'" & k.char & "'" & " mods=" & $k.modifiers
+    )
+  logDebug("keybind", "processKey: current keys=[" & keysStr & "]")
+
   # Check if this completes a sequence
   if mode in registry.sequences:
+    logDebug(
+      "keybind",
+      "processKey: checking sequences for mode, numSequences=" &
+        $registry.sequences[mode].len,
+    )
     if registry.sequenceState.keys in registry.sequences[mode]:
       let command = registry.sequences[mode][registry.sequenceState.keys]
 
@@ -610,12 +662,22 @@ proc processKey*(
         break
 
     if hasLongerSequence:
+      logDebug("keybind", "processKey: waiting for more keys (hasLongerSequence)")
       # Wait for more keys
       return none(Command)
+
+  logDebug(
+    "keybind",
+    "processKey: no sequence match, possibleSequences=" &
+      $registry.sequenceState.possibleSequences.len,
+  )
 
   # No valid sequence continuation, try single key binding
   if registry.sequenceState.keys.len == 1:
     let singleKeyResult = registry.findSingleBinding(mode, combo)
+    logDebug(
+      "keybind", "processKey: single key lookup, found=" & $singleKeyResult.isSome
+    )
 
     # Check if this command requires additional input
     if singleKeyResult.isSome and singleKeyResult.get.kind == ctOperatorPending:
@@ -631,11 +693,17 @@ proc processKey*(
       return some(cmdWithCount)
     else:
       # No binding found
+      logDebug("keybind", "processKey: no single binding found for key")
       registry.sequenceState.keys = @[]
       registry.sequenceState.possibleSequences = @[]
       return none(Command)
 
   # Invalid sequence
+  logDebug(
+    "keybind",
+    "processKey: invalid sequence, clearing. seqKeys.len=" &
+      $registry.sequenceState.keys.len,
+  )
   registry.clearSequence()
   return none(Command)
 
@@ -1827,6 +1895,28 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "T", "till-char-backward")
   registry.bindKey(EditorMode.Normal, "r", "replace-char")
 
+  # Buffer switching commands (gt, gT)
+  registry.registerCommand(
+    Command(
+      name: "buffer-next-tab",
+      description: "Switch to next buffer tab",
+      kind: ctAction,
+      commandId: "buffer.next.tab",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "buffer-prev-tab",
+      description: "Switch to previous buffer tab",
+      kind: ctAction,
+      commandId: "buffer.prev.tab",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g t", "buffer-next-tab")
+  registry.bindKey(EditorMode.Normal, "g T", "buffer-prev-tab")
+
   # Sequence bindings - Vim-style
   registry.bindKey(EditorMode.Normal, "g g", "goto-first-line") # Go to first line
   registry.bindKey(EditorMode.Normal, "g _", "line-last-non-blank")
@@ -2239,6 +2329,15 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.registerCommand(
     Command(
+      name: "visual-block-append",
+      description: "Append after visual block selection",
+      kind: ctAction,
+      commandId: "visual.block.append",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
       name: "visual-paste",
       description: "Delete selection and paste register content",
       kind: ctAction,
@@ -2279,7 +2378,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Visual, "P", "visual-paste")
   registry.bindKey(EditorMode.Visual, "z f", "fold-create") # Create fold from selection
   registry.bindKey(EditorMode.Visual, "Escape", "switch-to-normal") # Exit to normal mode
-  registry.bindKey(EditorMode.Visual, "Ctrl+c", "switch-to-normal") # Exit to normal mode
+  registry.bindKey(EditorMode.Visual, "C-c", "switch-to-normal") # Exit to normal mode
   registry.bindKey(EditorMode.Visual, "C-a", "increment-number") # Increase number
   registry.bindKey(EditorMode.Visual, "C-x", "decrement-number") # Decrease number
   registry.bindKey(
@@ -2313,6 +2412,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualBlock, "}", "visual-move-paragraph-forward")
   registry.bindKey(EditorMode.VisualBlock, "{", "visual-move-paragraph-backward")
   registry.bindKey(EditorMode.VisualBlock, "I", "visual-to-insert")
+  registry.bindKey(EditorMode.VisualBlock, "A", "visual-block-append")
   registry.bindKey(EditorMode.VisualBlock, "d", "visual-delete")
   registry.bindKey(EditorMode.VisualBlock, "x", "visual-delete")
   registry.bindKey(EditorMode.VisualBlock, "y", "visual-yank")
@@ -2330,7 +2430,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualBlock, "z f", "fold-create")
     # Create fold from selection
   registry.bindKey(EditorMode.VisualBlock, "Escape", "switch-to-normal")
-  registry.bindKey(EditorMode.VisualBlock, "Ctrl+c", "switch-to-normal")
+  registry.bindKey(EditorMode.VisualBlock, "C-c", "switch-to-normal")
   registry.bindKey(EditorMode.VisualBlock, "C-a", "increment-number") # Increase number
   registry.bindKey(EditorMode.VisualBlock, "C-x", "decrement-number") # Decrease number
   registry.bindKey(
@@ -2381,7 +2481,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualLine, "z f", "fold-create")
     # Create fold from selection
   registry.bindKey(EditorMode.VisualLine, "Escape", "switch-to-normal")
-  registry.bindKey(EditorMode.VisualLine, "Ctrl+c", "switch-to-normal")
+  registry.bindKey(EditorMode.VisualLine, "C-c", "switch-to-normal")
   registry.bindKey(EditorMode.VisualLine, "C-a", "increment-number") # Increase number
   registry.bindKey(EditorMode.VisualLine, "C-x", "decrement-number") # Decrease number
   registry.bindKey(
@@ -2401,10 +2501,12 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
 
   # Insert mode key bindings
   registry.bindKey(EditorMode.Insert, "Escape", "switch-to-normal") # Exit to normal mode
+  registry.bindKey(EditorMode.Insert, "C-c", "switch-to-normal") # Exit to normal mode
 
   # Replace mode key bindings
   registry.bindKey(EditorMode.Replace, "Escape", "switch-to-normal")
     # Exit to normal mode
+  registry.bindKey(EditorMode.Replace, "C-c", "switch-to-normal") # Exit to normal mode
 
 proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
   ## Convert a Celina event to a key combination
@@ -2460,6 +2562,17 @@ proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
   if celina.KeyModifier.Alt in event.key.modifiers:
     combo.modifiers.incl(kmAlt)
   if celina.KeyModifier.Shift in event.key.modifiers:
-    combo.modifiers.incl(kmShift)
+    # For character keys, the shift state is already reflected in the character
+    # itself (e.g., 'T' vs 't', '!' vs '1'). Only include Shift modifier for
+    # special keys (arrows, function keys, etc.) where shift changes behavior.
+    if combo.isSpecial:
+      combo.modifiers.incl(kmShift)
+
+  logDebug(
+    "keybind",
+    "eventToKeyCombo: isSpecial=" & $combo.isSpecial & " char=" &
+      (if not combo.isSpecial: combo.char else: "<special>") & " modifiers=" &
+      $combo.modifiers & " event.key.modifiers=" & $event.key.modifiers,
+  )
 
   return some(combo)

@@ -573,6 +573,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         substituteContext: none(SubstituteContext),
         replaceHistory: @[],
         insertModeStartPos: none(BufferPosition),
+        visualBlockInsertContext: none(VisualBlockInsertContext),
       ),
       savedViewportTopLine: 0, # Saved viewport position for operators
       # Yank register (internal clipboard) - DEPRECATED

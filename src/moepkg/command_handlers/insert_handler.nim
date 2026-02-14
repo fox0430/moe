@@ -152,33 +152,49 @@ proc handleBackspace*(
   if pos.column > 0:
     # Check if auto-delete paren is enabled
     if state.display.autoDeleteParen:
-      # Get the character before cursor (the one to be deleted)
       let currentLine = buffer.getLine(pos.line)
-      let lineCharLen = currentLine.charLen
+      let charBeforeCursor = currentLine.runeAtPos(pos.column - 1)
 
-      # Need at least 2 characters: one before cursor and one after
-      if pos.column >= 1 and pos.column < lineCharLen:
-        try:
-          # Get the characters before and after cursor as strings
-          let beforeStr = $currentLine.runeAtPos(pos.column - 1)
-          let afterStr = $currentLine.runeAtPos(pos.column)
-
-          # Check if both are single-byte ASCII characters
-          if beforeStr.len == 1 and afterStr.len == 1:
-            let beforeChar = beforeStr[0]
-            let afterChar = afterStr[0]
-
-            # Check if it's a matching paren pair
-            if isMatchingPair(beforeChar, afterChar):
-              # Delete both characters
-              state.cursor.column -= 1
-              discard buffer.deleteChar(state.cursor) # Delete opening paren
-              discard buffer.deleteChar(state.cursor) # Delete closing paren
-              return
-                InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
-        except IndexDefect, CatchableError:
-          # If accessing rune fails, just fall through to normal backspace
-          discard
+      try:
+        # Bracket matching: find corresponding bracket on same line
+        # Always delete opening bracket first so undo cursor returns to it
+        if isOpenBracket(charBeforeCursor):
+          let matchCol = findMatchingCloseOnLine(currentLine, pos.column - 1)
+          if matchCol >= 0:
+            # Delete opening bracket first
+            state.cursor.column -= 1
+            discard buffer.deleteChar(state.cursor)
+            # Delete closing bracket (shifted by -1 since open was before it)
+            discard
+              buffer.deleteChar(BufferPosition(line: pos.line, column: matchCol - 1))
+            return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+        elif isCloseBracket(charBeforeCursor):
+          let matchCol = findMatchingOpenOnLine(currentLine, pos.column - 1)
+          if matchCol >= 0:
+            # Delete opening bracket first
+            discard buffer.deleteChar(BufferPosition(line: pos.line, column: matchCol))
+            # Delete closing bracket (shifted by -1 since open was before it)
+            discard
+              buffer.deleteChar(BufferPosition(line: pos.line, column: pos.column - 2))
+            # Both brackets were before cursor
+            state.cursor.column -= 2
+            return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+        else:
+          # Quotes: only auto-delete adjacent pairs (existing behavior)
+          let lineCharLen = currentLine.charLen
+          if pos.column < lineCharLen:
+            let beforeStr = $charBeforeCursor
+            let afterStr = $currentLine.runeAtPos(pos.column)
+            if beforeStr.len == 1 and afterStr.len == 1:
+              if isMatchingPair(beforeStr[0], afterStr[0]):
+                state.cursor.column -= 1
+                discard buffer.deleteChar(state.cursor) # Delete opening quote
+                discard buffer.deleteChar(state.cursor) # Delete closing quote
+                return
+                  InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+      except IndexDefect, CatchableError:
+        # If accessing rune fails, fall through to normal backspace
+        discard
 
     # Normal backspace: move cursor back and delete
     state.cursor.column -= 1

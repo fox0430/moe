@@ -54,6 +54,8 @@ type
     nmrLspSelectionRange # Signal to handler_manager to execute LSP selection range
     nmrLspDocumentLink # Signal to handler_manager to execute LSP document link
     nmrJumpToBuffer # Signal to handler_manager to jump to buffer and position
+    nmrBufferNext # Signal to handler_manager to switch to next buffer
+    nmrBufferPrev # Signal to handler_manager to switch to previous buffer
 
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
     motionController*: MotionController
@@ -109,6 +111,10 @@ type
       nmrJumpBufferIndex*: int # Target buffer index
       nmrJumpLine*: int # Target line number
       nmrJumpColumn*: int # Target column number
+    of nmrBufferNext:
+      discard
+    of nmrBufferPrev:
+      discard
 
 proc updateCursorToJumpPosition(
     handler: NormalModeHandler,
@@ -635,6 +641,10 @@ proc handleNormalModeKey*(
     of "window.close":
       # Ctrl-W c command - Close current window
       return NormalModeResult(kind: nmrCloseWindow)
+    of "buffer.next.tab":
+      return NormalModeResult(kind: nmrBufferNext)
+    of "buffer.prev.tab":
+      return NormalModeResult(kind: nmrBufferPrev)
     of "jump.back":
       # Ctrl-o - Jump to previous position in jump list
       if state.jumpList.len == 0:

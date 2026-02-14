@@ -22,7 +22,7 @@
 ## This module provides a unified interface for all mode-specific handlers,
 ## maintaining the shared infrastructure while delegating to specialized handlers.
 
-import std/[options, unicode]
+import std/[options, strutils, unicode]
 
 import pkg/[results, celina]
 
@@ -590,6 +590,10 @@ proc handleNormalMode*(
       jumpLine: r.nmrJumpLine,
       jumpColumn: r.nmrJumpColumn,
     )
+  of nmrBufferNext:
+    return HandlerResult(kind: hrBufferNext)
+  of nmrBufferPrev:
+    return HandlerResult(kind: hrBufferPrev)
 
 proc handleInsertMode*(
     manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
@@ -604,6 +608,26 @@ proc handleInsertMode*(
       if buffer.currentTransaction.isSome and state.editState.insertModeStartPos.isSome:
         let transaction = buffer.currentTransaction.get
         let insertedText = extractInsertedText(transaction)
+
+        # Visual Block insert replication: replicate inserted text to all block lines
+        if state.editState.visualBlockInsertContext.isSome:
+          if insertedText.len > 0:
+            let ctx = state.editState.visualBlockInsertContext.get
+            for lineNum in (ctx.startLine + 1) .. min(ctx.endLine, buffer.len - 1):
+              let lineCharLen = buffer.getLine(lineNum).runeLen
+              let col = ctx.insertColumn
+              # Pad with spaces if line is shorter than the target column
+              if col > lineCharLen:
+                let padding = ' '.repeat(col - lineCharLen)
+                discard buffer.insertText(
+                  BufferPosition(line: lineNum, column: lineCharLen), padding
+                )
+              discard buffer.insertText(
+                BufferPosition(line: lineNum, column: col), insertedText
+              )
+          # Always clear context when leaving insert mode
+          state.editState.visualBlockInsertContext =
+            none(types.VisualBlockInsertContext)
 
         # Record the insert command for repeat (.) if text was actually inserted
         if insertedText.len > 0:
@@ -635,10 +659,11 @@ proc handleInsertMode*(
       # Commit the transaction when leaving Insert mode
       let transactionResult = buffer.commitTransaction()
       if transactionResult.isErr:
-        # This should not happen in normal operation, but handle it gracefully
+        # Even if commit fails, allow mode transition so user isn't stuck in Insert mode
         return HandlerResult(
-          kind: hrError,
-          errorMessage: "Failed to commit transaction: " & transactionResult.error,
+          kind: hrHandled,
+          modeTransition: r.modeTransition,
+          statusMessage: "Failed to commit transaction: " & transactionResult.error,
         )
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
@@ -935,6 +960,18 @@ proc handleVisualMode*(
   let r = manager.visualHandler.handleVisualModeKey(buffer, state, viewport, keyCombo)
   case r.kind
   of vmrHandled:
+    # Check if we're entering Insert mode (e.g., visual block I command)
+    if r.modeTransition.isSome and r.modeTransition.get == EditorMode.Insert:
+      # Begin a transaction so commitTransaction() succeeds when leaving Insert mode
+      # Guard: visualChange already commits its delete transaction, so don't double-begin
+      if not buffer.inTransaction:
+        let transactionResult = buffer.beginTransaction("Visual to insert mode")
+        if transactionResult.isErr:
+          return HandlerResult(
+            kind: hrError,
+            errorMessage: "Failed to begin transaction: " & transactionResult.error,
+          )
+      state.editState.insertModeStartPos = some(state.cursor)
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )
@@ -963,10 +1000,11 @@ proc handleReplaceMode*(
       # Commit the transaction when leaving Replace mode
       let transactionResult = buffer.commitTransaction()
       if transactionResult.isErr:
-        # This should not happen in normal operation, but handle it gracefully
+        # Even if commit fails, allow mode transition so user isn't stuck in Replace mode
         return HandlerResult(
-          kind: hrError,
-          errorMessage: "Failed to commit transaction: " & transactionResult.error,
+          kind: hrHandled,
+          modeTransition: r.modeTransition,
+          statusMessage: "Failed to commit transaction: " & transactionResult.error,
         )
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
