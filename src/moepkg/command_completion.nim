@@ -170,6 +170,8 @@ const CommandDescriptions = {
   "lspexecommand": "Execute LSP command",
   "lspcallhierarchyincoming": "Show incoming calls",
   "lspcallhierarchyoutgoing": "Show outgoing calls",
+  # Terminal
+  "terminal": "Open terminal emulator",
 }.toTable
 
 # Commands that take file path arguments

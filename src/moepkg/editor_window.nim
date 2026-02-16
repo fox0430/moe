@@ -170,6 +170,9 @@ proc restoreOriginalBuffer*(win: EditorWindow, mode: EditorMode) =
     if win.callHierarchyViewerState.isSome and
         win.callHierarchyViewerState.get.originalBuffer != nil:
       win.buffer = win.callHierarchyViewerState.get.originalBuffer
+  of EditorMode.Terminal:
+    if win.terminalState.isSome and win.terminalState.get.originalBuffer != nil:
+      win.buffer = win.terminalState.get.originalBuffer
   else:
     discard
 
@@ -202,6 +205,10 @@ proc clearModeState*(win: EditorWindow, mode: EditorMode) =
     win.callHierarchyViewerState = none(CallHierarchyViewerState)
   of EditorMode.RecentFile:
     win.recentFileModeState = none(RecentFileModeState)
+  of EditorMode.Terminal:
+    if win.terminalState.isSome:
+      win.terminalState.get.cleanup()
+    win.terminalState = none(TerminalState)
   else:
     discard
 

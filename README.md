@@ -86,6 +86,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Macros
 
+- Terminal
+
 - Language Server Protocol (WIP)
 
   - Completion
@@ -135,8 +137,6 @@ This project's goals are easily customizable, high productivity, user friendly, 
 - Snippets
 
 - Spell checker
-
-- Terminal
 
 - Select data structures
 

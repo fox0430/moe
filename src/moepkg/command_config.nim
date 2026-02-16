@@ -192,6 +192,9 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("lspcallhierarchyincoming", claLspCallHierarchyIncoming)
   config.addAlias("lspcallhierarchyoutgoing", claLspCallHierarchyOutgoing)
 
+  # Terminal
+  config.addAlias("terminal", claTerminal)
+
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser
   # Clear existing aliases

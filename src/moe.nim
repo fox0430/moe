@@ -36,6 +36,34 @@ proc toCursorStyle(ct: CursorType): CursorStyle =
   of ctNonBlinkBlock: CursorStyle.SteadyBlock
   of ctNonBlinkIbeam: CursorStyle.SteadyBar
 
+proc pollTerminalWindows*(e: Editor) =
+  ## Poll PTY output for all windows in Terminal mode.
+  ## Called on every render frame to ensure terminal output is up-to-date.
+  ## Also handles automatic cleanup when the shell process exits.
+  for i, window in e.windowManager.windows:
+    if window.mode == EditorMode.Terminal and window.terminalState.isSome:
+      let termState = window.terminalState.get
+      if termState.subMode == tsmInput:
+        let updated = termState.pollOutput()
+        if updated:
+          e.state.needsFullRedraw = true
+
+        if termState.exitCode.isSome:
+          if termState.command.len > 0:
+            # Command mode (e.g. `:terminal ls`): show output in scrollback view
+            let snapshot = termState.enterNormalSubMode()
+            window.buffer = snapshot
+            window.cursor = BufferPosition(line: max(0, snapshot.len - 1), column: 0)
+            window.viewport.topLine = max(0, snapshot.len - window.viewport.height)
+          else:
+            # Interactive shell (`:terminal`): close and return to Normal mode
+            window.clearModeState(EditorMode.Terminal)
+            window.mode = EditorMode.Normal
+            if i == e.windowManager.activeWindowIndex:
+              e.setMode(EditorMode.Normal)
+          e.state.needsFullRedraw = true
+          return
+
 proc handleResize(e: Editor) =
   ## Debounce resize events to prevent terminal buffer overflow
   ## Only process if at least 50ms have passed since last resize
@@ -103,6 +131,9 @@ proc runEditor(
     app.onRenderAsync proc(buffer: var Buffer) =
       {.cast(gcsafe).}:
         {.cast(raises: []).}:
+          # Poll terminal output for all windows in Terminal mode
+          editor.pollTerminalWindows()
+
           editor.render(buffer)
 
           # Set cursor style based on editor mode (unless disabled)

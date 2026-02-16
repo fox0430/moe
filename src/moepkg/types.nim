@@ -25,13 +25,13 @@ import
   modes, buffer, registers, filer, log_viewer, help_viewer, command_completion,
   message_log, buffer_manager, backup_manager, diff_viewer, debug_viewer, config_mode,
   references_viewer, documentsymbol_viewer, callhierarchy_viewer, hover_popup,
-  primitives, syntax_checker, recent_file_mode
+  primitives, syntax_checker, recent_file_mode, terminal_mode
 
 export
   buffer.SidebarItemKind, registers, command_completion, filer, log_viewer, help_viewer,
   buffer_manager, backup_manager, diff_viewer, debug_viewer, config_mode,
   references_viewer, documentsymbol_viewer, callhierarchy_viewer, hover_popup,
-  primitives, syntax_checker, recent_file_mode
+  primitives, syntax_checker, recent_file_mode, terminal_mode
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -88,6 +88,7 @@ type
     callHierarchyViewerState*: Option[CallHierarchyViewerState]
       # Call hierarchy viewer state
     recentFileModeState*: Option[RecentFileModeState] # Recent file mode state
+    terminalState*: Option[TerminalState] # Terminal mode state
 
   SearchDirection* = enum
     Forward # Search forward (/)

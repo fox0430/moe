@@ -235,6 +235,15 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
+    of EditorMode.Terminal:
+      # Terminal mode renders grid directly in Input sub-mode,
+      # or uses standard window rendering in Normal sub-mode
+      if window.terminalState.isSome and window.terminalState.get.subMode == tsmInput:
+        e.renderTerminal(buffer, window, isBottomWindow, tabLineOffset)
+      else:
+        e.renderWindow(
+          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        )
     else:
       # Normal buffer rendering (Normal, Insert, Visual, Command, Search, etc.)
       e.renderWindow(
@@ -258,7 +267,14 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
 
   # Set cursor to active window position
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.setActiveWindowScreenCursor(e.activeWindow)
+    # Terminal-Input mode manages its own screen cursor from the grid,
+    # so skip the standard cursor calculation that would overwrite it.
+    let isTerminalInput =
+      e.activeWindow.mode == EditorMode.Terminal and e.activeWindow.terminalState.isSome and
+      e.activeWindow.terminalState.get.subMode == tsmInput
+
+    if not isTerminalInput:
+      e.setActiveWindowScreenCursor(e.activeWindow)
 
     # Set cursor visibility based on mode
     # Special modes (Filer, Config, etc.) set cursorVisible in their render functions
@@ -273,6 +289,9 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
         EditorMode.DiffViewer, EditorMode.Debug, EditorMode.References,
         EditorMode.DocumentSymbol, EditorMode.CallHierarchy, EditorMode.RecentFile:
       e.state.cursorVisible = false
+    of EditorMode.Terminal:
+      # Terminal mode sets cursorVisible in renderTerminal
+      discard
     else:
       # Normal, Insert, Visual, etc. - cursor should be visible
       e.state.cursorVisible = true

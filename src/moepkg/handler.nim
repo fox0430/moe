@@ -26,7 +26,8 @@ import
   editor, key_bindings, modes, buffer, logger, types, motion, search_utils, filer,
   quick_run_utils, help_viewer, buffer_manager, backup_manager, backup, diff_viewer,
   command_completion, build, render_utils, debug_viewer, config_loader,
-  documentsymbol_viewer, message_log, command_line, color, theme, tab_line
+  documentsymbol_viewer, message_log, command_line, color, theme, tab_line,
+  terminal_mode
 import command_handlers/handler_manager
 
 proc addRunningProcess*(e: Editor, p: BackgroundProcess) =
@@ -323,6 +324,28 @@ proc enterFilerInActiveWindow(e: Editor, path: string) =
   activeWin.cursor = BufferPosition(line: 0, column: 0)
   activeWin.viewport.topLine = 0
   activeWin.viewport.leftColumn = 0
+
+proc enterTerminalInActiveWindow(e: Editor, command: string) =
+  ## Switch the active window to Terminal mode.
+  let activeWin = e.activeWindow
+  let
+    cols = activeWin.viewport.width
+    rows = max(1, activeWin.viewport.height - e.calculateReservedLines(true))
+  let termResult = newTerminalState(command, cols, rows)
+  if termResult.isErr:
+    e.state.setStatusMessage("Terminal error: " & termResult.error)
+    return
+
+  let termState = termResult.get
+  termState.originalBuffer = activeWin.buffer
+  activeWin.terminalState = some(termState)
+  # Create a placeholder buffer (grid will be rendered directly)
+  activeWin.buffer = newTextBuffer("")
+  activeWin.cursor = BufferPosition(line: 0, column: 0)
+  activeWin.viewport.topLine = 0
+  activeWin.viewport.leftColumn = 0
+  e.setMode(EditorMode.Terminal)
+  activeWin.mode = EditorMode.Terminal
 
 proc handleCommandModeEvent(e: Editor, event: Event): bool =
   ## Handle Command mode events (special handling for text input)
@@ -855,6 +878,12 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           else:
             getCurrentDir()
         e.enterFilerInActiveWindow(startPath)
+      of hrEnterTerminal:
+        overlayHandled = true
+        let baseModeBeforeOverlay = e.state.baseMode
+        e.state.exitOverlay()
+        e.state.previousMode = baseModeBeforeOverlay
+        e.enterTerminalInActiveWindow(r.enterTerminalCommand)
       of hrEnterLogViewer:
         overlayHandled = true
         # Open LogViewer in a new split window for editor messages - exit overlay first
@@ -1227,7 +1256,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           hrPrevWindow, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
           hrLspCodeLensExecute, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
           hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit,
-          hrConfigSaveConfig, hrDebugViewerQuit, hrLogViewerQuit:
+          hrConfigSaveConfig, hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit:
         discard # Not returned from command mode handler
 
       if not overlayHandled:
@@ -1585,7 +1614,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       hrEnterReferences, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
       hrEnterDocumentSymbol, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
       hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
-      hrEnterCallHierarchy:
+      hrEnterCallHierarchy, hrEnterTerminal, hrTerminalQuit:
     discard # Not expected from RecentFile mode handler
 
   # Handle overlay transitions (e.g., entering Command mode with :)
@@ -2036,8 +2065,17 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if event.kind == EventKind.Key and e.state.scrollAnimation.active:
     cancelScrollAnimation(e.state.scrollAnimation)
 
-  # Handle Ctrl-C (Quit event from celina) - Vim-like behavior
+  # Handle Ctrl-C (Quit event from celina)
   if event.kind == EventKind.Quit:
+    # Terminal-Input mode: forward Ctrl-C to PTY as \x03
+    if e.state.mode == EditorMode.Terminal:
+      let activeWin = e.activeWindow
+      if activeWin.terminalState.isSome:
+        let termState = activeWin.terminalState.get
+        if termState.subMode == tsmInput:
+          termState.feedInput("\x03")
+          return true
+
     if e.state.mode == EditorMode.Normal:
       # Normal mode: show exit message like Vim
       e.state.statusMessage = "Type :qa and press <Enter> to exit"
@@ -2453,6 +2491,12 @@ proc handleEvent*(e: Editor, event: Event): bool =
   of hrFilerQuit:
     # Close filer and return to Normal mode
     e.activeWindow.clearModeState(EditorMode.Filer)
+    e.activeWindow.mode = EditorMode.Normal
+    e.setMode(EditorMode.Normal)
+    return true
+  of hrTerminalQuit:
+    # Close terminal and return to Normal mode
+    e.activeWindow.clearModeState(EditorMode.Terminal)
     e.activeWindow.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     return true
@@ -2904,7 +2948,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
       hrEnterFiler, hrEnterLogViewer, hrEnterHelpViewer, hrEnterBufferManager,
       hrEnterBackupManager, hrEnterDiffViewer, hrEnterReferences, hrEnterDocumentSymbol,
-      hrEnterCallHierarchy:
+      hrEnterCallHierarchy, hrEnterTerminal:
     discard # Handled by handleCommandModeEvent or other code paths
 
   # Handle overlay transitions
