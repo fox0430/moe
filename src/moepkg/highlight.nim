@@ -17,19 +17,26 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[sequtils, os, parseutils, strutils, strformat]
+import
+  std/
+    [sequtils, os, parseutils, strutils, strformat, unicode, algorithm, options, tables]
 
-import syntax/highlite
-import lsp/[semantictoken, protocol/types]
-import unicodeext, color, independentutils, ui
+import pkg/celina
 
-export SourceLanguage
+import color, primitives
+import syntax/tokenizer
+import lsp/protocol/types
+
+export SourceLanguage, EditorColorPairIndex
 
 type
+  # Runes type alias for sequence of Unicode characters
+  Runes* = seq[Rune]
+
   ColorSegment* = object
     firstRow*, firstColumn*, lastRow*, lastColumn*: int
     color*: EditorColorPairIndex
-    attribute*: Attribute
+    style*: Style # Changed from attribute to style
 
   Highlight* = ref object
     colorSegments*: seq[ColorSegment]
@@ -38,13 +45,76 @@ type
     word*: string
     color*: EditorColorPairIndex
 
+  # Visual selection area (for compatibility with old code)
+  SelectedArea* = object
+    startLine*, endLine*: int
+    startColumn*, endColumn*: int
+
+  # Incremental highlighting support
+  TokenizerState* = object
+    ## Tokenizer state at the start of a line
+    ## Used for incremental re-parsing
+    state*: TokenClass
+    templateLiteralDepth*: int
+    braceDepthStack*: seq[int]
+    commentDepth*: int
+    inJsxMode*: bool
+    jsxTagDepth*: int
+    inComment*: bool
+    inScript*: bool
+    inStyle*: bool
+    astroInFrontmatter*: bool
+    astroFirstLine*: bool
+
+  LineStateCache* = object ## Cache of tokenizer states for each line
+    states*: seq[TokenizerState]
+    version*: int # Synchronized with buffer changeSeq for invalidation
+
+  IncrementalHighlight* = ref object ## Incremental highlighting information
+    segments*: seq[ColorSegment]
+    lineStates*: LineStateCache
+
+proc captureTokenizerState*(g: GeneralTokenizer): TokenizerState =
+  ## Capture the current state of a tokenizer
+  ## Used to save state at line boundaries for incremental re-parsing
+  result = TokenizerState(
+    state: g.state,
+    templateLiteralDepth: g.templateLiteralDepth,
+    braceDepthStack: g.braceDepthStack,
+    commentDepth: g.commentDepth,
+    inJsxMode: g.inJsxMode,
+    jsxTagDepth: g.jsxTagDepth,
+    inComment: g.inComment,
+    inScript: g.inScript,
+    inStyle: g.inStyle,
+    astroInFrontmatter: g.astroInFrontmatter,
+    astroFirstLine: g.astroFirstLine,
+  )
+
+proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
+  ## Restore tokenizer state from a saved state
+  ## Used to resume tokenization from a cached line boundary
+  g.state = state.state
+  g.templateLiteralDepth = state.templateLiteralDepth
+  g.braceDepthStack = state.braceDepthStack
+  g.commentDepth = state.commentDepth
+  g.inJsxMode = state.inJsxMode
+  g.jsxTagDepth = state.jsxTagDepth
+  g.inComment = state.inComment
+  g.inScript = state.inScript
+  g.inStyle = state.inStyle
+  g.astroInFrontmatter = state.astroInFrontmatter
+  g.astroFirstLine = state.astroFirstLine
+
+# Default style for highlighting
+let defaultStyle* =
+  Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
+
 proc `$`*(highlight: Highlight): string =
   result = "Highlight: ["
   for i, s in highlight.colorSegments:
     result &=
-      fmt"ColorSegment(firstRow: {$s.firstRow}, " & fmt"firstColumn: {$s.firstColumn}, " &
-      fmt"lastRow: {$s.lastRow}, " & fmt"lastColumn: {$s.lastColumn}, " &
-      fmt"color: {s.color}, " & fmt"attribute: {s.attribute})"
+      fmt"ColorSegment(firstRow: {$s.firstRow}, firstColumn: {$s.firstColumn}, lastRow: {$s.lastRow}, lastColumn: {$s.lastColumn}, color: {s.color})"
     if i < highlight.colorSegments.high:
       result.add ", "
   result.add "]"
@@ -61,11 +131,49 @@ proc `[]`*(highlight: Highlight, i: int): ColorSegment {.inline.} =
 proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment {.inline.} =
   highlight.colorSegments[highlight.colorSegments.len - int(i)]
 
+proc indexOf*(highlight: Highlight, row, column: int): int =
+  ## Calculate the index of the color segment which the pair (row, column) belongs to.
+  ## Uses binary search for O(log n) performance.
+
+  # Because the following assertion is sluggish, it is disabled in release builds.
+  when not defined(release):
+    doAssert(
+      (row, column) >= (highlight[0].firstRow, highlight[0].firstColumn),
+      fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}",
+    )
+    doAssert(
+      (row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn),
+      fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}",
+    )
+
+  var
+    lb = 0
+    ub = highlight.len
+  while ub - lb > 1:
+    let mid = (lb + ub) div 2
+    if (row, column) >= (highlight[mid].firstRow, highlight[mid].firstColumn):
+      lb = mid
+    else:
+      ub = mid
+
+  return lb
+
 proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPairIndex =
-  for colorSegment in highlight.colorSegments:
-    if line >= colorSegment.firstRow and colorSegment.lastRow >= line and
-        col >= colorSegment.firstColumn and colorSegment.lastColumn >= col:
-      return colorSegment.color
+  ## Get the color at the specified position using binary search.
+  ## Returns default color if the position is out of bounds.
+
+  # Handle empty highlight
+  if highlight.colorSegments.len == 0:
+    return EditorColorPairIndex.default
+
+  # Check if position is within valid range
+  if (line, col) < (highlight[0].firstRow, highlight[0].firstColumn) or
+      (line, col) > (highlight[^1].lastRow, highlight[^1].lastColumn):
+    return EditorColorPairIndex.default
+
+  # Use binary search to find the segment
+  let idx = highlight.indexOf(line, col)
+  return highlight[idx].color
 
 template isIntersect(s, t: ColorSegment): bool =
   not (
@@ -97,17 +205,16 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
     return @[s]
 
   if t.contains(s):
-    return
-      @[
-        ColorSegment(
-          firstRow: s.firstRow,
-          firstColumn: s.firstColumn,
-          lastRow: s.lastRow,
-          lastColumn: s.lastColumn,
-          color: t.color,
-          attribute: t.attribute,
-        )
-      ]
+    return @[
+      ColorSegment(
+        firstRow: s.firstRow,
+        firstColumn: s.firstColumn,
+        lastRow: s.lastRow,
+        lastColumn: s.lastColumn,
+        color: t.color,
+        style: t.style,
+      )
+    ]
 
   if s.contains(t):
     if (s.firstRow, s.firstColumn) < (t.firstRow, t.firstColumn):
@@ -119,7 +226,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
           lastRow: last.row,
           lastColumn: last.column,
           color: s.color,
-          attribute: t.attribute,
+          style: s.style,
         )
       )
 
@@ -134,7 +241,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
           lastRow: s.lastRow,
           lastColumn: s.lastColumn,
           color: s.color,
-          attribute: t.attribute,
+          style: s.style,
         )
       )
 
@@ -149,7 +256,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
         lastRow: t.lastRow,
         lastColumn: t.lastColumn,
         color: t.color,
-        attribute: t.attribute,
+        style: t.style,
       )
     )
 
@@ -160,7 +267,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
         lastRow: s.lastRow,
         lastColumn: s.lastColumn,
         color: s.color,
-        attribute: t.attribute,
+        style: s.style,
       )
     )
   else:
@@ -172,7 +279,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
         lastRow: last.row,
         lastColumn: last.column,
         color: s.color,
-        attribute: t.attribute,
+        style: s.style,
       )
     )
 
@@ -183,7 +290,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
         lastRow: s.lastRow,
         lastColumn: s.lastColumn,
         color: t.color,
-        attribute: t.attribute,
+        style: t.style,
       )
     )
 
@@ -200,7 +307,7 @@ proc addColorSegment*(
     h: var Highlight,
     line, length: int,
     color: EditorColorPairIndex,
-    attribute = Attribute.normal,
+    style = defaultStyle,
 ) =
   ## Add a colorSegment to end of the line.
   ## Ignore If need to overwrite.
@@ -226,7 +333,7 @@ proc addColorSegment*(
         lastRow: line,
         lastColumn: beforeSegment.lastColumn + 1 + length,
         color: color,
-        attribute: attribute,
+        style: style,
       ),
       position + 1,
     )
@@ -263,6 +370,16 @@ iterator parseReservedWord(
 proc getEditorColorPair(
     kind: TokenClass, language: SourceLanguage
 ): EditorColorPairIndex =
+  # Diff language uses dedicated color pairs
+  if language == langDiff:
+    return
+      case kind
+      of gtStringLit: EditorColorPairIndex.diffViewerAddedLine
+      of gtComment: EditorColorPairIndex.diffViewerDeletedLine
+      of gtPreprocessor: EditorColorPairIndex.diffViewerHeader
+      of gtKeyword: EditorColorPairIndex.diffViewerMeta
+      else: EditorColorPairIndex.default
+
   case kind
   of gtOperator:
     EditorColorPairIndex.operator
@@ -318,14 +435,6 @@ proc getEditorColorPair(
   else:
     EditorColorPairIndex.default
 
-proc getEditorColorPair(
-    legend: SemanticTokensLegend, semTokenNum: int
-): EditorColorPairIndex =
-  try:
-    result = parseEnum[EditorColorPairIndex](legend.tokenTypes[semTokenNum])
-  except ValueError:
-    result = EditorColorPairIndex.default
-
 proc initHighlight*(
     buffer: seq[Runes] = @[], color = EditorColorPairIndex.default
 ): Highlight {.inline.} =
@@ -339,7 +448,12 @@ proc initHighlight*(
       else:
         -1
     colorSegments.add ColorSegment(
-      firstRow: i, firstColumn: 0, lastRow: i, lastColumn: lastColumn, color: color
+      firstRow: i,
+      firstColumn: 0,
+      lastRow: i,
+      lastColumn: lastColumn,
+      color: color,
+      style: defaultStyle,
     )
 
   return Highlight(colorSegments: colorSegments)
@@ -369,6 +483,7 @@ proc initHighlight*(
         lastRow: currentRow,
         lastColumn: currentColumn,
         color: c,
+        style: defaultStyle,
       )
       empty = true
     for r in runes(str):
@@ -383,6 +498,7 @@ proc initHighlight*(
               lastRow: currentRow,
               lastColumn: currentColumn - 1,
               color: color,
+              style: defaultStyle,
             )
           )
         else:
@@ -449,48 +565,223 @@ proc initHighlight*(
 
   return Highlight(colorSegments: colorSegments)
 
-proc initHighlight*(
-    buffer: seq[Runes], semTokens: seq[LspSemanticToken], legend: SemanticTokensLegend
-): Highlight =
-  ## Initialize Highlight with LSP SemanticTokens.
+proc initHighlightIncremental*(
+    buffer: seq[Runes],
+    startLine: int,
+    endLine: int,
+    initialState: TokenizerState,
+    reservedWords: seq[ReservedWord],
+    language: SourceLanguage,
+): tuple[segments: seq[ColorSegment], lineStates: seq[TokenizerState]] =
+  ## Parse a partial buffer range with initial tokenizer state
+  ## Returns color segments and tokenizer state at the end of each line
+  ## Used for incremental re-highlighting of changed regions
 
-  result = initHighlight(buffer)
-  for t in semTokens:
-    result.overwrite(
-      ColorSegment(
-        firstRow: t.line,
-        firstColumn: t.column,
-        lastRow: t.line,
-        lastColumn: t.column + (t.length - 1),
-        color: getEditorColorPair(legend, t.tokenType),
-      )
-    )
+  if language == SourceLanguage.langNone or buffer.len == 0:
+    # Return empty results for plain text
+    return (segments: @[], lineStates: @[])
 
-proc indexOf*(highlight: Highlight, row, column: int): int =
-  ## calculate the index of the color segment which the pair (row, column) belongs to
-
-  # Because the following assertion is sluggish, it is disabled in release builds.
-  when not defined(release):
-    doAssert(
-      (row, column) >= (highlight[0].firstRow, highlight[0].firstColumn),
-      fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}",
-    )
-    doAssert(
-      (row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn),
-      fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}",
-    )
+  # Build buffer string for the requested range
+  var bufferStr: string
+  for i in startLine .. min(endLine, buffer.high):
+    bufferStr &= $buffer[i]
+    if i < min(endLine, buffer.high):
+      bufferStr &= '\n'
 
   var
-    lb = 0
-    ub = highlight.len
-  while ub - lb > 1:
-    let mid = (lb + ub) div 2
-    if (row, column) >= (highlight[mid].firstRow, highlight[mid].firstColumn):
-      lb = mid
-    else:
-      ub = mid
+    currentRow = startLine
+    currentColumn: int
+    colorSegments: seq[ColorSegment]
+    lineStates: seq[TokenizerState]
 
-  return lb
+  # Template to split tokens by newlines and track line boundaries
+  template splitByNewlineWithState(str, c: typed) =
+    const Newline = Rune('\n')
+    var
+      cs = ColorSegment(
+        firstRow: currentRow,
+        firstColumn: currentColumn,
+        lastRow: currentRow,
+        lastColumn: currentColumn,
+        color: c,
+        style: defaultStyle,
+      )
+      empty = true
+    for r in runes(str):
+      if r == Newline:
+        # push an empty segment
+        if empty:
+          let color = EditorColorPairIndex.default
+          colorSegments.add(
+            ColorSegment(
+              firstRow: currentRow,
+              firstColumn: currentColumn,
+              lastRow: currentRow,
+              lastColumn: currentColumn - 1,
+              color: color,
+              style: defaultStyle,
+            )
+          )
+        else:
+          colorSegments.add(cs)
+
+        # Capture tokenizer state at line boundary
+        lineStates.add(captureTokenizerState(token))
+
+        inc(currentRow)
+        currentColumn = 0
+        cs.firstRow = currentRow
+        cs.firstColumn = currentColumn
+        cs.lastRow = currentRow
+        cs.lastColumn = currentColumn
+        empty = true
+      else:
+        cs.lastColumn = currentColumn
+        inc(currentColumn)
+        empty = false
+    if not empty:
+      colorSegments.add(cs)
+
+  var token = GeneralTokenizer()
+  token.initGeneralTokenizer(bufferStr)
+
+  # Restore initial tokenizer state
+  token.restoreTokenizerState(initialState)
+
+  var pad: string
+  if bufferStr.parseWhile(pad, {' ', '\x09' .. '\x0D'}) > 0:
+    splitByNewlineWithState(pad, EditorColorPairIndex.default)
+
+  while true:
+    token.getNextToken(language)
+
+    if token.kind == gtEof:
+      break
+
+    let
+      first = token.start
+      # Make it complete even if it's incomplete
+      last =
+        if first + token.length - 1 > bufferStr.high:
+          bufferStr.high
+        else:
+          first + token.length - 1
+
+    block:
+      # Increment `currentRow` if newlines only
+      let str = bufferStr[first .. last]
+      if str != "" and
+          all(
+            str,
+            proc(x: char): bool =
+              x == '\n',
+          ):
+        # Save states for each newline
+        for i in 0 ..< (last - first + 1):
+          lineStates.add(captureTokenizerState(token))
+        currentRow += last - first + 1
+        currentColumn = 0
+        continue
+
+    let color = getEditorColorPair(token.kind, language)
+
+    if token.kind == gtComment:
+      for r in bufferStr[first .. last].parseReservedWord(reservedWords, color):
+        if r[0] == "":
+          continue
+        splitByNewlineWithState(r[0], r[1])
+      continue
+
+    splitByNewlineWithState(bufferStr[first .. last], color)
+
+  # Capture final state for the last line
+  if currentRow <= endLine:
+    lineStates.add(captureTokenizerState(token))
+
+  return (segments: colorSegments, lineStates: lineStates)
+
+proc updateHighlightIncremental*(
+    buffer: seq[Runes],
+    incrHighlight: var IncrementalHighlight,
+    changedStartLine: int,
+    changedEndLine: int,
+    bufferChangeSeq: int,
+    reservedWords: seq[ReservedWord],
+    language: SourceLanguage,
+) =
+  ## Update highlighting incrementally for a changed region
+  ## Uses safety margins and cached tokenizer states for efficiency
+
+  const SafetyMargin = 50 # Lines before/after change to re-parse
+
+  # Detect buffer size change (line insertion/deletion)
+  let lineDelta = buffer.len - incrHighlight.lineStates.states.len
+
+  # Determine re-parse range with safety margins
+  # If buffer size changed, re-parse from change point to end to avoid segment shifting logic
+  let
+    reparseStart = max(0, changedStartLine - SafetyMargin)
+    reparseEnd =
+      if lineDelta != 0:
+        # Buffer size changed - re-parse to end of file
+        buffer.high
+      else:
+        # No size change - use normal safety margin
+        min(buffer.high, changedEndLine + SafetyMargin)
+
+  # Get initial state for the re-parse range
+  var initialState: TokenizerState
+  if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
+    # Use cached state from the line before re-parse start
+    initialState = incrHighlight.lineStates.states[reparseStart - 1]
+  else:
+    # Start of file - use default state
+    initialState = TokenizerState()
+
+  # Parse the re-parse range
+  let (newSegments, newLineStates) = initHighlightIncremental(
+    buffer, reparseStart, reparseEnd, initialState, reservedWords, language
+  )
+
+  # Remove old segments in the re-parse range
+  var filteredSegments: seq[ColorSegment]
+  for seg in incrHighlight.segments:
+    # Keep segments that are within buffer bounds and don't overlap with the re-parse range
+    # This ensures we don't keep segments pointing to deleted lines
+    if seg.firstRow < buffer.len and seg.lastRow < buffer.len and
+        (seg.lastRow < reparseStart or seg.firstRow > reparseEnd):
+      filteredSegments.add(seg)
+
+  # Merge new segments
+  incrHighlight.segments = filteredSegments & newSegments
+
+  # Sort segments by position (should already be sorted, but ensure it)
+  incrHighlight.segments.sort do(a, b: ColorSegment) -> int:
+    if a.firstRow != b.firstRow:
+      return cmp(a.firstRow, b.firstRow)
+    else:
+      return cmp(a.firstColumn, b.firstColumn)
+
+  # Update line state cache
+  # Resize states array to match buffer size
+  if incrHighlight.lineStates.states.len < buffer.len:
+    # Buffer grew - extend with default states
+    while incrHighlight.lineStates.states.len < buffer.len:
+      incrHighlight.lineStates.states.add(TokenizerState())
+  elif incrHighlight.lineStates.states.len > buffer.len:
+    # Buffer shrunk - truncate
+    incrHighlight.lineStates.states.setLen(buffer.len)
+
+  # Replace states for the re-parsed lines
+  if newLineStates.len > 0:
+    var stateIdx = 0
+    for lineIdx in reparseStart .. min(reparseEnd, buffer.high):
+      if stateIdx < newLineStates.len and lineIdx < incrHighlight.lineStates.states.len:
+        incrHighlight.lineStates.states[lineIdx] = newLineStates[stateIdx]
+        inc stateIdx
+
+  # Update version to match current buffer change sequence
+  incrHighlight.lineStates.version = bufferChangeSeq
 
 proc detectLanguage*(filename: string): SourceLanguage =
   # TODO: use settings file
@@ -545,6 +836,7 @@ proc initSelectedAreaColorSegment*(
   result.lastRow = position.line
   result.lastColumn = position.column
   result.color = color
+  result.style = defaultStyle
 
 proc overwriteColorSegmentBlock*[T](
     highlight: var Highlight, area: SelectedArea, buffer: T
@@ -566,5 +858,317 @@ proc overwriteColorSegmentBlock*[T](
       lastRow: i,
       lastColumn: min(endColumn, buffer[i].high),
       color: EditorColorPairIndex.selectArea,
+      style: defaultStyle,
     )
     highlight.overwrite(colorSegment)
+
+# LSP Semantic Tokens Support
+
+proc semanticTokenTypeToColor*(
+    typeName: string, modifiers: seq[string] = @[]
+): EditorColorPairIndex =
+  ## Convert semantic token type name to EditorColorPairIndex.
+  ## Supports both LSP standard types and rust-analyzer specific types.
+  ##
+  ## Standard LSP token types (LSP 3.16+):
+  ##   namespace, type, class, enum, interface, struct, typeParameter,
+  ##   parameter, variable, property, enumMember, event, function,
+  ##   method, macro, keyword, modifier, comment, string, number,
+  ##   regexp, operator, decorator
+  ##
+  ## Rust-analyzer specific types:
+  ##   lifetime, attribute, derive, union, typeAlias, builtinType,
+  ##   selfKeyword, selfTypeKeyword, formatSpecifier, escapeSequence,
+  ##   label, generic, constParameter, unresolvedReference, punctuation,
+  ##   angle, arithmetic, bitwise, brace, bracket, colon, comma,
+  ##   comparison, dot, logical, macroBang, parenthesis, semicolon,
+  ##   attributeBracket, builtinAttribute, deriveHelper, toolModule,
+  ##   invalidEscapeSequence
+
+  # Check for deprecated modifier first (can affect any type)
+  # Deprecated items typically use a strike-through style but we return
+  # the base color here - style handling should be done separately
+
+  case typeName
+  # Standard LSP token types
+  of "namespace":
+    EditorColorPairIndex.namespace
+  of "type":
+    EditorColorPairIndex.typeName
+  of "class":
+    EditorColorPairIndex.className
+  of "enum":
+    EditorColorPairIndex.enumName
+  of "interface":
+    EditorColorPairIndex.interfaceName
+  of "struct":
+    EditorColorPairIndex.typeName
+  of "typeParameter":
+    EditorColorPairIndex.typeParameter
+  of "parameter":
+    EditorColorPairIndex.parameter
+  of "variable":
+    # Check for specific modifiers
+    if "readonly" in modifiers or "static" in modifiers:
+      EditorColorPairIndex.constParameter
+    else:
+      EditorColorPairIndex.variable
+  of "property":
+    EditorColorPairIndex.property
+  of "enumMember":
+    EditorColorPairIndex.enumMember
+  of "event":
+    EditorColorPairIndex.event
+  of "function":
+    EditorColorPairIndex.function
+  of "method":
+    EditorColorPairIndex.`method`
+  of "macro":
+    EditorColorPairIndex.`macro`
+  of "keyword":
+    EditorColorPairIndex.keyword
+  of "modifier":
+    EditorColorPairIndex.keyword
+  of "comment":
+    EditorColorPairIndex.comment
+  of "string":
+    EditorColorPairIndex.lspString
+  of "number":
+    EditorColorPairIndex.decNumber
+  of "regexp":
+    EditorColorPairIndex.regexp
+  of "operator":
+    EditorColorPairIndex.operator
+  of "decorator":
+    EditorColorPairIndex.decorator
+
+  # Rust-analyzer specific token types
+  of "lifetime":
+    EditorColorPairIndex.lifetime
+  of "attribute":
+    EditorColorPairIndex.attribute
+  of "derive":
+    EditorColorPairIndex.derive
+  of "union":
+    EditorColorPairIndex.union
+  of "typeAlias":
+    EditorColorPairIndex.typeAlias
+  of "builtinType":
+    EditorColorPairIndex.builtinType
+  of "selfKeyword":
+    EditorColorPairIndex.selfKeyword
+  of "selfTypeKeyword":
+    EditorColorPairIndex.selfTypeKeyword
+  of "formatSpecifier":
+    EditorColorPairIndex.formatSpecifier
+  of "escapeSequence":
+    EditorColorPairIndex.escapeSequence
+  of "invalidEscapeSequence":
+    EditorColorPairIndex.invalidEscapeSequence
+  of "label":
+    EditorColorPairIndex.label
+  of "generic":
+    EditorColorPairIndex.generic
+  of "constParameter":
+    EditorColorPairIndex.constParameter
+  of "unresolvedReference":
+    EditorColorPairIndex.unresolvedReference
+  of "punctuation":
+    EditorColorPairIndex.punctuation
+  of "angle":
+    EditorColorPairIndex.angle
+  of "arithmetic":
+    EditorColorPairIndex.arithmetic
+  of "bitwise":
+    EditorColorPairIndex.bitwise
+  of "brace":
+    EditorColorPairIndex.brace
+  of "bracket":
+    EditorColorPairIndex.bracket
+  of "colon":
+    EditorColorPairIndex.colon
+  of "comma":
+    EditorColorPairIndex.comma
+  of "comparison":
+    EditorColorPairIndex.comparison
+  of "dot":
+    EditorColorPairIndex.dot
+  of "logical":
+    EditorColorPairIndex.logical
+  of "macroBang":
+    EditorColorPairIndex.macroBang
+  of "parenthesis":
+    EditorColorPairIndex.parenthesis
+  of "semicolon":
+    EditorColorPairIndex.semicolon
+  of "attributeBracket":
+    EditorColorPairIndex.attributeBracket
+  of "builtinAttribute":
+    EditorColorPairIndex.builtinAttribute
+  of "deriveHelper":
+    EditorColorPairIndex.deriveHelper
+  of "toolModule":
+    EditorColorPairIndex.toolModule
+  else:
+    # Unknown token type - use default
+    EditorColorPairIndex.default
+
+proc semanticTokenToColorSegment*(
+    token: SemanticToken, legend: SemanticTokensLegend
+): ColorSegment =
+  ## Convert a single SemanticToken to a ColorSegment.
+  let
+    typeName = getSemanticTokenType(token, legend)
+    modifiers = getSemanticTokenModifiers(token, legend)
+    color = semanticTokenTypeToColor(typeName, modifiers)
+
+  result = ColorSegment(
+    firstRow: token.line,
+    firstColumn: token.startChar,
+    lastRow: token.line, # Semantic tokens are typically single-line
+    lastColumn: token.endChar - 1, # endChar is exclusive, lastColumn is inclusive
+    color: color,
+    style: defaultStyle,
+  )
+
+proc applySemanticTokens*(
+    highlight: var Highlight, tokens: SemanticTokens, legend: SemanticTokensLegend
+) =
+  ## Apply semantic tokens to an existing Highlight, overwriting the relevant segments.
+  ## Semantic tokens from LSP take precedence over local syntax highlighting.
+  ##
+  ## Performance: O(n + m) where n = existing segments, m = semantic tokens
+  ## Uses batch processing instead of individual overwrite calls.
+  let decodedTokens = decodeSemanticTokens(tokens)
+  if decodedTokens.len == 0:
+    return
+
+  # Convert all tokens to ColorSegments and index by line for O(1) lookup
+  var tokensByLine = initTable[int, seq[ColorSegment]]()
+  for token in decodedTokens:
+    let segment = semanticTokenToColorSegment(token, legend)
+    if segment.lastColumn >= segment.firstColumn:
+      if token.line notin tokensByLine:
+        tokensByLine[token.line] = @[]
+      tokensByLine[token.line].add(segment)
+
+  if tokensByLine.len == 0:
+    return
+
+  # Sort tokens within each line by column
+  for line in tokensByLine.keys:
+    tokensByLine[line].sort do(a, b: ColorSegment) -> int:
+      cmp(a.firstColumn, b.firstColumn)
+
+  # Build new segment list by merging existing segments with tokens
+  var newSegments: seq[ColorSegment] = @[]
+
+  for seg in highlight.colorSegments:
+    # Check if this segment's line has any tokens
+    if seg.firstRow notin tokensByLine and seg.lastRow notin tokensByLine:
+      # No tokens on this line, keep segment as-is
+      newSegments.add(seg)
+      continue
+
+    # For simplicity, handle single-line segments (most common case)
+    if seg.firstRow == seg.lastRow:
+      let line = seg.firstRow
+      if line notin tokensByLine:
+        newSegments.add(seg)
+        continue
+
+      # Split segment around tokens on this line
+      let lineTokens = tokensByLine[line]
+      var currentCol = seg.firstColumn
+
+      for token in lineTokens:
+        # Skip tokens completely before current position
+        if token.lastColumn < currentCol:
+          continue
+
+        # Skip tokens completely outside segment bounds
+        if token.lastColumn < seg.firstColumn or token.firstColumn > seg.lastColumn:
+          continue
+
+        # Effective token start (clipped to current position and segment bounds)
+        let effectiveStart = max(token.firstColumn, max(currentCol, seg.firstColumn))
+        let effectiveEnd = min(token.lastColumn, seg.lastColumn)
+
+        # Skip if no valid range after clipping
+        if effectiveStart > effectiveEnd:
+          continue
+
+        # Add portion before token (if any)
+        if currentCol < effectiveStart:
+          newSegments.add(
+            ColorSegment(
+              firstRow: line,
+              firstColumn: currentCol,
+              lastRow: line,
+              lastColumn: effectiveStart - 1,
+              color: seg.color,
+              style: seg.style,
+            )
+          )
+
+        # Add the token itself
+        newSegments.add(
+          ColorSegment(
+            firstRow: line,
+            firstColumn: effectiveStart,
+            lastRow: line,
+            lastColumn: effectiveEnd,
+            color: token.color,
+            style: token.style,
+          )
+        )
+        currentCol = effectiveEnd + 1
+
+        # Stop if we've covered the entire segment
+        if currentCol > seg.lastColumn:
+          break
+
+      # Add remaining portion after last token (if any)
+      if currentCol <= seg.lastColumn:
+        newSegments.add(
+          ColorSegment(
+            firstRow: line,
+            firstColumn: currentCol,
+            lastRow: line,
+            lastColumn: seg.lastColumn,
+            color: seg.color,
+            style: seg.style,
+          )
+        )
+    else:
+      # Multi-line segment: for now, use the slower individual overwrite
+      # This is rare in practice
+      var tempHighlight = Highlight(colorSegments: @[seg])
+      for line in seg.firstRow .. seg.lastRow:
+        if line in tokensByLine:
+          for token in tokensByLine[line]:
+            tempHighlight.overwrite(token)
+      newSegments.add(tempHighlight.colorSegments)
+
+  highlight.colorSegments = newSegments
+
+proc semanticTokensToHighlight*(
+    tokens: SemanticTokens, legend: SemanticTokensLegend, bufferLen: int
+): Highlight =
+  ## Create a new Highlight from semantic tokens only.
+  ## This creates a sparse highlight - positions not covered by tokens will have default color.
+  result = Highlight(colorSegments: @[])
+  let decodedTokens = decodeSemanticTokens(tokens)
+
+  for token in decodedTokens:
+    if token.line < bufferLen:
+      let segment = semanticTokenToColorSegment(token, legend)
+      if segment.lastColumn >= segment.firstColumn:
+        result.colorSegments.add(segment)
+
+  # Sort segments by position
+  result.colorSegments.sort do(a, b: ColorSegment) -> int:
+    if a.firstRow != b.firstRow:
+      return cmp(a.firstRow, b.firstRow)
+    else:
+      return cmp(a.firstColumn, b.firstColumn)

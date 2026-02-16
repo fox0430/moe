@@ -23,7 +23,7 @@
 
 from flags import flagsMarkdown
 
-from highlite import GeneralTokenizer, TokenClass
+from tokenizer import GeneralTokenizer, TokenClass
 
 from lexer import lexBacktick, lexDash, lexHash, lexSharp, lexSymbol, lexWhitespace
 

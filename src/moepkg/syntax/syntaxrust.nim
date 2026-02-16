@@ -33,7 +33,7 @@
 
 import std/algorithm
 
-import flags, highlite
+import flags, tokenizer
 
 const
   rustKeywords* = [

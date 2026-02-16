@@ -22,7 +22,7 @@
 #
 # [ MIT license: http://www.opensource.org/licenses/mit-license.php ]
 
-import flags, highlite, lexer
+import flags, tokenizer, lexer
 
 proc yamlPlainStrLit(g: var GeneralTokenizer, pos: var int) =
   g.kind = gtStringLit

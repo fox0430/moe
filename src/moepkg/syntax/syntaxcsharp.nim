@@ -1,5 +1,4 @@
-import flags
-import highlite, syntaxc
+import flags, tokenizer, syntaxc
 
 const csharpKeywords* = [
   "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked",

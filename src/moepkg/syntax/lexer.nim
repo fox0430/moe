@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -23,13 +23,13 @@
 
 from flags import TokenizerFlag, TokenizerFlags
 
-from highlite import GeneralTokenizer, TokenClass, symChars, wsChars
+from tokenizer import GeneralTokenizer, TokenClass, symChars, wsChars
 
-from lexer/curlyopenlexer import lexCurlyDashComment
+from lexer/curly_open_lexer import lexCurlyDashComment
 
-from lexer/endlexer import endLine
+from lexer/end_lexer import endLine
 
-from lexer/hashlexer import lexHashLineComment
+from lexer/hash_lexer import lexHashLineComment
 
 #
 # Procedures.
@@ -297,5 +297,3 @@ proc lexWhitespace*(lexer: var GeneralTokenizer, position: int): int =
         lexer.state = gtNone
 
       inc result
-
-#[############################################################################]#

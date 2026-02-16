@@ -31,8 +31,8 @@
 #    distribution, for details about the copyright.
 #
 
-import flags, highlite, lexer
-from lexer/endlexer import endLine
+import flags, tokenizer, lexer
+from lexer/end_lexer import endLine
 
 const haskellKeywords* = [
   "_", "case", "class", "data", "default", "deriving", "do", "else", "if", "import",

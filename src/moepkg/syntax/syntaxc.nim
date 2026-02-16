@@ -31,8 +31,7 @@
 #    distribution, for details about the copyright.
 #
 
-import flags
-import highlite
+import flags, tokenizer
 
 const cKeywords* = [
   "_Bool", "_Complex", "_Imaginary", "auto", "break", "case", "char", "const",

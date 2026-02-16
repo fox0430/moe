@@ -31,7 +31,7 @@
 #    distribution, for details about the copyright.
 #
 
-import flags, highlite, lexer
+import flags, tokenizer, lexer
 
 const pythonKeywords* = [
   "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",

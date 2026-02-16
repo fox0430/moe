@@ -1,5 +1,4 @@
-import flags
-import highlite, syntaxc
+import flags, tokenizer, syntaxc
 
 const cppKeywords* = [
   "asm", "auto", "break", "case", "catch", "char", "class", "const", "continue",

@@ -1,232 +1,204 @@
-## Copyright (c) 2023 The core Nim team
-## https://github.com/nim-lang/langserver
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
 
-# NOTE: Language Server Protocol Specification - 3.17
-# https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
+## LSP Protocol Enumerations
+## Based on LSP Specification 3.17
 
-type ErrorCode* = enum
-  RequestCancelled = -32800 # All the other error codes are from JSON-RPC
-  ParseError = -32700
-  InternalError = -32603
-  InvalidParams = -32602
-  MethodNotFound = -32601
-  InvalidRequest = -32600
-  ServerErrorStart = -32099
-  ServerNotInitialized = -32002
-  ServerErrorEnd = -32000
-
-# Anything below here comes from the LSP specification
 type
-  LanguageIdExtension* {.pure.} = enum
-    abap = "abap"
-    bat = "bat"
-    bibtex = "bibtex"
-    clojure = "clojure "
-    coffeescript = "coffeescript"
-    c = "c"
-    cpp = "cpp"
-    csharp = "csharp"
-    css = "css"
-    diff = "diff"
-    dart = "dart"
-    dockerfile = "dockerfile"
-    elixir = "elixir"
-    erlang = "erlang"
-    fsharp = "fsharp"
-    gitCommit = "git-commit"
-    gitRebase = "git-rebase"
-    go = "go"
-    groovry = "groovry"
-    handlebars = "handlebars"
-    haskell = "haskell"
-    html = "html"
-    ini = "ini"
-    java = "java"
-    javascript = "javascript"
-    json = "json"
-    latex = "latex"
-    less = "less"
-    lua = "lua"
-    makefile = "makefile"
-    nim = "nim"
-    objectiveC = "objective-c"
-    objectiveCpp = "objective-cpp"
-    perl = "perl"
-    perl6 = "perl6"
-    php = "php"
-    powershell = "powershell"
-    pug = "jade"
-    python = "python"
-    r = "r"
-    razor = "razor"
-    ruby = "ruby"
-    rust = "rust"
-    scss = "scss"
-    scala = "scala"
-    shaderLab = "shaderlab"
-    bash = "shellscript"
-    sql = "sql"
-    swift = "swift"
-    typeScript = "typescript"
-    typeScriptReact = "typescriptreact"
-    tex = "tex"
-    visualBasic = "vb"
-    xml = "xml"
-    xsl = "xsl"
-    yaml = "yaml"
+  DiagnosticSeverity* = enum
+    ## Diagnostic severity levels
+    dsError = 1
+    dsWarning = 2
+    dsInformation = 3
+    dsHint = 4
 
-  DiagnosticSeverity* {.pure.} = enum
-    Error = 1
-    Warning = 2
-    Information = 3
-    Hint = 4
+  CompletionItemKind* = enum
+    ## Completion item kinds
+    cikText = 1
+    cikMethod = 2
+    cikFunction = 3
+    cikConstructor = 4
+    cikField = 5
+    cikVariable = 6
+    cikClass = 7
+    cikInterface = 8
+    cikModule = 9
+    cikProperty = 10
+    cikUnit = 11
+    cikValue = 12
+    cikEnum = 13
+    cikKeyword = 14
+    cikSnippet = 15
+    cikColor = 16
+    cikFile = 17
+    cikReference = 18
+    cikFolder = 19
+    cikEnumMember = 20
+    cikConstant = 21
+    cikStruct = 22
+    cikEvent = 23
+    cikOperator = 24
+    cikTypeParameter = 25
 
-  SymbolKind* {.pure.} = enum
-    File = 1
-    Module = 2
-    Namespace = 3
-    Package = 4
-    Class = 5
-    Method = 6
-    Property = 7
-    Field = 8
-    Constructor = 9
-    Enum = 10
-    Interface = 11
-    Function = 12
-    Variable = 13
-    Constant = 14
-    String = 15
-    Number = 16
-    Boolean = 17
-    Array = 18
-    Object = 19
-    Key = 20
-    Null = 21
-    EnumMember = 22
-    Struct = 23
-    Event = 24
-    Operator = 25
-    TypeParameter = 26
+  SymbolKind* = enum
+    ## Symbol kinds for document symbols
+    skFile = 1
+    skModule = 2
+    skNamespace = 3
+    skPackage = 4
+    skClass = 5
+    skMethod = 6
+    skProperty = 7
+    skField = 8
+    skConstructor = 9
+    skEnum = 10
+    skInterface = 11
+    skFunction = 12
+    skVariable = 13
+    skConstant = 14
+    skString = 15
+    skNumber = 16
+    skBoolean = 17
+    skArray = 18
+    skObject = 19
+    skKey = 20
+    skNull = 21
+    skEnumMember = 22
+    skStruct = 23
+    skEvent = 24
+    skOperator = 25
+    skTypeParameter = 26
 
-  SymbolTag* {.pure.} = enum
-    Deprecated = 1
+  MessageType* = enum
+    ## Message types for window/showMessage
+    mtError = 1
+    mtWarning = 2
+    mtInfo = 3
+    mtLog = 4
 
-  CompletionItemKind* {.pure.} = enum
-    Text = 1
-    Method = 2
-    Function = 3
-    Constructor = 4
-    Field = 5
-    Variable = 6
-    Class = 7
-    Interface = 8
-    Module = 9
-    Property = 10
-    Unit = 11
-    Value = 12
-    Enum = 13
-    Keyword = 14
-    Snippet = 15
-    Color = 16
-    File = 17
-    Reference = 18
-    Folder = 19
-    EnumMember = 20
-    Constant = 21
-    Struct = 22
-    Event = 23
-    Operator = 24
-    TypeParameter = 25
+  TextDocumentSyncKind* = enum
+    ## How documents are synced to the server
+    tdskNone = 0
+    tdskFull = 1
+    tdskIncremental = 2
 
-  TextDocumentSyncKind* {.pure.} = enum
-    None = 0
-    Full = 1
-    Incremental = 2
+  CompletionTriggerKind* = enum
+    ## How a completion was triggered
+    ctkInvoked = 1
+    ctkTriggerCharacter = 2
+    ctkTriggerForIncompleteCompletions = 3
 
-  MessageType* {.pure.} = enum
-    Error = 1
-    Warning = 2
-    Info = 3
-    Log = 4
+  InsertTextFormat* = enum
+    ## Format of the insert text
+    itfPlainText = 1
+    itfSnippet = 2
 
-  FileChangeType* {.pure.} = enum
-    Created = 1
-    Changed = 2
-    Deleted = 3
+  DiagnosticTag* = enum
+    ## Diagnostic tags for additional information
+    dtUnnecessary = 1
+    dtDeprecated = 2
 
-  WatchKind* {.pure.} = enum
-    Create = 1
-    Change = 2
-    Delete = 4
+  MarkupKind* = enum
+    ## Markup content kind
+    mkPlainText = "plaintext"
+    mkMarkdown = "markdown"
 
-  TextDocumentSaveReason* {.pure.} = enum
-    Manual = 1
-    AfterDelay = 2
-    FocusOut = 3
+  InlayHintKind* = enum
+    ## Inlay hint kinds
+    ihkType = 1 ## Type annotation hints
+    ihkParameter = 2 ## Parameter name hints
 
-  CompletionTriggerKind* {.pure.} = enum
-    Invoked = 1
-    TriggerCharacter = 2
-    TriggerForIncompleteCompletions = 3
+  ErrorCodes* = enum
+    ecRequestFailed = -32803
+    ecServerCancelled = -32802
+    ecContentModified = -32801
+    ecRequestCancelled = -32800
+    ecParseError = -32700
+    ecInternalError = -32603
+    ecInvalidParams = -32602
+    ecMethodNotFound = -32601
+    ecInvalidRequest = -32600
+    ecServerNotInitialized = -32002
+    ecUnknownErrorCode = -32001
 
-  InsertTextFormat* {.pure.} = enum
-    PlainText = 1
-    Snippet = 2
+  SemanticTokenTypes* = enum
+    ## Standard semantic token types (LSP 3.16+)
+    ## The order matches the LSP spec and should not be changed
+    sttNamespace = "namespace"
+    sttType = "type"
+    sttClass = "class"
+    sttEnum = "enum"
+    sttInterface = "interface"
+    sttStruct = "struct"
+    sttTypeParameter = "typeParameter"
+    sttParameter = "parameter"
+    sttVariable = "variable"
+    sttProperty = "property"
+    sttEnumMember = "enumMember"
+    sttEvent = "event"
+    sttFunction = "function"
+    sttMethod = "method"
+    sttMacro = "macro"
+    sttKeyword = "keyword"
+    sttModifier = "modifier"
+    sttComment = "comment"
+    sttString = "string"
+    sttNumber = "number"
+    sttRegexp = "regexp"
+    sttOperator = "operator"
+    sttDecorator = "decorator"
 
-  DocumentHighlightKind* {.pure.} = enum
-    Text = 1
-    Read = 2
-    Write = 3
+  SemanticTokenModifiers* = enum
+    ## Standard semantic token modifiers (LSP 3.16+)
+    ## These are bit flags - each modifier is a power of 2
+    stmDeclaration = "declaration"
+    stmDefinition = "definition"
+    stmReadonly = "readonly"
+    stmStatic = "static"
+    stmDeprecated = "deprecated"
+    stmAbstract = "abstract"
+    stmAsync = "async"
+    stmModification = "modification"
+    stmDocumentation = "documentation"
+    stmDefaultLibrary = "defaultLibrary"
 
-  SignatureHelpTriggerKind* {.pure.} = enum
-    Invoked = 1
-    TriggerCharacter = 2
-    ContentChange = 3
+  DocumentHighlightKind* = enum
+    ## A document highlight kind
+    dhkText = 1 ## A textual occurrence
+    dhkRead = 2 ## Read-access of a symbol, like reading a variable
+    dhkWrite = 3 ## Write-access of a symbol, like writing to a variable
 
-  TraceValue* {.pure.} = enum
-    off
-    messages
-    verbose
+  FoldingRangeKind* = enum
+    ## The kind of a folding range
+    frkComment = "comment" ## Folding range for a comment
+    frkImports = "imports" ## Folding range for imports or includes
+    frkRegion = "region" ## Folding range for a region (e.g., #region in C#)
 
-  SemanticTokenTypes* {.pure.} = enum
-    namespace
-    `type`
-    `class`
-    `enum`
-    `interface`
-    struct
-    typeParameter
-    parameter
-    variable
-    property
-    enumMember
-    event
-    function
-    `method`
-    `macro`
-    keyword
-    modifier
-    comment
-    string
-    number
-    regexp
-    operator
-    decorator
-
-  SemanticTokenModifiers* {.pure.} = enum
-    declaration
-    definition
-    readonly
-    `static`
-    deprecated
-    abstract
-    async
-    modification
-    documentation
-    defaultLibrary
-
-  FoldingRangeKind* {.pure.} = enum
-    comment
-    imports
-    region
+  CodeActionKind* = enum
+    ## Code action kinds (LSP 3.16+)
+    ## These are hierarchical identifiers (e.g., "quickfix.extract.function")
+    cakEmpty = "" ## Empty kind
+    cakQuickFix = "quickfix" ## Base kind for quickfix actions
+    cakRefactor = "refactor" ## Base kind for refactoring actions
+    cakRefactorExtract = "refactor.extract" ## Extract actions (method, function, etc.)
+    cakRefactorInline = "refactor.inline" ## Inline actions
+    cakRefactorRewrite = "refactor.rewrite" ## Rewrite actions
+    cakSource = "source" ## Base kind for source actions
+    cakSourceOrganizeImports = "source.organizeImports" ## Organize imports
+    cakSourceFixAll = "source.fixAll" ## Fix all actions

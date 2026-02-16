@@ -1,0 +1,1339 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+## Tests for visual_commands.nim
+
+import std/[unittest, options, tables, strutils]
+
+import ../src/moepkg/buffer {.all.}
+import ../src/moepkg/types {.all.}
+import ../src/moepkg/modes {.all.}
+import ../src/moepkg/registers {.all.}
+import ../src/moepkg/command_handlers/visual_commands {.all.}
+
+proc createTestState(): EditorState =
+  ## Create a minimal EditorState for testing
+  EditorState(
+    cursor: BufferPosition(line: 0, column: 0),
+    preferredColumn: -1,
+    screenCursor: CursorPosition(x: 0, y: 0),
+    mode: EditorMode.Visual,
+    previousMode: EditorMode.Normal,
+    display: DisplaySettings(
+      showTabLine: false,
+      showStatusLine: true,
+      multiStatusLine: false,
+      showLineCount: true,
+      showLinePercentage: true,
+      showEncoding: true,
+      showLineNumbers: true,
+      showCursorLine: false,
+      showSyntax: true,
+      showIndentationLines: false,
+      showSidebar: false,
+      showGitDiff: false,
+      showSyntaxChecker: false,
+      showCodeLens: false,
+      showDocumentHighlight: false,
+      lineWrap: true,
+      tabStop: 2,
+      expandTab: true,
+      autoIndent: true,
+      autoCloseParen: false,
+      autoDeleteParen: false,
+    ),
+    needsFullRedraw: false,
+    viewportReservedLines: 2,
+    macroState: MacroState(
+      isRecording: false,
+      register: '\0',
+      recordedKeys: @[],
+      registers: initTable[char, seq[string]](),
+      lastRegister: none(char),
+      waitingForRegister: false,
+      commandType: "",
+      pendingCount: 0,
+      playbackDepth: 0,
+    ),
+    registers: initRegisters(),
+    visualSelection: VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 0),
+      active: true,
+      kind: vskChar,
+    ),
+  )
+
+suite "Visual Commands - getSelectionRange":
+  test "Get selection range when start equals current":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 5),
+      current: BufferPosition(line: 0, column: 5),
+      active: true,
+      kind: vskChar,
+    )
+    let (selStart, selEnd) = selection.getSelectionRange()
+    check selStart.line == 0
+    check selStart.column == 5
+    check selEnd.line == 0
+    check selEnd.column == 5
+
+  test "Get selection range when start is before current (same line)":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 2),
+      current: BufferPosition(line: 0, column: 8),
+      active: true,
+      kind: vskChar,
+    )
+    let (selStart, selEnd) = selection.getSelectionRange()
+    check selStart.line == 0
+    check selStart.column == 2
+    check selEnd.line == 0
+    check selEnd.column == 8
+
+  test "Get selection range when start is after current (same line)":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 8),
+      current: BufferPosition(line: 0, column: 2),
+      active: true,
+      kind: vskChar,
+    )
+    let (selStart, selEnd) = selection.getSelectionRange()
+    check selStart.line == 0
+    check selStart.column == 2
+    check selEnd.line == 0
+    check selEnd.column == 8
+
+  test "Get selection range when start is on earlier line":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 1, column: 5),
+      current: BufferPosition(line: 3, column: 2),
+      active: true,
+      kind: vskChar,
+    )
+    let (selStart, selEnd) = selection.getSelectionRange()
+    check selStart.line == 1
+    check selStart.column == 5
+    check selEnd.line == 3
+    check selEnd.column == 2
+
+  test "Get selection range when start is on later line":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 3, column: 2),
+      current: BufferPosition(line: 1, column: 5),
+      active: true,
+      kind: vskChar,
+    )
+    let (selStart, selEnd) = selection.getSelectionRange()
+    check selStart.line == 1
+    check selStart.column == 5
+    check selEnd.line == 3
+    check selEnd.column == 2
+
+  test "Get selection range when selection is not active":
+    let selection = VisualSelection(
+      start: BufferPosition(line: 0, column: 5),
+      current: BufferPosition(line: 2, column: 10),
+      active: false,
+      kind: vskChar,
+    )
+    let (selStart, selEnd) = selection.getSelectionRange()
+    check selStart.line == 0
+    check selStart.column == 5
+    check selEnd.line == 0
+    check selEnd.column == 5
+
+suite "Visual Commands - visualMoveLeft":
+  test "Move left from middle of line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+    state.visualSelection.current = state.cursor
+
+    visualMoveLeft(buf, state)
+
+    check state.cursor.column == 4
+    check state.visualSelection.current.column == 4
+    check state.needsFullRedraw == true
+
+  test "Move left from beginning of line (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.visualSelection.current = state.cursor
+
+    visualMoveLeft(buf, state)
+
+    check state.cursor.column == 0
+    check state.visualSelection.current.column == 0
+
+suite "Visual Commands - visualMoveRight":
+  test "Move right from middle of line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+    state.visualSelection.current = state.cursor
+
+    visualMoveRight(buf, state)
+
+    check state.cursor.column == 6
+    check state.visualSelection.current.column == 6
+    check state.needsFullRedraw == true
+
+  test "Move right at end of line (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 11)
+    state.visualSelection.current = state.cursor
+
+    visualMoveRight(buf, state)
+
+    check state.cursor.column == 11
+
+suite "Visual Commands - visualMoveUp":
+  test "Move up from second line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 3)
+    state.visualSelection.current = state.cursor
+
+    visualMoveUp(buf, state)
+
+    check state.cursor.line == 0
+    check state.visualSelection.current.line == 0
+    check state.needsFullRedraw == true
+
+  test "Move up from first line (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+    state.visualSelection.current = state.cursor
+
+    visualMoveUp(buf, state)
+
+    check state.cursor.line == 0
+
+  test "Move up clamps cursor to new line length":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "short")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nlonger line")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 10)
+    state.visualSelection.current = state.cursor
+
+    visualMoveUp(buf, state)
+
+    check state.cursor.line == 0
+    check state.cursor.column == 5 # clamped to "short" length
+
+suite "Visual Commands - visualMoveDown":
+  test "Move down from first line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+    state.visualSelection.current = state.cursor
+
+    visualMoveDown(buf, state)
+
+    check state.cursor.line == 1
+    check state.visualSelection.current.line == 1
+    check state.needsFullRedraw == true
+
+  test "Move down from last line (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+    state.visualSelection.current = state.cursor
+
+    visualMoveDown(buf, state)
+
+    check state.cursor.line == 0
+
+  test "Move down clamps cursor to new line length":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "longer line")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nshort")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 10)
+    state.visualSelection.current = state.cursor
+
+    visualMoveDown(buf, state)
+
+    check state.cursor.line == 1
+    check state.cursor.column == 5 # clamped to "short" length
+
+suite "Visual Commands - visualYank":
+  test "Yank character selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualYank(buf, state)
+
+    check state.yankRegister == "hello"
+    check state.yankIsLine == false
+    check state.visualSelection.active == false
+    check state.cursor.column == 0 # cursor moves to start of selection
+    check state.mode == EditorMode.Normal
+
+  test "Yank line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 3),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualYank(buf, state)
+
+    check state.yankRegister == "line 1\nline 2"
+    check state.yankIsLine == true
+    check state.visualSelection.active == false
+
+  test "Yank to named register":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    state.pendingRegister = some('a')
+
+    visualYank(buf, state)
+
+    check state.registers.getRegisterContent('a') == "hello"
+    check state.pendingRegister.isNone
+
+suite "Visual Commands - visualDelete":
+  test "Delete character selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualDelete(buf, state)
+
+    check buf.getLine(0) == " world"
+    check state.yankRegister == "hello"
+    check state.visualSelection.active == false
+    check state.cursor.column == 0
+    check state.mode == EditorMode.Normal
+
+  test "Delete line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 3),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualDelete(buf, state)
+
+    check buf.len == 1
+    check buf.getLine(0) == "line 3"
+    check state.yankIsLine == true
+
+  test "Delete inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection.active = false
+
+    visualDelete(buf, state)
+
+    check buf.getLine(0) == "hello world"
+
+suite "Visual Commands - visualIndent":
+  test "Indent single line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 2
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualIndent(buf, state)
+
+    check buf.getLine(0) == "  hello"
+    check state.visualSelection.active == false
+    check state.mode == EditorMode.Normal
+
+  test "Indent multiple line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 2
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 2, column: 3),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualIndent(buf, state)
+
+    check buf.getLine(0) == "  line 1"
+    check buf.getLine(1) == "  line 2"
+    check buf.getLine(2) == "  line 3"
+
+  test "Indent with count":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 2
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualIndent(buf, state, 3)
+
+    check buf.getLine(0) == "      hello"
+
+suite "Visual Commands - visualDedent":
+  test "Dedent single line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 2
+    state.cursor = BufferPosition(line: 0, column: 2)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 6),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualDedent(buf, state)
+
+    check buf.getLine(0) == "hello"
+    check state.visualSelection.active == false
+
+  test "Dedent line with no indentation (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 2
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualDedent(buf, state)
+
+    check buf.getLine(0) == "hello"
+
+suite "Visual Commands - visualLowercase":
+  test "Convert selection to lowercase":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "HELLO World")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualLowercase(buf, state)
+
+    check buf.getLine(0) == "hello World"
+    check state.visualSelection.active == false
+    check state.mode == EditorMode.Normal
+
+  test "Lowercase line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "HELLO")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nWORLD")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 4),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualLowercase(buf, state)
+
+    check buf.getLine(0) == "hello"
+    check buf.getLine(1) == "world"
+
+suite "Visual Commands - visualUppercase":
+  test "Convert selection to uppercase":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualUppercase(buf, state)
+
+    check buf.getLine(0) == "HELLO world"
+    check state.visualSelection.active == false
+
+  test "Uppercase line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 4),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualUppercase(buf, state)
+
+    check buf.getLine(0) == "HELLO"
+    check buf.getLine(1) == "WORLD"
+
+suite "Visual Commands - visualToggleCase":
+  test "Toggle case of selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "HeLLo WoRLd")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualToggleCase(buf, state)
+
+    check buf.getLine(0) == "hEllO WoRLd"
+    check state.visualSelection.active == false
+
+  test "Toggle case preserves non-alphabetic characters":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello123World")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 12),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualToggleCase(buf, state)
+
+    check buf.getLine(0) == "hELLO123wORLD"
+
+suite "Visual Commands - visualReplace":
+  test "Replace selection with character":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualReplace(buf, state, 'x')
+
+    check buf.getLine(0) == "xxxxx world"
+    check state.visualSelection.active == false
+
+  test "Replace preserves newlines in character selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualReplace(buf, state, 'x')
+
+    check buf.getLine(0) == "xxxxx"
+    check buf.getLine(1) == "xxxxx"
+
+suite "Visual Commands - visualJoinLines":
+  test "Join two lines":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualJoinLines(buf, state)
+
+    check buf.len == 1
+    check state.visualSelection.active == false
+    check state.statusMessage == "1 lines joined"
+
+  test "Join single line selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualJoinLines(buf, state)
+
+    check buf.len == 1
+    check buf.getLine(0) == "hello world"
+    check state.visualSelection.active == false
+
+  test "Join multiple lines":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 2, column: 3),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualJoinLines(buf, state)
+
+    check buf.len == 1
+    check state.statusMessage == "2 lines joined"
+
+suite "Visual Commands - visualMoveHome":
+  test "Move to beginning of line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+    state.visualSelection.current = state.cursor
+
+    visualMoveHome(buf, state)
+
+    check state.cursor.column == 0
+    check state.visualSelection.current.column == 0
+
+suite "Visual Commands - visualMoveEnd":
+  test "Move to end of line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.visualSelection.current = state.cursor
+
+    visualMoveEnd(buf, state)
+
+    check state.cursor.column == 10 # len - 1
+
+  test "Move to end of empty line":
+    let buf = newTextBuffer()
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.visualSelection.current = state.cursor
+
+    visualMoveEnd(buf, state)
+
+    check state.cursor.column == 0
+
+suite "Visual Commands - visualMoveFirstNonBlank":
+  test "Move to first non-blank character":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "   hello world")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 10)
+    state.visualSelection.current = state.cursor
+
+    visualMoveFirstNonBlank(buf, state)
+
+    check state.cursor.column == 3
+
+suite "Visual Commands - visualMoveFirstLine":
+  test "Move to first line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 2, column: 3)
+    state.visualSelection.current = state.cursor
+
+    visualMoveFirstLine(buf, state)
+
+    check state.cursor.line == 0
+    check state.cursor.column == 0
+    check state.visualSelection.current.line == 0
+
+suite "Visual Commands - visualMoveLastLine":
+  test "Move to last line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+    state.visualSelection.current = state.cursor
+
+    visualMoveLastLine(buf, state)
+
+    check state.cursor.line == 2
+    check state.visualSelection.current.line == 2
+
+  test "Move to specific line number":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.visualSelection.current = state.cursor
+
+    visualMoveLastLine(buf, state, 2) # Go to line 2 (1-indexed)
+
+    check state.cursor.line == 1
+
+suite "Visual Commands - visualMoveWord":
+  test "Move to next word":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world test")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.visualSelection.current = state.cursor
+
+    visualMoveWord(buf, state)
+
+    check state.cursor.column == 6 # start of "world"
+    check state.visualSelection.current.column == 6
+
+  test "Move word with count":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world test foo")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.visualSelection.current = state.cursor
+
+    visualMoveWord(buf, state, 2)
+
+    check state.cursor.column == 12 # start of "test"
+
+suite "Visual Commands - visualMoveWordBack":
+  test "Move to previous word":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world test")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 12)
+    state.visualSelection.current = state.cursor
+
+    visualMoveWordBack(buf, state)
+
+    check state.cursor.column == 6 # start of "world"
+
+suite "Visual Commands - visualMoveWordEnd":
+  test "Move to end of word":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world test")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.visualSelection.current = state.cursor
+
+    visualMoveWordEnd(buf, state)
+
+    check state.cursor.column == 4 # end of "hello"
+
+suite "Visual Commands - visualMoveParagraphForward":
+  test "Move to next paragraph":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "paragraph 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\n")
+    discard buf.insertText(BufferPosition(line: 1, column: 0), "\nparagraph 2")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.visualSelection.current = state.cursor
+
+    visualMoveParagraphForward(buf, state)
+
+    check state.cursor.line >= 1
+
+suite "Visual Commands - visualMoveParagraphBackward":
+  test "Move to previous paragraph":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "paragraph 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\n")
+    discard buf.insertText(BufferPosition(line: 1, column: 0), "\nparagraph 2")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 2, column: 0)
+    state.visualSelection.current = state.cursor
+
+    visualMoveParagraphBackward(buf, state)
+
+    check state.cursor.line <= 1
+
+suite "Visual Commands - visualToInsertMode":
+  test "Switch from visual to insert mode":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 2),
+      current: BufferPosition(line: 1, column: 3),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualToInsertMode(buf, state)
+
+    check state.mode == EditorMode.Insert
+    check state.cursor.line == 0
+    check state.cursor.column == 0
+    check state.visualSelection.active == false
+
+suite "Visual Commands - visualChange":
+  test "Change character selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualChange(buf, state)
+
+    check buf.getLine(0) == " world"
+    check state.mode == EditorMode.Insert
+    check state.visualSelection.active == false
+
+  test "Change line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 3),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualChange(buf, state)
+
+    check buf.len == 2 # empty line + line 3
+    check state.mode == EditorMode.Insert
+
+suite "Visual Commands - visualSwapSelection":
+  test "Swap selection endpoints":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 8)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 2),
+      current: BufferPosition(line: 0, column: 8),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSwapSelection(buf, state)
+
+    check state.visualSelection.start == BufferPosition(line: 0, column: 8)
+    check state.visualSelection.current == BufferPosition(line: 0, column: 2)
+    check state.cursor == BufferPosition(line: 0, column: 2)
+
+  test "Swap inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection.active = false
+    state.visualSelection.start = BufferPosition(line: 0, column: 2)
+    state.visualSelection.current = BufferPosition(line: 0, column: 8)
+
+    visualSwapSelection(buf, state)
+
+    # Should not change anything since not active
+    check state.visualSelection.start == BufferPosition(line: 0, column: 2)
+    check state.visualSelection.current == BufferPosition(line: 0, column: 8)
+
+suite "Visual Commands - visualPaste":
+  test "Paste replaces character selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.registers.setYankedRegister("REPLACED", false)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.getLine(0) == "REPLACED world"
+    check state.visualSelection.active == false
+    check state.mode == EditorMode.Normal
+
+  test "Paste with empty register (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    # Don't set any register content
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.getLine(0) == "hello world" # unchanged
+    check state.visualSelection.active == false
+
+  test "Paste from named register":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    discard state.registers.setNamedRegister('a', "NAMED", false)
+    state.pendingRegister = some('a')
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.getLine(0) == "NAMED world"
+    check state.pendingRegister.isNone
+
+suite "Visual Commands - Block Selection":
+  test "Delete block selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
+    discard buf.insertText(BufferPosition(line: 1, column: 7), "\ntest line")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 2, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualDelete(buf, state)
+
+    check buf.getLine(0) == "lo world"
+    check buf.getLine(1) == " bar"
+    check buf.getLine(2) == "t line"
+    check state.visualSelection.active == false
+
+  test "Yank block selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualYank(buf, state)
+
+    # Block selection from column 0 to 2 (inclusive) gives 3 characters per line
+    # substr(startCol, endCol - startCol + 1) = substr(0, 3) = 4 chars due to LineBuffer.substr behavior
+    check state.yankRegister == "hell\nworl"
+    check state.visualSelection.active == false
+
+  test "Lowercase block selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "HELLO WORLD")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nFOO BAR")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualLowercase(buf, state)
+
+    # Block selection columns 0-2 (inclusive) = 3 characters
+    check buf.getLine(0) == "helLO WORLD"
+    check buf.getLine(1) == "foo BAR"
+
+  test "Uppercase block selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualUppercase(buf, state)
+
+    # Block selection columns 0-2 (inclusive) = 3 characters
+    check buf.getLine(0) == "HELlo world"
+    check buf.getLine(1) == "FOO bar"
+
+  test "Toggle case block selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "HeLLo world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nFoO bar")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualToggleCase(buf, state)
+
+    # Block selection columns 0-2 (inclusive) = 3 characters
+    # "HeL" -> "hEl", "FoO" -> "fOo"
+    check buf.getLine(0) == "hElLo world"
+    check buf.getLine(1) == "fOo bar"
+
+  test "Replace block selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualReplace(buf, state, 'x')
+
+    # Block selection columns 0-2 (inclusive) = 3 characters
+    check buf.getLine(0) == "xxxlo world"
+    check buf.getLine(1) == "xxx bar"
+
+  test "Replace line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualReplace(buf, state, 'x')
+
+    check buf.getLine(0) == "xxxxx"
+    check buf.getLine(1) == "xxxxx"
+
+  test "Paste line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    discard buf.insertText(BufferPosition(line: 1, column: 6), "\nline 3")
+    let state = createTestState()
+    state.registers.setYankedRegister("REPLACED", false)
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 3),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.len == 2
+    check buf.getLine(0) == "REPLACED"
+    check buf.getLine(1) == "line 3"
+
+  test "Paste linewise content into line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "old line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 10), "\nold line 2")
+    discard buf.insertText(BufferPosition(line: 1, column: 10), "\nold line 3")
+    let state = createTestState()
+    state.registers.setYankedRegister("new line A\nnew line B", true)
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.len == 4
+    check buf.getLine(0) == "new line A"
+    check buf.getLine(1) == "new line B"
+
+suite "Visual Commands - Edge Cases":
+  test "Yank with inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection.active = false
+    state.yankRegister = ""
+
+    visualYank(buf, state)
+
+    check state.yankRegister == ""
+
+  test "Indent inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.visualSelection.active = false
+
+    visualIndent(buf, state)
+
+    check buf.getLine(0) == "hello"
+
+  test "Dedent inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    let state = createTestState()
+    state.visualSelection.active = false
+
+    visualDedent(buf, state)
+
+    check buf.getLine(0) == "  hello"
+
+  test "Lowercase inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "HELLO")
+    let state = createTestState()
+    state.visualSelection.active = false
+
+    visualLowercase(buf, state)
+
+    check buf.getLine(0) == "HELLO"
+
+  test "Uppercase inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.visualSelection.active = false
+
+    visualUppercase(buf, state)
+
+    check buf.getLine(0) == "hello"
+
+  test "Toggle case inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "HeLLo")
+    let state = createTestState()
+    state.visualSelection.active = false
+
+    visualToggleCase(buf, state)
+
+    check buf.getLine(0) == "HeLLo"
+
+  test "Replace inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.visualSelection.active = false
+
+    visualReplace(buf, state, 'x')
+
+    check buf.getLine(0) == "hello"
+
+  test "Change inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    state.visualSelection.active = false
+
+    visualChange(buf, state)
+
+    check buf.getLine(0) == "hello"
+    check state.mode == EditorMode.Visual
+
+  test "Paste inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.registers.setYankedRegister("REPLACED", false)
+    state.visualSelection.active = false
+
+    visualPaste(buf, state)
+
+    check buf.getLine(0) == "hello"
+
+  test "Delete all lines leaves empty buffer":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "only line")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualDelete(buf, state)
+
+    check buf.len == 1
+    check buf.getLine(0) == ""
+
+  test "Block selection with line shorter than start column":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nhi")
+    discard buf.insertText(BufferPosition(line: 1, column: 2), "\ntest line")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 5),
+      current: BufferPosition(line: 2, column: 8),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualYank(buf, state)
+
+    # Second line "hi" is shorter than column 5, so it contributes empty string
+    # The result should have 3 lines (one per selected line)
+    check state.yankRegister.split('\n').len == 3
+
+  test "visualMoveRight at exact line length":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5) # At end
+    state.visualSelection.current = state.cursor
+
+    visualMoveRight(buf, state)
+
+    check state.cursor.column == 5 # Should not move past end
+
+  test "visualMoveDown at buffer end":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "only line")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.visualSelection.current = state.cursor
+
+    visualMoveDown(buf, state)
+
+    check state.cursor.line == 0 # Should stay on same line
+
+  test "Join lines with inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nline 2")
+    let state = createTestState()
+    state.visualSelection.active = false
+
+    visualJoinLines(buf, state)
+
+    check buf.len == 2

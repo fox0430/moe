@@ -1,0 +1,143 @@
+{
+  "currentScenario": "test",
+  "scenarios": {
+    "test": {
+      "name": "Test Scenario",
+      "hover": {
+        "enabled": true,
+        "contents": [
+          {
+            "kind": "markdown",
+            "message": "**Test Symbol**\n\nThis is a test hover content.",
+            "position": {"line": 0, "character": 0}
+          }
+        ]
+      },
+      "completion": {
+        "enabled": true,
+        "isIncomplete": false,
+        "items": [
+          {
+            "label": "testFunc",
+            "kind": 3,
+            "detail": "proc testFunc()",
+            "documentation": "A test function",
+            "insertText": "testFunc()"
+          },
+          {
+            "label": "testVar",
+            "kind": 6,
+            "detail": "var testVar: int",
+            "documentation": "A test variable"
+          }
+        ]
+      },
+      "diagnostics": {
+        "enabled": true,
+        "diagnostics": [
+          {
+            "range": {
+              "start": {"line": 0, "character": 0},
+              "end": {"line": 0, "character": 10}
+            },
+            "severity": 1,
+            "code": "E001",
+            "source": "lasm",
+            "message": "Test error diagnostic"
+          }
+        ]
+      },
+      "definition": {
+        "enabled": true,
+        "location": {
+          "uri": "file:///test/definition.nim",
+          "range": {
+            "start": {"line": 10, "character": 0},
+            "end": {"line": 10, "character": 10}
+          }
+        }
+      },
+      "declaration": {
+        "enabled": true,
+        "location": {
+          "uri": "file:///test/declaration.nim",
+          "range": {
+            "start": {"line": 5, "character": 0},
+            "end": {"line": 5, "character": 8}
+          }
+        }
+      },
+      "references": {
+        "enabled": true,
+        "includeDeclaration": true,
+        "locations": [
+          {
+            "uri": "file:///test/ref1.nim",
+            "range": {
+              "start": {"line": 1, "character": 0},
+              "end": {"line": 1, "character": 5}
+            }
+          },
+          {
+            "uri": "file:///test/ref2.nim",
+            "range": {
+              "start": {"line": 2, "character": 0},
+              "end": {"line": 2, "character": 5}
+            }
+          }
+        ]
+      },
+      "documentHighlight": {
+        "enabled": true,
+        "highlights": [
+          {
+            "range": {
+              "start": {"line": 0, "character": 0},
+              "end": {"line": 0, "character": 5}
+            },
+            "kind": 1
+          }
+        ]
+      },
+      "inlayHint": {
+        "enabled": true,
+        "hints": [
+          {
+            "position": {"line": 0, "character": 10},
+            "label": ": int",
+            "kind": 1,
+            "tooltip": "Type hint"
+          }
+        ]
+      },
+      "semanticTokens": {
+        "enabled": true,
+        "tokens": [0, 0, 5, 1, 0]
+      },
+      "formatting": {
+        "enabled": true,
+        "edits": [
+          {
+            "range": {
+              "start": {"line": 0, "character": 0},
+              "end": {"line": 0, "character": 5}
+            },
+            "newText": "formatted"
+          }
+        ]
+      },
+      "delays": {
+        "completion": 10,
+        "diagnostics": 10,
+        "hover": 10,
+        "definition": 10,
+        "declaration": 10,
+        "references": 10,
+        "documentHighlight": 10,
+        "inlayHint": 10,
+        "semanticTokens": 10,
+        "formatting": 10
+      }
+    }
+  }
+}

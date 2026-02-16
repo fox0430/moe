@@ -1,0 +1,1847 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+import std/[unittest, options, strutils, sets, tables, importutils]
+import ../src/moepkg/config
+import ../src/moepkg/config_mode {.all.}
+
+suite "ConfigMode - ConfigModeState initialization":
+  test "newConfigModeState creates valid state":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    check state.selectedIndex == 0
+    check state.topLine == 0
+    check state.editMode == false
+    check state.editBuffer == ""
+    check state.editCursor == 0
+    check state.enumPopupOpen == false
+    check state.enumPopupIndex == 0
+    check state.items.len > 0
+
+  test "buildItemList populates items from config":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Should have section headers and items
+    var sectionCount = 0
+    var itemCount = 0
+    for item in state.items:
+      if item.kind == cvkSection: sectionCount.inc else: itemCount.inc
+
+    check sectionCount > 0
+    check itemCount > 0
+
+  test "Items have correct depth":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    for item in state.items:
+      if item.kind == cvkSection:
+        check item.depth == 0
+      else:
+        check item.depth == 1
+
+suite "ConfigMode - getSelectedItem":
+  test "getSelectedItem returns current item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    let item = state.getSelectedItem()
+    check item.isSome
+    check item.get.displayName == state.items[0].displayName
+
+  test "getSelectedItemIndex returns correct index":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    check state.getSelectedItemIndex() == 0
+
+    state.selectedIndex = 5
+    check state.getSelectedItemIndex() == 5
+
+  test "getSelectedItem returns none for invalid index":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    state.selectedIndex = -1
+
+    check state.getSelectedItem().isNone
+
+suite "ConfigMode - Navigation":
+  test "moveDown increments selectedIndex":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.moveDown()
+    check state.selectedIndex == 1
+
+  test "moveDown stops at last item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    state.selectedIndex = state.items.len - 1
+
+    state.moveDown()
+    check state.selectedIndex == state.items.len - 1
+
+  test "moveUp decrements selectedIndex":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    state.selectedIndex = 5
+
+    state.moveUp()
+    check state.selectedIndex == 4
+
+  test "moveUp stops at first item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    state.selectedIndex = 0
+
+    state.moveUp()
+    check state.selectedIndex == 0
+
+  test "moveUp adjusts topLine when needed":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    state.selectedIndex = 5
+    state.topLine = 5
+
+    state.moveUp()
+    check state.selectedIndex == 4
+    check state.topLine == 4
+
+  test "moveToFirst goes to index 0":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    state.selectedIndex = 10
+    state.topLine = 5
+
+    state.moveToFirst()
+    check state.selectedIndex == 0
+    check state.topLine == 0
+
+  test "moveToLast goes to last item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.moveToLast()
+    check state.selectedIndex == state.items.len - 1
+
+  test "ensureSelectedVisible adjusts topLine for above viewport":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    state.selectedIndex = 3
+    state.topLine = 10
+
+    state.ensureSelectedVisible(20)
+    check state.topLine == 3
+
+  test "ensureSelectedVisible adjusts topLine for below viewport":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+    state.selectedIndex = 30
+    state.topLine = 0
+
+    state.ensureSelectedVisible(10)
+    check state.topLine == 21 # selectedIndex - viewportHeight + 1
+
+suite "ConfigMode - Bool value manipulation":
+  test "toggleBoolValue toggles bool item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a bool item
+    var boolIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkBool:
+        boolIndex = i
+        break
+
+    check boolIndex >= 0
+    state.selectedIndex = boolIndex
+    let originalValue = state.items[boolIndex].boolValue
+
+    state.toggleBoolValue()
+    check state.items[boolIndex].boolValue == not originalValue
+
+    state.toggleBoolValue()
+    check state.items[boolIndex].boolValue == originalValue
+
+  test "toggleBoolValue does nothing for non-bool item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a section item
+    var sectionIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkSection:
+        sectionIndex = i
+        break
+
+    check sectionIndex >= 0
+    state.selectedIndex = sectionIndex
+
+    # Should not crash
+    state.toggleBoolValue()
+
+suite "ConfigMode - Int value manipulation":
+  test "incrementIntValue increases int item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    check intIndex >= 0
+    state.selectedIndex = intIndex
+    let originalValue = state.items[intIndex].intValue
+
+    state.incrementIntValue()
+    check state.items[intIndex].intValue == originalValue + 1
+
+  test "decrementIntValue decreases int item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item with value > min
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt and item.intValue > item.intMin:
+        intIndex = i
+        break
+
+    check intIndex >= 0
+    state.selectedIndex = intIndex
+    let originalValue = state.items[intIndex].intValue
+
+    state.decrementIntValue()
+    check state.items[intIndex].intValue == originalValue - 1
+
+  test "incrementIntValue respects max boundary":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item and set to max
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    check intIndex >= 0
+    state.selectedIndex = intIndex
+    state.items[intIndex].intValue = state.items[intIndex].intMax
+
+    state.incrementIntValue()
+    check state.items[intIndex].intValue == state.items[intIndex].intMax
+
+  test "decrementIntValue respects min boundary":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item and set to min
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    check intIndex >= 0
+    state.selectedIndex = intIndex
+    state.items[intIndex].intValue = state.items[intIndex].intMin
+
+    state.decrementIntValue()
+    check state.items[intIndex].intValue == state.items[intIndex].intMin
+
+suite "ConfigMode - Float value manipulation":
+  test "incrementFloatValue increases float item by step":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a float item
+    var floatIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkFloat:
+        floatIndex = i
+        break
+
+    check floatIndex >= 0
+    state.selectedIndex = floatIndex
+    let originalValue = state.items[floatIndex].floatValue
+    let step = state.items[floatIndex].floatStep
+
+    state.incrementFloatValue()
+    check state.items[floatIndex].floatValue == originalValue + step
+
+  test "decrementFloatValue decreases float item by step":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a float item with value > min + step
+    var floatIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkFloat and item.floatValue > item.floatMin + item.floatStep:
+        floatIndex = i
+        break
+
+    check floatIndex >= 0
+    state.selectedIndex = floatIndex
+    let originalValue = state.items[floatIndex].floatValue
+    let step = state.items[floatIndex].floatStep
+
+    state.decrementFloatValue()
+    check state.items[floatIndex].floatValue == originalValue - step
+
+  test "incrementFloatValue respects max boundary":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a float item and set to max
+    var floatIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkFloat:
+        floatIndex = i
+        break
+
+    check floatIndex >= 0
+    state.selectedIndex = floatIndex
+    state.items[floatIndex].floatValue = state.items[floatIndex].floatMax
+
+    state.incrementFloatValue()
+    check state.items[floatIndex].floatValue == state.items[floatIndex].floatMax
+
+  test "decrementFloatValue respects min boundary":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a float item and set to min
+    var floatIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkFloat:
+        floatIndex = i
+        break
+
+    check floatIndex >= 0
+    state.selectedIndex = floatIndex
+    state.items[floatIndex].floatValue = state.items[floatIndex].floatMin
+
+    state.decrementFloatValue()
+    check state.items[floatIndex].floatValue == state.items[floatIndex].floatMin
+
+suite "ConfigMode - Enum value manipulation":
+  test "cycleEnumValue forward cycles through options":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    check enumIndex >= 0
+    state.selectedIndex = enumIndex
+    let item = state.items[enumIndex]
+    let originalIdx = item.enumOptions.find(item.enumValue)
+    let expectedIdx = (originalIdx + 1) mod item.enumOptions.len
+
+    state.cycleEnumValue(forward = true)
+    check state.items[enumIndex].enumValue == item.enumOptions[expectedIdx]
+
+  test "cycleEnumValue backward cycles through options":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    check enumIndex >= 0
+    state.selectedIndex = enumIndex
+    let item = state.items[enumIndex]
+    let originalIdx = item.enumOptions.find(item.enumValue)
+    let expectedIdx = (originalIdx - 1 + item.enumOptions.len) mod item.enumOptions.len
+
+    state.cycleEnumValue(forward = false)
+    check state.items[enumIndex].enumValue == item.enumOptions[expectedIdx]
+
+  test "cycleEnumValue wraps around at end":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    check enumIndex >= 0
+    state.selectedIndex = enumIndex
+
+    # Set to last option
+    let lastOption = state.items[enumIndex].enumOptions[^1]
+    state.items[enumIndex].enumValue = lastOption
+
+    state.cycleEnumValue(forward = true)
+    check state.items[enumIndex].enumValue == state.items[enumIndex].enumOptions[0]
+
+suite "ConfigMode - formatItemForDisplay":
+  test "Section item displays with brackets":
+    let item = ConfigItem(
+      kind: cvkSection,
+      displayName: "Standard",
+      section: "Standard",
+      depth: 0,
+      descriptorIndex: -1,
+    )
+
+    let result = formatItemForDisplay(item, 20)
+    check result == "[Standard]"
+
+  test "Bool item displays name and value":
+    let item = ConfigItem(
+      kind: cvkBool,
+      displayName: "number",
+      section: "Standard",
+      depth: 1,
+      descriptorIndex: 1,
+      boolValue: true,
+    )
+
+    let result = formatItemForDisplay(item, 20)
+    check "number" in result
+    check "true" in result
+
+  test "Int item displays name and value":
+    let item = ConfigItem(
+      kind: cvkInt,
+      displayName: "tabStop",
+      section: "Standard",
+      depth: 1,
+      descriptorIndex: 1,
+      intValue: 4,
+      intMin: 1,
+      intMax: 16,
+    )
+
+    let result = formatItemForDisplay(item, 20)
+    check "tabStop" in result
+    check "4" in result
+
+  test "Float item displays name and value":
+    let item = ConfigItem(
+      kind: cvkFloat,
+      displayName: "friction",
+      section: "SmoothScroll",
+      depth: 1,
+      descriptorIndex: 1,
+      floatValue: 100.0,
+      floatMin: 0.0,
+      floatMax: 500.0,
+      floatStep: 10.0,
+    )
+
+    let result = formatItemForDisplay(item, 20)
+    check "friction" in result
+    check "100" in result
+
+  test "Enum item displays name and value":
+    let item = ConfigItem(
+      kind: cvkEnum,
+      displayName: "colorMode",
+      section: "Standard",
+      depth: 1,
+      descriptorIndex: 1,
+      enumValue: "24bit",
+      enumOptions: @["8", "16", "256", "24bit", "none"],
+    )
+
+    let result = formatItemForDisplay(item, 20)
+    check "colorMode" in result
+    check "24bit" in result
+
+suite "ConfigMode - Edit mode for Int":
+  test "startEdit initializes edit buffer for int":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    check intIndex >= 0
+    state.selectedIndex = intIndex
+
+    state.startEdit()
+    check state.editMode == true
+    check state.editBuffer == $state.items[intIndex].intValue
+    check state.editCursor == state.editBuffer.len
+
+  test "cancelEdit resets edit state":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.cancelEdit()
+
+    check state.editMode == false
+    check state.editBuffer == ""
+    check state.editCursor == 0
+
+  test "confirmEdit applies valid int value":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editBuffer = "5"
+    state.editCursor = 1
+
+    let result = state.confirmEdit()
+    check result == true
+    check state.items[intIndex].intValue == 5
+    check state.editMode == false
+
+  test "confirmEdit rejects out-of-range int value":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    let originalValue = state.items[intIndex].intValue
+    state.startEdit()
+    state.editBuffer = "99999" # Out of range
+
+    let result = state.confirmEdit()
+    check result == false
+    # Value unchanged after failed edit
+    check state.items[intIndex].intValue == originalValue
+
+  test "confirmEdit rejects invalid int input":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    let originalValue = state.items[intIndex].intValue
+    state.startEdit()
+    state.editBuffer = "abc" # Invalid number
+
+    let result = state.confirmEdit()
+    check result == false
+    check state.items[intIndex].intValue == originalValue
+
+suite "ConfigMode - Edit mode for Float":
+  test "startEdit initializes edit buffer for float":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a float item
+    var floatIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkFloat:
+        floatIndex = i
+        break
+
+    check floatIndex >= 0
+    state.selectedIndex = floatIndex
+
+    state.startEdit()
+    check state.editMode == true
+    check state.editBuffer == $state.items[floatIndex].floatValue
+    check state.editCursor == state.editBuffer.len
+
+  test "confirmEdit applies valid float value":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a float item
+    var floatIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkFloat:
+        floatIndex = i
+        break
+
+    state.selectedIndex = floatIndex
+    state.startEdit()
+    state.editBuffer = "50.5"
+    state.editCursor = 4
+
+    let result = state.confirmEdit()
+    check result == true
+    check state.items[floatIndex].floatValue == 50.5
+    check state.editMode == false
+
+  test "confirmEdit rejects out-of-range float value":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a float item
+    var floatIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkFloat:
+        floatIndex = i
+        break
+
+    state.selectedIndex = floatIndex
+    let originalValue = state.items[floatIndex].floatValue
+    state.startEdit()
+    state.editBuffer = "99999.0" # Out of range
+
+    let result = state.confirmEdit()
+    check result == false
+    check state.items[floatIndex].floatValue == originalValue
+
+suite "ConfigMode - Edit buffer manipulation":
+  test "editInsertChar inserts at cursor":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editBuffer = "12"
+    state.editCursor = 1
+
+    state.editInsertChar("5")
+    check state.editBuffer == "152"
+    check state.editCursor == 2
+
+  test "editBackspace deletes before cursor":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editBuffer = "123"
+    state.editCursor = 2
+
+    state.editBackspace()
+    check state.editBuffer == "13"
+    check state.editCursor == 1
+
+  test "editBackspace does nothing at start":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editBuffer = "123"
+    state.editCursor = 0
+
+    state.editBackspace()
+    check state.editBuffer == "123"
+    check state.editCursor == 0
+
+  test "editDelete removes at cursor":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editBuffer = "123"
+    state.editCursor = 1
+
+    state.editDelete()
+    check state.editBuffer == "13"
+    check state.editCursor == 1
+
+  test "editDelete does nothing at end":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editBuffer = "123"
+    state.editCursor = 3
+
+    state.editDelete()
+    check state.editBuffer == "123"
+    check state.editCursor == 3
+
+  test "editMoveCursorLeft moves cursor left":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editBuffer = "123"
+    state.editCursor = 2
+
+    state.editMoveCursorLeft()
+    check state.editCursor == 1
+
+  test "editMoveCursorRight moves cursor right":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editBuffer = "123"
+    state.editCursor = 1
+
+    state.editMoveCursorRight()
+    check state.editCursor == 2
+
+  test "editMoveCursorHome moves to start":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editBuffer = "123"
+    state.editCursor = 2
+
+    state.editMoveCursorHome()
+    check state.editCursor == 0
+
+  test "editMoveCursorEnd moves to end":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editBuffer = "123"
+    state.editCursor = 1
+
+    state.editMoveCursorEnd()
+    check state.editCursor == 3
+
+  test "isEditing returns correct state":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    check state.isEditing() == false
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    check state.isEditing() == true
+
+    state.cancelEdit()
+    check state.isEditing() == false
+
+  test "getEditInfo returns buffer and cursor":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editBuffer = "test"
+    state.editCursor = 2
+
+    let info = state.getEditInfo()
+    check info.buffer == "test"
+    check info.cursor == 2
+
+suite "ConfigMode - Enum popup":
+  test "openEnumPopup opens popup for enum item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    check enumIndex >= 0
+    state.selectedIndex = enumIndex
+
+    state.openEnumPopup()
+    check state.enumPopupOpen == true
+    check state.enumPopupIndex >= 0
+
+  test "openEnumPopup does nothing for non-enum item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a bool item
+    var boolIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkBool:
+        boolIndex = i
+        break
+
+    state.selectedIndex = boolIndex
+    state.openEnumPopup()
+    check state.enumPopupOpen == false
+
+  test "closeEnumPopup resets popup state":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    state.selectedIndex = enumIndex
+    state.openEnumPopup()
+    state.closeEnumPopup()
+
+    check state.enumPopupOpen == false
+    check state.enumPopupIndex == 0
+
+  test "enumPopupMoveUp decrements index":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    state.selectedIndex = enumIndex
+    state.openEnumPopup()
+    state.enumPopupIndex = 2
+
+    state.enumPopupMoveUp()
+    check state.enumPopupIndex == 1
+
+  test "enumPopupMoveUp wraps to last at first":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    state.selectedIndex = enumIndex
+    state.openEnumPopup()
+    state.enumPopupIndex = 0
+
+    state.enumPopupMoveUp()
+    check state.enumPopupIndex == state.items[enumIndex].enumOptions.len - 1
+
+  test "enumPopupMoveDown increments index":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    state.selectedIndex = enumIndex
+    state.openEnumPopup()
+    state.enumPopupIndex = 0
+
+    state.enumPopupMoveDown()
+    check state.enumPopupIndex == 1
+
+  test "enumPopupMoveDown wraps to first at last":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    state.selectedIndex = enumIndex
+    state.openEnumPopup()
+    state.enumPopupIndex = state.items[enumIndex].enumOptions.len - 1
+
+    state.enumPopupMoveDown()
+    check state.enumPopupIndex == 0
+
+  test "enumPopupConfirm applies selected value":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    state.selectedIndex = enumIndex
+    state.openEnumPopup()
+    state.enumPopupIndex = 1
+    let expectedValue = state.items[enumIndex].enumOptions[1]
+
+    state.enumPopupConfirm()
+    check state.items[enumIndex].enumValue == expectedValue
+    check state.enumPopupOpen == false
+
+  test "isEnumPopupOpen returns correct state":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    check state.isEnumPopupOpen() == false
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    state.selectedIndex = enumIndex
+    state.openEnumPopup()
+    check state.isEnumPopupOpen() == true
+
+    state.closeEnumPopup()
+    check state.isEnumPopupOpen() == false
+
+  test "getEnumPopupInfo returns options and index":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    state.selectedIndex = enumIndex
+    state.openEnumPopup()
+    state.enumPopupIndex = 2
+
+    let info = state.getEnumPopupInfo()
+    check info.options == state.items[enumIndex].enumOptions
+    check info.selectedIndex == 2
+
+suite "ConfigMode - applyChange":
+  test "applyChange updates config for bool":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find the "number" bool item (standard.number)
+    var numberIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkBool and item.displayName == "number":
+        numberIndex = i
+        break
+
+    check numberIndex >= 0
+    state.selectedIndex = numberIndex
+    let originalValue = cfg.standard.number
+
+    state.toggleBoolValue()
+    check cfg.standard.number == not originalValue
+
+  test "applyChange updates config for lineWrap":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find the "lineWrap" bool item (standard.lineWrap)
+    var lineWrapIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkBool and item.displayName == "lineWrap":
+        lineWrapIndex = i
+        break
+
+    check lineWrapIndex >= 0
+    state.selectedIndex = lineWrapIndex
+    check cfg.standard.lineWrap == true
+
+    state.toggleBoolValue()
+    check cfg.standard.lineWrap == false
+
+    state.toggleBoolValue()
+    check cfg.standard.lineWrap == true
+
+  test "applyChange updates config for int":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find the "tabStop" int item
+    var tabStopIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt and item.displayName == "tabStop":
+        tabStopIndex = i
+        break
+
+    check tabStopIndex >= 0
+    state.selectedIndex = tabStopIndex
+    let originalValue = cfg.standard.tabStop
+
+    state.incrementIntValue()
+    check cfg.standard.tabStop == originalValue + 1
+
+  test "applyChange updates config for float":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a float item (friction)
+    var frictionIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkFloat and item.displayName == "friction":
+        frictionIndex = i
+        break
+
+    check frictionIndex >= 0
+    state.selectedIndex = frictionIndex
+    let originalValue = cfg.smoothScroll.friction
+    let step = state.items[frictionIndex].floatStep
+
+    state.incrementFloatValue()
+    check cfg.smoothScroll.friction == originalValue + step
+
+  test "applyChange updates config for enum":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item (colorMode)
+    var colorModeIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum and item.displayName == "colorMode":
+        colorModeIndex = i
+        break
+
+    check colorModeIndex >= 0
+    state.selectedIndex = colorModeIndex
+
+    state.cycleEnumValue(forward = true)
+    # The value should have changed in the config
+    check $cfg.standard.colorMode == state.items[colorModeIndex].enumValue
+
+suite "ConfigMode - Item coverage":
+  test "State contains all value kinds":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var sectionCount = 0
+    var boolCount = 0
+    var intCount = 0
+    var floatCount = 0
+    var enumCount = 0
+
+    for item in state.items:
+      case item.kind
+      of cvkSection: sectionCount.inc
+      of cvkBool: boolCount.inc
+      of cvkInt: intCount.inc
+      of cvkFloat: floatCount.inc
+      of cvkEnum: enumCount.inc
+      of cvkString: discard
+
+    check sectionCount > 0
+    check boolCount > 0
+    check intCount > 0
+    check floatCount > 0
+    check enumCount > 0
+
+  test "All items have valid descriptorIndex":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    for item in state.items:
+      if item.kind == cvkSection:
+        check item.descriptorIndex == -1
+      else:
+        check item.descriptorIndex >= 0
+
+suite "ConfigMode - Edge cases and guard conditions":
+  test "startEdit does nothing for bool item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a bool item
+    var boolIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkBool:
+        boolIndex = i
+        break
+
+    state.selectedIndex = boolIndex
+    state.startEdit()
+    check state.editMode == false
+
+  test "startEdit does nothing for section item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a section item
+    var sectionIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkSection:
+        sectionIndex = i
+        break
+
+    state.selectedIndex = sectionIndex
+    state.startEdit()
+    check state.editMode == false
+
+  test "startEdit does nothing for enum item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    state.selectedIndex = enumIndex
+    state.startEdit()
+    check state.editMode == false
+
+  test "startEdit does nothing for invalid index":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.selectedIndex = -1
+    state.startEdit()
+    check state.editMode == false
+
+  test "editInsertChar does nothing when not in edit mode":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.editMode = false
+    state.editBuffer = ""
+    state.editInsertChar("x")
+    check state.editBuffer == ""
+
+  test "editBackspace does nothing when not in edit mode":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.editMode = false
+    state.editBuffer = "test"
+    state.editCursor = 2
+    state.editBackspace()
+    check state.editBuffer == "test"
+
+  test "editDelete does nothing when not in edit mode":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.editMode = false
+    state.editBuffer = "test"
+    state.editCursor = 2
+    state.editDelete()
+    check state.editBuffer == "test"
+
+  test "editMoveCursorLeft does nothing when not in edit mode":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.editMode = false
+    state.editCursor = 5
+    state.editMoveCursorLeft()
+    check state.editCursor == 5
+
+  test "editMoveCursorLeft stops at position 0":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item and start edit
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editCursor = 0
+    state.editMoveCursorLeft()
+    check state.editCursor == 0
+
+  test "editMoveCursorRight does nothing when not in edit mode":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.editMode = false
+    state.editCursor = 0
+    state.editMoveCursorRight()
+    check state.editCursor == 0
+
+  test "editMoveCursorRight stops at buffer length":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an int item and start edit
+    var intIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt:
+        intIndex = i
+        break
+
+    state.selectedIndex = intIndex
+    state.startEdit()
+    state.editCursor = state.editBuffer.len
+    state.editMoveCursorRight()
+    check state.editCursor == state.editBuffer.len
+
+  test "editMoveCursorHome does nothing when not in edit mode":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.editMode = false
+    state.editCursor = 5
+    state.editMoveCursorHome()
+    check state.editCursor == 5
+
+  test "editMoveCursorEnd does nothing when not in edit mode":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.editMode = false
+    state.editCursor = 0
+    state.editBuffer = "test"
+    state.editMoveCursorEnd()
+    check state.editCursor == 0
+
+  test "cycleEnumValue does nothing for non-enum item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a bool item
+    var boolIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkBool:
+        boolIndex = i
+        break
+
+    state.selectedIndex = boolIndex
+    let originalValue = state.items[boolIndex].boolValue
+    state.cycleEnumValue(forward = true)
+    check state.items[boolIndex].boolValue == originalValue
+
+  test "cycleEnumValue does nothing for invalid index":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.selectedIndex = -1
+    # Should not crash
+    state.cycleEnumValue(forward = true)
+
+  test "incrementIntValue does nothing for non-int item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a bool item
+    var boolIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkBool:
+        boolIndex = i
+        break
+
+    state.selectedIndex = boolIndex
+    # Should not crash
+    state.incrementIntValue()
+
+  test "decrementIntValue does nothing for non-int item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a bool item
+    var boolIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkBool:
+        boolIndex = i
+        break
+
+    state.selectedIndex = boolIndex
+    # Should not crash
+    state.decrementIntValue()
+
+  test "incrementFloatValue does nothing for non-float item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a bool item
+    var boolIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkBool:
+        boolIndex = i
+        break
+
+    state.selectedIndex = boolIndex
+    # Should not crash
+    state.incrementFloatValue()
+
+  test "decrementFloatValue does nothing for non-float item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a bool item
+    var boolIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkBool:
+        boolIndex = i
+        break
+
+    state.selectedIndex = boolIndex
+    # Should not crash
+    state.decrementFloatValue()
+
+  test "applyChange does nothing for invalid index":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Should not crash
+    state.applyChange(-1)
+    state.applyChange(state.items.len + 100)
+
+  test "applyChange does nothing for section item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a section item
+    var sectionIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkSection:
+        sectionIndex = i
+        break
+
+    # Should not crash
+    state.applyChange(sectionIndex)
+
+  test "enumPopupMoveUp does nothing when popup is closed":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.enumPopupOpen = false
+    state.enumPopupIndex = 2
+    state.enumPopupMoveUp()
+    check state.enumPopupIndex == 2
+
+  test "enumPopupMoveDown does nothing when popup is closed":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.enumPopupOpen = false
+    state.enumPopupIndex = 0
+    state.enumPopupMoveDown()
+    check state.enumPopupIndex == 0
+
+  test "enumPopupConfirm does nothing when popup is closed":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find an enum item
+    var enumIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum:
+        enumIndex = i
+        break
+
+    state.selectedIndex = enumIndex
+    let originalValue = state.items[enumIndex].enumValue
+    state.enumPopupOpen = false
+    state.enumPopupConfirm()
+    check state.items[enumIndex].enumValue == originalValue
+
+  test "openEnumPopup does nothing for invalid index":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.selectedIndex = -1
+    state.openEnumPopup()
+    check state.enumPopupOpen == false
+
+  test "getEnumPopupInfo returns empty for non-enum item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a bool item
+    var boolIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkBool:
+        boolIndex = i
+        break
+
+    state.selectedIndex = boolIndex
+    let info = state.getEnumPopupInfo()
+    check info.options.len == 0
+    check info.selectedIndex == 0
+
+  test "getEnumPopupInfo returns empty for invalid index":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.selectedIndex = -1
+    let info = state.getEnumPopupInfo()
+    check info.options.len == 0
+
+  test "getSelectedItemIndex returns -1 for out of bounds index":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.selectedIndex = state.items.len + 10
+    check state.getSelectedItemIndex() == -1
+
+  test "confirmEdit returns false for invalid index":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    state.selectedIndex = -1
+    state.editMode = true
+    let result = state.confirmEdit()
+    check result == false
+    check state.editMode == false
+
+  test "confirmEdit returns false for non-editable item":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    # Find a section item
+    var sectionIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkSection:
+        sectionIndex = i
+        break
+
+    state.selectedIndex = sectionIndex
+    state.editMode = true
+    state.editBuffer = "test"
+    let result = state.confirmEdit()
+    check result == false
+    check state.editMode == false
+
+suite "ConfigMode - formatItemForDisplay cvkString":
+  test "String item displays name and value":
+    let item = ConfigItem(
+      kind: cvkString,
+      displayName: "myString",
+      section: "Test",
+      depth: 1,
+      descriptorIndex: 1,
+      stringValue: "hello world",
+    )
+
+    let result = formatItemForDisplay(item, 20)
+    check "myString" in result
+    check "hello world" in result
+
+suite "ConfigMode - Theme section":
+  test "Theme section header exists":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var found = false
+    for item in state.items:
+      if item.kind == cvkSection and item.displayName == "Theme":
+        found = true
+        break
+    check found
+
+  test "Theme kind enum has correct value":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var kindIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum and item.section == "Theme" and item.displayName == "kind":
+        kindIndex = i
+        break
+
+    check kindIndex >= 0
+    check state.items[kindIndex].enumValue == $cfg.theme.kind
+    check state.items[kindIndex].enumOptions == @["default", "config", "vscode"]
+
+  test "Theme kind enum change applies to config":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var kindIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum and item.section == "Theme" and item.displayName == "kind":
+        kindIndex = i
+        break
+
+    check kindIndex >= 0
+    state.selectedIndex = kindIndex
+    state.items[kindIndex].enumValue = "vscode"
+    state.applyChange(kindIndex)
+    check cfg.theme.kind == tkVscode
+
+  test "Theme path string has correct value":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var pathIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathIndex = i
+        break
+
+    check pathIndex >= 0
+    check state.items[pathIndex].stringValue == cfg.theme.path
+
+  test "Theme path string edit applies to config":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var pathIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathIndex = i
+        break
+
+    check pathIndex >= 0
+    state.selectedIndex = pathIndex
+
+    # Test editing via startEdit/confirmEdit
+    state.startEdit()
+    check state.editMode == true
+    check state.editBuffer == cfg.theme.path
+
+    state.editBuffer = "/new/theme/path.toml"
+    state.editCursor = state.editBuffer.len
+    let result = state.confirmEdit()
+    check result == true
+    check cfg.theme.path == "/new/theme/path.toml"
+
+  test "Theme path is visible when kind is config":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+
+    var found = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        found = true
+        break
+    check found
+
+  test "Theme path is hidden when kind is default":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkDefault
+    let state = newConfigModeState(cfg)
+
+    var found = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        found = true
+        break
+    check not found
+
+  test "Theme path is hidden when kind is vscode":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkVscode
+    let state = newConfigModeState(cfg)
+
+    var found = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        found = true
+        break
+    check not found
+
+  test "Changing kind to config shows path":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkDefault
+    let state = newConfigModeState(cfg)
+
+    # path should not exist
+    var pathFound = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathFound = true
+        break
+    check not pathFound
+
+    # Change kind to config
+    var kindIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum and item.section == "Theme" and item.displayName == "kind":
+        kindIndex = i
+        break
+
+    check kindIndex >= 0
+    state.selectedIndex = kindIndex
+    state.items[kindIndex].enumValue = "config"
+    state.applyChange(kindIndex)
+
+    # Now path should be visible
+    pathFound = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathFound = true
+        break
+    check pathFound
+
+  test "Changing kind from config hides path":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+
+    # path should exist
+    var pathFound = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathFound = true
+        break
+    check pathFound
+
+    # Change kind to vscode
+    var kindIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkEnum and item.section == "Theme" and item.displayName == "kind":
+        kindIndex = i
+        break
+
+    check kindIndex >= 0
+    state.selectedIndex = kindIndex
+    state.items[kindIndex].enumValue = "vscode"
+    state.applyChange(kindIndex)
+
+    # Now path should be hidden
+    pathFound = false
+    for item in state.items:
+      if item.kind == cvkString and item.section == "Theme" and
+          item.displayName == "path":
+        pathFound = true
+        break
+    check not pathFound
+
+suite "ConfigMode - Bool value edge case":
+  test "Bool item displays false correctly":
+    let item = ConfigItem(
+      kind: cvkBool,
+      displayName: "testBool",
+      section: "Test",
+      depth: 1,
+      descriptorIndex: 1,
+      boolValue: false,
+    )
+
+    let result = formatItemForDisplay(item, 20)
+    check "false" in result
+
+suite "ConfigMode - descriptor completeness":
+  privateAccess ConfigItemDescriptor
+
+  # Collect simple (non-nested-object) field names from a config section.
+  # When a new field is added to any config struct, fieldPairs automatically
+  # includes it, so the test detects missing descriptors.
+  template collectFieldNames(
+      obj: typed, section: string, fields: var HashSet[(string, string)]
+  ) =
+    for name, value in fieldPairs(obj):
+      when value is bool:
+        fields.incl((section, name))
+      elif value is int:
+        fields.incl((section, name))
+      elif value is float:
+        fields.incl((section, name))
+      elif value is string:
+        fields.incl((section, name))
+      elif value is Option[string]:
+        fields.incl((section, name))
+      elif value is seq[string]:
+        fields.incl((section, name))
+      elif value is enum:
+        fields.incl((section, name))
+
+  test "All EditorConfig sections are accounted for":
+    ## If a new section is added to EditorConfig, this test fails until it is
+    ## added to either `tested` or `excluded`.
+    let tested = [
+      "standard", "clipboard", "statusLine", "highlight", "autoBackup", "notification",
+      "filer", "autocomplete", "autoSave", "git", "syntaxChecker", "smoothScroll",
+      "theme", "lsp",
+    ].toHashSet
+    let excluded = [
+      "buildOnSave", "tabLine", "quickRun", "persist", "startUpFileOpen", "debug"
+    ].toHashSet
+
+    var cfg = newEditorConfig()
+    for name, value in fieldPairs(cfg[]):
+      if name notin tested and name notin excluded:
+        echo "EditorConfig section not accounted for: " & name
+      check name in tested or name in excluded
+
+  test "All config fields have descriptors or are explicitly excluded":
+    ## If a new field is added to a config struct in a tested section, this
+    ## test fails until a descriptor is added to makeDescriptors() or the
+    ## field is added to the excluded set.
+    var cfg = newEditorConfig()
+
+    # Collect all simple fields from sections that config mode covers
+    var allFields: HashSet[(string, string)]
+    collectFieldNames(cfg.standard, "Standard", allFields)
+    collectFieldNames(cfg.clipboard, "Clipboard", allFields)
+    collectFieldNames(cfg.statusLine, "StatusLine", allFields)
+    collectFieldNames(cfg.highlight, "Highlight", allFields)
+    collectFieldNames(cfg.autoBackup, "AutoBackup", allFields)
+    collectFieldNames(cfg.notification, "Notification", allFields)
+    collectFieldNames(cfg.filer, "Filer", allFields)
+    collectFieldNames(cfg.autocomplete, "Autocomplete", allFields)
+    collectFieldNames(cfg.autoSave, "AutoSave", allFields)
+    collectFieldNames(cfg.git, "Git", allFields)
+    collectFieldNames(cfg.syntaxChecker, "SyntaxChecker", allFields)
+    collectFieldNames(cfg.smoothScroll, "SmoothScroll", allFields)
+    collectFieldNames(cfg.theme, "Theme", allFields)
+    collectFieldNames(cfg.lsp, "Lsp", allFields)
+
+    # Collect (section, displayName) from configDescriptors
+    var descriptorFields: HashSet[(string, string)]
+    for desc in configDescriptors:
+      if desc.kind != cvkSection:
+        descriptorFields.incl((desc.section, desc.displayName))
+
+    # Fields intentionally not in config mode UI
+    # (complex types, dir paths that need filesystem validation, etc.)
+    let excluded = [
+      ("StatusLine", "setupText"),
+      ("Highlight", "reservedWord"),
+      ("AutoBackup", "backupDir"),
+      ("AutoBackup", "dirToExclude"),
+    ].toHashSet
+
+    let missing = allFields - descriptorFields - excluded
+    if missing.len > 0:
+      echo "Fields missing from config mode (add descriptor or exclude):"
+      for item in missing:
+        echo "  " & item[0] & "." & item[1]
+    check missing.len == 0

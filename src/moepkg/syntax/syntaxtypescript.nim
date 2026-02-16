@@ -31,8 +31,7 @@
 #    distribution, for details about the copyright.
 #
 
-import highlite
-import syntaxhtml
+import tokenizer, syntaxhtml
 
 const typescriptKeywords* = [
   "DOMSTRING_SIZE_ERR", "DataViewDate", "HIERARCHY_REQUEST_ERR", "INDEX_SIZE_ERR",

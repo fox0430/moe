@@ -1,996 +1,1607 @@
-## Copyright (c) 2023 The core Nim team
-## https://github.com/nim-lang/langserver
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
 
-# NOTE: Language Server Protocol Specification - 3.17
-# https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
+## LSP Protocol Types
+## Based on LSP Specification 3.17
 
-import std/[json, options]
+import std/[options, json, tables]
+
 import enums
 
+export enums
+
 type
-  OptionalSeq*[T] = Option[seq[T]]
-  OptionalNode = Option[JsonNode]
-
-  CancelParams* = ref object of RootObj
-    id*: OptionalNode # int | string
-
-  Position* = ref object of RootObj
+  # Basic types
+  Position* = object
+    ## Position in a text document (0-indexed)
+    ## Note: character is in UTF-16 code units
     line*: int
     character*: int
 
-  Range* = ref object of RootObj
+  Range* = object ## A range in a text document
     start*: Position
     `end`*: Position
 
-  Location* = ref object of RootObj
+  Location* = object ## Represents a location inside a resource
     uri*: string
-    `range`*: Range
+    range*: Range
 
-  Diagnostic* = ref object of RootObj
-    `range`*: Range
-    severity*: Option[int]
-    code*: OptionalNode # int or string
-    source*: Option[string]
-    message*: string
-    relatedInformation*: OptionalSeq[DiagnosticRelatedInformation]
+  LocationLink* = object ## A link to a location
+    originSelectionRange*: Option[Range]
+    targetUri*: string
+    targetRange*: Range
+    targetSelectionRange*: Range
 
-  DiagnosticRelatedInformation* = ref object of RootObj
-    location*: Location
-    message*: string
-
-  Command* = ref object of RootObj
-    title*: string
-    command*: string
-    arguments*: OptionalNode
-
-  CodeAction* = ref object of RootObj
-    command*: Command
-    title*: string
-    kind*: string
-
-  TextEdit* = ref object of RootObj
-    `range`*: Range
-    newText*: string
-
-  TextDocumentEdit* = ref object of RootObj
-    textDocument*: VersionedTextDocumentIdentifier
-    edits*: OptionalSeq[TextEdit]
-
-  WorkspaceEdit* = ref object of RootObj
-    changes*: OptionalNode
-    documentChanges*: OptionalSeq[TextDocumentEdit]
-
-  DocumentFilter* = ref object of RootObj
-    language*: Option[string]
-    scheme*: Option[string]
-    pattern*: Option[string]
-
-  DocumentSelector* = DocumentFilter
-
-  TextDocumentIdentifier* = ref object of RootObj
+  # Text document types
+  TextDocumentIdentifier* = object ## Identifies a text document
     uri*: string
 
-  TextDocumentItem* = ref object of RootObj
+  VersionedTextDocumentIdentifier* = object ## Identifies a text document with version
+    uri*: string
+    version*: int
+
+  TextDocumentItem* = object ## An item to transfer a text document
     uri*: string
     languageId*: string
     version*: int
     text*: string
 
-  TextDocumentPositionParams* = ref object of RootObj
+  TextDocumentPositionParams* = object ## Parameters for text document position requests
     textDocument*: TextDocumentIdentifier
     position*: Position
 
-  TextDocumentRegistrationOptions* = ref object of RootObj
-    documentSelector*: Option[DocumentSelector]
-
-  VersionedTextDocumentIdentifier* = ref object of TextDocumentIdentifier
-    version*: OptionalNode # int or float
-
-  ExpandTextDocumentPositionParams* = ref object of TextDocumentPositionParams
-    level*: Option[int]
-
-  MarkupContent* = ref object of RootObj
-    kind*: string
-    value*: string
-
-  ClientInfo* = ref object of RootObj
-    name*: string
-    version*: Option[string]
-
-  InitializeParams* = ref object of RootObj
-    processId*: OptionalNode # int or float
-    clientInfo*: Option[ClientInfo]
-    locale*: Option[string]
-    rootPath*: Option[string]
-    rootUri*: Option[string]
-    initializationOptions*: OptionalNode
-    capabilities*: ClientCapabilities
-    trace*: Option[string]
-    workspaceFolders*: OptionalSeq[WorkspaceFolder]
-
-  WorkDoneProgressOptions* = ref object of RootObj
-    workDoneProgress*: Option[bool]
-
-  WorkDoneProgressBegin* = ref object of RootObj
-    kind*: string
-    title*: string
-    cancellable*: Option[bool]
-    message*: Option[string]
-    percentage*: Option[int]
-
-  WorkDoneProgressReport* = ref object of RootObj
-    kind*: string
-    cancellable*: Option[bool]
-    message*: Option[string]
-    percentage*: Option[int]
-
-  WorkDoneProgressEnd* = ref object of RootObj
-    kind*: string
-    message*: Option[string]
-
-  WorkDoneProgressCreateParams* = ref object of RootObj
-    token*: OptionalNode # int or string (ProgressToken)
-
-  ProgressTokenParams* = ref object of RootObj
-    token*: OptionalNode # int or string (ProgressToken)
-    value*: OptionalNode # T
-
-  WorkDoneProgressParams* = ref object of RootObj
-    workDoneToken*: OptionalNode # ProgressToken
-
-  ConfigurationItem* = ref object of RootObj
-    scopeUri*: Option[string]
-    section*: Option[string]
-
-  ConfigurationParams* = ref object of RootObj
-    items*: seq[ConfigurationItem]
-
-  WorkspaceEditCapability* = ref object of RootObj
-    documentChanges*: Option[bool]
-
-  DidChangeConfigurationCapability* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  DidChangeWatchedFilesCapability* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  SymbolKindCapability* = ref object of RootObj
-    valueSet*: OptionalSeq[int]
-
-  SymbolCapability* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    symbolKind*: Option[SymbolKindCapability]
-
-  ExecuteCommandClientCapability* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  SemanticTokensWorkspaceClientCapabilities* = ref object of RootObj
-    refreshSupport*: Option[bool]
-
-  InlayHintWorkspaceClientCapabilities* = ref object of RootObj
-    refreshSupport*: Option[bool]
-
-  InlineValueWorkspaceClientCapabilities* = ref object of RootObj
-    refreshSupport*: Option[bool]
-
-  WorkspaceClientCapabilities* = ref object of RootObj
-    applyEdit*: Option[bool]
-    workspaceEdit*: Option[WorkspaceEditCapability]
-    didChangeConfiguration*: Option[DidChangeConfigurationCapability]
-    didChangeWatchedFiles*: Option[DidChangeWatchedFilesCapability]
-    symbol*: Option[SymbolCapability]
-    executeCommand*: Option[ExecuteCommandClientCapability]
-    workspaceFolders*: Option[bool]
-    configuration*: Option[bool]
-    codeLens*: Option[CodeLensWorkspaceClientCapabilities]
-    semanticTokens*: Option[SemanticTokensWorkspaceClientCapabilities]
-    inlayHint*: Option[InlayHintWorkspaceClientCapabilities]
-    innlineValue*: Option[InlineValueWorkspaceClientCapabilities]
-
-  TextDocumentSyncClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    willSave*: Option[bool]
-    willSaveWaitUntil*: Option[bool]
-    didSave*: Option[bool]
-
-  CompletionItemCapability* = ref object of RootObj
-    snippetSupport*: Option[bool]
-    commitCharactersSupport*: Option[bool]
-    documentFormat*: OptionalSeq[string]
-    deprecatedSupport*: Option[bool]
-
-  CompletionItemKindCapability* = ref object of RootObj
-    valueSet*: OptionalSeq[int]
-
-  CompletionClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    completionItem*: Option[CompletionItemCapability]
-    completionItemKind*: Option[CompletionItemKindCapability]
-    contextSupport*: Option[bool]
-
-  HoverClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    contentFormat*: OptionalSeq[string]
-
-  ParameterInformationCapability* = ref object of RootObj
-    labelOffsetSupport*: Option[bool]
-
-  SignatureInformationCapability* = ref object of RootObj
-    documentationFormat*: OptionalSeq[string]
-    parameterInformation*: ParameterInformationCapability
-    activeParameterSupport*: Option[bool]
-    contextSupport*: Option[bool]
-
-  SignatureHelpClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    signatureInformation*: Option[SignatureInformationCapability]
-
-  ReferenceClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  DocumentHighlightClientCapabilies* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  TagSupportCapability* = ref object of RootObj
-    valueSet*: seq[SymbolTag]
-
-  DocumentSymbolClientCapabilies* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    symbolKind*: Option[SymbolKindCapability]
-    hierarchicalDocumentSymbolSupport*: Option[bool]
-    tagSupport*: Option[TagSupportCapability]
-    labelSupport*: Option[bool]
-
-  DocumentFormattingClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  DocumentRangeFormattingClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  DocumentOnTypeFormattingClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  DefinitionClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  TypeDefinitionClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    linkSupport*: Option[bool]
-
-  ImplementationClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    linkSupport*: Option[bool]
-
-  CodeActionClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  CodeLensClientClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  DocumentLinkCapability* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  DocumentColorClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  RenameClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    prepareSupport*: Option[bool]
-
-  PublishDiagnosticsClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  FoldingRangeKindValueSet* = ref object of RootObj
-    valueSet*: seq[FoldingRangeKind]
-
-  FoldingRangeFoldingRange* = ref object of RootObj
-    collapsedText*: seq[bool]
-
-  FoldingRangeClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    rangeLimit*: Option[uint]
-    lineFoldingOnly*: Option[bool]
-    foldingRangeKind*: Option[FoldingRangeKindValueSet]
-    foldingRange*: Option[FoldingRangeFoldingRange]
-
-  SelectionRangeClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  SemanticTokensClientCapabilitiesRequest* = ref object of RootObj
-    range*: Option[bool]
-    full*: Option[bool]
-
-  SemanticTokensClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    tokenTypes*: seq[string]
-    tokenModifiers*: seq[string]
-    formats*: seq[string]
-    requests*: SemanticTokensClientCapabilitiesRequest
-    overlappingTokenSupport*: Option[bool]
-    multilineTokenSupport*: Option[bool]
-    serverCancelSupport*: Option[bool]
-    augmentsSyntaxTokens*: Option[bool]
-
-  InlayHintClientCapabilitiesResolveSupport* = ref object of RootObj
-    properties*: seq[string]
-
-  InlayHintClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    resolveSupport*: Option[InlayHintClientCapabilitiesResolveSupport]
-
-  InlineValueClientCapabilitie* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  DeclarationClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    linkSupport*: Option[bool]
-
-  CallHierarchyClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-
-  DocumentLinkClientCapabilities* = ref object of RootObj
-    dynamicRegistration*: Option[bool]
-    toolsopSupport*: Option[bool]
-
-  TextDocumentClientCapabilities* = ref object of RootObj
-    synchronization*: Option[TextDocumentSyncClientCapabilities]
-    completion*: Option[CompletionClientCapabilities]
-    hover*: Option[HoverClientCapabilities]
-    signatureHelp*: Option[SignatureHelpClientCapabilities]
-    declaration*: Option[DeclarationClientCapabilities]
-    definition*: Option[DefinitionClientCapabilities]
-    typeDefinition*: Option[TypeDefinitionClientCapabilities]
-    implementation*: Option[ImplementationClientCapabilities]
-    references*: Option[ReferenceClientCapabilities]
-    documentHighlight*: Option[DocumentHighlightClientCapabilies]
-    documentSymbol*: Option[DocumentSymbolClientCapabilies]
-    codeAction*: Option[CodeActionClientCapabilities]
-    codeLens*: Option[CodeLensClientClientCapabilities]
-    documentLink*: Option[DocumentLinkClientCapabilities]
-    colorProvider*: Option[DocumentColorClientCapabilities]
-    formatting*: Option[DocumentFormattingClientCapabilities]
-    rangeFormatting*: Option[DocumentRangeFormattingClientCapabilities]
-    onTypeFormatting*: Option[DocumentOnTypeFormattingClientCapabilities]
-    rename*: Option[RenameClientCapabilities]
-    publishDiagnostics*: Option[PublishDiagnosticsClientCapabilities]
-    foldingRange*: Option[FoldingRangeClientCapabilities]
-    selectionRange*: Option[SelectionRangeClientCapabilities]
-    callHierarchy*: Option[CallHierarchyClientCapabilities]
-    semanticTokens*: Option[SemanticTokensClientCapabilities]
-    inlayHint*: Option[InlayHintClientCapabilities]
-    inlineValue*: Option[InlineValueClientCapabilitie]
-
-  WindowCapabilities* = ref object of RootObj
-    workDoneProgress*: Option[bool]
-    showMessage*: Option[ShowMessageRequestParams]
-    showDocument*: Option[ShowDocumentClientCapabilities]
-
-  ClientCapabilities* = ref object of RootObj
-    workspace*: Option[WorkspaceClientCapabilities]
-    textDocument*: Option[TextDocumentClientCapabilities]
-    window*: Option[WindowCapabilities]
-    experimental*: OptionalNode
-
-  WorkspaceFolder* = ref object of RootObj
+  TextEdit* = object ## A text edit
+    range*: Range
+    newText*: string
+
+  OptionalVersionedTextDocumentIdentifier* = object
+    ## Text document identifier with optional version
     uri*: string
-    name*: string
+    version*: Option[int]
+      # null means the version is known and the content on disk is the truth
 
-  InitializeResult* = ref object of RootObj
-    capabilities*: ServerCapabilities
+  TextDocumentEdit* = object ## An edit to a versioned text document
+    textDocument*: OptionalVersionedTextDocumentIdentifier
+    edits*: seq[TextEdit]
 
-  InitializeError* = ref object of RootObj
-    retry*: bool
+  WorkspaceEdit* = object ## A workspace edit
+    changes*: Option[Table[string, seq[TextEdit]]] # uri -> edits
+    documentChanges*: Option[seq[TextDocumentEdit]]
 
-  CompletionOptions* = ref object of RootObj
-    resolveProvider*: Option[bool]
-    triggerCharacters*: OptionalSeq[string]
-
-  HoverOptions* = ref object of WorkDoneProgressOptions
-
-  SignatureHelpOptions* = ref object of WorkDoneProgressParams
-    triggerCharacters*: OptionalSeq[string]
-    retriggerCharacters*: OptionalSeq[string]
-
-  DefinitionOptions* = ref object of WorkDoneProgressOptions
-
-  TypeDefinitionOptions* = ref object of WorkDoneProgressOptions
-
-  TypeDefinitionRegistrationOptions* = ref object of TextDocumentRegistrationOptions
-    identifier*: Option[string]
-    interFileDependencies*: bool
-    workspaceDiagnostics*: bool
-    partialResultToken*: OptionalNode # ProgressToken
-
-  CodeLensOptions* = ref object of WorkDoneProgressOptions
-    resolveProvider*: Option[bool]
-
-  DocumentOnTypeFormattingOptions* = ref object of RootObj
-    firstTriggerCharacter*: string
-    moreTriggerCharacter*: OptionalSeq[string]
-
-  DocumentLinkOptions* = ref object of RootObj
-    resolveProvider*: Option[bool]
-
-  ExecuteCommandOptions* = ref object of WorkDoneProgressOptions
-    commands*: seq[string]
-
-  SaveOptions* = ref object of RootObj
-    includeText*: Option[bool]
-
-  ColorProviderOptions* = ref object of RootObj
-
-  TextDocumentSyncOptions* = ref object of RootObj
-    openClose*: Option[bool]
-    change*: Option[TextDocumentSyncKind]
-
-  StaticRegistrationOptions* = ref object of RootObj
-    id*: Option[string]
-
-  WorkspaceFolderCapability* = ref object of RootObj
-    supported*: Option[bool]
-    changeNotifications*: OptionalNode # string or bool
-
-  WorkspaceCapability* = ref object of RootObj
-    workspaceFolders*: Option[WorkspaceFolderCapability]
-
-  TextDocumentAndStaticRegistrationOptions* = ref object of TextDocumentRegistrationOptions
-    id*: Option[string]
-
-  ReferenceOptions* = ref object of WorkDoneProgressOptions
-
-  RenameOptions* = ref object of RootObj
-    prepareProvider*: bool
-
-  SemanticTokensLegend* = ref object of RootObj
-    tokenTypes*: seq[string]
-    tokenModifiers*: seq[string]
-
-  SemanticTokensOptions* = ref object of WorkDoneProgressOptions
-    legend*: SemanticTokensLegend
-    range*: OptionalNode # bool or JsonNode
-    full*: OptionalNode # bool or JsonNode
-
-  SemanticTokensRegistrationOptions* = ref object of TextDocumentRegistrationOptions
-    id*: Option[string]
-    legend*: SemanticTokensLegend
-    range*: OptionalNode # bool or JsonNode
-    full*: OptionalNode # bool or JsonNode
-
-  InlayHintOptions* = ref object of RootObj
-    resolveProvider*: Option[bool]
-
-  InlineValueOptions* = ref object of WorkDoneProgressOptions
-
-  InlineValueRegistrationOptions* = ref object of InlineValueOptions
-    documentSelector*: Option[DocumentSelector]
-    id*: Option[string]
-
-  DiagnosticOptions* = ref object of WorkDoneProgressOptions
-    identifier*: Option[string]
-    interFileDependencies*: bool
-    workspaceDiagnostics*: bool
-
-  DiagnosticRegistrationOptions* = ref object of TextDocumentRegistrationOptions
-    identifier*: Option[string]
-    interFileDependencies*: bool
-    workspaceDiagnostics*: bool
-    id*: Option[string]
-
-  FoldingRangeOptions* = ref object of WorkDoneProgressOptions
-
-  SelectionRangeOptions* = ref object of WorkDoneProgressOptions
-
-  SelectionRangeRegistrationOptions* = ref object of WorkDoneProgressParams
-    workDoneProgress*: Option[bool]
-    documentSelector*: Option[DocumentSelector]
-    id*: Option[string]
-
-  ImplementationOptions* = ref object of WorkDoneProgressOptions
-
-  DeclarationOptions* = ref object of WorkDoneProgressOptions
-
-  DeclarationRegistrationOptions* = ref object of TextDocumentPositionParams
-    workDoneToken*: OptionalNode # ProgressToken
-    partialResultToken*: OptionalNode # ProgressToken
-
-  CallHierarchyOptions* = ref object of WorkDoneProgressOptions
-
-  CallHierarchyRegistrationOptions* = ref object of TextDocumentRegistrationOptions
-    workDoneProgress*: Option[bool]
-    id*: Option[string]
-
-  DocumentHighlightOptions* = ref object of TextDocumentRegistrationOptions
-    workDoneProgress*: Option[bool]
-
-  DocumentSymbolOptions* = ref object of WorkDoneProgressOptions
-    label*: Option[string]
-
-  CodeActionOptions* = ref object of WorkDoneProgressOptions
-    codeActionKinds*: seq[string]
-    resolveProvider*: Option[bool]
-
-  DocumentFormattingOptions* = ref object of WorkDoneProgressOptions
-
-  DocumentRangeFormattingOptions* = ref object of WorkDoneProgressOptions
-
-  WorkspaceSymbolOptions* = ref object of WorkDoneProgressOptions
-    resolveProvider*: Option[bool]
-
-  ServerCapabilities* = ref object of RootObj
-    textDocumentSync*: OptionalNode # TextDocumentSyncOptions or int
-    hoverProvider*: OptionalNode # bool | HoverOptions
-    completionProvider*: Option[CompletionOptions]
-    signatureHelpProvider*: Option[SignatureHelpOptions]
-    declarationProvider*: OptionalNode
-      # bool | DeclarationOptions | DeclarationRegistrationOptions
-    definitionProvider*: OptionalNode # bool | DefinitionOptions
-    typeDefinitionProvider*: OptionalNode
-      # bool | TypeDefinitionOptions | TypeDefinitionRegistrationOptions
-    implementationProvider*: OptionalNode
-      # bool | ImplementationOptions | TextDocumentAndStaticRegistrationOptions
-    referencesProvider*: OptionalNode # bool | ReferenceOptions
-    documentHighlightProvider*: OptionalNode # bool | DocumentHighlightOptions
-    documentSymbolProvider*: OptionalNode # bool | DocumentSymbolOptions
-    workspaceSymbolProvider*: OptionalNode # bool | WorkspaceSymbolOptions
-    codeActionProvider*: OptionalNode # bool | CodeActionOptions
-    codeLensProvider*: Option[CodeLensOptions]
-    documentFormattingProvider*: OptionalNode # bool | DocumentFormattingOptions
-    documentRangeFormattingProvider*: OptionalNode
-      # bool | DocumentRangeFormattingOptions
-    documentOnTypeFormattingProvider*: Option[DocumentOnTypeFormattingOptions]
-    renameProvider*: OptionalNode # bool or RenameOptions
-    documentLinkProvider*: Option[DocumentLinkOptions]
-    colorProvider*: OptionalNode
-      # bool | ColorProviderOptions | TextDocumentAndStaticRegistrationOptions
-    workspace*: Option[WorkspaceCapability]
-    semanticTokensProvider*: OptionalNode
-      # SemanticTokensOptions | SemanticTokensRegistrationOptions
-    inlayHintProvider*: OptionalNode
-      # bool | InlayHintOptions | InlayHintRegistrationOptions
-    inlineValueProvider*: OptionalNode
-      # bool InlineValueOptions | InlineValueRegistrationOptions
-    diagnosticProvider*: OptionalNode # DiagnosticOptions | DiagnosticRegistrationOptions
-    foldingRangeProvider*: OptionalNode # bool | FoldingRangeOptions
-    selectionRangeProvider*: OptionalNode
-      # bool | SelectionRangeOptions | SelectionRangeRegistrationOptions
-    callHierarchyProvider*: OptionalNode
-      # bool | CallHierarchyOptions | CallHierarchyRegistrationOptions
-    executeCommandProvider*: Option[ExecuteCommandOptions]
-    experimental*: OptionalNode
-
-  InitializedParams* = ref object of RootObj
-    DUMMY*: Option[nil]
-
-  ShowMessageParams* = ref object of RootObj
-    `type`*: int
-    message*: string
-
-  MessageActionItem* = ref object of RootObj
-    title*: string
-
-  ShowMessageRequestParams* = ref object of RootObj
-    `type`*: int
-    message*: string
-    actions*: OptionalSeq[MessageActionItem]
-
-  ShowDocumentClientCapabilities* = ref object of RootObj
-    support*: bool
-
-  LogMessageParams* = ref object of RootObj
-    `type`*: int
-    message*: string
-
-  Registration* = ref object of RootObj
-    id*: string
-    `method`*: string
-    registrationOptions*: OptionalNode
-
-  RegistrationParams* = ref object of RootObj
-    registrations*: OptionalSeq[Registration]
-
-  Unregistration* = ref object of RootObj
-    id*: string
-    `method`*: string
-
-  UnregistrationParams* = ref object of RootObj
-    unregistrations*: OptionalSeq[Unregistration]
-
-  WorkspaceFoldersChangeEvent* = ref object of RootObj
-    added*: OptionalSeq[WorkspaceFolder]
-    removed*: OptionalSeq[WorkspaceFolder]
-
-  DidChangeWorkspaceFoldersParams* = ref object of RootObj
-    event*: WorkspaceFoldersChangeEvent
-
-  DidChangeConfigurationParams* = ref object of RootObj
-    settings*: OptionalNode
-
-  FileEvent* = ref object of RootObj
-    uri*: string
-    `type`*: int
-
-  DidChangeWatchedFilesParams* = ref object of RootObj
-    changes*: OptionalSeq[FileEvent]
-
-  DidChangeWatchedFilesRegistrationOptions* = ref object of RootObj
-    watchers*: OptionalSeq[FileSystemWatcher]
-
-  FileSystemWatcher* = ref object of RootObj
-    globPattern*: string
-    kind*: Option[int]
-
-  WorkspaceSymbolParams* = ref object of RootObj
-    query*: string
-
-  ExecuteCommandParams* = ref object of WorkDoneProgressParams
-    command*: string
-    arguments*: JsonNode # LSPAny[]
-
-  ExecuteCommandRegistrationOptions* = ref object of RootObj
-    commands*: OptionalSeq[string]
-
-  ApplyWorkspaceEditParams* = ref object of RootObj
-    label*: Option[string]
-    edit*: WorkspaceEdit
-
-  ApplyWorkspaceEditResponse* = ref object of RootObj
-    applied*: bool
-
-  DidOpenTextDocumentParams* = ref object of RootObj
-    textDocument*: TextDocumentItem
-
-  DidChangeTextDocumentParams* = ref object of RootObj
-    textDocument*: VersionedTextDocumentIdentifier
-    contentChanges*: seq[TextDocumentContentChangeEvent]
-
-  TextDocumentContentChangeEvent* = ref object of RootObj
-    text*: string
+  TextDocumentContentChangeEvent* = object ## Content change event for didChange
     range*: Option[Range]
     rangeLength*: Option[int]
+    text*: string
 
-  TextDocumentChangeRegistrationOptions* = ref object of TextDocumentRegistrationOptions
-    syncKind*: int
+  # Diagnostic types
+  DiagnosticRelatedInformation* = object ## Related information for a diagnostic
+    location*: Location
+    message*: string
 
-  WillSaveTextDocumentParams* = ref object of RootObj
-    textDocument*: TextDocumentIdentifier
-    reason*: int
+  Diagnostic* = object ## A diagnostic (error, warning, etc.)
+    range*: Range
+    severity*: Option[DiagnosticSeverity]
+    code*: Option[JsonNode]
+    codeDescription*: Option[JsonNode]
+    source*: Option[string]
+    message*: string
+    tags*: Option[seq[DiagnosticTag]]
+    relatedInformation*: Option[seq[DiagnosticRelatedInformation]]
+    data*: Option[JsonNode]
 
-  DidSaveTextDocumentParams* = ref object of RootObj
-    textDocument*: TextDocumentIdentifier
-    text*: Option[string]
-
-  TextDocumentSaveRegistrationOptions* = ref object of TextDocumentRegistrationOptions
-    includeText*: Option[bool]
-
-  DidCloseTextDocumentParams* = ref object of RootObj
-    textDocument*: TextDocumentIdentifier
-
-  PublishDiagnosticsParams* = ref object of RootObj
+  PublishDiagnosticsParams* = object ## Parameters for publishDiagnostics notification
     uri*: string
-    diagnostics*: OptionalSeq[Diagnostic]
+    version*: Option[int]
+    diagnostics*: seq[Diagnostic]
 
-  CompletionParams* = ref object of TextDocumentPositionParams
-    context*: Option[CompletionContext]
-
-  CompletionContext* = ref object of RootObj
-    triggerKind*: int
+  # Completion types
+  CompletionContext* = object ## Additional information about completion context
+    triggerKind*: CompletionTriggerKind
     triggerCharacter*: Option[string]
 
-  CompletionList* = ref object of RootObj
-    isIncomplete*: bool
-    items*: OptionalSeq[CompletionItem]
+  CompletionParams* = object ## Parameters for completion request
+    textDocument*: TextDocumentIdentifier
+    position*: Position
+    context*: Option[CompletionContext]
 
-  CompletionItemLabelDetails* = ref object of RootObj
-    detail*: string
-    description*: Option[string]
+  MarkupContent* = object ## Markup content for documentation
+    kind*: MarkupKind
+    value*: string
 
-  CompletionItem* = ref object of RootObj
+  CompletionItem* = object ## A completion item
     label*: string
-    labelDetails*: Option[CompletionItemLabelDetails]
-    kind*: Option[int]
-    tags*: OptionalSeq[int]
+    labelDetails*: Option[JsonNode]
+    kind*: Option[CompletionItemKind]
+    tags*: Option[seq[int]]
     detail*: Option[string]
-    documentation*: OptionalNode #Option[string or MarkupContent]
+    documentation*: Option[JsonNode] # string | MarkupContent
     deprecated*: Option[bool]
     preselect*: Option[bool]
     sortText*: Option[string]
     filterText*: Option[string]
     insertText*: Option[string]
-    insertTextFormat*: Option[int]
-    textEdit*: Option[TextEdit]
-    additionalTextEdits*: OptionalSeq[TextEdit]
-    commitCharacters*: OptionalSeq[string]
-    command*: Option[Command]
-    data*: OptionalNode
+    insertTextFormat*: Option[InsertTextFormat]
+    insertTextMode*: Option[int]
+    textEdit*: Option[JsonNode] # TextEdit | InsertReplaceEdit
+    textEditText*: Option[string]
+    additionalTextEdits*: Option[seq[TextEdit]]
+    commitCharacters*: Option[seq[string]]
+    command*: Option[JsonNode]
+    data*: Option[JsonNode]
 
-  CompletionRegistrationOptions* = ref object of TextDocumentRegistrationOptions
-    triggerCharacters*: OptionalSeq[string]
-    resolveProvider*: Option[bool]
+  CompletionList* = object ## Represents a collection of completion items
+    isIncomplete*: bool
+    itemDefaults*: Option[JsonNode]
+    items*: seq[CompletionItem]
 
-  MarkedStringOption* = ref object of RootObj
-    language*: string
-    value*: string
-
-  Hover* = ref object of RootObj
-    contents*: OptionalNode
-      # string or MarkedStringOption or [string] or [MarkedStringOption] or MarkupContent
+  # Hover types
+  Hover* = object ## Result of a hover request
+    contents*: JsonNode # MarkedString | MarkedString[] | MarkupContent
     range*: Option[Range]
 
-  HoverParams* = ref object of TextDocumentPositionParams
+  HoverParams* = object ## Parameters for hover request
+    textDocument*: TextDocumentIdentifier
+    position*: Position
 
-  SignatureHelp* = ref object of RootObj
+  # Signature Help types
+  ParameterInformation* = object ## Information about a parameter
+    label*: string # Parameter label (can also be [start, end] but we use string)
+    documentation*: Option[JsonNode] # string | MarkupContent
+
+  SignatureInformation* = object ## Information about a signature
+    label*: string
+    documentation*: Option[JsonNode] # string | MarkupContent
+    parameters*: Option[seq[ParameterInformation]]
+    activeParameter*: Option[int]
+
+  SignatureHelp* = object ## Result of signature help request
     signatures*: seq[SignatureInformation]
     activeSignature*: Option[int]
     activeParameter*: Option[int]
 
-  SignatureInformation* = ref object of RootObj
-    label*: string
-    documentation*: OptionalNode # string | MarkupContent
-    parameters*: OptionalSeq[ParameterInformation]
+  SignatureHelpParams* = object ## Parameters for signature help request
+    textDocument*: TextDocumentIdentifier
+    position*: Position
+    context*: Option[JsonNode] # SignatureHelpContext
 
-  ParameterInformation* = ref object of RootObj
-    label*: OptionalNode # string | seq[int]
-    documentation*: OptionalNode # string | MarkupContent
+  # Execute Command types
+  ExecuteCommandParams* = object ## Parameters for workspace/executeCommand request
+    command*: string
+    arguments*: Option[seq[JsonNode]]
 
-  SignatureHelpRegistrationOptions* = ref object of TextDocumentRegistrationOptions
-    workDoneToken*: OptionalNode # ProgressToken
-    triggerCharacters*: OptionalSeq[string]
-    retriggerCharacters*: OptionalSeq[string]
+  ExecuteCommandOptions* = object ## Execute command options
+    commands*: seq[string]
+    workDoneProgress*: Option[bool]
 
-  ReferenceParams* = ref object of TextDocumentPositionParams
-    context*: ReferenceContext
+  # Definition/Declaration types
+  DefinitionParams* = object ## Parameters for definition request
+    textDocument*: TextDocumentIdentifier
+    position*: Position
 
-  ReferenceContext* = ref object of RootObj
+  DeclarationParams* = object ## Parameters for declaration request
+    textDocument*: TextDocumentIdentifier
+    position*: Position
+
+  # References types
+  ReferenceContext* = object ## Context for find references
     includeDeclaration*: bool
 
-  DocumentHighlight* = ref object of RootObj
-    `range`*: Range
-    kind*: Option[int]
-
-  DocumentSymbolParams* = ref object of WorkDoneProgressParams
-    partialResultToken*: OptionalNode # ProgressToken
+  ReferenceParams* = object ## Parameters for references request
     textDocument*: TextDocumentIdentifier
+    position*: Position
+    context*: ReferenceContext
 
-  DocumentSymbol* = ref object of RootObj
+  # Document symbol types
+  DocumentSymbol* = object ## Document symbol (hierarchical)
     name*: string
     detail*: Option[string]
-    kind*: int # SymbolKind
-    tags*: Option[seq[SymbolTag]]
+    kind*: SymbolKind
+    tags*: Option[seq[int]]
     deprecated*: Option[bool]
-    range*: Option[Range]
-    selectionRange*: Option[Range]
+    range*: Range
+    selectionRange*: Range
     children*: Option[seq[DocumentSymbol]]
 
-  SymbolInformation* = ref object of RootObj
+  SymbolInformation* = object ## Symbol information (flat)
     name*: string
-    kind*: int # SymbolKind
-    tags*: Option[seq[SymbolTag]]
+    kind*: SymbolKind
+    tags*: Option[seq[int]]
     deprecated*: Option[bool]
     location*: Location
     containerName*: Option[string]
 
-  CodeActionParams* = ref object of RootObj
-    textDocument*: TextDocumentIdentifier
-    `range`*: Range
-    context*: CodeActionContext
-
-  CodeActionContext* = ref object of RootObj
-    diagnostics*: OptionalSeq[Diagnostic]
-
-  CodeLensParams* = ref object of WorkDoneProgressParams
-    partialResultToken*: OptionalNode # ProgressToken
+  DocumentSymbolParams* = object ## Parameters for document symbol request
     textDocument*: TextDocumentIdentifier
 
-  CodeLens* = ref object of RootObj
-    `range`*: Range
-    command*: Option[Command]
-    data*: OptionalNode
+  DocumentSymbolResult* = object
+    ## Result of documentSymbol request
+    ## Either hierarchical DocumentSymbol[] or flat SymbolInformation[]
+    case isHierarchical*: bool
+    of true:
+      symbols*: seq[DocumentSymbol]
+    of false:
+      symbolInfos*: seq[SymbolInformation]
 
-  CodeLensRegistrationOptions* = ref object of TextDocumentRegistrationOptions
-    workDoneProgress*: Option[bool]
-    resolveProvider*: Option[bool]
+  # Inlay Hint types
+  InlayHintLabelPart* = object ## A part of an inlay hint label
+    value*: string
+    tooltip*: Option[JsonNode] # string | MarkupContent
+    location*: Option[Location]
+    command*: Option[JsonNode]
 
-  CodeLensWorkspaceClientCapabilities* = ref object of RootObj
-    refreshSupport*: Option[bool]
-
-  DocumentLinkParams* = ref object of WorkDoneProgressParams
-    partialResultToken*: OptionalNode # ProgressToken
-    textDocument*: TextDocumentIdentifier
-
-  DocumentLink* = ref object of RootObj
-    `range`*: Range
-    target*: Option[string]
-    tooltip*: Option[string]
-    data*: OptionalNode
-
-  DocumentLinkRegistrationOptions* = ref object of TextDocumentRegistrationOptions
-    resolveProvider*: Option[bool]
-
-  DocumentColorParams* = ref object of RootObj
-    textDocument*: TextDocumentIdentifier
-
-  ColorInformation* = ref object of RootObj
-    `range`*: Range
-    color*: Color
-
-  Color* = ref object of RootObj
-    red*: int
-    green*: int
-    blue*: int
-    alpha*: int
-
-  ColorPresentationParams* = ref object of RootObj
-    textDocument*: TextDocumentIdentifier
-    color*: Color
-    `range`*: Range
-
-  ColorPresentation* = ref object of RootObj
-    label*: string
-    textEdit*: Option[TextEdit]
-    additionalTextEdits*: OptionalSeq[TextEdit]
-
-  FormattingOptions* = ref object of RootObj
-    tabSize*: int
-    insertSpaces*: bool
-    trimTrailingWhitespace*: Option[bool]
-    insertFinalNewline*: Option[bool]
-    trimFinalNewlines*: Option[bool]
-
-  DocumentFormattingParams* = ref object of RootObj
-    textDocument*: TextDocumentIdentifier
-    options*: FormattingOptions
-
-  DocumentRangeFormattingParams* = ref object of RootObj
-    textDocument*: TextDocumentIdentifier
-    `range`*: Range
-    options*: OptionalNode
-
-  DocumentOnTypeFormattingParams* = ref object of RootObj
-    textDocument*: TextDocumentIdentifier
+  InlayHint* = object ## An inlay hint
     position*: Position
-    ch*: string
-    options*: OptionalNode
-
-  DocumentOnTypeFormattingRegistrationOptions* = ref object of TextDocumentRegistrationOptions
-    firstTriggerCharacter*: string
-    moreTriggerCharacter*: OptionalSeq[string]
-
-  RenameParams* = ref object of RootObj
-    textDocument*: TextDocumentIdentifier
-    position*: Position
-    newName*: string
-
-  PrepareRenameParams* = ref object of RootObj
-    textDocument*: TextDocumentIdentifier
-    position*: Position
-
-  PrepareRenameResponse* = ref object of RootObj
-    defaultBehaviour*: bool
-
-  SignatureHelpContext* = ref object of RootObj
-    triggerKind*: int
-    triggerCharacter*: Option[string]
-    isRetrigger*: bool
-    activeSignatureHelp*: Option[SignatureHelp]
-
-  SignatureHelpParams* = ref object of TextDocumentPositionParams
-    context*: SignatureHelpContext
-
-  ExpandResult* = ref object of RootObj
-    range*: Range
-    content*: string
-
-  PartialResultParams* = ref object of RootObj
-    partialResultToken*: OptionalNode # ProgressToken
-
-  SemanticTokensParams* = ref object of RootObj
-    textDocument*: TextDocumentIdentifier
-    workDoneToken*: OptionalNode # ProgressToken
-    partialResultToken*: OptionalNode # ProgressToken
-
-  SemanticTokensDeltaParams* = ref object of SemanticTokensParams
-    previousResultId*: string
-
-  SemanticTokens* = ref object of RootObj
-    resultId*: Option[string]
-    data*: seq[int]
-
-  InlayHintParams* = ref object of RootObj # TODO: extends WorkDoneProgressParams
-    textDocument*: TextDocumentIdentifier
-    range*: Range
-
-  InlayHint* = ref object of RootObj
-    position*: Position
-    label*: string # string | InlayHintLabelPart[]
-    kind*: Option[int]
-    textEdits*: OptionalSeq[TextEdit]
-    tooltip*: Option[string] # string | MarkupContent
+    label*: JsonNode # string | InlayHintLabelPart[]
+    kind*: Option[InlayHintKind]
+    textEdits*: Option[seq[TextEdit]]
+    tooltip*: Option[JsonNode] # string | MarkupContent
     paddingLeft*: Option[bool]
-    paddingRight*: Option[bool] #data*: OptionalNode
+    paddingRight*: Option[bool]
+    data*: Option[JsonNode]
 
-  InlineValueContext* = ref object of RootObj
+  InlayHintParams* = object ## Parameters for inlay hint request
+    textDocument*: TextDocumentIdentifier
+    range*: Range
+
+  # Inline Value types
+  InlineValueText* = object ## Provide inline value as text
+    range*: Range
+    text*: string
+
+  InlineValueVariableLookup* = object ## Provide inline value through a variable lookup
+    range*: Range
+    variableName*: Option[string]
+    caseSensitiveLookup*: bool
+
+  InlineValueEvaluatableExpression* = object
+    ## Provide inline value through an expression evaluation
+    range*: Range
+    expression*: Option[string]
+
+  InlineValueKind* = enum
+    ivkText
+    ivkVariableLookup
+    ivkEvaluatableExpression
+
+  InlineValue* = object
+    ## An inline value (one of: text, variable lookup, or evaluatable expression)
+    case kind*: InlineValueKind
+    of ivkText:
+      text*: InlineValueText
+    of ivkVariableLookup:
+      variableLookup*: InlineValueVariableLookup
+    of ivkEvaluatableExpression:
+      evaluatableExpression*: InlineValueEvaluatableExpression
+
+  InlineValueContext* = object ## Context for inline values request
     frameId*: int
     stoppedLocation*: Range
 
-  InlineValueParams* = ref object of WorkDoneProgressParams
+  InlineValueParams* = object ## Parameters for inline value request
     textDocument*: TextDocumentIdentifier
     range*: Range
     context*: InlineValueContext
 
-  InlineValueText* = ref object of RootObj
+  # Selection Range types
+  SelectionRange* = ref object ## Selection range with optional parent
     range*: Range
-    text*: string
+    parent*: SelectionRange # nil if no parent
 
-  InlineValueVariableLookup* = ref object of RootObj
-    range*: Range
-    variableName*: Option[string]
-    caseSensitiveLookup: bool
-
-  InlineValueEvaluatableExpression* = ref object of RootObj
-    range: Range
-    expression: Option[string]
-
-  DefinitionParams* = ref object of TextDocumentPositionParams
-    workDoneToken*: OptionalNode # ProgressToken
-    workDoneProgress*: Option[bool]
-
-  TypeDefinitionParams* = ref object of TextDocumentPositionParams
-    workDoneToken*: OptionalNode # ProgressToken
-    partialResultToken*: OptionalNode # ProgressToken
-
-  ImplementationParams* = ref object of TextDocumentPositionParams
-    workDoneToken*: OptionalNode # ProgressToken
-    partialResultToken*: OptionalNode # ProgressToken
-
-  CallHierarchyPrepareParams* = ref object of TextDocumentPositionParams
-    workDoneToken*: OptionalNode # ProgressToken
-
-  CallHierarchyItem* = ref object of RootObj
-    name*: string
-    kind*: int
-    tags*: OptionalSeq[SymbolTag]
-    detail*: Option[string]
-    uri*: string
-    range*: Range
-    selectionRange*: Range
-    data*: OptionalNode # unknown
-
-  CallHierarchyIncomingCallsParams* = ref object of WorkDoneProgressParams
-    partialResultToken*: OptionalNode # ProgressToken
-    item*: CallHierarchyItem
-
-  CallHierarchyIncomingCall* = ref object of RootObj
-    `from`*: CallHierarchyItem
-    fromRanges*: seq[Range]
-
-  CallHierarchyOutgoingCallsParams* = ref object of WorkDoneProgressParams
-    partialResultToken*: OptionalNode # ProgressToken
-    item*: CallHierarchyItem
-
-  CallHierarchyOutgoingCall* = ref object of RootObj
-    to*: CallHierarchyItem
-    fromRanges*: seq[Range]
-
-  DocumentHighlightParams* = ref object of TextDocumentPositionParams
-    workDoneProgress*: Option[bool]
-    partialResultToken*: OptionalNode # ProgressToken
-
-  FoldingRangeParams* = ref object of WorkDoneProgressParams
-    partialResultToken*: OptionalNode # ProgressToken
-    textDocument*: TextDocumentIdentifier
-
-  FoldingRange* = ref object of RootObj
-    startLine*: uint
-    starCharacter*: Option[uint]
-    endLine*: uint
-    endCharacter*: Option[uint]
-    kind*: Option[FoldingRangeKind]
-    collapsedText*: Option[string]
-
-  SelectionRangeParams* = ref object of WorkDoneProgressParams
+  SelectionRangeParams* = object ## Parameters for selection range request
     textDocument*: TextDocumentIdentifier
     positions*: seq[Position]
 
-  SelectionRange* = ref object of RootObj
+  # Document Highlight types
+  DocumentHighlight* = object
+    ## A document highlight is a range inside a text document which deserves
+    ## special attention. Usually a document highlight is visualized by changing
+    ## the background color of its range.
     range*: Range
-    parent*: Option[SelectionRange]
+    kind*: Option[DocumentHighlightKind]
+
+  DocumentHighlightParams* = object ## Parameters for document highlight request
+    textDocument*: TextDocumentIdentifier
+    position*: Position
+
+  # Document Link types
+  DocumentLink* = object
+    ## A document link is a range in a text document that links to an internal
+    ## or external resource, like another text document or a web site.
+    range*: Range ## The range this link applies to
+    target*: Option[string] ## The uri this link points to (can be resolved later)
+    tooltip*: Option[string] ## The tooltip text when hovering over this link
+    data*: Option[JsonNode] ## A data entry field for resolve request
+
+  DocumentLinkParams* = object ## Parameters for document link request
+    textDocument*: TextDocumentIdentifier
+
+  # Command type (used by CodeLens and other features)
+  Command* = object ## Represents a reference to a command
+    title*: string ## Title of the command (displayed in UI)
+    command*: string ## The identifier of the actual command handler
+    arguments*: Option[seq[JsonNode]]
+      ## Arguments that the command handler should be invoked with
+
+  # CodeLens types
+  CodeLens* = object
+    ## A code lens represents a command that should be shown along with source text
+    range*: Range ## The range in which this code lens is valid
+    command*: Option[Command]
+      ## The command this code lens represents (can be resolved later)
+    data*: Option[JsonNode]
+      ## A data entry field preserved on a code lens item between resolve request
+
+  CodeLensParams* = object ## Parameters for textDocument/codeLens request
+    textDocument*: TextDocumentIdentifier
+
+  # Code Action types
+  CodeActionContext* = object ## Context for code action requests
+    diagnostics*: seq[Diagnostic] ## Diagnostics known to the client
+    only*: Option[seq[string]]
+      ## Requested kinds of actions (e.g., ["quickfix", "refactor"])
+    triggerKind*: Option[int]
+      ## How the code action was triggered (1=Invoked, 2=Automatic)
+
+  CodeActionParams* = object ## Parameters for textDocument/codeAction request
+    textDocument*: TextDocumentIdentifier
+    range*: Range ## The range for which the command was invoked
+    context*: CodeActionContext ## Context carrying additional information
+
+  CodeAction* = object
+    ## A code action represents a change that can be performed in code.
+    ## Can be a simple Command, or provide edits directly.
+    title*: string ## A short, human-readable title for this code action
+    kind*: Option[string] ## The kind of the code action (e.g., "quickfix", "refactor")
+    diagnostics*: Option[seq[Diagnostic]] ## Diagnostics this action resolves
+    isPreferred*: Option[bool]
+      ## Marks this as preferred action (shown in UI without submenu)
+    disabled*: Option[JsonNode] ## Marks the action as disabled with a reason
+    edit*: Option[WorkspaceEdit] ## The workspace edit this code action performs
+    command*: Option[Command] ## A command this code action executes
+    data*: Option[JsonNode] ## Data preserved between request and resolve
+
+  # Call Hierarchy types
+  CallHierarchyItem* = object
+    ## Represents programming constructs like functions or constructors in the
+    ## context of call hierarchy.
+    name*: string ## The name of this item
+    kind*: SymbolKind ## The kind of this item
+    tags*: Option[seq[int]] ## Tags for this item (e.g., deprecated)
+    detail*: Option[string] ## More detail for this item (e.g., signature)
+    uri*: string ## The resource identifier of this item
+    range*: Range ## Range enclosing this symbol (including leading/trailing whitespace)
+    selectionRange*: Range ## Range that should be selected and revealed
+    data*: Option[JsonNode] ## Data preserved between prepare and incoming/outgoing calls
+
+  CallHierarchyIncomingCall* = object
+    ## Represents an incoming call, e.g., a caller of a method or constructor.
+    `from`*: CallHierarchyItem ## The item that makes the call
+    fromRanges*: seq[Range] ## The ranges at which the calls appear
+
+  CallHierarchyOutgoingCall* = object
+    ## Represents an outgoing call, e.g., calling a getter from a method.
+    to*: CallHierarchyItem ## The item that is called
+    fromRanges*: seq[Range] ## The range at which this item is called
+
+  CallHierarchyPrepareParams* = object
+    ## Parameters for textDocument/prepareCallHierarchy
+    textDocument*: TextDocumentIdentifier
+    position*: Position
+
+  CallHierarchyIncomingCallsParams* = object
+    ## Parameters for callHierarchy/incomingCalls
+    item*: CallHierarchyItem
+
+  CallHierarchyOutgoingCallsParams* = object
+    ## Parameters for callHierarchy/outgoingCalls
+    item*: CallHierarchyItem
+
+  # Folding Range types
+  FoldingRange* = object ## Represents a folding range in a text document
+    startLine*: int ## Zero-based line number of the start of the range
+    startCharacter*: Option[int] ## Zero-based character offset of the start (optional)
+    endLine*: int ## Zero-based line number of the end of the range
+    endCharacter*: Option[int] ## Zero-based character offset of the end (optional)
+    kind*: Option[FoldingRangeKind] ## The kind of the folding range
+    collapsedText*: Option[string] ## Text to display when collapsed (LSP 3.17+)
+
+  FoldingRangeParams* = object ## Parameters for textDocument/foldingRange request
+    textDocument*: TextDocumentIdentifier
+
+  # Semantic Tokens types
+  SemanticTokensLegend* = object
+    ## Semantic tokens legend (defines token types and modifiers)
+    tokenTypes*: seq[string]
+    tokenModifiers*: seq[string]
+
+  SemanticTokensOptions* = object ## Server semantic tokens options
+    legend*: SemanticTokensLegend
+    range*: Option[JsonNode] # bool | {}
+    full*: Option[JsonNode] # bool | { delta?: bool }
+
+  SemanticTokens* = object ## Result of semantic tokens request
+    resultId*: Option[string]
+    data*: seq[int]
+      # Encoded token data (deltaLine, deltaStart, length, tokenType, tokenModifiers)
+
+  SemanticToken* = object ## Decoded individual semantic token
+    line*: int
+    startChar*: int
+    endChar*: int ## startChar + length (exclusive)
+    length*: int
+    tokenType*: int
+    tokenModifiers*: int
+
+  # Work Done Progress types
+  WorkDoneProgressKind* = enum
+    ## The kind of work done progress
+    wdpkBegin = "begin"
+    wdpkReport = "report"
+    wdpkEnd = "end"
+
+  WorkDoneProgressBegin* = object
+    ## To start progress reporting a $/progress notification must be sent
+    title*: string ## Mandatory title of the progress operation
+    cancellable*: Option[bool] ## Controls if a cancel button should show
+    message*: Option[string] ## Optional, more detailed progress message
+    percentage*: Option[int] ## Optional progress percentage (0-100)
+
+  WorkDoneProgressReport* = object ## Reporting progress is done using this payload
+    cancellable*: Option[bool] ## Controls if a cancel button should show
+    message*: Option[string] ## Optional, more detailed progress message
+    percentage*: Option[int] ## Optional progress percentage (0-100)
+
+  WorkDoneProgressEnd* = object ## Signaling the end of a progress reporting
+    message*: Option[string] ## Optional final message indicating the outcome
+
+  WorkDoneProgress* = object ## Work done progress value (discriminated union)
+    case kind*: WorkDoneProgressKind
+    of wdpkBegin:
+      begin*: WorkDoneProgressBegin
+    of wdpkReport:
+      report*: WorkDoneProgressReport
+    of wdpkEnd:
+      `end`*: WorkDoneProgressEnd
+
+  WorkDoneProgressParams* = object ## Parameters for $/progress notification
+    token*: JsonNode ## The progress token (int | string)
+    value*: WorkDoneProgress ## The progress data
+
+  # Server capabilities
+  CompletionOptions* = object ## Completion options
+    triggerCharacters*: Option[seq[string]]
+    allCommitCharacters*: Option[seq[string]]
+    resolveProvider*: Option[bool]
+    workDoneProgress*: Option[bool]
+
+  SignatureHelpOptions* = object ## Signature help options
+    triggerCharacters*: Option[seq[string]]
+    retriggerCharacters*: Option[seq[string]]
+
+  TextDocumentSyncOptions* = object ## Text document sync options
+    openClose*: Option[bool]
+    change*: Option[TextDocumentSyncKind]
+    willSave*: Option[bool]
+    willSaveWaitUntil*: Option[bool]
+    save*: Option[JsonNode] # bool | SaveOptions
+
+  ServerCapabilities* = object ## Server capabilities
+    positionEncoding*: Option[string]
+    textDocumentSync*: Option[JsonNode] # TextDocumentSyncOptions | TextDocumentSyncKind
+    completionProvider*: Option[CompletionOptions]
+    hoverProvider*: Option[JsonNode] # bool | HoverOptions
+    signatureHelpProvider*: Option[SignatureHelpOptions]
+    declarationProvider*: Option[JsonNode]
+    definitionProvider*: Option[JsonNode]
+    typeDefinitionProvider*: Option[JsonNode]
+    implementationProvider*: Option[JsonNode]
+    referencesProvider*: Option[JsonNode]
+    documentHighlightProvider*: Option[JsonNode]
+    documentSymbolProvider*: Option[JsonNode]
+    codeActionProvider*: Option[JsonNode]
+    codeLensProvider*: Option[JsonNode]
+    documentLinkProvider*: Option[JsonNode]
+    colorProvider*: Option[JsonNode]
+    documentFormattingProvider*: Option[JsonNode]
+    documentRangeFormattingProvider*: Option[JsonNode]
+    documentOnTypeFormattingProvider*: Option[JsonNode]
+    renameProvider*: Option[JsonNode]
+    foldingRangeProvider*: Option[JsonNode]
+    executeCommandProvider*: Option[ExecuteCommandOptions]
+    selectionRangeProvider*: Option[JsonNode]
+    linkedEditingRangeProvider*: Option[JsonNode]
+    callHierarchyProvider*: Option[JsonNode]
+    semanticTokensProvider*: Option[SemanticTokensOptions]
+    monikerProvider*: Option[JsonNode]
+    typeHierarchyProvider*: Option[JsonNode]
+    inlineValueProvider*: Option[JsonNode]
+    inlayHintProvider*: Option[JsonNode]
+    diagnosticProvider*: Option[JsonNode]
+    workspaceSymbolProvider*: Option[JsonNode]
+    workspace*: Option[JsonNode]
+    experimental*: Option[JsonNode]
+
+  # Initialize types
+  ClientInfo* = object ## Information about the client
+    name*: string
+    version*: Option[string]
+
+  InitializeParams* = object ## Parameters for initialize request
+    processId*: Option[int]
+    clientInfo*: Option[ClientInfo]
+    locale*: Option[string]
+    rootPath*: Option[string]
+    rootUri*: Option[string]
+    initializationOptions*: Option[JsonNode]
+    capabilities*: JsonNode # ClientCapabilities
+    trace*: Option[string]
+    workspaceFolders*: Option[seq[JsonNode]]
+
+  ServerInfo* = object ## Information about the server
+    name*: string
+    version*: Option[string]
+
+  InitializeResult* = object ## Result of initialize request
+    capabilities*: ServerCapabilities
+    serverInfo*: Option[ServerInfo]
+
+  # Window message types
+  ShowMessageParams* = object ## Parameters for window/showMessage
+    `type`*: MessageType
+    message*: string
+
+  LogMessageParams* = object ## Parameters for window/logMessage
+    `type`*: MessageType
+    message*: string
+
+# Helper constructors
+proc newPosition*(line, character: int): Position =
+  Position(line: line, character: character)
+
+proc newRange*(startLine, startChar, endLine, endChar: int): Range =
+  Range(start: newPosition(startLine, startChar), `end`: newPosition(endLine, endChar))
+
+proc newRange*(start, `end`: Position): Range =
+  Range(start: start, `end`: `end`)
+
+proc newTextDocumentIdentifier*(uri: string): TextDocumentIdentifier =
+  TextDocumentIdentifier(uri: uri)
+
+proc newVersionedTextDocumentIdentifier*(
+    uri: string, version: int
+): VersionedTextDocumentIdentifier =
+  VersionedTextDocumentIdentifier(uri: uri, version: version)
+
+proc newTextDocumentItem*(
+    uri, languageId: string, version: int, text: string
+): TextDocumentItem =
+  TextDocumentItem(uri: uri, languageId: languageId, version: version, text: text)
+
+# JSON serialization helpers
+proc toJson*(pos: Position): JsonNode =
+  %*{"line": pos.line, "character": pos.character}
+
+proc toJson*(r: Range): JsonNode =
+  %*{"start": r.start.toJson, "end": r.`end`.toJson}
+
+proc toJson*(loc: Location): JsonNode =
+  %*{"uri": loc.uri, "range": loc.range.toJson}
+
+proc toJson*(tdi: TextDocumentIdentifier): JsonNode =
+  %*{"uri": tdi.uri}
+
+proc toJson*(vtdi: VersionedTextDocumentIdentifier): JsonNode =
+  %*{"uri": vtdi.uri, "version": vtdi.version}
+
+proc toJson*(item: TextDocumentItem): JsonNode =
+  %*{
+    "uri": item.uri,
+    "languageId": item.languageId,
+    "version": item.version,
+    "text": item.text,
+  }
+
+proc toJson*(params: SelectionRangeParams): JsonNode =
+  var positionsJson = newJArray()
+  for pos in params.positions:
+    positionsJson.add(pos.toJson)
+  %*{"textDocument": params.textDocument.toJson, "positions": positionsJson}
+
+proc toJson*(link: DocumentLink): JsonNode =
+  ## Serialize DocumentLink to JSON (for resolve request)
+  result = %*{"range": link.range.toJson}
+  if link.target.isSome:
+    result["target"] = %link.target.get
+  if link.tooltip.isSome:
+    result["tooltip"] = %link.tooltip.get
+  if link.data.isSome:
+    result["data"] = link.data.get
+
+proc toJson*(params: ExecuteCommandParams): JsonNode =
+  ## Serialize ExecuteCommandParams to JSON
+  result = %*{"command": params.command}
+  if params.arguments.isSome:
+    result["arguments"] = %params.arguments.get
+
+# JSON parsing helpers
+proc parsePosition*(node: JsonNode): Position =
+  Position(line: node["line"].getInt, character: node["character"].getInt)
+
+proc parseRange*(node: JsonNode): Range =
+  Range(start: parsePosition(node["start"]), `end`: parsePosition(node["end"]))
+
+proc parseLocation*(node: JsonNode): Location =
+  Location(uri: node["uri"].getStr, range: parseRange(node["range"]))
+
+proc parseLocationLink*(node: JsonNode): LocationLink =
+  result.targetUri = node["targetUri"].getStr
+  result.targetRange = parseRange(node["targetRange"])
+  result.targetSelectionRange = parseRange(node["targetSelectionRange"])
+  if node.hasKey("originSelectionRange"):
+    result.originSelectionRange = some(parseRange(node["originSelectionRange"]))
+
+proc locationLinkToLocation*(link: LocationLink): Location =
+  ## Convert LocationLink to Location (uses targetSelectionRange for precise navigation)
+  Location(uri: link.targetUri, range: link.targetSelectionRange)
+
+proc parseTextEdit*(node: JsonNode): TextEdit =
+  TextEdit(range: parseRange(node["range"]), newText: node["newText"].getStr)
+
+proc parseTextDocumentEdit*(node: JsonNode): TextDocumentEdit =
+  let tdoc = node["textDocument"]
+  result.textDocument.uri = tdoc["uri"].getStr
+  if tdoc.hasKey("version") and tdoc["version"].kind != JNull:
+    result.textDocument.version = some(tdoc["version"].getInt)
+  for edit in node["edits"]:
+    result.edits.add(parseTextEdit(edit))
+
+proc parseWorkspaceEdit*(node: JsonNode): WorkspaceEdit =
+  if node.hasKey("changes"):
+    var changes = initTable[string, seq[TextEdit]]()
+    for uri, edits in node["changes"].pairs:
+      var editSeq: seq[TextEdit] = @[]
+      for edit in edits:
+        editSeq.add(parseTextEdit(edit))
+      changes[uri] = editSeq
+    result.changes = some(changes)
+  if node.hasKey("documentChanges"):
+    var docChanges: seq[TextDocumentEdit] = @[]
+    for docChange in node["documentChanges"]:
+      if docChange.hasKey("textDocument"):
+        docChanges.add(parseTextDocumentEdit(docChange))
+    result.documentChanges = some(docChanges)
+
+proc parseDiagnostic*(node: JsonNode): Diagnostic =
+  result.range = parseRange(node["range"])
+  result.message = node["message"].getStr
+
+  if node.hasKey("severity"):
+    result.severity = some(DiagnosticSeverity(node["severity"].getInt))
+  if node.hasKey("code"):
+    result.code = some(node["code"])
+  if node.hasKey("source"):
+    result.source = some(node["source"].getStr)
+  if node.hasKey("tags"):
+    var tags: seq[DiagnosticTag] = @[]
+    for t in node["tags"]:
+      tags.add(DiagnosticTag(t.getInt))
+    result.tags = some(tags)
+
+proc parseCompletionItem*(node: JsonNode): CompletionItem =
+  result.label = node["label"].getStr
+
+  if node.hasKey("kind"):
+    let kind = node["kind"].getInt
+    # LSP spec says kind values are 1-25. Handle invalid values gracefully.
+    if kind >= 1 and kind <= 25:
+      result.kind = some(CompletionItemKind(kind))
+  if node.hasKey("detail"):
+    result.detail = some(node["detail"].getStr)
+  if node.hasKey("documentation"):
+    result.documentation = some(node["documentation"])
+  if node.hasKey("insertText"):
+    result.insertText = some(node["insertText"].getStr)
+  if node.hasKey("insertTextFormat"):
+    let fmt = node["insertTextFormat"].getInt
+    # LSP spec says 1=PlainText, 2=Snippet. Handle invalid values gracefully.
+    if fmt in {1, 2}:
+      result.insertTextFormat = some(InsertTextFormat(fmt))
+  if node.hasKey("sortText"):
+    result.sortText = some(node["sortText"].getStr)
+  if node.hasKey("filterText"):
+    result.filterText = some(node["filterText"].getStr)
+  if node.hasKey("deprecated"):
+    result.deprecated = some(node["deprecated"].getBool)
+  if node.hasKey("preselect"):
+    result.preselect = some(node["preselect"].getBool)
+
+proc parseHover*(node: JsonNode): Hover =
+  result.contents = node["contents"]
+  if node.hasKey("range"):
+    result.range = some(parseRange(node["range"]))
+
+proc parseParameterInformation*(node: JsonNode): ParameterInformation =
+  ## Parse parameter information from JSON
+  # Label can be string or [start, end] tuple - we handle both
+  if node.hasKey("label"):
+    if node["label"].kind == JString:
+      result.label = node["label"].getStr
+    elif node["label"].kind == JArray:
+      # [start, end] format - we'll just use empty string and rely on signature label
+      result.label = ""
+  if node.hasKey("documentation"):
+    result.documentation = some(node["documentation"])
+
+proc parseSignatureInformation*(node: JsonNode): SignatureInformation =
+  ## Parse signature information from JSON
+  result.label = node["label"].getStr
+  if node.hasKey("documentation"):
+    result.documentation = some(node["documentation"])
+  if node.hasKey("parameters"):
+    var params: seq[ParameterInformation] = @[]
+    for p in node["parameters"]:
+      params.add(parseParameterInformation(p))
+    result.parameters = some(params)
+  if node.hasKey("activeParameter"):
+    result.activeParameter = some(node["activeParameter"].getInt)
+
+proc parseSignatureHelp*(node: JsonNode): SignatureHelp =
+  ## Parse signature help response from JSON
+  if node.hasKey("signatures"):
+    for sig in node["signatures"]:
+      result.signatures.add(parseSignatureInformation(sig))
+  if node.hasKey("activeSignature"):
+    result.activeSignature = some(node["activeSignature"].getInt)
+  if node.hasKey("activeParameter"):
+    result.activeParameter = some(node["activeParameter"].getInt)
+
+proc parseDocumentSymbol*(node: JsonNode): DocumentSymbol =
+  ## Parse DocumentSymbol from JSON (hierarchical format)
+  result.name = node["name"].getStr
+  result.kind = SymbolKind(node["kind"].getInt)
+  result.range = parseRange(node["range"])
+  result.selectionRange = parseRange(node["selectionRange"])
+
+  if node.hasKey("detail") and node["detail"].kind != JNull:
+    result.detail = some(node["detail"].getStr)
+  if node.hasKey("deprecated"):
+    result.deprecated = some(node["deprecated"].getBool)
+  if node.hasKey("tags") and node["tags"].kind == JArray:
+    var tags: seq[int] = @[]
+    for t in node["tags"]:
+      tags.add(t.getInt)
+    result.tags = some(tags)
+  if node.hasKey("children") and node["children"].kind == JArray:
+    var children: seq[DocumentSymbol] = @[]
+    for child in node["children"]:
+      children.add(parseDocumentSymbol(child))
+    result.children = some(children)
+
+proc parseSymbolInformation*(node: JsonNode): SymbolInformation =
+  ## Parse SymbolInformation from JSON (flat format)
+  result.name = node["name"].getStr
+  result.kind = SymbolKind(node["kind"].getInt)
+  result.location = parseLocation(node["location"])
+
+  if node.hasKey("deprecated"):
+    result.deprecated = some(node["deprecated"].getBool)
+  if node.hasKey("tags") and node["tags"].kind == JArray:
+    var tags: seq[int] = @[]
+    for t in node["tags"]:
+      tags.add(t.getInt)
+    result.tags = some(tags)
+  if node.hasKey("containerName") and node["containerName"].kind != JNull:
+    result.containerName = some(node["containerName"].getStr)
+
+proc parseInlayHintLabelPart*(node: JsonNode): InlayHintLabelPart =
+  ## Parse InlayHintLabelPart from JSON
+  result.value = node["value"].getStr
+  if node.hasKey("tooltip"):
+    result.tooltip = some(node["tooltip"])
+  if node.hasKey("location"):
+    result.location = some(parseLocation(node["location"]))
+  if node.hasKey("command"):
+    result.command = some(node["command"])
+
+proc parseInlayHint*(node: JsonNode): Option[InlayHint] =
+  ## Parse InlayHint from JSON. Returns none if node is nil or not an object.
+  if node.isNil or node.kind != JObject:
+    return none(InlayHint)
+
+  var hint: InlayHint
+  if not node.hasKey("position") or not node.hasKey("label"):
+    return none(InlayHint)
+
+  hint.position = parsePosition(node["position"])
+  hint.label = node["label"]
+  if node.hasKey("kind"):
+    hint.kind = some(InlayHintKind(node["kind"].getInt))
+  if node.hasKey("textEdits"):
+    let textEditsNode = node["textEdits"]
+    if textEditsNode.kind == JArray:
+      var edits: seq[TextEdit] = @[]
+      for edit in textEditsNode:
+        if edit.kind == JObject:
+          edits.add(parseTextEdit(edit))
+      hint.textEdits = some(edits)
+  if node.hasKey("tooltip"):
+    hint.tooltip = some(node["tooltip"])
+  if node.hasKey("paddingLeft"):
+    hint.paddingLeft = some(node["paddingLeft"].getBool)
+  if node.hasKey("paddingRight"):
+    hint.paddingRight = some(node["paddingRight"].getBool)
+  if node.hasKey("data"):
+    hint.data = some(node["data"])
+
+  return some(hint)
+
+proc getInlayHintLabel*(hint: InlayHint): string =
+  ## Extract the label string from an inlay hint
+  case hint.label.kind
+  of JString:
+    return hint.label.getStr
+  of JArray:
+    # Concatenate all label parts
+    for part in hint.label:
+      if part.hasKey("value"):
+        result.add(part["value"].getStr)
+  else:
+    return ""
+
+proc parseSelectionRange*(node: JsonNode): SelectionRange =
+  ## Parse SelectionRange from JSON (recursive structure)
+  ## Returns nil if node is invalid
+  if node.isNil or node.kind == JNull or not node.hasKey("range"):
+    return nil
+
+  result = SelectionRange()
+  result.range = parseRange(node["range"])
+  if node.hasKey("parent") and node["parent"].kind != JNull:
+    result.parent = parseSelectionRange(node["parent"])
+
+proc parseDocumentHighlight*(node: JsonNode): DocumentHighlight =
+  ## Parse DocumentHighlight from JSON
+  result.range = parseRange(node["range"])
+  if node.hasKey("kind") and node["kind"].kind == JInt:
+    result.kind = some(DocumentHighlightKind(node["kind"].getInt))
+
+proc parseDocumentLink*(node: JsonNode): DocumentLink =
+  ## Parse DocumentLink from JSON
+  result.range = parseRange(node["range"])
+  if node.hasKey("target") and node["target"].kind == JString:
+    result.target = some(node["target"].getStr)
+  if node.hasKey("tooltip") and node["tooltip"].kind == JString:
+    result.tooltip = some(node["tooltip"].getStr)
+  if node.hasKey("data"):
+    result.data = some(node["data"])
+
+proc parseInlineValueText*(node: JsonNode): InlineValueText =
+  ## Parse InlineValueText from JSON
+  result.range = parseRange(node["range"])
+  result.text = node["text"].getStr
+
+proc parseInlineValueVariableLookup*(node: JsonNode): InlineValueVariableLookup =
+  ## Parse InlineValueVariableLookup from JSON
+  result.range = parseRange(node["range"])
+  if node.hasKey("variableName") and node["variableName"].kind == JString:
+    result.variableName = some(node["variableName"].getStr)
+  result.caseSensitiveLookup = node["caseSensitiveLookup"].getBool
+
+proc parseInlineValueEvaluatableExpression*(
+    node: JsonNode
+): InlineValueEvaluatableExpression =
+  ## Parse InlineValueEvaluatableExpression from JSON
+  result.range = parseRange(node["range"])
+  if node.hasKey("expression") and node["expression"].kind == JString:
+    result.expression = some(node["expression"].getStr)
+
+proc parseInlineValue*(node: JsonNode): InlineValue =
+  ## Parse InlineValue from JSON
+  ## Determines type based on which fields are present
+  if node.hasKey("text"):
+    # InlineValueText
+    result = InlineValue(kind: ivkText, text: parseInlineValueText(node))
+  elif node.hasKey("caseSensitiveLookup"):
+    # InlineValueVariableLookup
+    result = InlineValue(
+      kind: ivkVariableLookup, variableLookup: parseInlineValueVariableLookup(node)
+    )
+  else:
+    # InlineValueEvaluatableExpression (has range and optionally expression)
+    result = InlineValue(
+      kind: ivkEvaluatableExpression,
+      evaluatableExpression: parseInlineValueEvaluatableExpression(node),
+    )
+
+proc getInlineValueRange*(value: InlineValue): Range =
+  ## Get the range from an inline value
+  case value.kind
+  of ivkText:
+    return value.text.range
+  of ivkVariableLookup:
+    return value.variableLookup.range
+  of ivkEvaluatableExpression:
+    return value.evaluatableExpression.range
+
+proc toJson*(params: InlineValueParams): JsonNode =
+  ## Serialize InlineValueParams to JSON
+  %*{
+    "textDocument": params.textDocument.toJson,
+    "range": params.range.toJson,
+    "context": {
+      "frameId": params.context.frameId,
+      "stoppedLocation": params.context.stoppedLocation.toJson,
+    },
+  }
+
+proc parseSemanticTokensLegend*(node: JsonNode): SemanticTokensLegend =
+  ## Parse SemanticTokensLegend from JSON
+  if node.hasKey("tokenTypes"):
+    for t in node["tokenTypes"]:
+      result.tokenTypes.add(t.getStr)
+  if node.hasKey("tokenModifiers"):
+    for m in node["tokenModifiers"]:
+      result.tokenModifiers.add(m.getStr)
+
+proc parseSemanticTokensOptions*(node: JsonNode): SemanticTokensOptions =
+  ## Parse SemanticTokensOptions from JSON
+  if node.hasKey("legend"):
+    result.legend = parseSemanticTokensLegend(node["legend"])
+  if node.hasKey("range"):
+    result.range = some(node["range"])
+  if node.hasKey("full"):
+    result.full = some(node["full"])
+
+proc parseExecuteCommandOptions*(node: JsonNode): ExecuteCommandOptions =
+  ## Parse ExecuteCommandOptions from JSON
+  if node.hasKey("commands"):
+    for cmd in node["commands"]:
+      result.commands.add(cmd.getStr)
+  if node.hasKey("workDoneProgress"):
+    result.workDoneProgress = some(node["workDoneProgress"].getBool)
+
+proc parseSemanticTokens*(node: JsonNode): SemanticTokens =
+  ## Parse SemanticTokens response from JSON
+  if node.hasKey("resultId") and node["resultId"].kind == JString:
+    result.resultId = some(node["resultId"].getStr)
+  if node.hasKey("data") and node["data"].kind == JArray:
+    for item in node["data"]:
+      result.data.add(item.getInt)
+
+proc decodeSemanticTokens*(tokens: SemanticTokens): seq[SemanticToken] =
+  ## Decode encoded semantic tokens data into SemanticToken objects
+  ## The data array is encoded as: [deltaLine, deltaStartChar, length, tokenType, tokenModifiers]
+  ## Each group of 5 integers represents one token
+  if tokens.data.len == 0 or tokens.data.len mod 5 != 0:
+    return @[]
+
+  var currentLine = 0
+  var currentChar = 0
+
+  for i in countup(0, tokens.data.len - 1, 5):
+    let deltaLine = tokens.data[i]
+    let deltaStart = tokens.data[i + 1]
+    let length = tokens.data[i + 2]
+    let tokenType = tokens.data[i + 3]
+    let tokenModifiers = tokens.data[i + 4]
+
+    # Update position
+    if deltaLine > 0:
+      currentLine += deltaLine
+      currentChar = deltaStart
+    else:
+      currentChar += deltaStart
+
+    result.add(
+      SemanticToken(
+        line: currentLine,
+        startChar: currentChar,
+        endChar: currentChar + length,
+        length: length,
+        tokenType: tokenType,
+        tokenModifiers: tokenModifiers,
+      )
+    )
+
+proc getSemanticTokenType*(token: SemanticToken, legend: SemanticTokensLegend): string =
+  ## Get the token type name from the legend
+  if token.tokenType >= 0 and token.tokenType < legend.tokenTypes.len:
+    return legend.tokenTypes[token.tokenType]
+  return ""
+
+proc getSemanticTokenModifiers*(
+    token: SemanticToken, legend: SemanticTokensLegend
+): seq[string] =
+  ## Get the token modifier names from the legend (tokenModifiers is a bitmask)
+  var modifiers = token.tokenModifiers
+  var idx = 0
+  while modifiers > 0 and idx < legend.tokenModifiers.len:
+    if (modifiers and 1) != 0:
+      result.add(legend.tokenModifiers[idx])
+    modifiers = modifiers shr 1
+    inc idx
+
+proc parseWorkDoneProgressBegin*(node: JsonNode): WorkDoneProgressBegin =
+  ## Parse WorkDoneProgressBegin from JSON
+  result.title = node["title"].getStr
+  if node.hasKey("cancellable"):
+    result.cancellable = some(node["cancellable"].getBool)
+  if node.hasKey("message"):
+    result.message = some(node["message"].getStr)
+  if node.hasKey("percentage"):
+    result.percentage = some(node["percentage"].getInt)
+
+proc parseWorkDoneProgressReport*(node: JsonNode): WorkDoneProgressReport =
+  ## Parse WorkDoneProgressReport from JSON
+  if node.hasKey("cancellable"):
+    result.cancellable = some(node["cancellable"].getBool)
+  if node.hasKey("message"):
+    result.message = some(node["message"].getStr)
+  if node.hasKey("percentage"):
+    result.percentage = some(node["percentage"].getInt)
+
+proc parseWorkDoneProgressEnd*(node: JsonNode): WorkDoneProgressEnd =
+  ## Parse WorkDoneProgressEnd from JSON
+  if node.hasKey("message"):
+    result.message = some(node["message"].getStr)
+
+proc parseWorkDoneProgress*(node: JsonNode): WorkDoneProgress =
+  ## Parse WorkDoneProgress value from JSON
+  let kindStr = node["kind"].getStr
+  case kindStr
+  of "begin":
+    result = WorkDoneProgress(kind: wdpkBegin, begin: parseWorkDoneProgressBegin(node))
+  of "report":
+    result =
+      WorkDoneProgress(kind: wdpkReport, report: parseWorkDoneProgressReport(node))
+  of "end":
+    result = WorkDoneProgress(kind: wdpkEnd, `end`: parseWorkDoneProgressEnd(node))
+  else:
+    raise newException(ValueError, "Unknown work done progress kind: " & kindStr)
+
+proc parseWorkDoneProgressParams*(node: JsonNode): WorkDoneProgressParams =
+  ## Parse WorkDoneProgressParams ($/progress notification) from JSON
+  result.token = node["token"]
+  result.value = parseWorkDoneProgress(node["value"])
+
+proc getProgressToken*(params: WorkDoneProgressParams): string =
+  ## Get progress token as string (handles both int and string tokens)
+  if params.token.kind == JInt:
+    $params.token.getInt
+  else:
+    params.token.getStr
+
+proc toSemanticTokenType*(typeName: string): Option[SemanticTokenTypes] =
+  ## Convert a token type name string to SemanticTokenTypes enum
+  case typeName
+  of "namespace":
+    some(sttNamespace)
+  of "type":
+    some(sttType)
+  of "class":
+    some(sttClass)
+  of "enum":
+    some(sttEnum)
+  of "interface":
+    some(sttInterface)
+  of "struct":
+    some(sttStruct)
+  of "typeParameter":
+    some(sttTypeParameter)
+  of "parameter":
+    some(sttParameter)
+  of "variable":
+    some(sttVariable)
+  of "property":
+    some(sttProperty)
+  of "enumMember":
+    some(sttEnumMember)
+  of "event":
+    some(sttEvent)
+  of "function":
+    some(sttFunction)
+  of "method":
+    some(sttMethod)
+  of "macro":
+    some(sttMacro)
+  of "keyword":
+    some(sttKeyword)
+  of "modifier":
+    some(sttModifier)
+  of "comment":
+    some(sttComment)
+  of "string":
+    some(sttString)
+  of "number":
+    some(sttNumber)
+  of "regexp":
+    some(sttRegexp)
+  of "operator":
+    some(sttOperator)
+  of "decorator":
+    some(sttDecorator)
+  else:
+    none(SemanticTokenTypes)
+
+proc toSemanticTokenModifier*(modifierName: string): Option[SemanticTokenModifiers] =
+  ## Convert a token modifier name string to SemanticTokenModifiers enum
+  case modifierName
+  of "declaration":
+    some(stmDeclaration)
+  of "definition":
+    some(stmDefinition)
+  of "readonly":
+    some(stmReadonly)
+  of "static":
+    some(stmStatic)
+  of "deprecated":
+    some(stmDeprecated)
+  of "abstract":
+    some(stmAbstract)
+  of "async":
+    some(stmAsync)
+  of "modification":
+    some(stmModification)
+  of "documentation":
+    some(stmDocumentation)
+  of "defaultLibrary":
+    some(stmDefaultLibrary)
+  else:
+    none(SemanticTokenModifiers)
+
+proc getSemanticTokenTypeEnum*(
+    token: SemanticToken, legend: SemanticTokensLegend
+): Option[SemanticTokenTypes] =
+  ## Get the token type as SemanticTokenTypes enum
+  let typeName = getSemanticTokenType(token, legend)
+  if typeName.len > 0:
+    return toSemanticTokenType(typeName)
+  return none(SemanticTokenTypes)
+
+proc getSemanticTokenModifierEnums*(
+    token: SemanticToken, legend: SemanticTokensLegend
+): seq[SemanticTokenModifiers] =
+  ## Get the token modifiers as SemanticTokenModifiers enum sequence
+  let modifierNames = getSemanticTokenModifiers(token, legend)
+  for name in modifierNames:
+    let enumOpt = toSemanticTokenModifier(name)
+    if enumOpt.isSome:
+      result.add(enumOpt.get)
+
+proc hasModifier*(
+    token: SemanticToken, legend: SemanticTokensLegend, modifier: SemanticTokenModifiers
+): bool =
+  ## Check if a token has a specific modifier
+  let modifiers = getSemanticTokenModifierEnums(token, legend)
+  return modifier in modifiers
+
+proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
+  # Return empty capabilities if node is not a JObject
+  if node.isNil or node.kind != JObject:
+    return result
+  if node.hasKey("textDocumentSync"):
+    result.textDocumentSync = some(node["textDocumentSync"])
+  if node.hasKey("completionProvider"):
+    let cp = node["completionProvider"]
+    var opts = CompletionOptions()
+    if cp.kind == JObject:
+      if cp.hasKey("triggerCharacters"):
+        var chars: seq[string] = @[]
+        for c in cp["triggerCharacters"]:
+          chars.add(c.getStr)
+        opts.triggerCharacters = some(chars)
+      if cp.hasKey("resolveProvider"):
+        opts.resolveProvider = some(cp["resolveProvider"].getBool)
+    result.completionProvider = some(opts)
+  if node.hasKey("signatureHelpProvider"):
+    let sh = node["signatureHelpProvider"]
+    var opts = SignatureHelpOptions()
+    if sh.kind == JObject:
+      if sh.hasKey("triggerCharacters"):
+        var chars: seq[string] = @[]
+        for c in sh["triggerCharacters"]:
+          chars.add(c.getStr)
+        opts.triggerCharacters = some(chars)
+      if sh.hasKey("retriggerCharacters"):
+        var chars: seq[string] = @[]
+        for c in sh["retriggerCharacters"]:
+          chars.add(c.getStr)
+        opts.retriggerCharacters = some(chars)
+    result.signatureHelpProvider = some(opts)
+  if node.hasKey("hoverProvider"):
+    result.hoverProvider = some(node["hoverProvider"])
+  if node.hasKey("definitionProvider"):
+    result.definitionProvider = some(node["definitionProvider"])
+  if node.hasKey("declarationProvider"):
+    result.declarationProvider = some(node["declarationProvider"])
+  if node.hasKey("typeDefinitionProvider"):
+    result.typeDefinitionProvider = some(node["typeDefinitionProvider"])
+  if node.hasKey("implementationProvider"):
+    result.implementationProvider = some(node["implementationProvider"])
+  if node.hasKey("referencesProvider"):
+    result.referencesProvider = some(node["referencesProvider"])
+  if node.hasKey("documentHighlightProvider"):
+    result.documentHighlightProvider = some(node["documentHighlightProvider"])
+  if node.hasKey("documentLinkProvider"):
+    result.documentLinkProvider = some(node["documentLinkProvider"])
+  if node.hasKey("documentSymbolProvider"):
+    result.documentSymbolProvider = some(node["documentSymbolProvider"])
+  if node.hasKey("codeActionProvider"):
+    result.codeActionProvider = some(node["codeActionProvider"])
+  if node.hasKey("documentFormattingProvider"):
+    result.documentFormattingProvider = some(node["documentFormattingProvider"])
+  if node.hasKey("documentRangeFormattingProvider"):
+    result.documentRangeFormattingProvider =
+      some(node["documentRangeFormattingProvider"])
+  if node.hasKey("renameProvider"):
+    result.renameProvider = some(node["renameProvider"])
+  if node.hasKey("executeCommandProvider"):
+    result.executeCommandProvider =
+      some(parseExecuteCommandOptions(node["executeCommandProvider"]))
+  if node.hasKey("semanticTokensProvider"):
+    result.semanticTokensProvider =
+      some(parseSemanticTokensOptions(node["semanticTokensProvider"]))
+  if node.hasKey("inlayHintProvider"):
+    result.inlayHintProvider = some(node["inlayHintProvider"])
+  if node.hasKey("inlineValueProvider"):
+    result.inlineValueProvider = some(node["inlineValueProvider"])
+  if node.hasKey("selectionRangeProvider"):
+    result.selectionRangeProvider = some(node["selectionRangeProvider"])
+  if node.hasKey("codeLensProvider"):
+    result.codeLensProvider = some(node["codeLensProvider"])
+  if node.hasKey("callHierarchyProvider"):
+    result.callHierarchyProvider = some(node["callHierarchyProvider"])
+  if node.hasKey("foldingRangeProvider"):
+    result.foldingRangeProvider = some(node["foldingRangeProvider"])
+
+# CodeLens serialization and parsing
+proc toJson*(cmd: Command): JsonNode =
+  ## Serialize Command to JSON
+  result = %*{"title": cmd.title, "command": cmd.command}
+  if cmd.arguments.isSome:
+    result["arguments"] = %cmd.arguments.get
+
+proc toJson*(lens: CodeLens): JsonNode =
+  ## Serialize CodeLens to JSON (for resolve request)
+  result = %*{"range": lens.range.toJson}
+  if lens.command.isSome:
+    result["command"] = lens.command.get.toJson
+  if lens.data.isSome:
+    result["data"] = lens.data.get
+
+proc toJson*(params: CodeLensParams): JsonNode =
+  ## Serialize CodeLensParams to JSON
+  %*{"textDocument": params.textDocument.toJson}
+
+proc parseCommand*(node: JsonNode): Command =
+  ## Parse Command from JSON
+  result.title = node["title"].getStr
+  result.command = node["command"].getStr
+  if node.hasKey("arguments") and node["arguments"].kind == JArray:
+    var args: seq[JsonNode] = @[]
+    for arg in node["arguments"]:
+      args.add(arg)
+    result.arguments = some(args)
+
+proc parseCodeLens*(node: JsonNode): CodeLens =
+  ## Parse CodeLens from JSON
+  result.range = parseRange(node["range"])
+  if node.hasKey("command") and node["command"].kind == JObject:
+    result.command = some(parseCommand(node["command"]))
+  if node.hasKey("data"):
+    result.data = some(node["data"])
+
+# Code Action serialization and parsing
+proc toJson*(context: CodeActionContext): JsonNode =
+  ## Serialize CodeActionContext to JSON
+  result = newJObject()
+  var diagArray = newJArray()
+  for diag in context.diagnostics:
+    var diagNode = %*{"range": diag.range.toJson, "message": diag.message}
+    if diag.severity.isSome:
+      diagNode["severity"] = %diag.severity.get.int
+    if diag.code.isSome:
+      diagNode["code"] = diag.code.get
+    if diag.source.isSome:
+      diagNode["source"] = %diag.source.get
+    diagArray.add(diagNode)
+  result["diagnostics"] = diagArray
+  if context.only.isSome:
+    result["only"] = %context.only.get
+  if context.triggerKind.isSome:
+    result["triggerKind"] = %context.triggerKind.get
+
+proc toJson*(params: CodeActionParams): JsonNode =
+  ## Serialize CodeActionParams to JSON
+  %*{
+    "textDocument": params.textDocument.toJson,
+    "range": params.range.toJson,
+    "context": params.context.toJson,
+  }
+
+proc parseCodeAction*(node: JsonNode): CodeAction =
+  ## Parse CodeAction from JSON
+  result.title = node["title"].getStr
+  if node.hasKey("kind") and node["kind"].kind == JString:
+    result.kind = some(node["kind"].getStr)
+  if node.hasKey("diagnostics") and node["diagnostics"].kind == JArray:
+    var diags: seq[Diagnostic] = @[]
+    for d in node["diagnostics"]:
+      diags.add(parseDiagnostic(d))
+    result.diagnostics = some(diags)
+  if node.hasKey("isPreferred"):
+    result.isPreferred = some(node["isPreferred"].getBool)
+  if node.hasKey("disabled"):
+    result.disabled = some(node["disabled"])
+  if node.hasKey("edit") and node["edit"].kind == JObject:
+    result.edit = some(parseWorkspaceEdit(node["edit"]))
+  if node.hasKey("command") and node["command"].kind == JObject:
+    result.command = some(parseCommand(node["command"]))
+  if node.hasKey("data"):
+    result.data = some(node["data"])
+
+proc toJson*(action: CodeAction): JsonNode =
+  ## Serialize CodeAction to JSON (for codeAction/resolve request)
+  result = %*{"title": action.title}
+  if action.kind.isSome:
+    result["kind"] = %action.kind.get
+  if action.isPreferred.isSome:
+    result["isPreferred"] = %action.isPreferred.get
+  if action.disabled.isSome:
+    result["disabled"] = action.disabled.get
+  if action.data.isSome:
+    result["data"] = action.data.get
+
+# Call Hierarchy serialization and parsing
+proc parseCallHierarchyItem*(node: JsonNode): CallHierarchyItem =
+  ## Parse CallHierarchyItem from JSON
+  result.name = node["name"].getStr
+  result.kind = SymbolKind(node["kind"].getInt)
+  result.uri = node["uri"].getStr
+  result.range = parseRange(node["range"])
+  result.selectionRange = parseRange(node["selectionRange"])
+  if node.hasKey("tags") and node["tags"].kind == JArray:
+    var tags: seq[int] = @[]
+    for t in node["tags"]:
+      tags.add(t.getInt)
+    result.tags = some(tags)
+  if node.hasKey("detail") and node["detail"].kind == JString:
+    result.detail = some(node["detail"].getStr)
+  if node.hasKey("data"):
+    result.data = some(node["data"])
+
+proc toJson*(item: CallHierarchyItem): JsonNode =
+  ## Serialize CallHierarchyItem to JSON
+  result = %*{
+    "name": item.name,
+    "kind": item.kind.int,
+    "uri": item.uri,
+    "range": item.range.toJson,
+    "selectionRange": item.selectionRange.toJson,
+  }
+  if item.tags.isSome:
+    result["tags"] = %item.tags.get
+  if item.detail.isSome:
+    result["detail"] = %item.detail.get
+  if item.data.isSome:
+    result["data"] = item.data.get
+
+proc parseCallHierarchyIncomingCall*(node: JsonNode): CallHierarchyIncomingCall =
+  ## Parse CallHierarchyIncomingCall from JSON
+  result.`from` = parseCallHierarchyItem(node["from"])
+  for r in node["fromRanges"]:
+    result.fromRanges.add(parseRange(r))
+
+proc parseCallHierarchyOutgoingCall*(node: JsonNode): CallHierarchyOutgoingCall =
+  ## Parse CallHierarchyOutgoingCall from JSON
+  result.to = parseCallHierarchyItem(node["to"])
+  for r in node["fromRanges"]:
+    result.fromRanges.add(parseRange(r))
+
+# Folding Range serialization and parsing
+proc toJson*(params: FoldingRangeParams): JsonNode =
+  ## Serialize FoldingRangeParams to JSON
+  %*{"textDocument": params.textDocument.toJson}
+
+proc parseFoldingRangeKind*(s: string): Option[FoldingRangeKind] =
+  ## Parse FoldingRangeKind from string
+  case s
+  of "comment":
+    some(frkComment)
+  of "imports":
+    some(frkImports)
+  of "region":
+    some(frkRegion)
+  else:
+    none(FoldingRangeKind)
+
+proc parseFoldingRange*(node: JsonNode): FoldingRange =
+  ## Parse FoldingRange from JSON
+  result.startLine = node["startLine"].getInt
+  result.endLine = node["endLine"].getInt
+  if node.hasKey("startCharacter") and node["startCharacter"].kind == JInt:
+    result.startCharacter = some(node["startCharacter"].getInt)
+  if node.hasKey("endCharacter") and node["endCharacter"].kind == JInt:
+    result.endCharacter = some(node["endCharacter"].getInt)
+  if node.hasKey("kind") and node["kind"].kind == JString:
+    result.kind = parseFoldingRangeKind(node["kind"].getStr)
+  if node.hasKey("collapsedText") and node["collapsedText"].kind == JString:
+    result.collapsedText = some(node["collapsedText"].getStr)
+
+# Additional helper functions for LSP client
+
+proc parseLocations*(node: JsonNode): seq[Location] =
+  ## Parse Location or Location[] from JSON (handles both single and array responses)
+  result = @[]
+  case node.kind
+  of JArray:
+    for item in node:
+      result.add(parseLocation(item))
+  of JObject:
+    result.add(parseLocation(node))
+  else:
+    discard
+
+proc parseDocumentSymbolResult*(node: JsonNode): DocumentSymbolResult =
+  ## Parse DocumentSymbol[] or SymbolInformation[] from JSON
+  if node.kind != JArray or node.len == 0:
+    return DocumentSymbolResult(isHierarchical: true, symbols: @[])
+
+  # Check if first item has "children" or "location" to determine type
+  let firstItem = node[0]
+  if firstItem.hasKey("location"):
+    # SymbolInformation[]
+    var syms: seq[SymbolInformation] = @[]
+    for item in node:
+      syms.add(parseSymbolInformation(item))
+    return DocumentSymbolResult(isHierarchical: false, symbolInfos: syms)
+  else:
+    # DocumentSymbol[]
+    var syms: seq[DocumentSymbol] = @[]
+    for item in node:
+      syms.add(parseDocumentSymbol(item))
+    return DocumentSymbolResult(isHierarchical: true, symbols: syms)
+
+proc documentLinkToJson*(link: DocumentLink): JsonNode =
+  ## Convert DocumentLink to JSON for documentLink/resolve request
+  result = %*{
+    "range": {
+      "start": {"line": link.range.start.line, "character": link.range.start.character},
+      "end": {"line": link.range.`end`.line, "character": link.range.`end`.character},
+    }
+  }
+  if link.target.isSome:
+    result["target"] = %link.target.get
+  if link.tooltip.isSome:
+    result["tooltip"] = %link.tooltip.get
+  if link.data.isSome:
+    result["data"] = link.data.get
+
+proc codeLensToJson*(lens: CodeLens): JsonNode =
+  ## Convert CodeLens to JSON for codeLens/resolve request
+  result = newJObject()
+  var rangeNode = newJObject()
+  rangeNode["start"] =
+    %*{"line": lens.range.start.line, "character": lens.range.start.character}
+  rangeNode["end"] =
+    %*{"line": lens.range.`end`.line, "character": lens.range.`end`.character}
+  result["range"] = rangeNode
+
+  if lens.command.isSome:
+    let cmd = lens.command.get
+    var cmdNode = newJObject()
+    cmdNode["title"] = %cmd.title
+    cmdNode["command"] = %cmd.command
+    if cmd.arguments.isSome:
+      var argsArray = newJArray()
+      for arg in cmd.arguments.get:
+        argsArray.add(arg)
+      cmdNode["arguments"] = argsArray
+    result["command"] = cmdNode
+  if lens.data.isSome:
+    result["data"] = lens.data.get
+
+proc callHierarchyItemToJson*(item: CallHierarchyItem): JsonNode =
+  ## Convert CallHierarchyItem to JSON for call hierarchy requests
+  result = %*{
+    "name": item.name,
+    "kind": item.kind.int,
+    "uri": item.uri,
+    "range": {
+      "start": {"line": item.range.start.line, "character": item.range.start.character},
+      "end": {"line": item.range.`end`.line, "character": item.range.`end`.character},
+    },
+    "selectionRange": {
+      "start": {
+        "line": item.selectionRange.start.line,
+        "character": item.selectionRange.start.character,
+      },
+      "end": {
+        "line": item.selectionRange.`end`.line,
+        "character": item.selectionRange.`end`.character,
+      },
+    },
+  }
+  if item.tags.isSome:
+    result["tags"] = %item.tags.get
+  if item.detail.isSome:
+    result["detail"] = %item.detail.get
+  if item.data.isSome:
+    result["data"] = item.data.get
+
+# Dynamic Registration types (LSP 3.17)
+type
+  Registration* = object ## General parameters to register a capability.
+    id*: string ## The id used to register the request. Used to unregister.
+    `method`*: string ## The method / capability to register for.
+    registerOptions*: Option[JsonNode] ## Options necessary for the registration.
+
+  RegistrationParams* = object ## Parameters for client/registerCapability request.
+    registrations*: seq[Registration]
+
+  Unregistration* = object ## General parameters to unregister a capability.
+    id*: string ## The id used to unregister the request.
+    `method`*: string ## The method / capability to unregister.
+
+  UnregistrationParams* = object ## Parameters for client/unregisterCapability request.
+    unregisterations*: seq[Unregistration]
+      # Note: LSP spec uses "unregisterations" (typo in spec)
+
+  TextDocumentRegistrationOptions* = object
+    ## Options for text document registration (used in dynamic registration)
+    documentSelector*: Option[JsonNode]
+      # DocumentSelector | null - which documents this applies to
+
+  TextDocumentChangeRegistrationOptions* = object
+    ## Options for textDocument/didChange dynamic registration
+    documentSelector*: Option[JsonNode]
+    syncKind*: Option[TextDocumentSyncKind]
+
+  CompletionRegistrationOptions* = object
+    ## Options for textDocument/completion dynamic registration
+    documentSelector*: Option[JsonNode]
+    triggerCharacters*: Option[seq[string]]
+    allCommitCharacters*: Option[seq[string]]
+    resolveProvider*: Option[bool]
+    workDoneProgress*: Option[bool]
+
+proc parseRegistration*(node: JsonNode): Registration =
+  ## Parse Registration from JSON
+  result.id = node["id"].getStr
+  result.`method` = node["method"].getStr
+  if node.hasKey("registerOptions"):
+    result.registerOptions = some(node["registerOptions"])
+
+proc parseRegistrationParams*(node: JsonNode): RegistrationParams =
+  ## Parse RegistrationParams from JSON
+  if node.hasKey("registrations"):
+    for reg in node["registrations"]:
+      result.registrations.add(parseRegistration(reg))
+
+proc parseUnregistration*(node: JsonNode): Unregistration =
+  ## Parse Unregistration from JSON
+  result.id = node["id"].getStr
+  result.`method` = node["method"].getStr
+
+proc parseUnregistrationParams*(node: JsonNode): UnregistrationParams =
+  ## Parse UnregistrationParams from JSON
+  # Note: The LSP spec uses "unregisterations" (with typo)
+  if node.hasKey("unregisterations"):
+    for unreg in node["unregisterations"]:
+      result.unregisterations.add(parseUnregistration(unreg))

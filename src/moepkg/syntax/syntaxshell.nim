@@ -31,7 +31,7 @@
 #    distribution, for details about the copyright.
 #
 
-import flags, highlite, lexer
+import flags, tokenizer, lexer
 
 const shellKeywords* = [
   "[", "]", "alias", "bg", "bind", "break", "builtin", "case", "cd", "chdir", "command",

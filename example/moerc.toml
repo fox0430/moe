@@ -1,375 +1,446 @@
 [Standard]
 
-number = true
+number = true                          # Line numbers
 
-currentNumber = true
+statusLine = true                      # Show status line
 
-cursorLine = false
+syntax = true                          # Syntax highlighting
 
-statusLine = true
+indentationLines = true                # Indentation guides
 
-tabLine = true
+tabStop = 2                            # Tab width
 
-syntax = true
+expandTab = false                      # Insert spaces instead of tab
 
-indentationLines = true
+sidebar = true                         # Show sidebar
 
-tabStop = 2
+autoCloseParen = true                  # Auto-close parentheses
 
-sidebar = true
+autoIndent = true                      # Auto-indent
 
-autoCloseParen = true
+ignorecase = true                      # Search case insensitive
 
-autoIndent = true
+smartcase = true                       # Smart case search
 
-ignorecase = true
+disableChangeCursor = false            # Disable cursor shape changes
 
-smartcase = true
+defaultCursor = "terminalDefault"      # Default cursor style - restored on exit
 
-disableChangeCursor = false
+normalModeCursor = "blinkBlock"        # Normal mode cursor
 
-defaultCursor = "terminalDefault"
+insertModeCursor = "blinkIbeam"        # Insert mode cursor
 
-normalModeCursor = "blinkBlock"
+liveReloadOfConf = false               # Live config reload - Set to true to auto-reload config on file change
 
-insertModeCursor = "blinkIbeam"
+incrementalSearch = true               # Incremental search
 
-liveReloadOfConf = false
+autoDeleteParen = true                 # Auto-delete matching parens - Set to false to disable
 
-incrementalSearch = true
+liveReloadOfFile = true                # Auto-reload when file changed externally
 
-popupWindowInExmode = true
+colorMode = "24bit"                    # Color mode: "8", "16", "256", "24bit", "none"
 
-autoDeleteParen = false
+mouse = true                           # Enable mouse support
 
-liveReloadOfFile = false
-
-colorMode = "24bit"
+lineWrap = true                        # Wrap long lines
 
 mouse = true
 
 [Clipboard]
 
-enable = true
+enable = true                          # Clipboard integration
 
-tool = "xsel"
+tool = "xsel"                          # Tool: xsel, xclip, wl-clipboard, etc.
 
 [BuildOnSave]
 
-enable = false
+enable = false                         # Build on save feature
 
-# workspaceRoot = "/home/fox/git/moe"
+workspaceRoot = "/home/fox/git/moe"    # Working directory for build
 
-# command = "cd /home/fox/git/moe && nimble build"
+command = "nimble build"               # Custom build command
 
 [TabLine]
 
-allBuffer = false
+enable = true                          # Enable tab line
 
 [StatusLine]
 
-multipleStatusLine = true
+multipleStatusLine = true              # Show status line per window
 
-merge = false
+merge = false                          # Merge status lines - single bottom status line in multi-window mode
 
-mode = true
+mode = true                            # Show mode in status line
 
-filename = true
+filename = true                        # Show filename in status line
 
-chanedMark = true
+chanedMark = true                      # Show changed mark [+]
 
-directory = true
+directory = true                       # Show full directory path - false shows just filename
 
-gitChangedLines = true
+gitChangedLines = true                 # Show git changed lines count +N ~N -N
 
-gitBranchName = true
+gitBranchName = true                   # Show git branch name
 
-showGitInactive = false
+showGitInactive = false                # Show git info in inactive windows
 
-showModeInactive = false
+showModeInactive = false               # Show mode in inactive windows
 
+# Custom status line format
+# Supported placeholders:
+#   {lineNumber}    - Current line number
+#   {totalLines}    - Total lines in buffer
+#   {columnNumber}  - Current column number
+#   {totalColumns}  - Total columns in current line
+#   {encoding}      - File encoding (e.g., "UTF-8")
+#   {fileType}      - File type/language (e.g., "Nim", "Toml")
+#   {percentage}    - Line percentage (e.g., "50%")
+#   {mode}          - Current editor mode
+#   {filename}      - Filename only
+#   {directory}     - Directory path
+#   {filePath}      - Full file path
+#   {gitBranch}     - Git branch name
+#   {gitChanges}    - Git changes (+N ~N -N)
 setupText = "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
 
 [Highlight]
 
-currentLine = true
+currentLine = true                     # Highlight current line
 
-reservedWord = ["TODO", "WIP", "NOTE"]
+reservedWord = ["TODO", "WIP", "NOTE"] # Highlight reserved words
 
-replaceText = true
+replaceText = true                     # Live substitute preview - shows :s/foo/bar/ changes in real-time
 
-pairOfParen = true
+pairOfParen = true                     # Highlight matching parens - highlights matching bracket when cursor is on one
 
-fullWidthSpace = true
+fullWidthSpace = true                  # Highlight full-width spaces
 
-trailingSpaces = true
+trailingSpaces = true                  # Highlight trailing spaces
 
-currentWord = true
+currentWord = true                     # Highlight current word - highlights all occurrences of word under cursor
 
 [AutoBackup]
 
-enable = false
+enable = false                         # Auto-backup feature
 
-# backupDir = "/home/user/.cache/moe/backups"
+# backupDir = "/home/user/.cache/moe/backups"  # Backup directory
 
-# 10 second
-idleTime = 10
+# 10 second idle time before backup
+idleTime = 10                          # Idle time in seconds
 
-# 5 minute
-interval = 5
+# 5 minute interval between backups
+interval = 5                           # Interval in minutes
 
-dirToExclude = ["/etc"]
+dirToExclude = ["/etc"]                # Directories to exclude
 
 [QuickRun]
 
-saveBufferWhenQuickRun = true
+saveBufferWhenQuickRun = true          # Save buffer before running
 
-# command = "nimble build"
+# command = "nimble build"             # Custom command override
 
-# 30 second
-timeout = 30
+# 30 second timeout
+timeout = 30                           # Timeout in seconds
 
-# nimAdvancedCommand = "js"
+# nimAdvancedCommand = "js"            # Nim advanced command e.g., "js" for JavaScript
 
-# ClangOptions = "-Wall"
+# ClangOptions = "-Wall"               # C compiler options
 
-# CppOptions = "-Wall"
+# CppOptions = "-Wall"                 # C++ compiler options
 
-# NimOptions = "--debugger:native"
+# NimOptions = "--debugger:native"     # Nim compiler options
 
-# shOptions = "-c"
+# shOptions = "-c"                     # sh shell options
 
-# bashOptions = "-c"
+# bashOptions = "-c"                   # bash shell options
 
 [Notification]
 
-screenNotifications = true
+screenNotifications = true             # Global screen notifications
 
-logNotifications = true
+logNotifications = true                # Global log notifications
 
-autoBackupScreenNotify = true
+autoBackupScreenNotify = true          # Auto-backup screen notifications
 
-autoBackupLogNotify = true
+autoBackupLogNotify = true             # Auto-backup log notifications
 
-autoSaveScreenNotify = true
+autoSaveScreenNotify = true            # Auto-save screen notifications
 
-autoSaveLogNotify = true
+autoSaveLogNotify = true               # Auto-save log notifications
 
-yankScreenNotify = true
+yankScreenNotify = true                # Yank screen notifications
 
-yankLogNotify = true
+yankLogNotify = true                   # Yank log notifications
 
-deleteScreenNotify = true
+deleteScreenNotify = true              # Delete screen notifications
 
-deleteLogNotify = true
+deleteLogNotify = true                 # Delete log notifications
 
-saveScreenNotify = true
+saveScreenNotify = true                # Save screen notifications
 
-saveLogNotify = true
+saveLogNotify = true                   # Save log notifications
 
-quickRunScreenNotify = true
+quickRunScreenNotify = true            # QuickRun screen notifications
 
-quickRunLogNotify = true
+quickRunLogNotify = true               # QuickRun log notifications
 
-buildOnSaveScreenNotify = true
+buildOnSaveScreenNotify = true         # Build-on-save screen notifications
 
-buildOnSaveLogNotify = true
+buildOnSaveLogNotify = true            # Build-on-save log notifications
 
-filerScreenNotify = true
+filerScreenNotify = true               # Filer screen notifications
 
-filerLogNotify = true
+filerLogNotify = true                  # Filer log notifications
 
-restoreScreenNotify = true
+restoreScreenNotify = true             # Restore screen notifications
 
-restoreLogNotify = true
+restoreLogNotify = true                # Restore log notifications
 
-lspScreenNotify = true
+lspScreenNotify = true                 # LSP screen notifications
 
-lspLogNotify = true
+lspLogNotify = true                    # LSP log notifications
 
 [Filer]
 
-showIcons = true
+showIcons = true                       # File browser icons - emoji icons for file types
 
 [Autocomplete]
 
-enable = true
+enable = true                          # Autocomplete enable/disable
 
-windowBorder = true
+windowBorder = true                    # Autocomplete window border
 
 [AutoSave]
 
-enable = true
+enable = true                          # Auto-save feature
 
-interval = 5
+interval = 5                           # Auto-save interval in minutes
 
 [Persist]
 
-exCommand = true
+exCommand = true                       # Persist command history
 
-exCommandHistoryLimit = 1000
+exCommandHistoryLimit = 1000           # History limit
 
-search = true
+search = true                          # Persist search history
 
-searchHistoryLimit = 1000
+searchHistoryLimit = 1000              # Search history limit
 
-cursorPosition = true
+cursorPosition = true                  # Persist cursor position per file
 
 [Git]
 
-showChangedLine = true
+showChangedLine = true                 # Show git diff indicators in sidebar
 
-updateInterval = 1000
+updateInterval = 1000                  # Git diff update interval in milliseconds
 
 [SyntaxChecker]
 
-enable = false
+enable = false                         # Enable syntax checker in sidebar
 
 [SmoothScroll]
 
-enable = true
+enable = true                          # Smooth scrolling
 
-minDelay = 5
+friction = 80.0                        # Friction coefficient (velocity decay rate)
 
-maxDelay = 20
+airDrag = 2.0                          # Air drag coefficient (velocity resistance)
 
 [StartUp.FileOpen]
-autoSplit = true
-splitType = "vertical"
+autoSplit = true                       # Auto-split on startup when opening multiple files
+splitType = "vertical"                 # Split type: "vertical" or "horizontal"
 
-[Lsp]
-enable = false
-timeout = 5000
-
-[Lsp.Completion]
-enable = true
-
-[Lsp.Declaration]
-enable = true
-openWindow = false
-
-[Lsp.Definition]
-enable = true
-openWindow = false
-
-[Lsp.TypeDefinition]
-enable = true
-openWindow = false
-
-[Lsp.Implementation]
-enable = true
-openWindow = false
-
-[Lsp.Diagnostics]
-enable = true
-
-[Lsp.SignatureHelp]
-enable = true
-
-[Lsp.DocumentFormatting]
-enable = true
-
-[Lsp.FoldingRange]
-enable = true
-
-[Lsp.SelectionRange]
-enable = true
-
-[Lsp.DocumentSymbol]
-enable = true
-
-[Lsp.Hover]
-enable = true
-
-[Lsp.InlayHint]
-enable = true
-
-[Lsp.InlineValue]
-enable = false
-
-[Lsp.References]
-enable = true
-
-[Lsp.CallHierarchy]
-enable = true
-
-[Lsp.DocumentHighlight]
-enable = true
-
-[Lsp.DocumentLink]
-enable = true
-
-[Lsp.CodeLens]
-enable = false
-
-[Lsp.Rename]
-enable = true
-
-[Lsp.SemanticTokens]
-enable = true
-
-[Lsp.ExecuteCommand]
-enable = true
-
-[Lsp.nim]
-extensions = ["nim"]
-command = "nimlangserver"
-trace = "verbose"
-
-[Lsp.rust]
-extensions = ["rs"]
-command = "rust-analyzer"
-trace = "verbose"
-rustAnalyzerRunSingle = true
-rustAnalyzerDebugSingle = true
-
+# Debug mode settings - controls what sections are shown in :debug view
+# Use :debug command to open the debug viewer (vertical split, auto-refreshes every 500ms)
 
 [Debug.WindowNode]
-enable = true
-currentWindow = true
-index = true
-windowIndex = true
-bufferIndex = true
-parentIndex = true
-childLen = true
-splitType = true
-haveCursesWin = true
-y = true
-x = true
-h = true
-w = true
-currentLine = true
-currentColumn = true
-expandedColumn = true
-cursor = true
+enable = true                          # Show window info section
+currentWindow = true                   # Show current window flag
+index = true                           # Show window index
+windowIndex = true                     # Show window index in manager
+bufferIndex = true                     # Show buffer index
+parentIndex = true                     # Show parent index
+childLen = true                        # Show child count
+splitType = true                       # Show split type
+haveCursesWin = true                   # Show curses window flag
+y = true                               # Show viewport Y position
+x = true                               # Show viewport X position
+h = true                               # Show viewport height
+w = true                               # Show viewport width
+currentLine = true                     # Show current line
+currentColumn = true                   # Show current column
+expandedColumn = true                  # Show expanded column
+cursor = true                          # Show cursor info
 
 [Debug.EditorView]
-enable = true
-widthOfLineNum = true
-height = true
-width = true
-originalLine = false
-start = false
-length = false
+enable = true                          # Show editor state & display settings
+widthOfLineNum = true                  # Show line number width
+height = true                          # Show height
+width = true                           # Show width
+originalLine = false                   # Show original line
+start = false                          # Show start position
+length = false                         # Show length
 
 [Debug.BufferStatus]
-enable = true
-bufferIndex = true
-path = true
-openDir = true
-currentMode = true
-prevMode = true
-language = true
-encoding = true
-countChange = true
-cmdLoop = true
-lastSaveTime = true
-bufferLen = true
+enable = true                          # Show buffer info section
+bufferIndex = true                     # Show buffer index
+path = true                            # Show file path
+openDir = true                         # Show open directory
+currentMode = true                     # Show current mode
+prevMode = true                        # Show previous mode
+language = true                        # Show language
+encoding = true                        # Show encoding
+countChange = true                     # Show change count
+cmdLoop = true                         # Show command loop
+lastSaveTime = true                    # Show last save time
+bufferLen = true                       # Show buffer length
+
+[Debug.Search]
+enable = true                          # Show search state section
+
+[Debug.MacroState]
+enable = true                          # Show macro state section
+
+[Debug.Visual]
+enable = true                          # Show visual selection section
+
+[Debug.JumpList]
+enable = true                          # Show jump list section
+
+[Debug.Lsp]
+enable = true                          # Show LSP state section
 
 [Theme]
 
-# "default" or "config" or "vscode".
-kind = "config"
+# Theme system - supports custom color themes
+kind = "config"                        # Theme kind: "default", "config" - "vscode" not yet supported
 
-# Please set the path of the theme config file.
-path = "~/.config/moe/themes/dark.toml"
+# Path to custom theme file (used when kind = "config")
+# Sample themes available in example/themes/: dark.toml, light.toml, vivid.toml
+path = "~/.config/moe/themes/dark.toml" # Theme file path
+
+[Lsp]
+
+enable = false                         # Enable LSP support
+
+timeout = 5000                         # LSP request timeout in ms
+
+[Lsp.Completion]
+
+enable = true                          # Enable completion
+
+[Lsp.Declaration]
+
+enable = true                          # Enable go to declaration
+
+openWindow = false                     # Open in new window
+
+[Lsp.Definition]
+
+enable = true                          # Enable go to definition
+
+openWindow = false                     # Open in new window
+
+[Lsp.TypeDefinition]
+
+enable = true                          # Enable go to type definition
+
+openWindow = false                     # Open in new window
+
+[Lsp.Implementation]
+
+enable = true                          # Enable go to implementation
+
+openWindow = false                     # Open in new window
+
+[Lsp.Diagnostics]
+
+enable = true                          # Enable diagnostics
+
+[Lsp.SignatureHelp]
+
+enable = true                          # Enable signature help
+
+[Lsp.DocumentFormatting]
+
+enable = true                          # Enable document formatting
+
+[Lsp.FoldingRange]
+
+enable = true                          # Enable code folding
+
+[Lsp.SelectionRange]
+
+enable = true                          # Enable selection range
+
+[Lsp.DocumentSymbol]
+
+enable = true                          # Enable document symbols
+
+[Lsp.Hover]
+
+enable = true                          # Enable hover information
+
+[Lsp.InlayHint]
+
+enable = true                          # Enable inlay hints
+
+[Lsp.InlineValue]
+
+enable = false                         # Enable inline values
+
+[Lsp.References]
+
+enable = true                          # Enable find references
+
+[Lsp.CallHierarchy]
+
+enable = true                          # Enable call hierarchy
+
+[Lsp.DocumentHighlight]
+
+enable = true                          # Enable document highlight
+
+[Lsp.DocumentLink]
+
+enable = true                          # Enable document links
+
+[Lsp.CodeLens]
+
+enable = false                         # Enable code lens
+
+[Lsp.Rename]
+
+enable = true                          # Enable rename symbol
+
+[Lsp.SemanticTokens]
+
+enable = true                          # Enable semantic tokens
+
+[Lsp.ExecuteCommand]
+
+enable = true                          # Enable execute command
+
+# Language server configurations
+# You can add any language by creating a section [Lsp.<language>]
+# with extensions, command, and trace settings
+
+[Lsp.nim]
+
+extensions = ["nim"]                   # File extensions for this language
+
+command = "nimlangserver"              # LSP server command
+
+trace = "verbose"                      # Trace level: "off", "messages", "verbose"
+
+[Lsp.rust]
+
+extensions = ["rs"]                    # File extensions for this language
+
+command = "rust-analyzer"              # LSP server command
+
+trace = "verbose"                      # Trace level
+
+rustAnalyzerRunSingle = true           # rust-analyzer specific: run single
+
+rustAnalyzerDebugSingle = true         # rust-analyzer specific: debug single
