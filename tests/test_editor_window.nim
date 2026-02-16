@@ -25,6 +25,8 @@ import ../src/moepkg/config
 import ../src/moepkg/types
 import ../src/moepkg/buffer
 import ../src/moepkg/modes
+import ../src/moepkg/help_viewer
+import ../src/moepkg/render_utils
 
 # Helper to create a minimal Editor for testing
 proc createTestEditor(): Editor =
@@ -37,8 +39,8 @@ suite "calculateReservedLines":
     e.state.display.showStatusLine = true
     e.state.display.multiStatusLine = true
     let reserved = e.calculateReservedLines(isBottomWindow = true)
-    # StatusAndCommandReserve = 2
-    check reserved == 2
+    # StatusAndCommandReserve = 1 (status line and command line share the last row)
+    check reserved == 1
 
   test "status line enabled, multi status line, non-bottom window":
     let e = createTestEditor()
@@ -53,8 +55,8 @@ suite "calculateReservedLines":
     e.state.display.showStatusLine = true
     e.state.display.multiStatusLine = false
     let reserved = e.calculateReservedLines(isBottomWindow = true)
-    # StatusAndCommandReserve = 2
-    check reserved == 2
+    # StatusAndCommandReserve = 1 (status line and command line share the last row)
+    check reserved == 1
 
   test "status line enabled, single status line, non-bottom window":
     let e = createTestEditor()
@@ -107,7 +109,11 @@ suite "calculateWindowCursor":
     let cursor = BufferPosition(line: 0, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer, viewport, cursor, lineNumOffset = 4, reservedLines = 2
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
     )
     check pos.x == 4 # lineNumOffset
     check pos.y == 0
@@ -121,7 +127,11 @@ suite "calculateWindowCursor":
     let cursor = BufferPosition(line: 0, column: 5)
 
     let pos = e.calculateWindowCursor(
-      buffer, viewport, cursor, lineNumOffset = 4, reservedLines = 2
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
     )
     check pos.x == 9 # lineNumOffset + 5
     check pos.y == 0
@@ -135,7 +145,11 @@ suite "calculateWindowCursor":
     let cursor = BufferPosition(line: 1, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer, viewport, cursor, lineNumOffset = 4, reservedLines = 2
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
     )
     check pos.x == 4 # lineNumOffset
     check pos.y == 1 # second line
@@ -149,7 +163,11 @@ suite "calculateWindowCursor":
     let cursor = BufferPosition(line: 0, column: 0) # Above visible area
 
     let pos = e.calculateWindowCursor(
-      buffer, viewport, cursor, lineNumOffset = 4, reservedLines = 2
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
     )
     check pos.x == 0
     check pos.y == 0
@@ -163,7 +181,11 @@ suite "calculateWindowCursor":
     let cursor = BufferPosition(line: 0, column: 10)
 
     let pos = e.calculateWindowCursor(
-      buffer, viewport, cursor, lineNumOffset = 4, reservedLines = 2
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
     )
     check pos.x == 9 # lineNumOffset + (10 - 5) = 4 + 5 = 9
     check pos.y == 0
@@ -177,7 +199,11 @@ suite "calculateWindowCursor":
     let cursor = BufferPosition(line: 10, column: 0) # Beyond buffer
 
     let pos = e.calculateWindowCursor(
-      buffer, viewport, cursor, lineNumOffset = 4, reservedLines = 2
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
     )
     check pos.x == 0
     check pos.y == 0
@@ -191,7 +217,11 @@ suite "calculateWindowCursor":
     let cursor = BufferPosition(line: 0, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer, viewport, cursor, lineNumOffset = 4, reservedLines = 2
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
     )
     check pos.x == 4
     check pos.y == 0
@@ -498,7 +528,11 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let cursor = BufferPosition(line: 2, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer, viewport, cursor, lineNumOffset = 4, reservedLines = 2
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
     )
     check pos.x == 4
     check pos.y == 2 # Line 0, empty line 1, Line 2
@@ -515,7 +549,11 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let cursor = BufferPosition(line: 1, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer, viewport, cursor, lineNumOffset = 4, reservedLines = 2
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
     )
     check pos.x == 4
     # Line 0 wraps to multiple screen lines, then Line 2
@@ -533,7 +571,11 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let cursor = BufferPosition(line: 0, column: 15)
 
     let pos = e.calculateWindowCursor(
-      buffer, viewport, cursor, lineNumOffset = 4, reservedLines = 2
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
     )
     # Should be on wrapped line (y=1) at column 5 (15 - 10 = 5)
     check pos.y == 1
@@ -548,7 +590,11 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let cursor = BufferPosition(line: -1, column: 0)
 
     let pos = e.calculateWindowCursor(
-      buffer, viewport, cursor, lineNumOffset = 4, reservedLines = 2
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
     )
     check pos.x == 0
     check pos.y == 0
@@ -562,7 +608,11 @@ suite "calculateWindowCursor - wrap mode edge cases":
     let cursor = BufferPosition(line: 4, column: 0) # Beyond visible area
 
     let pos = e.calculateWindowCursor(
-      buffer, viewport, cursor, lineNumOffset = 4, reservedLines = 2
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
     )
     check pos.x == 0
     check pos.y == 0
@@ -742,19 +792,17 @@ suite "restoreOriginalBuffer":
 
     check win.buffer == filerBuf
 
-  test "Help - restores original buffer":
+  test "Help - no-op (split window mode, no originalBuffer)":
     let e = createTestEditor()
     let win = e.activeWindow
-    let origBuf = newTextBuffer("original")
     let helpBuf = newTextBuffer("help")
     win.buffer = helpBuf
     let hs = newHelpViewerState()
-    hs.originalBuffer = origBuf
     win.helpViewerState = some(hs)
 
     win.restoreOriginalBuffer(EditorMode.Help)
 
-    check win.buffer == origBuf
+    check win.buffer == helpBuf
 
   test "BufferManager - restores original buffer":
     let e = createTestEditor()
@@ -872,19 +920,17 @@ suite "clearModeState":
     check win.buffer == logBuf
     check win.logViewerState.isNone
 
-  test "Help - restores buffer and clears state":
+  test "Help - clears state without buffer change (split window mode)":
     let e = createTestEditor()
     let win = e.activeWindow
-    let origBuf = newTextBuffer("original")
     let helpBuf = newTextBuffer("help")
     win.buffer = helpBuf
     let hs = newHelpViewerState()
-    hs.originalBuffer = origBuf
     win.helpViewerState = some(hs)
 
     win.clearModeState(EditorMode.Help)
 
-    check win.buffer == origBuf
+    check win.buffer == helpBuf
     check win.helpViewerState.isNone
 
   test "BufferManager - restores buffer and clears state":
@@ -1017,3 +1063,91 @@ suite "clearModeState":
     win.clearModeState(EditorMode.Normal)
 
     check win.buffer == buf
+
+suite "Help viewer - split window open and close":
+  test "Open help viewer creates a split window":
+    let e = createTestEditor()
+    check e.windowManager.windows.len == 1
+    let initialBufferCount = e.buffers.len
+
+    let helpState = newHelpViewerState()
+    let helpBuffer = helpState.createHelpTextBuffer()
+    let splitResult = e.hsplitWithBuffer(helpBuffer)
+
+    check splitResult.isOk
+    check e.windowManager.windows.len == 2
+    check e.buffers.len == initialBufferCount + 1
+    check e.activeWindow.buffer == helpBuffer
+    check helpBuffer.readOnly
+
+  test "Open help viewer sets mode and state":
+    let e = createTestEditor()
+    let helpState = newHelpViewerState()
+    let helpBuffer = helpState.createHelpTextBuffer()
+    let splitResult = e.hsplitWithBuffer(helpBuffer)
+    check splitResult.isOk
+
+    e.setMode(EditorMode.Help)
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Help
+    activeWin.helpViewerState = some(helpState)
+
+    check activeWin.mode == EditorMode.Help
+    check activeWin.helpViewerState.isSome
+
+  test "Close help viewer removes split window and buffer":
+    let e = createTestEditor()
+    let origBuffer = e.activeWindow.buffer
+    let initialBufferCount = e.buffers.len
+
+    # Open help in split
+    let helpState = newHelpViewerState()
+    let helpBuffer = helpState.createHelpTextBuffer()
+    let splitResult = e.hsplitWithBuffer(helpBuffer)
+    check splitResult.isOk
+    check e.windowManager.windows.len == 2
+
+    # Set help mode on active window
+    e.setMode(EditorMode.Help)
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Help
+    activeWin.helpViewerState = some(helpState)
+
+    # Close help viewer (same logic as hrHelpViewerQuit)
+    activeWin.clearModeState(EditorMode.Help)
+    activeWin.mode = EditorMode.Normal
+    e.setMode(EditorMode.Normal)
+    let buf = activeWin.buffer
+    let idx = e.buffers.find(buf)
+    if idx >= 0:
+      e.buffers.delete(idx)
+    discard e.closeWindow()
+
+    check e.windowManager.windows.len == 1
+    check e.buffers.len == initialBufferCount
+    check e.activeWindow.buffer == origBuffer
+
+  test "Help viewer buffer contains help text":
+    let helpState = newHelpViewerState()
+    let helpBuffer = helpState.createHelpTextBuffer()
+
+    check helpBuffer.len > 0
+    check helpBuffer.readOnly
+
+  test "Close help viewer with single window does not crash":
+    let e = createTestEditor()
+    check e.windowManager.windows.len == 1
+
+    # Simulate help in single window (edge case - no split)
+    let helpState = newHelpViewerState()
+    let activeWin = e.activeWindow
+    activeWin.mode = EditorMode.Help
+    activeWin.helpViewerState = some(helpState)
+
+    # Close help viewer - should not close window since only 1 window
+    activeWin.clearModeState(EditorMode.Help)
+    activeWin.mode = EditorMode.Normal
+    e.setMode(EditorMode.Normal)
+    # windows.len == 1, so skip closing
+    check e.windowManager.windows.len == 1
+    check activeWin.helpViewerState.isNone

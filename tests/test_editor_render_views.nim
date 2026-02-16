@@ -21,8 +21,9 @@
 
 import std/[unittest, strutils]
 import pkg/celina
-import ../src/moepkg/[editor, config, config_loader, modes]
+import ../src/moepkg/[editor, config, config_loader, modes, types, buffer, render_utils]
 import ../src/moepkg/editor_render_views
+import ../src/moepkg/editor_window
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -693,3 +694,410 @@ suite "Integration - Full render cycle":
     e.renderTempMessages(buffer)
 
     check e.state.screenCursor.y == buffer.area.height - 1
+
+proc getBufferLine(buffer: celina.Buffer, y: int): string =
+  ## Extract a line from celina Buffer as string
+  result = ""
+  for x in 0 ..< buffer.area.width:
+    result.add(buffer[x, y].symbol)
+
+proc hasStatusLineStyleAt(buffer: celina.Buffer, y: int): bool =
+  ## Check if a line has Bold modifier (status line characteristic)
+  ## Status lines use Bold modifier; normal content does not
+  for x in 0 ..< buffer.area.width:
+    if StyleModifier.Bold in buffer[x, y].style.modifiers:
+      return true
+  false
+
+suite "renderSplitView - Close window cleans up status line":
+  test "hsplit close: no stale separator at old boundary (single status line)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = false
+
+    # Create hsplit
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+
+    # Render with 2 windows (draws separator between them)
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    # Record the separator Y position (between windows)
+    let topWindow = e.windowManager.windows[0]
+    let separatorY = topWindow.viewport.y + topWindow.viewport.height
+
+    # Verify separator exists before close
+    let sepLine = getBufferLine(buffer, separatorY)
+    check "─" in sepLine
+
+    # Close active window
+    discard e.closeWindow()
+    check e.windowManager.windows.len == 1
+
+    # Render after close
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    # The old separator Y should now be normal content, not a separator
+    let afterLine = getBufferLine(buffer, separatorY)
+    check "─" notin afterLine
+
+  test "hsplit close: no stale per-window status line (multi status line)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+
+    # Create hsplit
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+
+    # Render with 2 windows
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    # The top window has a per-window status line at its bottom edge
+    let topWindow = e.windowManager.windows[0]
+    let topStatusLineY = calculateWindowStatusLineY(topWindow, isBottomWindow = false)
+
+    # Verify per-window status line exists at top window's bottom before close
+    check hasStatusLineStyleAt(buffer, topStatusLineY)
+
+    # Close active window (bottom, since hsplit sets active to new window)
+    discard e.closeWindow()
+    check e.windowManager.windows.len == 1
+
+    # Render after close
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    # The old top-window status line Y should now be normal content
+    # (the remaining window's content area should extend past it)
+    # Only the bottom status line (y=23) should have status styling
+    let bottomStatusLineY = buffer.area.height - 1
+    if topStatusLineY != bottomStatusLineY:
+      check not hasStatusLineStyleAt(buffer, topStatusLineY)
+
+  test "hsplit close: remaining window viewport covers full height":
+    let e = createTestEditor()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = false
+
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+
+    discard e.closeWindow()
+    check e.windowManager.windows.len == 1
+
+    # Remaining window should cover the full viewport height
+    check e.windowManager.windows[0].viewport.y == 0
+    check e.windowManager.windows[0].viewport.height == 24
+
+  test "hsplit close: remaining window viewport covers full height (multi status line)":
+    let e = createTestEditor()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+
+    discard e.closeWindow()
+    check e.windowManager.windows.len == 1
+
+    check e.windowManager.windows[0].viewport.y == 0
+    check e.windowManager.windows[0].viewport.height == 24
+
+  test "vsplit close: no stale separator at old boundary":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = false
+
+    discard e.vsplit()
+    check e.windowManager.windows.len == 2
+
+    # Render with 2 windows (draws vertical separator)
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    # Record the separator X position
+    let leftWindow = e.windowManager.windows[0]
+    let separatorX = leftWindow.viewport.x + leftWindow.viewport.width
+
+    # Verify vertical separator exists before close
+    check buffer[separatorX, 0].symbol == "│"
+
+    # Close active window
+    discard e.closeWindow()
+    check e.windowManager.windows.len == 1
+
+    # Render after close
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    # The old separator X should now be normal content
+    check buffer[separatorX, 0].symbol != "│"
+
+  test "vsplit close: remaining window viewport covers full width":
+    let e = createTestEditor()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    discard e.vsplit()
+    check e.windowManager.windows.len == 2
+
+    discard e.closeWindow()
+    check e.windowManager.windows.len == 1
+
+    check e.windowManager.windows[0].viewport.x == 0
+    check e.windowManager.windows[0].viewport.width == 80
+
+proc getRowText(buffer: celina.Buffer, y: int): string =
+  ## Extract text content from a buffer row
+  for x in 0 ..< buffer.area.width:
+    let sym = buffer[x, y].symbol
+    if sym.len > 0:
+      result.add sym
+    else:
+      result.add ' '
+
+proc isStatusLineRow(buffer: celina.Buffer, y: int): bool =
+  ## Detect status line rows by checking for encoding indicator (e.g. UTF-8)
+  ## which is unique to status lines (not present in tab lines or content)
+  let text = buffer.getRowText(y)
+  "UTF-8" in text or "UTF-16" in text or "UTF-32" in text
+
+proc statusLineYPositions(buffer: celina.Buffer): seq[int] =
+  ## Get Y positions of status line rows
+  for y in 0 ..< buffer.area.height:
+    if buffer.isStatusLineRow(y):
+      result.add(y)
+
+suite "Status line count - no duplicate status lines":
+  test "Single window, multiStatusLine=false: exactly 1 status line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = false
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    let positions = statusLineYPositions(buffer)
+    # Should have exactly 1 status line at y=22
+    check positions.len == 1
+    check positions[0] == 23
+
+  test "Single window, multiStatusLine=true: exactly 1 status line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    let positions = statusLineYPositions(buffer)
+    # Should have exactly 1 status line at y=22
+    check positions.len == 1
+    check positions[0] == 23
+
+  test "2 hsplit windows, multiStatusLine=true: exactly 2 status lines":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    let positions = statusLineYPositions(buffer)
+    # Each window gets its own status line
+    check positions.len == 2
+
+  test "2 hsplit windows, multiStatusLine=false: exactly 1 status line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = false
+
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    let positions = statusLineYPositions(buffer)
+    # Single status line at the bottom
+    check positions.len == 1
+    check positions[0] == 23
+
+  test "2 vsplit windows, multiStatusLine=true: exactly 1 status line row":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+
+    discard e.vsplit()
+    check e.windowManager.windows.len == 2
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    let positions = statusLineYPositions(buffer)
+    # Both windows' status lines are at the same Y (both are bottom windows)
+    check positions.len == 1
+    check positions[0] == 23
+
+suite "Bottom area - status line and command line share last row":
+  test "Single window: status line at last row (y=height-1)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    let positions = statusLineYPositions(buffer)
+    # Status line should be at the very last row (y=23), not y=22
+    check positions.len == 1
+    check positions[0] == 23
+
+  test "Single window: no empty row below status line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    # Last row should be the status line (not blank)
+    let lastRowText = buffer.getRowText(23).strip()
+    check lastRowText.len > 0
+
+    # Second-to-last row (y=22) should be content area (not status line)
+    check not buffer.isStatusLineRow(22)
+
+  test "Single window: content area is height - 2 (tab + status)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+    e.state.display.showTabLine = true
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    # Content area: y=1 (after tab) to y=22 (before status line) = 22 rows
+    # y=0: tab line, y=23: status line
+    # Line number "1" should be at y=1
+    let y1text = buffer.getRowText(1).strip()
+    check "1" in y1text
+
+    # y=22 should still be in content area (no status line marker)
+    check not buffer.isStatusLineRow(22)
+
+  test "Command mode: command text overlays status line at last row":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+
+    # Enter command mode
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":write"
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    # Command text should be at last row (y=23)
+    let lastRow = buffer.getRowText(23).strip()
+    check ":write" in lastRow
+    check e.state.screenCursor.y == 23
+
+  test "2 hsplit, multiStatusLine=true: bottom window status at last row":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    let positions = statusLineYPositions(buffer)
+    # Window 1 status line + Window 2 status line
+    check positions.len == 2
+    # Bottom window's status line should be at y=23 (last row)
+    check positions[^1] == 23

@@ -371,25 +371,35 @@ proc renderLineSegmentWithSelection*(
       renderChar(rune, col, style)
       charIdx += 1
 
-  # Fill the rest of the line with cursor line highlight if on cursor line
-  if e.state.display.showCursorLine and lineIndex == ctx.cursorLine:
-    while screenX + displayX < ctx.windowRightEdge:
-      buffer.setString(screenX + displayX, screenY, " ", cursorLineHighlightStyle())
-      displayX += 1
+  # Fill the rest of the line to the window right edge.
+  # Always fill to clear stale content (e.g. old cursor line highlight).
+  let fillStyle =
+    if e.state.display.showCursorLine and lineIndex == ctx.cursorLine:
+      cursorLineHighlightStyle()
+    else:
+      normalStyle()
+  while screenX + displayX < ctx.windowRightEdge:
+    buffer.setString(screenX + displayX, screenY, " ", fillStyle)
+    displayX += 1
 
-proc fillCursorLineBackground*(
+proc fillLineBackground*(
     e: Editor,
     buffer: var Buffer,
     screenX, screenY: int,
     lineIndex, cursorLine: int,
     windowRightEdge: int,
 ) =
-  ## Fill the rest of the line with cursor line background if on cursor line
-  if e.state.display.showCursorLine and lineIndex == cursorLine:
-    var displayX = 0
-    while screenX + displayX < windowRightEdge:
-      buffer.setString(screenX + displayX, screenY, " ", cursorLineHighlightStyle())
-      displayX += 1
+  ## Fill the rest of the line to the window right edge.
+  ## Uses cursor line highlight for the cursor line, normal style otherwise.
+  let fillStyle =
+    if e.state.display.showCursorLine and lineIndex == cursorLine:
+      cursorLineHighlightStyle()
+    else:
+      normalStyle()
+  var displayX = 0
+  while screenX + displayX < windowRightEdge:
+    buffer.setString(screenX + displayX, screenY, " ", fillStyle)
+    displayX += 1
 
 proc renderCodeLensInline*(
     e: Editor,

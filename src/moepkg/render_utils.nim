@@ -36,7 +36,7 @@ const
   TabLineHeight* = 1 ## Height of tab line
   StatusLineReserve* = 1
   CommandLineReserve* = 1
-  StatusAndCommandReserve* = 2
+  StatusAndCommandReserve* = 1
 
   # Line number display constants
   LineNumberBase* = 1 # Convert 0-based index to 1-based display
@@ -307,12 +307,9 @@ proc findMaxBottomY*(windows: seq[EditorWindow]): int =
 
 proc calculateWindowStatusLineY*(window: EditorWindow, isBottomWindow: bool): int =
   ## Calculate Y position for window status line
-  ## Bottom windows: place above command line (height - 2)
-  ## Non-bottom windows: place at window bottom (height - 1)
-  if isBottomWindow:
-    window.viewport.y + window.viewport.height - 2
-  else:
-    window.viewport.y + window.viewport.height - 1
+  ## Status line is always at the last row of the window area (y + height - 1)
+  ## For bottom windows, the command line overlays the status line when active
+  window.viewport.y + window.viewport.height - 1
 
 # Display width calculation with tab support
 

@@ -314,7 +314,7 @@ suite "HelpViewer - Search backward":
 
   test "searchBackward wraps around to end":
     let state = newHelpViewerState()
-    state.setSearchQuery("jumps")
+    state.setSearchQuery("backup")
     state.selectedIndex = 0
 
     let result = state.searchBackward()

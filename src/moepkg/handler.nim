@@ -478,18 +478,18 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       of hrCloseWindow:
         # Handle window close - may also quit if last window
         let activeWin = e.activeWindow
+
         # Save buffer ref before clearModeState restores originalBuffer
         let splitBuf = activeWin.buffer
         activeWin.clearModeState(e.state.mode)
-        # For special modes with split windows, remove the temporary buffer
-        if e.state.mode in {
-          EditorMode.LogViewer, EditorMode.BackupManager, EditorMode.DiffViewer,
-          EditorMode.Debug, EditorMode.Config, EditorMode.RecentFile,
-        }:
+
+        if not e.state.mode.isFileEditMode:
+          # For special modes with split windows, remove the temporary buffer
           if e.windowManager.windows.len > 1:
             let idx = e.buffers.find(splitBuf)
             if idx >= 0:
               e.buffers.delete(idx)
+
         # Reset mode before closing
         e.state.previousMode = EditorMode.Normal
         activeWin.mode = EditorMode.Normal
@@ -897,20 +897,23 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           activeWin.logViewerState = some(newLogViewerState(lckLsp))
       of hrEnterHelpViewer:
         overlayHandled = true
-        # Enter help viewer mode - save base mode, exit overlay
+        # Enter help viewer mode in a split window
         let baseModeBeforeOverlay = e.state.baseMode
         e.state.exitOverlay()
         e.state.previousMode = baseModeBeforeOverlay
-        e.setMode(EditorMode.Help)
-        let activeWin = e.activeWindow
-        activeWin.mode = EditorMode.Help
         let helpState = newHelpViewerState()
-        helpState.originalBuffer = activeWin.buffer
-        activeWin.buffer = helpState.createHelpTextBuffer()
-        activeWin.cursor = BufferPosition(line: 0, column: 0)
-        activeWin.viewport.topLine = 0
-        activeWin.viewport.leftColumn = 0
-        activeWin.helpViewerState = some(helpState)
+        let helpBuffer = helpState.createHelpTextBuffer()
+        let splitResult = e.hsplitWithBuffer(helpBuffer)
+        if splitResult.isErr:
+          e.state.setStatusMessage("Failed to open help: " & splitResult.error)
+        else:
+          e.setMode(EditorMode.Help)
+          let activeWin = e.activeWindow
+          activeWin.mode = EditorMode.Help
+          activeWin.cursor = BufferPosition(line: 0, column: 0)
+          activeWin.viewport.topLine = 0
+          activeWin.viewport.leftColumn = 0
+          activeWin.helpViewerState = some(helpState)
       of hrEnterBufferManager:
         overlayHandled = true
         # Enter buffer manager mode - save base mode, exit overlay
@@ -1455,8 +1458,8 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
   let keyCombo = keyComboOpt.get
 
   # Get viewport height for the recent file list
-  # Reserve: 2 lines for status/command line, 1 line for title
-  let viewportHeight = max(0, e.viewport.height - 2 - 1)
+  # Reserve: status/command line (shared row) + 1 line for title
+  let viewportHeight = max(0, e.viewport.height - StatusAndCommandReserve - 1)
 
   let activeWin = e.activeWindow
   if activeWin.recentFileModeState.isNone:
@@ -1567,8 +1570,8 @@ proc handleDebugModeEvent(e: Editor, event: Event): bool =
   let keyCombo = keyComboOpt.get
 
   # Get viewport height for the debug viewer
-  # Reserve: 2 lines for status/command line, 1 line for title
-  let viewportHeight = max(0, e.viewport.height - 2 - 1)
+  # Reserve: status/command line (shared row) + 1 line for title
+  let viewportHeight = max(0, e.viewport.height - StatusAndCommandReserve - 1)
 
   let activeWin = e.activeWindow
   if activeWin.debugViewerState.isNone:
@@ -1886,8 +1889,12 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       activeBuffer = e.activeBuffer()
       lineNumOffset = e.calculateLineNumOffsetForMouse(activeBuffer)
       sidebarWidth = e.calculateSidebarWidth(e.activeWindow.mode)
-      # Status line + command line
-      reservedLines = if e.state.display.showStatusLine: 2 else: 1
+      # Status line + command line (shared row)
+      reservedLines =
+        if e.state.display.showStatusLine:
+          StatusAndCommandReserve
+        else:
+          CommandLineReserve
       # Account for tab line offset
       tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
       adjustedMouseY = mouse.y - tabLineOffset
@@ -1910,7 +1917,11 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
     var filerState = e.activeWindow.filerState.get
     let
       tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
-      reservedLines = if e.state.display.showStatusLine: 2 else: 1
+      reservedLines =
+        if e.state.display.showStatusLine:
+          StatusAndCommandReserve
+        else:
+          CommandLineReserve
       adjustedMouseY = mouse.y - tabLineOffset
 
     # Ignore clicks on tab line or status/command line area
@@ -2217,14 +2228,11 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # For other modes, use the unified handler manager with active buffer
   let activeBuffer = e.activeBuffer
 
-  # Get the active viewport if in split mode and sync with motion controller
-  var activeViewport = e.viewport
+  # Get the active viewport (shared by reference with motionController)
+  let activeViewport = e.viewport
+
   if e.windowManager.windows.len > 0 and
       e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    activeViewport = e.activeWindow.viewport
-    # Sync the motion controller's viewport with the active window's viewport
-    e.executer.motionController.viewportManager.viewport = activeViewport
-
     # Set reserved lines for viewport calculations
     # Find the maximum bottom Y coordinate to determine bottom windows
     var maxBottomY = 0
@@ -2239,17 +2247,18 @@ proc handleEvent*(e: Editor, event: Event): bool =
       isBottomWindow = (windowBottomY == maxBottomY)
 
     # Calculate reserved lines based on window position and status line mode
+    # Status line and command line share the same row (command overlays status)
     e.state.viewportReservedLines =
       if e.state.display.showStatusLine:
         if e.state.display.multiStatusLine:
           # Multi status line mode: each window has status, bottom has command too
-          if isBottomWindow: 2 else: 1
+          if isBottomWindow: StatusAndCommandReserve else: StatusLineReserve
         else:
           # Single status line mode: only bottom has status + command
-          if isBottomWindow: 2 else: 0
+          if isBottomWindow: StatusAndCommandReserve else: 0
       else:
         # No status line: only bottom has command line
-        if isBottomWindow: 1 else: 0
+        if isBottomWindow: CommandLineReserve else: 0
 
     # Add tab line height if shown
     if e.state.display.showTabLine:
@@ -2260,7 +2269,8 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.state.viewportReservedLines += e.state.statusMessageExtraLines()
   else:
     # Single window mode - use default calculation
-    e.state.viewportReservedLines = if e.state.display.showStatusLine: 2 else: 1
+    e.state.viewportReservedLines =
+      if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
 
     # Add tab line height if shown
     if e.state.display.showTabLine:
@@ -2268,8 +2278,6 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
     # Add extra lines for multi-line status messages
     e.state.viewportReservedLines += e.state.statusMessageExtraLines()
-    # Sync the motion controller's viewport with the editor's viewport
-    e.executer.motionController.viewportManager.viewport = e.viewport
 
   # Get active window for handleEvent (needed for special modes like Filer)
   let activeWin =
@@ -2306,14 +2314,6 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # (LogViewer handles cursor directly without using MotionController)
   if e.currentMode == EditorMode.LogViewer:
     e.updateViewportForCursor(e.cursor)
-
-  # Sync viewport from motionController to window
-  if e.windowManager.windows.len > 0 and
-      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.activeWindow.viewport = e.executer.motionController.viewportManager.viewport
-  else:
-    # Single window mode - sync viewport from motionController
-    e.viewport = e.executer.motionController.viewportManager.viewport
 
   # Process the result
   case r.kind
@@ -2465,10 +2465,18 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.state.setStatusMessage("Log refreshed")
     return true
   of hrHelpViewerQuit:
-    # Close help viewer and return to Normal mode
-    e.activeWindow.clearModeState(EditorMode.Help)
-    e.activeWindow.mode = EditorMode.Normal
+    # Close help viewer split window and return to Normal mode
+    let activeWin = e.activeWindow
+    activeWin.clearModeState(EditorMode.Help)
+    activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
+    # Remove the split buffer from the buffer list and close the window
+    if e.windowManager.windows.len > 1:
+      let buf = activeWin.buffer
+      let idx = e.buffers.find(buf)
+      if idx >= 0:
+        e.buffers.delete(idx)
+      discard e.closeWindow()
     return true
   of hrReferencesQuit:
     # Close references viewer and return to Normal mode

@@ -28,38 +28,32 @@ import editor_types, logger, render_utils, sidebar
 # Window state management procedures
 
 proc saveActiveWindowState*(e: Editor) =
-  ## Save viewport scroll position to the active window before switching
+  ## Save mode state to the active window before switching
   ## Note: cursor and mode are already stored directly in EditorWindow (single source of truth)
+  ## Viewport is shared by reference, so no field copying is needed
   ## For overlay modes (Command, Search, Rename), save the base mode instead
   ## This preserves the "real" mode (Filer, Normal, etc.) when splitting from command line
   if e.windowManager.windows.len > 0 and
       e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    # Save viewport scroll position from motionController
-    e.activeWindow.viewport.topLine =
-      e.executer.motionController.viewportManager.viewport.topLine
-    e.activeWindow.viewport.leftColumn =
-      e.executer.motionController.viewportManager.viewport.leftColumn
     # For overlay modes, save the base mode to the window
     if e.state.hasOverlay:
       e.activeWindow.mode = e.state.baseMode
 
 proc restoreActiveWindowState(e: Editor) =
-  ## Restore viewport scroll position from the active window after switching
+  ## Share the active window's viewport reference with motionController and editor
   ## Note: cursor and mode are accessed directly from EditorWindow
   if e.windowManager.windows.len > 0 and
       e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    # Restore viewport scroll position to motionController
-    e.executer.motionController.viewportManager.viewport.topLine =
-      e.activeWindow.viewport.topLine
-    e.executer.motionController.viewportManager.viewport.leftColumn =
-      e.activeWindow.viewport.leftColumn
+    e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
+    e.viewport = e.activeWindow.viewport
 
 proc syncActiveWindow*(e: Editor) =
   ## Sync the active window's buffer and viewport with the executor and motion controller
+  ## Viewport is shared by reference - reassigning shares the active window's viewport
   e.executer.buffer = e.activeWindow.buffer
   e.executer.motionController.executor.buffer = e.activeWindow.buffer
   e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
-  e.restoreActiveWindowState()
+  e.viewport = e.activeWindow.viewport
   e.state.needsFullRedraw = true
 
 proc calculateReservedLines*(e: Editor, isBottomWindow: bool = true): int =
@@ -158,9 +152,6 @@ proc restoreOriginalBuffer*(win: EditorWindow, mode: EditorMode) =
   of EditorMode.Filer:
     if win.filerState.isSome and win.filerState.get.originalBuffer != nil:
       win.buffer = win.filerState.get.originalBuffer
-  of EditorMode.Help:
-    if win.helpViewerState.isSome and win.helpViewerState.get.originalBuffer != nil:
-      win.buffer = win.helpViewerState.get.originalBuffer
   of EditorMode.BufferManager:
     if win.bufferManagerState.isSome and win.bufferManagerState.get.originalBuffer != nil:
       win.buffer = win.bufferManagerState.get.originalBuffer
@@ -436,10 +427,10 @@ proc enew*(e: Editor): Result[(), string] =
   e.activeWindow.viewport.topLine = 0
   e.activeWindow.viewport.leftColumn = 0
 
-  # Update executor and motion controller references
+  # Update executor and motion controller buffer references
+  # Viewport is shared by reference, so field changes above are already reflected
   e.executer.buffer = newBuffer
   e.executer.motionController.executor.buffer = newBuffer
-  e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
 
   # Reset cursor
   e.cursor = BufferPosition(line: 0, column: 0)

@@ -771,7 +771,7 @@ proc calculateNewPosition*(
     cmd: MotionCommand,
     viewportHeight: int = 24,
     viewportTopLine: int = 0,
-    reservedLines: int = 2,
+    reservedLines: int = StatusAndCommandReserve,
 ): CursorPosition =
   ## Calculate new cursor position after motion, without modifying state
   case cmd.motion
@@ -888,11 +888,15 @@ proc calculateScreenLine(
     lineWrap: bool,
     maxWidth: int,
     tabStop: int = 4,
+    maxResult: int = int.high,
 ): int =
-  ## Calculate screen line position of targetLine starting from startLine
-  ## Returns the number of screen lines from startLine to targetLine
+  ## Calculate screen line position of targetLine starting from startLine.
+  ## Returns the number of screen lines from startLine to targetLine.
+  ## Stops early if result reaches maxResult to avoid O(n) for distant jumps.
   result = 0
   for lineIdx in startLine ..< targetLine:
+    if result >= maxResult:
+      return
     if lineIdx >= 0 and lineIdx < buffer.len:
       if lineWrap:
         let line = buffer.getLine(lineIdx)
@@ -929,16 +933,25 @@ proc updateViewport*(
       if reservedLines >= 0:
         reservedLines
       else:
-        (if showStatusLine: 2 else: 1)
+        (if showStatusLine: StatusAndCommandReserve else: CommandLineReserve)
 
   # Vertical scrolling - handle line wrap mode differently
   if lineWrap and not buffer.isNil:
     # Line wrap mode: calculate screen positions
-    let maxWidth = max(1, mgr.viewport.width - lineNumOffset)
+    let
+      maxWidth = max(1, mgr.viewport.width - lineNumOffset)
+      visibleHeight = mgr.viewport.height - actualReservedLines
 
-    # Calculate cursor's screen line position relative to topLine
+    # Calculate cursor's screen line position relative to topLine.
+    # Use visibleHeight as early-exit bound to avoid O(n) for distant jumps.
     var cursorScreenLine = calculateScreenLine(
-      buffer, mgr.viewport.topLine, clampedCursorY, lineWrap, maxWidth, tabStop
+      buffer,
+      mgr.viewport.topLine,
+      clampedCursorY,
+      lineWrap,
+      maxWidth,
+      tabStop,
+      maxResult = visibleHeight,
     )
 
     # Add offset within the cursor's wrapped line
@@ -949,35 +962,42 @@ proc updateViewport*(
           cursorWrapPosition(cursorLine, clampedCursorX, maxWidth, tabStop)
       cursorScreenLine += wrapLineIndex
 
-    let visibleHeight = mgr.viewport.height - actualReservedLines
-
     # Scroll up if cursor is above viewport
     if cursorScreenLine < 0 or clampedCursorY < mgr.viewport.topLine:
       mgr.viewport.topLine = clampedCursorY
     # Scroll down if cursor is below viewport
     elif cursorScreenLine >= visibleHeight:
-      # Calculate target topLine to make cursor visible
-      # We want to scroll just enough to show the cursor
-      # Start by trying to place cursor near the top of the viewport
-      var targetTopLine = mgr.viewport.topLine
+      # Walk backwards from the cursor line to find the topLine that makes the
+      # cursor just visible at the bottom. This is O(viewport_height) instead
+      # of the previous O(n * viewport_height) forward search.
+      let cursorWrapOffset =
+        if clampedCursorY >= 0 and clampedCursorY < buffer.len:
+          let cursorLine = buffer.getLine(clampedCursorY)
+          cursorWrapPosition(cursorLine, clampedCursorX, maxWidth, tabStop)[0]
+        else:
+          0
 
-      # Increment topLine until cursor is within visible area
-      while targetTopLine <= clampedCursorY:
-        let testScreenLine = calculateScreenLine(
-          buffer, targetTopLine, clampedCursorY, lineWrap, maxWidth, tabStop
-        )
-        let testWrapOffset =
-          if clampedCursorY >= 0 and clampedCursorY < buffer.len:
-            let cursorLine = buffer.getLine(clampedCursorY)
-            cursorWrapPosition(cursorLine, clampedCursorX, maxWidth, tabStop)[0]
+      # Budget: screen lines available above the cursor's wrap position.
+      # Condition: sum(wrapCount[topLine..cursorY-1]) + cursorWrapOffset < visibleHeight
+      let budget = visibleHeight - cursorWrapOffset
+
+      var
+        targetTopLine = clampedCursorY
+        accum = 0
+        line = clampedCursorY - 1
+
+      while line >= 0:
+        let lineHeight =
+          if line < buffer.len:
+            calculateWrapCount(buffer.getLine(line), maxWidth, tabStop)
           else:
-            0
-        let totalScreenLine = testScreenLine + testWrapOffset
-
-        if totalScreenLine < visibleHeight:
-          # Cursor is now visible
+            1
+        if accum + lineHeight < budget:
+          accum += lineHeight
+          targetTopLine = line
+          line -= 1
+        else:
           break
-        targetTopLine += 1
 
       mgr.viewport.topLine = targetTopLine
   else:
@@ -1075,7 +1095,7 @@ proc updateScrollAnimation*(
     mgr: ViewportManager,
     anim: var ScrollAnimation,
     config: SmoothScrollConfig,
-    reservedLines: int = 2,
+    reservedLines: int = StatusAndCommandReserve,
     bufferLen: int = int.high,
 ): tuple[active: bool, cursorLine: int] =
   ## Update physics-based scroll animation each frame.
@@ -1214,7 +1234,11 @@ proc executeMotion*(
     if controller.cursorManager.state.viewportReservedLines >= 0:
       controller.cursorManager.state.viewportReservedLines
     else:
-      (if controller.cursorManager.state.display.showStatusLine: 2 else: 1)
+      (
+        if controller.cursorManager.state.display.showStatusLine:
+        StatusAndCommandReserve
+        else: CommandLineReserve
+      )
 
   var newPos = controller.executor.calculateNewPosition(
     currentPos, cmd, controller.viewportManager.viewport.height,

@@ -39,7 +39,7 @@ proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
   (oldWidth != e.viewport.width) or (oldHeight != e.viewport.height)
 
 proc adjustViewportForCursor(
-    viewport: var ViewPort,
+    viewport: ViewPort,
     cursor: BufferPosition,
     visibleHeight, textAreaWidth: int,
     lineWrap: bool,
@@ -84,19 +84,6 @@ proc adjustViewportForCursor(
 proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
   ## Render split window view
 
-  # For single window mode, sync window viewport size with editor viewport
-  # This ensures the window has the correct screen size (especially on first render)
-  # Also sync motionController viewport since ViewPort is a value type (copies on assignment)
-  if e.windowManager.windows.len == 1:
-    let window = e.windowManager.windows[0]
-    if window.viewport.width != e.viewport.width or
-        window.viewport.height != e.viewport.height:
-      window.viewport.width = e.viewport.width
-      window.viewport.height = e.viewport.height
-      # Also update motionController viewport size (ViewPort is value type, not shared)
-      e.executer.motionController.viewportManager.viewport.width = e.viewport.width
-      e.executer.motionController.viewportManager.viewport.height = e.viewport.height
-
   let
     oldWidth = e.viewport.width
     oldHeight = e.viewport.height
@@ -110,19 +97,6 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       e.viewport.width, e.viewport.height, oldWidth, oldHeight,
       e.state.display.multiStatusLine,
     )
-
-    # After resize, sync viewport from window to motion controller
-    # (ViewPort is value type, so must sync all fields)
-    if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-      e.executer.motionController.viewportManager.viewport.topLine =
-        e.activeWindow.viewport.topLine
-      e.executer.motionController.viewportManager.viewport.leftColumn =
-        e.activeWindow.viewport.leftColumn
-      e.executer.motionController.viewportManager.viewport.width =
-        e.activeWindow.viewport.width
-      e.executer.motionController.viewportManager.viewport.height =
-        e.activeWindow.viewport.height
-  # Note: In normal case, cursor is already in EditorWindow (single source of truth)
 
   # Find the maximum bottom Y coordinate (to determine bottom windows)
   let maxBottomY = findMaxBottomY(e.windowManager.windows)
@@ -304,24 +278,26 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       e.state.cursorVisible = true
 
 proc renderBottomLines*(e: Editor, buffer: var Buffer) =
-  ## Render status line and command line at the bottom of the screen
-  let
-    statusLineY = buffer.area.y + buffer.area.height - 2
-    commandLineY = buffer.area.y + buffer.area.height - 1
+  ## Render status line and command line at the bottom of the screen.
+  ## The status line and command line share the last row (y = height - 1).
+  ## When a command/search/rename overlay is active, it overwrites the status line.
+  let bottomY = buffer.area.y + buffer.area.height - 1
 
-  # Render status line using active buffer
-  # - Single window mode: always render status line at bottom
-  # - Multi-window mode: only render if multiStatusLine is disabled OR merge is enabled
-  if e.windowManager.windows.len == 1 or not e.state.display.multiStatusLine or
-      e.config.statusLine.merge:
-    e.state.renderStatusLine(e.activeBuffer(), buffer, statusLineY, e.config.statusLine)
+  # Render global status line at the bottom:
+  # - When multiStatusLine is disabled: single status line for all windows
+  # - When merge is enabled: merged status line at bottom
+  # When multiStatusLine is enabled (and merge is off), per-window status lines
+  # are rendered in renderSplitView instead.
+  if not e.state.display.multiStatusLine or e.config.statusLine.merge:
+    e.state.renderStatusLine(e.activeBuffer(), buffer, bottomY, e.config.statusLine)
 
-  # Handle command line based on overlay state
+  # Handle command line based on overlay state.
+  # Overlays render at the same bottomY, overwriting the status line.
   if e.state.isCommandOverlay:
-    buffer.setString(buffer.area.x, commandLineY, e.state.commandText, commandStyle())
+    buffer.setString(buffer.area.x, bottomY, e.state.commandText, commandStyle())
     # Cursor position: ":" + commandCursor (0-based after ":")
     e.state.screenCursor.x = 1 + e.state.commandCursor
-    e.state.screenCursor.y = buffer.area.height - 1
+    e.state.screenCursor.y = bottomY
 
     # Render command completion popup if active
     if e.state.commandCompletionManager.isActive():
@@ -337,23 +313,21 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
   elif e.state.isSearchOverlay:
     let searchChar = if e.state.search.direction == Forward: "/" else: "?"
     let searchPrompt = searchChar & e.state.search.text
-    buffer.setString(buffer.area.x, commandLineY, searchPrompt, commandStyle())
+    buffer.setString(buffer.area.x, bottomY, searchPrompt, commandStyle())
     e.state.screenCursor.x = searchPrompt.len
-    e.state.screenCursor.y = buffer.area.height - 1
+    e.state.screenCursor.y = bottomY
   elif e.state.isRenameOverlay:
     let renamePrompt = "Rename: " & e.state.renameState.text
-    buffer.setString(buffer.area.x, commandLineY, renamePrompt, commandStyle())
+    buffer.setString(buffer.area.x, bottomY, renamePrompt, commandStyle())
     e.state.screenCursor.x = renamePrompt.len
-    e.state.screenCursor.y = buffer.area.height - 1
+    e.state.screenCursor.y = bottomY
   else:
     let lineCount = e.state.statusMessageLineCount()
     if lineCount == 1:
-      # Single line: render as before
-      buffer.setString(
-        buffer.area.x, commandLineY, e.state.statusMessage, commandStyle()
-      )
+      # Single line: overwrite the status line
+      buffer.setString(buffer.area.x, bottomY, e.state.statusMessage, commandStyle())
     elif lineCount > 1:
-      # Multi-line: move status line up, expand command line area
+      # Multi-line: move status line up, expand message area downward to bottomY
       let
         allLines = e.state.statusMessage.split('\n')
         # Limit to MaxStatusMessageLines, show last N lines if exceeded
@@ -362,8 +336,8 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
             allLines[allLines.len - MaxStatusMessageLines .. ^1]
           else:
             allLines
-        extraLines = lines.len - 1
-        newStatusLineY = max(0, statusLineY - extraLines)
+        # Status line moves up to make room for all message lines
+        newStatusLineY = max(0, buffer.area.height - 1 - lines.len)
         messageStartY = newStatusLineY + 1
 
       # Re-render status line at new position
@@ -371,10 +345,10 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
         e.activeBuffer(), buffer, newStatusLineY, e.config.statusLine
       )
 
-      # Render message lines from messageStartY to commandLineY
+      # Render message lines from messageStartY to bottomY
       for i, line in lines:
         let y = messageStartY + i
-        if y >= messageStartY and y <= commandLineY:
+        if y >= messageStartY and y <= bottomY:
           buffer.setString(
             buffer.area.x, y, " ".repeat(buffer.area.width), commandStyle()
           )

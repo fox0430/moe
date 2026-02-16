@@ -45,7 +45,7 @@ type
     width*: int ## Width of sidebar in characters
     buffer*: seq[seq[SidebarItem]] ## Per-line sidebar content [y][x]
 
-  ViewPort* = object
+  ViewPort* = ref object
     topLine*: int
     leftColumn*: int
     width*: int
@@ -609,6 +609,15 @@ type
     # Overlay state for transient modes (Command, Search, Rename)
     # When set, the editor displays an overlay on top of the base mode
     overlay*: Option[OverlayState]
+
+proc `==`*(a, b: ViewPort): bool =
+  ## Structural equality for ViewPort (ref object defaults to pointer comparison)
+  if a.isNil and b.isNil:
+    return true
+  if a.isNil or b.isNil:
+    return false
+  a.topLine == b.topLine and a.leftColumn == b.leftColumn and a.width == b.width and
+    a.height == b.height and a.x == b.x and a.y == b.y
 
 proc setStatusMessage*(state: EditorState, msg: string) =
   ## Set status message and log it to message log

@@ -258,10 +258,10 @@ proc visibleEntries*(state: FilerState, height: int): seq[FileEntry] =
     @[]
 
 proc ensureSelectedVisible*(
-    state: FilerState, viewportHeight: int, reservedLines: int = 2
+    state: FilerState, viewportHeight: int, reservedLines: int = 1
 ) =
   ## Ensure the selected entry is visible in the viewport
-  ## reservedLines: total lines reserved (status line + command line)
+  ## reservedLines: total lines reserved (status + command share same row)
   let availableHeight = max(1, viewportHeight - reservedLines)
 
   if state.selectedIndex < state.topLine:
@@ -269,14 +269,14 @@ proc ensureSelectedVisible*(
   elif state.selectedIndex >= state.topLine + availableHeight:
     state.topLine = state.selectedIndex - availableHeight + 1
 
-proc halfPageDown*(state: FilerState, viewportHeight: int, reservedLines: int = 2) =
+proc halfPageDown*(state: FilerState, viewportHeight: int, reservedLines: int = 1) =
   ## Move half a page down
   let availableHeight = max(1, viewportHeight - reservedLines)
   let halfPage = max(1, availableHeight div 2)
   state.selectedIndex = min(state.entries.len - 1, state.selectedIndex + halfPage)
   state.ensureSelectedVisible(viewportHeight, reservedLines)
 
-proc halfPageUp*(state: FilerState, viewportHeight: int, reservedLines: int = 2) =
+proc halfPageUp*(state: FilerState, viewportHeight: int, reservedLines: int = 1) =
   ## Move half a page up
   let availableHeight = max(1, viewportHeight - reservedLines)
   let halfPage = max(1, availableHeight div 2)

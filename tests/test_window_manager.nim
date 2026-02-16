@@ -285,7 +285,7 @@ suite "EditorWindowManager - Vertical Split":
 
     check result.isOk
     check wm.windows.len == 2
-    check wm.activeWindowIndex == 1 # New window is active
+    check wm.activeWindowIndex == 0 # New window is active (inserted before original)
 
     # Windows should be side by side
     check wm.windows[0].viewport.x == 0
@@ -311,8 +311,8 @@ suite "EditorWindowManager - Vertical Split":
       wm.windows[0].buffer, wm.windows[0].viewport, BufferPosition(line: 0, column: 0)
     )
 
-    check wm.windows[0].active == false
-    check wm.windows[1].active == true
+    check wm.windows[0].active == true # New window (left) is active
+    check wm.windows[1].active == false # Original window (right) is inactive
 
 suite "EditorWindowManager - Horizontal Split":
   test "hsplit creates two stacked windows":
@@ -327,7 +327,7 @@ suite "EditorWindowManager - Horizontal Split":
 
     check result.isOk
     check wm.windows.len == 2
-    check wm.activeWindowIndex == 1 # New window is active
+    check wm.activeWindowIndex == 0 # New window is active (inserted before original)
 
     # Windows should be stacked
     check wm.windows[0].viewport.y == 0
@@ -358,8 +358,8 @@ suite "EditorWindowManager - Horizontal Split":
       multiStatusLine = false,
     )
 
-    check wm.windows[0].active == false
-    check wm.windows[1].active == true
+    check wm.windows[0].active == true # New window (top) is active
+    check wm.windows[1].active == false # Original window (bottom) is inactive
 
   test "hsplit with multiStatusLine":
     let wm = createSingleWindowManager(80, 24)
@@ -389,7 +389,7 @@ suite "EditorWindowManager - vsplitWithBuffer":
 
     check result.isOk
     check result.get == newBuf
-    check wm.windows[1].buffer == newBuf
+    check wm.windows[0].buffer == newBuf
 
 suite "EditorWindowManager - hsplitWithBuffer":
   test "hsplitWithBuffer uses provided buffer":
@@ -407,7 +407,7 @@ suite "EditorWindowManager - hsplitWithBuffer":
 
     check result.isOk
     check result.get == newBuf
-    check wm.windows[1].buffer == newBuf
+    check wm.windows[0].buffer == newBuf
 
 suite "EditorWindowManager - resizeWindows":
   test "resizeWindows with invalid dimensions does nothing":
@@ -598,9 +598,9 @@ suite "EditorWindowManager - bufferList in splits":
 
     check splitResult.isOk
     check wm.windows.len == 2
-    # New window (index 1) should have bufferList with only the split buffer
-    check wm.windows[1].bufferList.len == 1
-    check wm.windows[1].bufferList[0] == wm.windows[1].buffer
+    # New window (index 0) should have bufferList with only the split buffer
+    check wm.windows[0].bufferList.len == 1
+    check wm.windows[0].bufferList[0] == wm.windows[0].buffer
 
   test "hsplit initializes new window with single buffer in bufferList":
     let wm = createSingleWindowManager(80, 24)
@@ -614,9 +614,9 @@ suite "EditorWindowManager - bufferList in splits":
 
     check splitResult.isOk
     check wm.windows.len == 2
-    # New window (index 1) should have bufferList with only the split buffer
-    check wm.windows[1].bufferList.len == 1
-    check wm.windows[1].bufferList[0] == wm.windows[1].buffer
+    # New window (index 0) should have bufferList with only the split buffer
+    check wm.windows[0].bufferList.len == 1
+    check wm.windows[0].bufferList[0] == wm.windows[0].buffer
 
   test "vsplitWithBuffer initializes new window with provided buffer in bufferList":
     let wm = createSingleWindowManager(80, 24)
@@ -633,9 +633,9 @@ suite "EditorWindowManager - bufferList in splits":
 
     check splitResult.isOk
     check wm.windows.len == 2
-    check wm.windows[1].buffer == newBuffer
-    check wm.windows[1].bufferList.len == 1
-    check wm.windows[1].bufferList[0] == newBuffer
+    check wm.windows[0].buffer == newBuffer
+    check wm.windows[0].bufferList.len == 1
+    check wm.windows[0].bufferList[0] == newBuffer
 
   test "hsplitWithBuffer initializes new window with provided buffer in bufferList":
     let wm = createSingleWindowManager(80, 24)
@@ -653,9 +653,9 @@ suite "EditorWindowManager - bufferList in splits":
 
     check splitResult.isOk
     check wm.windows.len == 2
-    check wm.windows[1].buffer == newBuffer
-    check wm.windows[1].bufferList.len == 1
-    check wm.windows[1].bufferList[0] == newBuffer
+    check wm.windows[0].buffer == newBuffer
+    check wm.windows[0].bufferList.len == 1
+    check wm.windows[0].bufferList[0] == newBuffer
 
   test "Original window bufferList unchanged after split":
     let wm = createSingleWindowManager(80, 24)
@@ -665,8 +665,8 @@ suite "EditorWindowManager - bufferList in splits":
       wm.windows[0].buffer, wm.windows[0].viewport, BufferPosition(line: 0, column: 0)
     )
 
-    # Original window's bufferList should be unchanged
-    check wm.windows[0].bufferList.len == originalBufferListLen
+    # Original window (now at index 1) bufferList should be unchanged
+    check wm.windows[1].bufferList.len == originalBufferListLen
 
 suite "EditorWindowManager - Split Size Proportions":
   # vsplit size checks

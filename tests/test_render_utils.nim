@@ -407,17 +407,17 @@ suite "calculateWindowStatusLineY":
   test "bottom window":
     var buf = newTextBuffer()
     let win = EditorWindow(buffer: buf, viewport: ViewPort(y: 0, height: 24))
-    # Bottom window: y + height - 2
-    check calculateWindowStatusLineY(win, true) == 22
+    # Status line at last row: y + height - 1
+    check calculateWindowStatusLineY(win, true) == 23
 
   test "non-bottom window":
     var buf = newTextBuffer()
     let win = EditorWindow(buffer: buf, viewport: ViewPort(y: 0, height: 12))
-    # Non-bottom window: y + height - 1
+    # Status line at last row: y + height - 1
     check calculateWindowStatusLineY(win, false) == 11
 
   test "window with offset":
     var buf = newTextBuffer()
     let win = EditorWindow(buffer: buf, viewport: ViewPort(y: 10, height: 15))
-    check calculateWindowStatusLineY(win, true) == 23 # 10 + 15 - 2 = 23
+    check calculateWindowStatusLineY(win, true) == 24 # 10 + 15 - 1 = 24
     check calculateWindowStatusLineY(win, false) == 24 # 10 + 15 - 1 = 24

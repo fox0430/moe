@@ -508,7 +508,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         autoDeleteParen: editorConfig.standard.autoDeleteParen,
       ),
       needsFullRedraw: true, # Initial render needs full draw
-      viewportReservedLines: 2, # Default for single window mode with status line
+      viewportReservedLines: StatusAndCommandReserve, # Status+command share same row
       # Timing state (grouped in TimingState)
       timing: TimingState(
         lastResizeTime: getMonoTime(),

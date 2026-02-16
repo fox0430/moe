@@ -596,7 +596,11 @@ proc executeCommand*(
         # For page scroll motions, we want to scroll the full page amount, not just minimum to show cursor
         let viewportHeight = ctx.motionController.viewportManager.viewport.height
         let lineCount = ctx.motionController.executor.buffer.len
-        let reservedLines = if ctx.state.display.showStatusLine: 2 else: 1
+        let reservedLines =
+          if ctx.state.display.showStatusLine:
+            StatusAndCommandReserve
+          else:
+            CommandLineReserve
         let pageSize = max(1, viewportHeight - reservedLines - 1)
         let halfPageSize = max(1, pageSize div 2)
 
@@ -2439,8 +2443,9 @@ proc handleScrollCursorCenter(
   ## Scroll the viewport to place cursor line at the center (z. or zz command)
   ## Cursor position doesn't change, only the viewport
 
-  # Calculate reserved lines (status line + command line)
-  let reservedLines = if ctx.state.display.showStatusLine: 2 else: 1
+  # Calculate reserved lines (status line + command line share same row)
+  let reservedLines =
+    if ctx.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
   let visibleHeight =
     ctx.motionController.viewportManager.viewport.height - reservedLines
 
@@ -2458,8 +2463,9 @@ proc handleScrollCursorBottom(
   ## Scroll the viewport to place cursor line at the bottom (zb command)
   ## Cursor position doesn't change, only the viewport
 
-  # Calculate reserved lines (status line + command line)
-  let reservedLines = if ctx.state.display.showStatusLine: 2 else: 1
+  # Calculate reserved lines (status line + command line share same row)
+  let reservedLines =
+    if ctx.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
   let visibleHeight =
     ctx.motionController.viewportManager.viewport.height - reservedLines
 

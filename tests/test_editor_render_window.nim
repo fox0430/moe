@@ -1023,14 +1023,14 @@ suite "Cursor line highlight - Window boundary clipping":
     for x in 40 ..< 80:
       check buffer[x, 0].style.bg != hlStyle.bg
 
-  test "fillCursorLineBackground clipped to window boundary":
+  test "fillLineBackground clipped to window boundary":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
     e.state.display.showCursorLine = true
 
-    # Call fillCursorLineBackground directly with windowRightEdge=30
-    e.fillCursorLineBackground(buffer, 0, 0, 0, 0, 30)
+    # Call fillLineBackground directly with windowRightEdge=30
+    e.fillLineBackground(buffer, 0, 0, 0, 0, 30)
 
     let hlStyle = cursorLineHighlightStyle()
     # Should fill positions 0..29
@@ -1040,6 +1040,25 @@ suite "Cursor line highlight - Window boundary clipping":
     # Should NOT fill positions 30+
     for x in 30 ..< 80:
       check buffer[x, 0].style.bg != hlStyle.bg
+
+  test "fillLineBackground fills normalStyle for non-cursor line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.display.showCursorLine = true
+
+    # Pre-fill with cursor line highlight to simulate stale content
+    let hlStyle = cursorLineHighlightStyle()
+    for x in 0 ..< 40:
+      buffer.setString(x, 0, " ", hlStyle)
+
+    # Fill line 1 (non-cursor), cursor is on line 0
+    e.fillLineBackground(buffer, 0, 0, 1, 0, 40)
+
+    # All positions should now have normalStyle (stale highlight cleared)
+    let nStyle = normalStyle()
+    for x in 0 ..< 40:
+      check buffer[x, 0].style.bg == nStyle.bg
 
   test "renderLineSegmentWithSelection clipped to window boundary":
     let e = createTestEditor()
@@ -1072,3 +1091,119 @@ suite "Cursor line highlight - Window boundary clipping":
     # Beyond windowRightEdge should NOT be filled
     for x in 30 ..< 80:
       check buffer[x, 0].style.bg != hlStyle.bg
+
+  test "Non-cursor line clears stale cursor line highlight":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.state.display.showCursorLine = true
+    e.state.display.showSyntax = false
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "AB")
+
+    # Pre-fill the trailing area with cursor line highlight to simulate
+    # a previous frame where this line was the cursor line
+    let hlStyle = cursorLineHighlightStyle()
+    for x in 2 ..< 40:
+      buffer.setString(x, 0, " ", hlStyle)
+
+    # Now render this line as a NON-cursor line (cursor is on line 99)
+    let ctx = RenderContext(
+      cursorLine: 99,
+      cursorCol: 0,
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 40,
+    )
+
+    e.renderLineSegmentWithSelection(
+      e.textBuffer, buffer, "AB", 0, 0, 0, 0, ctx, useRunes = false
+    )
+
+    # Trailing area should be cleared to normalStyle, not cursor highlight
+    let nStyle = normalStyle()
+    for x in 2 ..< 40:
+      check buffer[x, 0].style.bg == nStyle.bg
+
+  test "Stale cursor highlight cleared after vsplit":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showCursorLine = true
+    e.state.display.lineWrap = false
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
+
+    # First render: single full-width window, cursor on line 0
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0
+    window.cursor.column = 0
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let hlStyle = cursorLineHighlightStyle()
+    # Verify highlight spans full 80-column window
+    for x in 2 ..< 80:
+      check buffer[x, 0].style.bg == hlStyle.bg
+
+    # Second render: simulate vsplit — left window now only 39 columns wide
+    window.viewport.width = 39
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    # Highlight should only cover within the narrower window
+    for x in 2 ..< 39:
+      check buffer[x, 0].style.bg == hlStyle.bg
+
+    # Old highlight beyond new window right edge should be untouched by
+    # this window's render (it's now part of another window's area).
+    # The key point: cells 39..79 are NOT written by the left window.
+    # In a real split, the right window would overwrite them.
+
+  test "Non-cursor line cleared in window render (no-wrap)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.showCursorLine = true
+    e.state.display.lineWrap = false
+
+    # Insert two lines
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Line1\nLine2")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0
+    window.cursor.column = 0
+
+    # Pre-fill row 1 (line 1) trailing area with cursor highlight
+    # to simulate it being the previous cursor line
+    let hlStyle = cursorLineHighlightStyle()
+    for x in 5 ..< 40:
+      buffer.setString(x, 1, " ", hlStyle)
+
+    # Render with cursor on line 0
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    # Row 0 (cursor line) should have cursor highlight
+    for x in 5 ..< 40:
+      check buffer[x, 0].style.bg == hlStyle.bg
+
+    # Row 1 (non-cursor line) trailing area should be cleared
+    let nStyle = normalStyle()
+    for x in 5 ..< 40:
+      check buffer[x, 1].style.bg == nStyle.bg

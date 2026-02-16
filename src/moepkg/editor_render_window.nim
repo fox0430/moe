@@ -64,7 +64,7 @@ proc renderWindowLineWrapped*(
         buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
     # Fill with cursor line highlight if on cursor line
     let textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
-    e.fillCursorLineBackground(
+    e.fillLineBackground(
       buffer,
       textScreenX,
       actualScreenY,
@@ -192,8 +192,8 @@ proc renderWindowLineNoWrap*(
         useRunes = false,
       )
   else:
-    # Empty line or scrolled past line end - fill with cursor line highlight if on cursor line
-    e.fillCursorLineBackground(
+    # Empty line or scrolled past line end - fill to clear stale content
+    e.fillLineBackground(
       buffer,
       textScreenX,
       actualScreenY,
