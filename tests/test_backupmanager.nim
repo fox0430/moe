@@ -197,12 +197,11 @@ suite "backup_manager - refresh":
 suite "backup_manager - moveUp":
   test "Move up decrements selectedIndex":
     let state = newBackupManagerState()
-    state.entries =
-      @[
-        BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
-        BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
-        BackupEntry(filename: "c", timestamp: now(), fullPath: "/c"),
-      ]
+    state.entries = @[
+      BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
+      BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
+      BackupEntry(filename: "c", timestamp: now(), fullPath: "/c"),
+    ]
     state.selectedIndex = 2
 
     state.moveUp()
@@ -228,12 +227,11 @@ suite "backup_manager - moveUp":
 
   test "Move up adjusts topLine when needed":
     let state = newBackupManagerState()
-    state.entries =
-      @[
-        BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
-        BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
-        BackupEntry(filename: "c", timestamp: now(), fullPath: "/c"),
-      ]
+    state.entries = @[
+      BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
+      BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
+      BackupEntry(filename: "c", timestamp: now(), fullPath: "/c"),
+    ]
     state.selectedIndex = 1
     state.topLine = 1
 
@@ -244,12 +242,11 @@ suite "backup_manager - moveUp":
 suite "backup_manager - moveDown":
   test "Move down increments selectedIndex":
     let state = newBackupManagerState()
-    state.entries =
-      @[
-        BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
-        BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
-        BackupEntry(filename: "c", timestamp: now(), fullPath: "/c"),
-      ]
+    state.entries = @[
+      BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
+      BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
+      BackupEntry(filename: "c", timestamp: now(), fullPath: "/c"),
+    ]
     state.selectedIndex = 0
 
     state.moveDown()
@@ -260,11 +257,10 @@ suite "backup_manager - moveDown":
 
   test "Move down does not exceed last entry":
     let state = newBackupManagerState()
-    state.entries =
-      @[
-        BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
-        BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
-      ]
+    state.entries = @[
+      BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
+      BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
+    ]
     state.selectedIndex = 1
 
     state.moveDown()
@@ -280,11 +276,10 @@ suite "backup_manager - moveDown":
 suite "backup_manager - moveToFirst":
   test "Move to first sets selectedIndex to 0":
     let state = newBackupManagerState()
-    state.entries =
-      @[
-        BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
-        BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
-      ]
+    state.entries = @[
+      BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
+      BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
+    ]
     state.selectedIndex = 1
     state.topLine = 1
 
@@ -295,12 +290,11 @@ suite "backup_manager - moveToFirst":
 suite "backup_manager - moveToLast":
   test "Move to last sets selectedIndex to last entry":
     let state = newBackupManagerState()
-    state.entries =
-      @[
-        BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
-        BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
-        BackupEntry(filename: "c", timestamp: now(), fullPath: "/c"),
-      ]
+    state.entries = @[
+      BackupEntry(filename: "a", timestamp: now(), fullPath: "/a"),
+      BackupEntry(filename: "b", timestamp: now(), fullPath: "/b"),
+      BackupEntry(filename: "c", timestamp: now(), fullPath: "/c"),
+    ]
     state.selectedIndex = 0
 
     state.moveToLast()
@@ -317,11 +311,10 @@ suite "backup_manager - getSelectedEntry":
   test "Get selected entry returns correct entry":
     let state = newBackupManagerState()
     let t = now()
-    state.entries =
-      @[
-        BackupEntry(filename: "a", timestamp: t, fullPath: "/a"),
-        BackupEntry(filename: "b", timestamp: t, fullPath: "/b"),
-      ]
+    state.entries = @[
+      BackupEntry(filename: "a", timestamp: t, fullPath: "/a"),
+      BackupEntry(filename: "b", timestamp: t, fullPath: "/b"),
+    ]
     state.selectedIndex = 1
 
     let entry = state.getSelectedEntry()

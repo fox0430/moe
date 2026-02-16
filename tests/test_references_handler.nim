@@ -32,12 +32,11 @@ suite "ReferencesHandler - Handler creation":
 suite "ReferencesHandler - Navigation keys":
   test "j key moves down":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     let keyCombo = toKeyCombo('j')
 
@@ -48,12 +47,11 @@ suite "ReferencesHandler - Navigation keys":
 
   test "k key moves up":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 2
     let keyCombo = toKeyCombo('k')
@@ -65,11 +63,10 @@ suite "ReferencesHandler - Navigation keys":
 
   test "Down arrow key moves down":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     let keyCombo = toSpecialKeyCombo(skDown)
 
@@ -80,11 +77,10 @@ suite "ReferencesHandler - Navigation keys":
 
   test "Up arrow key moves up":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 1
     let keyCombo = toSpecialKeyCombo(skUp)
@@ -97,12 +93,11 @@ suite "ReferencesHandler - Navigation keys":
 suite "ReferencesHandler - Go to first/last":
   test "gg moves to first item":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 2
 
@@ -124,12 +119,11 @@ suite "ReferencesHandler - Go to first/last":
 
   test "G moves to last item":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 0
     let keyCombo = toKeyCombo('G')
@@ -141,12 +135,11 @@ suite "ReferencesHandler - Go to first/last":
 
   test "g followed by non-g cancels gg sequence":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 2
 
@@ -234,11 +227,10 @@ suite "ReferencesHandler - Enter command mode":
 suite "ReferencesHandler - Jump to reference":
   test "Enter key returns jump result with selected item":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/first.nim", line: 10, column: 5, text: "first"),
-        ReferenceItem(path: "/second.nim", line: 20, column: 10, text: "second"),
-      ]
+    let items = @[
+      ReferenceItem(path: "/first.nim", line: 10, column: 5, text: "first"),
+      ReferenceItem(path: "/second.nim", line: 20, column: 10, text: "second"),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 1
     let keyCombo = toSpecialKeyCombo(skEnter)
@@ -309,11 +301,10 @@ suite "ReferencesHandler - Viewport scrolling":
 suite "ReferencesHandler - Boundary conditions":
   test "k at first item stays at first":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 0
     let keyCombo = toKeyCombo('k')
@@ -325,11 +316,10 @@ suite "ReferencesHandler - Boundary conditions":
 
   test "j at last item stays at last":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 1
     let keyCombo = toKeyCombo('j')
@@ -341,11 +331,10 @@ suite "ReferencesHandler - Boundary conditions":
 
   test "Up arrow at first item stays at first":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 0
     let keyCombo = toSpecialKeyCombo(skUp)
@@ -357,11 +346,10 @@ suite "ReferencesHandler - Boundary conditions":
 
   test "Down arrow at last item stays at last":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 1
     let keyCombo = toSpecialKeyCombo(skDown)
@@ -374,11 +362,10 @@ suite "ReferencesHandler - Boundary conditions":
 suite "ReferencesHandler - gg with special key":
   test "g followed by Escape cancels gg and quits":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 1
 
@@ -398,11 +385,10 @@ suite "ReferencesHandler - gg with special key":
 
   test "g followed by Enter cancels gg and jumps":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 1, column: 2, text: "target"),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 1, column: 2, text: "target"),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 1
 
@@ -422,12 +408,11 @@ suite "ReferencesHandler - gg with special key":
 
   test "g followed by Down cancels gg and moves down":
     let handler = newReferencesHandler()
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 0
 

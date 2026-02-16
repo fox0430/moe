@@ -793,12 +793,11 @@ suite "diff_viewer: DiffViewerState field access":
 suite "diff_viewer: createDiffTextBuffer":
   test "Creates TextBuffer with correct content":
     let state = newDiffViewerState()
-    state.lines =
-      @[
-        DiffLine(text: "+added line", kind: dlkAdded),
-        DiffLine(text: "-deleted line", kind: dlkDeleted),
-        DiffLine(text: " context line", kind: dlkNormal),
-      ]
+    state.lines = @[
+      DiffLine(text: "+added line", kind: dlkAdded),
+      DiffLine(text: "-deleted line", kind: dlkDeleted),
+      DiffLine(text: " context line", kind: dlkNormal),
+    ]
 
     let buf = state.createDiffTextBuffer()
 
@@ -825,11 +824,10 @@ suite "diff_viewer: createDiffTextBuffer":
 
   test "Initializes highlight (not nil)":
     let state = newDiffViewerState()
-    state.lines =
-      @[
-        DiffLine(text: "+added", kind: dlkAdded),
-        DiffLine(text: "-deleted", kind: dlkDeleted),
-      ]
+    state.lines = @[
+      DiffLine(text: "+added", kind: dlkAdded),
+      DiffLine(text: "-deleted", kind: dlkDeleted),
+    ]
 
     let buf = state.createDiffTextBuffer()
 
@@ -847,14 +845,13 @@ suite "diff_viewer: createDiffTextBuffer":
 
   test "Highlight assigns correct colors for diff line types":
     let state = newDiffViewerState()
-    state.lines =
-      @[
-        DiffLine(text: "+added line", kind: dlkAdded),
-        DiffLine(text: "-deleted line", kind: dlkDeleted),
-        DiffLine(text: "@@ -1,3 +1,4 @@", kind: dlkHeader),
-        DiffLine(text: "diff --git a/f b/f", kind: dlkMeta),
-        DiffLine(text: " context line", kind: dlkNormal),
-      ]
+    state.lines = @[
+      DiffLine(text: "+added line", kind: dlkAdded),
+      DiffLine(text: "-deleted line", kind: dlkDeleted),
+      DiffLine(text: "@@ -1,3 +1,4 @@", kind: dlkHeader),
+      DiffLine(text: "diff --git a/f b/f", kind: dlkMeta),
+      DiffLine(text: " context line", kind: dlkNormal),
+    ]
 
     let buf = state.createDiffTextBuffer()
 
@@ -1013,14 +1010,13 @@ suite "diff_viewer: initHighlight with langDiff":
     check hl.getColorPair(0, 0) == EditorColorPairIndex.default
 
   test "Multi-line diff highlight":
-    let runesBuffer =
-      @[
-        "+added".toRunes(),
-        "-deleted".toRunes(),
-        "@@ -1,3 +1,4 @@".toRunes(),
-        "diff --git a/f b/f".toRunes(),
-        " context".toRunes(),
-      ]
+    let runesBuffer = @[
+      "+added".toRunes(),
+      "-deleted".toRunes(),
+      "@@ -1,3 +1,4 @@".toRunes(),
+      "diff --git a/f b/f".toRunes(),
+      " context".toRunes(),
+    ]
     let hl = initHighlight(runesBuffer, @[], langDiff)
 
     check hl.getColorPair(0, 0) == EditorColorPairIndex.diffViewerAddedLine

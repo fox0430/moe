@@ -227,15 +227,14 @@ suite "LspIntegration - Hover Text":
 suite "LspIntegration - Signature Help":
   test "getSignatureHelpText with single signature":
     let sigHelp = SignatureHelp(
-      signatures:
-        @[
-          SignatureInformation(
-            label: "proc foo(a: int, b: string): bool",
-            documentation: none(JsonNode),
-            parameters: none(seq[ParameterInformation]),
-            activeParameter: none(int),
-          )
-        ],
+      signatures: @[
+        SignatureInformation(
+          label: "proc foo(a: int, b: string): bool",
+          documentation: none(JsonNode),
+          parameters: none(seq[ParameterInformation]),
+          activeParameter: none(int),
+        )
+      ],
       activeSignature: some(0),
       activeParameter: none(int),
     )
@@ -243,15 +242,14 @@ suite "LspIntegration - Signature Help":
 
   test "getSignatureHelpText with documentation":
     let sigHelp = SignatureHelp(
-      signatures:
-        @[
-          SignatureInformation(
-            label: "proc bar()",
-            documentation: some(%"This is the documentation"),
-            parameters: none(seq[ParameterInformation]),
-            activeParameter: none(int),
-          )
-        ],
+      signatures: @[
+        SignatureInformation(
+          label: "proc bar()",
+          documentation: some(%"This is the documentation"),
+          parameters: none(seq[ParameterInformation]),
+          activeParameter: none(int),
+        )
+      ],
       activeSignature: some(0),
       activeParameter: none(int),
     )
@@ -267,15 +265,14 @@ suite "LspIntegration - Signature Help":
 
   test "getActiveParameterIndex from top level":
     let sigHelp = SignatureHelp(
-      signatures:
-        @[
-          SignatureInformation(
-            label: "foo(a, b, c)",
-            documentation: none(JsonNode),
-            parameters: none(seq[ParameterInformation]),
-            activeParameter: none(int),
-          )
-        ],
+      signatures: @[
+        SignatureInformation(
+          label: "foo(a, b, c)",
+          documentation: none(JsonNode),
+          parameters: none(seq[ParameterInformation]),
+          activeParameter: none(int),
+        )
+      ],
       activeSignature: some(0),
       activeParameter: some(2),
     )
@@ -283,15 +280,14 @@ suite "LspIntegration - Signature Help":
 
   test "getActiveParameterIndex from signature":
     let sigHelp = SignatureHelp(
-      signatures:
-        @[
-          SignatureInformation(
-            label: "foo(a, b)",
-            documentation: none(JsonNode),
-            parameters: none(seq[ParameterInformation]),
-            activeParameter: some(1),
-          )
-        ],
+      signatures: @[
+        SignatureInformation(
+          label: "foo(a, b)",
+          documentation: none(JsonNode),
+          parameters: none(seq[ParameterInformation]),
+          activeParameter: some(1),
+        )
+      ],
       activeSignature: some(0),
       activeParameter: none(int),
     )
@@ -299,15 +295,14 @@ suite "LspIntegration - Signature Help":
 
   test "getActiveParameterIndex defaults to 0":
     let sigHelp = SignatureHelp(
-      signatures:
-        @[
-          SignatureInformation(
-            label: "foo()",
-            documentation: none(JsonNode),
-            parameters: none(seq[ParameterInformation]),
-            activeParameter: none(int),
-          )
-        ],
+      signatures: @[
+        SignatureInformation(
+          label: "foo()",
+          documentation: none(JsonNode),
+          parameters: none(seq[ParameterInformation]),
+          activeParameter: none(int),
+        )
+      ],
       activeSignature: some(0),
       activeParameter: none(int),
     )
@@ -315,20 +310,19 @@ suite "LspIntegration - Signature Help":
 
   test "getParameterInfo with parameters":
     let sigHelp = SignatureHelp(
-      signatures:
-        @[
-          SignatureInformation(
-            label: "foo(a: int, b: string)",
-            documentation: none(JsonNode),
-            parameters: some(
-              @[
-                ParameterInformation(label: "a: int", documentation: none(JsonNode)),
-                ParameterInformation(label: "b: string", documentation: none(JsonNode)),
-              ]
-            ),
-            activeParameter: none(int),
-          )
-        ],
+      signatures: @[
+        SignatureInformation(
+          label: "foo(a: int, b: string)",
+          documentation: none(JsonNode),
+          parameters: some(
+            @[
+              ParameterInformation(label: "a: int", documentation: none(JsonNode)),
+              ParameterInformation(label: "b: string", documentation: none(JsonNode)),
+            ]
+          ),
+          activeParameter: none(int),
+        )
+      ],
       activeSignature: some(0),
       activeParameter: some(1),
     )
@@ -544,103 +538,91 @@ suite "LspIntegration - applyTextEdits":
 
   test "applyTextEdits insert at beginning":
     let buffer = newTextBuffer("world")
-    let edits =
-      @[
-        TextEdit(
-          range: Range(
-            start: Position(line: 0, character: 0),
-            `end`: Position(line: 0, character: 0),
-          ),
-          newText: "hello ",
-        )
-      ]
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 0)
+        ),
+        newText: "hello ",
+      )
+    ]
     let result = applyTextEdits(buffer, edits)
     check result.isOk
     check buffer.getLine(0) == "hello world"
 
   test "applyTextEdits replace text":
     let buffer = newTextBuffer("hello world")
-    let edits =
-      @[
-        TextEdit(
-          range: Range(
-            start: Position(line: 0, character: 0),
-            `end`: Position(line: 0, character: 5),
-          ),
-          newText: "hi",
-        )
-      ]
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 5)
+        ),
+        newText: "hi",
+      )
+    ]
     let result = applyTextEdits(buffer, edits)
     check result.isOk
     check buffer.getLine(0) == "hi world"
 
   test "applyTextEdits delete text":
     let buffer = newTextBuffer("hello world")
-    let edits =
-      @[
-        TextEdit(
-          range: Range(
-            start: Position(line: 0, character: 5),
-            `end`: Position(line: 0, character: 11),
-          ),
-          newText: "",
-        )
-      ]
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 5),
+          `end`: Position(line: 0, character: 11),
+        ),
+        newText: "",
+      )
+    ]
     let result = applyTextEdits(buffer, edits)
     check result.isOk
     check buffer.getLine(0) == "hello"
 
   test "applyTextEdits multiple edits in reverse order":
     let buffer = newTextBuffer("abc")
-    let edits =
-      @[
-        TextEdit(
-          range: Range(
-            start: Position(line: 0, character: 0),
-            `end`: Position(line: 0, character: 1),
-          ),
-          newText: "A",
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 1)
         ),
-        TextEdit(
-          range: Range(
-            start: Position(line: 0, character: 2),
-            `end`: Position(line: 0, character: 3),
-          ),
-          newText: "C",
+        newText: "A",
+      ),
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 2), `end`: Position(line: 0, character: 3)
         ),
-      ]
+        newText: "C",
+      ),
+    ]
     let result = applyTextEdits(buffer, edits)
     check result.isOk
     check buffer.getLine(0) == "AbC"
 
   test "applyTextEdits with multiline buffer":
     let buffer = newTextBuffer("line1\nline2\nline3")
-    let edits =
-      @[
-        TextEdit(
-          range: Range(
-            start: Position(line: 1, character: 0),
-            `end`: Position(line: 1, character: 5),
-          ),
-          newText: "modified",
-        )
-      ]
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 1, character: 0), `end`: Position(line: 1, character: 5)
+        ),
+        newText: "modified",
+      )
+    ]
     let result = applyTextEdits(buffer, edits)
     check result.isOk
     check buffer.getLine(1) == "modified"
 
   test "applyTextEdits insert at end":
     let buffer = newTextBuffer("hello")
-    let edits =
-      @[
-        TextEdit(
-          range: Range(
-            start: Position(line: 0, character: 5),
-            `end`: Position(line: 0, character: 5),
-          ),
-          newText: " world",
-        )
-      ]
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 5), `end`: Position(line: 0, character: 5)
+        ),
+        newText: " world",
+      )
+    ]
     let result = applyTextEdits(buffer, edits)
     check result.isOk
     check buffer.getLine(0) == "hello world"
@@ -654,49 +636,46 @@ suite "LspIntegration - applyLspFoldingRanges":
 
   test "applyLspFoldingRanges with single range":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4")
-    let ranges =
-      @[
-        FoldingRange(
-          startLine: 0,
-          startCharacter: none(int),
-          endLine: 2,
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: none(string),
-        )
-      ]
+    let ranges = @[
+      FoldingRange(
+        startLine: 0,
+        startCharacter: none(int),
+        endLine: 2,
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
     let count = buffer.applyLspFoldingRanges(ranges)
     check count == 1
 
   test "applyLspFoldingRanges skips invalid ranges":
     let buffer = newTextBuffer("line1\nline2")
-    let ranges =
-      @[
-        FoldingRange(
-          startLine: 5, # Out of bounds
-          startCharacter: none(int),
-          endLine: 10,
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: none(string),
-        )
-      ]
+    let ranges = @[
+      FoldingRange(
+        startLine: 5, # Out of bounds
+        startCharacter: none(int),
+        endLine: 10,
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
     let count = buffer.applyLspFoldingRanges(ranges)
     check count == 0
 
   test "applyLspFoldingRanges with startCollapsed":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4")
-    let ranges =
-      @[
-        FoldingRange(
-          startLine: 0,
-          startCharacter: none(int),
-          endLine: 2,
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: none(string),
-        )
-      ]
+    let ranges = @[
+      FoldingRange(
+        startLine: 0,
+        startCharacter: none(int),
+        endLine: 2,
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
     let count = buffer.applyLspFoldingRanges(ranges, startCollapsed = true)
     check count == 1
     check buffer.foldState.folds[0].collapsed
@@ -908,16 +887,14 @@ suite "LspIntegration - applyWorkspaceEdit":
   test "applyWorkspaceEdit with changes field":
     var buffers = @[newTextBuffer("hello", some("/tmp/test.txt"))]
     var changes = initTable[string, seq[TextEdit]]()
-    changes["file:///tmp/test.txt"] =
-      @[
-        TextEdit(
-          range: Range(
-            start: Position(line: 0, character: 0),
-            `end`: Position(line: 0, character: 5),
-          ),
-          newText: "world",
-        )
-      ]
+    changes["file:///tmp/test.txt"] = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 5)
+        ),
+        newText: "world",
+      )
+    ]
     let edit = WorkspaceEdit(
       changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
     )
@@ -931,36 +908,32 @@ suite "LspIntegration - applyWorkspaceEdit":
 
     # Create changes that would modify to "bbb"
     var changes = initTable[string, seq[TextEdit]]()
-    changes["file:///tmp/test.txt"] =
-      @[
-        TextEdit(
-          range: Range(
-            start: Position(line: 0, character: 0),
-            `end`: Position(line: 0, character: 3),
-          ),
-          newText: "bbb",
-        )
-      ]
+    changes["file:///tmp/test.txt"] = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 3)
+        ),
+        newText: "bbb",
+      )
+    ]
 
     # Create documentChanges that would modify to "ccc"
-    let docChanges =
-      @[
-        TextDocumentEdit(
-          textDocument: OptionalVersionedTextDocumentIdentifier(
-            uri: "file:///tmp/test.txt", version: some(1)
-          ),
-          edits:
-            @[
-              TextEdit(
-                range: Range(
-                  start: Position(line: 0, character: 0),
-                  `end`: Position(line: 0, character: 3),
-                ),
-                newText: "ccc",
-              )
-            ],
-        )
-      ]
+    let docChanges = @[
+      TextDocumentEdit(
+        textDocument: OptionalVersionedTextDocumentIdentifier(
+          uri: "file:///tmp/test.txt", version: some(1)
+        ),
+        edits: @[
+          TextEdit(
+            range: Range(
+              start: Position(line: 0, character: 0),
+              `end`: Position(line: 0, character: 3),
+            ),
+            newText: "ccc",
+          )
+        ],
+      )
+    ]
 
     let edit = WorkspaceEdit(changes: some(changes), documentChanges: some(docChanges))
     let result = applyWorkspaceEdit(buffers, edit)
@@ -971,81 +944,74 @@ suite "LspIntegration - applyWorkspaceEdit":
 suite "LspIntegration - applyDiagnosticsToBuffer":
   test "applyDiagnosticsToBuffer sets error markers":
     let buffer = newTextBuffer("line1\nline2\nline3")
-    let diagnostics =
-      @[
-        Diagnostic(
-          range: Range(
-            start: Position(line: 1, character: 0),
-            `end`: Position(line: 1, character: 5),
-          ),
-          severity: some(dsError),
-          code: none(JsonNode),
-          codeDescription: none(JsonNode),
-          source: none(string),
-          message: "Error message",
-          tags: none(seq[DiagnosticTag]),
-          relatedInformation: none(seq[DiagnosticRelatedInformation]),
-          data: none(JsonNode),
-        )
-      ]
+    let diagnostics = @[
+      Diagnostic(
+        range: Range(
+          start: Position(line: 1, character: 0), `end`: Position(line: 1, character: 5)
+        ),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "Error message",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      )
+    ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
     check buffer.getLineMarker(1) == some(SidebarItemKind.SyntaxError)
 
   test "applyDiagnosticsToBuffer sets warning markers":
     let buffer = newTextBuffer("line1\nline2\nline3")
-    let diagnostics =
-      @[
-        Diagnostic(
-          range: Range(
-            start: Position(line: 0, character: 0),
-            `end`: Position(line: 0, character: 5),
-          ),
-          severity: some(dsWarning),
-          code: none(JsonNode),
-          codeDescription: none(JsonNode),
-          source: none(string),
-          message: "Warning message",
-          tags: none(seq[DiagnosticTag]),
-          relatedInformation: none(seq[DiagnosticRelatedInformation]),
-          data: none(JsonNode),
-        )
-      ]
+    let diagnostics = @[
+      Diagnostic(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 5)
+        ),
+        severity: some(dsWarning),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "Warning message",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      )
+    ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
     check buffer.getLineMarker(0) == some(SidebarItemKind.SyntaxWarning)
 
   test "applyDiagnosticsToBuffer error takes precedence over warning":
     let buffer = newTextBuffer("line1\nline2")
-    let diagnostics =
-      @[
-        Diagnostic(
-          range: Range(
-            start: Position(line: 0, character: 0),
-            `end`: Position(line: 0, character: 5),
-          ),
-          severity: some(dsWarning),
-          code: none(JsonNode),
-          codeDescription: none(JsonNode),
-          source: none(string),
-          message: "Warning",
-          tags: none(seq[DiagnosticTag]),
-          relatedInformation: none(seq[DiagnosticRelatedInformation]),
-          data: none(JsonNode),
+    let diagnostics = @[
+      Diagnostic(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 5)
         ),
-        Diagnostic(
-          range: Range(
-            start: Position(line: 0, character: 0),
-            `end`: Position(line: 0, character: 5),
-          ),
-          severity: some(dsError),
-          code: none(JsonNode),
-          codeDescription: none(JsonNode),
-          source: none(string),
-          message: "Error",
-          tags: none(seq[DiagnosticTag]),
-          relatedInformation: none(seq[DiagnosticRelatedInformation]),
-          data: none(JsonNode),
+        severity: some(dsWarning),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "Warning",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+      Diagnostic(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 5)
         ),
-      ]
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "Error",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+    ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
     check buffer.getLineMarker(0) == some(SidebarItemKind.SyntaxError)
 
@@ -1062,23 +1028,22 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
 
   test "applyDiagnosticsToBuffer ignores out of range lines":
     let buffer = newTextBuffer("line1")
-    let diagnostics =
-      @[
-        Diagnostic(
-          range: Range(
-            start: Position(line: 100, character: 0),
-            `end`: Position(line: 100, character: 5),
-          ),
-          severity: some(dsError),
-          code: none(JsonNode),
-          codeDescription: none(JsonNode),
-          source: none(string),
-          message: "Error",
-          tags: none(seq[DiagnosticTag]),
-          relatedInformation: none(seq[DiagnosticRelatedInformation]),
-          data: none(JsonNode),
-        )
-      ]
+    let diagnostics = @[
+      Diagnostic(
+        range: Range(
+          start: Position(line: 100, character: 0),
+          `end`: Position(line: 100, character: 5),
+        ),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "Error",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      )
+    ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
     # Should not crash, line 0 should have no marker
     check buffer.getLineMarker(0).isNone

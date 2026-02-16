@@ -768,27 +768,26 @@ suite "Filer - pathToIcon":
 
 suite "Filer - createFilerTextBuffer":
   test "Buffer line count equals entries":
-    let entries =
-      @[
-        FileEntry(
-          name: "dir1",
-          kind: fekDirectory,
-          size: 0,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekDirectory,
-        ),
-        FileEntry(
-          name: "file1.txt",
-          kind: fekFile,
-          size: 100,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekFile,
-        ),
-      ]
+    let entries = @[
+      FileEntry(
+        name: "dir1",
+        kind: fekDirectory,
+        size: 0,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekDirectory,
+      ),
+      FileEntry(
+        name: "file1.txt",
+        kind: fekFile,
+        size: 100,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekFile,
+      ),
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -801,18 +800,17 @@ suite "Filer - createFilerTextBuffer":
     check buf.len == entries.len
 
   test "Buffer with icons enabled":
-    let entries =
-      @[
-        FileEntry(
-          name: "main.nim",
-          kind: fekFile,
-          size: 100,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekFile,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: "main.nim",
+        kind: fekFile,
+        size: 100,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekFile,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -826,18 +824,17 @@ suite "Filer - createFilerTextBuffer":
     check buf.getLine(0).contains("👑")
 
   test "Buffer without icons shows kind markers":
-    let entries =
-      @[
-        FileEntry(
-          name: "mydir",
-          kind: fekDirectory,
-          size: 0,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekDirectory,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: "mydir",
+        kind: fekDirectory,
+        size: 0,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekDirectory,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -863,27 +860,26 @@ suite "Filer - createFilerTextBuffer":
     check buf.isUtilityBuffer == true
 
   test "Highlight segments count matches entries + 1":
-    let entries =
-      @[
-        FileEntry(
-          name: "dir1",
-          kind: fekDirectory,
-          size: 0,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekDirectory,
-        ),
-        FileEntry(
-          name: "file.txt",
-          kind: fekFile,
-          size: 100,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekFile,
-        ),
-      ]
+    let entries = @[
+      FileEntry(
+        name: "dir1",
+        kind: fekDirectory,
+        size: 0,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekDirectory,
+      ),
+      FileEntry(
+        name: "file.txt",
+        kind: fekFile,
+        size: 100,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekFile,
+      ),
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -936,18 +932,17 @@ suite "Filer - createFilerTextBuffer":
     check buf.highlightNeedsUpdate == false
 
   test "Directory entry line ends with slash":
-    let entries =
-      @[
-        FileEntry(
-          name: "mydir",
-          kind: fekDirectory,
-          size: 0,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekDirectory,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: "mydir",
+        kind: fekDirectory,
+        size: 0,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekDirectory,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -960,18 +955,17 @@ suite "Filer - createFilerTextBuffer":
     check buf.getLine(0).endsWith("mydir/")
 
   test "File entry line does not end with slash":
-    let entries =
-      @[
-        FileEntry(
-          name: "file.txt",
-          kind: fekFile,
-          size: 100,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekFile,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: "file.txt",
+        kind: fekFile,
+        size: 100,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekFile,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -985,18 +979,17 @@ suite "Filer - createFilerTextBuffer":
     check not buf.getLine(0).endsWith("/")
 
   test "Symlink entry without icons shows @ marker":
-    let entries =
-      @[
-        FileEntry(
-          name: "link",
-          kind: fekSymlink,
-          size: 0,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekFile,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: "link",
+        kind: fekSymlink,
+        size: 0,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekFile,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -1009,18 +1002,17 @@ suite "Filer - createFilerTextBuffer":
     check buf.getLine(0).contains("@ ")
 
   test "Directory entry highlight uses filerDirectory color":
-    let entries =
-      @[
-        FileEntry(
-          name: "dir1",
-          kind: fekDirectory,
-          size: 0,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekDirectory,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: "dir1",
+        kind: fekDirectory,
+        size: 0,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekDirectory,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -1033,18 +1025,17 @@ suite "Filer - createFilerTextBuffer":
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerDirectory
 
   test "Symlink-to-file highlight uses filerSymlink color":
-    let entries =
-      @[
-        FileEntry(
-          name: "link",
-          kind: fekSymlink,
-          size: 0,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekFile,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: "link",
+        kind: fekSymlink,
+        size: 0,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekFile,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -1057,18 +1048,17 @@ suite "Filer - createFilerTextBuffer":
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerSymlink
 
   test "Symlink-to-dir highlight uses filerSymlinkDir color":
-    let entries =
-      @[
-        FileEntry(
-          name: "linkdir",
-          kind: fekSymlink,
-          size: 0,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekDirectory,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: "linkdir",
+        kind: fekSymlink,
+        size: 0,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekDirectory,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -1081,18 +1071,17 @@ suite "Filer - createFilerTextBuffer":
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerSymlinkDir
 
   test "Hidden file highlight uses filerHiddenFile color":
-    let entries =
-      @[
-        FileEntry(
-          name: ".hidden",
-          kind: fekFile,
-          size: 0,
-          modified: getTime(),
-          isHidden: true,
-          isExecutable: false,
-          targetKind: fekFile,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: ".hidden",
+        kind: fekFile,
+        size: 0,
+        modified: getTime(),
+        isHidden: true,
+        isExecutable: false,
+        targetKind: fekFile,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -1105,18 +1094,17 @@ suite "Filer - createFilerTextBuffer":
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerHiddenFile
 
   test "Executable file highlight uses filerExecutable color":
-    let entries =
-      @[
-        FileEntry(
-          name: "run.sh",
-          kind: fekFile,
-          size: 100,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: true,
-          targetKind: fekFile,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: "run.sh",
+        kind: fekFile,
+        size: 100,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: true,
+        targetKind: fekFile,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -1129,18 +1117,17 @@ suite "Filer - createFilerTextBuffer":
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.filerExecutable
 
   test "Normal file highlight uses default color":
-    let entries =
-      @[
-        FileEntry(
-          name: "normal.txt",
-          kind: fekFile,
-          size: 100,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekFile,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: "normal.txt",
+        kind: fekFile,
+        size: 100,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekFile,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -1153,18 +1140,17 @@ suite "Filer - createFilerTextBuffer":
     check buf.highlight.colorSegments[0].color == EditorColorPairIndex.default
 
   test "Symlink to directory shows folder icon with icons enabled":
-    let entries =
-      @[
-        FileEntry(
-          name: "linkdir",
-          kind: fekSymlink,
-          size: 0,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekDirectory,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: "linkdir",
+        kind: fekSymlink,
+        size: 0,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekDirectory,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,
@@ -1177,18 +1163,17 @@ suite "Filer - createFilerTextBuffer":
     check buf.getLine(0).contains("📁")
 
   test "Symlink to directory line ends with slash":
-    let entries =
-      @[
-        FileEntry(
-          name: "linkdir",
-          kind: fekSymlink,
-          size: 0,
-          modified: getTime(),
-          isHidden: false,
-          isExecutable: false,
-          targetKind: fekDirectory,
-        )
-      ]
+    let entries = @[
+      FileEntry(
+        name: "linkdir",
+        kind: fekSymlink,
+        size: 0,
+        modified: getTime(),
+        isHidden: false,
+        isExecutable: false,
+        targetKind: fekDirectory,
+      )
+    ]
     let state = FilerState(
       currentPath: "/tmp",
       entries: entries,

@@ -289,31 +289,29 @@ suite "LspService - Response Parsing":
     check hover.isNone
 
   test "parseLocationsResponse parses array of locations":
-    let resp =
-      %*[
-        {
-          "uri": "file:///test.nim",
-          "range":
-            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}},
-        },
-        {
-          "uri": "file:///test2.nim",
-          "range":
-            {"start": {"line": 5, "character": 2}, "end": {"line": 5, "character": 12}},
-        },
-      ]
+    let resp = %*[
+      {
+        "uri": "file:///test.nim",
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}},
+      },
+      {
+        "uri": "file:///test2.nim",
+        "range":
+          {"start": {"line": 5, "character": 2}, "end": {"line": 5, "character": 12}},
+      },
+    ]
     let locations = parseLocationsResponse(resp)
     check locations.len == 2
     check locations[0].uri == "file:///test.nim"
     check locations[1].uri == "file:///test2.nim"
 
   test "parseLocationsResponse handles single location":
-    let resp =
-      %*{
-        "uri": "file:///test.nim",
-        "range":
-          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}},
-      }
+    let resp = %*{
+      "uri": "file:///test.nim",
+      "range":
+        {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}},
+    }
     let locations = parseLocationsResponse(resp)
     check locations.len == 1
 
@@ -329,17 +327,16 @@ suite "LspService - Response Parsing":
     check sigHelp.isNone
 
   test "parseDocumentHighlightResponse parses highlights":
-    let resp =
-      %*[
-        {
-          "range":
-            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 5}}
-        },
-        {
-          "range":
-            {"start": {"line": 2, "character": 3}, "end": {"line": 2, "character": 8}}
-        },
-      ]
+    let resp = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 5}}
+      },
+      {
+        "range":
+          {"start": {"line": 2, "character": 3}, "end": {"line": 2, "character": 8}}
+      },
+    ]
     let highlights = parseDocumentHighlightResponse(resp)
     check highlights.len == 2
 
@@ -349,53 +346,49 @@ suite "LspService - Response Parsing":
     check highlights.len == 0
 
   test "parseCodeLensResponse parses code lenses":
-    let resp =
-      %*[
-        {
-          "range":
-            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}}
-        }
-      ]
+    let resp = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}}
+      }
+    ]
     let lenses = parseCodeLensResponse(resp)
     check lenses.len == 1
 
   test "parseCallHierarchyPrepareResponse parses items":
-    let resp =
-      %*[
-        {
-          "name": "testFunc",
-          "kind": 12,
-          "uri": "file:///test.nim",
-          "range":
-            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}},
-          "selectionRange":
-            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 8}},
-        }
-      ]
+    let resp = %*[
+      {
+        "name": "testFunc",
+        "kind": 12,
+        "uri": "file:///test.nim",
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}},
+        "selectionRange":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 8}},
+      }
+    ]
     let items = parseCallHierarchyPrepareResponse(resp)
     check items.len == 1
     check items[0].name == "testFunc"
 
   test "parseSelectionRangeResponse parses ranges":
-    let resp =
-      %*[
-        {
-          "range":
-            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}}
-        }
-      ]
+    let resp = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}}
+      }
+    ]
     let ranges = parseSelectionRangeResponse(resp)
     check ranges.len == 1
 
   test "parseDocumentLinksResponse parses links":
-    let resp =
-      %*[
-        {
-          "range":
-            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}},
-          "target": "https://example.com",
-        }
-      ]
+    let resp = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 10}},
+        "target": "https://example.com",
+      }
+    ]
     let links = parseDocumentLinksResponse(resp)
     check links.len == 1
     check links[0].target == some("https://example.com")

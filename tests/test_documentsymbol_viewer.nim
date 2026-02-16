@@ -163,11 +163,10 @@ suite "DocumentSymbolViewer - newDocumentSymbolViewerState with hierarchical sym
     check state.filePath == "/path/to/file.nim"
 
   test "Create state with nested symbols":
-    let childSymbols =
-      @[
-        makeDocumentSymbol("method1", skMethod, 5, 4),
-        makeDocumentSymbol("method2", skMethod, 10, 4),
-      ]
+    let childSymbols = @[
+      makeDocumentSymbol("method1", skMethod, 5, 4),
+      makeDocumentSymbol("method2", skMethod, 10, 4),
+    ]
     let parentSymbol =
       makeDocumentSymbol("MyClass", skClass, 0, 0, children = some(childSymbols))
     let result =
@@ -184,12 +183,11 @@ suite "DocumentSymbolViewer - newDocumentSymbolViewerState with hierarchical sym
 
   test "Create state with deeply nested symbols":
     let grandchildSymbols = @[makeDocumentSymbol("innerFunc", skFunction, 10, 8)]
-    let childSymbols =
-      @[
-        makeDocumentSymbol(
-          "nestedClass", skClass, 5, 4, children = some(grandchildSymbols)
-        )
-      ]
+    let childSymbols = @[
+      makeDocumentSymbol(
+        "nestedClass", skClass, 5, 4, children = some(grandchildSymbols)
+      )
+    ]
     let parentSymbol =
       makeDocumentSymbol("OuterClass", skClass, 0, 0, children = some(childSymbols))
     let result =
@@ -213,12 +211,11 @@ suite "DocumentSymbolViewer - newDocumentSymbolViewerState with hierarchical sym
     check state.topLine == 0
 
   test "Create state with symbol that has detail":
-    let symbols =
-      @[
-        makeDocumentSymbol(
-          "myFunc", skFunction, 0, 0, detail = some("proc(a: int): string")
-        )
-      ]
+    let symbols = @[
+      makeDocumentSymbol(
+        "myFunc", skFunction, 0, 0, detail = some("proc(a: int): string")
+      )
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
 
@@ -226,11 +223,10 @@ suite "DocumentSymbolViewer - newDocumentSymbolViewerState with hierarchical sym
 
 suite "DocumentSymbolViewer - newDocumentSymbolViewerState with SymbolInformation":
   test "Create state with flat symbol information":
-    let infos =
-      @[
-        makeSymbolInformation("func1", skFunction, "file:///test.nim", 0, 0),
-        makeSymbolInformation("func2", skFunction, "file:///test.nim", 10, 0),
-      ]
+    let infos = @[
+      makeSymbolInformation("func1", skFunction, "file:///test.nim", 0, 0),
+      makeSymbolInformation("func2", skFunction, "file:///test.nim", 10, 0),
+    ]
     let result =
       lspTypes.DocumentSymbolResult(isHierarchical: false, symbolInfos: infos)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
@@ -242,17 +238,11 @@ suite "DocumentSymbolViewer - newDocumentSymbolViewerState with SymbolInformatio
     check state.items[1].depth == 0
 
   test "Create state with symbol information that has containerName":
-    let infos =
-      @[
-        makeSymbolInformation(
-          "myMethod",
-          skMethod,
-          "file:///test.nim",
-          5,
-          4,
-          containerName = some("MyClass"),
-        )
-      ]
+    let infos = @[
+      makeSymbolInformation(
+        "myMethod", skMethod, "file:///test.nim", 5, 4, containerName = some("MyClass")
+      )
+    ]
     let result =
       lspTypes.DocumentSymbolResult(isHierarchical: false, symbolInfos: infos)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
@@ -261,12 +251,11 @@ suite "DocumentSymbolViewer - newDocumentSymbolViewerState with SymbolInformatio
 
 suite "DocumentSymbolViewer - itemCount":
   test "Get item count with multiple items":
-    let symbols =
-      @[
-        makeDocumentSymbol("foo", skFunction, 0, 0),
-        makeDocumentSymbol("bar", skFunction, 10, 0),
-        makeDocumentSymbol("baz", skFunction, 20, 0),
-      ]
+    let symbols = @[
+      makeDocumentSymbol("foo", skFunction, 0, 0),
+      makeDocumentSymbol("bar", skFunction, 10, 0),
+      makeDocumentSymbol("baz", skFunction, 20, 0),
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
 
@@ -280,11 +269,10 @@ suite "DocumentSymbolViewer - itemCount":
 
 suite "DocumentSymbolViewer - getItem":
   test "Get item at valid index":
-    let symbols =
-      @[
-        makeDocumentSymbol("foo", skFunction, 0, 0),
-        makeDocumentSymbol("bar", skFunction, 10, 0),
-      ]
+    let symbols = @[
+      makeDocumentSymbol("foo", skFunction, 0, 0),
+      makeDocumentSymbol("bar", skFunction, 10, 0),
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
 
@@ -310,11 +298,10 @@ suite "DocumentSymbolViewer - getItem":
 
 suite "DocumentSymbolViewer - getSelectedItem":
   test "Get selected item":
-    let symbols =
-      @[
-        makeDocumentSymbol("foo", skFunction, 0, 0),
-        makeDocumentSymbol("bar", skFunction, 10, 0),
-      ]
+    let symbols = @[
+      makeDocumentSymbol("foo", skFunction, 0, 0),
+      makeDocumentSymbol("bar", skFunction, 10, 0),
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
 
@@ -369,11 +356,10 @@ suite "DocumentSymbolViewer - formatLine":
 
 suite "DocumentSymbolViewer - getLine":
   test "Get line at valid index":
-    let symbols =
-      @[
-        makeDocumentSymbol("foo", skFunction, 0, 0),
-        makeDocumentSymbol("bar", skFunction, 10, 5),
-      ]
+    let symbols = @[
+      makeDocumentSymbol("foo", skFunction, 0, 0),
+      makeDocumentSymbol("bar", skFunction, 10, 5),
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
 
@@ -398,12 +384,11 @@ suite "DocumentSymbolViewer - getLine":
 
 suite "DocumentSymbolViewer - moveUp":
   test "Move up from middle":
-    let symbols =
-      @[
-        makeDocumentSymbol("foo", skFunction, 0, 0),
-        makeDocumentSymbol("bar", skFunction, 10, 0),
-        makeDocumentSymbol("baz", skFunction, 20, 0),
-      ]
+    let symbols = @[
+      makeDocumentSymbol("foo", skFunction, 0, 0),
+      makeDocumentSymbol("bar", skFunction, 10, 0),
+      makeDocumentSymbol("baz", skFunction, 20, 0),
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
     state.selectedIndex = 2
@@ -413,11 +398,10 @@ suite "DocumentSymbolViewer - moveUp":
     check state.selectedIndex == 1
 
   test "Move up from first item does nothing":
-    let symbols =
-      @[
-        makeDocumentSymbol("foo", skFunction, 0, 0),
-        makeDocumentSymbol("bar", skFunction, 10, 0),
-      ]
+    let symbols = @[
+      makeDocumentSymbol("foo", skFunction, 0, 0),
+      makeDocumentSymbol("bar", skFunction, 10, 0),
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
 
@@ -427,12 +411,11 @@ suite "DocumentSymbolViewer - moveUp":
 
 suite "DocumentSymbolViewer - moveDown":
   test "Move down from first":
-    let symbols =
-      @[
-        makeDocumentSymbol("foo", skFunction, 0, 0),
-        makeDocumentSymbol("bar", skFunction, 10, 0),
-        makeDocumentSymbol("baz", skFunction, 20, 0),
-      ]
+    let symbols = @[
+      makeDocumentSymbol("foo", skFunction, 0, 0),
+      makeDocumentSymbol("bar", skFunction, 10, 0),
+      makeDocumentSymbol("baz", skFunction, 20, 0),
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
 
@@ -441,11 +424,10 @@ suite "DocumentSymbolViewer - moveDown":
     check state.selectedIndex == 1
 
   test "Move down from last item does nothing":
-    let symbols =
-      @[
-        makeDocumentSymbol("foo", skFunction, 0, 0),
-        makeDocumentSymbol("bar", skFunction, 10, 0),
-      ]
+    let symbols = @[
+      makeDocumentSymbol("foo", skFunction, 0, 0),
+      makeDocumentSymbol("bar", skFunction, 10, 0),
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
     state.selectedIndex = 1
@@ -456,12 +438,11 @@ suite "DocumentSymbolViewer - moveDown":
 
 suite "DocumentSymbolViewer - moveToFirst":
   test "Move to first from middle":
-    let symbols =
-      @[
-        makeDocumentSymbol("foo", skFunction, 0, 0),
-        makeDocumentSymbol("bar", skFunction, 10, 0),
-        makeDocumentSymbol("baz", skFunction, 20, 0),
-      ]
+    let symbols = @[
+      makeDocumentSymbol("foo", skFunction, 0, 0),
+      makeDocumentSymbol("bar", skFunction, 10, 0),
+      makeDocumentSymbol("baz", skFunction, 20, 0),
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
     state.selectedIndex = 2
@@ -481,12 +462,11 @@ suite "DocumentSymbolViewer - moveToFirst":
 
 suite "DocumentSymbolViewer - moveToLast":
   test "Move to last from first":
-    let symbols =
-      @[
-        makeDocumentSymbol("foo", skFunction, 0, 0),
-        makeDocumentSymbol("bar", skFunction, 10, 0),
-        makeDocumentSymbol("baz", skFunction, 20, 0),
-      ]
+    let symbols = @[
+      makeDocumentSymbol("foo", skFunction, 0, 0),
+      makeDocumentSymbol("bar", skFunction, 10, 0),
+      makeDocumentSymbol("baz", skFunction, 20, 0),
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
 
@@ -503,11 +483,10 @@ suite "DocumentSymbolViewer - moveToLast":
     check state.selectedIndex == 0
 
   test "Move to last when already at last":
-    let symbols =
-      @[
-        makeDocumentSymbol("foo", skFunction, 0, 0),
-        makeDocumentSymbol("bar", skFunction, 10, 0),
-      ]
+    let symbols = @[
+      makeDocumentSymbol("foo", skFunction, 0, 0),
+      makeDocumentSymbol("bar", skFunction, 10, 0),
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
     state.selectedIndex = 1
@@ -542,11 +521,10 @@ suite "DocumentSymbolViewer - halfPageUp":
     check state.selectedIndex == 0
 
   test "Half page up at top does nothing":
-    let symbols =
-      @[
-        makeDocumentSymbol("foo", skFunction, 0, 0),
-        makeDocumentSymbol("bar", skFunction, 10, 0),
-      ]
+    let symbols = @[
+      makeDocumentSymbol("foo", skFunction, 0, 0),
+      makeDocumentSymbol("bar", skFunction, 10, 0),
+    ]
     let result = lspTypes.DocumentSymbolResult(isHierarchical: true, symbols: symbols)
     let state = newDocumentSymbolViewerState(result, "/path/to/file.nim")
 

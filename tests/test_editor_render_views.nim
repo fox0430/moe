@@ -447,11 +447,10 @@ suite "renderTempMessages - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.tempMessages =
-      @[
-        " jump line  col file/text", "   1    10    5 /path/to/file1.nim",
-        "   2    20   10 /path/to/file2.nim", "   3    30   15 /path/to/file3.nim",
-      ]
+    e.state.tempMessages = @[
+      " jump line  col file/text", "   1    10    5 /path/to/file1.nim",
+      "   2    20   10 /path/to/file2.nim", "   3    30   15 /path/to/file3.nim",
+    ]
 
     e.renderTempMessages(buffer)
 

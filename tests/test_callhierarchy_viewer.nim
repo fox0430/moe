@@ -75,12 +75,11 @@ suite "CallHierarchyViewer - newCallHierarchyViewerState":
 
 suite "CallHierarchyViewer - itemCount":
   test "Get item count with multiple items":
-    let items =
-      @[
-        makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-        makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
-        makeCallHierarchyItem("baz", "file:///test.nim", 20, 0),
-      ]
+    let items = @[
+      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+      makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
+      makeCallHierarchyItem("baz", "file:///test.nim", 20, 0),
+    ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
 
     check state.itemCount == 3
@@ -93,11 +92,10 @@ suite "CallHierarchyViewer - itemCount":
 
 suite "CallHierarchyViewer - getItem":
   test "Get item at valid index":
-    let items =
-      @[
-        makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-        makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
-      ]
+    let items = @[
+      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+      makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
+    ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
 
     let item = state.getItem(1)
@@ -120,11 +118,10 @@ suite "CallHierarchyViewer - getItem":
 
 suite "CallHierarchyViewer - getSelectedItem":
   test "Get selected item":
-    let items =
-      @[
-        makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-        makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
-      ]
+    let items = @[
+      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+      makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
+    ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
 
     let item = state.getSelectedItem()
@@ -161,11 +158,10 @@ suite "CallHierarchyViewer - formatLine":
 
 suite "CallHierarchyViewer - getLine":
   test "Get line at valid index":
-    let items =
-      @[
-        makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-        makeCallHierarchyItem("bar", "file:///test.nim", 10, 5),
-      ]
+    let items = @[
+      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+      makeCallHierarchyItem("bar", "file:///test.nim", 10, 5),
+    ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
 
     let line = state.getLine(1)
@@ -187,12 +183,11 @@ suite "CallHierarchyViewer - getLine":
 
 suite "CallHierarchyViewer - moveUp":
   test "Move up from middle":
-    let items =
-      @[
-        makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-        makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
-        makeCallHierarchyItem("baz", "file:///test.nim", 20, 0),
-      ]
+    let items = @[
+      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+      makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
+      makeCallHierarchyItem("baz", "file:///test.nim", 20, 0),
+    ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
     state.selectedIndex = 2
 
@@ -201,11 +196,10 @@ suite "CallHierarchyViewer - moveUp":
     check state.selectedIndex == 1
 
   test "Move up from first item does nothing":
-    let items =
-      @[
-        makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-        makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
-      ]
+    let items = @[
+      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+      makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
+    ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
 
     state.moveUp()
@@ -214,12 +208,11 @@ suite "CallHierarchyViewer - moveUp":
 
 suite "CallHierarchyViewer - moveDown":
   test "Move down from first":
-    let items =
-      @[
-        makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-        makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
-        makeCallHierarchyItem("baz", "file:///test.nim", 20, 0),
-      ]
+    let items = @[
+      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+      makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
+      makeCallHierarchyItem("baz", "file:///test.nim", 20, 0),
+    ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
 
     state.moveDown()
@@ -227,11 +220,10 @@ suite "CallHierarchyViewer - moveDown":
     check state.selectedIndex == 1
 
   test "Move down from last item does nothing":
-    let items =
-      @[
-        makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-        makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
-      ]
+    let items = @[
+      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+      makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
+    ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
     state.selectedIndex = 1
 
@@ -241,12 +233,11 @@ suite "CallHierarchyViewer - moveDown":
 
 suite "CallHierarchyViewer - moveToFirst":
   test "Move to first from middle":
-    let items =
-      @[
-        makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-        makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
-        makeCallHierarchyItem("baz", "file:///test.nim", 20, 0),
-      ]
+    let items = @[
+      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+      makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
+      makeCallHierarchyItem("baz", "file:///test.nim", 20, 0),
+    ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
     state.selectedIndex = 2
 
@@ -264,12 +255,11 @@ suite "CallHierarchyViewer - moveToFirst":
 
 suite "CallHierarchyViewer - moveToLast":
   test "Move to last from first":
-    let items =
-      @[
-        makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-        makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
-        makeCallHierarchyItem("baz", "file:///test.nim", 20, 0),
-      ]
+    let items = @[
+      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+      makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
+      makeCallHierarchyItem("baz", "file:///test.nim", 20, 0),
+    ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
 
     state.moveToLast()
@@ -285,11 +275,10 @@ suite "CallHierarchyViewer - moveToLast":
     check state.selectedIndex == 0
 
   test "Move to last when already at last":
-    let items =
-      @[
-        makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-        makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
-      ]
+    let items = @[
+      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+      makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
+    ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
     state.selectedIndex = 1
 
@@ -321,11 +310,10 @@ suite "CallHierarchyViewer - halfPageUp":
     check state.selectedIndex == 0
 
   test "Half page up at top does nothing":
-    let items =
-      @[
-        makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-        makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
-      ]
+    let items = @[
+      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+      makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
+    ]
     let state = newCallHierarchyViewerState(items, chvkPrepare)
 
     state.halfPageUp(10)

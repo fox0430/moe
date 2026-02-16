@@ -154,18 +154,17 @@ suite "LspClient - handleNotification":
         receivedUri = uri
         receivedDiagnostics = diagnostics
 
-    let params =
-      %*{
-        "uri": "file:///test.nim",
-        "diagnostics": [
-          {
-            "range":
-              {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 5}},
-            "severity": 1,
-            "message": "Error message",
-          }
-        ],
-      }
+    let params = %*{
+      "uri": "file:///test.nim",
+      "diagnostics": [
+        {
+          "range":
+            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 5}},
+          "severity": 1,
+          "message": "Error message",
+        }
+      ],
+    }
 
     client.handleNotification("textDocument/publishDiagnostics", params)
     check receivedUri == "file:///test.nim"
@@ -330,12 +329,11 @@ suite "LspClient - processResponse":
       {.cast(gcsafe).}:
         notificationReceived = true
 
-    let notification =
-      %*{
-        "jsonrpc": "2.0",
-        "method": "window/logMessage",
-        "params": {"type": 3, "message": "test"},
-      }
+    let notification = %*{
+      "jsonrpc": "2.0",
+      "method": "window/logMessage",
+      "params": {"type": 3, "message": "test"},
+    }
 
     let result = client.processResponse(notification)
     check result.isNone
@@ -345,13 +343,12 @@ suite "LspClient - processResponse":
     let client = newLspClient("nim", "lasm")
 
     # A request has both "id" and "method" fields
-    let request =
-      %*{
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "window/showMessageRequest",
-        "params": {"type": 1, "message": "test"},
-      }
+    let request = %*{
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "window/showMessageRequest",
+      "params": {"type": 1, "message": "test"},
+    }
 
     # processResponse should treat this as a notification (has method)
     let result = client.processResponse(request)
@@ -370,12 +367,9 @@ suite "LspClient - processResponse":
     let client = newLspClient("nim", "lasm")
     client.waitingResponses[1] = WaitingResponse(id: 1, methodName: "test")
 
-    let response =
-      %*{
-        "jsonrpc": "2.0",
-        "id": 1,
-        "error": {"code": -32600, "message": "Invalid Request"},
-      }
+    let response = %*{
+      "jsonrpc": "2.0", "id": 1, "error": {"code": -32600, "message": "Invalid Request"}
+    }
 
     # Error responses are still processed as responses (have id, no method)
     let result = client.processResponse(response)

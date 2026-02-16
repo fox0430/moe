@@ -21,8 +21,7 @@
 ##
 ## This module provides the data structures and operations for the help viewer mode.
 
-const HelpSentences* =
-  """
+const HelpSentences* = """
 # Exiting
 
 :w    - Write file

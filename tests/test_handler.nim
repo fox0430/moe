@@ -37,6 +37,7 @@ import ../src/moepkg/editor {.all.}
 import ../src/moepkg/config {.all.}
 import ../src/moepkg/filer {.all.}
 import ../src/moepkg/handler {.all.}
+import ../src/moepkg/config_loader {.all.}
 import ../src/moepkg/render_utils
 
 proc createTestViewport(x, y, width, height, topLine, leftColumn: int): ViewPort =
@@ -1394,3 +1395,456 @@ suite "enterFilerInActiveWindow":
     check e.state.mode == EditorMode.Filer
     check e.activeWindow.mode == EditorMode.Filer
     check e.activeWindow.filerState.isSome
+
+suite "handleCommandModeEvent - :putconfigfile":
+  test "Overlay exited and config written":
+    let e = createTestEditorWithBuffer("hello")
+    e.config.theme.kind = tkDefault
+    e.config.theme.path = ""
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":putconfigfile"
+    e.state.commandCursor = 14
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+    check e.state.mode == EditorMode.Normal
+    check "Config written" in e.state.statusMessage
+
+  test "Backup created when config already exists":
+    let e = createTestEditorWithBuffer("hello")
+    e.config.theme.kind = tkDefault
+    e.config.theme.path = ""
+
+    let configPath = getConfigPath()
+    let backupPath = configPath & ".bac"
+
+    # Ensure config file exists first
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":putconfigfile"
+    e.state.commandCursor = 14
+    discard handleCommandModeEvent(e, makeEnterEvent())
+    check fileExists(configPath)
+
+    # Run again to trigger backup
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":putconfigfile"
+    e.state.commandCursor = 14
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check "Config written" in e.state.statusMessage
+    check fileExists(backupPath)
+
+  test "Theme file saved when kind is tkConfig":
+    var themeFileCounter {.global.} = 0
+    inc themeFileCounter
+    let themeFile = "/tmp/moe_test_putconfigfile_theme_" & $themeFileCounter & ".toml"
+    defer:
+      removeFile(themeFile)
+
+    let e = createTestEditorWithBuffer("hello")
+    e.config.theme.kind = tkConfig
+    e.config.theme.path = themeFile
+
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":putconfigfile"
+    e.state.commandCursor = 14
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check "Config written" in e.state.statusMessage
+    check fileExists(themeFile)
+
+suite "handleCommandModeEvent - all command mode commands execute":
+  ## Regression tests ensuring every command properly exits the overlay
+  ## and clears commandText after execution.
+
+  # --- Quit/Close ---
+
+  test ":q exits editor (returns false)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":q"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == false
+
+  test ":q! closes window (returns false for single window)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":q!"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == false
+
+  # --- Window ---
+
+  test ":vs vertical split":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":vs"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":sp horizontal split":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":sp"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":new creates new buffer in horizontal split":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":new"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":vnew creates new buffer in vertical split":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":vnew"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  # --- File/Buffer ---
+
+  test ":e opens or creates file":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":e testfile"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":w save (no file path shows error)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":w"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":wq save and quit (save fails without file path)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":wq"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    # Save fails (no file path), processSaveAndQuitResult returns true (continue)
+    check cont == true
+
+  test ":b 0 switch to buffer":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":b 0"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":bd delete buffer":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":bd"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  # --- Option ---
+
+  test ":set scrollfriction 50 (float option)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":set scrollfriction 50"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+    check "scrollfriction" in e.state.statusMessage
+
+  # --- Mode transitions ---
+
+  test ":filer enters filer mode":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":filer"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":log enters log viewer":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":log"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":help enters help viewer":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":help"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":buffers enters buffer manager":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":buffers"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":backup enters backup manager":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":backup"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":jump shows jump list":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":jump"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":build with no file shows error":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":build"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":debug opens debug viewer":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":debug"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":config opens configuration mode":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":config"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":quickrun with no file shows error":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":quickrun"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  # --- Theme/Substitute ---
+
+  test ":theme default changes to default theme":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":theme default"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":s/a/b/ substitutes text":
+    let e = createTestEditorWithBuffer("abc")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":s/a/b/"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  # --- Misc ---
+
+  test ":!echo hi executes shell command":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":!echo hi"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":bg sends editor to background":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":bg"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":man ls shows man page":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":man ls"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  # --- LSP ---
+
+  test ":lsplog opens LSP log viewer":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":lsplog"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":lspformat requests LSP formatting":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":lspformat"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":lsprestart restarts LSP server":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":lsprestart"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":lspfold requests LSP folding":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":lspfold"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":lspexecommand executes LSP command":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":lspexecommand"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":lspcallhierarchyincoming requests incoming calls":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":lspcallhierarchyincoming"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""
+
+  test ":lspcallhierarchyoutgoing requests outgoing calls":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":lspcallhierarchyoutgoing"
+
+    let cont = handleCommandModeEvent(e, makeEnterEvent())
+
+    check cont == true
+    check not e.state.isCommandOverlay
+    check e.state.commandText == ""

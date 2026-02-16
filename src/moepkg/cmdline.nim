@@ -46,8 +46,7 @@ proc showVersion() =
 
 proc showHelp() =
   ## Display help message and exit
-  const HelpMessage =
-    """
+  const HelpMessage = """
 Usage:
   moe [file]       Edit file
 

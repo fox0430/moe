@@ -22,11 +22,10 @@ import ../src/moepkg/references_viewer
 
 suite "ReferencesViewer - State creation":
   test "newReferencesViewerState creates state with items":
-    let items =
-      @[
-        ReferenceItem(path: "/path/to/file.nim", line: 10, column: 5, text: ""),
-        ReferenceItem(path: "/path/to/other.nim", line: 20, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/path/to/file.nim", line: 10, column: 5, text: ""),
+      ReferenceItem(path: "/path/to/other.nim", line: 20, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
 
     check state.items.len == 2
@@ -48,12 +47,11 @@ suite "ReferencesViewer - State creation":
     check state.title == "Definitions"
 
   test "itemCount returns correct count":
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
 
     check state.itemCount == 3
@@ -64,11 +62,10 @@ suite "ReferencesViewer - State creation":
 
 suite "ReferencesViewer - Item access":
   test "getItem returns item at valid index":
-    let items =
-      @[
-        ReferenceItem(path: "/first.nim", line: 1, column: 2, text: "first"),
-        ReferenceItem(path: "/second.nim", line: 3, column: 4, text: "second"),
-      ]
+    let items = @[
+      ReferenceItem(path: "/first.nim", line: 1, column: 2, text: "first"),
+      ReferenceItem(path: "/second.nim", line: 3, column: 4, text: "second"),
+    ]
     let state = newReferencesViewerState(items)
 
     let item = state.getItem(1)
@@ -95,11 +92,10 @@ suite "ReferencesViewer - Item access":
     check state.getItem(0).isNone
 
   test "getSelectedItem returns currently selected item":
-    let items =
-      @[
-        ReferenceItem(path: "/first.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/second.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/first.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/second.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 1
 
@@ -125,11 +121,10 @@ suite "ReferencesViewer - Formatting":
     check formatted == "/file.nim 1 Line 1 Col"
 
   test "getLine returns formatted line at index":
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 5, column: 10, text: ""),
-        ReferenceItem(path: "/b.nim", line: 15, column: 20, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 5, column: 10, text: ""),
+      ReferenceItem(path: "/b.nim", line: 15, column: 20, text: ""),
+    ]
     let state = newReferencesViewerState(items)
 
     check state.getLine(0) == "/a.nim 6 Line 11 Col"
@@ -148,12 +143,11 @@ suite "ReferencesViewer - Formatting":
 
 suite "ReferencesViewer - Navigation":
   test "moveUp decreases selectedIndex":
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 2
 
@@ -164,11 +158,10 @@ suite "ReferencesViewer - Navigation":
     check state.selectedIndex == 0
 
   test "moveUp does nothing at index 0":
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 0
 
@@ -181,12 +174,11 @@ suite "ReferencesViewer - Navigation":
     check state.selectedIndex == 0
 
   test "moveDown increases selectedIndex":
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 0
 
@@ -197,11 +189,10 @@ suite "ReferencesViewer - Navigation":
     check state.selectedIndex == 2
 
   test "moveDown does nothing at last index":
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 1
 
@@ -214,12 +205,11 @@ suite "ReferencesViewer - Navigation":
     check state.selectedIndex == 0
 
   test "moveToFirst sets selectedIndex to 0":
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 2
 
@@ -232,12 +222,11 @@ suite "ReferencesViewer - Navigation":
     check state.selectedIndex == 0
 
   test "moveToLast sets selectedIndex to last":
-    let items =
-      @[
-        ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
-        ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
-      ]
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
+    ]
     let state = newReferencesViewerState(items)
     state.selectedIndex = 0
 

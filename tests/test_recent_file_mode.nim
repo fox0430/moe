@@ -66,8 +66,7 @@ suite "RecentFileMode - XBEL parsing":
 
   test "getRecentUsedFiles parses valid xbel file":
     let xbelPath = testDir / "test.xbel"
-    let xbelContent =
-      """<?xml version="1.0" encoding="UTF-8"?>
+    let xbelContent = """<?xml version="1.0" encoding="UTF-8"?>
 <xbel version="1.0">
   <bookmark href="file:///home/user/file1.txt" added="2024-01-01T00:00:00Z">
     <info><metadata owner="test"/></info>
@@ -87,8 +86,7 @@ suite "RecentFileMode - XBEL parsing":
 
   test "getRecentUsedFiles decodes URL-encoded paths":
     let xbelPath = testDir / "test_encoded.xbel"
-    let xbelContent =
-      """<?xml version="1.0" encoding="UTF-8"?>
+    let xbelContent = """<?xml version="1.0" encoding="UTF-8"?>
 <xbel version="1.0">
   <bookmark href="file:///home/user/My%20Documents/file%20with%20spaces.txt" added="2024-01-01T00:00:00Z">
     <info><metadata owner="test"/></info>
@@ -104,8 +102,7 @@ suite "RecentFileMode - XBEL parsing":
 
   test "getRecentUsedFiles returns empty seq for xbel without bookmarks":
     let xbelPath = testDir / "empty.xbel"
-    let xbelContent =
-      """<?xml version="1.0" encoding="UTF-8"?>
+    let xbelContent = """<?xml version="1.0" encoding="UTF-8"?>
 <xbel version="1.0">
 </xbel>"""
     writeFile(xbelPath, xbelContent)
@@ -116,8 +113,7 @@ suite "RecentFileMode - XBEL parsing":
 
   test "getRecentUsedFiles handles malformed xbel with missing end quote":
     let xbelPath = testDir / "malformed.xbel"
-    let xbelContent =
-      """<?xml version="1.0" encoding="UTF-8"?>
+    let xbelContent = """<?xml version="1.0" encoding="UTF-8"?>
 <xbel version="1.0">
   <bookmark href="file:///home/user/file1.txt" added="2024-01-01T00:00:00Z">
   </bookmark>
@@ -133,8 +129,7 @@ suite "RecentFileMode - XBEL parsing":
 
   test "getRecentUsedFiles handles xbel with non-file URIs":
     let xbelPath = testDir / "mixed.xbel"
-    let xbelContent =
-      """<?xml version="1.0" encoding="UTF-8"?>
+    let xbelContent = """<?xml version="1.0" encoding="UTF-8"?>
 <xbel version="1.0">
   <bookmark href="https://example.com" added="2024-01-01T00:00:00Z">
   </bookmark>

@@ -64,8 +64,7 @@ suite "Config Validation - InvalidItem and ValidationResult":
 
 suite "Config Validation - Standard section":
   test "Valid Standard config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 number = true
 tabStop = 4
@@ -78,8 +77,7 @@ colorMode = "24bit"
     check config.standard.colorMode == cm24bit
 
   test "lineWrap loads from TOML":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 lineWrap = false
 """
@@ -88,8 +86,7 @@ lineWrap = false
     check config.standard.lineWrap == false
 
   test "lineWrap defaults to true when not specified":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 number = true
 """
@@ -98,8 +95,7 @@ number = true
     check config.standard.lineWrap == true
 
   test "Invalid bool type is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 number = "true"
 """
@@ -109,8 +105,7 @@ number = "true"
     check "Standard.number" in vr.errors[0].name
 
   test "Invalid tabStop (zero) is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 tabStop = 0
 """
@@ -121,8 +116,7 @@ tabStop = 0
     check config.standard.tabStop == 2 # Default value
 
   test "Invalid tabStop (negative) is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 tabStop = -1
 """
@@ -132,8 +126,7 @@ tabStop = -1
     check config.standard.tabStop == 2 # Default value
 
   test "Invalid colorMode enum is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 colorMode = "invalid"
 """
@@ -143,8 +136,7 @@ colorMode = "invalid"
     check config.standard.colorMode == cm24bit # Default value
 
   test "Invalid cursorType enum is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 defaultCursor = "invalid"
 """
@@ -155,8 +147,7 @@ defaultCursor = "invalid"
 
 suite "Config Validation - Clipboard section":
   test "Valid Clipboard config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Clipboard]
 enable = true
 tool = "xsel"
@@ -167,8 +158,7 @@ tool = "xsel"
     check config.clipboard.tool == cbtXsel
 
   test "Invalid clipboard tool is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Clipboard]
 tool = "invalid"
 """
@@ -180,8 +170,7 @@ tool = "invalid"
 
 suite "Config Validation - AutoBackup section":
   test "Valid AutoBackup config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [AutoBackup]
 enable = true
 idleTime = 10
@@ -196,8 +185,7 @@ dirToExclude = ["/etc", "/tmp"]
     check config.autoBackup.dirToExclude == @["/etc", "/tmp"]
 
   test "Invalid idleTime (zero) is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [AutoBackup]
 idleTime = 0
 """
@@ -207,8 +195,7 @@ idleTime = 0
     check config.autoBackup.idleTime == 10 # Default value
 
   test "Invalid dirToExclude type (not array) is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [AutoBackup]
 dirToExclude = "/etc"
 """
@@ -218,8 +205,7 @@ dirToExclude = "/etc"
 
 suite "Config Validation - SmoothScroll section":
   test "Valid SmoothScroll config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [SmoothScroll]
 enable = true
 friction = 80.0
@@ -232,8 +218,7 @@ airDrag = 2.0
     check config.smoothScroll.airDrag == 2.0
 
   test "Negative friction is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [SmoothScroll]
 friction = -1.0
 """
@@ -244,8 +229,7 @@ friction = -1.0
 
 suite "Config Validation - Highlight section":
   test "Valid Highlight config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Highlight]
 currentLine = true
 reservedWord = ["TODO", "FIXME"]
@@ -256,8 +240,7 @@ reservedWord = ["TODO", "FIXME"]
     check config.highlight.reservedWord == @["TODO", "FIXME"]
 
   test "Invalid reservedWord (not array) is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Highlight]
 reservedWord = "TODO"
 """
@@ -267,8 +250,7 @@ reservedWord = "TODO"
 
 suite "Config Validation - LSP section":
   test "Valid LSP config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Lsp]
 enable = true
 timeout = 5000
@@ -289,8 +271,7 @@ openWindow = false
     check config.lsp.definition.openWindow == false
 
   test "Invalid LSP timeout is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Lsp]
 timeout = 0
 """
@@ -300,8 +281,7 @@ timeout = 0
     check config.lsp.timeout == 5000 # Default value
 
   test "Language server config validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Lsp.nim]
 extensions = [".nim"]
 command = "nimlsp"
@@ -315,8 +295,7 @@ trace = "verbose"
     check config.lsp.servers["nim"].trace == ltVerbose
 
   test "Invalid LSP trace level is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Lsp.nim]
 trace = "invalid"
 """
@@ -327,8 +306,7 @@ trace = "invalid"
 
 suite "Config Validation - Multiple errors":
   test "Multiple errors are collected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 tabStop = 0
 colorMode = "invalid"
@@ -339,8 +317,7 @@ number = "not_bool"
     check vr.errors.len == 3
 
   test "Error messages are generated for all errors":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 tabStop = 0
 colorMode = "invalid"
@@ -409,8 +386,7 @@ colorMode = "invalid"
 
 suite "Config Validation - BuildOnSave section":
   test "Valid BuildOnSave config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [BuildOnSave]
 enable = true
 command = "make build"
@@ -421,8 +397,7 @@ command = "make build"
     check config.buildOnSave.command == some("make build")
 
   test "Invalid enable type is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [BuildOnSave]
 enable = "true"
 """
@@ -431,8 +406,7 @@ enable = "true"
     check "BuildOnSave.enable" in vr.errors[0].name
 
   test "Invalid command type is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [BuildOnSave]
 command = 123
 """
@@ -442,8 +416,7 @@ command = 123
 
 suite "Config Validation - StatusLine section":
   test "Valid StatusLine config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [StatusLine]
 multipleStatusLine = true
 merge = false
@@ -465,8 +438,7 @@ setupText = "{lineNumber}/{totalLines}"
     check config.statusLine.setupText == "{lineNumber}/{totalLines}"
 
   test "Invalid setupText type is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [StatusLine]
 setupText = 123
 """
@@ -476,8 +448,7 @@ setupText = 123
 
 suite "Config Validation - Git section":
   test "Valid Git config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Git]
 showChangedLine = true
 updateInterval = 500
@@ -488,8 +459,7 @@ updateInterval = 500
     check config.git.updateInterval == 500
 
   test "Invalid updateInterval (zero) is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Git]
 updateInterval = 0
 """
@@ -499,8 +469,7 @@ updateInterval = 0
     check config.git.updateInterval == 1000 # Default value
 
   test "Invalid updateInterval (negative) is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Git]
 updateInterval = -1
 """
@@ -511,8 +480,7 @@ updateInterval = -1
 
 suite "Config Validation - SyntaxChecker section":
   test "Valid SyntaxChecker config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [SyntaxChecker]
 enable = true
 """
@@ -521,8 +489,7 @@ enable = true
     check config.syntaxChecker.enable == true
 
   test "Invalid enable type is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [SyntaxChecker]
 enable = "yes"
 """
@@ -532,8 +499,7 @@ enable = "yes"
 
 suite "Config Validation - Theme section":
   test "Valid Theme config with default kind passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Theme]
 kind = "default"
 """
@@ -542,8 +508,7 @@ kind = "default"
     check config.theme.kind == tkDefault
 
   test "Invalid theme kind is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Theme]
 kind = "invalid"
 """
@@ -554,8 +519,7 @@ kind = "invalid"
 
 suite "Config Validation - AutoSave section":
   test "Valid AutoSave config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [AutoSave]
 enable = true
 interval = 10
@@ -566,8 +530,7 @@ interval = 10
     check config.autoSave.interval == 10
 
   test "Invalid interval (zero) is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [AutoSave]
 interval = 0
 """
@@ -578,8 +541,7 @@ interval = 0
 
 suite "Config Validation - Notification section":
   test "Valid Notification config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Notification]
 screenNotifications = true
 logNotifications = false
@@ -594,8 +556,7 @@ autoBackupLogNotify = false
     check config.notification.autoBackupLogNotify == false
 
   test "Invalid bool type is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Notification]
 screenNotifications = "yes"
 """
@@ -605,8 +566,7 @@ screenNotifications = "yes"
 
 suite "Config Validation - Filer section":
   test "Valid Filer config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Filer]
 showIcons = true
 """
@@ -615,8 +575,7 @@ showIcons = true
     check config.filer.showIcons == true
 
   test "Invalid showIcons type is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Filer]
 showIcons = "yes"
 """
@@ -626,8 +585,7 @@ showIcons = "yes"
 
 suite "Config Validation - Autocomplete section":
   test "Valid Autocomplete config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Autocomplete]
 enable = true
 windowBorder = false
@@ -638,8 +596,7 @@ windowBorder = false
     check config.autocomplete.windowBorder == false
 
   test "Invalid enable type is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Autocomplete]
 enable = 1
 """
@@ -649,8 +606,7 @@ enable = 1
 
 suite "Config Validation - Persist section":
   test "Valid Persist config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Persist]
 exCommand = true
 exCommandHistoryLimit = 500
@@ -667,8 +623,7 @@ cursorPosition = true
     check config.persist.cursorPosition == true
 
   test "Invalid exCommandHistoryLimit (zero) is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Persist]
 exCommandHistoryLimit = 0
 """
@@ -678,8 +633,7 @@ exCommandHistoryLimit = 0
     check config.persist.exCommandHistoryLimit == 1000 # Default value
 
   test "Invalid searchHistoryLimit (negative) is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Persist]
 searchHistoryLimit = -10
 """
@@ -690,8 +644,7 @@ searchHistoryLimit = -10
 
 suite "Config Validation - QuickRun section":
   test "Valid QuickRun config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [QuickRun]
 saveBufferWhenQuickRun = true
 command = "make run"
@@ -706,8 +659,7 @@ nimAdvancedCommand = "c"
     check config.quickRun.nimAdvancedCommand == some("c")
 
   test "Invalid timeout (zero) is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [QuickRun]
 timeout = 0
 """
@@ -717,8 +669,7 @@ timeout = 0
     check config.quickRun.timeout == 30 # Default value
 
   test "Invalid command type is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [QuickRun]
 command = 123
 """
@@ -728,8 +679,7 @@ command = 123
 
 suite "Config Validation - TabLine section":
   test "Valid TabLine config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [TabLine]
 enable = false
 """
@@ -738,8 +688,7 @@ enable = false
     check config.tabLine.enable == false
 
   test "Invalid enable type is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [TabLine]
 enable = "no"
 """
@@ -749,8 +698,7 @@ enable = "no"
 
 suite "Config Validation - StartUp.FileOpen section":
   test "Valid StartUp.FileOpen config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [StartUp.FileOpen]
 autoSplit = true
 splitType = "horizontal"
@@ -761,8 +709,7 @@ splitType = "horizontal"
     check config.startUpFileOpen.splitType == stHorizontal
 
   test "Invalid splitType is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [StartUp.FileOpen]
 splitType = "diagonal"
 """
@@ -773,8 +720,7 @@ splitType = "diagonal"
 
 suite "Config Validation - Debug section":
   test "Valid Debug.WindowNode config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Debug.WindowNode]
 enable = true
 currentWindow = true
@@ -791,8 +737,7 @@ bufferIndex = false
     check config.debug.windowNode.bufferIndex == false
 
   test "Valid Debug.EditorView config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Debug.EditorView]
 enable = false
 widthOfLineNum = true
@@ -805,8 +750,7 @@ height = false
     check config.debug.editorView.height == false
 
   test "Valid Debug.BufferStatus config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Debug.BufferStatus]
 enable = true
 bufferIndex = false
@@ -821,8 +765,7 @@ openDir = false
     check config.debug.bufferStatus.openDir == false
 
   test "Valid Debug.Search config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Debug.Search]
 enable = false
 """
@@ -831,8 +774,7 @@ enable = false
     check config.debug.search.enable == false
 
   test "Valid Debug.MacroState config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Debug.MacroState]
 enable = true
 """
@@ -841,8 +783,7 @@ enable = true
     check config.debug.macroState.enable == true
 
   test "Valid Debug.Visual config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Debug.Visual]
 enable = false
 """
@@ -851,8 +792,7 @@ enable = false
     check config.debug.visual.enable == false
 
   test "Valid Debug.JumpList config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Debug.JumpList]
 enable = true
 """
@@ -861,8 +801,7 @@ enable = true
     check config.debug.jumpList.enable == true
 
   test "Valid Debug.Lsp config passes validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Debug.Lsp]
 enable = false
 """
@@ -871,8 +810,7 @@ enable = false
     check config.debug.lsp.enable == false
 
   test "Invalid Debug.WindowNode bool type is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Debug.WindowNode]
 enable = "yes"
 """
@@ -882,8 +820,7 @@ enable = "yes"
 
 suite "Config Validation - Standard section extended":
   test "Valid cursor types pass validation":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 normalModeCursor = "blinkBlock"
 insertModeCursor = "blinkIbeam"
@@ -900,8 +837,7 @@ insertModeCursor = "blinkIbeam"
       check not vr.hasErrors
 
   test "Invalid integer type (string) is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 tabStop = "four"
 """
@@ -1302,8 +1238,7 @@ suite "Config - saveConfig":
 
 suite "Config Validation - Unknown keys":
   test "Unknown top-level section is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 number = true
 
@@ -1319,8 +1254,7 @@ number = false
     check found
 
   test "Unknown key in Standard section is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 number = true
 tabStp = 4
@@ -1334,8 +1268,7 @@ tabStp = 4
     check found
 
   test "Unknown key in Clipboard section is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Clipboard]
 enable = true
 unknownKey = "value"
@@ -1349,8 +1282,7 @@ unknownKey = "value"
     check found
 
   test "Unknown key in Notification section is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Notification]
 screenNotifications = true
 typoKey = true
@@ -1364,8 +1296,7 @@ typoKey = true
     check found
 
   test "Lsp dynamic language server (Table type) is not an error":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Lsp]
 enable = true
 
@@ -1378,8 +1309,7 @@ command = "nimlsp"
     check config.lsp.servers.hasKey("nim")
 
   test "Lsp non-Table unknown key is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Lsp]
 enable = true
 unknownFlag = true
@@ -1393,8 +1323,7 @@ unknownFlag = true
     check found
 
   test "Unknown Debug sub-section is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Debug.WindowNode]
 enable = true
 
@@ -1410,8 +1339,7 @@ enable = true
     check found
 
   test "Unknown key in Debug.WindowNode is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Debug.WindowNode]
 enable = true
 unknownField = true
@@ -1425,8 +1353,7 @@ unknownField = true
     check found
 
   test "Unknown key in StartUp section is detected":
-    let tomlStr =
-      """
+    let tomlStr = """
 [StartUp.FileOpen]
 autoSplit = true
 
@@ -1442,8 +1369,7 @@ key = true
     check found
 
   test "Valid full config has no unknown key errors":
-    let tomlStr =
-      """
+    let tomlStr = """
 [Standard]
 number = true
 tabStop = 4
@@ -1495,3 +1421,216 @@ splitType = "vertical"
     let msg = item.toErrorMessage
     check "Invalid value" in msg
     check "Standard.tabStop" in msg
+
+suite "Config - saveThemeToToml":
+  test "Save DefaultColors to file":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_theme_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    let result = saveThemeToToml(DefaultColors, testFile)
+    check result.isOk
+    check fileExists(testFile)
+
+  test "Saved theme file contains [Colors] section":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_theme_section_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    let result = saveThemeToToml(DefaultColors, testFile)
+    check result.isOk
+
+    let content = readFile(testFile)
+    check "[Colors]" in content
+    check "foreground = " in content
+    check "background = " in content
+
+  test "Saved theme can be reloaded":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_theme_reload_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    let saveResult = saveThemeToToml(DefaultColors, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadThemeFromToml(testFile)
+    check loadResult.isOk
+
+  test "Color values round-trip":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_theme_rt_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    let saveResult = saveThemeToToml(DefaultColors, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadThemeFromToml(testFile)
+    check loadResult.isOk
+    let loaded = loadResult.get
+
+    # Check all color pairs match
+    for index in EditorColorPairIndex:
+      check DefaultColors[index].foreground.rgb == loaded[index].foreground.rgb
+      check DefaultColors[index].background.rgb == loaded[index].background.rgb
+
+  test "Custom colors round-trip":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_theme_custom_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var colors = DefaultColors
+    colors[EditorColorPairIndex.keyword].foreground =
+      ThemeColor(rgb: Rgb(red: 0x12, green: 0x34, blue: 0x56))
+    colors[EditorColorPairIndex.keyword].background =
+      ThemeColor(rgb: Rgb(red: 0xab, green: 0xcd, blue: 0xef))
+
+    let saveResult = saveThemeToToml(colors, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadThemeFromToml(testFile)
+    check loadResult.isOk
+    let loaded = loadResult.get
+
+    check loaded[EditorColorPairIndex.keyword].foreground.rgb ==
+      Rgb(red: 0x12, green: 0x34, blue: 0x56)
+    check loaded[EditorColorPairIndex.keyword].background.rgb ==
+      Rgb(red: 0xab, green: 0xcd, blue: 0xef)
+
+  test "termDefault color round-trip":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_theme_td_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var colors = DefaultColors
+    colors[EditorColorPairIndex.default].foreground =
+      ThemeColor(rgb: TerminalDefaultRgb)
+    colors[EditorColorPairIndex.default].background =
+      ThemeColor(rgb: TerminalDefaultRgb)
+
+    let saveResult = saveThemeToToml(colors, testFile)
+    check saveResult.isOk
+
+    let content = readFile(testFile)
+    check "\"termDefault\"" in content
+
+    let loadResult = loadThemeFromToml(testFile)
+    check loadResult.isOk
+    let loaded = loadResult.get
+    check loaded[EditorColorPairIndex.default].foreground.rgb == TerminalDefaultRgb
+    check loaded[EditorColorPairIndex.default].background.rgb == TerminalDefaultRgb
+
+  test "Parent directory is created automatically":
+    inc testFileCounter
+    let testDir = "/tmp/moe_test_save_theme_dir_" & $testFileCounter
+    let testFile = testDir / "subdir" / "theme.toml"
+    defer:
+      removeDir(testDir)
+
+    let result = saveThemeToToml(DefaultColors, testFile)
+    check result.isOk
+    check fileExists(testFile)
+
+  test "Backup file is created when original exists":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_theme_bac_" & $testFileCounter & ".toml"
+    let backupFile = testFile & ".bac"
+    defer:
+      removeFile(testFile)
+      removeFile(backupFile)
+
+    # Write initial theme file
+    let firstResult = saveThemeToToml(DefaultColors, testFile)
+    check firstResult.isOk
+    check fileExists(testFile)
+    check not fileExists(backupFile)
+
+    let originalContent = readFile(testFile)
+
+    # Save again with different colors - should create backup
+    var colors = DefaultColors
+    colors[EditorColorPairIndex.keyword].foreground =
+      ThemeColor(rgb: Rgb(red: 0xff, green: 0x00, blue: 0x00))
+
+    let secondResult = saveThemeToToml(colors, testFile)
+    check secondResult.isOk
+    check fileExists(backupFile)
+
+    # Backup should contain the original content
+    check readFile(backupFile) == originalContent
+    # New file should differ
+    check readFile(testFile) != originalContent
+
+  test "No backup file when original does not exist":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_theme_nobac_" & $testFileCounter & ".toml"
+    let backupFile = testFile & ".bac"
+    defer:
+      removeFile(testFile)
+      if fileExists(backupFile):
+        removeFile(backupFile)
+
+    let result = saveThemeToToml(DefaultColors, testFile)
+    check result.isOk
+    check fileExists(testFile)
+    check not fileExists(backupFile)
+
+suite "Config - saveConfigToToml saves theme file":
+  test "Theme file is saved when kind is tkConfig with path":
+    inc testFileCounter
+    let configFile = "/tmp/moe_test_save_cfg_theme_" & $testFileCounter & ".toml"
+    let themeFile = "/tmp/moe_test_save_cfg_theme_colors_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(configFile)
+      removeFile(themeFile)
+
+    # Set up global themeColors
+    setThemeColors(DefaultColors)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = themeFile
+
+    let result = saveConfigToToml(config, configFile)
+    check result.isOk
+    check fileExists(themeFile)
+
+    # Verify the theme file can be loaded
+    let loadResult = loadThemeFromToml(themeFile)
+    check loadResult.isOk
+
+  test "Theme file is not saved when kind is tkDefault":
+    inc testFileCounter
+    let configFile = "/tmp/moe_test_save_cfg_no_theme_" & $testFileCounter & ".toml"
+    let themeFile =
+      "/tmp/moe_test_save_cfg_no_theme_colors_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(configFile)
+      if fileExists(themeFile):
+        removeFile(themeFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = themeFile
+
+    let result = saveConfigToToml(config, configFile)
+    check result.isOk
+    check not fileExists(themeFile)
+
+  test "Theme file is not saved when path is empty":
+    inc testFileCounter
+    let configFile = "/tmp/moe_test_save_cfg_empty_path_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(configFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = ""
+
+    let result = saveConfigToToml(config, configFile)
+    check result.isOk

@@ -168,12 +168,11 @@ suite "Completion - CompletionManager":
 
   test "selectNext cycles through entries":
     let mgr = newCompletionManager()
-    mgr.menu.entries =
-      @[
-        CompletionEntry(word: "apple", matchScore: 100, source: csBuffer),
-        CompletionEntry(word: "banana", matchScore: 90, source: csBuffer),
-        CompletionEntry(word: "cherry", matchScore: 80, source: csBuffer),
-      ]
+    mgr.menu.entries = @[
+      CompletionEntry(word: "apple", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "banana", matchScore: 90, source: csBuffer),
+      CompletionEntry(word: "cherry", matchScore: 80, source: csBuffer),
+    ]
 
     check mgr.menu.selectedIndex == 0
     mgr.selectNext()
@@ -185,12 +184,11 @@ suite "Completion - CompletionManager":
 
   test "selectPrevious cycles through entries":
     let mgr = newCompletionManager()
-    mgr.menu.entries =
-      @[
-        CompletionEntry(word: "apple", matchScore: 100, source: csBuffer),
-        CompletionEntry(word: "banana", matchScore: 90, source: csBuffer),
-        CompletionEntry(word: "cherry", matchScore: 80, source: csBuffer),
-      ]
+    mgr.menu.entries = @[
+      CompletionEntry(word: "apple", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "banana", matchScore: 90, source: csBuffer),
+      CompletionEntry(word: "cherry", matchScore: 80, source: csBuffer),
+    ]
 
     check mgr.menu.selectedIndex == 0
     mgr.selectPrevious()
@@ -202,11 +200,10 @@ suite "Completion - CompletionManager":
 
   test "getSelectedWord returns correct word":
     let mgr = newCompletionManager()
-    mgr.menu.entries =
-      @[
-        CompletionEntry(word: "apple", matchScore: 100, source: csBuffer),
-        CompletionEntry(word: "banana", matchScore: 90, source: csBuffer),
-      ]
+    mgr.menu.entries = @[
+      CompletionEntry(word: "apple", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "banana", matchScore: 90, source: csBuffer),
+    ]
 
     check mgr.getSelectedWord() == "apple"
     mgr.selectNext()
@@ -310,12 +307,11 @@ suite "Completion - calculatePopupPosition":
 
 suite "Completion - calculateMaxWordWidth":
   test "Calculate max width":
-    let entries =
-      @[
-        CompletionEntry(word: "short", matchScore: 100, source: csBuffer),
-        CompletionEntry(word: "verylongword", matchScore: 90, source: csBuffer),
-        CompletionEntry(word: "medium", matchScore: 80, source: csBuffer),
-      ]
+    let entries = @[
+      CompletionEntry(word: "short", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "verylongword", matchScore: 90, source: csBuffer),
+      CompletionEntry(word: "medium", matchScore: 80, source: csBuffer),
+    ]
 
     let width = calculateMaxWordWidth(entries)
     check width == 12 # "verylongword".len
@@ -339,11 +335,10 @@ suite "Completion - LSP support":
     mgr.menu.prefix = "tes"
     mgr.state = csPendingLsp
 
-    let items =
-      @[
-        CompletionItem(label: "test", kind: some(cikFunction)),
-        CompletionItem(label: "testing", kind: some(cikVariable)),
-      ]
+    let items = @[
+      CompletionItem(label: "test", kind: some(cikFunction)),
+      CompletionItem(label: "testing", kind: some(cikVariable)),
+    ]
     mgr.setLspItems(items)
 
     check mgr.state == csActive
@@ -413,14 +408,13 @@ suite "Completion - scroll offset":
   test "selectNext adjusts scroll offset":
     let mgr = newCompletionManager()
     mgr.menu.maxVisible = 3
-    mgr.menu.entries =
-      @[
-        CompletionEntry(word: "a", matchScore: 100, source: csBuffer),
-        CompletionEntry(word: "b", matchScore: 90, source: csBuffer),
-        CompletionEntry(word: "c", matchScore: 80, source: csBuffer),
-        CompletionEntry(word: "d", matchScore: 70, source: csBuffer),
-        CompletionEntry(word: "e", matchScore: 60, source: csBuffer),
-      ]
+    mgr.menu.entries = @[
+      CompletionEntry(word: "a", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "b", matchScore: 90, source: csBuffer),
+      CompletionEntry(word: "c", matchScore: 80, source: csBuffer),
+      CompletionEntry(word: "d", matchScore: 70, source: csBuffer),
+      CompletionEntry(word: "e", matchScore: 60, source: csBuffer),
+    ]
 
     check mgr.menu.scrollOffset == 0
     mgr.selectNext() # index 1
@@ -432,14 +426,13 @@ suite "Completion - scroll offset":
   test "selectPrevious adjusts scroll offset":
     let mgr = newCompletionManager()
     mgr.menu.maxVisible = 3
-    mgr.menu.entries =
-      @[
-        CompletionEntry(word: "a", matchScore: 100, source: csBuffer),
-        CompletionEntry(word: "b", matchScore: 90, source: csBuffer),
-        CompletionEntry(word: "c", matchScore: 80, source: csBuffer),
-        CompletionEntry(word: "d", matchScore: 70, source: csBuffer),
-        CompletionEntry(word: "e", matchScore: 60, source: csBuffer),
-      ]
+    mgr.menu.entries = @[
+      CompletionEntry(word: "a", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "b", matchScore: 90, source: csBuffer),
+      CompletionEntry(word: "c", matchScore: 80, source: csBuffer),
+      CompletionEntry(word: "d", matchScore: 70, source: csBuffer),
+      CompletionEntry(word: "e", matchScore: 60, source: csBuffer),
+    ]
     mgr.menu.selectedIndex = 4
     mgr.menu.scrollOffset = 2
 
@@ -481,11 +474,10 @@ suite "Completion - calculatePopupPosition with showBorder=false":
     check pos.y < 20
 
   test "No extra gap between cursor and popup below":
-    let entries =
-      @[
-        CompletionEntry(word: "hello", matchScore: 100, source: csBuffer),
-        CompletionEntry(word: "world", matchScore: 90, source: csBuffer),
-      ]
+    let entries = @[
+      CompletionEntry(word: "hello", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "world", matchScore: 90, source: csBuffer),
+    ]
     let bordered = calculatePopupPosition(10, 5, 80, 24, entries, showBorder = true)
     let borderless = calculatePopupPosition(10, 5, 80, 24, entries, showBorder = false)
 
@@ -512,11 +504,10 @@ suite "Completion - calculatePopupPosition with showBorder=false":
 suite "Completion - renderCompletionPopup":
   test "Renders border and content with showBorder=true":
     let menu = CompletionMenu(
-      entries:
-        @[
-          CompletionEntry(word: "hello", matchScore: 100, source: csBuffer),
-          CompletionEntry(word: "world", matchScore: 90, source: csBuffer),
-        ],
+      entries: @[
+        CompletionEntry(word: "hello", matchScore: 100, source: csBuffer),
+        CompletionEntry(word: "world", matchScore: 90, source: csBuffer),
+      ],
       selectedIndex: 0,
       hasSelection: true,
       scrollOffset: 0,
@@ -545,11 +536,10 @@ suite "Completion - renderCompletionPopup":
 
   test "Renders content without border with showBorder=false":
     let menu = CompletionMenu(
-      entries:
-        @[
-          CompletionEntry(word: "hello", matchScore: 100, source: csBuffer),
-          CompletionEntry(word: "world", matchScore: 90, source: csBuffer),
-        ],
+      entries: @[
+        CompletionEntry(word: "hello", matchScore: 100, source: csBuffer),
+        CompletionEntry(word: "world", matchScore: 90, source: csBuffer),
+      ],
       selectedIndex: 0,
       hasSelection: true,
       scrollOffset: 0,
@@ -573,11 +563,10 @@ suite "Completion - renderCompletionPopup":
 
   test "Selected item highlighted correctly without border":
     let menu = CompletionMenu(
-      entries:
-        @[
-          CompletionEntry(word: "apple", matchScore: 100, source: csBuffer),
-          CompletionEntry(word: "banana", matchScore: 90, source: csBuffer),
-        ],
+      entries: @[
+        CompletionEntry(word: "apple", matchScore: 100, source: csBuffer),
+        CompletionEntry(word: "banana", matchScore: 90, source: csBuffer),
+      ],
       selectedIndex: 1,
       hasSelection: true,
       scrollOffset: 0,
@@ -648,12 +637,11 @@ suite "Completion - popup anchor position":
     check anchor2 == triggerX
 
   test "Popup position is constant for different candidates":
-    let entries =
-      @[
-        CompletionEntry(word: "hello", matchScore: 100, source: csBuffer),
-        CompletionEntry(word: "helicopter", matchScore: 90, source: csBuffer),
-        CompletionEntry(word: "help", matchScore: 80, source: csBuffer),
-      ]
+    let entries = @[
+      CompletionEntry(word: "hello", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "helicopter", matchScore: 90, source: csBuffer),
+      CompletionEntry(word: "help", matchScore: 80, source: csBuffer),
+    ]
     let triggerX = 10
 
     # Simulate cycling: each candidate has different length but anchor stays fixed
@@ -701,11 +689,10 @@ suite "Completion - hasSelection reset":
     mgr.state = csPendingLsp
     mgr.menu.hasSelection = true
 
-    let items =
-      @[
-        CompletionItem(label: "test", kind: some(cikFunction)),
-        CompletionItem(label: "testing", kind: some(cikVariable)),
-      ]
+    let items = @[
+      CompletionItem(label: "test", kind: some(cikFunction)),
+      CompletionItem(label: "testing", kind: some(cikVariable)),
+    ]
     mgr.setLspItems(items)
 
     check mgr.menu.hasSelection == false

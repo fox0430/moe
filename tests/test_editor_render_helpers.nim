@@ -301,12 +301,11 @@ suite "isPositionInDocumentHighlight - Detailed":
     e.state.display.showDocumentHighlight = true
     e.state.lspCache.documentHighlightCache.isValid = true
     e.state.lspCache.documentHighlightCache.itemsByLine = {
-      0:
-        @[
-          DocumentHighlightItem(startColumn: 0, endColumn: 5, kind: 1),
-          DocumentHighlightItem(startColumn: 10, endColumn: 15, kind: 2),
-          DocumentHighlightItem(startColumn: 20, endColumn: 25, kind: 3),
-        ]
+      0: @[
+        DocumentHighlightItem(startColumn: 0, endColumn: 5, kind: 1),
+        DocumentHighlightItem(startColumn: 10, endColumn: 15, kind: 2),
+        DocumentHighlightItem(startColumn: 20, endColumn: 25, kind: 3),
+      ]
     }.toTable
 
     let result1 = e.isPositionInDocumentHighlight(BufferPosition(line: 0, column: 2))

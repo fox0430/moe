@@ -383,12 +383,11 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         return %*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()}
       except CatchableError as e:
         sendLogMessage(mtWarning, "Failed to parse registerCapability: " & e.msg)
-        return
-          %*{
-            "jsonrpc": "2.0",
-            "id": reqId,
-            "error": {"code": -32602, "message": "Invalid params: " & e.msg},
-          }
+        return %*{
+          "jsonrpc": "2.0",
+          "id": reqId,
+          "error": {"code": -32602, "message": "Invalid params: " & e.msg},
+        }
     of "client/unregisterCapability":
       # Dynamic capability unregistration
       try:
@@ -397,21 +396,19 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         return %*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()}
       except CatchableError as e:
         sendLogMessage(mtWarning, "Failed to parse unregisterCapability: " & e.msg)
-        return
-          %*{
-            "jsonrpc": "2.0",
-            "id": reqId,
-            "error": {"code": -32602, "message": "Invalid params: " & e.msg},
-          }
+        return %*{
+          "jsonrpc": "2.0",
+          "id": reqId,
+          "error": {"code": -32602, "message": "Invalid params: " & e.msg},
+        }
     else:
       # Unknown server request - respond with method not found error
       sendLogMessage(mtInfo, "Unknown server request: " & meth)
-      return
-        %*{
-          "jsonrpc": "2.0",
-          "id": reqId,
-          "error": {"code": -32601, "message": "Method not found: " & meth},
-        }
+      return %*{
+        "jsonrpc": "2.0",
+        "id": reqId,
+        "error": {"code": -32601, "message": "Method not found: " & meth},
+      }
 
   proc handleNotification(meth: string, params: JsonNode) =
     case meth
@@ -595,16 +592,15 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       else:
         newJNull()
 
-    let initParams =
-      %*{
-        "processId": getCurrentProcessId(),
-        "clientInfo": {"name": "moe", "version": "0.3.0"},
-        "rootUri": rootUri,
-        "rootPath": rootPath,
-        "workspaceFolders": newJNull(),
-        "capabilities": buildClientCapabilities(),
-        "trace": "verbose",
-      }
+    let initParams = %*{
+      "processId": getCurrentProcessId(),
+      "clientInfo": {"name": "moe", "version": "0.3.0"},
+      "rootUri": rootUri,
+      "rootPath": rootPath,
+      "workspaceFolders": newJNull(),
+      "capabilities": buildClientCapabilities(),
+      "trace": "verbose",
+    }
 
     let reqResult = await sendRequest("initialize", initParams)
     if reqResult.isErr:
@@ -688,15 +684,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
     # Send all pending didOpen notifications now that server is running
     for cmd in pendingDidOpen:
-      let params =
-        %*{
-          "textDocument": {
-            "uri": cmd.openUri,
-            "languageId": cmd.openLangId,
-            "version": cmd.openVersion,
-            "text": cmd.openText,
-          }
+      let params = %*{
+        "textDocument": {
+          "uri": cmd.openUri,
+          "languageId": cmd.openLangId,
+          "version": cmd.openVersion,
+          "text": cmd.openText,
         }
+      }
       await sendNotificationLog("textDocument/didOpen", params)
     pendingDidOpen = @[]
 
@@ -739,15 +734,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       ctx.sharedState.storeRunning(false)
     of lcmdDidOpen:
       if ctx.sharedState.loadState() == lwsRunning:
-        let params =
-          %*{
-            "textDocument": {
-              "uri": cmd.openUri,
-              "languageId": cmd.openLangId,
-              "version": cmd.openVersion,
-              "text": cmd.openText,
-            }
+        let params = %*{
+          "textDocument": {
+            "uri": cmd.openUri,
+            "languageId": cmd.openLangId,
+            "version": cmd.openVersion,
+            "text": cmd.openText,
           }
+        }
         await sendNotificationLog("textDocument/didOpen", params)
       else:
         let currentState = ctx.sharedState.loadState()
@@ -762,11 +756,10 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     of lcmdDidChange:
       let changeState = ctx.sharedState.loadState()
       if changeState == lwsRunning:
-        let params =
-          %*{
-            "textDocument": {"uri": cmd.changeUri, "version": cmd.changeVersion},
-            "contentChanges": [{"text": cmd.changeText}],
-          }
+        let params = %*{
+          "textDocument": {"uri": cmd.changeUri, "version": cmd.changeVersion},
+          "contentChanges": [{"text": cmd.changeText}],
+        }
         await sendNotificationLog("textDocument/didChange", params)
       elif changeState == lwsStarting or changeState == lwsStopped:
         # Queue as didOpen with latest content (replaces any pending didOpen for same URI)

@@ -1388,14 +1388,13 @@ proc parseCallHierarchyItem*(node: JsonNode): CallHierarchyItem =
 
 proc toJson*(item: CallHierarchyItem): JsonNode =
   ## Serialize CallHierarchyItem to JSON
-  result =
-    %*{
-      "name": item.name,
-      "kind": item.kind.int,
-      "uri": item.uri,
-      "range": item.range.toJson,
-      "selectionRange": item.selectionRange.toJson,
-    }
+  result = %*{
+    "name": item.name,
+    "kind": item.kind.int,
+    "uri": item.uri,
+    "range": item.range.toJson,
+    "selectionRange": item.selectionRange.toJson,
+  }
   if item.tags.isSome:
     result["tags"] = %item.tags.get
   if item.detail.isSome:
@@ -1481,14 +1480,12 @@ proc parseDocumentSymbolResult*(node: JsonNode): DocumentSymbolResult =
 
 proc documentLinkToJson*(link: DocumentLink): JsonNode =
   ## Convert DocumentLink to JSON for documentLink/resolve request
-  result =
-    %*{
-      "range": {
-        "start":
-          {"line": link.range.start.line, "character": link.range.start.character},
-        "end": {"line": link.range.`end`.line, "character": link.range.`end`.character},
-      }
+  result = %*{
+    "range": {
+      "start": {"line": link.range.start.line, "character": link.range.start.character},
+      "end": {"line": link.range.`end`.line, "character": link.range.`end`.character},
     }
+  }
   if link.target.isSome:
     result["target"] = %link.target.get
   if link.tooltip.isSome:
@@ -1522,27 +1519,25 @@ proc codeLensToJson*(lens: CodeLens): JsonNode =
 
 proc callHierarchyItemToJson*(item: CallHierarchyItem): JsonNode =
   ## Convert CallHierarchyItem to JSON for call hierarchy requests
-  result =
-    %*{
-      "name": item.name,
-      "kind": item.kind.int,
-      "uri": item.uri,
-      "range": {
-        "start":
-          {"line": item.range.start.line, "character": item.range.start.character},
-        "end": {"line": item.range.`end`.line, "character": item.range.`end`.character},
+  result = %*{
+    "name": item.name,
+    "kind": item.kind.int,
+    "uri": item.uri,
+    "range": {
+      "start": {"line": item.range.start.line, "character": item.range.start.character},
+      "end": {"line": item.range.`end`.line, "character": item.range.`end`.character},
+    },
+    "selectionRange": {
+      "start": {
+        "line": item.selectionRange.start.line,
+        "character": item.selectionRange.start.character,
       },
-      "selectionRange": {
-        "start": {
-          "line": item.selectionRange.start.line,
-          "character": item.selectionRange.start.character,
-        },
-        "end": {
-          "line": item.selectionRange.`end`.line,
-          "character": item.selectionRange.`end`.character,
-        },
+      "end": {
+        "line": item.selectionRange.`end`.line,
+        "character": item.selectionRange.`end`.character,
       },
-    }
+    },
+  }
   if item.tags.isSome:
     result["tags"] = %item.tags.get
   if item.detail.isSome:

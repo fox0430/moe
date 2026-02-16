@@ -199,8 +199,7 @@ suite "KeybindConfig - loadKeybindingsFromToml":
 
   test "load action keybinding from toml":
     let registry = newKeyBindingRegistry()
-    let tomlContent =
-      """
+    let tomlContent = """
 [[keybinding]]
 mode = "normal"
 key = "C-q"
@@ -222,8 +221,7 @@ command = "file.quit"
 
   test "load mode switch keybinding from toml":
     let registry = newKeyBindingRegistry()
-    let tomlContent =
-      """
+    let tomlContent = """
 [[keybinding]]
 mode = "insert"
 key = "C-n"
@@ -245,8 +243,7 @@ target_mode = "normal"
 
   test "load overlay switch keybinding from toml":
     let registry = newKeyBindingRegistry()
-    let tomlContent =
-      """
+    let tomlContent = """
 [[keybinding]]
 mode = "normal"
 key = "C-f"
@@ -268,8 +265,7 @@ target_overlay = "search"
 
   test "load keybinding with args from toml":
     let registry = newKeyBindingRegistry()
-    let tomlContent =
-      """
+    let tomlContent = """
 [[keybinding]]
 mode = "normal"
 key = "C-p"
@@ -293,8 +289,7 @@ args = ["arg1", "arg2"]
 
   test "load multiple keybindings from toml":
     let registry = newKeyBindingRegistry()
-    let tomlContent =
-      """
+    let tomlContent = """
 [[keybinding]]
 mode = "normal"
 key = "C-a"
@@ -319,8 +314,7 @@ command = "buffer.switch"
 
   test "skip keybinding with missing mode":
     let registry = newKeyBindingRegistry()
-    let tomlContent =
-      """
+    let tomlContent = """
 [[keybinding]]
 key = "C-x"
 command_type = "action"
@@ -339,8 +333,7 @@ command = "test.command"
 
   test "skip keybinding with missing key":
     let registry = newKeyBindingRegistry()
-    let tomlContent =
-      """
+    let tomlContent = """
 [[keybinding]]
 mode = "normal"
 command_type = "action"
@@ -359,8 +352,7 @@ command = "test.command"
 
   test "skip keybinding with invalid mode":
     let registry = newKeyBindingRegistry()
-    let tomlContent =
-      """
+    let tomlContent = """
 [[keybinding]]
 mode = "invalid_mode"
 key = "C-x"
@@ -380,8 +372,7 @@ command = "test.command"
 
   test "default command type to action when not specified":
     let registry = newKeyBindingRegistry()
-    let tomlContent =
-      """
+    let tomlContent = """
 [[keybinding]]
 mode = "normal"
 key = "C-z"
@@ -401,8 +392,7 @@ command = "undo"
 
   test "skip toml with no keybinding array":
     let registry = newKeyBindingRegistry()
-    let tomlContent =
-      """
+    let tomlContent = """
 [settings]
 name = "test"
 """

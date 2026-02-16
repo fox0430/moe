@@ -28,12 +28,11 @@ import ../src/moepkg/command_handlers/buffer_manager_handler {.all.}
 proc createTestBufferManagerState(): BufferManagerState =
   ## Create a BufferManagerState with test entries
   let state = newBufferManagerState()
-  let bufferInfos =
-    @[
-      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
-      BufferInfo(filePath: some("/file2.nim"), isModified: true, isActive: false),
-      BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
-    ]
+  let bufferInfos = @[
+    BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
+    BufferInfo(filePath: some("/file2.nim"), isModified: true, isActive: false),
+    BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
+  ]
   state.updateEntries(bufferInfos)
   result = state
 

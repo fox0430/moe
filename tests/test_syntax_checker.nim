@@ -84,21 +84,19 @@ suite "SyntaxChecker - parseNimCheckResult":
     check errors[0].message == "unused variable 'x' [XDeclaredButNotUsed]"
 
   test "Parse hint":
-    let output =
-      @[
-        "/path/to/file.nim(1, 0) Hint: 'x' is declared but not used [XDeclaredButNotUsed]"
-      ]
+    let output = @[
+      "/path/to/file.nim(1, 0) Hint: 'x' is declared but not used [XDeclaredButNotUsed]"
+    ]
     let errors = parseNimCheckResult("/path/to/file.nim", output)
     check errors.len == 1
     check errors[0].messageType == SyntaxCheckMessageType.hint
 
   test "Parse multiple errors and warnings":
-    let output =
-      @[
-        "/path/to/file.nim(1, 5) Error: undeclared identifier",
-        "/path/to/file.nim(3, 0) Warning: imported but not used",
-        "/path/to/file.nim(7, 2) Error: type mismatch",
-      ]
+    let output = @[
+      "/path/to/file.nim(1, 5) Error: undeclared identifier",
+      "/path/to/file.nim(3, 0) Warning: imported but not used",
+      "/path/to/file.nim(7, 2) Error: type mismatch",
+    ]
     let errors = parseNimCheckResult("/path/to/file.nim", output)
     check errors.len == 3
     check errors[0].messageType == SyntaxCheckMessageType.error
@@ -136,11 +134,10 @@ suite "SyntaxChecker - parseNimCheckResult":
     check errors[0].message == "some information"
 
   test "Errors from imported module with different absolute path are ignored":
-    let output =
-      @[
-        "/home/user/.nimble/pkgs/somelib/utils.nim(10, 5) Error: type mismatch",
-        "/home/user/project/file.nim(3, 1) Error: undeclared identifier",
-      ]
+    let output = @[
+      "/home/user/.nimble/pkgs/somelib/utils.nim(10, 5) Error: type mismatch",
+      "/home/user/project/file.nim(3, 1) Error: undeclared identifier",
+    ]
     let errors = parseNimCheckResult("/home/user/project/file.nim", output)
     check errors.len == 1
     check errors[0].position.line == 2
@@ -149,21 +146,19 @@ suite "SyntaxChecker - parseNimCheckResult":
   test "Same filename in different directory is ignored with absolute path":
     # e.g. checking /home/user/project/utils.nim should not pick up
     # errors from /home/user/.nimble/pkgs/somelib/utils.nim
-    let output =
-      @[
-        "/home/user/.nimble/pkgs/somelib/utils.nim(5, 0) Error: from dependency",
-        "/home/user/project/utils.nim(1, 0) Error: from project",
-      ]
+    let output = @[
+      "/home/user/.nimble/pkgs/somelib/utils.nim(5, 0) Error: from dependency",
+      "/home/user/project/utils.nim(1, 0) Error: from project",
+    ]
     let errors = parseNimCheckResult("/home/user/project/utils.nim", output)
     check errors.len == 1
     check errors[0].message == "from project"
 
   test "Template instantiation lines are ignored":
-    let output =
-      @[
-        "/path/to/file.nim(5, 3) template/generic instantiation of `foo` from here",
-        "/path/to/file.nim(10, 1) Error: type mismatch",
-      ]
+    let output = @[
+      "/path/to/file.nim(5, 3) template/generic instantiation of `foo` from here",
+      "/path/to/file.nim(10, 1) Error: type mismatch",
+    ]
     let errors = parseNimCheckResult("/path/to/file.nim", output)
     check errors.len == 1
     check errors[0].position.line == 9
@@ -176,13 +171,12 @@ suite "SyntaxChecker - parseNimCheckResult":
     check errors.len == 0
 
   test "Mixed output with hints, warnings, and errors for same file":
-    let output =
-      @[
-        "/path/to/file.nim(1, 0) Hint: used config file [Conf]",
-        "/path/to/file.nim(3, 6) Warning: imported and not used: 'os' [UnusedImport]",
-        "/path/to/file.nim(5, 4) Error: undeclared identifier: 'x'",
-        "/path/to/file.nim(5, 8) Error: expression 'x' has no type",
-      ]
+    let output = @[
+      "/path/to/file.nim(1, 0) Hint: used config file [Conf]",
+      "/path/to/file.nim(3, 6) Warning: imported and not used: 'os' [UnusedImport]",
+      "/path/to/file.nim(5, 4) Error: undeclared identifier: 'x'",
+      "/path/to/file.nim(5, 8) Error: expression 'x' has no type",
+    ]
     let errors = parseNimCheckResult("/path/to/file.nim", output)
     check errors.len == 4
     check errors[0].messageType == SyntaxCheckMessageType.hint
@@ -195,19 +189,18 @@ suite "SyntaxChecker - parseNimCheckResult":
 suite "SyntaxChecker - applySyntaxCheckToBuffer":
   test "Apply errors to buffer sets line markers":
     let buf = newTextBuffer("line1\nline2\nline3\nline4\nline5")
-    let errors =
-      @[
-        SyntaxCheckError(
-          position: BufferPosition(line: 1, column: 0),
-          messageType: SyntaxCheckMessageType.error,
-          message: "test error",
-        ),
-        SyntaxCheckError(
-          position: BufferPosition(line: 3, column: 0),
-          messageType: SyntaxCheckMessageType.warning,
-          message: "test warning",
-        ),
-      ]
+    let errors = @[
+      SyntaxCheckError(
+        position: BufferPosition(line: 1, column: 0),
+        messageType: SyntaxCheckMessageType.error,
+        message: "test error",
+      ),
+      SyntaxCheckError(
+        position: BufferPosition(line: 3, column: 0),
+        messageType: SyntaxCheckMessageType.warning,
+        message: "test warning",
+      ),
+    ]
     applySyntaxCheckToBuffer(buf, errors)
     check buf.getLineMarker(0) == none(SidebarItemKind)
     check buf.getLineMarker(1) == some(SidebarItemKind.SyntaxError)
@@ -228,14 +221,13 @@ suite "SyntaxChecker - applySyntaxCheckToBuffer":
     let buf = newTextBuffer("line1\nline2\nline3")
     buf.setLineMarker(0, SidebarItemKind.GitAdded)
     buf.setLineMarker(1, SidebarItemKind.SyntaxError)
-    let errors =
-      @[
-        SyntaxCheckError(
-          position: BufferPosition(line: 2, column: 0),
-          messageType: SyntaxCheckMessageType.error,
-          message: "error",
-        )
-      ]
+    let errors = @[
+      SyntaxCheckError(
+        position: BufferPosition(line: 2, column: 0),
+        messageType: SyntaxCheckMessageType.error,
+        message: "error",
+      )
+    ]
     applySyntaxCheckToBuffer(buf, errors)
     # Git marker should be preserved
     check buf.getLineMarker(0) == some(SidebarItemKind.GitAdded)
@@ -246,33 +238,31 @@ suite "SyntaxChecker - applySyntaxCheckToBuffer":
 
   test "Hints and info are not shown in sidebar":
     let buf = newTextBuffer("line1\nline2\nline3")
-    let errors =
-      @[
-        SyntaxCheckError(
-          position: BufferPosition(line: 0, column: 0),
-          messageType: SyntaxCheckMessageType.hint,
-          message: "a hint",
-        ),
-        SyntaxCheckError(
-          position: BufferPosition(line: 1, column: 0),
-          messageType: SyntaxCheckMessageType.info,
-          message: "some info",
-        ),
-      ]
+    let errors = @[
+      SyntaxCheckError(
+        position: BufferPosition(line: 0, column: 0),
+        messageType: SyntaxCheckMessageType.hint,
+        message: "a hint",
+      ),
+      SyntaxCheckError(
+        position: BufferPosition(line: 1, column: 0),
+        messageType: SyntaxCheckMessageType.info,
+        message: "some info",
+      ),
+    ]
     applySyntaxCheckToBuffer(buf, errors)
     check buf.getLineMarker(0) == none(SidebarItemKind)
     check buf.getLineMarker(1) == none(SidebarItemKind)
 
   test "Errors on out-of-range lines are ignored":
     let buf = newTextBuffer("line1\nline2")
-    let errors =
-      @[
-        SyntaxCheckError(
-          position: BufferPosition(line: 10, column: 0),
-          messageType: SyntaxCheckMessageType.error,
-          message: "out of range",
-        )
-      ]
+    let errors = @[
+      SyntaxCheckError(
+        position: BufferPosition(line: 10, column: 0),
+        messageType: SyntaxCheckMessageType.error,
+        message: "out of range",
+      )
+    ]
     applySyntaxCheckToBuffer(buf, errors)
     check buf.getLineMarker(0) == none(SidebarItemKind)
     check buf.getLineMarker(1) == none(SidebarItemKind)
@@ -296,83 +286,77 @@ suite "SyntaxChecker - clearSyntaxMarkers":
 
 suite "SyntaxChecker - formattedMessage":
   test "Returns error message for matching line":
-    let errors =
-      @[
-        SyntaxCheckError(
-          position: BufferPosition(line: 3, column: 5),
-          messageType: SyntaxCheckMessageType.error,
-          message: "undeclared identifier",
-        )
-      ]
+    let errors = @[
+      SyntaxCheckError(
+        position: BufferPosition(line: 3, column: 5),
+        messageType: SyntaxCheckMessageType.error,
+        message: "undeclared identifier",
+      )
+    ]
     let msg = formattedMessage(errors, 3)
     check msg.isSome
     check msg.get == "Error: undeclared identifier"
 
   test "Returns warning message for matching line":
-    let errors =
-      @[
-        SyntaxCheckError(
-          position: BufferPosition(line: 5, column: 0),
-          messageType: SyntaxCheckMessageType.warning,
-          message: "unused variable",
-        )
-      ]
+    let errors = @[
+      SyntaxCheckError(
+        position: BufferPosition(line: 5, column: 0),
+        messageType: SyntaxCheckMessageType.warning,
+        message: "unused variable",
+      )
+    ]
     let msg = formattedMessage(errors, 5)
     check msg.isSome
     check msg.get == "Warning: unused variable"
 
   test "Returns hint message for matching line":
-    let errors =
-      @[
-        SyntaxCheckError(
-          position: BufferPosition(line: 0, column: 0),
-          messageType: SyntaxCheckMessageType.hint,
-          message: "use const",
-        )
-      ]
+    let errors = @[
+      SyntaxCheckError(
+        position: BufferPosition(line: 0, column: 0),
+        messageType: SyntaxCheckMessageType.hint,
+        message: "use const",
+      )
+    ]
     let msg = formattedMessage(errors, 0)
     check msg.isSome
     check msg.get == "Hint: use const"
 
   test "Returns info message for matching line":
-    let errors =
-      @[
-        SyntaxCheckError(
-          position: BufferPosition(line: 1, column: 0),
-          messageType: SyntaxCheckMessageType.info,
-          message: "some info",
-        )
-      ]
+    let errors = @[
+      SyntaxCheckError(
+        position: BufferPosition(line: 1, column: 0),
+        messageType: SyntaxCheckMessageType.info,
+        message: "some info",
+      )
+    ]
     let msg = formattedMessage(errors, 1)
     check msg.isSome
     check msg.get == "Info: some info"
 
   test "Returns none for non-matching line":
-    let errors =
-      @[
-        SyntaxCheckError(
-          position: BufferPosition(line: 3, column: 0),
-          messageType: SyntaxCheckMessageType.error,
-          message: "error on line 3",
-        )
-      ]
+    let errors = @[
+      SyntaxCheckError(
+        position: BufferPosition(line: 3, column: 0),
+        messageType: SyntaxCheckMessageType.error,
+        message: "error on line 3",
+      )
+    ]
     let msg = formattedMessage(errors, 5)
     check msg.isNone
 
   test "Returns first matching error when multiple on same line":
-    let errors =
-      @[
-        SyntaxCheckError(
-          position: BufferPosition(line: 2, column: 0),
-          messageType: SyntaxCheckMessageType.error,
-          message: "first error",
-        ),
-        SyntaxCheckError(
-          position: BufferPosition(line: 2, column: 5),
-          messageType: SyntaxCheckMessageType.warning,
-          message: "second issue",
-        ),
-      ]
+    let errors = @[
+      SyntaxCheckError(
+        position: BufferPosition(line: 2, column: 0),
+        messageType: SyntaxCheckMessageType.error,
+        message: "first error",
+      ),
+      SyntaxCheckError(
+        position: BufferPosition(line: 2, column: 5),
+        messageType: SyntaxCheckMessageType.warning,
+        message: "second issue",
+      ),
+    ]
     let msg = formattedMessage(errors, 2)
     check msg.isSome
     check msg.get == "Error: first error"

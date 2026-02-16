@@ -1321,11 +1321,9 @@ proc calculateOperatorRange*(
   var range = OperatorRange(start: startPos, endPos: endPos, isLinewise: isLinewise)
 
   # Ensure start comes before end
-  if range.start.line > range.endPos.line or
-      (
-        range.start.line == range.endPos.line and
-        range.start.column > range.endPos.column
-      ):
+  if range.start.line > range.endPos.line or (
+    range.start.line == range.endPos.line and range.start.column > range.endPos.column
+  ):
     swap(range.start, range.endPos)
 
   # For exclusive motions in characterwise mode, exclude the endPos character

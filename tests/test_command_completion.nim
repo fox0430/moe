@@ -238,16 +238,13 @@ suite "CommandCompletion - collectCommands":
 suite "CommandCompletion - filterAndSortEntries":
   test "Filter commands by prefix":
     let mgr = newCommandCompletionManager()
-    mgr.allCommands =
-      @[
-        CommandCompletionEntry(command: "quit", description: "Quit", matchScore: 0),
-        CommandCompletionEntry(
-          command: "write", description: "Write file", matchScore: 0
-        ),
-        CommandCompletionEntry(
-          command: "wq", description: "Write and quit", matchScore: 0
-        ),
-      ]
+    mgr.allCommands = @[
+      CommandCompletionEntry(command: "quit", description: "Quit", matchScore: 0),
+      CommandCompletionEntry(command: "write", description: "Write file", matchScore: 0),
+      CommandCompletionEntry(
+        command: "wq", description: "Write and quit", matchScore: 0
+      ),
+    ]
 
     let entries = mgr.filterAndSortEntries("w")
     check entries.len == 2
@@ -256,24 +253,22 @@ suite "CommandCompletion - filterAndSortEntries":
 
   test "Empty prefix returns all":
     let mgr = newCommandCompletionManager()
-    mgr.allCommands =
-      @[
-        CommandCompletionEntry(command: "a", description: "", matchScore: 0),
-        CommandCompletionEntry(command: "b", description: "", matchScore: 0),
-        CommandCompletionEntry(command: "c", description: "", matchScore: 0),
-      ]
+    mgr.allCommands = @[
+      CommandCompletionEntry(command: "a", description: "", matchScore: 0),
+      CommandCompletionEntry(command: "b", description: "", matchScore: 0),
+      CommandCompletionEntry(command: "c", description: "", matchScore: 0),
+    ]
 
     let entries = mgr.filterAndSortEntries("")
     check entries.len == 3
 
   test "Entries sorted by score descending":
     let mgr = newCommandCompletionManager()
-    mgr.allCommands =
-      @[
-        CommandCompletionEntry(command: "help", description: "", matchScore: 0),
-        CommandCompletionEntry(command: "he", description: "", matchScore: 0),
-        CommandCompletionEntry(command: "helicopter", description: "", matchScore: 0),
-      ]
+    mgr.allCommands = @[
+      CommandCompletionEntry(command: "help", description: "", matchScore: 0),
+      CommandCompletionEntry(command: "he", description: "", matchScore: 0),
+      CommandCompletionEntry(command: "helicopter", description: "", matchScore: 0),
+    ]
 
     let entries = mgr.filterAndSortEntries("he")
     check entries.len == 3
@@ -282,11 +277,10 @@ suite "CommandCompletion - filterAndSortEntries":
 
   test "No match returns empty":
     let mgr = newCommandCompletionManager()
-    mgr.allCommands =
-      @[
-        CommandCompletionEntry(command: "quit", description: "", matchScore: 0),
-        CommandCompletionEntry(command: "write", description: "", matchScore: 0),
-      ]
+    mgr.allCommands = @[
+      CommandCompletionEntry(command: "quit", description: "", matchScore: 0),
+      CommandCompletionEntry(command: "write", description: "", matchScore: 0),
+    ]
 
     let entries = mgr.filterAndSortEntries("xyz")
     check entries.len == 0
@@ -294,11 +288,10 @@ suite "CommandCompletion - filterAndSortEntries":
 suite "CommandCompletion - updateFilter":
   test "Update filter sets entries and resets selection":
     let mgr = newCommandCompletionManager()
-    mgr.allCommands =
-      @[
-        CommandCompletionEntry(command: "quit", description: "", matchScore: 0),
-        CommandCompletionEntry(command: "write", description: "", matchScore: 0),
-      ]
+    mgr.allCommands = @[
+      CommandCompletionEntry(command: "quit", description: "", matchScore: 0),
+      CommandCompletionEntry(command: "write", description: "", matchScore: 0),
+    ]
     mgr.menu.selectedIndex = 1
     mgr.state = ccsActive
 
@@ -323,12 +316,11 @@ suite "CommandCompletion - updateFilter":
 suite "CommandCompletion - selectNext and selectPrevious":
   test "selectNext cycles through entries":
     let mgr = newCommandCompletionManager()
-    mgr.menu.entries =
-      @[
-        CommandCompletionEntry(command: "a", description: "", matchScore: 100),
-        CommandCompletionEntry(command: "b", description: "", matchScore: 90),
-        CommandCompletionEntry(command: "c", description: "", matchScore: 80),
-      ]
+    mgr.menu.entries = @[
+      CommandCompletionEntry(command: "a", description: "", matchScore: 100),
+      CommandCompletionEntry(command: "b", description: "", matchScore: 90),
+      CommandCompletionEntry(command: "c", description: "", matchScore: 80),
+    ]
 
     check mgr.menu.selectedIndex == -1
     mgr.selectNext()
@@ -342,12 +334,11 @@ suite "CommandCompletion - selectNext and selectPrevious":
 
   test "selectPrevious cycles through entries":
     let mgr = newCommandCompletionManager()
-    mgr.menu.entries =
-      @[
-        CommandCompletionEntry(command: "a", description: "", matchScore: 100),
-        CommandCompletionEntry(command: "b", description: "", matchScore: 90),
-        CommandCompletionEntry(command: "c", description: "", matchScore: 80),
-      ]
+    mgr.menu.entries = @[
+      CommandCompletionEntry(command: "a", description: "", matchScore: 100),
+      CommandCompletionEntry(command: "b", description: "", matchScore: 90),
+      CommandCompletionEntry(command: "c", description: "", matchScore: 80),
+    ]
 
     check mgr.menu.selectedIndex == -1
     mgr.selectPrevious()
@@ -379,14 +370,13 @@ suite "CommandCompletion - selectNext scroll offset":
   test "selectNext adjusts scroll offset when needed":
     let mgr = newCommandCompletionManager()
     mgr.menu.maxVisible = 3
-    mgr.menu.entries =
-      @[
-        CommandCompletionEntry(command: "a", description: "", matchScore: 100),
-        CommandCompletionEntry(command: "b", description: "", matchScore: 90),
-        CommandCompletionEntry(command: "c", description: "", matchScore: 80),
-        CommandCompletionEntry(command: "d", description: "", matchScore: 70),
-        CommandCompletionEntry(command: "e", description: "", matchScore: 60),
-      ]
+    mgr.menu.entries = @[
+      CommandCompletionEntry(command: "a", description: "", matchScore: 100),
+      CommandCompletionEntry(command: "b", description: "", matchScore: 90),
+      CommandCompletionEntry(command: "c", description: "", matchScore: 80),
+      CommandCompletionEntry(command: "d", description: "", matchScore: 70),
+      CommandCompletionEntry(command: "e", description: "", matchScore: 60),
+    ]
 
     check mgr.menu.scrollOffset == 0
     mgr.selectNext() # index 0
@@ -399,14 +389,13 @@ suite "CommandCompletion - selectNext scroll offset":
   test "selectPrevious adjusts scroll offset when needed":
     let mgr = newCommandCompletionManager()
     mgr.menu.maxVisible = 3
-    mgr.menu.entries =
-      @[
-        CommandCompletionEntry(command: "a", description: "", matchScore: 100),
-        CommandCompletionEntry(command: "b", description: "", matchScore: 90),
-        CommandCompletionEntry(command: "c", description: "", matchScore: 80),
-        CommandCompletionEntry(command: "d", description: "", matchScore: 70),
-        CommandCompletionEntry(command: "e", description: "", matchScore: 60),
-      ]
+    mgr.menu.entries = @[
+      CommandCompletionEntry(command: "a", description: "", matchScore: 100),
+      CommandCompletionEntry(command: "b", description: "", matchScore: 90),
+      CommandCompletionEntry(command: "c", description: "", matchScore: 80),
+      CommandCompletionEntry(command: "d", description: "", matchScore: 70),
+      CommandCompletionEntry(command: "e", description: "", matchScore: 60),
+    ]
     mgr.menu.selectedIndex = 4
     mgr.menu.scrollOffset = 2
 
@@ -420,11 +409,10 @@ suite "CommandCompletion - selectNext scroll offset":
 suite "CommandCompletion - getSelectedCommand":
   test "Get selected command":
     let mgr = newCommandCompletionManager()
-    mgr.menu.entries =
-      @[
-        CommandCompletionEntry(command: "quit", description: "", matchScore: 100),
-        CommandCompletionEntry(command: "write", description: "", matchScore: 90),
-      ]
+    mgr.menu.entries = @[
+      CommandCompletionEntry(command: "quit", description: "", matchScore: 100),
+      CommandCompletionEntry(command: "write", description: "", matchScore: 90),
+    ]
     mgr.menu.selectedIndex = 0
 
     check mgr.getSelectedCommand() == "quit"
@@ -615,14 +603,13 @@ suite "CommandCompletion - triggerArgumentCompletion":
 
 suite "CommandCompletion - calculateMaxCommandWidth":
   test "Calculate max width":
-    let entries =
-      @[
-        CommandCompletionEntry(command: "short", description: "", matchScore: 100),
-        CommandCompletionEntry(
-          command: "verylongcommand", description: "", matchScore: 90
-        ),
-        CommandCompletionEntry(command: "medium", description: "", matchScore: 80),
-      ]
+    let entries = @[
+      CommandCompletionEntry(command: "short", description: "", matchScore: 100),
+      CommandCompletionEntry(
+        command: "verylongcommand", description: "", matchScore: 90
+      ),
+      CommandCompletionEntry(command: "medium", description: "", matchScore: 80),
+    ]
 
     let width = calculateMaxCommandWidth(entries)
     check width == 15 # "verylongcommand".len
@@ -634,14 +621,13 @@ suite "CommandCompletion - calculateMaxCommandWidth":
 
 suite "CommandCompletion - calculateMaxDescriptionWidth":
   test "Calculate max description width":
-    let entries =
-      @[
-        CommandCompletionEntry(command: "a", description: "short", matchScore: 100),
-        CommandCompletionEntry(
-          command: "b", description: "very long description", matchScore: 90
-        ),
-        CommandCompletionEntry(command: "c", description: "medium desc", matchScore: 80),
-      ]
+    let entries = @[
+      CommandCompletionEntry(command: "a", description: "short", matchScore: 100),
+      CommandCompletionEntry(
+        command: "b", description: "very long description", matchScore: 90
+      ),
+      CommandCompletionEntry(command: "c", description: "medium desc", matchScore: 80),
+    ]
 
     let width = calculateMaxDescriptionWidth(entries)
     check width == 21 # "very long description".len
@@ -670,14 +656,13 @@ suite "CommandCompletion - calculateCommandPopupPosition":
     check pos.x + pos.width <= 80 # Should not exceed terminal width
 
   test "Popup height based on visible items":
-    let entries =
-      @[
-        CommandCompletionEntry(command: "a", description: "", matchScore: 100),
-        CommandCompletionEntry(command: "b", description: "", matchScore: 90),
-        CommandCompletionEntry(command: "c", description: "", matchScore: 80),
-        CommandCompletionEntry(command: "d", description: "", matchScore: 70),
-        CommandCompletionEntry(command: "e", description: "", matchScore: 60),
-      ]
+    let entries = @[
+      CommandCompletionEntry(command: "a", description: "", matchScore: 100),
+      CommandCompletionEntry(command: "b", description: "", matchScore: 90),
+      CommandCompletionEntry(command: "c", description: "", matchScore: 80),
+      CommandCompletionEntry(command: "d", description: "", matchScore: 70),
+      CommandCompletionEntry(command: "e", description: "", matchScore: 60),
+    ]
     let pos = calculateCommandPopupPosition(0, 80, 24, entries, maxVisible = 3)
 
     check pos.height == 5 # 3 items + 2 for border
@@ -858,15 +843,14 @@ suite "CommandCompletion - edge cases":
 
   test "filterAndSortEntries with fuzzy match":
     let mgr = newCommandCompletionManager()
-    mgr.allCommands =
-      @[
-        CommandCompletionEntry(
-          command: "vsplit", description: "Vertical split", matchScore: 0
-        ),
-        CommandCompletionEntry(
-          command: "split", description: "Horizontal split", matchScore: 0
-        ),
-      ]
+    mgr.allCommands = @[
+      CommandCompletionEntry(
+        command: "vsplit", description: "Vertical split", matchScore: 0
+      ),
+      CommandCompletionEntry(
+        command: "split", description: "Horizontal split", matchScore: 0
+      ),
+    ]
 
     # "vsp" should fuzzy match "vsplit"
     let entries = mgr.filterAndSortEntries("vsp")

@@ -53,11 +53,10 @@ suite "CodeLens Cache":
     e.state.lspCache.codeLensCache.isValid = true
     e.state.lspCache.codeLensCache.itemsByLine = {
       0: @[CodeLensItem(line: 0, title: "5 references", command: "references")],
-      5:
-        @[
-          CodeLensItem(line: 5, title: "Run Test", command: "test.run"),
-          CodeLensItem(line: 5, title: "Debug Test", command: "test.debug"),
-        ],
+      5: @[
+        CodeLensItem(line: 5, title: "Run Test", command: "test.run"),
+        CodeLensItem(line: 5, title: "Debug Test", command: "test.debug"),
+      ],
     }.toTable
 
     # Line 0 has one item
@@ -117,12 +116,11 @@ suite "CodeLens Cache":
     let e = createTestEditor()
     e.state.lspCache.codeLensCache.isValid = true
     e.state.lspCache.codeLensCache.itemsByLine = {
-      0:
-        @[
-          CodeLensItem(line: 0, title: "Run", command: "run"),
-          CodeLensItem(line: 0, title: "Debug", command: "debug"),
-          CodeLensItem(line: 0, title: "Test", command: "test"),
-        ]
+      0: @[
+        CodeLensItem(line: 0, title: "Run", command: "run"),
+        CodeLensItem(line: 0, title: "Debug", command: "debug"),
+        CodeLensItem(line: 0, title: "Test", command: "test"),
+      ]
     }.toTable
     let text = e.getCodeLensDisplayText(0)
     check text == "Run | Debug | Test"
@@ -132,12 +130,11 @@ suite "CodeLens Picker":
     let e = createTestEditor()
     e.viewport.height = 24
 
-    let items =
-      @[
-        CodeLensItem(line: 0, title: "Item 1", command: "cmd1"),
-        CodeLensItem(line: 0, title: "Item 2", command: "cmd2"),
-        CodeLensItem(line: 0, title: "Item 3", command: "cmd3"),
-      ]
+    let items = @[
+      CodeLensItem(line: 0, title: "Item 1", command: "cmd1"),
+      CodeLensItem(line: 0, title: "Item 2", command: "cmd2"),
+      CodeLensItem(line: 0, title: "Item 3", command: "cmd3"),
+    ]
     e.showCodeLensPicker(items)
 
     check e.state.lspCache.codeLensPicker.isActive
@@ -159,12 +156,11 @@ suite "CodeLens Picker":
   test "codeLensPickerSelectNext - basic":
     let e = createTestEditor()
     e.viewport.height = 24
-    let items =
-      @[
-        CodeLensItem(line: 0, title: "Item 1", command: "cmd1"),
-        CodeLensItem(line: 0, title: "Item 2", command: "cmd2"),
-        CodeLensItem(line: 0, title: "Item 3", command: "cmd3"),
-      ]
+    let items = @[
+      CodeLensItem(line: 0, title: "Item 1", command: "cmd1"),
+      CodeLensItem(line: 0, title: "Item 2", command: "cmd2"),
+      CodeLensItem(line: 0, title: "Item 3", command: "cmd3"),
+    ]
     e.showCodeLensPicker(items)
 
     check e.state.lspCache.codeLensPicker.selectedIndex == 0
@@ -182,12 +178,11 @@ suite "CodeLens Picker":
   test "codeLensPickerSelectPrev - basic":
     let e = createTestEditor()
     e.viewport.height = 24
-    let items =
-      @[
-        CodeLensItem(line: 0, title: "Item 1", command: "cmd1"),
-        CodeLensItem(line: 0, title: "Item 2", command: "cmd2"),
-        CodeLensItem(line: 0, title: "Item 3", command: "cmd3"),
-      ]
+    let items = @[
+      CodeLensItem(line: 0, title: "Item 1", command: "cmd1"),
+      CodeLensItem(line: 0, title: "Item 2", command: "cmd2"),
+      CodeLensItem(line: 0, title: "Item 3", command: "cmd3"),
+    ]
     e.showCodeLensPicker(items)
     e.state.lspCache.codeLensPicker.selectedIndex = 2
 

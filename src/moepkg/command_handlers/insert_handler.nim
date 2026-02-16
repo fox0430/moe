@@ -478,11 +478,9 @@ proc handleInsertModeKey*(
       return handler.commitCompletion(buffer, state, keepPopupOpen = true)
 
     # Ctrl+P, Up, or Shift+Tab - select previous and replace current word
-    if keyCombo.isCtrlP or (keyCombo.isSpecial and keyCombo.special == skUp) or
-        (
-          keyCombo.isSpecial and keyCombo.special == skTab and
-          kmShift in keyCombo.modifiers
-        ):
+    if keyCombo.isCtrlP or (keyCombo.isSpecial and keyCombo.special == skUp) or (
+      keyCombo.isSpecial and keyCombo.special == skTab and kmShift in keyCombo.modifiers
+    ):
       # First Shift+Tab activates selection mode
       if not handler.completionManager.menu.hasSelection:
         handler.completionManager.menu.hasSelection = true

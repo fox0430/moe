@@ -121,11 +121,10 @@ suite "Highlight - Incremental Initialization":
     check lineStates.len == 3
 
   test "initHighlightIncremental partial range":
-    let buffer =
-      @[
-        "line1".toRunes, "line2".toRunes, "line3".toRunes, "line4".toRunes,
-        "line5".toRunes,
-      ]
+    let buffer = @[
+      "line1".toRunes, "line2".toRunes, "line3".toRunes, "line4".toRunes,
+      "line5".toRunes,
+    ]
     let (segments, lineStates) = initHighlightIncremental(
       buffer, 1, 3, TokenizerState(), @[], SourceLanguage.langRust
     )
@@ -222,11 +221,10 @@ suite "Highlight - Incremental Update":
     check incrHighlight.lineStates.version == 1
 
   test "updateHighlightIncremental safety margin":
-    let buffer =
-      @[
-        "line0".toRunes, "line1".toRunes, "line2".toRunes, "line3".toRunes,
-        "line4".toRunes,
-      ]
+    let buffer = @[
+      "line0".toRunes, "line1".toRunes, "line2".toRunes, "line3".toRunes,
+      "line4".toRunes,
+    ]
 
     # Initialize
     let (segments, lineStates) = initHighlightIncremental(
@@ -339,11 +337,10 @@ suite "Highlight - Edge Cases":
 
 suite "Highlight - Multi-line Constructs":
   test "Multi-line comment state preservation":
-    let buffer =
-      @[
-        "/* comment line 1".toRunes, "comment line 2".toRunes,
-        "comment line 3 */".toRunes, "fn main() {}".toRunes,
-      ]
+    let buffer = @[
+      "/* comment line 1".toRunes, "comment line 2".toRunes,
+      "comment line 3 */".toRunes, "fn main() {}".toRunes,
+    ]
 
     let (segments, lineStates) = initHighlightIncremental(
       buffer, 0, 3, TokenizerState(), @[], SourceLanguage.langRust

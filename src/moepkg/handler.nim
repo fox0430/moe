@@ -1158,6 +1158,62 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           # Return to the base mode we were in before entering Command overlay
           e.state.exitOverlay()
           e.setMode(e.state.mode) # Sync window mode
+      of hrPutConfigFile:
+        overlayHandled = true
+        # Write current configuration to file (:putConfigFile)
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
+
+        let configPath = getConfigPath()
+
+        # Backup existing config file if it exists
+        if fileExists(configPath):
+          let backupPath = configPath & ".bac"
+          try:
+            copyFile(configPath, backupPath)
+            logInfo("config", "Backed up existing config to: " & backupPath)
+          except CatchableError as ex:
+            e.state.setStatusMessage("Error: Failed to backup config: " & ex.msg)
+            logError("config", "Failed to backup config: " & ex.msg)
+            return true
+
+        let saveResult = saveConfig(e.config)
+        if saveResult.isOk:
+          e.state.setStatusMessage("Config written: " & configPath)
+          logInfo("config", "Config written: " & configPath)
+        else:
+          e.state.setStatusMessage("Failed to write config: " & saveResult.error)
+          logError("config", "Failed to write config: " & saveResult.error)
+      of hrLspFormat:
+        overlayHandled = true
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
+        discard e.requestLspFormat()
+      of hrLspRestart:
+        overlayHandled = true
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
+        discard e.restartLspServer()
+      of hrLspFold:
+        overlayHandled = true
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
+        asyncSpawn e.refreshLspFolds()
+      of hrLspExecuteCommand:
+        overlayHandled = true
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
+        asyncSpawn e.requestLspExecuteCommand(r.hrLspCommand, r.hrLspCommandArgs)
+      of hrLspCallHierarchyIncoming:
+        overlayHandled = true
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
+        discard e.requestLspCallHierarchyIncoming()
+      of hrLspCallHierarchyOutgoing:
+        overlayHandled = true
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
+        discard e.requestLspCallHierarchyOutgoing()
       of hrJumpToBuffer, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,
           hrFilerDeleteFile, hrFilerShowInfo, hrFilerQuit, hrLogViewerRefresh,
           hrHelpViewerQuit, hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences,
@@ -1169,11 +1225,9 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           hrBackupManagerRefresh, hrBackupManagerQuit, hrDiffViewerQuit,
           hrEnterDiffViewer, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow,
           hrPrevWindow, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
-          hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
-          hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
-          hrLspSelectionRange, hrLspDocumentLink, hrLspFormat, hrLspRestart, hrLspFold,
-          hrLspExecuteCommand, hrConfigQuit, hrConfigSaveConfig, hrPutConfigFile,
-          hrDebugViewerQuit, hrLogViewerQuit:
+          hrLspCodeLensExecute, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
+          hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit,
+          hrConfigSaveConfig, hrDebugViewerQuit, hrLogViewerQuit:
         discard # Not returned from command mode handler
 
       if not overlayHandled:

@@ -43,12 +43,9 @@ suite "BufferEntry - initBufferManagerEntries":
     check entries[0].active == true
 
   test "Create entries from single buffer":
-    let bufferInfos =
-      @[
-        BufferInfo(
-          filePath: some("/path/to/file.nim"), isModified: false, isActive: true
-        )
-      ]
+    let bufferInfos = @[
+      BufferInfo(filePath: some("/path/to/file.nim"), isModified: false, isActive: true)
+    ]
     let entries = initBufferManagerEntries(bufferInfos)
 
     check entries.len == 1
@@ -58,14 +55,11 @@ suite "BufferEntry - initBufferManagerEntries":
     check entries[0].active == true
 
   test "Create entries from multiple buffers":
-    let bufferInfos =
-      @[
-        BufferInfo(
-          filePath: some("/path/file1.nim"), isModified: false, isActive: false
-        ),
-        BufferInfo(filePath: some("/path/file2.nim"), isModified: true, isActive: true),
-        BufferInfo(filePath: none(string), isModified: false, isActive: false),
-      ]
+    let bufferInfos = @[
+      BufferInfo(filePath: some("/path/file1.nim"), isModified: false, isActive: false),
+      BufferInfo(filePath: some("/path/file2.nim"), isModified: true, isActive: true),
+      BufferInfo(filePath: none(string), isModified: false, isActive: false),
+    ]
     let entries = initBufferManagerEntries(bufferInfos)
 
     check entries.len == 3
@@ -97,11 +91,10 @@ suite "BufferEntry - initBufferManagerEntries":
 suite "BufferManagerState - updateEntries":
   test "Update entries from buffer info":
     let state = newBufferManagerState()
-    let bufferInfos =
-      @[
-        BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
-        BufferInfo(filePath: some("/file2.nim"), isModified: true, isActive: false),
-      ]
+    let bufferInfos = @[
+      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
+      BufferInfo(filePath: some("/file2.nim"), isModified: true, isActive: false),
+    ]
 
     state.updateEntries(bufferInfos)
 
@@ -125,12 +118,11 @@ suite "BufferManagerState - updateEntries":
     let state = newBufferManagerState()
     state.selectedIndex = 1
 
-    let bufferInfos =
-      @[
-        BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: false),
-        BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: true),
-        BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
-      ]
+    let bufferInfos = @[
+      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: false),
+      BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: true),
+      BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
+    ]
 
     state.updateEntries(bufferInfos)
 
@@ -140,11 +132,10 @@ suite "BufferManagerState - updateEntries":
 suite "BufferManagerState - Navigation":
   test "moveUp decreases selectedIndex":
     let state = newBufferManagerState()
-    let bufferInfos =
-      @[
-        BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: false),
-        BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: true),
-      ]
+    let bufferInfos = @[
+      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: false),
+      BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: true),
+    ]
     state.updateEntries(bufferInfos)
     state.selectedIndex = 1
 
@@ -165,12 +156,11 @@ suite "BufferManagerState - Navigation":
 
   test "moveUp adjusts topLine when scrolling":
     let state = newBufferManagerState()
-    let bufferInfos =
-      @[
-        BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: false),
-        BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: false),
-        BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: true),
-      ]
+    let bufferInfos = @[
+      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: false),
+      BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: false),
+      BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: true),
+    ]
     state.updateEntries(bufferInfos)
     state.selectedIndex = 1
     state.topLine = 1
@@ -182,11 +172,10 @@ suite "BufferManagerState - Navigation":
 
   test "moveDown increases selectedIndex":
     let state = newBufferManagerState()
-    let bufferInfos =
-      @[
-        BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
-        BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: false),
-      ]
+    let bufferInfos = @[
+      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
+      BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: false),
+    ]
     state.updateEntries(bufferInfos)
     state.selectedIndex = 0
 
@@ -207,12 +196,11 @@ suite "BufferManagerState - Navigation":
 
   test "moveDown multiple times":
     let state = newBufferManagerState()
-    let bufferInfos =
-      @[
-        BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
-        BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: false),
-        BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
-      ]
+    let bufferInfos = @[
+      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
+      BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: false),
+      BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
+    ]
     state.updateEntries(bufferInfos)
     state.selectedIndex = 0
 
@@ -228,11 +216,10 @@ suite "BufferManagerState - Navigation":
 suite "BufferManagerState - getSelectedEntry":
   test "Get selected entry returns correct entry":
     let state = newBufferManagerState()
-    let bufferInfos =
-      @[
-        BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: false),
-        BufferInfo(filePath: some("/file2.nim"), isModified: true, isActive: true),
-      ]
+    let bufferInfos = @[
+      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: false),
+      BufferInfo(filePath: some("/file2.nim"), isModified: true, isActive: true),
+    ]
     state.updateEntries(bufferInfos)
     state.selectedIndex = 1
 
@@ -320,12 +307,11 @@ suite "BufferManagerState - Integration":
     check state.entries.len == 0
 
     # Add some buffers
-    let bufferInfos =
-      @[
-        BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
-        BufferInfo(filePath: some("/file2.nim"), isModified: true, isActive: false),
-        BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
-      ]
+    let bufferInfos = @[
+      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
+      BufferInfo(filePath: some("/file2.nim"), isModified: true, isActive: false),
+      BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
+    ]
     state.updateEntries(bufferInfos)
 
     check state.entries.len == 3
@@ -361,21 +347,19 @@ suite "BufferManagerState - Integration":
     let state = newBufferManagerState()
 
     # Initial buffers
-    let bufferInfos1 =
-      @[
-        BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
-        BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: false),
-        BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
-      ]
+    let bufferInfos1 = @[
+      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
+      BufferInfo(filePath: some("/file2.nim"), isModified: false, isActive: false),
+      BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
+    ]
     state.updateEntries(bufferInfos1)
     state.selectedIndex = 2
 
     # Remove a buffer (simulate closing)
-    let bufferInfos2 =
-      @[
-        BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
-        BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
-      ]
+    let bufferInfos2 = @[
+      BufferInfo(filePath: some("/file1.nim"), isModified: false, isActive: true),
+      BufferInfo(filePath: some("/file3.nim"), isModified: false, isActive: false),
+    ]
     state.updateEntries(bufferInfos2)
 
     # selectedIndex should be clamped

@@ -445,15 +445,14 @@ proc startAsync*(client: LspClient): Future[void] {.async: (raises: []).} =
 
   # Send initialize request
   let rootUri = "file://" & client.workspaceRoot
-  let initParams =
-    %*{
-      "processId": getCurrentProcessId(),
-      "clientInfo": {"name": "moe", "version": moeSemVersionStr()},
-      "rootUri": rootUri,
-      "rootPath": client.workspaceRoot,
-      "capabilities": buildClientCapabilities(),
-      "trace": "off",
-    }
+  let initParams = %*{
+    "processId": getCurrentProcessId(),
+    "clientInfo": {"name": "moe", "version": moeSemVersionStr()},
+    "rootUri": rootUri,
+    "rootPath": client.workspaceRoot,
+    "capabilities": buildClientCapabilities(),
+    "trace": "off",
+  }
 
   try:
     let reqResult = await client.sendRequest("initialize", initParams)
@@ -538,11 +537,10 @@ proc didOpen*(
   if not client.isInitialized:
     return Result[void, string].err("Client not initialized")
 
-  let params =
-    %*{
-      "textDocument":
-        {"uri": uri, "languageId": languageId, "version": version, "text": text}
-    }
+  let params = %*{
+    "textDocument":
+      {"uri": uri, "languageId": languageId, "version": version, "text": text}
+  }
   return await client.sendNotification("textDocument/didOpen", params)
 
 proc didClose*(client: LspClient, uri: string): Future[Result[void, string]] {.async.} =
@@ -560,11 +558,9 @@ proc didChange*(
   if not client.isInitialized:
     return Result[void, string].err("Client not initialized")
 
-  let params =
-    %*{
-      "textDocument": {"uri": uri, "version": version},
-      "contentChanges": [{"text": text}],
-    }
+  let params = %*{
+    "textDocument": {"uri": uri, "version": version}, "contentChanges": [{"text": text}]
+  }
   return await client.sendNotification("textDocument/didChange", params)
 
 proc didSave*(
@@ -742,12 +738,11 @@ proc references*(
     includeDeclaration: bool = true,
 ): Future[Result[seq[Location], string]] {.async.} =
   ## Request find references
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "position": {"line": line, "character": character},
-      "context": {"includeDeclaration": includeDeclaration},
-    }
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "position": {"line": line, "character": character},
+    "context": {"includeDeclaration": includeDeclaration},
+  }
 
   let respResult = await client.sendAndWait("textDocument/references", params)
   if respResult.isErr:
@@ -825,11 +820,10 @@ proc formatting*(
     client: LspClient, uri: string, tabSize: int = 2, insertSpaces: bool = true
 ): Future[Result[seq[TextEdit], string]] {.async.} =
   ## Request document formatting
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
-    }
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
+  }
 
   let respResult = await client.sendAndWait("textDocument/formatting", params)
   if respResult.isErr:
@@ -851,15 +845,14 @@ proc rangeFormatting*(
     insertSpaces: bool = true,
 ): Future[Result[seq[TextEdit], string]] {.async.} =
   ## Request range formatting
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "range": {
-        "start": {"line": startLine, "character": startChar},
-        "end": {"line": endLine, "character": endChar},
-      },
-      "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
-    }
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "range": {
+      "start": {"line": startLine, "character": startChar},
+      "end": {"line": endLine, "character": endChar},
+    },
+    "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
+  }
 
   let respResult = await client.sendAndWait("textDocument/rangeFormatting", params)
   if respResult.isErr:
@@ -890,14 +883,13 @@ proc inlayHints*(
     client: LspClient, uri: string, startLine, startChar, endLine, endChar: int
 ): Future[Result[seq[InlayHint], string]] {.async.} =
   ## Request inlay hints for a range
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "range": {
-        "start": {"line": startLine, "character": startChar},
-        "end": {"line": endLine, "character": endChar},
-      },
-    }
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "range": {
+      "start": {"line": startLine, "character": startChar},
+      "end": {"line": endLine, "character": endChar},
+    },
+  }
 
   let respResult = await client.sendAndWait("textDocument/inlayHint", params)
   if respResult.isErr:
@@ -933,14 +925,13 @@ proc semanticTokensRange*(
     client: LspClient, uri: string, startLine, startChar, endLine, endChar: int
 ): Future[Result[Option[SemanticTokens], string]] {.async.} =
   ## Request semantic tokens for a range
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "range": {
-        "start": {"line": startLine, "character": startChar},
-        "end": {"line": endLine, "character": endChar},
-      },
-    }
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "range": {
+      "start": {"line": startLine, "character": startChar},
+      "end": {"line": endLine, "character": endChar},
+    },
+  }
 
   let respResult = await client.sendAndWait("textDocument/semanticTokens/range", params)
   if respResult.isErr:
@@ -997,21 +988,20 @@ proc inlineValues*(
     stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar: int,
 ): Future[Result[seq[InlineValue], string]] {.async.} =
   ## Request inline values for debugging
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "viewPort": {
-        "start": {"line": startLine, "character": startChar},
-        "end": {"line": endLine, "character": endChar},
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "viewPort": {
+      "start": {"line": startLine, "character": startChar},
+      "end": {"line": endLine, "character": endChar},
+    },
+    "context": {
+      "frameId": frameId,
+      "stoppedLocation": {
+        "start": {"line": stoppedLine, "character": stoppedStartChar},
+        "end": {"line": stoppedEndLine, "character": stoppedEndChar},
       },
-      "context": {
-        "frameId": frameId,
-        "stoppedLocation": {
-          "start": {"line": stoppedLine, "character": stoppedStartChar},
-          "end": {"line": stoppedEndLine, "character": stoppedEndChar},
-        },
-      },
-    }
+    },
+  }
 
   let respResult = await client.sendAndWait("textDocument/inlineValue", params)
   if respResult.isErr:

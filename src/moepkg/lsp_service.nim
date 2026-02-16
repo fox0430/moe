@@ -639,12 +639,11 @@ proc startReferencesRequest*(
     return err("Server not ready")
 
   let uri = pathToUri(path)
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "position": {"line": line, "character": character},
-      "context": {"includeDeclaration": includeDeclaration},
-    }
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "position": {"line": line, "character": character},
+    "context": {"includeDeclaration": includeDeclaration},
+  }
 
   let requestId = svc.startTrackedRequest(worker, "textDocument/references", params)
   return ok(requestId)
@@ -678,11 +677,9 @@ proc startSelectionRangeRequest*(
     return err("Server not ready")
 
   let uri = pathToUri(path)
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "positions": [{"line": line, "character": character}],
-    }
+  let params = %*{
+    "textDocument": {"uri": uri}, "positions": [{"line": line, "character": character}]
+  }
 
   let requestId = svc.startTrackedRequest(worker, "textDocument/selectionRange", params)
   return ok(requestId)
@@ -741,14 +738,13 @@ proc startSemanticTokensRangeRequest*(
     return err("Server not ready")
 
   let uri = pathToUri(path)
-  let params =
-    %*{
-      "textDocument": {"uri": uri},
-      "range": {
-        "start": {"line": startLine, "character": startChar},
-        "end": {"line": endLine, "character": endChar},
-      },
-    }
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "range": {
+      "start": {"line": startLine, "character": startChar},
+      "end": {"line": endLine, "character": endChar},
+    },
+  }
 
   let requestId =
     svc.startTrackedRequest(worker, "textDocument/semanticTokens/range", params)
@@ -1137,10 +1133,9 @@ proc requestCompletion*(
       return err("Server not ready")
 
     let uri = pathToUri(path)
-    let params =
-      %*{
-        "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
-      }
+    let params = %*{
+      "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
+    }
 
     let requestId = svc.startTrackedRequest(worker, "textDocument/completion", params)
     let respResult = await svc.waitForResponse(requestId)
@@ -1164,10 +1159,9 @@ proc requestHover*(
       return err("Server not ready")
 
     let uri = pathToUri(path)
-    let params =
-      %*{
-        "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
-      }
+    let params = %*{
+      "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
+    }
 
     let requestId = svc.startTrackedRequest(worker, "textDocument/hover", params)
     let respResult = await svc.waitForResponse(requestId)
@@ -1195,11 +1189,10 @@ proc requestFormatting*(
       return err("Server not ready")
 
     let uri = pathToUri(path)
-    let params =
-      %*{
-        "textDocument": {"uri": uri},
-        "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
-      }
+    let params = %*{
+      "textDocument": {"uri": uri},
+      "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
+    }
 
     let requestId = svc.startTrackedRequest(worker, "textDocument/formatting", params)
     let respResult = await svc.waitForResponse(requestId)
@@ -1229,12 +1222,11 @@ proc requestRename*(
       return err("Server not ready")
 
     let uri = pathToUri(path)
-    let params =
-      %*{
-        "textDocument": {"uri": uri},
-        "position": {"line": line, "character": character},
-        "newName": newName,
-      }
+    let params = %*{
+      "textDocument": {"uri": uri},
+      "position": {"line": line, "character": character},
+      "newName": newName,
+    }
 
     let requestId = svc.startTrackedRequest(worker, "textDocument/rename", params)
     let respResult = await svc.waitForResponse(requestId)
@@ -1262,10 +1254,9 @@ proc requestDefinition*(
       return err("Server not ready")
 
     let uri = pathToUri(path)
-    let params =
-      %*{
-        "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
-      }
+    let params = %*{
+      "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
+    }
 
     let requestId = svc.startTrackedRequest(worker, "textDocument/definition", params)
     let respResult = await svc.waitForResponse(requestId)
@@ -1289,12 +1280,11 @@ proc requestReferences*(
       return err("Server not ready")
 
     let uri = pathToUri(path)
-    let params =
-      %*{
-        "textDocument": {"uri": uri},
-        "position": {"line": line, "character": character},
-        "context": {"includeDeclaration": includeDeclaration},
-      }
+    let params = %*{
+      "textDocument": {"uri": uri},
+      "position": {"line": line, "character": character},
+      "context": {"includeDeclaration": includeDeclaration},
+    }
 
     let requestId = svc.startTrackedRequest(worker, "textDocument/references", params)
     let respResult = await svc.waitForResponse(requestId)

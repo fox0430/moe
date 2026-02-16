@@ -1532,6 +1532,75 @@ proc toTomlStringArray(val: seq[string]): string =
     result.add toTomlString(s)
   result.add "]"
 
+proc toTomlColorKey(index: EditorColorPairIndex): string =
+  ## Convert EditorColorPairIndex to TOML key name
+  case index
+  of EditorColorPairIndex.lspString:
+    "string"
+  else:
+    $index
+
+proc themeColorToTomlValue(color: ThemeColor): string =
+  ## Convert ThemeColor to TOML value string
+  if color.rgb.isTermDefaultColor:
+    return "\"termDefault\""
+  let hexOpt = color.rgb.toHex()
+  if hexOpt.isSome:
+    return "\"" & hexOpt.get & "\""
+  return "\"termDefault\""
+
+proc saveThemeToToml*(colors: ThemeColors, path: string): Result[void, string] =
+  ## Save theme colors to a TOML file
+  var lines: seq[string] = @[]
+
+  lines.add "# Theme color configuration"
+  lines.add "# Color format: \"#RRGGBB\" (hex) or \"termDefault\" (terminal default color)"
+  lines.add ""
+  lines.add "[Colors]"
+  lines.add ""
+
+  # Write default foreground/background
+  lines.add "foreground = " &
+    themeColorToTomlValue(colors[EditorColorPairIndex.default].foreground)
+  lines.add "background = " &
+    themeColorToTomlValue(colors[EditorColorPairIndex.default].background)
+  lines.add ""
+
+  # Write all other color pairs
+  for index in EditorColorPairIndex:
+    if index == EditorColorPairIndex.default:
+      continue
+
+    let key = toTomlColorKey(index)
+    lines.add key & " = " & themeColorToTomlValue(colors[index].foreground)
+    lines.add key & "Bg = " & themeColorToTomlValue(colors[index].background)
+
+  lines.add ""
+
+  # Ensure directory exists
+  let expandedPath = path.expandTilde
+  let dir = parentDir(expandedPath)
+  if dir.len > 0 and not dirExists(dir):
+    try:
+      createDir(dir)
+    except CatchableError as e:
+      return Result[void, string].err("Failed to create directory: " & e.msg)
+
+  # Backup existing file
+  if fileExists(expandedPath):
+    let backupPath = expandedPath & ".bac"
+    try:
+      copyFile(expandedPath, backupPath)
+    except CatchableError as e:
+      return Result[void, string].err("Failed to backup theme file: " & e.msg)
+
+  # Write to file
+  try:
+    writeFile(expandedPath, lines.join("\n"))
+    return Result[void, string].ok()
+  except CatchableError as e:
+    return Result[void, string].err("Failed to write theme file: " & e.msg)
+
 proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string] =
   ## Save configuration to a TOML file
   var lines: seq[string] = @[]
@@ -1919,9 +1988,16 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   # Write to file
   try:
     writeFile(path, lines.join("\n"))
-    return Result[void, string].ok()
   except CatchableError as e:
     return Result[void, string].err("Failed to write config file: " & e.msg)
+
+  # Save theme colors to the theme file if using config theme with a path
+  if config.theme.kind == tkConfig and config.theme.path.len > 0:
+    let themeResult = saveThemeToToml(themeColors, config.theme.path)
+    if themeResult.isErr:
+      return Result[void, string].err(themeResult.error)
+
+  return Result[void, string].ok()
 
 proc saveConfig*(config: EditorConfig): Result[void, string] =
   ## Save configuration to the default location

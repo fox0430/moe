@@ -44,12 +44,11 @@ proc makeCallHierarchyItem(
 
 proc makeTestState(): CallHierarchyViewerState =
   ## Create a test state with multiple items
-  let items =
-    @[
-      makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
-      makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
-      makeCallHierarchyItem("baz", "file:///test.nim", 20, 0),
-    ]
+  let items = @[
+    makeCallHierarchyItem("foo", "file:///test.nim", 0, 0),
+    makeCallHierarchyItem("bar", "file:///test.nim", 10, 0),
+    makeCallHierarchyItem("baz", "file:///test.nim", 20, 0),
+  ]
   newCallHierarchyViewerState(items, chvkPrepare)
 
 proc makeEmptyTestState(): CallHierarchyViewerState =

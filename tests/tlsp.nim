@@ -128,13 +128,12 @@ suite "LSP Protocol Types":
     check r.`end`.character == 10
 
   test "parseDiagnostic":
-    let json =
-      %*{
-        "range":
-          {"start": {"line": 5, "character": 0}, "end": {"line": 5, "character": 10}},
-        "severity": 1,
-        "message": "Test error",
-      }
+    let json = %*{
+      "range":
+        {"start": {"line": 5, "character": 0}, "end": {"line": 5, "character": 10}},
+      "severity": 1,
+      "message": "Test error",
+    }
     let diag = parseDiagnostic(json)
     check diag.range.start.line == 5
     check diag.severity.isSome
@@ -142,13 +141,12 @@ suite "LSP Protocol Types":
     check diag.message == "Test error"
 
   test "parseCompletionItem":
-    let json =
-      %*{
-        "label": "testFunc",
-        "kind": 3,
-        "detail": "func testFunc()",
-        "insertText": "testFunc()",
-      }
+    let json = %*{
+      "label": "testFunc",
+      "kind": 3,
+      "detail": "func testFunc()",
+      "insertText": "testFunc()",
+    }
     let item = parseCompletionItem(json)
     check item.label == "testFunc"
     check item.kind.isSome
@@ -267,17 +265,16 @@ suite "SignatureHelp":
     check sh.signatures.len == 0
 
   test "parseSignatureHelp single signature":
-    let node =
-      %*{
-        "signatures": [
-          {
-            "label": "func(a: int, b: string)",
-            "parameters": [{"label": "a: int"}, {"label": "b: string"}],
-          }
-        ],
-        "activeSignature": 0,
-        "activeParameter": 1,
-      }
+    let node = %*{
+      "signatures": [
+        {
+          "label": "func(a: int, b: string)",
+          "parameters": [{"label": "a: int"}, {"label": "b: string"}],
+        }
+      ],
+      "activeSignature": 0,
+      "activeParameter": 1,
+    }
     let sh = parseSignatureHelp(node)
     check sh.signatures.len == 1
     check sh.signatures[0].label == "func(a: int, b: string)"
@@ -288,15 +285,14 @@ suite "SignatureHelp":
 
   test "getSignatureHelpText":
     let sh = SignatureHelp(
-      signatures:
-        @[
-          SignatureInformation(
-            label: "myFunc(x: int, y: float): string",
-            documentation: none(JsonNode),
-            parameters: none(seq[ParameterInformation]),
-            activeParameter: none(int),
-          )
-        ],
+      signatures: @[
+        SignatureInformation(
+          label: "myFunc(x: int, y: float): string",
+          documentation: none(JsonNode),
+          parameters: none(seq[ParameterInformation]),
+          activeParameter: none(int),
+        )
+      ],
       activeSignature: some(0),
       activeParameter: none(int),
     )
@@ -304,15 +300,14 @@ suite "SignatureHelp":
 
   test "getSignatureHelpText with documentation":
     let sh = SignatureHelp(
-      signatures:
-        @[
-          SignatureInformation(
-            label: "foo()",
-            documentation: some(%"This is foo function"),
-            parameters: none(seq[ParameterInformation]),
-            activeParameter: none(int),
-          )
-        ],
+      signatures: @[
+        SignatureInformation(
+          label: "foo()",
+          documentation: some(%"This is foo function"),
+          parameters: none(seq[ParameterInformation]),
+          activeParameter: none(int),
+        )
+      ],
       activeSignature: some(0),
       activeParameter: none(int),
     )
@@ -322,15 +317,14 @@ suite "SignatureHelp":
 
   test "getActiveParameterIndex":
     let sh = SignatureHelp(
-      signatures:
-        @[
-          SignatureInformation(
-            label: "f(a, b)",
-            documentation: none(JsonNode),
-            parameters: none(seq[ParameterInformation]),
-            activeParameter: none(int),
-          )
-        ],
+      signatures: @[
+        SignatureInformation(
+          label: "f(a, b)",
+          documentation: none(JsonNode),
+          parameters: none(seq[ParameterInformation]),
+          activeParameter: none(int),
+        )
+      ],
       activeSignature: some(0),
       activeParameter: some(1),
     )
@@ -338,22 +332,21 @@ suite "SignatureHelp":
 
   test "getParameterInfo":
     let sh = SignatureHelp(
-      signatures:
-        @[
-          SignatureInformation(
-            label: "func(first: int, second: string)",
-            documentation: none(JsonNode),
-            parameters: some(
-              @[
-                ParameterInformation(label: "first: int", documentation: none(JsonNode)),
-                ParameterInformation(
-                  label: "second: string", documentation: none(JsonNode)
-                ),
-              ]
-            ),
-            activeParameter: none(int),
-          )
-        ],
+      signatures: @[
+        SignatureInformation(
+          label: "func(first: int, second: string)",
+          documentation: none(JsonNode),
+          parameters: some(
+            @[
+              ParameterInformation(label: "first: int", documentation: none(JsonNode)),
+              ParameterInformation(
+                label: "second: string", documentation: none(JsonNode)
+              ),
+            ]
+          ),
+          activeParameter: none(int),
+        )
+      ],
       activeSignature: some(0),
       activeParameter: some(0),
     )

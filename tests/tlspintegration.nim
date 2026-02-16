@@ -428,11 +428,10 @@ suite "TextEdit Application":
 
   test "applyTextEdits - multiple edits same line":
     let buffer = newTextBuffer("abc def ghi")
-    let edits =
-      @[
-        TextEdit(range: newRange(0, 0, 0, 3), newText: "AAA"), # Replace "abc"
-        TextEdit(range: newRange(0, 8, 0, 11), newText: "CCC"), # Replace "ghi"
-      ]
+    let edits = @[
+      TextEdit(range: newRange(0, 0, 0, 3), newText: "AAA"), # Replace "abc"
+      TextEdit(range: newRange(0, 8, 0, 11), newText: "CCC"), # Replace "ghi"
+    ]
     let result = applyTextEdits(buffer, edits)
     check result.isOk
     check buffer.getTextString() == "AAA def CCC"
@@ -478,17 +477,16 @@ suite "Folding Range Application":
 
   test "applyLspFoldingRanges - single fold":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4")
-    let ranges =
-      @[
-        FoldingRange(
-          startLine: 1,
-          endLine: 2,
-          startCharacter: none(int),
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: none(string),
-        )
-      ]
+    let ranges = @[
+      FoldingRange(
+        startLine: 1,
+        endLine: 2,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
     let count = applyLspFoldingRanges(buffer, ranges)
     check count == 1
     check buffer.foldState.folds.len == 1
@@ -498,124 +496,118 @@ suite "Folding Range Application":
 
   test "applyLspFoldingRanges - multiple non-overlapping folds":
     let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
-    let ranges =
-      @[
-        FoldingRange(
-          startLine: 1,
-          endLine: 2,
-          startCharacter: none(int),
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: none(string),
-        ),
-        FoldingRange(
-          startLine: 5,
-          endLine: 7,
-          startCharacter: none(int),
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: none(string),
-        ),
-      ]
+    let ranges = @[
+      FoldingRange(
+        startLine: 1,
+        endLine: 2,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      ),
+      FoldingRange(
+        startLine: 5,
+        endLine: 7,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      ),
+    ]
     let count = applyLspFoldingRanges(buffer, ranges)
     check count == 2
     check buffer.foldState.folds.len == 2
 
   test "applyLspFoldingRanges - start collapsed":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4")
-    let ranges =
-      @[
-        FoldingRange(
-          startLine: 1,
-          endLine: 2,
-          startCharacter: none(int),
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: some("..."),
-        )
-      ]
+    let ranges = @[
+      FoldingRange(
+        startLine: 1,
+        endLine: 2,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: some("..."),
+      )
+    ]
     let count = applyLspFoldingRanges(buffer, ranges, startCollapsed = true)
     check count == 1
     check buffer.foldState.folds[0].collapsed
 
   test "applyLspFoldingRanges - with collapsedText":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4")
-    let ranges =
-      @[
-        FoldingRange(
-          startLine: 1,
-          endLine: 2,
-          startCharacter: none(int),
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: some("{ ... }"),
-        )
-      ]
+    let ranges = @[
+      FoldingRange(
+        startLine: 1,
+        endLine: 2,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: some("{ ... }"),
+      )
+    ]
     let count = applyLspFoldingRanges(buffer, ranges)
     check count == 1
     check buffer.foldState.folds[0].collapsedText == some("{ ... }")
 
   test "applyLspFoldingRanges - invalid ranges skipped":
     let buffer = newTextBuffer("0\n1\n2")
-    let ranges =
-      @[
-        FoldingRange(
-          startLine: 5, # Out of bounds
-          endLine: 10,
-          startCharacter: none(int),
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: none(string),
-        ),
-        FoldingRange(
-          startLine: 2, # End before start
-          endLine: 1,
-          startCharacter: none(int),
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: none(string),
-        ),
-        FoldingRange(
-          startLine: 0, # Valid
-          endLine: 1,
-          startCharacter: none(int),
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: none(string),
-        ),
-      ]
+    let ranges = @[
+      FoldingRange(
+        startLine: 5, # Out of bounds
+        endLine: 10,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      ),
+      FoldingRange(
+        startLine: 2, # End before start
+        endLine: 1,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      ),
+      FoldingRange(
+        startLine: 0, # Valid
+        endLine: 1,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      ),
+    ]
     let count = applyLspFoldingRanges(buffer, ranges)
     check count == 1
 
   test "applyLspFoldingRanges - clearExisting false":
     let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7")
     # Add initial fold
-    let ranges1 =
-      @[
-        FoldingRange(
-          startLine: 0,
-          endLine: 1,
-          startCharacter: none(int),
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: none(string),
-        )
-      ]
+    let ranges1 = @[
+      FoldingRange(
+        startLine: 0,
+        endLine: 1,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
     discard applyLspFoldingRanges(buffer, ranges1)
     check buffer.foldState.folds.len == 1
 
     # Add more folds without clearing
-    let ranges2 =
-      @[
-        FoldingRange(
-          startLine: 4,
-          endLine: 6,
-          startCharacter: none(int),
-          endCharacter: none(int),
-          kind: none(FoldingRangeKind),
-          collapsedText: none(string),
-        )
-      ]
+    let ranges2 = @[
+      FoldingRange(
+        startLine: 4,
+        endLine: 6,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
     let count = applyLspFoldingRanges(buffer, ranges2, clearExisting = false)
     check count == 1
     check buffer.foldState.folds.len == 2
@@ -630,20 +622,19 @@ suite "Diagnostics Application":
 
   test "applyDiagnosticsToBuffer - error diagnostic":
     let buffer = newTextBuffer("line1\nline2\nline3")
-    let diagnostics =
-      @[
-        Diagnostic(
-          range: newRange(1, 0, 1, 5),
-          severity: some(dsError),
-          code: none(JsonNode),
-          codeDescription: none(JsonNode),
-          source: none(string),
-          message: "Error on line 2",
-          tags: none(seq[DiagnosticTag]),
-          relatedInformation: none(seq[DiagnosticRelatedInformation]),
-          data: none(JsonNode),
-        )
-      ]
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(1, 0, 1, 5),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "Error on line 2",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      )
+    ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
     check buffer.getLineMarker(0).isNone
     check buffer.getLineMarker(1) == some(SidebarItemKind.SyntaxError)
@@ -651,50 +642,48 @@ suite "Diagnostics Application":
 
   test "applyDiagnosticsToBuffer - warning diagnostic":
     let buffer = newTextBuffer("line1\nline2\nline3")
-    let diagnostics =
-      @[
-        Diagnostic(
-          range: newRange(0, 0, 0, 5),
-          severity: some(dsWarning),
-          code: none(JsonNode),
-          codeDescription: none(JsonNode),
-          source: none(string),
-          message: "Warning",
-          tags: none(seq[DiagnosticTag]),
-          relatedInformation: none(seq[DiagnosticRelatedInformation]),
-          data: none(JsonNode),
-        )
-      ]
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(0, 0, 0, 5),
+        severity: some(dsWarning),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "Warning",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      )
+    ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
     check buffer.getLineMarker(0) == some(SidebarItemKind.SyntaxWarning)
 
   test "applyDiagnosticsToBuffer - error takes precedence over warning":
     let buffer = newTextBuffer("line1\nline2\nline3")
-    let diagnostics =
-      @[
-        Diagnostic(
-          range: newRange(1, 0, 1, 5),
-          severity: some(dsWarning),
-          code: none(JsonNode),
-          codeDescription: none(JsonNode),
-          source: none(string),
-          message: "Warning first",
-          tags: none(seq[DiagnosticTag]),
-          relatedInformation: none(seq[DiagnosticRelatedInformation]),
-          data: none(JsonNode),
-        ),
-        Diagnostic(
-          range: newRange(1, 0, 1, 5),
-          severity: some(dsError),
-          code: none(JsonNode),
-          codeDescription: none(JsonNode),
-          source: none(string),
-          message: "Error second",
-          tags: none(seq[DiagnosticTag]),
-          relatedInformation: none(seq[DiagnosticRelatedInformation]),
-          data: none(JsonNode),
-        ),
-      ]
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(1, 0, 1, 5),
+        severity: some(dsWarning),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "Warning first",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+      Diagnostic(
+        range: newRange(1, 0, 1, 5),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "Error second",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+    ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
     check buffer.getLineMarker(1) == some(SidebarItemKind.SyntaxError)
 
@@ -710,20 +699,19 @@ suite "Diagnostics Application":
 
   test "applyDiagnosticsToBuffer - out of range line ignored":
     let buffer = newTextBuffer("line1\nline2")
-    let diagnostics =
-      @[
-        Diagnostic(
-          range: newRange(100, 0, 100, 5), # Out of bounds
-          severity: some(dsError),
-          code: none(JsonNode),
-          codeDescription: none(JsonNode),
-          source: none(string),
-          message: "Error",
-          tags: none(seq[DiagnosticTag]),
-          relatedInformation: none(seq[DiagnosticRelatedInformation]),
-          data: none(JsonNode),
-        )
-      ]
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(100, 0, 100, 5), # Out of bounds
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "Error",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      )
+    ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
     # Should not crash, no markers added
     for i in 0 ..< buffer.len:
@@ -809,11 +797,9 @@ suite "WorkspaceEdit Application":
     check buffers[0].getTextString() == "from_docChanges"
 
   test "applyWorkspaceEdit - multiple buffers":
-    var buffers: seq[TextBuffer] =
-      @[
-        newTextBuffer("aaa", some("/tmp/a.txt")),
-        newTextBuffer("bbb", some("/tmp/b.txt")),
-      ]
+    var buffers: seq[TextBuffer] = @[
+      newTextBuffer("aaa", some("/tmp/a.txt")), newTextBuffer("bbb", some("/tmp/b.txt"))
+    ]
     var changes = initTable[string, seq[TextEdit]]()
     changes["file:///tmp/a.txt"] =
       @[TextEdit(range: newRange(0, 0, 0, 3), newText: "AAA")]

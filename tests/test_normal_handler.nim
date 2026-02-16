@@ -962,11 +962,10 @@ suite "NormalModeHandler - Jump List":
     let viewport = createTestViewport()
 
     # Set up jump list with positions in the same buffer
-    state.jumpList =
-      @[
-        JumpPosition(bufferIndex: 0, line: 0, column: 0),
-        JumpPosition(bufferIndex: 0, line: 2, column: 0),
-      ]
+    state.jumpList = @[
+      JumpPosition(bufferIndex: 0, line: 0, column: 0),
+      JumpPosition(bufferIndex: 0, line: 2, column: 0),
+    ]
     state.jumpListIndex = -1
     state.currentBufferIndex = 0
     state.cursor = BufferPosition(line: 1, column: 0)
@@ -1359,11 +1358,10 @@ suite "NormalModeHandler - Jump List Edge Cases":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.jumpList =
-      @[
-        JumpPosition(bufferIndex: 0, line: 0, column: 0),
-        JumpPosition(bufferIndex: 0, line: 1, column: 0),
-      ]
+    state.jumpList = @[
+      JumpPosition(bufferIndex: 0, line: 0, column: 0),
+      JumpPosition(bufferIndex: 0, line: 1, column: 0),
+    ]
     state.jumpListIndex = 1 # Not first jump
     state.currentBufferIndex = 0
     state.cursor = BufferPosition(line: 2, column: 0)
@@ -1382,11 +1380,10 @@ suite "NormalModeHandler - Jump List Edge Cases":
     let state = createTestState()
     let viewport = createTestViewport()
 
-    state.jumpList =
-      @[
-        JumpPosition(bufferIndex: 0, line: 0, column: 0),
-        JumpPosition(bufferIndex: 1, line: 5, column: 3),
-      ]
+    state.jumpList = @[
+      JumpPosition(bufferIndex: 0, line: 0, column: 0),
+      JumpPosition(bufferIndex: 1, line: 5, column: 3),
+    ]
     state.jumpListIndex = 0
     state.currentBufferIndex = 0
 

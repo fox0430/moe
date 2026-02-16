@@ -96,26 +96,23 @@ suite "vscode_theme - colorFromNode":
 
 suite "vscode_theme - isCurrentVsCodeThemePackage":
   test "returns true when theme label matches":
-    let json =
-      %*{
-        "contributes": {
-          "themes": [
-            {"label": "Dark+ (default dark)", "path": "./themes/dark_plus.json"},
-            {"label": "Light+ (default light)", "path": "./themes/light_plus.json"},
-          ]
-        }
+    let json = %*{
+      "contributes": {
+        "themes": [
+          {"label": "Dark+ (default dark)", "path": "./themes/dark_plus.json"},
+          {"label": "Light+ (default light)", "path": "./themes/light_plus.json"},
+        ]
       }
+    }
     check isCurrentVsCodeThemePackage(json, "Dark+ (default dark)")
     check isCurrentVsCodeThemePackage(json, "Light+ (default light)")
 
   test "returns false when theme label does not match":
-    let json =
-      %*{
-        "contributes": {
-          "themes":
-            [{"label": "Dark+ (default dark)", "path": "./themes/dark_plus.json"}]
-        }
+    let json = %*{
+      "contributes": {
+        "themes": [{"label": "Dark+ (default dark)", "path": "./themes/dark_plus.json"}]
       }
+    }
     check not isCurrentVsCodeThemePackage(json, "Monokai")
 
   test "returns false when contributes is missing":
@@ -131,33 +128,31 @@ suite "vscode_theme - isCurrentVsCodeThemePackage":
     check not isCurrentVsCodeThemePackage(json, "Dark+")
 
   test "returns true when theme id matches":
-    let json =
-      %*{
-        "contributes": {
-          "themes": [
-            {
-              "label": "%darkModernThemeLabel%",
-              "id": "Default Dark Modern",
-              "path": "./themes/dark_modern.json",
-            }
-          ]
-        }
+    let json = %*{
+      "contributes": {
+        "themes": [
+          {
+            "label": "%darkModernThemeLabel%",
+            "id": "Default Dark Modern",
+            "path": "./themes/dark_modern.json",
+          }
+        ]
       }
+    }
     check isCurrentVsCodeThemePackage(json, "Default Dark Modern")
 
   test "returns true when theme id matches but label is NLS placeholder":
-    let json =
-      %*{
-        "contributes": {
-          "themes": [
-            {
-              "label": "%darkPlusColorThemeLabel%",
-              "id": "Default Dark+",
-              "path": "./themes/dark_plus.json",
-            }
-          ]
-        }
+    let json = %*{
+      "contributes": {
+        "themes": [
+          {
+            "label": "%darkPlusColorThemeLabel%",
+            "id": "Default Dark+",
+            "path": "./themes/dark_plus.json",
+          }
+        ]
       }
+    }
     check isCurrentVsCodeThemePackage(json, "Default Dark+")
 
   test "returns false when theme has no label or id":
@@ -166,11 +161,10 @@ suite "vscode_theme - isCurrentVsCodeThemePackage":
 
 suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
   test "basic theme with editor foreground and background":
-    let themeJson =
-      %*{
-        "colors": {"editor.foreground": "#d4d4d4", "editor.background": "#1e1e1e"},
-        "tokenColors": [],
-      }
+    let themeJson = %*{
+      "colors": {"editor.foreground": "#d4d4d4", "editor.background": "#1e1e1e"},
+      "tokenColors": [],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     # Check foreground is applied to default
@@ -184,11 +178,10 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.default].background.rgb.blue == 0x1e
 
   test "keyword token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors": [{"scope": "keyword", "settings": {"foreground": "#569cd6"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors": [{"scope": "keyword", "settings": {"foreground": "#569cd6"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.keyword].foreground.rgb.red == 0x56
@@ -196,11 +189,10 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.keyword].foreground.rgb.blue == 0xd6
 
   test "string token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors": [{"scope": "string", "settings": {"foreground": "#ce9178"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors": [{"scope": "string", "settings": {"foreground": "#ce9178"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.stringLit].foreground.rgb.red == 0xce
@@ -211,11 +203,10 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
       result[EditorColorPairIndex.stringLit].foreground.rgb
 
   test "comment token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors": [{"scope": "comment", "settings": {"foreground": "#6a9955"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors": [{"scope": "comment", "settings": {"foreground": "#6a9955"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.comment].foreground.rgb.red == 0x6a
@@ -226,12 +217,11 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
       result[EditorColorPairIndex.comment].foreground.rgb
 
   test "constant.numeric token color affects all number types":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors":
-          [{"scope": "constant.numeric", "settings": {"foreground": "#b5cea8"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors":
+        [{"scope": "constant.numeric", "settings": {"foreground": "#b5cea8"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     let expectedRgb = Rgb(red: 0xb5, green: 0xce, blue: 0xa8)
@@ -242,12 +232,11 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.octNumber].foreground.rgb == expectedRgb
 
   test "entity.name.function token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors":
-          [{"scope": "entity.name.function", "settings": {"foreground": "#dcdcaa"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors":
+        [{"scope": "entity.name.function", "settings": {"foreground": "#dcdcaa"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     let expectedRgb = Rgb(red: 0xdc, green: 0xdc, blue: 0xaa)
@@ -256,12 +245,11 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.`method`].foreground.rgb == expectedRgb
 
   test "entity.name.type token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors":
-          [{"scope": "entity.name.type", "settings": {"foreground": "#4ec9b0"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors":
+        [{"scope": "entity.name.type", "settings": {"foreground": "#4ec9b0"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     let expectedRgb = Rgb(red: 0x4e, green: 0xc9, blue: 0xb0)
@@ -271,11 +259,10 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.builtinType].foreground.rgb == expectedRgb
 
   test "variable token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors": [{"scope": "variable", "settings": {"foreground": "#9cdcfe"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors": [{"scope": "variable", "settings": {"foreground": "#9cdcfe"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     let expectedRgb = Rgb(red: 0x9c, green: 0xdc, blue: 0xfe)
@@ -283,14 +270,13 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.variable].foreground.rgb == expectedRgb
 
   test "line number colors":
-    let themeJson =
-      %*{
-        "colors": {
-          "editorLineNumber.foreground": "#858585",
-          "editorLineNumber.activeForeground": "#c6c6c6",
-        },
-        "tokenColors": [],
-      }
+    let themeJson = %*{
+      "colors": {
+        "editorLineNumber.foreground": "#858585",
+        "editorLineNumber.activeForeground": "#c6c6c6",
+      },
+      "tokenColors": [],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.lineNum].foreground.rgb.red == 0x85
@@ -302,11 +288,10 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.currentLineNum].foreground.rgb.blue == 0xc6
 
   test "status bar colors":
-    let themeJson =
-      %*{
-        "colors": {"statusBar.foreground": "#ffffff", "statusBar.background": "#007acc"},
-        "tokenColors": [],
-      }
+    let themeJson = %*{
+      "colors": {"statusBar.foreground": "#ffffff", "statusBar.background": "#007acc"},
+      "tokenColors": [],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     # Check status bar foreground
@@ -319,16 +304,15 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.statusLineNormalMode].background.rgb.blue == 0xcc
 
   test "tab colors":
-    let themeJson =
-      %*{
-        "colors": {
-          "tab.inactiveForeground": "#888888",
-          "tab.inactiveBackground": "#2d2d2d",
-          "tab.activeForeground": "#ffffff",
-          "tab.activeBackground": "#1e1e1e",
-        },
-        "tokenColors": [],
-      }
+    let themeJson = %*{
+      "colors": {
+        "tab.inactiveForeground": "#888888",
+        "tab.inactiveBackground": "#2d2d2d",
+        "tab.activeForeground": "#ffffff",
+        "tab.activeBackground": "#1e1e1e",
+      },
+      "tokenColors": [],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.tab].foreground.rgb.red == 0x88
@@ -346,11 +330,9 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.selectArea].background.rgb.blue == 0x78
 
   test "search highlight":
-    let themeJson =
-      %*{
-        "colors": {"editor.findMatchHighlightBackground": "#ea5c0055"},
-        "tokenColors": [],
-      }
+    let themeJson = %*{
+      "colors": {"editor.findMatchHighlightBackground": "#ea5c0055"}, "tokenColors": []
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     # Alpha channel is ignored (only first 7 chars used)
@@ -368,15 +350,14 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.currentLineBg].background.rgb.blue == 0xff
 
   test "error and warning colors":
-    let themeJson =
-      %*{
-        "colors": {
-          "editorError.foreground": "#f14c4c",
-          "editorWarning.foreground": "#cca700",
-          "editorInfo.foreground": "#3794ff",
-        },
-        "tokenColors": [],
-      }
+    let themeJson = %*{
+      "colors": {
+        "editorError.foreground": "#f14c4c",
+        "editorWarning.foreground": "#cca700",
+        "editorInfo.foreground": "#3794ff",
+      },
+      "tokenColors": [],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.errorMessage].foreground.rgb.red == 0xf1
@@ -388,15 +369,14 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.syntaxCheckInfo].foreground.rgb.red == 0x37
 
   test "git decoration colors":
-    let themeJson =
-      %*{
-        "colors": {
-          "gitDecoration.addedResourceForeground": "#81b88b",
-          "gitDecoration.deletedResourceForeground": "#c74e39",
-          "gitDecoration.modifiedResourceForeground": "#e2c08d",
-        },
-        "tokenColors": [],
-      }
+    let themeJson = %*{
+      "colors": {
+        "gitDecoration.addedResourceForeground": "#81b88b",
+        "gitDecoration.deletedResourceForeground": "#c74e39",
+        "gitDecoration.modifiedResourceForeground": "#e2c08d",
+      },
+      "tokenColors": [],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.diffViewerAddedLine].foreground.rgb.red == 0x81
@@ -417,16 +397,12 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.whitespace].foreground.rgb.blue == 0xe2
 
   test "scope array in tokenColors":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors": [
-          {
-            "scope": ["keyword", "keyword.control"],
-            "settings": {"foreground": "#c586c0"},
-          }
-        ],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors": [
+        {"scope": ["keyword", "keyword.control"], "settings": {"foreground": "#c586c0"}}
+      ],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.keyword].foreground.rgb.red == 0xc5
@@ -434,11 +410,10 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.keyword].foreground.rgb.blue == 0xc0
 
   test "entity scope affects function and type":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors": [{"scope": "entity", "settings": {"foreground": "#4fc1ff"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors": [{"scope": "entity", "settings": {"foreground": "#4fc1ff"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     let expectedRgb = Rgb(red: 0x4f, green: 0xc1, blue: 0xff)
@@ -448,11 +423,10 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.builtin].foreground.rgb == expectedRgb
 
   test "constant scope affects numbers":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors": [{"scope": "constant", "settings": {"foreground": "#b5cea8"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors": [{"scope": "constant", "settings": {"foreground": "#b5cea8"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     let expectedRgb = Rgb(red: 0xb5, green: 0xce, blue: 0xa8)
@@ -460,123 +434,110 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.decNumber].foreground.rgb == expectedRgb
 
   test "operator token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors":
-          [{"scope": "keyword.operator", "settings": {"foreground": "#d4d4d4"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors":
+        [{"scope": "keyword.operator", "settings": {"foreground": "#d4d4d4"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.operator].foreground.rgb.red == 0xd4
 
   test "namespace token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors":
-          [{"scope": "entity.name.namespace", "settings": {"foreground": "#4ec9b0"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors":
+        [{"scope": "entity.name.namespace", "settings": {"foreground": "#4ec9b0"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.namespace].foreground.rgb.red == 0x4e
 
   test "decorator token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors": [
-          {
-            "scope": "entity.name.function.decorator",
-            "settings": {"foreground": "#dcdcaa"},
-          }
-        ],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors": [
+        {
+          "scope": "entity.name.function.decorator",
+          "settings": {"foreground": "#dcdcaa"},
+        }
+      ],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.decorator].foreground.rgb.red == 0xdc
     check result[EditorColorPairIndex.attribute].foreground.rgb.red == 0xdc
 
   test "preprocessor token color from keyword.control.directive":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors": [
-          {"scope": "keyword.control.directive", "settings": {"foreground": "#c586c0"}}
-        ],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors":
+        [{"scope": "keyword.control.directive", "settings": {"foreground": "#c586c0"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.preprocessor].foreground.rgb.red == 0xc5
 
   test "preprocessor token color from meta.preprocessor":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors":
-          [{"scope": "meta.preprocessor", "settings": {"foreground": "#569cd6"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors":
+        [{"scope": "meta.preprocessor", "settings": {"foreground": "#569cd6"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.preprocessor].foreground.rgb.red == 0x56
 
   test "macro token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors": [
-          {"scope": "entity.name.function.macro", "settings": {"foreground": "#dcdcaa"}}
-        ],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors":
+        [{"scope": "entity.name.function.macro", "settings": {"foreground": "#dcdcaa"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.`macro`].foreground.rgb.red == 0xdc
 
   test "enum token colors":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors": [
-          {"scope": "entity.name.type.enum", "settings": {"foreground": "#4ec9b0"}},
-          {"scope": "variable.other.enummember", "settings": {"foreground": "#4fc1ff"}},
-        ],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors": [
+        {"scope": "entity.name.type.enum", "settings": {"foreground": "#4ec9b0"}},
+        {"scope": "variable.other.enummember", "settings": {"foreground": "#4fc1ff"}},
+      ],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.enumName].foreground.rgb.red == 0x4e
     check result[EditorColorPairIndex.enumMember].foreground.rgb.red == 0x4f
 
   test "property token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors":
-          [{"scope": "variable.other.property", "settings": {"foreground": "#9cdcfe"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors":
+        [{"scope": "variable.other.property", "settings": {"foreground": "#9cdcfe"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.property].foreground.rgb.red == 0x9c
 
   test "parameter token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors":
-          [{"scope": "variable.parameter", "settings": {"foreground": "#9cdcfe"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors":
+        [{"scope": "variable.parameter", "settings": {"foreground": "#9cdcfe"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.parameter].foreground.rgb.red == 0x9c
 
   test "inlay hints colors":
-    let themeJson =
-      %*{
-        "colors": {
-          "editorInlayHint.foreground": "#969696",
-          "editorInlayHint.background": "#1e1e1e",
-        },
-        "tokenColors": [],
-      }
+    let themeJson = %*{
+      "colors": {
+        "editorInlayHint.foreground": "#969696", "editorInlayHint.background": "#1e1e1e"
+      },
+      "tokenColors": [],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.inlayHint].foreground.rgb.red == 0x96
@@ -600,16 +561,15 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.configModeCurrentLine].foreground.rgb.red == 0xae
 
   test "popup window colors":
-    let themeJson =
-      %*{
-        "colors": {
-          "editorSuggestWidget.foreground": "#d4d4d4",
-          "editorSuggestWidget.background": "#252526",
-          "editorSuggestWidget.highlightForeground": "#0097fb",
-          "editorSuggestWidget.selectedBackground": "#094771",
-        },
-        "tokenColors": [],
-      }
+    let themeJson = %*{
+      "colors": {
+        "editorSuggestWidget.foreground": "#d4d4d4",
+        "editorSuggestWidget.background": "#252526",
+        "editorSuggestWidget.highlightForeground": "#0097fb",
+        "editorSuggestWidget.selectedBackground": "#094771",
+      },
+      "tokenColors": [],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.popupWindow].foreground.rgb.red == 0xd4
@@ -618,23 +578,21 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
     check result[EditorColorPairIndex.popupWinCurrentLine].background.rgb.red == 0x09
 
   test "git conflict color":
-    let themeJson =
-      %*{
-        "colors": {"gitDecoration.conflictingResourceForeground": "#e4676b"},
-        "tokenColors": [],
-      }
+    let themeJson = %*{
+      "colors": {"gitDecoration.conflictingResourceForeground": "#e4676b"},
+      "tokenColors": [],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.gitConflict].foreground.rgb.red == 0xe4
     check result[EditorColorPairIndex.replaceText].background.rgb.red == 0xe4
 
   test "hyperlink token color":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors":
-          [{"scope": "markup.underline.link", "settings": {"foreground": "#3794ff"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors":
+        [{"scope": "markup.underline.link", "settings": {"foreground": "#3794ff"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
 
     check result[EditorColorPairIndex.dir].foreground.rgb.red == 0x37
@@ -662,20 +620,18 @@ suite "vscode_theme - makeColorThemeFromVSCodeThemeFile":
       removeDir(baseDir)
 
     # Write base theme
-    let baseTheme =
-      %*{
-        "colors": {"editor.foreground": "#aaaaaa", "editor.background": "#111111"},
-        "tokenColors": [{"scope": "comment", "settings": {"foreground": "#6a9955"}}],
-      }
+    let baseTheme = %*{
+      "colors": {"editor.foreground": "#aaaaaa", "editor.background": "#111111"},
+      "tokenColors": [{"scope": "comment", "settings": {"foreground": "#6a9955"}}],
+    }
     writeFile(baseDir / "base.json", $baseTheme)
 
     # Child theme overrides foreground and adds keyword token
-    let childTheme =
-      %*{
-        "include": "./base.json",
-        "colors": {"editor.foreground": "#cccccc"},
-        "tokenColors": [{"scope": "keyword", "settings": {"foreground": "#569cd6"}}],
-      }
+    let childTheme = %*{
+      "include": "./base.json",
+      "colors": {"editor.foreground": "#cccccc"},
+      "tokenColors": [{"scope": "keyword", "settings": {"foreground": "#569cd6"}}],
+    }
 
     let resolved = resolveThemeIncludes(childTheme, baseDir)
     let result = makeColorThemeFromVSCodeThemeFile(resolved)
@@ -783,22 +739,20 @@ suite "vscode_theme - findTokenSettings":
     check r == nil
 
   test "theme with keyword.control applies to keyword in makeColorTheme":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors":
-          [{"scope": "keyword.control", "settings": {"foreground": "#c586c0"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors":
+        [{"scope": "keyword.control", "settings": {"foreground": "#c586c0"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
     check result[EditorColorPairIndex.keyword].foreground.rgb ==
       Rgb(red: 0xc5, green: 0x86, blue: 0xc0)
 
   test "theme with entity.name uses parent for entity.name.function lookup":
-    let themeJson =
-      %*{
-        "colors": {},
-        "tokenColors": [{"scope": "entity.name", "settings": {"foreground": "#4ec9b0"}}],
-      }
+    let themeJson = %*{
+      "colors": {},
+      "tokenColors": [{"scope": "entity.name", "settings": {"foreground": "#4ec9b0"}}],
+    }
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
     check result[EditorColorPairIndex.functionName].foreground.rgb ==
       Rgb(red: 0x4e, green: 0xc9, blue: 0xb0)
@@ -939,27 +893,24 @@ suite "vscode_theme - resolveThemeIncludes (edge cases)":
     defer:
       removeDir(baseDir)
 
-    let themeC =
-      %*{
-        "colors": {"editor.background": "#111111"},
-        "tokenColors": [{"scope": "comment", "settings": {"foreground": "#666666"}}],
-      }
+    let themeC = %*{
+      "colors": {"editor.background": "#111111"},
+      "tokenColors": [{"scope": "comment", "settings": {"foreground": "#666666"}}],
+    }
     writeFile(baseDir / "c.json", $themeC)
 
-    let themeB =
-      %*{
-        "include": "./c.json",
-        "colors": {"editor.foreground": "#bbbbbb"},
-        "tokenColors": [],
-      }
+    let themeB = %*{
+      "include": "./c.json",
+      "colors": {"editor.foreground": "#bbbbbb"},
+      "tokenColors": [],
+    }
     writeFile(baseDir / "b.json", $themeB)
 
-    let themeA =
-      %*{
-        "include": "./b.json",
-        "colors": {"editor.foreground": "#aaaaaa"},
-        "tokenColors": [{"scope": "keyword", "settings": {"foreground": "#ff0000"}}],
-      }
+    let themeA = %*{
+      "include": "./b.json",
+      "colors": {"editor.foreground": "#aaaaaa"},
+      "tokenColors": [{"scope": "keyword", "settings": {"foreground": "#ff0000"}}],
+    }
 
     let resolved = resolveThemeIncludes(themeA, baseDir)
     check resolved{"colors", "editor.foreground"}.getStr == "#aaaaaa"
@@ -976,12 +927,11 @@ suite "vscode_theme - resolveThemeIncludes (edge cases)":
       %*{"tokenColors": [{"scope": "keyword", "settings": {"foreground": "#ff0000"}}]}
     writeFile(baseDir / "base.json", $baseTheme)
 
-    let childTheme =
-      %*{
-        "include": "./base.json",
-        "colors": {"editor.foreground": "#cccccc"},
-        "tokenColors": [],
-      }
+    let childTheme = %*{
+      "include": "./base.json",
+      "colors": {"editor.foreground": "#cccccc"},
+      "tokenColors": [],
+    }
 
     let resolved = resolveThemeIncludes(childTheme, baseDir)
     check resolved{"colors", "editor.foreground"}.getStr == "#cccccc"
@@ -996,12 +946,11 @@ suite "vscode_theme - resolveThemeIncludes (edge cases)":
     let baseTheme = %*{"colors": {"editor.background": "#222222"}}
     writeFile(baseDir / "base.json", $baseTheme)
 
-    let childTheme =
-      %*{
-        "include": "./base.json",
-        "colors": {},
-        "tokenColors": [{"scope": "string", "settings": {"foreground": "#00ff00"}}],
-      }
+    let childTheme = %*{
+      "include": "./base.json",
+      "colors": {},
+      "tokenColors": [{"scope": "string", "settings": {"foreground": "#00ff00"}}],
+    }
 
     let resolved = resolveThemeIncludes(childTheme, baseDir)
     check resolved{"colors", "editor.background"}.getStr == "#222222"
@@ -1015,12 +964,11 @@ suite "vscode_theme - resolveThemeIncludes (edge cases)":
 
     writeFile(baseDir / "bad.json", "not valid json{{{")
 
-    let childTheme =
-      %*{
-        "include": "./bad.json",
-        "colors": {"editor.foreground": "#dddddd"},
-        "tokenColors": [],
-      }
+    let childTheme = %*{
+      "include": "./bad.json",
+      "colors": {"editor.foreground": "#dddddd"},
+      "tokenColors": [],
+    }
 
     let resolved = resolveThemeIncludes(childTheme, baseDir)
     check resolved{"colors", "editor.foreground"}.getStr == "#dddddd"
@@ -1058,10 +1006,9 @@ suite "vscode_theme - parseVsCodeThemeJson":
     defer:
       removeDir(baseDir)
 
-    let packageJson =
-      %*{
-        "contributes": {"themes": [{"label": "My Theme", "path": "./nonexistent.json"}]}
-      }
+    let packageJson = %*{
+      "contributes": {"themes": [{"label": "My Theme", "path": "./nonexistent.json"}]}
+    }
     let result = parseVsCodeThemeJson(packageJson, "My Theme", baseDir / "package.json")
     check result.isNone
 
@@ -1081,19 +1028,17 @@ suite "vscode_theme - parseVsCodeThemeJson":
     defer:
       removeDir(baseDir)
 
-    let baseTheme =
-      %*{
-        "colors": {"editor.background": "#000000"},
-        "tokenColors": [{"scope": "comment", "settings": {"foreground": "#999999"}}],
-      }
+    let baseTheme = %*{
+      "colors": {"editor.background": "#000000"},
+      "tokenColors": [{"scope": "comment", "settings": {"foreground": "#999999"}}],
+    }
     writeFile(baseDir / "base.json", $baseTheme)
 
-    let childTheme =
-      %*{
-        "include": "./base.json",
-        "colors": {"editor.foreground": "#ffffff"},
-        "tokenColors": [],
-      }
+    let childTheme = %*{
+      "include": "./base.json",
+      "colors": {"editor.foreground": "#ffffff"},
+      "tokenColors": [],
+    }
     writeFile(baseDir / "child.json", $childTheme)
 
     let packageJson =
