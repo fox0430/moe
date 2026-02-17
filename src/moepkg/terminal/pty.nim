@@ -30,9 +30,15 @@ type PtyHandle* = ref object
   closed*: bool
 
 # POSIX PTY bindings
-proc forkpty(
-  amaster: var cint, name: cstring, termp: pointer, winp: pointer
-): Pid {.importc, header: "<pty.h>".}
+when defined(macosx):
+  proc forkpty(
+    amaster: var cint, name: cstring, termp: pointer, winp: pointer
+  ): Pid {.importc, header: "<util.h>".}
+
+else:
+  proc forkpty(
+    amaster: var cint, name: cstring, termp: pointer, winp: pointer
+  ): Pid {.importc, header: "<pty.h>".}
 
 type Winsize {.importc: "struct winsize", header: "<sys/ioctl.h>".} = object
   ws_row: cushort
@@ -40,7 +46,10 @@ type Winsize {.importc: "struct winsize", header: "<sys/ioctl.h>".} = object
   ws_xpixel: cushort
   ws_ypixel: cushort
 
-const TIOCSWINSZ = 0x5414.culong
+when defined(macosx):
+  const TIOCSWINSZ = 0x80087467.culong
+else:
+  const TIOCSWINSZ = 0x5414.culong
 
 proc ioctl(
   fd: cint, request: culong

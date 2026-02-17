@@ -36,10 +36,15 @@ export
   background_process
 
 type
+  ScreenSize* = object
+    width*, height*: int
+    prevWidth*, prevHeight*: int
+
   Editor* = ref object
     textBuffer*: TextBuffer
     state*: EditorState
     viewport*: ViewPort
+    screenSize*: ScreenSize
     executer*: CommandExecutor
     commandRegistry*: CommandRegistry
     keyBindingRegistry*: KeyBindingRegistry

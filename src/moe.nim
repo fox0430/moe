@@ -44,6 +44,13 @@ proc pollTerminalWindows*(e: Editor) =
     if window.mode == EditorMode.Terminal and window.terminalState.isSome:
       let termState = window.terminalState.get
       if termState.subMode == tsmInput:
+        # Resize terminal if window dimensions changed
+        let (expectedCols, expectedRows) = e.calculateTerminalAreaDimensions(window)
+        if expectedCols != termState.grid.cols or expectedRows != termState.grid.rows:
+          if expectedCols > 0 and expectedRows > 0:
+            termState.resize(expectedCols, expectedRows)
+            e.state.needsFullRedraw = true
+
         let updated = termState.pollOutput()
         if updated:
           e.state.needsFullRedraw = true
@@ -56,10 +63,24 @@ proc pollTerminalWindows*(e: Editor) =
             window.cursor = BufferPosition(line: max(0, snapshot.len - 1), column: 0)
             window.viewport.topLine = max(0, snapshot.len - window.viewport.height)
           else:
-            # Interactive shell (`:terminal`): close and return to Normal mode
+            # Interactive shell (`:terminal`): close terminal window
             window.clearModeState(EditorMode.Terminal)
-            window.mode = EditorMode.Normal
-            if i == e.windowManager.activeWindowIndex:
+            if e.windowManager.windows.len > 1:
+              # Multiple windows: close the terminal window
+              let origActive = e.windowManager.activeWindowIndex
+              e.windowManager.activeWindowIndex = i
+              discard e.windowManager.closeWindow(e.state.display.multiStatusLine)
+              if origActive != i:
+                e.windowManager.activeWindowIndex =
+                  if origActive > i:
+                    origActive - 1
+                  else:
+                    origActive
+              e.syncActiveWindow()
+              e.setMode(e.activeWindow.mode)
+            else:
+              # Last window: return to Normal mode
+              window.mode = EditorMode.Normal
               e.setMode(EditorMode.Normal)
           e.state.needsFullRedraw = true
           return

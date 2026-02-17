@@ -33,6 +33,76 @@ proc createTestEditor(): Editor =
   let config = newEditorConfig()
   result = newEditor(config)
 
+suite "calculateTerminalAreaDimensions":
+  test "single window, status line enabled":
+    let e = createTestEditor()
+    e.state.display.showStatusLine = true
+    e.state.display.showTabLine = false
+    let win = e.activeWindow
+    # Default viewport: width=80, height=20
+    let (cols, rows) = e.calculateTerminalAreaDimensions(win)
+    check cols == 80
+    # height(20) - StatusAndCommandReserve(1) - tabLineOffset(0)
+    check rows == 19
+
+  test "single window, status line disabled":
+    let e = createTestEditor()
+    e.state.display.showStatusLine = false
+    e.state.display.showTabLine = false
+    let win = e.activeWindow
+    let (cols, rows) = e.calculateTerminalAreaDimensions(win)
+    check cols == 80
+    # height(20) - CommandLineReserve(1) - tabLineOffset(0)
+    check rows == 19
+
+  test "single window, with tab line":
+    let e = createTestEditor()
+    e.state.display.showStatusLine = true
+    e.state.display.showTabLine = true
+    let win = e.activeWindow
+    let (cols, rows) = e.calculateTerminalAreaDimensions(win)
+    check cols == 80
+    # height(20) - StatusAndCommandReserve(1) - TabLineHeight(1)
+    check rows == 18
+
+  test "hsplit, top window (non-bottom)":
+    let e = createTestEditor()
+    e.state.display.showStatusLine = true
+    e.state.display.showTabLine = false
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+    # Top window (index 0) is non-bottom
+    let topWin = e.windowManager.windows[0]
+    let (cols, rows) = e.calculateTerminalAreaDimensions(topWin)
+    check cols == topWin.viewport.width
+    # Non-bottom window: no reserved lines, no tab line
+    check rows == topWin.viewport.height
+
+  test "hsplit, bottom window":
+    let e = createTestEditor()
+    e.state.display.showStatusLine = true
+    e.state.display.showTabLine = false
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+    # Bottom window (index 1) is the active one after hsplit
+    let bottomWin = e.windowManager.windows[1]
+    let (cols, rows) = e.calculateTerminalAreaDimensions(bottomWin)
+    check cols == bottomWin.viewport.width
+    # Bottom window: height - StatusAndCommandReserve(1)
+    check rows == bottomWin.viewport.height - 1
+
+  test "minimum rows is 1":
+    let e = createTestEditor()
+    e.state.display.showStatusLine = true
+    e.state.display.showTabLine = true
+    let win = e.activeWindow
+    # Set viewport height very small so rows would be <= 0
+    win.viewport = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 2, x: 0, y: 0)
+    let (cols, rows) = e.calculateTerminalAreaDimensions(win)
+    check cols == 80
+    # height(2) - StatusAndCommandReserve(1) - TabLineHeight(1) = 0, clamped to 1
+    check rows == 1
+
 suite "calculateReservedLines":
   test "status line enabled, multi status line, bottom window":
     let e = createTestEditor()

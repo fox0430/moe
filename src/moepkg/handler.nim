@@ -328,9 +328,7 @@ proc enterFilerInActiveWindow(e: Editor, path: string) =
 proc enterTerminalInActiveWindow(e: Editor, command: string) =
   ## Switch the active window to Terminal mode.
   let activeWin = e.activeWindow
-  let
-    cols = activeWin.viewport.width
-    rows = max(1, activeWin.viewport.height - e.calculateReservedLines(true))
+  let (cols, rows) = e.calculateTerminalAreaDimensions(activeWin)
   let termResult = newTerminalState(command, cols, rows)
   if termResult.isErr:
     e.state.setStatusMessage("Terminal error: " & termResult.error)

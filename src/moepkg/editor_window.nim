@@ -74,6 +74,28 @@ proc calculateReservedLines*(e: Editor, isBottomWindow: bool = true): int =
   if isBottomWindow:
     result += e.state.statusMessageExtraLines()
 
+proc calculateTerminalAreaDimensions*(
+    e: Editor, window: EditorWindow
+): tuple[cols, rows: int] =
+  ## Compute the correct PTY cols/rows for a terminal in the given window,
+  ## matching the formula used by renderTerminal.
+  let
+    maxBottomY = findMaxBottomY(e.windowManager.windows)
+    windowBottomY = window.viewport.y + window.viewport.height
+    isBottomWindow = (windowBottomY == maxBottomY)
+    tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
+    reservedBottom =
+      if isBottomWindow and e.state.display.showStatusLine:
+        StatusAndCommandReserve
+      elif isBottomWindow:
+        CommandLineReserve
+      else:
+        0
+  result = (
+    cols: window.viewport.width,
+    rows: max(1, window.viewport.height - reservedBottom - tabLineOffset),
+  )
+
 proc calculateWindowCursor*(
     e: Editor,
     buffer: TextBuffer,

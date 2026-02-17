@@ -21,7 +21,7 @@ import std/[unittest, options, os]
 import pkg/results
 import ../src/moepkg/[terminal_mode, key_bindings, buffer]
 import ../src/moepkg/command_handlers/terminal_handler
-import ../src/moepkg/terminal/pgy
+import ../src/moepkg/terminal/pty
 
 proc charKey(c: string, mods: set[KeyModifier] = {}): KeyCombo =
   KeyCombo(isSpecial: false, char: c, modifiers: mods)

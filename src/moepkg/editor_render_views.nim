@@ -28,15 +28,18 @@ import
   status_line, tab_line, buffer
 
 proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
-  ## Update viewport size from buffer area and return true if resized
-  let
-    oldWidth = e.viewport.width
-    oldHeight = e.viewport.height
+  ## Update screen size from buffer area and return true if resized.
+  ## Uses e.screenSize (not e.viewport) to avoid overwriting the active
+  ## window's viewport dimensions in split mode.
+  ## Stores previous dimensions in prevWidth/prevHeight for resize calculations.
+  e.screenSize.prevWidth = e.screenSize.width
+  e.screenSize.prevHeight = e.screenSize.height
 
-  e.viewport.width = buffer.area.width
-  e.viewport.height = buffer.area.height
+  e.screenSize.width = buffer.area.width
+  e.screenSize.height = buffer.area.height
 
-  (oldWidth != e.viewport.width) or (oldHeight != e.viewport.height)
+  (e.screenSize.prevWidth != e.screenSize.width) or
+    (e.screenSize.prevHeight != e.screenSize.height)
 
 proc adjustViewportForCursor(
     viewport: ViewPort,
@@ -84,18 +87,14 @@ proc adjustViewportForCursor(
 proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
   ## Render split window view
 
-  let
-    oldWidth = e.viewport.width
-    oldHeight = e.viewport.height
-
   # If terminal was resized, rebuild window layout
-  if wasResized and oldWidth > 0 and oldHeight > 0 and e.viewport.width > 0 and
-      e.viewport.height > 0:
+  if wasResized and e.screenSize.prevWidth > 0 and e.screenSize.prevHeight > 0 and
+      e.screenSize.width > 0 and e.screenSize.height > 0:
     # Note: cursor is now stored directly in EditorWindow (single source of truth)
 
     e.windowManager.resizeWindows(
-      e.viewport.width, e.viewport.height, oldWidth, oldHeight,
-      e.state.display.multiStatusLine,
+      e.screenSize.width, e.screenSize.height, e.screenSize.prevWidth,
+      e.screenSize.prevHeight, e.state.display.multiStatusLine,
     )
 
   # Find the maximum bottom Y coordinate (to determine bottom windows)

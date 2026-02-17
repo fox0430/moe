@@ -37,94 +37,140 @@ proc createTestBuffer(): Buffer =
   result.area = Rect(x: 0, y: 0, width: 80, height: 24)
 
 suite "updateViewportSize - Basic behavior":
-  test "Update viewport from buffer area":
+  test "Update screenSize from buffer area":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     buffer.area = Rect(x: 0, y: 0, width: 100, height: 50)
 
-    # Initially viewport may have different size
-    e.viewport.width = 80
-    e.viewport.height = 24
+    e.screenSize.width = 80
+    e.screenSize.height = 24
 
     let resized = e.updateViewportSize(buffer)
 
     check resized == true
-    check e.viewport.width == 100
-    check e.viewport.height == 50
+    check e.screenSize.width == 100
+    check e.screenSize.height == 50
 
   test "No resize when size unchanged":
     let e = createTestEditor()
     var buffer = createTestBuffer()
     buffer.area = Rect(x: 0, y: 0, width: 80, height: 24)
 
-    e.viewport.width = 80
-    e.viewport.height = 24
+    e.screenSize.width = 80
+    e.screenSize.height = 24
 
     let resized = e.updateViewportSize(buffer)
 
     check resized == false
-    check e.viewport.width == 80
-    check e.viewport.height == 24
+    check e.screenSize.width == 80
+    check e.screenSize.height == 24
 
   test "Width change triggers resize":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    e.viewport.width = 80
-    e.viewport.height = 24
+    e.screenSize.width = 80
+    e.screenSize.height = 24
 
     buffer.area = Rect(x: 0, y: 0, width: 120, height: 24)
 
     let resized = e.updateViewportSize(buffer)
 
     check resized == true
-    check e.viewport.width == 120
-    check e.viewport.height == 24
+    check e.screenSize.width == 120
+    check e.screenSize.height == 24
 
   test "Height change triggers resize":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    e.viewport.width = 80
-    e.viewport.height = 24
+    e.screenSize.width = 80
+    e.screenSize.height = 24
 
     buffer.area = Rect(x: 0, y: 0, width: 80, height: 40)
 
     let resized = e.updateViewportSize(buffer)
 
     check resized == true
-    check e.viewport.width == 80
-    check e.viewport.height == 40
+    check e.screenSize.width == 80
+    check e.screenSize.height == 40
 
   test "Both dimensions change":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    e.viewport.width = 80
-    e.viewport.height = 24
+    e.screenSize.width = 80
+    e.screenSize.height = 24
 
     buffer.area = Rect(x: 0, y: 0, width: 120, height: 40)
 
     let resized = e.updateViewportSize(buffer)
 
     check resized == true
-    check e.viewport.width == 120
-    check e.viewport.height == 40
+    check e.screenSize.width == 120
+    check e.screenSize.height == 40
 
   test "Update from zero size":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    e.viewport.width = 0
-    e.viewport.height = 0
+    e.screenSize.width = 0
+    e.screenSize.height = 0
 
     buffer.area = Rect(x: 0, y: 0, width: 80, height: 24)
 
     let resized = e.updateViewportSize(buffer)
 
     check resized == true
-    check e.viewport.width == 80
-    check e.viewport.height == 24
+    check e.screenSize.width == 80
+    check e.screenSize.height == 24
+
+  test "Stores previous dimensions":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.screenSize.width = 80
+    e.screenSize.height = 24
+
+    buffer.area = Rect(x: 0, y: 0, width: 120, height: 40)
+
+    discard e.updateViewportSize(buffer)
+
+    check e.screenSize.prevWidth == 80
+    check e.screenSize.prevHeight == 24
+
+  test "Does not modify active window viewport":
+    ## Regression: updateViewportSize used to write to e.viewport which
+    ## is a ref shared with the active window, corrupting its dimensions.
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    # Set up vsplit so the active window has half-width viewport
+    e.viewport.width = 80
+    e.viewport.height = 24
+    discard e.vsplit()
+    check e.windowManager.windows.len == 2
+
+    # Record active window viewport dimensions after split
+    let activeWin = e.activeWindow
+    let origWidth = activeWin.viewport.width
+    let origHeight = activeWin.viewport.height
+    check origWidth < 80 # Should be approximately half
+
+    # Simulate screen update with full screen dimensions
+    e.screenSize.width = origWidth # Set to current to avoid triggering resize
+    e.screenSize.height = origHeight
+    buffer.area = Rect(x: 0, y: 0, width: 200, height: 50)
+
+    discard e.updateViewportSize(buffer)
+
+    # screenSize should be updated
+    check e.screenSize.width == 200
+    check e.screenSize.height == 50
+
+    # Active window viewport must NOT be overwritten
+    check activeWin.viewport.width == origWidth
+    check activeWin.viewport.height == origHeight
 
 suite "renderSplitView - Basic behavior":
   test "Render single window":
@@ -1100,3 +1146,114 @@ suite "Bottom area - status line and command line share last row":
     check positions.len == 2
     # Bottom window's status line should be at y=23 (last row)
     check positions[^1] == 23
+
+suite "updateViewportSize - split mode regression":
+  ## Regression tests for the bug where updateViewportSize corrupted
+  ## the active window's viewport via the shared ref (e.viewport).
+
+  test "vsplit: repeated updateViewportSize preserves window viewports":
+    ## Simulates the render loop: updateViewportSize is called every frame
+    ## with the full screen buffer. Window viewports must remain at their
+    ## split dimensions.
+    let e = createTestEditor()
+    var buffer = newBuffer(200, 50)
+    buffer.area = Rect(x: 0, y: 0, width: 200, height: 50)
+
+    # Initial setup
+    e.viewport.width = 200
+    e.viewport.height = 50
+    e.screenSize.width = 200
+    e.screenSize.height = 50
+
+    discard e.vsplit()
+    check e.windowManager.windows.len == 2
+
+    let leftWin = e.windowManager.windows[0]
+    let rightWin = e.windowManager.windows[1]
+    let leftWidth = leftWin.viewport.width
+    let rightWidth = rightWin.viewport.width
+
+    # Both windows should be roughly half the screen
+    check leftWidth < 200
+    check rightWidth < 200
+    check leftWidth + rightWidth + 1 == 200 # +1 for separator
+
+    # Simulate multiple render frames calling updateViewportSize
+    for _ in 0 ..< 5:
+      discard e.updateViewportSize(buffer)
+
+    # Window viewports must NOT be changed
+    check leftWin.viewport.width == leftWidth
+    check rightWin.viewport.width == rightWidth
+
+  test "hsplit: repeated updateViewportSize preserves window viewports":
+    let e = createTestEditor()
+    var buffer = newBuffer(80, 50)
+    buffer.area = Rect(x: 0, y: 0, width: 80, height: 50)
+
+    e.viewport.width = 80
+    e.viewport.height = 50
+    e.screenSize.width = 80
+    e.screenSize.height = 50
+
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+
+    let topWin = e.windowManager.windows[0]
+    let bottomWin = e.windowManager.windows[1]
+    let topHeight = topWin.viewport.height
+    let bottomHeight = bottomWin.viewport.height
+
+    check topHeight < 50
+    check bottomHeight < 50
+
+    for _ in 0 ..< 5:
+      discard e.updateViewportSize(buffer)
+
+    check topWin.viewport.height == topHeight
+    check bottomWin.viewport.height == bottomHeight
+
+  test "vsplit: full render cycle preserves window viewports":
+    ## Full integration: updateViewportSize + renderSplitView + renderBottomLines
+    let e = createTestEditor()
+    var buffer = newBuffer(200, 50)
+    buffer.area = Rect(x: 0, y: 0, width: 200, height: 50)
+
+    e.viewport.width = 200
+    e.viewport.height = 50
+    e.screenSize.width = 200
+    e.screenSize.height = 50
+
+    discard e.vsplit()
+    check e.windowManager.windows.len == 2
+
+    let leftWin = e.windowManager.windows[0]
+    let rightWin = e.windowManager.windows[1]
+    let leftWidth = leftWin.viewport.width
+    let rightWidth = rightWin.viewport.width
+
+    # Simulate 3 render frames
+    for _ in 0 ..< 3:
+      let wasResized = e.updateViewportSize(buffer)
+      clearBuffer(buffer)
+      e.renderSplitView(buffer, wasResized)
+      e.renderBottomLines(buffer)
+
+    check leftWin.viewport.width == leftWidth
+    check rightWin.viewport.width == rightWidth
+
+  test "screenSize tracks screen, not window dimensions":
+    let e = createTestEditor()
+    var buffer = newBuffer(200, 50)
+    buffer.area = Rect(x: 0, y: 0, width: 200, height: 50)
+
+    e.screenSize.width = 100
+    e.screenSize.height = 30
+
+    discard e.updateViewportSize(buffer)
+
+    # screenSize should reflect the full screen
+    check e.screenSize.width == 200
+    check e.screenSize.height == 50
+    check e.screenSize.prevWidth == 100
+    check e.screenSize.prevHeight == 30
