@@ -84,6 +84,6 @@ moe has a built-in terminal emulator. You can run a shell or any command inside 
 Terminal mode has two sub-modes:
 
 - **Terminal-Input**: All keystrokes are forwarded to the running shell/command. Press `Ctrl-\ Ctrl-n` to switch to Terminal-Normal sub-mode.
-- **Terminal-Normal**: Browse the terminal output with Vim-like navigation (`j`/`k`/`gg`/`G`). Press `i` or `a` to return to Terminal-Input sub-mode. Press `:` to enter command mode.
+- **Terminal-Normal**: Browse the terminal output. Press `i` or `a` to return to Terminal-Input sub-mode. Press `:` to enter command mode.
 
 When a command finishes (e.g. `:terminal ls`), the output is displayed in a read-only scrollback view (Terminal-Normal sub-mode). When an interactive shell exits, the terminal window is automatically closed.

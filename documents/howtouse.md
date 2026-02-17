@@ -305,10 +305,6 @@ All keystrokes are forwarded to the running shell/command.
 
 | Keys | Description |
 |:-----------------------------|:---------------------------|
-| <kbd>**j**</kbd><br> | Go Down |
-| <kbd>**k**</kbd><br> | Go Up |
-| <kbd>**g**</kbd> <kbd>**g**</kbd><br> | Go to the first line |
-| <kbd>**G**</kbd><br> | Go to the last line |
 | <kbd>**i**</kbd><br> | Return to Terminal-Input sub-mode |
 | <kbd>**a**</kbd><br> | Return to Terminal-Input sub-mode |
 | <kbd>**:**</kbd><br> | Enter command mode |

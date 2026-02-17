@@ -86,7 +86,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Macros
 
-- Terminal
+- Terminal ( >= 0.5.0 )
 
 - Language Server Protocol (WIP)
 
@@ -164,7 +164,7 @@ We recommend Linux environments.
 
 - [wl-clipboard](https://github.com/bugaevc/wl-clipboard) (Option on GNU/Linux)
 
-Version <= 0.3.0 (Ncurses base)
+Version <= 0.4.0 (Ncurses base)
 
 - [Ncurses](https://invisible-island.net/ncurses) 6.1 or higher
 
@@ -174,7 +174,7 @@ nimble install moe
 
 Check [detail](https://github.com/fox0430/moe/blob/v0.4.0/documents/overview.md)
 
-Version >= 0.4.0 ([Celina](https://github.com/fox0430/celina) base)
+Version >= 0.5.0 ([Celina](https://github.com/fox0430/celina) base)
 
 ```sh
 # Latest developmental state inside Github repository
