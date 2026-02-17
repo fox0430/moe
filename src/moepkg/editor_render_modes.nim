@@ -254,6 +254,8 @@ proc renderTerminal*(
     for row in 0 ..< min(grid.rows, maxRows):
       for col in 0 ..< min(grid.cols, maxCols):
         let cell = grid.cells[row][col]
+        if cell.widePadding:
+          continue # celina's setString handles wide char's second column
         let style = terminalCellToStyle(cell)
         let ch = if cell.ch.len > 0: cell.ch else: " "
         buffer.setString(startX + col, startY + row, ch, style)

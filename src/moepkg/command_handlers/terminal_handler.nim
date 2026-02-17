@@ -122,6 +122,18 @@ proc keyComboToBytes*(keyCombo: KeyCombo): string =
           return $chr(ch.ord - 'a'.ord + 1)
         elif ch >= 'A' and ch <= 'Z':
           return $chr(ch.ord - 'A'.ord + 1)
+        elif ch == '\\':
+          return "\x1c" # FS
+        elif ch == ']':
+          return "\x1d" # GS
+        elif ch == '^':
+          return "\x1e" # RS
+        elif ch == '_':
+          return "\x1f" # US
+        elif ch == '@':
+          return "\x00" # NUL
+        elif ch == '[':
+          return "\x1b" # ESC
       return ""
     elif kmAlt in keyCombo.modifiers:
       # Alt+key -> ESC + key

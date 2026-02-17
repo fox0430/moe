@@ -22,6 +22,10 @@
 
 import std/[os, posix, options]
 
+proc poll(
+  fds: ptr TPollfd, nfds: Tnfds, timeout: cint
+): cint {.importc, header: "<poll.h>".}
+
 import pkg/results
 
 type PtyHandle* = ref object
@@ -106,8 +110,13 @@ proc writeToPty*(pty: PtyHandle, data: string): Result[void, string] =
   while written < data.len:
     let n = write(pty.masterFd, unsafeAddr data[written], data.len - written)
     if n < 0:
+      if errno == EINTR:
+        continue
       if errno == EAGAIN or errno == EWOULDBLOCK:
-        # Would block, try again
+        var pfd: TPollfd
+        pfd.fd = pty.masterFd
+        pfd.events = POLLOUT
+        discard poll(addr pfd, 1, 100)
         continue
       return err("write to PTY failed: " & $strerror(errno))
     written += n.int
@@ -122,7 +131,15 @@ proc readFromPty*(pty: PtyHandle, maxBytes: int = 4096): string =
 
   var buf = newString(maxBytes)
   let n = read(pty.masterFd, addr buf[0], maxBytes)
-  if n <= 0:
+  if n < 0:
+    if errno == EINTR:
+      let n2 = read(pty.masterFd, addr buf[0], maxBytes)
+      if n2 <= 0:
+        return ""
+      buf.setLen(n2)
+      return buf
+    return ""
+  if n == 0:
     return ""
   buf.setLen(n)
   buf
@@ -186,8 +203,10 @@ proc closePty*(pty: PtyHandle) =
 
   discard close(pty.masterFd)
 
-  # Kill child if still alive
-  if pty.isAlive:
+  # Check if child is still running and kill if needed
+  var status: cint
+  let r = waitpid(pty.childPid, status, WNOHANG)
+  if r == 0:
+    # Still running — send SIGTERM and wait
     discard kill(pty.childPid, SIGTERM)
-    var status: cint
     discard waitpid(pty.childPid, status, 0)

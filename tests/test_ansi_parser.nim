@@ -17,8 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils]
-import ../src/moepkg/terminal/ansi_parser
+import std/[unittest, strutils, deques]
+import ../src/moepkg/terminal/ansi_parser {.all.}
 
 suite "TerminalGrid - Creation":
   test "newTerminalGrid creates grid with correct dimensions":
@@ -259,6 +259,34 @@ suite "TerminalGrid - Resize":
     check grid.cells[0][0].ch == "H"
     check grid.cells[0][2].ch == "l"
 
+  test "Resize clears wide char main cell when padding is truncated":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("AB日DE")
+    # cells: [0]="A" [1]="B" [2]="日" [3]=padding [4]="D" [5]="E"
+    grid.resize(3, 3)
+    # col 3 (padding) is truncated, so col 2 (main) must be cleared
+    check grid.cells[0][0].ch == "A"
+    check grid.cells[0][1].ch == "B"
+    check grid.cells[0][2].ch == "" # cleared, not orphaned "日"
+
+  test "Resize preserves intact wide char at right edge":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("A日")
+    # cells: [0]="A" [1]="日" [2]=padding
+    grid.resize(3, 3)
+    # Both main (col 1) and padding (col 2) are in the new grid — must stay intact
+    check grid.cells[0][0].ch == "A"
+    check grid.cells[0][1].ch == "日"
+    check grid.cells[0][2].widePadding == true
+
+  test "Resize clears main cell when padding is truncated (cols=1)":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("日B")
+    # cells: [0]="日" [1]=padding [2]="B"
+    grid.resize(1, 3)
+    # col 0 is "日" main cell, its padding at col 1 is truncated
+    check grid.cells[0][0].ch == "" # cleared
+
 suite "TerminalGrid - toPlainText":
   test "Convert grid to plain text":
     let grid = newTerminalGrid(10, 3)
@@ -337,6 +365,35 @@ suite "TerminalGrid - Incomplete sequences":
     check grid.cells[0][1].ch == "R"
     check grid.cells[0][1].fg.kind == ckIndexed
 
+  test "Incomplete UTF-8 sequence buffered across calls":
+    let grid = newTerminalGrid(80, 24)
+    # "日" = E6 97 A5 (3-byte UTF-8). Send first 2 bytes then the last.
+    grid.processOutput("A" & "\xe6\x97")
+    check grid.cells[0][0].ch == "A"
+    # Incomplete bytes should not produce output
+    check grid.cells[0][1].ch == ""
+    # Complete the sequence
+    grid.processOutput("\xa5B")
+    check grid.cells[0][1].ch == "日"
+    check grid.cells[0][2].widePadding == true # wide char padding
+    check grid.cells[0][3].ch == "B"
+
+  test "Incomplete 4-byte UTF-8 sequence buffered across calls":
+    let grid = newTerminalGrid(80, 24)
+    # U+1F600 (😀) = F0 9F 98 80 (4-byte UTF-8). Split after 1 byte.
+    grid.processOutput("\xf0")
+    check grid.cells[0][0].ch == ""
+    grid.processOutput("\x9f\x98\x80")
+    check grid.cells[0][0].ch == "\xf0\x9f\x98\x80"
+
+  test "Incomplete 2-byte UTF-8 sequence buffered across calls":
+    let grid = newTerminalGrid(80, 24)
+    # "é" = C3 A9 (2-byte UTF-8). Split after 1 byte.
+    grid.processOutput("\xc3")
+    check grid.cells[0][0].ch == ""
+    grid.processOutput("\xa9")
+    check grid.cells[0][0].ch == "é"
+
 suite "TerminalGrid - Scrollback buffer":
   test "Lines scroll into scrollback buffer":
     let grid = newTerminalGrid(10, 3)
@@ -402,3 +459,161 @@ suite "TerminalGrid - Cursor position tracking (regression)":
     check grid.cursorVisible == false # Must stay hidden
     grid.processOutput("\x1b[?25h") # Show
     check grid.cursorVisible == true
+
+suite "TerminalGrid - Wide (CJK) character support":
+  test "Wide character advances cursor by 2 columns":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("日")
+    check grid.cursorCol == 2
+    check grid.cursorRow == 0
+    check grid.cells[0][0].ch == "日"
+    check grid.cells[0][0].widePadding == false
+    check grid.cells[0][1].widePadding == true
+
+  test "Multiple wide characters":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("日本語")
+    check grid.cursorCol == 6
+    check grid.cells[0][0].ch == "日"
+    check grid.cells[0][1].widePadding == true
+    check grid.cells[0][2].ch == "本"
+    check grid.cells[0][3].widePadding == true
+    check grid.cells[0][4].ch == "語"
+    check grid.cells[0][5].widePadding == true
+
+  test "Wide character wraps when it doesn't fit at end of line":
+    # Grid is 5 cols wide. After 4 narrow chars, only 1 col remains.
+    # A wide char (2 cols) should wrap to next line.
+    let grid = newTerminalGrid(5, 3)
+    grid.processOutput("ABCD日")
+    # "ABCD" fills cols 0-3, col 4 is blank (padded), "日" wraps to row 1
+    check grid.cells[0][0].ch == "A"
+    check grid.cells[0][3].ch == "D"
+    check grid.cells[0][4].ch == "" # padding space before wrap
+    check grid.cells[1][0].ch == "日"
+    check grid.cells[1][1].widePadding == true
+    check grid.cursorRow == 1
+    check grid.cursorCol == 2
+
+  test "Overwrite narrow char onto wide char clears padding":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("日")
+    # Overwrite the wide char at col 0 with 'A'
+    grid.processOutput("\x1b[1;1H") # Move to row 1, col 1 (0-based: 0,0)
+    grid.processOutput("A")
+    check grid.cells[0][0].ch == "A"
+    check grid.cells[0][0].widePadding == false
+    check grid.cells[0][1].widePadding == false # padding cleared
+    check grid.cells[0][1].ch == "" # default empty
+
+  test "Overwrite onto padding cell clears the wide char main cell":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("日")
+    # Move to col 1 (the padding cell) and write 'X'
+    grid.processOutput("\x1b[1;2H") # row 1, col 2 (0-based: 0,1)
+    grid.processOutput("X")
+    check grid.cells[0][0].ch == "" # main cell cleared
+    check grid.cells[0][0].widePadding == false
+    check grid.cells[0][1].ch == "X"
+    check grid.cells[0][1].widePadding == false
+
+  test "toPlainText does not duplicate wide characters":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("日本")
+    let text = grid.toPlainText()
+    check text == "日本"
+
+  test "toPlainText with mixed narrow and wide chars":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("A日B本C")
+    let text = grid.toPlainText()
+    check text == "A日B本C"
+
+  test "Erase in line (K) respects wide char boundary at start":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("日B")
+    # Move to col 1 (padding of "日") and erase to end of line
+    grid.processOutput("\x1b[1;2H") # 0-based: row 0, col 1
+    grid.processOutput("\x1b[0K")
+    # The wide char at col 0 should also be cleared since we erased from its padding
+    check grid.cells[0][0].ch == ""
+    check grid.cells[0][0].widePadding == false
+    check grid.cells[0][1].ch == ""
+
+  test "Erase in line (K) respects wide char boundary at end":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("AB日DE")
+    # Erase from start of line to col 2 (which is the main cell of "日")
+    grid.processOutput("\x1b[1;3H") # 0-based: row 0, col 2
+    grid.processOutput("\x1b[1K") # Erase from beginning to cursor
+    check grid.cells[0][0].ch == "" # erased
+    check grid.cells[0][1].ch == "" # erased
+    check grid.cells[0][2].ch == "" # erased (was "日")
+    # The padding at col 3 should also be cleared
+    check grid.cells[0][3].ch == "" # padding cleared
+    check grid.cells[0][3].widePadding == false
+
+  test "Erase K mode 1 does not damage wide char outside erase range":
+    # Regression: cleanWideCharBoundary must not split a wide char
+    # that is entirely outside the erase range.
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("A日B")
+    # cells: [0]="A", [1]="日", [2]=padding, [3]="B"
+    # Erase from beginning to cursor at col 0
+    grid.processOutput("\x1b[1;1H") # 0-based: row 0, col 0
+    grid.processOutput("\x1b[1K")
+    check grid.cells[0][0].ch == "" # erased
+    # Wide char at col 1 must remain intact
+    check grid.cells[0][1].ch == "日"
+    check grid.cells[0][2].widePadding == true
+    check grid.cells[0][3].ch == "B"
+
+  test "Insert character at wide char padding splits correctly":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("日BC")
+    # cells: [0]="日" [1]=padding [2]="B" [3]="C"
+    # Insert 1 blank at col 1 (the padding cell)
+    grid.processOutput("\x1b[1;2H") # 0-based: row 0, col 1
+    grid.processOutput("\x1b[1@") # Insert 1 character
+    # The wide char at col 0 should be cleaned up
+    check grid.cells[0][0].ch == "" # main cell cleared
+    check grid.cells[0][0].widePadding == false
+    check grid.cells[0][1].ch == "" # inserted blank
+    check grid.cells[0][1].widePadding == false
+
+  test "Insert character pushes wide char off right edge":
+    let grid = newTerminalGrid(6, 3)
+    grid.processOutput("AB日CD")
+    # cells: [0]="A" [1]="B" [2]="日" [3]=padding [4]="C" [5]="D"
+    # Insert 1 blank at col 0. Rightmost cell "D" is pushed off.
+    grid.processOutput("\x1b[1;1H")
+    grid.processOutput("\x1b[1@")
+    check grid.cells[0][0].ch == "" # inserted blank
+    check grid.cells[0][1].ch == "A"
+    check grid.cells[0][2].ch == "B"
+    check grid.cells[0][3].ch == "日"
+    check grid.cells[0][4].widePadding == true
+    check grid.cells[0][5].ch == "C" # "D" pushed off
+
+  test "Insert character at right edge of wide char cleans up pushed-off padding":
+    let grid = newTerminalGrid(5, 3)
+    grid.processOutput("A日BC")
+    # cells: [0]="A" [1]="日" [2]=padding [3]="B" [4]="C"
+    # Insert 1 blank at col 3. "C" at col 4 is pushed off.
+    # But also check: col 5 (cols-n=4) boundary.
+    grid.processOutput("\x1b[1;1H")
+    grid.processOutput("\x1b[2@") # Insert 2 blanks at col 0
+    # pushEdge = 5-2 = 3. cell[3] is "B" (not padding). No split.
+    # Shift: cells shift right by 2. [0]=blank [1]=blank [2]="A" [3]="日" [4]=padding
+    check grid.cells[0][0].ch == "" # inserted
+    check grid.cells[0][1].ch == "" # inserted
+    check grid.cells[0][2].ch == "A"
+    check grid.cells[0][3].ch == "日"
+    check grid.cells[0][4].widePadding == true
+
+  test "Wide chars in scrollback are handled correctly in toPlainText":
+    let grid = newTerminalGrid(10, 3)
+    # Fill lines to push "日本" into scrollback
+    grid.processOutput("日本\r\nLine2\r\nLine3\r\nLine4")
+    let text = grid.toPlainText()
+    check "日本" in text

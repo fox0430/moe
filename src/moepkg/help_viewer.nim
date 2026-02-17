@@ -348,10 +348,6 @@ Ctrl-\ Ctrl-n - Switch to Terminal-Normal sub-mode
 
 ## Terminal-Normal sub-mode
 
-j  - Go down
-k  - Go up
-gg - Go to the first line
-G  - Go to the last line
 i  - Return to Terminal-Input sub-mode
 a  - Return to Terminal-Input sub-mode
 :  - Enter command mode

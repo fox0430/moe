@@ -21,7 +21,9 @@
 ## Implements a VT100/xterm state machine to process PTY output and
 ## maintain a 2D grid of styled cells.
 
-import std/strutils
+import std/[strutils, deques, unicode]
+
+import ../unicode_utils
 
 type
   ColorKind* = enum
@@ -52,6 +54,7 @@ type
     fg*: TerminalColor # Foreground color
     bg*: TerminalColor # Background color
     attrs*: set[TerminalAttr]
+    widePadding*: bool # Second cell of a wide (CJK) character
 
   AnsiParserState* = enum
     apsNormal # Normal text processing
@@ -68,7 +71,7 @@ type
     cursorCol*: int
     cursorVisible*: bool
     # Scrollback
-    scrollbackBuffer*: seq[seq[TerminalCell]]
+    scrollbackBuffer*: Deque[seq[TerminalCell]]
     maxScrollback*: int
     # Current SGR state
     currentFg*: TerminalColor
@@ -77,6 +80,7 @@ type
     # Parser state
     parserState*: AnsiParserState
     escapeBuffer*: string
+    utf8Buffer*: string # Incomplete UTF-8 bytes from previous read
     # Flags
     needsRedraw*: bool
     title*: string
@@ -91,6 +95,12 @@ proc indexedColor*(idx: uint8): TerminalColor =
 
 proc rgbColor*(r, g, b: uint8): TerminalColor =
   TerminalColor(kind: ckRgb, r: r, g: g, b: b)
+
+proc charDisplayWidth(ch: string): int =
+  ## Return the display width of a UTF-8 character (1 for narrow, 2 for wide/CJK).
+  if ch.len == 0:
+    return 1
+  runeWidth(ch.runeAt(0))
 
 proc defaultCell*(): TerminalCell =
   TerminalCell(ch: "", fg: defaultColor(), bg: defaultColor(), attrs: {})
@@ -107,7 +117,7 @@ proc newTerminalGrid*(cols, rows: int): TerminalGrid =
     cursorRow: 0,
     cursorCol: 0,
     cursorVisible: true,
-    scrollbackBuffer: @[],
+    scrollbackBuffer: initDeque[seq[TerminalCell]](),
     maxScrollback: DefaultMaxScrollback,
     currentFg: defaultColor(),
     currentBg: defaultColor(),
@@ -134,6 +144,11 @@ proc resize*(grid: TerminalGrid, cols, rows: int) =
     if r < oldRows:
       for c in 0 ..< min(cols, oldCols):
         newCells[r][c] = grid.cells[r][c]
+      # Clean up wide char split at the new right edge:
+      # If the cell just past the boundary (old col `cols`) was a padding cell,
+      # its main cell at cols-1 has lost its padding — clear it.
+      if cols < oldCols and cols > 0 and grid.cells[r][cols].widePadding:
+        newCells[r][cols - 1] = defaultCell()
 
   grid.cells = newCells
   grid.cols = cols
@@ -151,9 +166,9 @@ proc scrollUp(grid: TerminalGrid) =
     return
 
   # Push top line to scrollback
-  grid.scrollbackBuffer.add(grid.cells[0])
+  grid.scrollbackBuffer.addLast(grid.cells[0])
   if grid.scrollbackBuffer.len > grid.maxScrollback:
-    grid.scrollbackBuffer.delete(0)
+    grid.scrollbackBuffer.shrink(fromFirst = 1)
 
   # Shift rows up
   for r in 0 ..< grid.rows - 1:
@@ -164,8 +179,11 @@ proc scrollUp(grid: TerminalGrid) =
 
 proc putChar(grid: TerminalGrid, ch: string) =
   ## Place a character at the current cursor position, advancing the cursor.
+  ## Wide (CJK) characters occupy two cells: the character cell + a padding cell.
   if grid.cursorRow < 0 or grid.cursorRow >= grid.rows:
     return
+
+  let width = charDisplayWidth(ch)
 
   # Wrap if at right edge
   if grid.cursorCol >= grid.cols:
@@ -175,10 +193,60 @@ proc putChar(grid: TerminalGrid, ch: string) =
       grid.scrollUp()
       grid.cursorRow = grid.rows - 1
 
-  grid.cells[grid.cursorRow][grid.cursorCol] = TerminalCell(
+  # Wide character that doesn't fit on this line — pad the remaining cell and wrap
+  if width == 2 and grid.cursorCol + 1 >= grid.cols:
+    # Fill the last cell with a space and wrap
+    grid.cells[grid.cursorRow][grid.cursorCol] = defaultCell()
+    grid.cursorCol = 0
+    grid.cursorRow += 1
+    if grid.cursorRow >= grid.rows:
+      grid.scrollUp()
+      grid.cursorRow = grid.rows - 1
+
+  let col = grid.cursorCol
+  let row = grid.cursorRow
+
+  # If overwriting onto a padding cell, clear the wide char's main cell
+  if grid.cells[row][col].widePadding and col > 0:
+    grid.cells[row][col - 1] = defaultCell()
+
+  # If overwriting a wide char's main cell, clear its padding cell
+  if not grid.cells[row][col].widePadding and col + 1 < grid.cols and
+      grid.cells[row][col + 1].widePadding:
+    grid.cells[row][col + 1] = defaultCell()
+
+  grid.cells[row][col] = TerminalCell(
     ch: ch, fg: grid.currentFg, bg: grid.currentBg, attrs: grid.currentAttrs
   )
-  grid.cursorCol += 1
+
+  if width == 2 and col + 1 < grid.cols:
+    # If the padding cell is a wide char's main cell, clear its padding too
+    if col + 2 < grid.cols and grid.cells[row][col + 2].widePadding:
+      grid.cells[row][col + 2] = defaultCell()
+    grid.cells[row][col + 1] = TerminalCell(
+      ch: "",
+      fg: grid.currentFg,
+      bg: grid.currentBg,
+      attrs: grid.currentAttrs,
+      widePadding: true,
+    )
+
+  grid.cursorCol += width
+
+proc cleanWideCharBoundary(grid: TerminalGrid, row, col: int) =
+  ## Clean up wide character boundaries at an erase edge.
+  ## If the cell at (row, col) is a padding cell, clear both it and its main cell.
+  ## This handles both start and end boundaries of erase operations:
+  ##   - Start boundary: padding at cursorCol → clear the main cell before the range
+  ##   - End boundary: padding just past the range → clear the orphaned padding
+  ## Note: wide char main cells at the erase start don't need explicit cleanup
+  ## because the erase loop or end-boundary check will handle the padding.
+  if row < 0 or row >= grid.rows or col < 0 or col >= grid.cols:
+    return
+  if grid.cells[row][col].widePadding:
+    if col > 0:
+      grid.cells[row][col - 1] = defaultCell()
+    grid.cells[row][col] = defaultCell()
 
 proc parseCsiParams(s: string): seq[int] =
   ## Parse CSI parameter string "1;2;3" into sequence of ints.
@@ -369,6 +437,7 @@ proc processCsi(grid: TerminalGrid, buf: string) =
     case mode
     of 0:
       # Erase from cursor to end of screen
+      grid.cleanWideCharBoundary(grid.cursorRow, grid.cursorCol)
       for c in grid.cursorCol ..< grid.cols:
         grid.cells[grid.cursorRow][c] = defaultCell()
       for r in grid.cursorRow + 1 ..< grid.rows:
@@ -377,9 +446,11 @@ proc processCsi(grid: TerminalGrid, buf: string) =
       # Erase from beginning of screen to cursor
       for r in 0 ..< grid.cursorRow:
         grid.cells[r] = newRow(grid.cols)
-      for c in 0 .. grid.cursorCol:
-        if c < grid.cols:
-          grid.cells[grid.cursorRow][c] = defaultCell()
+      let endCol = min(grid.cursorCol, grid.cols - 1)
+      if endCol + 1 < grid.cols:
+        grid.cleanWideCharBoundary(grid.cursorRow, endCol + 1)
+      for c in 0 .. endCol:
+        grid.cells[grid.cursorRow][c] = defaultCell()
     of 2, 3:
       # Erase entire screen
       for r in 0 ..< grid.rows:
@@ -396,11 +467,15 @@ proc processCsi(grid: TerminalGrid, buf: string) =
     case mode
     of 0:
       # Erase from cursor to end of line
+      grid.cleanWideCharBoundary(grid.cursorRow, grid.cursorCol)
       for c in grid.cursorCol ..< grid.cols:
         grid.cells[grid.cursorRow][c] = defaultCell()
     of 1:
       # Erase from beginning of line to cursor
-      for c in 0 .. min(grid.cursorCol, grid.cols - 1):
+      let endCol = min(grid.cursorCol, grid.cols - 1)
+      if endCol + 1 < grid.cols:
+        grid.cleanWideCharBoundary(grid.cursorRow, endCol + 1)
+      for c in 0 .. endCol:
         grid.cells[grid.cursorRow][c] = defaultCell()
     of 2:
       # Erase entire line
@@ -470,7 +545,11 @@ proc processCsi(grid: TerminalGrid, buf: string) =
         params[0]
       else:
         1
-    for c in grid.cursorCol ..< min(grid.cursorCol + n, grid.cols):
+    grid.cleanWideCharBoundary(grid.cursorRow, grid.cursorCol)
+    let endCol = min(grid.cursorCol + n, grid.cols)
+    if endCol < grid.cols:
+      grid.cleanWideCharBoundary(grid.cursorRow, endCol)
+    for c in grid.cursorCol ..< endCol:
       grid.cells[grid.cursorRow][c] = defaultCell()
   of 'P':
     # Delete Character
@@ -480,6 +559,10 @@ proc processCsi(grid: TerminalGrid, buf: string) =
       else:
         1
     let row = grid.cursorRow
+    grid.cleanWideCharBoundary(row, grid.cursorCol)
+    let srcStart = grid.cursorCol + n
+    if srcStart < grid.cols:
+      grid.cleanWideCharBoundary(row, srcStart)
     for c in grid.cursorCol ..< grid.cols - n:
       if c + n < grid.cols:
         grid.cells[row][c] = grid.cells[row][c + n]
@@ -493,6 +576,12 @@ proc processCsi(grid: TerminalGrid, buf: string) =
       else:
         1
     let row = grid.cursorRow
+    # Clean wide char boundary at insertion point
+    grid.cleanWideCharBoundary(row, grid.cursorCol)
+    # Clean wide char boundary at the right edge that will be pushed off
+    let pushEdge = grid.cols - n
+    if pushEdge >= 0 and pushEdge < grid.cols:
+      grid.cleanWideCharBoundary(row, pushEdge)
     for c in countdown(grid.cols - 1, grid.cursorCol + n):
       grid.cells[row][c] = grid.cells[row][c - n]
     for c in grid.cursorCol ..< min(grid.cursorCol + n, grid.cols):
@@ -531,9 +620,13 @@ proc processCsi(grid: TerminalGrid, buf: string) =
 proc processOutput*(grid: TerminalGrid, data: string) =
   ## Process raw PTY output through the ANSI parser state machine.
   ## Updates the grid cells, cursor position, and colors.
+  var actualData = data
+  if grid.utf8Buffer.len > 0:
+    actualData = grid.utf8Buffer & data
+    grid.utf8Buffer = ""
   var i = 0
-  while i < data.len:
-    let ch = data[i]
+  while i < actualData.len:
+    let ch = actualData[i]
 
     case grid.parserState
     of apsNormal:
@@ -579,11 +672,14 @@ proc processOutput*(grid: TerminalGrid, data: string) =
               4
             else:
               1
-          if i + byteLen <= data.len:
-            runeStr = data[i ..< i + byteLen]
+          if i + byteLen <= actualData.len:
+            runeStr = actualData[i ..< i + byteLen]
             i += byteLen - 1 # -1 because the main loop increments
           else:
-            runeStr = "?"
+            # Incomplete UTF-8 sequence at end of buffer — save for next read
+            grid.utf8Buffer = actualData[i ..< actualData.len]
+            grid.needsRedraw = true
+            return
         grid.putChar(runeStr)
     of apsEscape:
       case ch
@@ -629,7 +725,7 @@ proc processOutput*(grid: TerminalGrid, data: string) =
         grid.parserState = apsNormal
       of '#':
         # DEC line attribute sequences (e.g., ESC # 8) - skip next byte
-        if i + 1 < data.len:
+        if i + 1 < actualData.len:
           i += 1
         grid.parserState = apsNormal
       of 'P', '_', '^', 'X':
@@ -666,7 +762,7 @@ proc processOutput*(grid: TerminalGrid, data: string) =
             grid.title = oscStr[2 .. ^1]
         if ch == '\x1b':
           # OSC terminated by ESC \ (ST), skip the backslash
-          if i + 1 < data.len and data[i + 1] == '\\':
+          if i + 1 < actualData.len and actualData[i + 1] == '\\':
             i += 1
         grid.parserState = apsNormal
       else:
@@ -675,7 +771,7 @@ proc processOutput*(grid: TerminalGrid, data: string) =
       # Consuming DCS/APC/PM/SOS string until ST (ESC \) or BEL
       if ch == '\x1b':
         # Possible start of ST (ESC \)
-        if i + 1 < data.len and data[i + 1] == '\\':
+        if i + 1 < actualData.len and actualData[i + 1] == '\\':
           i += 1 # Skip the backslash
         grid.parserState = apsNormal
       elif ch == '\x07':
@@ -703,6 +799,8 @@ proc toPlainText*(grid: TerminalGrid): string =
   for row in grid.scrollbackBuffer:
     var line = ""
     for cell in row:
+      if cell.widePadding:
+        continue
       if cell.ch.len > 0:
         line.add(cell.ch)
       else:
@@ -713,7 +811,7 @@ proc toPlainText*(grid: TerminalGrid): string =
   var lastNonEmptyRow = -1
   for r in 0 ..< grid.rows:
     for c in 0 ..< grid.cols:
-      if grid.cells[r][c].ch.len > 0:
+      if grid.cells[r][c].ch.len > 0 and not grid.cells[r][c].widePadding:
         lastNonEmptyRow = r
         break
 
@@ -722,6 +820,8 @@ proc toPlainText*(grid: TerminalGrid): string =
       var line = ""
       for c in 0 ..< grid.cols:
         let cell = grid.cells[r][c]
+        if cell.widePadding:
+          continue
         if cell.ch.len > 0:
           line.add(cell.ch)
         else:
