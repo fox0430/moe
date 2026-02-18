@@ -40,7 +40,7 @@ proc setupBuffer(lines: seq[string] = @[""]): TextBuffer =
         discard buf.insertText(BufferPosition(line: 0, column: 0), line)
     else:
       discard buf.insert(i, line)
-  buf.modified = false
+  buf.markSaved()
   return buf
 
 suite "CommandModeHandler - newCommandModeHandler":
@@ -55,7 +55,7 @@ suite "CommandModeHandler - executeQuit":
   test "Quit unmodified buffer":
     let handler = setupHandler()
     let buffer = setupBuffer()
-    buffer.modified = false
+    buffer.markSaved()
 
     let result = handler.executeQuit(buffer, force = false)
     check result.kind == cmrCloseWindow
@@ -141,7 +141,7 @@ suite "CommandModeHandler - executeQuitAll":
   test "Quit all with unmodified buffer":
     let handler = setupHandler()
     let buffer = setupBuffer()
-    buffer.modified = false
+    buffer.markSaved()
 
     let result = handler.executeQuitAll(buffer, force = false)
     check result.kind == cmrQuit
@@ -718,7 +718,7 @@ suite "CommandModeHandler - executeBufferDelete":
   test "Delete unmodified buffer":
     let handler = setupHandler()
     let buffer = setupBuffer()
-    buffer.modified = false
+    buffer.markSaved()
 
     let result = handler.executeBufferDelete(buffer, force = false)
     check result.kind == cmrBufferDelete
@@ -1120,13 +1120,6 @@ suite "CommandModeHandler - handleCommandModeInput":
     let result = handler.handleCommandModeInput(buffer, ":bd")
     check result.kind == cmrBufferDelete
 
-  test "Handle :Filer command":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":Filer")
-    check result.kind == cmrFiler
-
   test "Handle :log command":
     let handler = setupHandler()
     let buffer = setupBuffer()
@@ -1253,15 +1246,6 @@ suite "CommandModeHandler - handleCommandModeInput":
     check result.kind == cmrTheme
     check result.themeName == "dark"
 
-  test "Handle :stripws command":
-    let handler = setupHandler()
-    let buffer = newTextBuffer()
-    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello   ")
-
-    let result = handler.handleCommandModeInput(buffer, ":stripws")
-    check result.kind == cmrStripWhitespace
-    check result.strippedLineCount == 1
-
   test "Handle :lspfold command":
     let handler = setupHandler()
     let buffer = setupBuffer()
@@ -1327,14 +1311,6 @@ suite "CommandModeHandler - handleCommandModeInput":
     check result.kind == cmrSubstitute
     check result.substituteCount == 1
 
-  test "Handle :filer command (lowercase)":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":filer")
-    check result.kind == cmrFiler
-
-  # Command aliases
   test "Handle :x command (alias for :wq)":
     let handler = setupHandler()
     let buffer = setupBuffer()

@@ -159,13 +159,9 @@ proc isModified*(b: TextBuffer): bool {.inline.} =
   ## Check if buffer has unsaved changes
   b.changeSeq != b.savedSeq
 
-proc `modified=`*(
-    b: TextBuffer, value: bool
-) {.deprecated: "Use saveFile to mark as unmodified".} =
-  ## Deprecated: modified flag is now managed automatically
-  ## Set savedSeq to current changeSeq if value is false
-  if not value:
-    b.savedSeq = b.changeSeq
+proc markSaved*(b: TextBuffer) {.inline.} =
+  ## Mark the buffer as unmodified by syncing savedSeq to changeSeq.
+  b.savedSeq = b.changeSeq
 
 proc newTextBuffer*(
     content: string = "", filePath: Option[string] = none(string)
