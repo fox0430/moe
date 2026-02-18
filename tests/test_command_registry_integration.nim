@@ -1066,6 +1066,10 @@ suite "Handler - Yank line operations":
     check buffer.len == 3 # Buffer unchanged
     check "line2" in ctx.state.yankRegister
     check ctx.state.yankIsLine == true
+    # Register system must also be updated
+    let reg = ctx.state.registers.getNoNamedRegister()
+    check "line2" in reg.getContent()
+    check reg.isLine == true
 
   test "yank multiple lines (3yy)":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4")
@@ -1079,6 +1083,50 @@ suite "Handler - Yank line operations":
     check "line1" in ctx.state.yankRegister
     check "line2" in ctx.state.yankRegister
     check "line3" in ctx.state.yankRegister
+    # Register system must also be updated
+    let reg = ctx.state.registers.getNoNamedRegister()
+    check "line1" in reg.getContent()
+    check "line2" in reg.getContent()
+    check "line3" in reg.getContent()
+    check reg.isLine == true
+
+  test "yank single line then paste (yy then p)":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    let registry = createTestRegistry()
+
+    # yy
+    let yankResult = registry.execute(ctx, custom("yank.line"))
+    check yankResult.isOk
+
+    # p
+    let pasteResult = registry.execute(ctx, custom("paste.after"))
+    check pasteResult.isOk
+    check buffer.len == 4
+    check buffer[2] == "line2"
+
+  test "yank line after delete still yanks correctly (yy after x)":
+    let buffer = newTextBuffer("hello\nworld\nfoo")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    # x deletes 'h' and sets delete register
+    let deleteResult = registry.execute(ctx, custom("delete.char"))
+    check deleteResult.isOk
+    check buffer[0] == "ello"
+
+    # yy on line 1
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    let yankResult = registry.execute(ctx, custom("yank.line"))
+    check yankResult.isOk
+
+    # p should paste "world", not "h"
+    ctx.cursor = BufferPosition(line: 2, column: 0)
+    let pasteResult = registry.execute(ctx, custom("paste.after"))
+    check pasteResult.isOk
+    check "world" in buffer[3]
 
 suite "Handler - Substitute operations":
   test "substitute char (s)":
@@ -1775,6 +1823,32 @@ suite "Handler - Operator commands":
     check result.isOk
     check buffer.len == 3 # Buffer unchanged
     check "line2" in ctx.state.yankRegister
+    # Register system must also be updated
+    let reg = ctx.state.registers.getNoNamedRegister()
+    check "line2" in reg.getContent()
+    check reg.isLine == true
+
+  test "double operator (yy) then paste after delete":
+    let buffer = newTextBuffer("aaa\nbbb\nccc")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # x deletes 'a' and sets delete register
+    discard registry.execute(ctx, custom("delete.char"))
+    check buffer[0] == "aa"
+
+    # yy on line 1
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    discard registry.execute(ctx, custom("operator.yank"))
+    let result = registry.execute(ctx, custom("operator.yank"))
+    check result.isOk
+
+    # p should paste "bbb", not "a"
+    let pasteResult = registry.execute(ctx, custom("paste.after"))
+    check pasteResult.isOk
+    check "bbb" in buffer[2]
 
   test "double operator (cc) changes line":
     let buffer = newTextBuffer("line1\nline2\nline3")
