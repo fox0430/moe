@@ -20,6 +20,7 @@
 import std/[unittest, os, strutils, tables, options]
 import pkg/results
 import ../src/moepkg/[config_loader, config, color, theme]
+import test_config_helper
 
 var testFileCounter {.global.} = 0
 
@@ -1231,10 +1232,10 @@ suite "Config - saveConfigToToml round-trip completeness":
 
 suite "Config - saveConfig":
   test "Default config does not crash":
-    let config = newEditorConfig()
-    # saveConfig writes to the real config path; we just verify no crash.
-    # The result may be Ok or Err depending on file system permissions.
-    discard saveConfig(config)
+    withTempHome(tmpDir):
+      let config = newEditorConfig()
+      let result = saveConfig(config)
+      check result.isOk
 
 suite "Config Validation - Unknown keys":
   test "Unknown top-level section is detected":

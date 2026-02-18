@@ -26,6 +26,8 @@
 import std/[unittest, options, tables, os]
 from std/strutils import contains
 
+import test_config_helper
+
 import pkg/celina
 import pkg/celina/core/mouse_logic
 
@@ -1398,45 +1400,47 @@ suite "enterFilerInActiveWindow":
 
 suite "handleCommandModeEvent - :putconfigfile":
   test "Overlay exited and config written":
-    let e = createTestEditorWithBuffer("hello")
-    e.config.theme.kind = tkDefault
-    e.config.theme.path = ""
-    e.state.enterCommandOverlay()
-    e.state.commandText = ":putconfigfile"
-    e.state.commandCursor = 14
+    withTempHome(tmpDir):
+      let e = createTestEditorWithBuffer("hello")
+      e.config.theme.kind = tkDefault
+      e.config.theme.path = ""
+      e.state.enterCommandOverlay()
+      e.state.commandText = ":putconfigfile"
+      e.state.commandCursor = 14
 
-    let cont = handleCommandModeEvent(e, makeEnterEvent())
+      let cont = handleCommandModeEvent(e, makeEnterEvent())
 
-    check cont == true
-    check not e.state.isCommandOverlay
-    check e.state.commandText == ""
-    check e.state.mode == EditorMode.Normal
-    check "Config written" in e.state.statusMessage
+      check cont == true
+      check not e.state.isCommandOverlay
+      check e.state.commandText == ""
+      check e.state.mode == EditorMode.Normal
+      check "Config written" in e.state.statusMessage
 
   test "Backup created when config already exists":
-    let e = createTestEditorWithBuffer("hello")
-    e.config.theme.kind = tkDefault
-    e.config.theme.path = ""
+    withTempHome(tmpDir):
+      let e = createTestEditorWithBuffer("hello")
+      e.config.theme.kind = tkDefault
+      e.config.theme.path = ""
 
-    let configPath = getConfigPath()
-    let backupPath = configPath & ".bac"
+      let configPath = getConfigPath()
+      let backupPath = configPath & ".bac"
 
-    # Ensure config file exists first
-    e.state.enterCommandOverlay()
-    e.state.commandText = ":putconfigfile"
-    e.state.commandCursor = 14
-    discard handleCommandModeEvent(e, makeEnterEvent())
-    check fileExists(configPath)
+      # Ensure config file exists first
+      e.state.enterCommandOverlay()
+      e.state.commandText = ":putconfigfile"
+      e.state.commandCursor = 14
+      discard handleCommandModeEvent(e, makeEnterEvent())
+      check fileExists(configPath)
 
-    # Run again to trigger backup
-    e.state.enterCommandOverlay()
-    e.state.commandText = ":putconfigfile"
-    e.state.commandCursor = 14
-    let cont = handleCommandModeEvent(e, makeEnterEvent())
+      # Run again to trigger backup
+      e.state.enterCommandOverlay()
+      e.state.commandText = ":putconfigfile"
+      e.state.commandCursor = 14
+      let cont = handleCommandModeEvent(e, makeEnterEvent())
 
-    check cont == true
-    check "Config written" in e.state.statusMessage
-    check fileExists(backupPath)
+      check cont == true
+      check "Config written" in e.state.statusMessage
+      check fileExists(backupPath)
 
   test "Theme file saved when kind is tkConfig":
     var themeFileCounter {.global.} = 0
@@ -1445,19 +1449,20 @@ suite "handleCommandModeEvent - :putconfigfile":
     defer:
       removeFile(themeFile)
 
-    let e = createTestEditorWithBuffer("hello")
-    e.config.theme.kind = tkConfig
-    e.config.theme.path = themeFile
+    withTempHome(tmpDir):
+      let e = createTestEditorWithBuffer("hello")
+      e.config.theme.kind = tkConfig
+      e.config.theme.path = themeFile
 
-    e.state.enterCommandOverlay()
-    e.state.commandText = ":putconfigfile"
-    e.state.commandCursor = 14
+      e.state.enterCommandOverlay()
+      e.state.commandText = ":putconfigfile"
+      e.state.commandCursor = 14
 
-    let cont = handleCommandModeEvent(e, makeEnterEvent())
+      let cont = handleCommandModeEvent(e, makeEnterEvent())
 
-    check cont == true
-    check "Config written" in e.state.statusMessage
-    check fileExists(themeFile)
+      check cont == true
+      check "Config written" in e.state.statusMessage
+      check fileExists(themeFile)
 
 suite "handleCommandModeEvent - all command mode commands execute":
   ## Regression tests ensuring every command properly exits the overlay
