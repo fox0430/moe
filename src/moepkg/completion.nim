@@ -23,11 +23,11 @@
 ## It collects words from the current buffer and/or LSP server and presents them
 ## in a popup menu for selection.
 
-import std/[algorithm, sequtils, strutils, unicode, sets, options, json]
+import std/[algorithm, sequtils, strutils, unicode, sets, options, json, os]
 
 import pkg/celina
 
-import buffer, word_dictionary
+import buffer, word_dictionary, command_completion
 import syntax/tokenizer
 import lsp/protocol/types as lspTypes
 
@@ -43,6 +43,7 @@ type
     csBuffer ## From buffer words
     csLsp ## From LSP server
     csKeyword ## From language keywords
+    csFilePath ## From file system paths
 
   CompletionEntry* = object ## A single completion entry
     word*: string ## The word to insert
@@ -73,6 +74,9 @@ type
     lspItems*: seq[CompletionItem] ## Raw LSP completion items
     otherBuffers*: seq[TextBuffer]
       ## Other FileEditMode buffers for multi-buffer completion
+    isPathCompletion*: bool ## Whether currently in path completion mode
+    pathBasePath*: string ## Base directory for resolving relative paths
+    pathOriginalPrefix*: string ## Full path prefix typed so far (e.g. "./src/")
 
 const
   DefaultMaxVisible* = 10
@@ -82,6 +86,9 @@ const
   MinPopupWidth* = 15 ## Minimum popup width
   MaxPopupWidth* = 50 ## Maximum popup width
   PopupPadding* = 2 ## Padding inside popup (left + right)
+
+# Forward declaration
+proc cancelCompletion*(mgr: CompletionManager)
 
 # Word collection from buffer
 
@@ -159,6 +166,43 @@ proc extractPrefixBeforeCursor*(line: string, col: int): string =
   # Build prefix from start to cursor
   for i in startIdx ..< col:
     result.add($runes[i])
+
+proc isPathChar*(r: Rune): bool =
+  ## Check if a rune is part of a file path
+  ## Includes alphanumeric, underscore, dash, dot, slash, tilde
+  r.isAlpha or r.isDigitRune or r == '_'.Rune or r == '-'.Rune or r == '.'.Rune or
+    r == '/'.Rune or r == '~'.Rune
+
+proc extractPathPrefixBeforeCursor*(line: string, col: int): string =
+  ## Extract the path prefix before the cursor position.
+  ## Scans backwards from cursor collecting path characters.
+  ## Returns the path prefix only if it contains a '/' character,
+  ## otherwise returns empty string (not a path context).
+  if line.len == 0 or col <= 0:
+    return ""
+
+  var runes: seq[Rune] = @[]
+  for r in line.runes:
+    runes.add(r)
+
+  if col > runes.len:
+    return ""
+
+  # Go backwards from cursor to find path start
+  var startIdx = col
+  while startIdx > 0 and runes[startIdx - 1].isPathChar:
+    dec startIdx
+
+  # Build the prefix
+  var prefix = ""
+  for i in startIdx ..< col:
+    prefix.add($runes[i])
+
+  # Only return as path prefix if it contains a slash
+  if '/' in prefix:
+    return prefix
+  else:
+    return ""
 
 proc collectBufferWords*(
     buffer: TextBuffer, excludePos: BufferPosition, otherBuffers: seq[TextBuffer] = @[]
@@ -267,6 +311,9 @@ proc newCompletionManager*(): CompletionManager =
     currentLanguage: langNone,
     lspRequestId: none(int),
     lspItems: @[],
+    isPathCompletion: false,
+    pathBasePath: "",
+    pathOriginalPrefix: "",
   )
 
 proc getDocumentationText(doc: JsonNode): Option[string] =
@@ -313,6 +360,28 @@ proc filterAndSortEntries*(
   ## When LSP items are available, show only LSP items (switch from buffer)
   ## When no LSP items, show buffer words as fallback
   result = @[]
+
+  # Path completion mode: re-collect file paths with updated prefix
+  if mgr.isPathCompletion:
+    let fullPrefix = mgr.pathOriginalPrefix & prefix
+    let fileEntries = collectFilePaths(mgr.pathBasePath, fullPrefix)
+    for entry in fileEntries:
+      let kind =
+        if entry.command.endsWith("/"):
+          some(CompletionItemKind.cikFolder)
+        else:
+          some(CompletionItemKind.cikFile)
+      result.add(
+        CompletionEntry(
+          word: entry.command,
+          matchScore: entry.matchScore,
+          source: csFilePath,
+          kind: kind,
+          detail: some(entry.description),
+          documentation: none(string),
+        )
+      )
+    return
 
   # If LSP items are available, use only LSP items
   if mgr.lspItems.len > 0:
@@ -366,6 +435,62 @@ proc updateFilter*(mgr: CompletionManager, prefix: string) =
   mgr.menu.entries = mgr.filterAndSortEntries(prefix)
   mgr.menu.selectedIndex = 0
   mgr.menu.scrollOffset = 0
+
+proc triggerPathCompletion*(
+    mgr: CompletionManager, buffer: TextBuffer, cursorLine, cursorCol: int
+) =
+  ## Trigger file path completion at the current cursor position.
+  ## Uses collectFilePaths from command_completion to gather entries.
+  let line = buffer.getLine(cursorLine)
+  let fullPathPrefix = extractPathPrefixBeforeCursor(line, cursorCol)
+
+  if fullPathPrefix.len == 0:
+    mgr.cancelCompletion()
+    return
+
+  # Determine base path from buffer's file path or current dir
+  let basePath =
+    if buffer.filePath.isSome:
+      parentDir(buffer.filePath.get)
+    else:
+      getCurrentDir()
+
+  mgr.isPathCompletion = true
+  mgr.pathBasePath = basePath
+
+  # Split the path prefix into directory part and filename part
+  # e.g. "./src/foo" -> dirPart = "./src/", filenamePart = "foo"
+  let lastSlash = fullPathPrefix.rfind('/')
+  let dirPart =
+    if lastSlash >= 0:
+      fullPathPrefix[0 .. lastSlash] # includes the trailing /
+    else:
+      ""
+  let filenamePart =
+    if lastSlash >= 0 and lastSlash + 1 < fullPathPrefix.len:
+      fullPathPrefix[lastSlash + 1 ..^ 1]
+    else:
+      ""
+
+  mgr.pathOriginalPrefix = dirPart
+  mgr.menu.prefix = filenamePart
+  mgr.menu.triggerLine = cursorLine
+  mgr.menu.triggerCol = cursorCol - filenamePart.runeLen
+  mgr.menu.hasSelection = false
+
+  # Clear LSP state
+  mgr.lspItems = @[]
+  mgr.lspRequestId = none(int)
+
+  # Collect and filter entries
+  mgr.menu.entries = mgr.filterAndSortEntries(filenamePart)
+  mgr.menu.selectedIndex = 0
+  mgr.menu.scrollOffset = 0
+
+  if mgr.menu.entries.len > 0:
+    mgr.state = csActive
+  else:
+    mgr.state = csIdle
 
 proc triggerCompletion*(
     mgr: CompletionManager,
@@ -425,6 +550,9 @@ proc cancelCompletion*(mgr: CompletionManager) =
   mgr.menu.hasSelection = false
   mgr.lspRequestId = none(int)
   mgr.lspItems = @[]
+  mgr.isPathCompletion = false
+  mgr.pathBasePath = ""
+  mgr.pathOriginalPrefix = ""
 
 proc selectNext*(mgr: CompletionManager) =
   ## Select the next completion item

@@ -319,16 +319,24 @@ proc commitCompletion*(
       state.cursor.column -= 1
       discard buffer.deleteChar(state.cursor)
 
+  # For path completion, strip trailing '/' from directories so the user
+  # can explicitly type '/' to drill in.
+  let insertWord =
+    if handler.completionManager.isPathCompletion and selectedWord.endsWith("/"):
+      selectedWord[0 ..^ 2]
+    else:
+      selectedWord
+
   # Insert the selected word
-  discard buffer.insertText(state.cursor, selectedWord)
-  state.cursor.column += selectedWord.runeLen
+  discard buffer.insertText(state.cursor, insertWord)
+  state.cursor.column += insertWord.runeLen
 
   # Close the completion menu (unless keepPopupOpen)
   if not keepPopupOpen:
     handler.completionManager.cancelCompletion()
   else:
-    # Update the prefix to the full word (so further typing filters from here)
-    handler.completionManager.menu.prefix = selectedWord
+    # Update the prefix to the inserted text (so further cycling deletes it correctly)
+    handler.completionManager.menu.prefix = insertWord
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
@@ -477,10 +485,10 @@ proc handleInsertModeKey*(
       # Replace current word with selected one
       return handler.commitCompletion(buffer, state, keepPopupOpen = true)
 
-    # Ctrl+P, Up, or Shift+Tab - select previous and replace current word
+    # Ctrl+P, Up, or Shift+Tab/BackTab - select previous and replace current word
     if keyCombo.isCtrlP or (keyCombo.isSpecial and keyCombo.special == skUp) or (
       keyCombo.isSpecial and keyCombo.special == skTab and kmShift in keyCombo.modifiers
-    ):
+    ) or (keyCombo.isSpecial and keyCombo.special == skBackTab):
       # First Shift+Tab activates selection mode
       if not handler.completionManager.menu.hasSelection:
         handler.completionManager.menu.hasSelection = true
@@ -502,34 +510,52 @@ proc handleInsertModeKey*(
     # Backspace - update filter or cancel if prefix is empty
     if keyCombo.isSpecial and keyCombo.special == skBackspace:
       let backspaceResult = handler.handleBackspace(buffer, state)
-      # Update completion filter with new prefix
-      let line = buffer.getLine(state.cursor.line)
-      let newPrefix = extractPrefixBeforeCursor(line, state.cursor.column)
-      if newPrefix.len >= MinPrefixLength:
-        handler.completionManager.updateFilter(newPrefix)
+      if handler.completionManager.isPathCompletion:
+        # Re-check path context after backspace
+        let line = buffer.getLine(state.cursor.line)
+        let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)
+        if pathPrefix.len > 0:
+          handler.completionManager.triggerPathCompletion(
+            buffer, state.cursor.line, state.cursor.column
+          )
+        else:
+          handler.completionManager.cancelCompletion()
       else:
-        handler.completionManager.cancelCompletion()
+        # Update completion filter with new prefix
+        let line = buffer.getLine(state.cursor.line)
+        let newPrefix = extractPrefixBeforeCursor(line, state.cursor.column)
+        if newPrefix.len >= MinPrefixLength:
+          handler.completionManager.updateFilter(newPrefix)
+        else:
+          handler.completionManager.cancelCompletion()
       return backspaceResult
 
     # Regular character input while completion is active
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
       let hasSelection = handler.completionManager.menu.hasSelection
+      let wasPathCompletion = handler.completionManager.isPathCompletion
 
-      if hasSelection:
-        # Confirm current selection and close popup
+      if hasSelection and not wasPathCompletion:
+        # Confirm current selection and close popup (non-path only)
         handler.completionManager.cancelCompletion()
 
       # Insert the new character
       discard handler.handleCharacterInsertion(buffer, state, keyCombo.char)
 
-      # Re-trigger completion with new prefix (start fresh, no selection)
+      # Re-trigger completion with new prefix
       let line = buffer.getLine(state.cursor.line)
-      let newPrefix = extractPrefixBeforeCursor(line, state.cursor.column)
-      if newPrefix.len >= AutoTriggerPrefixLength:
-        # Show buffer completions immediately, LSP will update when ready
-        handler.triggerLspCompletionRequest(buffer, state)
+      let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)
+      if pathPrefix.len > 0:
+        handler.completionManager.triggerPathCompletion(
+          buffer, state.cursor.line, state.cursor.column
+        )
       else:
-        handler.completionManager.cancelCompletion()
+        let newPrefix = extractPrefixBeforeCursor(line, state.cursor.column)
+        if newPrefix.len >= AutoTriggerPrefixLength:
+          # Show buffer completions immediately, LSP will update when ready
+          handler.triggerLspCompletionRequest(buffer, state)
+        else:
+          handler.completionManager.cancelCompletion()
       return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   # Ctrl+N - trigger completion (when not active)
@@ -617,12 +643,19 @@ proc handleInsertModeKey*(
   # Handle regular character insertion with auto-completion trigger
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
     discard handler.handleCharacterInsertion(buffer, state, keyCombo.char)
-    # Auto-trigger completion after typing (when prefix is long enough)
+    # Check for path completion first
     let line = buffer.getLine(state.cursor.line)
-    let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
-    if prefix.len >= AutoTriggerPrefixLength:
-      # Show buffer completions immediately, LSP will update when ready
-      handler.triggerLspCompletionRequest(buffer, state)
+    let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)
+    if pathPrefix.len > 0:
+      handler.completionManager.triggerPathCompletion(
+        buffer, state.cursor.line, state.cursor.column
+      )
+    else:
+      # Auto-trigger word completion after typing (when prefix is long enough)
+      let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
+      if prefix.len >= AutoTriggerPrefixLength:
+        # Show buffer completions immediately, LSP will update when ready
+        handler.triggerLspCompletionRequest(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   # Handle special keys
