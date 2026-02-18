@@ -17,9 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import
-  std/
-    [sequtils, os, parseutils, strutils, strformat, unicode, algorithm, options, tables]
+import std/[sequtils, os, strutils, strformat, unicode, algorithm, options, tables]
 
 import pkg/celina
 
@@ -519,9 +517,6 @@ proc initHighlight*(
 
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(bufferStr)
-  var pad: string
-  if bufferStr.parseWhile(pad, {' ', '\x09' .. '\x0D'}) > 0:
-    splitByNewline(pad, EditorColorPairIndex.default)
 
   while true:
     token.getNextToken(language)
@@ -625,8 +620,15 @@ proc initHighlightIncremental*(
         else:
           colorSegments.add(cs)
 
-        # Capture tokenizer state at line boundary
+        # Capture tokenizer state at line boundary.
+        # For multi-line tokens (long strings, block comments), temporarily
+        # set the state to the token kind so incremental re-parsing can
+        # correctly resume from inside the multi-line construct.
+        let savedState = token.state
+        if token.kind in {gtLongStringLit, gtLongComment}:
+          token.state = token.kind
         lineStates.add(captureTokenizerState(token))
+        token.state = savedState
 
         inc(currentRow)
         currentColumn = 0
@@ -647,10 +649,6 @@ proc initHighlightIncremental*(
 
   # Restore initial tokenizer state
   token.restoreTokenizerState(initialState)
-
-  var pad: string
-  if bufferStr.parseWhile(pad, {' ', '\x09' .. '\x0D'}) > 0:
-    splitByNewlineWithState(pad, EditorColorPairIndex.default)
 
   while true:
     token.getNextToken(language)
@@ -704,83 +702,92 @@ proc updateHighlightIncremental*(
     buffer: seq[Runes],
     incrHighlight: var IncrementalHighlight,
     changedStartLine: int,
-    changedEndLine: int,
     bufferChangeSeq: int,
     reservedWords: seq[ReservedWord],
     language: SourceLanguage,
 ) =
-  ## Update highlighting incrementally for a changed region
-  ## Uses safety margins and cached tokenizer states for efficiency
+  ## Update highlighting incrementally for a changed region.
+  ## Re-parses from the changed line in chunks, stopping early when the
+  ## tokenizer state converges with the cached state (meaning all subsequent
+  ## lines would produce the same result as before). Falls back to parsing
+  ## the entire rest of the file when convergence cannot be detected (e.g.
+  ## when the line count has changed).
 
-  const SafetyMargin = 50 # Lines before/after change to re-parse
+  const ChunkSize = 100
 
-  # Detect buffer size change (line insertion/deletion)
-  let lineDelta = buffer.len - incrHighlight.lineStates.states.len
-
-  # Determine re-parse range with safety margins
-  # If buffer size changed, re-parse from change point to end to avoid segment shifting logic
-  let
-    reparseStart = max(0, changedStartLine - SafetyMargin)
-    reparseEnd =
-      if lineDelta != 0:
-        # Buffer size changed - re-parse to end of file
-        buffer.high
-      else:
-        # No size change - use normal safety margin
-        min(buffer.high, changedEndLine + SafetyMargin)
+  # Start re-parsing from the changed line.
+  # A small backward margin accounts for tokens that may span the boundary.
+  let reparseStart = max(0, changedStartLine - 2)
 
   # Get initial state for the re-parse range
   var initialState: TokenizerState
   if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
-    # Use cached state from the line before re-parse start
     initialState = incrHighlight.lineStates.states[reparseStart - 1]
   else:
-    # Start of file - use default state
     initialState = TokenizerState()
 
-  # Parse the re-parse range
-  let (newSegments, newLineStates) = initHighlightIncremental(
-    buffer, reparseStart, reparseEnd, initialState, reservedWords, language
-  )
+  # State convergence detection is only valid when the line count has not
+  # changed; otherwise cached states at the same index refer to different lines.
+  let canConverge = buffer.len == incrHighlight.lineStates.states.len
 
-  # Remove old segments in the re-parse range
+  # Parse in chunks, checking for state convergence after each chunk
+  var
+    currentStart = reparseStart
+    currentState = initialState
+    allNewSegments: seq[ColorSegment]
+    allNewLineStates: seq[TokenizerState]
+    reparseEnd = reparseStart - 1
+
+  while currentStart <= buffer.high:
+    let chunkEnd = min(currentStart + ChunkSize - 1, buffer.high)
+
+    let (newSegments, newLineStates) = initHighlightIncremental(
+      buffer, currentStart, chunkEnd, currentState, reservedWords, language
+    )
+
+    allNewSegments.add(newSegments)
+    allNewLineStates.add(newLineStates)
+    reparseEnd = chunkEnd
+
+    if newLineStates.len > 0:
+      currentState = newLineStates[^1]
+
+    # Check for convergence: if the tokenizer state at the end of this chunk
+    # matches the old cached state, all subsequent lines will produce the same
+    # segments as before — no need to continue parsing.
+    if canConverge and chunkEnd < buffer.high and newLineStates.len > 0 and
+        newLineStates[^1] == incrHighlight.lineStates.states[chunkEnd]:
+      break
+
+    currentStart = chunkEnd + 1
+
+  # Keep segments outside the re-parsed range
   var filteredSegments: seq[ColorSegment]
   for seg in incrHighlight.segments:
-    # Keep segments that are within buffer bounds and don't overlap with the re-parse range
-    # This ensures we don't keep segments pointing to deleted lines
     if seg.firstRow < buffer.len and seg.lastRow < buffer.len and
         (seg.lastRow < reparseStart or seg.firstRow > reparseEnd):
       filteredSegments.add(seg)
 
-  # Merge new segments
-  incrHighlight.segments = filteredSegments & newSegments
+  incrHighlight.segments = filteredSegments & allNewSegments
 
-  # Sort segments by position (should already be sorted, but ensure it)
+  # Sort segments by position
   incrHighlight.segments.sort do(a, b: ColorSegment) -> int:
     if a.firstRow != b.firstRow:
       return cmp(a.firstRow, b.firstRow)
     else:
       return cmp(a.firstColumn, b.firstColumn)
 
-  # Update line state cache
-  # Resize states array to match buffer size
-  if incrHighlight.lineStates.states.len < buffer.len:
-    # Buffer grew - extend with default states
-    while incrHighlight.lineStates.states.len < buffer.len:
-      incrHighlight.lineStates.states.add(TokenizerState())
-  elif incrHighlight.lineStates.states.len > buffer.len:
-    # Buffer shrunk - truncate
-    incrHighlight.lineStates.states.setLen(buffer.len)
+  # Update line state cache - resize to match buffer
+  incrHighlight.lineStates.states.setLen(buffer.len)
 
-  # Replace states for the re-parsed lines
-  if newLineStates.len > 0:
+  # Replace states for re-parsed lines only
+  if allNewLineStates.len > 0:
     var stateIdx = 0
-    for lineIdx in reparseStart .. min(reparseEnd, buffer.high):
-      if stateIdx < newLineStates.len and lineIdx < incrHighlight.lineStates.states.len:
-        incrHighlight.lineStates.states[lineIdx] = newLineStates[stateIdx]
+    for lineIdx in reparseStart .. reparseEnd:
+      if stateIdx < allNewLineStates.len and lineIdx < buffer.len:
+        incrHighlight.lineStates.states[lineIdx] = allNewLineStates[stateIdx]
         inc stateIdx
 
-  # Update version to match current buffer change sequence
   incrHighlight.lineStates.version = bufferChangeSeq
 
 proc detectLanguage*(filename: string): SourceLanguage =

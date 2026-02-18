@@ -127,7 +127,7 @@ type
     language*: SourceLanguage # Programming language for syntax highlighting
     highlightNeedsUpdate*: bool # Flag to track if highlight needs regeneration
     incrementalHighlight*: IncrementalHighlight # Incremental highlighting cache
-    lastChangedLines*: tuple[start, theEnd: int] # Last edit range for incremental update
+    lastChangedLines*: int # First changed line for incremental highlight
     reservedWords*: seq[ReservedWord] # Reserved words to highlight (TODO, NOTE, etc.)
 
     # Performance optimization
@@ -198,7 +198,7 @@ proc newTextBuffer*(
       language: SourceLanguage.langNone,
       highlightNeedsUpdate: false,
       incrementalHighlight: nil,
-      lastChangedLines: (0, 0),
+      lastChangedLines: 0,
       # Initialize cursor position cache (invalid state)
       cursorCache: CursorPosCache(line: -1, charPos: 0, bytePos: 0, changeSeq: -1),
       # Initialize empty fold state
@@ -667,37 +667,8 @@ proc pushUndoChange(b: TextBuffer, change: BufferChange) =
   # Mark highlight as needing update and track changed range
   b.highlightNeedsUpdate = true
 
-  # Track the range of changed lines for incremental highlighting
-  case change.kind
-  of ckInsertText:
-    let numNewlines = change.insertText.count('\n')
-    b.lastChangedLines = (change.insertPos.line, change.insertPos.line + numNewlines)
-  of ckDeleteText:
-    b.lastChangedLines = (change.deletePos.line, change.deletePos.line)
-  of ckInsertLine:
-    b.lastChangedLines = (change.insertLineIdx, change.insertLineIdx)
-  of ckDeleteLine:
-    b.lastChangedLines = (change.deleteLineIdx, change.deleteLineIdx)
-  of ckDeleteRange:
-    b.lastChangedLines = (change.deleteStartPos.line, change.deleteEndPos.line)
-  of ckTransaction:
-    # For transactions, compute the range of all changes
-    var minLine = int.high
-    var maxLine = 0
-    for ch in change.transactionChanges:
-      let pos = getChangePosition(ch)
-      minLine = min(minLine, pos.line)
-      # Estimate end line based on change type
-      case ch.kind
-      of ckInsertText:
-        let numLines = ch.insertText.count('\n')
-        maxLine = max(maxLine, pos.line + numLines)
-      of ckDeleteRange:
-        maxLine = max(maxLine, ch.deleteEndPos.line)
-      else:
-        maxLine = max(maxLine, pos.line)
-    if minLine != int.high:
-      b.lastChangedLines = (minLine, maxLine)
+  # Track the first changed line for incremental highlighting
+  b.lastChangedLines = getChangePosition(change).line
 
   if b.inTransaction and b.currentTransaction.isSome:
     # Add to current transaction
@@ -737,15 +708,23 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
 
   # Add transaction as a single undo entry if it has changes
   if transaction.changes.len > 0:
-    b.undoStack.addLast(
-      BufferChange(
-        kind: ckTransaction,
-        transactionChanges: transaction.changes,
-        transactionDescription: transaction.description,
-      )
+    let transactionChange = BufferChange(
+      kind: ckTransaction,
+      transactionChanges: transaction.changes,
+      transactionDescription: transaction.description,
     )
+    b.undoStack.addLast(transactionChange)
     # Note: changeSeq was already incremented by each change in pushUndoChange
     # Note: redoStack was already cleared by the first change in pushUndoChange
+
+    # Recompute lastChangedLines as the minimum across all changes.
+    # Each individual change in pushUndoChange overwrites lastChangedLines,
+    # so after the transaction only the last change's line remains.
+    var minLine = int.high
+    for ch in transaction.changes:
+      minLine = min(minLine, getChangePosition(ch).line)
+    if minLine != int.high:
+      b.lastChangedLines = minLine
 
   return ok(())
 
@@ -772,27 +751,11 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
   # Mark highlight as needing update after rollback
   if transaction.changes.len > 0:
     b.highlightNeedsUpdate = true
-    # Compute changed range from rolled back changes
     var minLine = int.high
-    var maxLine = 0
     for change in transaction.changes:
-      let pos = getChangePosition(change)
-      minLine = min(minLine, pos.line)
-      # Estimate end line based on change type (inverse operation)
-      case change.kind
-      of ckInsertText:
-        # Rolling back insert = delete
-        maxLine = max(maxLine, pos.line)
-      of ckDeleteText, ckInsertLine, ckDeleteLine:
-        maxLine = max(maxLine, pos.line)
-      of ckDeleteRange:
-        # Rolling back delete = insert
-        let numNewlines = change.deletedRangeText.count('\n')
-        maxLine = max(maxLine, pos.line + numNewlines)
-      of ckTransaction:
-        maxLine = max(maxLine, b.len - 1)
+      minLine = min(minLine, getChangePosition(change).line)
     if minLine != int.high:
-      b.lastChangedLines = (minLine, maxLine)
+      b.lastChangedLines = minLine
 
   b.inTransaction = false
   b.currentTransaction = none(BufferTransaction)
@@ -1046,35 +1009,22 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   if undoneChanges.len > 0:
     b.highlightNeedsUpdate = true
 
-    # Compute changed range from undone changes for incremental highlighting
+    # Compute first changed line from undone changes for incremental highlighting
     var minLine = int.high
-    var maxLine = 0
 
-    proc processChange(change: BufferChange, depth: int = 0) =
-      let pos = getChangePosition(change)
-      minLine = min(minLine, pos.line)
-      # Estimate end line based on change type (inverse operation)
+    proc findMinLine(change: BufferChange) =
       case change.kind
-      of ckInsertText:
-        # Undoing insert = delete, affects only the start line
-        maxLine = max(maxLine, pos.line)
-      of ckDeleteText, ckInsertLine, ckDeleteLine:
-        # Undoing these affects the target line
-        maxLine = max(maxLine, pos.line)
-      of ckDeleteRange:
-        # Undoing delete = insert, may span multiple lines
-        let numNewlines = change.deletedRangeText.count('\n')
-        maxLine = max(maxLine, pos.line + numNewlines)
       of ckTransaction:
-        # Recursively process transaction changes
         for innerChange in change.transactionChanges:
-          processChange(innerChange, depth + 1)
+          findMinLine(innerChange)
+      else:
+        minLine = min(minLine, getChangePosition(change).line)
 
     for change in undoneChanges:
-      processChange(change)
+      findMinLine(change)
 
     if minLine != int.high:
-      b.lastChangedLines = (minLine, maxLine)
+      b.lastChangedLines = minLine
 
   # Return suggested cursor position for the last undone change (Vim behavior)
   if undoneChanges.len > 0:
@@ -1177,38 +1127,21 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   if redoneChanges.len > 0:
     b.highlightNeedsUpdate = true
 
-    # Compute changed range from redone changes for incremental highlighting
+    # Compute first changed line from redone changes for incremental highlighting
     var minLine = int.high
-    var maxLine = 0
 
-    proc processChange(change: BufferChange, depth: int = 0) =
-      let pos = getChangePosition(change)
-      minLine = min(minLine, pos.line)
-      # Estimate end line based on change type
+    proc findMinLine(change: BufferChange) =
       case change.kind
-      of ckInsertText:
-        let numNewlines = change.insertText.count('\n')
-        maxLine = max(maxLine, pos.line + numNewlines)
-      of ckDeleteText:
-        maxLine = max(maxLine, pos.line)
-      of ckInsertLine:
-        maxLine = max(maxLine, pos.line)
-      of ckDeleteLine:
-        # Line deletion shifts all subsequent lines up
-        maxLine = max(maxLine, b.len - 1)
-      of ckDeleteRange:
-        # Redoing delete affects from the deletion point to the end
-        # Since lines are deleted, maxLine should be the last line of the buffer after deletion
-        maxLine = max(maxLine, b.len - 1)
       of ckTransaction:
-        # Recursively process transaction changes
         for innerChange in change.transactionChanges:
-          processChange(innerChange, depth + 1)
+          findMinLine(innerChange)
+      else:
+        minLine = min(minLine, getChangePosition(change).line)
 
     for change in redoneChanges:
-      processChange(change)
+      findMinLine(change)
     if minLine != int.high:
-      b.lastChangedLines = (minLine, maxLine)
+      b.lastChangedLines = minLine
 
   # Return suggested cursor position for the last redone change (Vim behavior)
   if redoneChanges.len > 0:
@@ -1473,8 +1406,8 @@ proc updateHighlight*(b: TextBuffer) =
       if cacheValid:
         # Use incremental highlighting for better performance
         updateHighlightIncremental(
-          runesBuffer, b.incrementalHighlight, b.lastChangedLines.start,
-          b.lastChangedLines.theEnd, b.changeSeq, b.reservedWords, b.language,
+          runesBuffer, b.incrementalHighlight, b.lastChangedLines, b.changeSeq,
+          b.reservedWords, b.language,
         )
 
         # Convert IncrementalHighlight segments to Highlight
