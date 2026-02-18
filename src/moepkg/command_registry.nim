@@ -2190,6 +2190,9 @@ proc handleYankLine(ctx: CommandContext, count: int = 1): Result[(), string] =
   ctx.state.yankRegister = yankText
   ctx.state.yankIsLine = true
 
+  # Also update the register system so paste commands find the yanked content
+  ctx.state.registers.setYankedRegister(yankText, true)
+
   logDebug(
     "yank",
     "Stored in register: '" & ctx.state.yankRegister & "', isLine=" &
@@ -2302,6 +2305,9 @@ proc handleOperatorYank(ctx: CommandContext, count: int = 1): Result[(), string]
 
     ctx.state.yankRegister = text
     ctx.state.yankIsLine = true
+
+    # Also update the register system so paste commands find the yanked content
+    ctx.state.registers.setYankedRegister(text, true)
 
     # Clear operator state
     ctx.state.editState.pendingOperator = none(PendingOperator)
