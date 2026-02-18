@@ -1232,7 +1232,11 @@ suite "CommandModeHandler - handleCommandModeInput":
     let buffer = setupBuffer()
 
     let result = handler.handleCommandModeInput(buffer, ":recent")
-    check result.kind == cmrRecentFile
+    when defined(macosx):
+      check result.kind == cmrError
+      check result.errorMessage == ":recent is not supported on macOS"
+    else:
+      check result.kind == cmrRecentFile
 
   test "Handle :backup command":
     let handler = setupHandler()

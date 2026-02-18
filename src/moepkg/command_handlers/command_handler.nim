@@ -879,7 +879,12 @@ proc handleCommandModeInput*(
   of claBackupManager:
     return CommandModeResult(kind: cmrBackupManager)
   of claRecentFile:
-    return CommandModeResult(kind: cmrRecentFile)
+    when defined(macosx):
+      return CommandModeResult(
+        kind: cmrError, errorMessage: ":recent is not supported on macOS"
+      )
+    else:
+      return CommandModeResult(kind: cmrRecentFile)
   of claClearSearchHighlight:
     return CommandModeResult(kind: cmrClearSearchHighlight)
   of claShellCommand:
