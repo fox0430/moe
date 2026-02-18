@@ -2081,12 +2081,40 @@ proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
   ctx.state.yankRegister = deletedText
   ctx.state.yankIsLine = true
 
-  # Delete the lines
+  # Begin transaction for line deletions
+  let transactionResult =
+    ctx.buffer.beginTransaction("Delete " & $actualCount & " line(s)")
+  if transactionResult.isErr:
+    return err("Failed to begin transaction: " & transactionResult.error)
+
+  # Delete the lines (keep at least one line in the buffer)
+  var brokeEarly = false
   for i in 1 .. actualCount:
     if startLine < ctx.buffer.len:
+      if ctx.buffer.len == 1:
+        brokeEarly = true
+        break
       let delResult = ctx.buffer.deleteLine(startLine)
       if delResult.isErr:
+        discard ctx.buffer.rollbackTransaction()
         return err(delResult.error)
+
+  # If we stopped because the buffer was down to 1 line, clear its content
+  if brokeEarly:
+    let lastLine = ctx.buffer.getLine(0)
+    if lastLine.len > 0:
+      let clearResult = ctx.buffer.deleteRange(
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 0, column: lastLine.charLen - 1),
+      )
+      if clearResult.isErr:
+        discard ctx.buffer.rollbackTransaction()
+        return err(clearResult.error)
+
+  # Commit transaction
+  let commitResult = ctx.buffer.commitTransaction()
+  if commitResult.isErr:
+    return err("Failed to commit transaction: " & commitResult.error)
 
   # Adjust cursor position if needed
   if ctx.cursor.line >= ctx.buffer.len:
@@ -2322,13 +2350,29 @@ proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), strin
     ctx.state.yankRegister = text
     ctx.state.yankIsLine = true
 
-    # Delete lines
+    # Delete lines (keep at least one line in the buffer)
+    var brokeEarly = false
     for i in 0 ..< lineCount:
       if startLine < ctx.buffer.len:
+        if ctx.buffer.len == 1:
+          brokeEarly = true
+          break
         let deleteResult = ctx.buffer.deleteLine(startLine)
         if deleteResult.isErr:
           discard ctx.buffer.rollbackTransaction()
           return err("Failed to delete line: " & deleteResult.error)
+
+    # If we stopped because the buffer was down to 1 line, clear its content
+    if brokeEarly:
+      let lastLine = ctx.buffer.getLine(0)
+      if lastLine.len > 0:
+        let clearResult = ctx.buffer.deleteRange(
+          BufferPosition(line: 0, column: 0),
+          BufferPosition(line: 0, column: lastLine.charLen - 1),
+        )
+        if clearResult.isErr:
+          discard ctx.buffer.rollbackTransaction()
+          return err("Failed to clear last line: " & clearResult.error)
 
     # Commit transaction
     let commitResult = ctx.buffer.commitTransaction()

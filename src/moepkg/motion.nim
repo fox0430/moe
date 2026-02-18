@@ -1441,13 +1441,31 @@ proc deleteRange*(buffer: TextBuffer, range: OperatorRange): Result[(), string] 
       if txnResult.isErr:
         return err(txnResult.error)
 
+    var brokeEarly = false
     for i in 0 .. (range.endPos.line - range.start.line):
       if range.start.line < buffer.len:
+        # Keep at least one line in the buffer
+        if buffer.len == 1:
+          brokeEarly = true
+          break
         let deleteResult = buffer.deleteLine(range.start.line)
         if deleteResult.isErr:
           if lineCount > 1:
             discard buffer.rollbackTransaction()
           return err(deleteResult.error)
+
+    # If we stopped because the buffer was down to 1 line, clear its content
+    if brokeEarly:
+      let lastLine = buffer.getLine(0)
+      if lastLine.len > 0:
+        let clearResult = buffer.deleteRange(
+          BufferPosition(line: 0, column: 0),
+          BufferPosition(line: 0, column: lastLine.charLen - 1),
+        )
+        if clearResult.isErr:
+          if lineCount > 1:
+            discard buffer.rollbackTransaction()
+          return err(clearResult.error)
 
     # Commit transaction if we started one
     if lineCount > 1:
