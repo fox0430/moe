@@ -1330,3 +1330,372 @@ suite "InsertModeHandler - Completion Active Key Handling":
       check result.kind == imrHandled
     else:
       check true
+
+  test "BackTab (skBackTab) when completion active":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nhel")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 3)
+
+    # Trigger completion
+    handler.completionManager.triggerCompletion(
+      buf, state.cursor.line, state.cursor.column, langNone
+    )
+
+    if handler.completionManager.isActive():
+      # Press BackTab (how terminals actually send Shift+Tab)
+      let keyCombo =
+        KeyCombo(isSpecial: true, special: skBackTab, fnNum: 0, modifiers: {})
+      let result = handler.handleInsertModeKey(buf, state, keyCombo)
+
+      check result.kind == imrHandled
+      check handler.completionManager.menu.hasSelection
+    else:
+      check true
+
+  test "BackTab cycles backwards through completion":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "alpha beta")
+    discard buf.insertText(BufferPosition(line: 0, column: 10), "\nal")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 2)
+
+    handler.completionManager.triggerCompletion(
+      buf, state.cursor.line, state.cursor.column, langNone
+    )
+
+    if handler.completionManager.isActive() and
+        handler.completionManager.menu.entries.len >= 2:
+      # First Tab selects item 0
+      let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+      discard handler.handleInsertModeKey(buf, state, tabKey)
+      let firstWord = handler.completionManager.menu.entries[0].word
+
+      # Second Tab selects item 1
+      discard handler.handleInsertModeKey(buf, state, tabKey)
+
+      # BackTab goes back to item 0
+      let backTabKey =
+        KeyCombo(isSpecial: true, special: skBackTab, fnNum: 0, modifiers: {})
+      discard handler.handleInsertModeKey(buf, state, backTabKey)
+
+      check buf.getLine(1) == firstWord
+    else:
+      check true
+
+suite "InsertModeHandler - Path completion":
+  test "Slash triggers path completion":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+
+    # Type "/" character
+    let keyCombo = KeyCombo(isSpecial: false, char: "/", modifiers: {})
+    let result = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check result.kind == imrHandled
+    check handler.completionManager.isPathCompletion
+
+  test "Dot-slash triggers path completion":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+
+    # Type "." first
+    let dotKey = KeyCombo(isSpecial: false, char: ".", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, dotKey)
+
+    # Then type "/"
+    let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
+    let result = handler.handleInsertModeKey(buf, state, slashKey)
+
+    check result.kind == imrHandled
+    check handler.completionManager.isPathCompletion
+
+  test "Plain word does not trigger path completion":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+
+    # Type "hello"
+    for ch in "hello":
+      let keyCombo = KeyCombo(isSpecial: false, char: $ch, modifiers: {})
+      discard handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check not handler.completionManager.isPathCompletion
+
+  test "Directory entry committed without trailing slash":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "./s")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    # Simulate path completion with a directory entry
+    let mgr = handler.completionManager
+    mgr.isPathCompletion = true
+    mgr.pathBasePath = "."
+    mgr.pathOriginalPrefix = "./"
+    mgr.state = csActive
+    mgr.menu.prefix = "s"
+    mgr.menu.triggerCol = 2
+    mgr.menu.triggerLine = 0
+    mgr.menu.entries = @[
+      CompletionEntry(
+        word: "src/",
+        matchScore: 100,
+        source: csFilePath,
+        kind: some(CompletionItemKind.cikFolder),
+        detail: some("Directory"),
+        documentation: none(string),
+      ),
+      CompletionEntry(
+        word: "setup.nim",
+        matchScore: 50,
+        source: csFilePath,
+        kind: some(CompletionItemKind.cikFile),
+        detail: some("File"),
+        documentation: none(string),
+      ),
+    ]
+
+    # Tab selects first entry (directory "src/")
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+
+    # Directory should be inserted without trailing '/'
+    check buf.getLine(0) == "./src"
+    check state.cursor.column == 5
+
+  test "File entry committed with full name":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "./s")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    # Simulate path completion with a file entry
+    let mgr = handler.completionManager
+    mgr.isPathCompletion = true
+    mgr.pathBasePath = "."
+    mgr.pathOriginalPrefix = "./"
+    mgr.state = csActive
+    mgr.menu.prefix = "s"
+    mgr.menu.triggerCol = 2
+    mgr.menu.triggerLine = 0
+    mgr.menu.entries = @[
+      CompletionEntry(
+        word: "setup.nim",
+        matchScore: 50,
+        source: csFilePath,
+        kind: some(CompletionItemKind.cikFile),
+        detail: some("File"),
+        documentation: none(string),
+      )
+    ]
+
+    # Tab selects file entry
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+
+    # File should be inserted with full name
+    check buf.getLine(0) == "./setup.nim"
+    check state.cursor.column == 11
+
+  test "Cycling path entries preserves no-trailing-slash for directories":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "./")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    let mgr = handler.completionManager
+    mgr.isPathCompletion = true
+    mgr.pathBasePath = "."
+    mgr.pathOriginalPrefix = "./"
+    mgr.state = csActive
+    mgr.menu.prefix = ""
+    mgr.menu.triggerCol = 2
+    mgr.menu.triggerLine = 0
+    mgr.menu.entries = @[
+      CompletionEntry(
+        word: "docs/",
+        matchScore: 100,
+        source: csFilePath,
+        kind: some(CompletionItemKind.cikFolder),
+        detail: some("Directory"),
+        documentation: none(string),
+      ),
+      CompletionEntry(
+        word: "src/",
+        matchScore: 100,
+        source: csFilePath,
+        kind: some(CompletionItemKind.cikFolder),
+        detail: some("Directory"),
+        documentation: none(string),
+      ),
+      CompletionEntry(
+        word: "README.md",
+        matchScore: 50,
+        source: csFilePath,
+        kind: some(CompletionItemKind.cikFile),
+        detail: some("File"),
+        documentation: none(string),
+      ),
+    ]
+
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+
+    # First Tab: selects "docs/" -> inserts "docs"
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check buf.getLine(0) == "./docs"
+
+    # Second Tab: selects "src/" -> inserts "src"
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check buf.getLine(0) == "./src"
+
+    # Third Tab: selects "README.md" -> inserts full name
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check buf.getLine(0) == "./README.md"
+
+  test "Escape cancels path completion":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+
+    # Type "/" to trigger path completion
+    let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, slashKey)
+    check handler.completionManager.isPathCompletion
+
+    # Press Escape
+    let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, escKey)
+
+    check not handler.completionManager.isPathCompletion
+    check not handler.completionManager.isActive()
+
+  test "Tilde-slash triggers path completion":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+
+    # Type "~"
+    let tildeKey = KeyCombo(isSpecial: false, char: "~", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tildeKey)
+    check not handler.completionManager.isPathCompletion
+
+    # Type "/"
+    let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, slashKey)
+
+    check handler.completionManager.isPathCompletion
+    check buf.getLine(0) == "~/"
+
+  test "Backspace re-triggers path completion when path context remains":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "./sr")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 4)
+
+    # Set up path completion state
+    let mgr = handler.completionManager
+    mgr.isPathCompletion = true
+    mgr.pathBasePath = "."
+    mgr.pathOriginalPrefix = "./"
+    mgr.state = csActive
+    mgr.menu.prefix = "sr"
+    mgr.menu.triggerCol = 2
+    mgr.menu.triggerLine = 0
+    mgr.menu.entries = @[
+      CompletionEntry(
+        word: "src/",
+        matchScore: 100,
+        source: csFilePath,
+        kind: some(CompletionItemKind.cikFolder),
+        detail: some("Directory"),
+        documentation: none(string),
+      )
+    ]
+
+    # Backspace deletes 'r', leaving "./s" — still a path context
+    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, bsKey)
+
+    check buf.getLine(0) == "./s"
+    check handler.completionManager.isPathCompletion
+    check handler.completionManager.isActive()
+
+  test "Backspace cancels path completion when path context lost":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "/")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 1)
+
+    # Set up path completion state
+    let mgr = handler.completionManager
+    mgr.isPathCompletion = true
+    mgr.pathBasePath = "."
+    mgr.pathOriginalPrefix = "/"
+    mgr.state = csActive
+    mgr.menu.prefix = ""
+    mgr.menu.triggerCol = 1
+    mgr.menu.triggerLine = 0
+    mgr.menu.entries = @[
+      CompletionEntry(
+        word: "usr/",
+        matchScore: 100,
+        source: csFilePath,
+        kind: some(CompletionItemKind.cikFolder),
+        detail: some("Directory"),
+        documentation: none(string),
+      )
+    ]
+
+    # Backspace deletes '/', leaving "" — no path context
+    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, bsKey)
+
+    check buf.getLine(0) == ""
+    check not handler.completionManager.isPathCompletion
+    check not handler.completionManager.isActive()
+
+  test "Non-path character cancels path completion":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "./src")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    # Set up path completion state
+    let mgr = handler.completionManager
+    mgr.isPathCompletion = true
+    mgr.pathBasePath = "."
+    mgr.pathOriginalPrefix = "./"
+    mgr.state = csActive
+    mgr.menu.prefix = "src"
+    mgr.menu.triggerCol = 2
+    mgr.menu.triggerLine = 0
+    mgr.menu.entries = @[
+      CompletionEntry(
+        word: "src/",
+        matchScore: 100,
+        source: csFilePath,
+        kind: some(CompletionItemKind.cikFolder),
+        detail: some("Directory"),
+        documentation: none(string),
+      )
+    ]
+
+    # Type space — not a path character
+    let spaceKey = KeyCombo(isSpecial: false, char: " ", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, spaceKey)
+
+    check buf.getLine(0) == "./src "
+    check not handler.completionManager.isPathCompletion
+    check not handler.completionManager.isActive()

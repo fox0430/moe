@@ -432,10 +432,13 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       let mgr = e.state.commandCompletionManager
       # Check if selected item is a directory (for file path mode)
       let isDir = mgr.mode == cmFilePath and mgr.getSelectedCommand().endsWith("/")
-      # Check if it's a no-argument command that should execute immediately
+      let isFile = mgr.mode == cmFilePath and not isDir
+      # Check if it's an action that should execute immediately
       let shouldExecuteNow =
-        mgr.mode == cmCommand and
-        e.commandLineParser.isNoArgumentAction(mgr.getSelectedCommand())
+        isFile or (
+          mgr.mode == cmCommand and
+          e.commandLineParser.isNoArgumentAction(mgr.getSelectedCommand())
+        )
       mgr.cancelCompletion()
       # If directory was confirmed, re-trigger completion for its contents
       if isDir:

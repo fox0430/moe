@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, options, strutils]
+from std/strutils import contains
 
 import pkg/[results, celina]
 
@@ -818,3 +819,62 @@ suite "Completion - multi-buffer word collection":
     check foundAlpine
     check foundAlphabet
     check foundAlpha
+
+suite "Completion - extractPathPrefixBeforeCursor":
+  test "Absolute path":
+    check extractPathPrefixBeforeCursor("/usr/lo", 7) == "/usr/lo"
+
+  test "Relative path":
+    check extractPathPrefixBeforeCursor("x ./src/m", 9) == "./src/m"
+
+  test "No path (plain word)":
+    check extractPathPrefixBeforeCursor("hello", 5) == ""
+
+  test "Just slash":
+    check extractPathPrefixBeforeCursor("/", 1) == "/"
+
+  test "Dot-slash":
+    check extractPathPrefixBeforeCursor("./", 2) == "./"
+
+  test "Home-relative":
+    check extractPathPrefixBeforeCursor("~/doc", 5) == "~/doc"
+
+  test "Path after space":
+    check extractPathPrefixBeforeCursor("include /etc/pa", 15) == "/etc/pa"
+
+  test "Parent dir":
+    check extractPathPrefixBeforeCursor("../foo", 6) == "../foo"
+
+  test "Empty line":
+    check extractPathPrefixBeforeCursor("", 0) == ""
+
+  test "Col at 0":
+    check extractPathPrefixBeforeCursor("/usr", 0) == ""
+
+  test "No slash - just dots":
+    check extractPathPrefixBeforeCursor("foo.bar", 7) == ""
+
+suite "Completion - isPathChar":
+  test "Slash is path char":
+    check isPathChar('/'.Rune)
+
+  test "Dot is path char":
+    check isPathChar('.'.Rune)
+
+  test "Tilde is path char":
+    check isPathChar('~'.Rune)
+
+  test "Dash is path char":
+    check isPathChar('-'.Rune)
+
+  test "Underscore is path char":
+    check isPathChar('_'.Rune)
+
+  test "Alpha is path char":
+    check isPathChar('a'.Rune)
+
+  test "Space is not path char":
+    check not isPathChar(' '.Rune)
+
+  test "Colon is not path char":
+    check not isPathChar(':'.Rune)
