@@ -452,6 +452,90 @@ suite "executeCommand - Operator + Motion":
     check buffer.len == 1
     check buffer[0] == "line3"
 
+  test "delete line motion (dj) on 2-line buffer clears to empty":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    # Set pending operator (d)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Execute motion (j) - deletes all lines
+    let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
+
+    let result = registry.executeCommand(ctx, cmd)
+    check result.isOk
+    check buffer.len == 1
+    check buffer[0] == ""
+
+  test "delete line motion (dj) on 2-line buffer undo restores all lines":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
+    let deleteResult = registry.executeCommand(ctx, cmd)
+    check deleteResult.isOk
+    check buffer.len == 1
+    check buffer[0] == ""
+
+    # Single undo should restore both lines
+    let undoResult = buffer.undo()
+    check undoResult.isOk
+    check buffer.len == 2
+    check buffer[0] == "line1"
+    check buffer[1] == "line2"
+
+  test "delete line motion (dj) on 3-line buffer undo restores deleted lines":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
+    let deleteResult = registry.executeCommand(ctx, cmd)
+    check deleteResult.isOk
+    check buffer.len == 1
+    check buffer[0] == "line3"
+
+    # Single undo should restore both deleted lines
+    let undoResult = buffer.undo()
+    check undoResult.isOk
+    check buffer.len == 3
+    check buffer[0] == "line1"
+    check buffer[1] == "line2"
+    check buffer[2] == "line3"
+
+  test "delete line motion (dj) on single line buffer keeps empty line":
+    let buffer = newTextBuffer("only line")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    # Set pending operator (d)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Execute motion (j) - only 1 line, motion down stays on line 0
+    let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
+
+    let result = registry.executeCommand(ctx, cmd)
+    check result.isOk
+    check buffer.len == 1
+
 suite "executeCommand - Delete with find motion":
   test "delete find character (df)":
     let buffer = newTextBuffer("hello world")
@@ -878,6 +962,97 @@ suite "Handler - Delete line operations":
     check buffer.len == 1
     check buffer[0] == "line1"
     check ctx.cursor.line == 0
+
+  test "dd on single line buffer clears line content":
+    let buffer = newTextBuffer("only line")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let result = registry.execute(ctx, custom("delete.line"))
+    check result.isOk
+    check buffer.len == 1
+    check buffer[0] == ""
+    check ctx.cursor.line == 0
+
+  test "dd on single empty line buffer keeps empty line":
+    let buffer = newTextBuffer("")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let result = registry.execute(ctx, custom("delete.line"))
+    check result.isOk
+    check buffer.len == 1
+    check buffer[0] == ""
+
+  test "delete all lines with count (2dd on 2-line buffer)":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let result = registry.execute(ctx, custom("delete.line"), @["2"])
+    check result.isOk
+    check buffer.len == 1
+    check buffer[0] == ""
+    check ctx.cursor.line == 0
+
+  test "dd on single line buffer undo restores content":
+    let buffer = newTextBuffer("only line")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let deleteResult = registry.execute(ctx, custom("delete.line"))
+    check deleteResult.isOk
+    check buffer[0] == ""
+
+    # Single undo should restore the original content
+    let undoResult = buffer.undo()
+    check undoResult.isOk
+    check buffer.len == 1
+    check buffer[0] == "only line"
+
+  test "2dd on 2-line buffer undo restores all lines":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let deleteResult = registry.execute(ctx, custom("delete.line"), @["2"])
+    check deleteResult.isOk
+    check buffer.len == 1
+    check buffer[0] == ""
+
+    # Single undo should restore both lines
+    let undoResult = buffer.undo()
+    check undoResult.isOk
+    check buffer.len == 2
+    check buffer[0] == "line1"
+    check buffer[1] == "line2"
+
+  test "3dd undo restores all deleted lines":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    let registry = createTestRegistry()
+
+    let deleteResult = registry.execute(ctx, custom("delete.line"), @["3"])
+    check deleteResult.isOk
+    check buffer.len == 2
+    check buffer[0] == "line1"
+    check buffer[1] == "line5"
+
+    # Single undo should restore all 3 deleted lines
+    let undoResult = buffer.undo()
+    check undoResult.isOk
+    check buffer.len == 5
+    check buffer[0] == "line1"
+    check buffer[1] == "line2"
+    check buffer[2] == "line3"
+    check buffer[3] == "line4"
+    check buffer[4] == "line5"
 
 suite "Handler - Yank line operations":
   test "yank single line (yy)":
@@ -1530,6 +1705,59 @@ suite "Handler - Operator commands":
     check buffer.len == 2
     check buffer[0] == "line1"
     check buffer[1] == "line3"
+
+  test "double operator (dd) on single line buffer clears line":
+    let buffer = newTextBuffer("only line")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # First d
+    discard registry.execute(ctx, custom("operator.delete"))
+    # Second d
+    let result = registry.execute(ctx, custom("operator.delete"))
+    check result.isOk
+    check buffer.len == 1
+    check buffer[0] == ""
+    check ctx.cursor.line == 0
+
+  test "double operator (dd) on single line buffer undo restores content":
+    let buffer = newTextBuffer("only line")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    discard registry.execute(ctx, custom("operator.delete"))
+    discard registry.execute(ctx, custom("operator.delete"))
+    check buffer[0] == ""
+
+    # Single undo should restore
+    let undoResult = buffer.undo()
+    check undoResult.isOk
+    check buffer.len == 1
+    check buffer[0] == "only line"
+
+  test "double operator (dd) on 3-line buffer undo restores line":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    discard registry.execute(ctx, custom("operator.delete"))
+    let result = registry.execute(ctx, custom("operator.delete"))
+    check result.isOk
+    check buffer.len == 2
+
+    # Single undo should restore
+    let undoResult = buffer.undo()
+    check undoResult.isOk
+    check buffer.len == 3
+    check buffer[0] == "line1"
+    check buffer[1] == "line2"
+    check buffer[2] == "line3"
 
   test "double operator (yy) yanks line":
     let buffer = newTextBuffer("line1\nline2\nline3")
