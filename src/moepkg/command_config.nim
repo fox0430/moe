@@ -127,13 +127,6 @@ proc loadDefaultConfig*(config: CommandConfig) =
 
   # Strip whitespace
   config.addAlias("stripwhitespace", claStripWhitespace)
-  config.addAlias("stripws", claStripWhitespace)
-  config.addAlias("deletetrailingspaces", claStripWhitespace)
-
-  # Filer (file explorer)
-  config.addAlias("filer", claFiler)
-  config.addAlias("ex", claFiler)
-  config.addAlias("explore", claFiler)
 
   # Log viewer
   config.addAlias("log", claLogViewer)

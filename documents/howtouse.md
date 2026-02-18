@@ -368,7 +368,7 @@ All keystrokes are forwarded to the running shell/command.
 | `showGitInactive on` or `showGitInactive off` | Change status line setting to show/hide git branch name in inactive window |
 | `nohlsearch` | Turn off highlights |
 | `icon` | Setting show/hidden icons in filer mode |
-| `deletetrailingspaces` | Delete trailing spaces |
+| `stripwhitespace` | Delete trailing spaces |
 | `ignorecase` | Change setting to ignorecase |
 | `smartcase` | Change setting to smartcase |
 | `cursorline on` or `cursorline off` | Change the highlight setting of the current line |

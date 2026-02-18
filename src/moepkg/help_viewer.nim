@@ -304,7 +304,7 @@ nohlsearch - Turn off search highlights
 hlsearch on or hlsearch off - Change setting to highlight search results
 highlightparen on or highlightparen off - Change setting to highlight matching parentheses
 icon - Setting show/hidden icons in filer mode
-deletetrailingspaces - Delete trailing spaces
+stripwhitespace - Delete trailing spaces
 ignorecase - Change setting to ignorecase
 smartcase - Change setting to smartcase
 cursorline on or cursorline off - Change the highlight setting of the current line
