@@ -604,6 +604,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       ),
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
+    screenSize: ScreenSize(width: 80, height: 20),
     commandRegistry: cmdRegistry,
     keyBindingRegistry: keyRegistry,
     commandLineParser: cmdLineParser,

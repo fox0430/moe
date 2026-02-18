@@ -47,6 +47,7 @@ type
     References
     DocumentSymbol
     CallHierarchy
+    Terminal
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -82,6 +83,7 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.References: "REFERENCES"
   of EditorMode.DocumentSymbol: "SYMBOLS"
   of EditorMode.CallHierarchy: "CALL HIERARCHY"
+  of EditorMode.Terminal: "TERMINAL"
 
 proc overlayLabel*(o: OverlayKind): string =
   case o

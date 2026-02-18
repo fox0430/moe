@@ -28,15 +28,18 @@ import
   status_line, tab_line, buffer
 
 proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
-  ## Update viewport size from buffer area and return true if resized
-  let
-    oldWidth = e.viewport.width
-    oldHeight = e.viewport.height
+  ## Update screen size from buffer area and return true if resized.
+  ## Uses e.screenSize (not e.viewport) to avoid overwriting the active
+  ## window's viewport dimensions in split mode.
+  ## Stores previous dimensions in prevWidth/prevHeight for resize calculations.
+  e.screenSize.prevWidth = e.screenSize.width
+  e.screenSize.prevHeight = e.screenSize.height
 
-  e.viewport.width = buffer.area.width
-  e.viewport.height = buffer.area.height
+  e.screenSize.width = buffer.area.width
+  e.screenSize.height = buffer.area.height
 
-  (oldWidth != e.viewport.width) or (oldHeight != e.viewport.height)
+  (e.screenSize.prevWidth != e.screenSize.width) or
+    (e.screenSize.prevHeight != e.screenSize.height)
 
 proc adjustViewportForCursor(
     viewport: ViewPort,
@@ -84,18 +87,14 @@ proc adjustViewportForCursor(
 proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
   ## Render split window view
 
-  let
-    oldWidth = e.viewport.width
-    oldHeight = e.viewport.height
-
   # If terminal was resized, rebuild window layout
-  if wasResized and oldWidth > 0 and oldHeight > 0 and e.viewport.width > 0 and
-      e.viewport.height > 0:
+  if wasResized and e.screenSize.prevWidth > 0 and e.screenSize.prevHeight > 0 and
+      e.screenSize.width > 0 and e.screenSize.height > 0:
     # Note: cursor is now stored directly in EditorWindow (single source of truth)
 
     e.windowManager.resizeWindows(
-      e.viewport.width, e.viewport.height, oldWidth, oldHeight,
-      e.state.display.multiStatusLine,
+      e.screenSize.width, e.screenSize.height, e.screenSize.prevWidth,
+      e.screenSize.prevHeight, e.state.display.multiStatusLine,
     )
 
   # Find the maximum bottom Y coordinate (to determine bottom windows)
@@ -235,6 +234,15 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
+    of EditorMode.Terminal:
+      # Terminal mode renders grid directly in Input sub-mode,
+      # or uses standard window rendering in Normal sub-mode
+      if window.terminalState.isSome and window.terminalState.get.subMode == tsmInput:
+        e.renderTerminal(buffer, window, isBottomWindow, tabLineOffset)
+      else:
+        e.renderWindow(
+          buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+        )
     else:
       # Normal buffer rendering (Normal, Insert, Visual, Command, Search, etc.)
       e.renderWindow(
@@ -258,7 +266,14 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
 
   # Set cursor to active window position
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.setActiveWindowScreenCursor(e.activeWindow)
+    # Terminal-Input mode manages its own screen cursor from the grid,
+    # so skip the standard cursor calculation that would overwrite it.
+    let isTerminalInput =
+      e.activeWindow.mode == EditorMode.Terminal and e.activeWindow.terminalState.isSome and
+      e.activeWindow.terminalState.get.subMode == tsmInput
+
+    if not isTerminalInput:
+      e.setActiveWindowScreenCursor(e.activeWindow)
 
     # Set cursor visibility based on mode
     # Special modes (Filer, Config, etc.) set cursorVisible in their render functions
@@ -273,6 +288,9 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
         EditorMode.DiffViewer, EditorMode.Debug, EditorMode.References,
         EditorMode.DocumentSymbol, EditorMode.CallHierarchy, EditorMode.RecentFile:
       e.state.cursorVisible = false
+    of EditorMode.Terminal:
+      # Terminal mode sets cursorVisible in renderTerminal
+      discard
     else:
       # Normal, Insert, Visual, etc. - cursor should be visible
       e.state.cursorVisible = true

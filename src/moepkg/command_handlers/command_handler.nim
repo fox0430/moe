@@ -117,6 +117,7 @@ type
     cmrLspCallHierarchyIncoming # LSP incoming calls (:lspCallHierarchyIncoming)
     cmrLspCallHierarchyOutgoing # LSP outgoing calls (:lspCallHierarchyOutgoing)
     cmrSubstitute # Search and replace (:s)
+    cmrTerminal # Open terminal emulator (:terminal)
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -225,6 +226,8 @@ type
       substituteReplacement*: string
       substituteGlobal*: bool # true for /g flag
       substituteCount*: int # number of replacements made
+    of cmrTerminal:
+      terminalCommand*: string # Optional command (empty = default shell)
     of cmrError:
       errorMessage*: string
 
@@ -916,6 +919,9 @@ proc handleCommandModeInput*(
     return CommandModeResult(kind: cmrLspCallHierarchyIncoming)
   of claLspCallHierarchyOutgoing:
     return CommandModeResult(kind: cmrLspCallHierarchyOutgoing)
+  of claTerminal:
+    return
+      CommandModeResult(kind: cmrTerminal, terminalCommand: cmdResult.terminalCommand)
   of claSubstitute:
     return handler.executeSubstitute(
       buffer, cmdResult.pattern, cmdResult.replacement, cmdResult.substituteFlags,

@@ -74,6 +74,7 @@ type
     claLspExecuteCommand # :lspexecommand (LSP execute command)
     claLspCallHierarchyIncoming # :lspcallhierarchyincoming (LSP incoming calls)
     claLspCallHierarchyOutgoing # :lspcallhierarchyoutgoing (LSP outgoing calls)
+    claTerminal # :terminal (open terminal emulator)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -184,6 +185,8 @@ type
       discard
     of claLspCallHierarchyOutgoing:
       discard
+    of claTerminal:
+      terminalCommand*: string # Optional command (empty = default shell)
     of claUnknown:
       errorMessage*: string
 
@@ -202,6 +205,7 @@ const ArgumentRequiredActions* = {
   claVSplit, # optional but user may want to specify file
   claHSplit, # optional but user may want to specify file
   claFiler, # optional but user may want to specify path
+  claTerminal, # optional but user may want to specify command
   claUnknown, # invalid command
 }
 
@@ -763,6 +767,13 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claLspCallHierarchyIncoming)
   of claLspCallHierarchyOutgoing:
     return CommandLineResult(kind: claLspCallHierarchyOutgoing)
+  of claTerminal:
+    let termCmd =
+      if cmd.args.len > 0:
+        cmd.args.join(" ")
+      else:
+        ""
+    return CommandLineResult(kind: claTerminal, terminalCommand: termCmd)
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

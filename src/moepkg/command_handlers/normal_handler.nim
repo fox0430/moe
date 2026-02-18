@@ -302,6 +302,8 @@ proc handleModeSwitch*(
   of EditorMode.CallHierarchy:
     return
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.CallHierarchy))
+  of EditorMode.Terminal:
+    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Terminal))
   of EditorMode.Normal:
     # Already in Normal mode
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))

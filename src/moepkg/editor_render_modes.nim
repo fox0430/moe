@@ -17,13 +17,14 @@
 #                                                                              #
 #[############################################################################]#
 
-## Special mode rendering procedures (config mode)
+## Special mode rendering procedures (config mode, terminal mode)
 
 import std/[options, strutils]
 
 import pkg/celina
 
 import editor_types, color, render_utils, config_mode
+import terminal/ansi_parser
 
 proc renderConfig*(
     e: Editor,
@@ -186,4 +187,97 @@ proc renderConfig*(
       e.state.cursorVisible = true
   else:
     # Hide cursor when not in edit mode
+    e.state.cursorVisible = false
+
+proc terminalColorToColorValue(tc: TerminalColor): ColorValue =
+  ## Convert ansi_parser TerminalColor to celina ColorValue.
+  case tc.kind
+  of ckDefault:
+    ColorValue(kind: Default)
+  of ckIndexed:
+    ColorValue(kind: Indexed256, indexed256: tc.index)
+  of ckRgb:
+    ColorValue(kind: celina.Rgb, rgb: RgbColor(r: tc.r, g: tc.g, b: tc.b))
+
+proc terminalCellToStyle(cell: TerminalCell): Style =
+  ## Convert a TerminalCell's colors and attributes to a celina Style.
+  var modifiers: set[StyleModifier] = {}
+  if taBold in cell.attrs:
+    modifiers.incl(StyleModifier.Bold)
+  if taDim in cell.attrs:
+    modifiers.incl(StyleModifier.Dim)
+  if taItalic in cell.attrs:
+    modifiers.incl(StyleModifier.Italic)
+  if taUnderline in cell.attrs:
+    modifiers.incl(StyleModifier.Underline)
+  if taReverse in cell.attrs:
+    modifiers.incl(StyleModifier.Reversed)
+  if taStrikethrough in cell.attrs:
+    modifiers.incl(StyleModifier.Crossed)
+
+  Style(
+    fg: terminalColorToColorValue(cell.fg),
+    bg: terminalColorToColorValue(cell.bg),
+    modifiers: modifiers,
+  )
+
+proc renderTerminal*(
+    e: Editor,
+    buffer: var Buffer,
+    window: EditorWindow,
+    isBottomWindow: bool,
+    tabLineOffset: int,
+) =
+  ## Render the terminal emulator grid within a window's viewport.
+  if window.terminalState.isNone:
+    return
+
+  let reservedBottom =
+    if isBottomWindow and e.state.display.showStatusLine:
+      StatusAndCommandReserve
+    elif isBottomWindow:
+      CommandLineReserve
+    else:
+      0
+
+  let
+    termState = window.terminalState.get
+    grid = termState.grid
+    startX = window.viewport.x
+    startY = window.viewport.y + tabLineOffset
+    maxRows = window.viewport.height - reservedBottom - tabLineOffset
+    maxCols = window.viewport.width
+
+  case termState.subMode
+  of tsmInput:
+    # Render live terminal grid directly to celina buffer
+    for row in 0 ..< min(grid.rows, maxRows):
+      for col in 0 ..< min(grid.cols, maxCols):
+        let cell = grid.cells[row][col]
+        if cell.widePadding:
+          continue # celina's setString handles wide char's second column
+        let style = terminalCellToStyle(cell)
+        let ch = if cell.ch.len > 0: cell.ch else: " "
+        buffer.setString(startX + col, startY + row, ch, style)
+      # Clear remaining columns if grid is narrower than viewport
+      if grid.cols < maxCols:
+        let emptyStr = " ".repeat(maxCols - grid.cols)
+        buffer.setString(startX + grid.cols, startY + row, emptyStr, normalStyle())
+
+    # Clear remaining rows
+    if grid.rows < maxRows:
+      let emptyLine = " ".repeat(maxCols)
+      for row in grid.rows ..< maxRows:
+        buffer.setString(startX, startY + row, emptyLine, normalStyle())
+
+    # Position cursor at terminal cursor location
+    if grid.cursorVisible and grid.cursorRow < maxRows and grid.cursorCol < maxCols:
+      e.state.screenCursor.x = startX + grid.cursorCol
+      e.state.screenCursor.y = startY + grid.cursorRow
+      e.state.cursorVisible = true
+    else:
+      e.state.cursorVisible = false
+  of tsmNormal:
+    # In Normal sub-mode, rendering is handled by editor_render_views.nim
+    # via renderWindow (the snapshot buffer is already set as window.buffer).
     e.state.cursorVisible = false

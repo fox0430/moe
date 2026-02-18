@@ -334,6 +334,23 @@ config - Open configuration mode
 debug - Open debug mode
 
 jump - Open Jump list viewer
+
+terminal         - Open terminal emulator (default shell)
+terminal command - Run command in terminal emulator
+
+# Terminal mode
+
+## Terminal-Input sub-mode (default)
+
+All keystrokes are forwarded to the running shell/command.
+
+Ctrl-\ Ctrl-n - Switch to Terminal-Normal sub-mode
+
+## Terminal-Normal sub-mode
+
+i  - Return to Terminal-Input sub-mode
+a  - Return to Terminal-Input sub-mode
+:  - Enter command mode
 """
 
 import std/[strutils, options]

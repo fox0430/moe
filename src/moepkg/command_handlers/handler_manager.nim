@@ -36,13 +36,15 @@ import
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
   filer_handler, log_viewer_handler, help_handler, buffer_manager_handler,
   backup_manager_handler, diff_viewer_handler, recent_file_mode_handler, debug_handler,
-  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler
+  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler,
+  terminal_handler
 
 export
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
   filer_handler, log_viewer_handler, help_handler, buffer_manager_handler,
   backup_manager_handler, diff_viewer_handler, recent_file_mode_handler, debug_handler,
-  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler
+  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler,
+  terminal_handler
 
 type
   HandlerResultKind* = enum
@@ -141,6 +143,8 @@ type
     hrCallHierarchyRequestIncoming # Request incoming calls for selected item
     hrCallHierarchyRequestOutgoing # Request outgoing calls for selected item
     hrEnterCallHierarchy # Enter call hierarchy viewer mode
+    hrEnterTerminal # Enter terminal mode
+    hrTerminalQuit # Close terminal and return to previous mode
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -161,6 +165,7 @@ type
     referencesHandler*: ReferencesHandler
     documentSymbolHandler*: DocumentSymbolHandler
     callHierarchyHandler*: CallHierarchyHandler
+    terminalHandler*: TerminalHandler
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandLineParser*: CommandLineParser
@@ -363,6 +368,10 @@ type
       callHierarchyOutgoingItem*: lspTypes.CallHierarchyItem
     of hrEnterCallHierarchy:
       discard
+    of hrEnterTerminal:
+      enterTerminalCommand*: string # Optional command (empty = default shell)
+    of hrTerminalQuit:
+      discard
     of hrUnhandled:
       discard
     of hrError:
@@ -409,6 +418,7 @@ proc newHandlerManager*(
   let referencesHandler = newReferencesHandler()
   let documentSymbolHandler = newDocumentSymbolHandler()
   let callHierarchyHandler = newCallHierarchyHandler()
+  let terminalHandler = newTerminalHandler()
 
   HandlerManager(
     normalHandler: normalHandler,
@@ -427,6 +437,7 @@ proc newHandlerManager*(
     referencesHandler: referencesHandler,
     documentSymbolHandler: documentSymbolHandler,
     callHierarchyHandler: callHierarchyHandler,
+    terminalHandler: terminalHandler,
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,
@@ -806,6 +817,8 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrLspCallHierarchyOutgoing)
   of cmrSubstitute:
     return HandlerResult(kind: hrSubstitute, hrSubstituteCount: r.substituteCount)
+  of cmrTerminal:
+    return HandlerResult(kind: hrEnterTerminal, enterTerminalCommand: r.terminalCommand)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -1419,6 +1432,52 @@ proc handleRecentFileMode*(
   of rfmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleTerminalMode*(
+    manager: HandlerManager,
+    termState: TerminalState,
+    state: EditorState,
+    keyCombo: KeyCombo,
+    window: EditorWindow,
+): HandlerResult =
+  ## Handle Terminal mode input
+  let r = manager.terminalHandler.handleTerminalModeKey(termState, keyCombo)
+  case r.kind
+  of trHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of trSwitchToNormal:
+    # Switch to Terminal-Normal sub-mode: snapshot grid to TextBuffer
+    let snapshotBuffer = termState.enterNormalSubMode()
+    window.buffer = snapshotBuffer
+    window.cursor = BufferPosition(line: max(0, snapshotBuffer.len - 1), column: 0)
+    window.viewport.topLine = max(0, snapshotBuffer.len - window.viewport.height)
+    return HandlerResult(
+      kind: hrHandled,
+      modeTransition: none(EditorMode),
+      statusMessage: "-- TERMINAL NORMAL --",
+    )
+  of trReturnToInput:
+    # Return to Terminal-Input sub-mode: restore placeholder buffer
+    termState.exitNormalSubMode()
+    window.buffer = newTextBuffer("")
+    window.cursor = BufferPosition(line: 0, column: 0)
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of trEnterCommand:
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
+    )
+  of trQuit:
+    return HandlerResult(kind: hrTerminalQuit)
+  of trUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of trError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
 const MaxMacroRecursionDepth = 100
   ## Maximum macro recursion depth to prevent infinite loops
 
@@ -1529,6 +1588,14 @@ proc handleKeyCombo*(
       return HandlerResult(
         kind: hrError, errorMessage: "Call hierarchy viewer state not initialized"
       )
+  of EditorMode.Terminal:
+    if window.isSome and window.get.terminalState.isSome:
+      return manager.handleTerminalMode(
+        window.get.terminalState.get, state, keyCombo, window.get
+      )
+    else:
+      return
+        HandlerResult(kind: hrError, errorMessage: "Terminal state not initialized")
   of EditorMode.RecentFile:
     # Recent File mode requires its own state, not EditorState
     # This should be handled at a higher level with RecentFileModeState

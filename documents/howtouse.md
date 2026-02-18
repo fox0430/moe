@@ -12,6 +12,7 @@
 - [References Mode](#references-mode)
 - [Call Hierarchy Mode](#call-hierarchy-mode)
 - [Filer Mode](#filer-mode)
+- [Terminal Mode](#terminal-mode)
 - [Configuration Mode](#configuration-mode)
 - [Command Mode](#command-mode)
 
@@ -287,6 +288,29 @@
 </details>
 
 
+## Terminal mode
+
+<details open>
+  <summary>Built-in Terminal Emulator</summary>
+
+### Terminal-Input sub-mode (default)
+
+All keystrokes are forwarded to the running shell/command.
+
+| Keys | Description |
+|:-----------------------------|:---------------------------|
+| <kbd>**Ctrl**</kbd> <kbd>**\\**</kbd> <kbd>**Ctrl**</kbd> <kbd>**n**</kbd><br> | Switch to Terminal-Normal sub-mode |
+
+### Terminal-Normal sub-mode
+
+| Keys | Description |
+|:-----------------------------|:---------------------------|
+| <kbd>**i**</kbd><br> | Return to Terminal-Input sub-mode |
+| <kbd>**a**</kbd><br> | Return to Terminal-Input sub-mode |
+| <kbd>**:**</kbd><br> | Enter command mode |
+
+</details>
+
 ## Configuration mode
 <details open>
   <summary>Configuration mode</summary>
@@ -362,6 +386,8 @@
 | `config` | Open configuration mode |
 | `debug` | Open debug mode |
 | `jump` | Open Jump list viewer |
+| `terminal` | Open terminal emulator (default shell) |
+| `terminal command` | Run command in terminal emulator |
 
 </details>
 
