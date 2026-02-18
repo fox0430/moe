@@ -166,6 +166,7 @@ type
     eventQueue: ptr EventQueue
     sharedState: ptr SharedState
     signal: ThreadSignalPtr # Signal for event-driven wakeup
+    tempDir: string
 
   LspWorker* = ref object
     thread: Thread[LspWorkerContext]
@@ -542,6 +543,8 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     if sendResult.isErr:
       sendLogMessage(mtWarning, "Failed to send " & meth & ": " & sendResult.error)
 
+  let lspWorkingDir = ctx.tempDir
+
   proc startServer(cmd: LspCommand): Future[void] {.async.} =
     ctx.sharedState.storeState(lwsStarting)
 
@@ -551,9 +554,9 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     if commandParts.len > 1:
       args = commandParts[1 ..^ 1] & args
 
-    # Use /tmp as working directory to prevent nimlangserver from
+    # Use temp dir as working directory to prevent nimlangserver from
     # detecting a project based on moe's current working directory
-    let workingDir = "/tmp"
+    let workingDir = lspWorkingDir
     let env: StringTableRef = nil
     let opts: set[AsyncProcessOption] = {UsePath, StdErrToStdOut}
 
@@ -966,6 +969,7 @@ proc start*(worker: LspWorker) =
     eventQueue: addr worker.eventQueue,
     sharedState: addr worker.sharedState,
     signal: worker.signal,
+    tempDir: getTempDir(),
   )
 
   createThread(worker.thread, workerThreadProc, ctx)
