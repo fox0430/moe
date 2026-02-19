@@ -26,7 +26,7 @@
 import std/[unittest, options, tables, os]
 from std/strutils import contains
 
-import test_config_helper
+import config_test_helper
 
 import pkg/celina
 import pkg/celina/core/mouse_logic

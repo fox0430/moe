@@ -18,9 +18,12 @@
 #[############################################################################]#
 
 import std/[unittest, os, strutils, tables, options]
+
 import pkg/results
+
 import ../src/moepkg/[config_loader, config, color, theme]
-import test_config_helper
+
+import config_test_helper
 
 var testFileCounter {.global.} = 0
 

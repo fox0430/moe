@@ -17,97 +17,63 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, osproc, envvars]
+import std/[unittest, options, os, osproc]
 
 import pkg/results
 
 import ../src/moepkg/clipboard {.all.}
 import ../src/moepkg/config
 
-proc isSkipTest(): bool =
-  ## Skip test unless NOT_SKIP_TESTS=y is set
-  getEnv("NOT_SKIP_TESTS") != "y"
-
 suite "clipboard: getClipboardCommand":
   test "xclip read command":
-    if isSkipTest():
-      skip()
-    else:
-      let cmd = getClipboardCommand(cbtXclip, ClipboardOperation.read)
-      check cmd.isSome
-      check cmd.get() == @["xclip", "-selection", "clipboard", "-o"]
+    let cmd = getClipboardCommand(cbtXclip, ClipboardOperation.read)
+    check cmd.isSome
+    check cmd.get() == @["xclip", "-selection", "clipboard", "-o"]
 
   test "xclip write command":
-    if isSkipTest():
-      skip()
-    else:
-      let cmd = getClipboardCommand(cbtXclip, ClipboardOperation.write)
-      check cmd.isSome
-      check cmd.get() == @["xclip", "-selection", "clipboard", "-i"]
+    let cmd = getClipboardCommand(cbtXclip, ClipboardOperation.write)
+    check cmd.isSome
+    check cmd.get() == @["xclip", "-selection", "clipboard", "-i"]
 
   test "xsel read command":
-    if isSkipTest():
-      skip()
-    else:
-      let cmd = getClipboardCommand(cbtXsel, ClipboardOperation.read)
-      check cmd.isSome
-      check cmd.get() == @["xsel", "--clipboard", "--output"]
+    let cmd = getClipboardCommand(cbtXsel, ClipboardOperation.read)
+    check cmd.isSome
+    check cmd.get() == @["xsel", "--clipboard", "--output"]
 
   test "xsel write command":
-    if isSkipTest():
-      skip()
-    else:
-      let cmd = getClipboardCommand(cbtXsel, ClipboardOperation.write)
-      check cmd.isSome
-      check cmd.get() == @["xsel", "--clipboard", "--input"]
+    let cmd = getClipboardCommand(cbtXsel, ClipboardOperation.write)
+    check cmd.isSome
+    check cmd.get() == @["xsel", "--clipboard", "--input"]
 
   test "wl-clipboard read command":
-    if isSkipTest():
-      skip()
-    else:
-      let cmd = getClipboardCommand(cbtWlClipboard, ClipboardOperation.read)
-      check cmd.isSome
-      check cmd.get() == @["wl-paste", "-n"]
+    let cmd = getClipboardCommand(cbtWlClipboard, ClipboardOperation.read)
+    check cmd.isSome
+    check cmd.get() == @["wl-paste", "-n"]
 
   test "wl-clipboard write command":
-    if isSkipTest():
-      skip()
-    else:
-      let cmd = getClipboardCommand(cbtWlClipboard, ClipboardOperation.write)
-      check cmd.isSome
-      check cmd.get() == @["wl-copy"]
+    let cmd = getClipboardCommand(cbtWlClipboard, ClipboardOperation.write)
+    check cmd.isSome
+    check cmd.get() == @["wl-copy"]
 
   test "win32yank read command":
-    if isSkipTest():
-      skip()
-    else:
-      let cmd = getClipboardCommand(cbtWin32yank, ClipboardOperation.read)
-      check cmd.isSome
-      check cmd.get() == @["win32yank.exe", "-o", "--lf"]
+    let cmd = getClipboardCommand(cbtWin32yank, ClipboardOperation.read)
+    check cmd.isSome
+    check cmd.get() == @["win32yank.exe", "-o", "--lf"]
 
   test "win32yank write command":
-    if isSkipTest():
-      skip()
-    else:
-      let cmd = getClipboardCommand(cbtWin32yank, ClipboardOperation.write)
-      check cmd.isSome
-      check cmd.get() == @["win32yank.exe", "-i", "--crlf"]
+    let cmd = getClipboardCommand(cbtWin32yank, ClipboardOperation.write)
+    check cmd.isSome
+    check cmd.get() == @["win32yank.exe", "-i", "--crlf"]
 
   test "pbcopy read command":
-    if isSkipTest():
-      skip()
-    else:
-      let cmd = getClipboardCommand(cbtPbcopy, ClipboardOperation.read)
-      check cmd.isSome
-      check cmd.get() == @["pbpaste"]
+    let cmd = getClipboardCommand(cbtPbcopy, ClipboardOperation.read)
+    check cmd.isSome
+    check cmd.get() == @["pbpaste"]
 
   test "pbcopy write command":
-    if isSkipTest():
-      skip()
-    else:
-      let cmd = getClipboardCommand(cbtPbcopy, ClipboardOperation.write)
-      check cmd.isSome
-      check cmd.get() == @["pbcopy"]
+    let cmd = getClipboardCommand(cbtPbcopy, ClipboardOperation.write)
+    check cmd.isSome
+    check cmd.get() == @["pbcopy"]
 
 proc isToolAvailable(cmd: string): bool =
   try:
@@ -117,17 +83,17 @@ proc isToolAvailable(cmd: string): bool =
     result = false
 
 proc isXclipAvailable(): bool =
-  isToolAvailable("xclip")
+  existsEnv("DISPLAY") and isToolAvailable("xclip")
 
 proc isXselAvailable(): bool =
-  isToolAvailable("xsel")
+  existsEnv("DISPLAY") and isToolAvailable("xsel")
 
 proc isWlClipboardAvailable(): bool =
-  isToolAvailable("wl-copy")
+  existsEnv("WAYLAND_DISPLAY") and isToolAvailable("wl-copy")
 
 suite "clipboard: readFromClipboardSync and writeToClipboardSync":
   test "write and read with xclip":
-    if isSkipTest() or not isXclipAvailable():
+    if not isXclipAvailable():
       skip()
     else:
       let testText = "moe editor clipboard test - xclip"
@@ -138,8 +104,12 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       check readResult.isOk
       check readResult.get() == testText
 
+      # Kill xclip's background process that holds clipboard ownership
+      discard execCmdEx("pkill xclip")
+      sleep(100)
+
   test "write and read with xsel":
-    if isSkipTest() or not isXselAvailable():
+    if not isXselAvailable():
       skip()
     else:
       let testText = "moe editor clipboard test - xsel"
@@ -150,8 +120,12 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       check readResult.isOk
       check readResult.get() == testText
 
+      # Kill xsel's background process that holds clipboard ownership
+      discard execCmdEx("pkill xsel")
+      sleep(100)
+
   test "write and read with wl-clipboard":
-    if isSkipTest() or not isWlClipboardAvailable():
+    if not isWlClipboardAvailable():
       skip()
     else:
       let testText = "moe editor clipboard test - wl-clipboard"
@@ -163,7 +137,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       check readResult.get() == testText
 
   test "write and read multiline text with xsel":
-    if isSkipTest() or not isXselAvailable():
+    if not isXselAvailable():
       skip()
     else:
       let testText = "line1\nline2\nline3"
@@ -175,7 +149,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       check readResult.get() == testText
 
   test "write and read unicode text with xsel":
-    if isSkipTest() or not isXselAvailable():
+    if not isXselAvailable():
       skip()
     else:
       let testText = "日本語テスト 🎉 emoji"
@@ -187,7 +161,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       check readResult.get() == testText
 
   test "write and read empty string with xsel":
-    if isSkipTest() or not isXselAvailable():
+    if not isXselAvailable():
       skip()
     else:
       let testText = ""
@@ -198,8 +172,12 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       check readResult.isOk
       check readResult.get() == testText
 
+      # Kill xsel's background process that holds clipboard ownership
+      discard execCmdEx("pkill xsel")
+      sleep(100)
+
   test "write and read multiline text with wl-clipboard":
-    if isSkipTest() or not isWlClipboardAvailable():
+    if not isWlClipboardAvailable():
       skip()
     else:
       let testText = "line1\nline2\nline3"
@@ -211,7 +189,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       check readResult.get() == testText
 
   test "write and read unicode text with wl-clipboard":
-    if isSkipTest() or not isWlClipboardAvailable():
+    if not isWlClipboardAvailable():
       skip()
     else:
       let testText = "日本語テスト 🎉 emoji"
@@ -223,7 +201,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       check readResult.get() == testText
 
   test "write and read empty string with wl-clipboard":
-    if isSkipTest() or not isWlClipboardAvailable():
+    if not isWlClipboardAvailable():
       skip()
     else:
       let testText = ""
