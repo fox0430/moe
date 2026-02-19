@@ -21,3 +21,6 @@ task release, "Build for release":
 
 task debug, "Build for debug":
   exec "nimble build -d:debug --debugger:native --verbose -y"
+
+task ptest, "Run tests in parallel":
+  exec "nim r tools/paralleltest.nim"

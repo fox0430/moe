@@ -10,6 +10,9 @@ src/**/*
 tests/*
 !tests/*.*
 
+tools/*
+!tools/*.*
+
 moe
 
 nimble.develop

@@ -27,6 +27,7 @@ on:
       - 'moe.nimble'
       - 'nimble.lock'
       - 'src/**'
+      - 'tools/paralleltest.nim'
       - 'tests/**'
 
 permissions:
@@ -78,10 +79,15 @@ jobs:
         nim-version: 2.2.4
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: install lasm
+    - name: Install lasm
       run: |
         nimble install lasm@#head
 
+    - name: Build moe
+      run: |
+        nimble build
+
     - name: Run unit test
       run: |
-        xvfb-run env XDG_SESSION_TYPE=x11 nimble --useSystemNim test --verbose -y
+        nimble setup
+        xvfb-run env XDG_SESSION_TYPE=x11 nimble --useSystemNim ptest
