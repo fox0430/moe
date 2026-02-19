@@ -95,7 +95,7 @@ proc processSaveAndQuitResult(e: Editor, r: HandlerResult): bool =
   let saveResult = e.saveFile(r.saveAndQuitFilename, r.forceQuitAfterSave)
   if saveResult.isErr:
     logError("handler", "Save and quit failed: " & saveResult.error)
-    e.state.setStatusMessage("Error: " & saveResult.error)
+    e.state.statusMessage = "Error: " & saveResult.error
     return true
   else:
     logInfo("handler", "File saved, quitting editor")
@@ -137,11 +137,11 @@ proc executeSearchFromCurrentPosition(e: Editor): bool =
     let pos = searchResult.get
     e.cursor = pos
     e.updateViewportForCursor(pos)
-    e.state.setStatusMessage("Found: " & e.state.search.text)
+    e.state.statusMessage = "Found: " & e.state.search.text
     e.state.needsFullRedraw = true
     return true
   else:
-    e.state.setStatusMessage("Pattern not found: " & e.state.search.text)
+    e.state.statusMessage = "Pattern not found: " & e.state.search.text
     return false
 
 proc finalizeSearch(e: Editor) =
@@ -259,12 +259,12 @@ proc performIncrementalSearch(e: Editor) =
     # Update viewport to follow cursor
     e.updateViewportForCursor(pos)
 
-    e.state.setStatusMessage("Found: " & e.state.search.text)
+    e.state.statusMessage = "Found: " & e.state.search.text
     e.state.needsFullRedraw = true
   else:
     # No match found, restore to start position
     e.cursor = e.state.search.startPos
-    e.state.setStatusMessage("Pattern not found: " & e.state.search.text)
+    e.state.statusMessage = "Pattern not found: " & e.state.search.text
 
 proc handleSearchCharacterInput(e: Editor, ch: string) =
   ## Handle character input in Search mode
@@ -331,7 +331,7 @@ proc enterTerminalInActiveWindow(e: Editor, command: string) =
   let (cols, rows) = e.calculateTerminalAreaDimensions(activeWin)
   let termResult = newTerminalState(command, cols, rows)
   if termResult.isErr:
-    e.state.setStatusMessage("Terminal error: " & termResult.error)
+    e.state.statusMessage = "Terminal error: " & termResult.error
     return
 
   let termState = termResult.get
@@ -478,7 +478,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         quickRunHandled = true
         let prepareResult = prepareQuickRun(activeBuffer, e.config)
         if prepareResult.isErr:
-          e.state.setStatusMessage("QuickRun error: " & prepareResult.error)
+          e.state.statusMessage = "QuickRun error: " & prepareResult.error
           logError("handler", "QuickRun prepare failed: " & prepareResult.error)
         else:
           let prepared = prepareResult.get
@@ -490,7 +490,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           )
           if e.config.notification.screenNotifications and
               e.config.notification.quickRunScreenNotify:
-            e.state.setStatusMessage(quickRunStartupMessage(prepared.filePath))
+            e.state.statusMessage = quickRunStartupMessage(prepared.filePath)
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
 
@@ -538,7 +538,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         let splitResult = e.vsplit(splitFilename)
         if splitResult.isErr:
           logError("handler", "Vertical split failed: " & splitResult.error)
-          e.state.setStatusMessage("Error: " & splitResult.error)
+          e.state.statusMessage = "Error: " & splitResult.error
         elif filerPath.isSome:
           e.enterFilerInActiveWindow(filerPath.get)
       of hrHSplit:
@@ -556,7 +556,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         let splitResult = e.hsplit(splitFilename)
         if splitResult.isErr:
           logError("handler", "Horizontal split failed: " & splitResult.error)
-          e.state.setStatusMessage("Error: " & splitResult.error)
+          e.state.statusMessage = "Error: " & splitResult.error
         elif filerPath.isSome:
           e.enterFilerInActiveWindow(filerPath.get)
       of hrEnew:
@@ -564,27 +564,27 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         let enewResult = e.enew()
         if enewResult.isErr:
           logError("handler", "Enew failed: " & enewResult.error)
-          e.state.setStatusMessage("Error: " & enewResult.error)
+          e.state.statusMessage = "Error: " & enewResult.error
       of hrNew:
         # Handle new (create new empty buffer in horizontal split)
         let newResult = e.new()
         if newResult.isErr:
           logError("handler", "New failed: " & newResult.error)
-          e.state.setStatusMessage("Error: " & newResult.error)
+          e.state.statusMessage = "Error: " & newResult.error
       of hrVnew:
         # Handle vnew (create new empty buffer in vertical split)
         let vnewResult = e.vnew()
         if vnewResult.isErr:
           logError("handler", "Vnew failed: " & vnewResult.error)
-          e.state.setStatusMessage("Error: " & vnewResult.error)
+          e.state.statusMessage = "Error: " & vnewResult.error
       of hrEdit:
         # Handle edit (open file in current window)
         let editResult = e.editFile(r.editFilename)
         if editResult.isErr:
           logError("handler", "Edit failed: " & editResult.error)
-          e.state.setStatusMessage("Error: " & editResult.error)
+          e.state.statusMessage = "Error: " & editResult.error
         else:
-          e.state.setStatusMessage("Opened: " & r.editFilename)
+          e.state.statusMessage = "Opened: " & r.editFilename
       of hrSetBoolOption:
         # Handle boolean option setting
         let opt = r.boolOption
@@ -593,84 +593,84 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         of bsoNumber:
           e.config.standard.number = val
           e.state.display.showLineNumbers = val
-          e.state.setStatusMessage("number = " & $val)
+          e.state.statusMessage = "number = " & $val
         of bsoCursorLine:
           e.config.highlight.currentLine = val
           e.state.display.showCursorLine = val
-          e.state.setStatusMessage("cursorline = " & $val)
+          e.state.statusMessage = "cursorline = " & $val
         of bsoStatusLine:
           e.config.standard.statusLine = val
           e.state.display.showStatusLine = val
-          e.state.setStatusMessage("statusline = " & $val)
+          e.state.statusMessage = "statusline = " & $val
         of bsoSyntax:
           e.config.standard.syntax = val
           e.state.display.showSyntax = val
-          e.state.setStatusMessage("syntax = " & $val)
+          e.state.statusMessage = "syntax = " & $val
         of bsoIndentationLines:
           e.config.standard.indentationLines = val
           e.state.display.showIndentationLines = val
-          e.state.setStatusMessage("indentationlines = " & $val)
+          e.state.statusMessage = "indentationlines = " & $val
         of bsoAutoIndent:
           e.config.standard.autoIndent = val
           e.state.display.autoIndent = val
-          e.state.setStatusMessage("autoindent = " & $val)
+          e.state.statusMessage = "autoindent = " & $val
         of bsoAutoCloseParen:
           e.config.standard.autoCloseParen = val
           e.state.display.autoCloseParen = val
-          e.state.setStatusMessage("autocloseparen = " & $val)
+          e.state.statusMessage = "autocloseparen = " & $val
         of bsoAutoDeleteParen:
           e.config.standard.autoDeleteParen = val
           e.state.display.autoDeleteParen = val
-          e.state.setStatusMessage("autodeleteparen = " & $val)
+          e.state.statusMessage = "autodeleteparen = " & $val
         of bsoClipboard:
           e.config.clipboard.enable = val
-          e.state.setStatusMessage("clipboard = " & $val)
+          e.state.statusMessage = "clipboard = " & $val
         of bsoSmoothScroll:
           e.config.smoothScroll.enable = val
-          e.state.setStatusMessage("smoothscroll = " & $val)
+          e.state.statusMessage = "smoothscroll = " & $val
         of bsoLiveReloadOfConf:
           e.config.standard.liveReloadOfConf = val
-          e.state.setStatusMessage("livereload = " & $val)
+          e.state.statusMessage = "livereload = " & $val
         of bsoShowIcons:
           e.config.filer.showIcons = val
-          e.state.setStatusMessage("icon = " & $val)
+          e.state.statusMessage = "icon = " & $val
         of bsoHighlightCurrentLine:
           e.config.highlight.currentLine = val
           e.state.display.showCursorLine = val
-          e.state.setStatusMessage("highlightcurrentline = " & $val)
+          e.state.statusMessage = "highlightcurrentline = " & $val
         of bsoHighlightCurrentWord:
           e.config.highlight.currentWord = val
-          e.state.setStatusMessage("highlightcurrentword = " & $val)
+          e.state.statusMessage = "highlightcurrentword = " & $val
         of bsoHighlightFullWidthSpace:
           e.config.highlight.fullWidthSpace = val
-          e.state.setStatusMessage("highlightfullspace = " & $val)
+          e.state.statusMessage = "highlightfullspace = " & $val
         of bsoHighlightPairOfParen:
           e.config.highlight.pairOfParen = val
-          e.state.setStatusMessage("highlightparen = " & $val)
+          e.state.statusMessage = "highlightparen = " & $val
         of bsoMultipleStatusLine:
           e.setMultiStatusLine(val)
         of bsoIgnoreCase:
           e.state.search.ignorecase = val
-          e.state.setStatusMessage("ignorecase = " & $val)
+          e.state.statusMessage = "ignorecase = " & $val
         of bsoSmartCase:
           e.state.search.smartcase = val
-          e.state.setStatusMessage("smartcase = " & $val)
+          e.state.statusMessage = "smartcase = " & $val
         of bsoIncSearch:
           e.state.search.incsearch = val
-          e.state.setStatusMessage("incsearch = " & $val)
+          e.state.statusMessage = "incsearch = " & $val
         of bsoHlSearch:
           e.state.search.hlsearch = val
-          e.state.setStatusMessage("hlsearch = " & $val)
+          e.state.statusMessage = "hlsearch = " & $val
         of bsoBuildOnSave:
           e.config.buildOnSave.enable = val
-          e.state.setStatusMessage("buildonsave = " & $val)
+          e.state.statusMessage = "buildonsave = " & $val
         of bsoShowGitInactive:
           e.config.statusLine.showGitInactive = val
-          e.state.setStatusMessage("showgitinactive = " & $val)
+          e.state.statusMessage = "showgitinactive = " & $val
         of bsoLineWrap:
           e.config.standard.lineWrap = val
           e.setLineWrap(val)
-          e.state.setStatusMessage("wrap = " & $val)
+          e.state.statusMessage = "wrap = " & $val
         e.state.needsFullRedraw = true
       of hrSetIntOption:
         # Handle integer option setting
@@ -680,7 +680,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         of isoTabStop:
           e.config.standard.tabStop = val
           e.state.display.tabStop = val
-          e.state.setStatusMessage("tabstop = " & $val)
+          e.state.statusMessage = "tabstop = " & $val
         e.state.needsFullRedraw = true
       of hrSetFloatOption:
         # Handle float option setting
@@ -689,10 +689,10 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         case opt
         of fsoScrollFriction:
           e.config.smoothScroll.friction = val
-          e.state.setStatusMessage("scrollfriction = " & $val)
+          e.state.statusMessage = "scrollfriction = " & $val
         of fsoScrollAirDrag:
           e.config.smoothScroll.airDrag = val
-          e.state.setStatusMessage("scrollairdrag = " & $val)
+          e.state.statusMessage = "scrollairdrag = " & $val
         e.state.needsFullRedraw = true
       of hrClearSearchHighlight:
         # Handle clear search highlight (:noh)
@@ -721,23 +721,23 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
               logInfo("config", "Backed up existing config to: " & backupPath)
             except CatchableError as ex:
               backupOk = false
-              e.state.setStatusMessage("Failed to backup config: " & ex.msg)
+              e.state.statusMessage = "Failed to backup config: " & ex.msg
               logError("config", "Failed to backup config: " & ex.msg)
 
           if backupOk:
             let saveResult = saveConfig(e.config)
             if saveResult.isOk:
-              e.state.setStatusMessage("Config saved: " & configPath)
+              e.state.statusMessage = "Config saved: " & configPath
               logInfo("config", "Config saved: " & configPath)
             else:
-              e.state.setStatusMessage("Failed to save config: " & saveResult.error)
+              e.state.statusMessage = "Failed to save config: " & saveResult.error
               logError("config", "Failed to save config: " & saveResult.error)
         else:
           # Handle file save
           let saveResult = e.saveFile(r.saveFilename, r.forceSave)
           if saveResult.isErr:
             logError("handler", "Save command failed: " & saveResult.error)
-            e.state.setStatusMessage("Error: " & saveResult.error)
+            e.state.statusMessage = "Error: " & saveResult.error
           else:
             # Get saved file path from active buffer
             let savedPath =
@@ -749,7 +749,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             # Screen notification (controlled by config)
             if e.config.notification.screenNotifications and
                 e.config.notification.saveScreenNotify:
-              e.state.setStatusMessage("Saved: " & savedPath)
+              e.state.statusMessage = "Saved: " & savedPath
 
             # Build on save if enabled
             if e.config.buildOnSave.enable:
@@ -773,7 +773,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
               # Build on save screen notification (controlled by config)
               if e.config.notification.screenNotifications and
                   e.config.notification.buildOnSaveScreenNotify:
-                e.state.setStatusMessage("Building: " & savedPath)
+                e.state.statusMessage = "Building: " & savedPath
 
             # Syntax check on save if enabled (only for supported languages)
             if e.config.syntaxChecker.enable and
@@ -800,24 +800,23 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           let enewResult = e.enew()
           if enewResult.isErr:
             logError("handler", "Enew failed after buffer delete: " & enewResult.error)
-            e.state.setStatusMessage("Error: " & enewResult.error)
+            e.state.statusMessage = "Error: " & enewResult.error
       of hrStripWhitespace:
         # Handle strip trailing whitespace
         let count = r.strippedLineCount
         if count > 0:
-          e.state.setStatusMessage(
+          e.state.statusMessage =
             "Stripped trailing whitespace from " & $count & " lines"
-          )
           e.state.needsFullRedraw = true
         else:
-          e.state.setStatusMessage("No trailing whitespace found")
+          e.state.statusMessage = "No trailing whitespace found"
       of hrQuickRun:
         overlayHandled = true
         if not quickRunHandled:
           # Prepare QuickRun (sync) and set pending for async execution
           let prepareResult = prepareQuickRun(activeBuffer, e.config)
           if prepareResult.isErr:
-            e.state.setStatusMessage("QuickRun error: " & prepareResult.error)
+            e.state.statusMessage = "QuickRun error: " & prepareResult.error
             logError("handler", "QuickRun prepare failed: " & prepareResult.error)
           else:
             let prepared = prepareResult.get
@@ -830,7 +829,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             # QuickRun screen notification (controlled by config)
             if e.config.notification.screenNotifications and
                 e.config.notification.quickRunScreenNotify:
-              e.state.setStatusMessage(quickRunStartupMessage(prepared.filePath))
+              e.state.statusMessage = quickRunStartupMessage(prepared.filePath)
           # Return to Normal mode - exit overlay first
           e.state.exitOverlay()
           e.setMode(EditorMode.Normal)
@@ -840,7 +839,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         let filePath =
           if activeBuffer.filePath.isSome: activeBuffer.filePath.get else: ""
         if filePath.len == 0:
-          e.state.setStatusMessage("Build error: File not saved")
+          e.state.statusMessage = "Build error: File not saved"
           logError("handler", "Build failed: No file path")
         else:
           # Set pending build info for async processing
@@ -850,7 +849,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             customCmd: "",
             workspaceRoot: parentDir(filePath),
           )
-          e.state.setStatusMessage("Building: " & filePath)
+          e.state.statusMessage = "Building: " & filePath
         # Return to Normal mode - exit overlay first
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
@@ -858,9 +857,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         overlayHandled = true
         # Handle substitute result - display count
         let count = r.hrSubstituteCount
-        e.state.setStatusMessage(
-          $count & " substitution" & (if count == 1: "" else: "s")
-        )
+        e.state.statusMessage = $count & " substitution" & (if count == 1: "" else: "s")
         e.state.needsFullRedraw = true
         # Return to Normal mode - exit overlay first
         e.state.exitOverlay()
@@ -899,7 +896,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         logBuffer.readOnly = true
         let splitResult = e.hsplitWithBuffer(logBuffer)
         if splitResult.isErr:
-          e.state.setStatusMessage("Failed to open log: " & splitResult.error)
+          e.state.statusMessage = "Failed to open log: " & splitResult.error
         else:
           e.setMode(EditorMode.LogViewer)
           let activeWin = e.activeWindow
@@ -919,7 +916,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         logBuffer.readOnly = true
         let splitResult = e.hsplitWithBuffer(logBuffer)
         if splitResult.isErr:
-          e.state.setStatusMessage("Failed to open LSP log: " & splitResult.error)
+          e.state.statusMessage = "Failed to open LSP log: " & splitResult.error
         else:
           e.setMode(EditorMode.LogViewer)
           let activeWin = e.activeWindow
@@ -935,7 +932,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         let helpBuffer = helpState.createHelpTextBuffer()
         let splitResult = e.hsplitWithBuffer(helpBuffer)
         if splitResult.isErr:
-          e.state.setStatusMessage("Failed to open help: " & splitResult.error)
+          e.state.statusMessage = "Failed to open help: " & splitResult.error
         else:
           e.setMode(EditorMode.Help)
           let activeWin = e.activeWindow
@@ -974,9 +971,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         let bkBuffer = bkState.createBackupManagerTextBuffer()
         let splitResult = e.vsplitWithBuffer(bkBuffer)
         if splitResult.isErr:
-          e.state.setStatusMessage(
-            "Failed to open backup manager: " & splitResult.error
-          )
+          e.state.statusMessage = "Failed to open backup manager: " & splitResult.error
         else:
           let baseModeBeforeOverlay = e.state.baseMode
           e.state.exitOverlay()
@@ -1089,9 +1084,9 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         let debugBuffer = debugState.createDebugTextBuffer()
         let splitResult = e.vsplitWithBuffer(debugBuffer)
         if splitResult.isErr:
-          e.state.setStatusMessage("Failed to open debug: " & splitResult.error)
+          e.state.statusMessage = "Failed to open debug: " & splitResult.error
         else:
-          e.state.setStatusMessage("Debug info (auto-refresh)")
+          e.state.statusMessage = "Debug info (auto-refresh)"
           # Store debug buffer reference for auto-refresh
           e.state.debugBuffer = debugBuffer
           e.state.timing.lastDebugUpdate = getMonoTime()
@@ -1107,7 +1102,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         # Handle jump list command (:ju, :jump)
         # Display jump list temporarily like Vim using tempMessages
         if e.state.jumpList.len == 0:
-          e.state.setStatusMessage("Jump list is empty")
+          e.state.statusMessage = "Jump list is empty"
         else:
           e.state.tempMessages = @[]
           e.state.tempMessages.add(" jump  line  col  file")
@@ -1141,7 +1136,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         if themeName == "default":
           # Use default theme
           setThemeColors(DefaultColors)
-          e.state.setStatusMessage("Theme changed to: default")
+          e.state.statusMessage = "Theme changed to: default"
         else:
           # Try to load theme from config directory
           let themePath =
@@ -1151,11 +1146,11 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             let themeResult = loadThemeFromToml(expandedPath)
             if themeResult.isOk:
               setThemeColors(themeResult.get)
-              e.state.setStatusMessage("Theme changed to: " & themeName)
+              e.state.statusMessage = "Theme changed to: " & themeName
             else:
-              e.state.setStatusMessage("Failed to load theme: " & themeResult.error)
+              e.state.statusMessage = "Failed to load theme: " & themeResult.error
           else:
-            e.state.setStatusMessage("Theme not found: " & themeName)
+            e.state.statusMessage = "Theme not found: " & themeName
         e.state.needsFullRedraw = true
         # Exit overlay first, then set Normal mode
         e.state.exitOverlay()
@@ -1167,7 +1162,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         configBuffer.readOnly = true
         let splitResult = e.vsplitWithBuffer(configBuffer)
         if splitResult.isErr:
-          e.state.setStatusMessage("Failed to open config: " & splitResult.error)
+          e.state.statusMessage = "Failed to open config: " & splitResult.error
         else:
           let baseModeBeforeOverlay = e.state.baseMode
           e.state.exitOverlay()
@@ -1203,16 +1198,16 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             copyFile(configPath, backupPath)
             logInfo("config", "Backed up existing config to: " & backupPath)
           except CatchableError as ex:
-            e.state.setStatusMessage("Error: Failed to backup config: " & ex.msg)
+            e.state.statusMessage = "Error: Failed to backup config: " & ex.msg
             logError("config", "Failed to backup config: " & ex.msg)
             return true
 
         let saveResult = saveConfig(e.config)
         if saveResult.isOk:
-          e.state.setStatusMessage("Config written: " & configPath)
+          e.state.statusMessage = "Config written: " & configPath
           logInfo("config", "Config written: " & configPath)
         else:
-          e.state.setStatusMessage("Failed to write config: " & saveResult.error)
+          e.state.statusMessage = "Failed to write config: " & saveResult.error
           logError("config", "Failed to write config: " & saveResult.error)
       of hrLspFormat:
         overlayHandled = true
@@ -1267,7 +1262,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       # Set status message if any
       let statusMsg = r.getStatusMessage()
       if statusMsg.len > 0:
-        e.state.setStatusMessage(statusMsg)
+        e.state.statusMessage = statusMsg
     else:
       # Empty command, just return to base mode
       e.state.exitOverlay()
@@ -1691,7 +1686,7 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
     # In Insert mode: Insert text directly without auto-indentation
     let transactionResult = activeBuffer.beginTransaction("Paste")
     if transactionResult.isErr:
-      e.state.setStatusMessage("Paste failed: " & transactionResult.error)
+      e.state.statusMessage = "Paste failed: " & transactionResult.error
       return true
 
     var pos = e.cursor
@@ -1714,7 +1709,7 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
     e.state.needsFullRedraw = true
   else:
     # For other modes, just show a message
-    e.state.setStatusMessage("Paste not supported in this mode")
+    e.state.statusMessage = "Paste not supported in this mode"
 
   return true
 
@@ -2442,14 +2437,14 @@ proc handleEvent*(e: Editor, event: Event): bool =
     activeWin.restoreOriginalBuffer(EditorMode.Filer)
     let editResult = e.editFile(r.filerFilePath)
     if editResult.isErr:
-      e.state.setStatusMessage("Error: " & editResult.error)
+      e.state.statusMessage = "Error: " & editResult.error
     else:
       activeWin.filerState = none(FilerState)
       activeWin.mode = EditorMode.Normal
       e.setMode(EditorMode.Normal)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:
-        e.state.setStatusMessage("Opened: " & r.filerFilePath)
+        e.state.statusMessage = "Opened: " & r.filerFilePath
       if e.config.notification.logNotifications and e.config.notification.filerLogNotify:
         logInfo("filer", "Opened file: " & r.filerFilePath)
     return true
@@ -2459,7 +2454,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
     activeWinVS.restoreOriginalBuffer(EditorMode.Filer)
     let splitResult = e.vsplit(some(r.filerFilePath))
     if splitResult.isErr:
-      e.state.setStatusMessage("Error: " & splitResult.error)
+      e.state.statusMessage = "Error: " & splitResult.error
     else:
       let activeWin = e.activeWindow
       activeWin.filerState = none(FilerState)
@@ -2467,7 +2462,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.setMode(EditorMode.Normal)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:
-        e.state.setStatusMessage("Opened in vsplit: " & r.filerFilePath)
+        e.state.statusMessage = "Opened in vsplit: " & r.filerFilePath
       if e.config.notification.logNotifications and e.config.notification.filerLogNotify:
         logInfo("filer", "Opened file in vsplit: " & r.filerFilePath)
     return true
@@ -2477,7 +2472,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
     activeWinHS.restoreOriginalBuffer(EditorMode.Filer)
     let splitResult = e.hsplit(some(r.filerFilePath))
     if splitResult.isErr:
-      e.state.setStatusMessage("Error: " & splitResult.error)
+      e.state.statusMessage = "Error: " & splitResult.error
     else:
       let activeWin = e.activeWindow
       activeWin.filerState = none(FilerState)
@@ -2485,7 +2480,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.setMode(EditorMode.Normal)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:
-        e.state.setStatusMessage("Opened in hsplit: " & r.filerFilePath)
+        e.state.statusMessage = "Opened in hsplit: " & r.filerFilePath
       if e.config.notification.logNotifications and e.config.notification.filerLogNotify:
         logInfo("filer", "Opened file in hsplit: " & r.filerFilePath)
     return true
@@ -2510,18 +2505,18 @@ proc handleEvent*(e: Editor, event: Event): bool =
         # File/directory deleted successfully
         if e.config.notification.screenNotifications and
             e.config.notification.filerScreenNotify:
-          e.state.setStatusMessage("Deleted: " & deleteResult.path)
+          e.state.statusMessage = "Deleted: " & deleteResult.path
         if e.config.notification.logNotifications and
             e.config.notification.filerLogNotify:
           logInfo("filer", "Deleted: " & deleteResult.path)
       else:
         # Deletion failed
-        e.state.setStatusMessage("Delete failed: " & deleteResult.error)
+        e.state.statusMessage = "Delete failed: " & deleteResult.error
         logError("filer", "Delete failed: " & deleteResult.error)
     return true
   of hrFilerShowInfo:
     # Show file information in status line
-    e.state.setStatusMessage(r.filerFileInfo)
+    e.state.statusMessage = r.filerFileInfo
     return true
   of hrLogViewerQuit:
     # Close log viewer window and return to Normal mode
@@ -2561,7 +2556,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       let maxLine = max(0, newBuffer.len - 1)
       if e.activeWindow.cursor.line > maxLine:
         e.activeWindow.cursor.line = maxLine
-      e.state.setStatusMessage("Log refreshed")
+      e.state.statusMessage = "Log refreshed"
     return true
   of hrHelpViewerQuit:
     # Close help viewer split window and return to Normal mode
@@ -2688,7 +2683,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
           activeWin.cursor.column = 0
     else:
       # Cannot delete the only buffer
-      e.state.setStatusMessage("Cannot delete the last buffer")
+      e.state.statusMessage = "Cannot delete the last buffer"
     return true
   of hrBackupManagerQuit:
     # Close backup manager and return to Normal mode
@@ -2735,16 +2730,16 @@ proc handleEvent*(e: Editor, event: Event): bool =
         copyFile(configPath, backupPath)
         logInfo("config", "Backed up existing config to: " & backupPath)
       except CatchableError as ex:
-        e.state.setStatusMessage("Failed to backup config: " & ex.msg)
+        e.state.statusMessage = "Failed to backup config: " & ex.msg
         logError("config", "Failed to backup config: " & ex.msg)
         return true
 
     let saveResult = saveConfig(e.config)
     if saveResult.isOk:
-      e.state.setStatusMessage("Config saved: " & configPath)
+      e.state.statusMessage = "Config saved: " & configPath
       logInfo("config", "Config saved: " & configPath)
     else:
-      e.state.setStatusMessage("Failed to save config: " & saveResult.error)
+      e.state.statusMessage = "Failed to save config: " & saveResult.error
       logError("config", "Failed to save config: " & saveResult.error)
     return true
   of hrPutConfigFile:
@@ -2758,17 +2753,17 @@ proc handleEvent*(e: Editor, event: Event): bool =
         copyFile(configPath, backupPath)
         logInfo("config", "Backed up existing config to: " & backupPath)
       except CatchableError as ex:
-        e.state.setStatusMessage("Error: Failed to backup config: " & ex.msg)
+        e.state.statusMessage = "Error: Failed to backup config: " & ex.msg
         logError("config", "Failed to backup config: " & ex.msg)
         e.setMode(EditorMode.Normal)
         return true
 
     let saveResult = saveConfig(e.config)
     if saveResult.isOk:
-      e.state.setStatusMessage("Config written: " & configPath)
+      e.state.statusMessage = "Config written: " & configPath
       logInfo("config", "Config written: " & configPath)
     else:
-      e.state.setStatusMessage("Failed to write config: " & saveResult.error)
+      e.state.statusMessage = "Failed to write config: " & saveResult.error
       logError("config", "Failed to write config: " & saveResult.error)
     e.setMode(EditorMode.Normal)
     return true
@@ -2800,7 +2795,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
             # Restore screen notification (controlled by config)
             if e.config.notification.screenNotifications and
                 e.config.notification.restoreScreenNotify:
-              e.state.setStatusMessage("Backup restored: " & filePath)
+              e.state.statusMessage = "Backup restored: " & filePath
             # Restore log notification (controlled by config)
             if e.config.notification.logNotifications and
                 e.config.notification.restoreLogNotify:
@@ -2808,20 +2803,18 @@ proc handleEvent*(e: Editor, event: Event): bool =
             # Refresh the backup list to show the new backup
             bkState.refresh()
           else:
-            e.state.setStatusMessage(
-              "Restored but failed to reload: " & textResult.error
-            )
+            e.state.statusMessage = "Restored but failed to reload: " & textResult.error
         else:
           # Restore screen notification (controlled by config)
           if e.config.notification.screenNotifications and
               e.config.notification.restoreScreenNotify:
-            e.state.setStatusMessage("Backup restored successfully")
+            e.state.statusMessage = "Backup restored successfully"
           # Restore log notification (controlled by config)
           if e.config.notification.logNotifications and
               e.config.notification.restoreLogNotify:
             logInfo("restore", "Backup restored successfully")
       else:
-        e.state.setStatusMessage("Failed to restore backup")
+        e.state.statusMessage = "Failed to restore backup"
     return true
   of hrBackupManagerDelete:
     # Delete the selected backup
@@ -2830,13 +2823,13 @@ proc handleEvent*(e: Editor, event: Event): bool =
     if activeWin.backupManagerState.isSome:
       let bkState = activeWin.backupManagerState.get
       if bkState.deleteBackup(backupIndex):
-        e.state.setStatusMessage("Backup deleted")
+        e.state.statusMessage = "Backup deleted"
         # Regenerate TextBuffer after deletion
         activeWin.buffer = bkState.createBackupManagerTextBuffer()
         activeWin.cursor.line = min(bkState.selectedIndex + 1, activeWin.buffer.len - 1)
         activeWin.cursor.column = 0
       else:
-        e.state.setStatusMessage("Failed to delete backup")
+        e.state.statusMessage = "Failed to delete backup"
     return true
   of hrBackupManagerOpenDiff:
     # Open diff viewer for the selected backup
@@ -2859,7 +2852,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
         e.setMode(EditorMode.DiffViewer)
         activeWin.mode = EditorMode.DiffViewer
         if dvState.errorMessage.len > 0:
-          e.state.setStatusMessage("Diff error: " & dvState.errorMessage)
+          e.state.statusMessage = "Diff error: " & dvState.errorMessage
     return true
   of hrLspGotoDefinition:
     discard e.requestLspGotoDefinition()
@@ -3040,7 +3033,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Set status message if any
   let statusMsg = r.getStatusMessage()
   if statusMsg.len > 0:
-    e.state.setStatusMessage(statusMsg)
+    e.state.statusMessage = statusMsg
 
   # Show syntax check message for current cursor line (if no other status message)
   if statusMsg.len == 0 and e.state.syntaxCheckResults.errors.len > 0:
@@ -3076,7 +3069,7 @@ proc runSyntaxCheckAsync(
       let checkResult =
         await startBackgroundSyntaxCheck(info.path, SourceLanguage(info.language))
       if checkResult.isErr:
-        editor.state.setStatusMessage("Syntax check error: " & checkResult.error)
+        editor.state.statusMessage = "Syntax check error: " & checkResult.error
       else:
         let checkProcess = checkResult.get
         editor.addRunningProcess(checkProcess.process)
@@ -3092,14 +3085,13 @@ proc runSyntaxCheckAsync(
         let errorCount = errors.countIt(it.messageType == SyntaxCheckMessageType.error)
         let warnCount = errors.countIt(it.messageType == SyntaxCheckMessageType.warning)
         if errorCount > 0 or warnCount > 0:
-          editor.state.setStatusMessage(
+          editor.state.statusMessage =
             "Syntax check: " & $errorCount & " error(s), " & $warnCount & " warning(s)"
-          )
         else:
-          editor.state.setStatusMessage("Syntax check: OK")
+          editor.state.statusMessage = "Syntax check: OK"
       editor.state.needsFullRedraw = true
     except Exception as ex:
-      editor.state.setStatusMessage("Syntax check error: " & ex.msg)
+      editor.state.statusMessage = "Syntax check error: " & ex.msg
 
 proc runBuildAsync(
     editor: Editor, info: BuildInfo
@@ -3111,7 +3103,7 @@ proc runBuildAsync(
         info.path, SourceLanguage(info.language), info.customCmd, info.workspaceRoot
       )
       if buildResult.isErr:
-        editor.state.setStatusMessage("Build error: " & buildResult.error)
+        editor.state.statusMessage = "Build error: " & buildResult.error
       else:
         let buildProcess = buildResult.get
         editor.addRunningProcess(buildProcess.process)
@@ -3122,16 +3114,15 @@ proc runBuildAsync(
         outputBuffer.readOnly = true
         let splitResult = editor.hsplitWithBuffer(outputBuffer)
         if splitResult.isErr:
-          editor.state.setStatusMessage(
+          editor.state.statusMessage =
             "Failed to open output window: " & splitResult.error
-          )
         else:
           if editor.config.notification.screenNotifications and
               editor.config.notification.buildOnSaveScreenNotify:
-            editor.state.setStatusMessage("Build completed: " & info.path)
+            editor.state.statusMessage = "Build completed: " & info.path
       editor.state.needsFullRedraw = true
     except Exception as ex:
-      editor.state.setStatusMessage("Build error: " & ex.msg)
+      editor.state.statusMessage = "Build error: " & ex.msg
 
 proc runQuickRunAsync(
     editor: Editor, info: QuickRunInfo
@@ -3146,14 +3137,14 @@ proc runQuickRunAsync(
       )
       let quickRunResult = await startBackgroundQuickRun(prepared)
       if quickRunResult.isErr:
-        editor.state.setStatusMessage("QuickRun error: " & quickRunResult.error)
+        editor.state.statusMessage = "QuickRun error: " & quickRunResult.error
       else:
         let qrProcess = quickRunResult.get
         editor.addRunningProcess(qrProcess.process)
         let outputResult = await qrProcess.waitForResultAsync()
         editor.removeRunningProcess(qrProcess.process)
         if outputResult.isErr:
-          editor.state.setStatusMessage("QuickRun error: " & outputResult.error)
+          editor.state.statusMessage = "QuickRun error: " & outputResult.error
         else:
           let output = outputResult.get
           let outputContent = output.join("\n")
@@ -3161,16 +3152,15 @@ proc runQuickRunAsync(
           outputBuffer.readOnly = true
           let splitResult = editor.hsplitWithBuffer(outputBuffer)
           if splitResult.isErr:
-            editor.state.setStatusMessage(
+            editor.state.statusMessage =
               "Failed to open output window: " & splitResult.error
-            )
           else:
             if editor.config.notification.screenNotifications and
                 editor.config.notification.quickRunScreenNotify:
-              editor.state.setStatusMessage("QuickRun completed: " & qrProcess.filePath)
+              editor.state.statusMessage = "QuickRun completed: " & qrProcess.filePath
       editor.state.needsFullRedraw = true
     except Exception as ex:
-      editor.state.setStatusMessage("QuickRun error: " & ex.msg)
+      editor.state.statusMessage = "QuickRun error: " & ex.msg
 
 proc handlePendingAsyncOperationsImpl(
     e: Editor

@@ -736,9 +736,8 @@ proc maybeReloadExternallyModifiedFile*(e: Editor) =
   # If buffer has unsaved changes, warn the user instead of reloading
   if activeBuffer.isModified:
     if not activeBuffer.externalModWarned:
-      e.state.setStatusMessage(
+      e.state.statusMessage =
         "Warning: " & filePath & " changed on disk (buffer has unsaved changes)"
-      )
       activeBuffer.externalModWarned = true
     return
 
@@ -746,12 +745,12 @@ proc maybeReloadExternallyModifiedFile*(e: Editor) =
   logInfo("editor", "File externally modified, reloading: " & filePath)
   let reloadResult = activeBuffer.reloadFile()
   if reloadResult.isOk:
-    e.state.setStatusMessage("File reloaded: " & filePath)
+    e.state.statusMessage = "File reloaded: " & filePath
     e.state.needsFullRedraw = true
     # Update git diff after reload
     e.refreshGitDiff(useBuffer = false)
   else:
-    e.state.setStatusMessage("Failed to reload file: " & reloadResult.error)
+    e.state.statusMessage = "Failed to reload file: " & reloadResult.error
 
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## Apply configuration settings to the editor
@@ -862,7 +861,7 @@ proc maybeReloadConfig*(e: Editor) =
   # Update last known modification time
   e.state.timing.lastConfigModTime = currentModTime
 
-  e.state.setStatusMessage("Configuration reloaded")
+  e.state.statusMessage = "Configuration reloaded"
   e.state.needsFullRedraw = true
 
 proc maybeUpdateGitDiff*(e: Editor) =
@@ -1172,7 +1171,7 @@ proc tick*(e: Editor) =
     addLspMessageLog(lspMessages)
     if e.config.notification.screenNotifications and
         e.config.notification.lspScreenNotify:
-      e.state.setStatusMessage(lspMessages[^1])
+      e.state.statusMessage = lspMessages[^1]
     if e.config.notification.logNotifications and e.config.notification.lspLogNotify:
       for msg in lspMessages:
         logInfo("lsp", msg)
