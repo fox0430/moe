@@ -23,9 +23,9 @@ import pkg/celina
 
 import
   modes, buffer, registers, filer, log_viewer, help_viewer, command_completion,
-  message_log, buffer_manager, backup_manager, diff_viewer, debug_viewer, config_mode,
-  references_viewer, documentsymbol_viewer, callhierarchy_viewer, hover_popup,
-  primitives, syntax_checker, recent_file_mode, terminal_mode
+  message_log, logger, buffer_manager, backup_manager, diff_viewer, debug_viewer,
+  config_mode, references_viewer, documentsymbol_viewer, callhierarchy_viewer,
+  hover_popup, primitives, syntax_checker, recent_file_mode, terminal_mode
 
 export
   buffer.SidebarItemKind, registers, command_completion, filer, log_viewer, help_viewer,
@@ -550,7 +550,7 @@ type
       # Cursor position within commandText (0-based, after the : prefix)
     search*: SearchState # Search-related state (text, history, settings)
     commandState*: CommandState # Command mode (ex-mode) state (history)
-    statusMessage*: string # Message to display in status line
+    statusMessageStr: string # Internal - use statusMessage getter/setter
     editState*: EditState # Edit operation state (operators, motions, repeat, etc.)
     savedViewportTopLine*: int # Viewport position saved when operator starts
     visualSelection*: VisualSelection # Visual mode selection state
@@ -620,11 +620,16 @@ proc `==`*(a, b: ViewPort): bool =
   a.topLine == b.topLine and a.leftColumn == b.leftColumn and a.width == b.width and
     a.height == b.height and a.x == b.x and a.y == b.y
 
-proc setStatusMessage*(state: EditorState, msg: string) =
-  ## Set status message and log it to message log
-  state.statusMessage = msg
+proc statusMessage*(state: EditorState): string =
+  ## Get the current status message
+  state.statusMessageStr
+
+proc `statusMessage=`*(state: EditorState, msg: string) =
+  ## Set status message and automatically log non-empty messages
+  state.statusMessageStr = msg
   if msg.len > 0:
     addMessageLog(msg)
+    logDebug("editorMessage", msg)
 
 const MaxStatusMessageLines* = 10
   ## Maximum lines for multi-line status messages to prevent viewport from disappearing
@@ -632,10 +637,10 @@ const MaxStatusMessageLines* = 10
 proc statusMessageLineCount*(state: EditorState): int =
   ## Count the number of lines in the status message
   ## Returns 0 if empty, otherwise count of lines (newlines + 1)
-  if state.statusMessage.len == 0:
+  if state.statusMessageStr.len == 0:
     0
   else:
-    min(state.statusMessage.count('\n') + 1, MaxStatusMessageLines)
+    min(state.statusMessageStr.count('\n') + 1, MaxStatusMessageLines)
 
 proc statusMessageExtraLines*(state: EditorState): int =
   ## Get extra lines needed beyond the default command line
