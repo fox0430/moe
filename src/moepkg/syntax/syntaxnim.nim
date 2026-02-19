@@ -244,8 +244,11 @@ proc nimNextToken*(g: var GeneralTokenizer) =
       else:
         inc(pos)
   elif g.state == gtLongStringLit:
-    g.kind = gtLongStringLit
-    while true:
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+    else:
+      g.kind = gtLongStringLit
+    while g.kind != gtEof:
       case g.buf[pos]
       of '\0':
         break

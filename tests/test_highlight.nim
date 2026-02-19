@@ -627,6 +627,119 @@ suite "Highlight - Nim Incremental Comment/String":
     updateHighlightIncremental(buffer, ih, 3, ver, @[], SourceLanguage.langNim)
     checkIncrMatchesFull(buffer, ih, "after # comment")
 
+suite "Highlight - Block Comment Multiline State":
+  # Helper to verify incremental and full parse produce identical results.
+  proc checkBlockCommentMatch(
+      buffer: seq[Runes], ih: IncrementalHighlight, lang: SourceLanguage
+  ) =
+    let incrResult = Highlight(colorSegments: ih.segments)
+    let fullResult = initHighlight(buffer, @[], lang)
+    for row in 0 ..< buffer.len:
+      for col in 0 ..< buffer[row].len:
+        check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
+
+  test "C: insert after multiline block comment":
+    var buffer = @[
+      "int x = 1;".toRunes, "/* this is".toRunes, "   a comment".toRunes, "*/".toRunes,
+      "int y = 2;".toRunes,
+    ]
+
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langC
+    )
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+
+    buffer.insert("int z = 3;".toRunes, 5)
+    updateHighlightIncremental(buffer, ih, 5, 1, @[], SourceLanguage.langC)
+    checkBlockCommentMatch(buffer, ih, SourceLanguage.langC)
+
+  test "Rust: insert after multiline block comment":
+    var buffer = @[
+      "fn main() {".toRunes, "/* block".toRunes, "   comment */".toRunes,
+      "let x = 1;".toRunes, "}".toRunes,
+    ]
+
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langRust
+    )
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+
+    buffer.insert("let z = 2;".toRunes, 4)
+    updateHighlightIncremental(buffer, ih, 4, 1, @[], SourceLanguage.langRust)
+    checkBlockCommentMatch(buffer, ih, SourceLanguage.langRust)
+
+  test "JavaScript: insert after multiline block comment":
+    var buffer = @[
+      "let x = 1;".toRunes, "/* block".toRunes, "   comment */".toRunes,
+      "let y = 2;".toRunes,
+    ]
+
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langJavaScript
+    )
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+
+    buffer.insert("let z = 3;".toRunes, 4)
+    updateHighlightIncremental(buffer, ih, 4, 1, @[], SourceLanguage.langJavaScript)
+    checkBlockCommentMatch(buffer, ih, SourceLanguage.langJavaScript)
+
+  test "TypeScript: insert after multiline block comment":
+    var buffer = @[
+      "let x: number = 1;".toRunes, "/* block".toRunes, "   comment */".toRunes,
+      "let y: number = 2;".toRunes,
+    ]
+
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langTypeScript
+    )
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+
+    buffer.insert("let z: number = 3;".toRunes, 4)
+    updateHighlightIncremental(buffer, ih, 4, 1, @[], SourceLanguage.langTypeScript)
+    checkBlockCommentMatch(buffer, ih, SourceLanguage.langTypeScript)
+
+  test "Haskell: insert after multiline block comment":
+    var buffer = @[
+      "module Main where".toRunes, "{- block".toRunes, "   comment -}".toRunes,
+      "main = putStrLn \"hello\"".toRunes,
+    ]
+
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langHaskell
+    )
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+
+    buffer.insert("foo = 1".toRunes, 4)
+    updateHighlightIncremental(buffer, ih, 4, 1, @[], SourceLanguage.langHaskell)
+    checkBlockCommentMatch(buffer, ih, SourceLanguage.langHaskell)
+
+  test "TOML: insert after multiline string":
+    var buffer = @[
+      "name = \"\"\"".toRunes, "hello".toRunes, "world\"\"\"".toRunes,
+      "value = 42".toRunes,
+    ]
+
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langToml
+    )
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+
+    buffer.insert("other = 1".toRunes, 4)
+    updateHighlightIncremental(buffer, ih, 4, 1, @[], SourceLanguage.langToml)
+    checkBlockCommentMatch(buffer, ih, SourceLanguage.langToml)
+
 suite "Highlight - detectLanguage":
   test "detectLanguage for Rust":
     check detectLanguage("test.rs") == SourceLanguage.langRust

@@ -237,6 +237,36 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
         break
       else:
         inc(pos)
+  elif g.state == gtLongStringLit:
+    # Continuation of multiline """ or ''' string
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+    else:
+      g.kind = gtLongStringLit
+    while g.kind != gtEof:
+      case g.buf[pos]
+      of '\0':
+        break
+      of '\"':
+        if g.buf[pos + 1] == '\"' and g.buf[pos + 2] == '\"':
+          inc(pos, 3)
+          g.state = gtNone
+          break
+        else:
+          inc(pos)
+      of '\'':
+        if g.buf[pos + 1] == '\'' and g.buf[pos + 2] == '\'':
+          inc(pos, 3)
+          g.state = gtNone
+          break
+        else:
+          inc(pos)
+      of '\\':
+        inc(pos)
+        if g.buf[pos] != '\0':
+          inc(pos)
+      else:
+        inc(pos)
   else:
     case g.buf[pos]
     of ' ', '\x09' .. '\x0D':
@@ -293,16 +323,15 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
         g.kind = gtPunctuation
         inc(pos)
     of '\"':
-      g.kind = gtStringLit
       inc(pos)
       # Check for multiline string """
       if g.buf[pos] == '\"' and g.buf[pos + 1] == '\"':
+        g.kind = gtLongStringLit
         inc(pos, 2)
-        # Multiline basic string - process escapes inline (no state transition)
-        # because state-based escape handling doesn't support newlines
         while true:
           case g.buf[pos]
           of '\0':
+            g.state = gtLongStringLit
             break
           of '\"':
             if g.buf[pos + 1] == '\"' and g.buf[pos + 2] == '\"':
@@ -311,13 +340,13 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
             else:
               inc(pos)
           of '\\':
-            # Skip escape sequence inline
             inc(pos)
             if g.buf[pos] != '\0':
               inc(pos)
           else:
             inc(pos)
       else:
+        g.kind = gtStringLit
         # Single-line basic string
         while true:
           case g.buf[pos]
@@ -332,15 +361,15 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
           else:
             inc(pos)
     of '\'':
-      g.kind = gtStringLit
       inc(pos)
       # Check for multiline literal string '''
       if g.buf[pos] == '\'' and g.buf[pos + 1] == '\'':
+        g.kind = gtLongStringLit
         inc(pos, 2)
-        # Multiline literal string - no escape processing
         while true:
           case g.buf[pos]
           of '\0':
+            g.state = gtLongStringLit
             break
           of '\'':
             if g.buf[pos + 1] == '\'' and g.buf[pos + 2] == '\'':
@@ -351,6 +380,7 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
           else:
             inc(pos)
       else:
+        g.kind = gtStringLit
         # Single-line literal string - no escape processing
         while true:
           case g.buf[pos]

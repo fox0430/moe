@@ -48,7 +48,38 @@ proc haskellNextToken*(g: var GeneralTokenizer) =
     symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
-  if g.state == gtStringLit:
+  if g.state == gtLongComment:
+    # Continuation of {- -} block comment
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+    else:
+      g.kind = gtLongComment
+      let nested = hasNestedComments in flagsHaskell
+      var depth = g.commentDepth
+      while true:
+        case g.buf[pos]
+        of '\0':
+          g.commentDepth = depth
+          break
+        of '-':
+          inc(pos)
+          if g.buf[pos] == '}':
+            inc(pos)
+            if depth == 0:
+              g.state = gtNone
+              g.commentDepth = 0
+              break
+            elif nested:
+              dec(depth)
+        of '{':
+          inc(pos)
+          if g.buf[pos] == '-':
+            inc(pos)
+            if nested:
+              inc(depth)
+        else:
+          inc(pos)
+  elif g.state == gtStringLit:
     g.kind = gtStringLit
     while true:
       case g.buf[pos]
