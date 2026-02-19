@@ -243,6 +243,23 @@ proc nimNextToken*(g: var GeneralTokenizer) =
         break
       else:
         inc(pos)
+  elif g.state == gtLongStringLit:
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+    else:
+      g.kind = gtLongStringLit
+    while g.kind != gtEof:
+      case g.buf[pos]
+      of '\0':
+        break
+      of '\"':
+        inc(pos)
+        if g.buf[pos] == '\"' and g.buf[pos + 1] == '\"' and g.buf[pos + 2] != '\"':
+          inc(pos, 2)
+          g.state = gtNone
+          break
+      else:
+        inc(pos)
   else:
     case g.buf[pos]
     of ' ', '\x09' .. '\x0D':
@@ -263,6 +280,7 @@ proc nimNextToken*(g: var GeneralTokenizer) =
           while true:
             case g.buf[pos]
             of '\0':
+              g.state = gtLongStringLit
               break
             of '\"':
               inc(pos)
@@ -336,6 +354,7 @@ proc nimNextToken*(g: var GeneralTokenizer) =
         while true:
           case g.buf[pos]
           of '\0':
+            g.state = gtLongStringLit
             break
           of '\"':
             inc(pos)

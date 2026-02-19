@@ -109,6 +109,8 @@ proc lexCurlyDashComment*(
       while true:
         case lexer.buf[result]
         of '\0':
+          lexer.state = gtLongComment
+          lexer.commentDepth = depth
           break
         of '-':
           inc result

@@ -832,25 +832,25 @@ suite "syntaxtoml - multiline strings":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"\"\"hello\nworld\"\"\"")
     g.tomlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtLongStringLit
 
   test "multiline literal string":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("'''hello\nworld'''")
     g.tomlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtLongStringLit
 
   test "empty multiline basic string":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"\"\"\"\"\"")
     g.tomlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtLongStringLit
 
   test "empty multiline literal string":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("''''''")
     g.tomlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtLongStringLit
 
 suite "syntaxtoml - invalid number suffixes":
   test "invalid binary digit":
@@ -1383,46 +1383,46 @@ suite "syntaxtoml - multiline string edge cases":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"\"\"\"\"\"")
     g.tomlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtLongStringLit
     check g.length == 6
 
   test "empty multiline literal string":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("''''''")
     g.tomlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtLongStringLit
     check g.length == 6
 
   test "multiline with single quote inside":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"\"\"say \"hello\"\"\"\"")
     g.tomlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtLongStringLit
 
   test "multiline with double quote inside":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("'''say ''wow'''")
     g.tomlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtLongStringLit
 
   test "unterminated multiline basic string":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"\"\"unclosed")
     g.tomlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtLongStringLit
     # Should consume until EOF
 
   test "unterminated multiline literal string":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("'''unclosed")
     g.tomlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtLongStringLit
 
   test "multiline with only newlines":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"\"\"\n\n\n\"\"\"")
     g.tomlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtLongStringLit
 
 suite "syntaxtoml - number edge cases":
   test "positive zero":

@@ -263,6 +263,48 @@ suite "Buffer - Transaction Support":
     check r.isErr
     check r.error.contains("No transaction in progress")
 
+suite "Buffer - Transaction lastChangedLines":
+  test "commitTransaction updates lastChangedLines to minimum line":
+    # Regression test: commitTransaction must set lastChangedLines to the
+    # minimum changed line so incremental highlighting re-parses correctly.
+    let b = newTextBuffer("line0\nline1\nline2\nline3\nline4")
+    check b.len == 5
+
+    discard b.beginTransaction("multi-line delete")
+    # Delete from multiple lines (simulating visual block delete)
+    discard b.deleteRange(
+      BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 3)
+    )
+    discard b.deleteRange(
+      BufferPosition(line: 1, column: 0), BufferPosition(line: 1, column: 3)
+    )
+    discard b.deleteRange(
+      BufferPosition(line: 2, column: 0), BufferPosition(line: 2, column: 3)
+    )
+    discard b.commitTransaction()
+
+    # lastChangedLines should be 0 (minimum), not 2 (last change)
+    check b.lastChangedLines == 0
+
+  test "commitTransaction with single change":
+    let b = newTextBuffer("hello\nworld")
+
+    discard b.beginTransaction("single")
+    discard b.insertText(BufferPosition(line: 1, column: 5), "!")
+    discard b.commitTransaction()
+
+    check b.lastChangedLines == 1
+
+  test "commitTransaction with empty transaction":
+    let b = newTextBuffer("hello")
+    let valBefore = b.lastChangedLines
+
+    discard b.beginTransaction("empty")
+    discard b.commitTransaction()
+
+    # lastChangedLines should be unchanged
+    check b.lastChangedLines == valBefore
+
 suite "Buffer - Modified Flag":
   test "isModified returns false for new buffer":
     let b = newTextBuffer("test")

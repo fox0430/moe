@@ -82,6 +82,31 @@ proc clikeNextToken*(
         break
       else:
         inc(pos)
+  elif g.state == gtLongComment:
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+    else:
+      g.kind = gtLongComment
+    var nested = 0
+    while g.kind != gtEof:
+      case g.buf[pos]
+      of '*':
+        inc(pos)
+        if g.buf[pos] == '/':
+          inc(pos)
+          if nested == 0:
+            g.state = gtNone
+            break
+      of '/':
+        inc(pos)
+        if g.buf[pos] == '*':
+          inc(pos)
+          if hasNestedComments in flags:
+            inc(nested)
+      of '\0':
+        break
+      else:
+        inc(pos)
   else:
     case g.buf[pos]
     of ' ', '\t' .. '\r':
@@ -113,6 +138,7 @@ proc clikeNextToken*(
               if hasNestedComments in flags:
                 inc(nested)
           of '\0':
+            g.state = gtLongComment
             break
           else:
             inc(pos)

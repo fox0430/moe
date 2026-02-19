@@ -97,6 +97,29 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
         g.inJsxMode = false
     return
 
+  # Handle block comment continuation
+  if g.state == gtLongComment:
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+      g.length = 0
+      return
+    g.kind = gtLongComment
+    while true:
+      case g.buf[pos]
+      of '*':
+        inc(pos)
+        if g.buf[pos] == '/':
+          inc(pos)
+          g.state = gtNone
+          break
+      of '\0':
+        break
+      else:
+        inc(pos)
+    g.length = pos - g.pos
+    g.pos = pos
+    return
+
   # Handle template literal state
   if g.state == gtLongStringLit:
     # We're inside a template literal
@@ -217,6 +240,7 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
           if g.buf[pos] == '*':
             inc(pos)
         of '\0':
+          g.state = gtLongComment
           break
         else:
           inc(pos)
