@@ -113,12 +113,35 @@ type
     numericPrefix*: string ## For building numeric prefixes like "2", "23", etc
     hasNumericPrefix*: bool ## Whether we have a numeric prefix to apply
 
+  ## Kind of runtime key mapping
+  RuntimeMappingKind* = enum
+    rmkCommand ## Maps to a command name (handled via existing bindings)
+    rmkKeySequence ## Maps to a key sequence (replayed via playbackMacro)
+
+  ## A runtime key mapping entry
+  RuntimeKeyMapping* = object
+    triggerKeys*: seq[KeyCombo] ## LHS (trigger key sequence)
+    triggerStr*: string ## Display string for LHS
+    targetStr*: string ## Display string for RHS
+    case kind*: RuntimeMappingKind
+    of rmkCommand:
+      commandName*: string
+    of rmkKeySequence:
+      targetKeys*: seq[string] ## Key strings for playbackMacro
+
+  ## State for accumulating keys for runtime key-seq mapping matching
+  RuntimeMappingState* = object
+    keys*: seq[KeyCombo] ## Keys accumulated so far
+
   ## Registry for all key_bindings
   KeyBindingRegistry* = ref object
     bindings*: Table[EditorMode, seq[KeyBinding]]
     sequences*: Table[EditorMode, Table[seq[KeyCombo], Command]] ## Multi-key sequences
     commandRegistry*: Table[string, Command]
     sequenceState*: KeySequenceState ## Current sequence being built
+    runtimeMappings*: Table[EditorMode, seq[RuntimeKeyMapping]]
+    runtimeMappingState*: RuntimeMappingState ## Key-seq accumulator
+    isReplayingMapping*: bool ## When true, skip mapping expansion (noremap)
 
 proc `==`*(a, b: KeyCombo): bool =
   if a.isSpecial != b.isSpecial:
@@ -390,12 +413,16 @@ proc newKeyBindingRegistry*(): KeyBindingRegistry =
       numericPrefix: "",
       hasNumericPrefix: false,
     ),
+    runtimeMappings: initTable[EditorMode, seq[RuntimeKeyMapping]](),
+    runtimeMappingState: RuntimeMappingState(keys: @[]),
+    isReplayingMapping: false,
   )
 
   # Initialize empty binding lists for each mode
   for mode in EditorMode:
     result.bindings[mode] = @[]
     result.sequences[mode] = initTable[seq[KeyCombo], Command]()
+    result.runtimeMappings[mode] = @[]
 
 proc registerCommand*(registry: KeyBindingRegistry, command: Command) =
   ## Register a command that can be bound to keys
@@ -487,6 +514,203 @@ proc clearSequence*(registry: KeyBindingRegistry) =
   registry.sequenceState.waitingForChar = false
   registry.sequenceState.numericPrefix = ""
   registry.sequenceState.hasNumericPrefix = false
+
+proc parseKeyString*(s: string): seq[KeyCombo] =
+  ## Parse a key string into a sequence of KeyCombos.
+  ## Supports space-separated tokens (e.g., "C-s Enter", "g g") and
+  ## Vim-style concatenated characters (e.g., "jj" = two j presses).
+  ## Returns empty seq on parse error.
+  let parts = s.strip().split(' ')
+  for part in parts:
+    if part.len == 0:
+      continue
+    let combo = parseKeyCombo(part)
+    if combo.isSome:
+      result.add(combo.get)
+    elif part.len > 1 and '-' notin part:
+      # Vim-style concatenated characters: "jj", "gg", "gd" etc.
+      for ch in part:
+        let charCombo = parseKeyCombo($ch)
+        if charCombo.isNone:
+          return @[]
+        result.add(charCombo.get)
+    else:
+      return @[]
+
+proc keySeqToDisplayString*(keys: seq[KeyCombo]): string =
+  ## Convert a sequence of KeyCombos to a display string (space-separated)
+  for i, k in keys:
+    if i > 0:
+      result.add(' ')
+    if k.isSpecial:
+      case k.special
+      of skEnter:
+        result.add("Enter")
+      of skTab:
+        result.add("Tab")
+      of skBackTab:
+        result.add("BackTab")
+      of skBackspace:
+        result.add("Backspace")
+      of skDelete:
+        result.add("Delete")
+      of skEscape:
+        result.add("Escape")
+      of skUp:
+        result.add("Up")
+      of skDown:
+        result.add("Down")
+      of skLeft:
+        result.add("Left")
+      of skRight:
+        result.add("Right")
+      of skPageUp:
+        result.add("PageUp")
+      of skPageDown:
+        result.add("PageDown")
+      of skHome:
+        result.add("Home")
+      of skEnd:
+        result.add("End")
+      of skFunction:
+        result.add("F" & $k.fnNum)
+      of skNone:
+        discard
+    else:
+      var prefix = ""
+      if kmCtrl in k.modifiers:
+        prefix.add("C-")
+      if kmAlt in k.modifiers:
+        prefix.add("M-")
+      if kmShift in k.modifiers:
+        prefix.add("S-")
+      if k.char == " ":
+        result.add(prefix & "Space")
+      else:
+        result.add(prefix & k.char)
+
+proc addRuntimeMapping*(
+    registry: KeyBindingRegistry, mode: EditorMode, lhsStr: string, rhsStr: string
+): string =
+  ## Add a runtime key mapping. Returns empty string on success, error message on failure.
+  ## If RHS is a known command name, registers as key→command.
+  ## Otherwise, parses RHS as key sequence and registers as key→key-sequence.
+  let lhsKeys = parseKeyString(lhsStr)
+  if lhsKeys.len == 0:
+    return "Invalid key: " & lhsStr
+
+  # Check if RHS is a command name
+  if rhsStr in registry.commandRegistry:
+    # Key → command mapping: register directly via existing bindings infrastructure
+    let command = registry.commandRegistry[rhsStr]
+    if lhsKeys.len == 1:
+      registry.bindKey(mode, lhsKeys[0], command)
+    else:
+      registry.bindSequence(mode, lhsKeys, command)
+
+    # Also store in runtimeMappings for listing/removal
+    let mapping = RuntimeKeyMapping(
+      triggerKeys: lhsKeys,
+      triggerStr: lhsStr,
+      targetStr: rhsStr,
+      kind: rmkCommand,
+      commandName: rhsStr,
+    )
+    # Remove existing mapping for same trigger
+    registry.runtimeMappings[mode].keepItIf(it.triggerKeys != lhsKeys)
+    registry.runtimeMappings[mode].add(mapping)
+    return ""
+
+  # Otherwise, parse RHS as key sequence
+  let rhsKeys = parseKeyString(rhsStr)
+  if rhsKeys.len == 0:
+    return "Invalid mapping target: " & rhsStr
+
+  # Convert RHS keys to string representation for playbackMacro
+  var targetKeyStrs: seq[string] = @[]
+  for k in rhsKeys:
+    targetKeyStrs.add(keyComboToString(k))
+
+  let mapping = RuntimeKeyMapping(
+    triggerKeys: lhsKeys,
+    triggerStr: lhsStr,
+    targetStr: rhsStr,
+    kind: rmkKeySequence,
+    targetKeys: targetKeyStrs,
+  )
+
+  # Remove existing mapping for same trigger
+  registry.runtimeMappings[mode].keepItIf(it.triggerKeys != lhsKeys)
+  registry.runtimeMappings[mode].add(mapping)
+  return ""
+
+proc removeRuntimeMapping*(
+    registry: KeyBindingRegistry, mode: EditorMode, lhsStr: string
+): string =
+  ## Remove a runtime key mapping. Returns empty string on success, error message on failure.
+  let lhsKeys = parseKeyString(lhsStr)
+  if lhsKeys.len == 0:
+    return "Invalid key: " & lhsStr
+
+  if mode notin registry.runtimeMappings:
+    return "No mapping found: " & lhsStr
+
+  var removedMapping: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
+
+  for m in registry.runtimeMappings[mode]:
+    if m.triggerKeys == lhsKeys:
+      removedMapping = some(m)
+      break
+
+  if removedMapping.isNone:
+    return "No mapping found: " & lhsStr
+
+  registry.runtimeMappings[mode].keepItIf(it.triggerKeys != lhsKeys)
+
+  # If it was a command mapping, also remove from bindings/sequences
+  let m = removedMapping.get
+  if m.kind == rmkCommand:
+    if lhsKeys.len == 1:
+      registry.unbindKey(mode, lhsKeys[0])
+    else:
+      if mode in registry.sequences:
+        registry.sequences[mode].del(lhsKeys)
+
+  return ""
+
+proc clearRuntimeMappings*(registry: KeyBindingRegistry, mode: EditorMode) =
+  ## Clear all runtime mappings for the given mode
+  if mode in registry.runtimeMappings:
+    # Remove command mappings from bindings/sequences
+    for m in registry.runtimeMappings[mode]:
+      if m.kind == rmkCommand:
+        if m.triggerKeys.len == 1:
+          registry.unbindKey(mode, m.triggerKeys[0])
+        else:
+          if mode in registry.sequences:
+            registry.sequences[mode].del(m.triggerKeys)
+    registry.runtimeMappings[mode] = @[]
+
+proc listRuntimeMappings*(registry: KeyBindingRegistry, mode: EditorMode): seq[string] =
+  ## List all runtime mappings for the given mode as human-readable strings
+  if mode notin registry.runtimeMappings:
+    return @[]
+  for m in registry.runtimeMappings[mode]:
+    result.add(m.triggerStr & " -> " & m.targetStr)
+
+proc clearRuntimeMappingState*(registry: KeyBindingRegistry) =
+  ## Clear the runtime mapping key accumulator
+  registry.runtimeMappingState.keys = @[]
+
+proc getRuntimeKeySeqMappings*(
+    registry: KeyBindingRegistry, mode: EditorMode
+): seq[RuntimeKeyMapping] =
+  ## Get all key-sequence runtime mappings for the given mode
+  if mode notin registry.runtimeMappings:
+    return @[]
+  for m in registry.runtimeMappings[mode]:
+    if m.kind == rmkKeySequence:
+      result.add(m)
 
 proc isDigitKey*(combo: KeyCombo): bool =
   ## Check if the key combination is a digit (0-9)

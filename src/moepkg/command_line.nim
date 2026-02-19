@@ -75,6 +75,21 @@ type
     claLspCallHierarchyIncoming # :lspcallhierarchyincoming (LSP incoming calls)
     claLspCallHierarchyOutgoing # :lspcallhierarchyoutgoing (LSP outgoing calls)
     claTerminal # :terminal (open terminal emulator)
+    claMap # :map {lhs} {rhs} (all modes)
+    claNmap # :nmap {lhs} {rhs} (normal mode)
+    claImap # :imap {lhs} {rhs} (insert mode)
+    claVmap # :vmap {lhs} {rhs} (visual modes)
+    claRmap # :rmap {lhs} {rhs} (replace mode)
+    claUnmap # :unmap {lhs} (all modes)
+    claNunmap # :nunmap {lhs} (normal mode)
+    claIunmap # :iunmap {lhs} (insert mode)
+    claVunmap # :vunmap {lhs} (visual modes)
+    claRunmap # :runmap {lhs} (replace mode)
+    claMapclear # :mapclear (all modes)
+    claNmapclear # :nmapclear (normal mode)
+    claImapclear # :imapclear (insert mode)
+    claVmapclear # :vmapclear (visual modes)
+    claRmapclear # :rmapclear (replace mode)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -187,6 +202,13 @@ type
       discard
     of claTerminal:
       terminalCommand*: string # Optional command (empty = default shell)
+    of claMap, claNmap, claImap, claVmap, claRmap:
+      mapLhs*: string
+      mapRhs*: string
+    of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap:
+      unmapLhs*: string
+    of claMapclear, claNmapclear, claImapclear, claVmapclear, claRmapclear:
+      discard
     of claUnknown:
       errorMessage*: string
 
@@ -206,6 +228,16 @@ const ArgumentRequiredActions* = {
   claHSplit, # optional but user may want to specify file
   claFiler, # optional but user may want to specify path
   claTerminal, # optional but user may want to specify command
+  claMap, # requires lhs and rhs
+  claNmap, # requires lhs and rhs
+  claImap, # requires lhs and rhs
+  claVmap, # requires lhs and rhs
+  claRmap, # requires lhs and rhs
+  claUnmap, # requires lhs
+  claNunmap, # requires lhs
+  claIunmap, # requires lhs
+  claVunmap, # requires lhs
+  claRunmap, # requires lhs
   claUnknown, # invalid command
 }
 
@@ -774,6 +806,69 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       else:
         ""
     return CommandLineResult(kind: claTerminal, terminalCommand: termCmd)
+  of claMap, claNmap, claImap, claVmap, claRmap:
+    if cmd.args.len < 2:
+      let cmdName =
+        case cmd.action
+        of claNmap: "nmap"
+        of claImap: "imap"
+        of claVmap: "vmap"
+        of claRmap: "rmap"
+        else: "map"
+      return CommandLineResult(
+        kind: claUnknown, errorMessage: "Usage: :" & cmdName & " {lhs} {rhs}"
+      )
+    let lhs = cmd.args[0]
+    let rhs = cmd.args[1 ..^ 1].join(" ")
+    case cmd.action
+    of claMap:
+      return CommandLineResult(kind: claMap, mapLhs: lhs, mapRhs: rhs)
+    of claNmap:
+      return CommandLineResult(kind: claNmap, mapLhs: lhs, mapRhs: rhs)
+    of claImap:
+      return CommandLineResult(kind: claImap, mapLhs: lhs, mapRhs: rhs)
+    of claVmap:
+      return CommandLineResult(kind: claVmap, mapLhs: lhs, mapRhs: rhs)
+    of claRmap:
+      return CommandLineResult(kind: claRmap, mapLhs: lhs, mapRhs: rhs)
+    else:
+      discard
+  of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap:
+    if cmd.args.len < 1:
+      let cmdName =
+        case cmd.action
+        of claNunmap: "nunmap"
+        of claIunmap: "iunmap"
+        of claVunmap: "vunmap"
+        of claRunmap: "runmap"
+        else: "unmap"
+      return CommandLineResult(
+        kind: claUnknown, errorMessage: "Usage: :" & cmdName & " {lhs}"
+      )
+    let lhs = cmd.args[0]
+    case cmd.action
+    of claUnmap:
+      return CommandLineResult(kind: claUnmap, unmapLhs: lhs)
+    of claNunmap:
+      return CommandLineResult(kind: claNunmap, unmapLhs: lhs)
+    of claIunmap:
+      return CommandLineResult(kind: claIunmap, unmapLhs: lhs)
+    of claVunmap:
+      return CommandLineResult(kind: claVunmap, unmapLhs: lhs)
+    of claRunmap:
+      return CommandLineResult(kind: claRunmap, unmapLhs: lhs)
+    else:
+      discard
+  of claMapclear:
+    return CommandLineResult(kind: claMapclear)
+  of claNmapclear:
+    return CommandLineResult(kind: claNmapclear)
+  of claImapclear:
+    return CommandLineResult(kind: claImapclear)
+  of claVmapclear:
+    return CommandLineResult(kind: claVmapclear)
+  of claRmapclear:
+    return CommandLineResult(kind: claRmapclear)
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

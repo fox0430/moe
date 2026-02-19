@@ -118,6 +118,9 @@ type
     cmrLspCallHierarchyOutgoing # LSP outgoing calls (:lspCallHierarchyOutgoing)
     cmrSubstitute # Search and replace (:s)
     cmrTerminal # Open terminal emulator (:terminal)
+    cmrMapAdd # Add runtime key mapping (:map, :nmap, etc.)
+    cmrMapRemove # Remove runtime key mapping (:unmap, :nunmap, etc.)
+    cmrMapClear # Clear runtime key mappings (:mapclear, :nmapclear, etc.)
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -228,6 +231,15 @@ type
       substituteCount*: int # number of replacements made
     of cmrTerminal:
       terminalCommand*: string # Optional command (empty = default shell)
+    of cmrMapAdd:
+      mapAddLhs*: string
+      mapAddRhs*: string
+      mapAddModes*: seq[EditorMode]
+    of cmrMapRemove:
+      mapRemoveLhs*: string
+      mapRemoveModes*: seq[EditorMode]
+    of cmrMapClear:
+      mapClearModes*: seq[EditorMode]
     of cmrError:
       errorMessage*: string
 
@@ -933,6 +945,65 @@ proc handleCommandModeInput*(
       cmdResult.hasRange, cmdResult.isGlobal, cmdResult.startLine, cmdResult.endLine,
       currentLine,
     )
+  of claMap, claNmap, claImap, claVmap, claRmap:
+    let modes =
+      case cmdResult.kind
+      of claNmap:
+        @[EditorMode.Normal]
+      of claImap:
+        @[EditorMode.Insert]
+      of claVmap:
+        @[EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]
+      of claRmap:
+        @[EditorMode.Replace]
+      else:
+        # claMap: all editable modes
+        @[
+          EditorMode.Normal, EditorMode.Insert, EditorMode.Visual,
+          EditorMode.VisualBlock, EditorMode.VisualLine, EditorMode.Replace,
+        ]
+    return CommandModeResult(
+      kind: cmrMapAdd,
+      mapAddLhs: cmdResult.mapLhs,
+      mapAddRhs: cmdResult.mapRhs,
+      mapAddModes: modes,
+    )
+  of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap:
+    let modes =
+      case cmdResult.kind
+      of claNunmap:
+        @[EditorMode.Normal]
+      of claIunmap:
+        @[EditorMode.Insert]
+      of claVunmap:
+        @[EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]
+      of claRunmap:
+        @[EditorMode.Replace]
+      else:
+        @[
+          EditorMode.Normal, EditorMode.Insert, EditorMode.Visual,
+          EditorMode.VisualBlock, EditorMode.VisualLine, EditorMode.Replace,
+        ]
+    return CommandModeResult(
+      kind: cmrMapRemove, mapRemoveLhs: cmdResult.unmapLhs, mapRemoveModes: modes
+    )
+  of claMapclear, claNmapclear, claImapclear, claVmapclear, claRmapclear:
+    let modes =
+      case cmdResult.kind
+      of claNmapclear:
+        @[EditorMode.Normal]
+      of claImapclear:
+        @[EditorMode.Insert]
+      of claVmapclear:
+        @[EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]
+      of claRmapclear:
+        @[EditorMode.Replace]
+      else:
+        @[
+          EditorMode.Normal, EditorMode.Insert, EditorMode.Visual,
+          EditorMode.VisualBlock, EditorMode.VisualLine, EditorMode.Replace,
+        ]
+    return CommandModeResult(kind: cmrMapClear, mapClearModes: modes)
   of claUnknown:
     return CommandModeResult(kind: cmrError, errorMessage: cmdResult.errorMessage)
 
