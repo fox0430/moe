@@ -70,7 +70,7 @@ proc waitForReady(client: LspClient): Future[bool] {.async.} =
 # Helper to run async tests
 template asyncTest(name: string, body: untyped) =
   test name:
-    proc asyncBody() {.async: (raises: [CancelledError, Exception]).} =
+    proc asyncBody() {.async: (raises: [CancelledError, CatchableError]).} =
       body
 
     waitFor asyncBody()
@@ -179,8 +179,8 @@ suite "LspClient Integration - Document Synchronization":
       let ready = await waitForReady(client)
       check ready
 
-      let result = await client.didOpen("file:///test.nim", "nim", 1, "echo \"Hello\"")
-      check result.isOk
+      let r = await client.didOpen("file:///test.nim", "nim", 1, "echo \"Hello\"")
+      check r.isOk
 
       client.kill()
 
@@ -199,8 +199,8 @@ suite "LspClient Integration - Document Synchronization":
       discard await client.didOpen("file:///test.nim", "nim", 1, "echo \"Hello\"")
 
       # Then close
-      let result = await client.didClose("file:///test.nim")
-      check result.isOk
+      let r = await client.didClose("file:///test.nim")
+      check r.isOk
 
       client.kill()
 
@@ -219,8 +219,8 @@ suite "LspClient Integration - Document Synchronization":
       discard await client.didOpen("file:///test.nim", "nim", 1, "echo \"Hello\"")
 
       # Then change
-      let result = await client.didChange("file:///test.nim", 2, "echo \"World\"")
-      check result.isOk
+      let r = await client.didChange("file:///test.nim", 2, "echo \"World\"")
+      check r.isOk
 
       client.kill()
 
@@ -239,8 +239,8 @@ suite "LspClient Integration - Document Synchronization":
       discard await client.didOpen("file:///test.nim", "nim", 1, "echo \"Hello\"")
 
       # Then save
-      let result = await client.didSave("file:///test.nim")
-      check result.isOk
+      let r = await client.didSave("file:///test.nim")
+      check r.isOk
 
       client.kill()
 
@@ -259,7 +259,7 @@ suite "LspClient Integration - Document Synchronization":
       discard await client.didOpen("file:///test.nim", "nim", 1, "echo \"Hello\"")
 
       # Save with text
-      let result = await client.didSave("file:///test.nim", some("echo \"Hello\""))
+      let r = await client.didSave("file:///test.nim", some("echo \"Hello\""))
       check result.isOk
 
       client.kill()
@@ -280,7 +280,7 @@ suite "LspClient Integration - LSP Features":
       discard await client.didOpen("file:///test.nim", "nim", 1, "echo test")
 
       # Request completion
-      let result = await client.completion("file:///test.nim", 0, 5)
+      let r = await client.completion("file:///test.nim", 0, 5)
       check result.isOk
       let items = result.get
       check items.len >= 1
@@ -301,8 +301,8 @@ suite "LspClient Integration - LSP Features":
 
       discard await client.didOpen("file:///test.nim", "nim", 1, "let x = 1")
 
-      let result = await client.hover("file:///test.nim", 0, 0)
-      check result.isOk
+      let r = await client.hover("file:///test.nim", 0, 0)
+      check r.isOk
       let hover = result.get
       check hover.isSome
 
@@ -321,9 +321,9 @@ suite "LspClient Integration - LSP Features":
 
       discard await client.didOpen("file:///test.nim", "nim", 1, "proc test()")
 
-      let result = await client.gotoDefinition("file:///test.nim", 0, 5)
-      check result.isOk
-      let locations = result.get
+      let r = await client.gotoDefinition("file:///test.nim", 0, 5)
+      check r.isOk
+      let locations = r.get
       check locations.len >= 1
       check locations[0].uri == "file:///test/definition.nim"
 
@@ -342,7 +342,7 @@ suite "LspClient Integration - LSP Features":
 
       discard await client.didOpen("file:///test.nim", "nim", 1, "proc test()")
 
-      let result = await client.gotoDeclaration("file:///test.nim", 0, 5)
+      let r = await client.gotoDeclaration("file:///test.nim", 0, 5)
       check result.isOk
       let locations = result.get
       check locations.len >= 1
@@ -363,7 +363,7 @@ suite "LspClient Integration - LSP Features":
 
       discard await client.didOpen("file:///test.nim", "nim", 1, "let x = 1")
 
-      let result = await client.references("file:///test.nim", 0, 4)
+      let r = await client.references("file:///test.nim", 0, 4)
       check result.isOk
       let locations = result.get
       check locations.len >= 2
@@ -383,7 +383,7 @@ suite "LspClient Integration - LSP Features":
 
       discard await client.didOpen("file:///test.nim", "nim", 1, "let x = 1")
 
-      let result = await client.documentHighlight("file:///test.nim", 0, 4)
+      let r = await client.documentHighlight("file:///test.nim", 0, 4)
       check result.isOk
       let highlights = result.get
       check highlights.len >= 1
@@ -403,7 +403,7 @@ suite "LspClient Integration - LSP Features":
 
       discard await client.didOpen("file:///test.nim", "nim", 1, "echo   test")
 
-      let result = await client.formatting("file:///test.nim")
+      let r = await client.formatting("file:///test.nim")
       check result.isOk
       let edits = result.get
       check edits.len >= 1
@@ -423,7 +423,7 @@ suite "LspClient Integration - LSP Features":
 
       discard await client.didOpen("file:///test.nim", "nim", 1, "let x = 1")
 
-      let result = await client.inlayHints("file:///test.nim", 0, 0, 10, 0)
+      let r = await client.inlayHints("file:///test.nim", 0, 0, 10, 0)
       check result.isOk
       # lasm config has inlayHint enabled with hints
       let hints = result.get
@@ -444,7 +444,7 @@ suite "LspClient Integration - LSP Features":
 
       discard await client.didOpen("file:///test.nim", "nim", 1, "proc test()")
 
-      let result = await client.semanticTokensFull("file:///test.nim")
+      let r = await client.semanticTokensFull("file:///test.nim")
       check result.isOk
       # lasm config has semanticTokens enabled with tokens
       let tokens = result.get
@@ -513,7 +513,7 @@ suite "LspClient Integration - Error Handling":
     let client = newLspClient("nim", "dummy-server", @[], "/tmp")
 
     # Try to send request without starting
-    let result = await client.sendRequest("test", %*{})
+    let r = await client.sendRequest("test", %*{})
     check result.isErr
     check result.error == "Client not running"
 
@@ -522,7 +522,7 @@ suite "LspClient Integration - Error Handling":
     let client = newLspClient("nim", "dummy-server", @[], "/tmp")
 
     # Try to send notification without starting
-    let result = await client.sendNotification("test", %*{})
+    let r = await client.sendNotification("test", %*{})
     check result.isErr
     check result.error == "Client not running"
 
@@ -537,7 +537,7 @@ suite "LspClient Integration - Error Handling":
       # Don't wait for init to complete
 
       # capabilities not set yet
-      let result = await client.didOpen("file:///test.nim", "nim", 1, "test")
+      let r = await client.didOpen("file:///test.nim", "nim", 1, "test")
       check result.isErr
       check result.error == "Client not initialized"
 
@@ -548,7 +548,7 @@ suite "LspClient Integration - sendAndWait":
     # No lasm needed - testing client behavior without server
     let client = newLspClient("nim", "dummy-server", @[], "/tmp")
 
-    let result = await client.sendAndWait("test/method", %*{})
+    let r = await client.sendAndWait("test/method", %*{})
     check result.isErr
     check result.error == "Client not running"
 
@@ -566,7 +566,7 @@ suite "LspClient Integration - sendAndWait":
       discard await client.didOpen("file:///test.nim", "nim", 1, "let x = 1")
 
       # Use completion as a test for sendAndWait
-      let result = await client.sendAndWait(
+      let r = await client.sendAndWait(
         "textDocument/completion",
         %*{
           "textDocument": {"uri": "file:///test.nim"},
