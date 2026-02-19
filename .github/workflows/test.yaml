@@ -89,4 +89,5 @@ jobs:
 
     - name: Run unit test
       run: |
+        nimble setup
         xvfb-run env XDG_SESSION_TYPE=x11 nimble --useSystemNim ptest
