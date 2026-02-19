@@ -104,6 +104,10 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       check readResult.isOk
       check readResult.get() == testText
 
+      # Kill xclip's background process that holds clipboard ownership
+      discard execCmdEx("pkill xclip")
+      sleep(100)
+
   test "write and read with xsel":
     if not isXselAvailable():
       skip()
@@ -115,6 +119,10 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       let readResult = readFromClipboardSync(cbtXsel)
       check readResult.isOk
       check readResult.get() == testText
+
+      # Kill xsel's background process that holds clipboard ownership
+      discard execCmdEx("pkill xsel")
+      sleep(100)
 
   test "write and read with wl-clipboard":
     if not isWlClipboardAvailable():
@@ -163,6 +171,10 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       let readResult = readFromClipboardSync(cbtXsel)
       check readResult.isOk
       check readResult.get() == testText
+
+      # Kill xsel's background process that holds clipboard ownership
+      discard execCmdEx("pkill xsel")
+      sleep(100)
 
   test "write and read multiline text with wl-clipboard":
     if not isWlClipboardAvailable():
