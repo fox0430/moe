@@ -70,7 +70,7 @@ proc waitForReady(client: LspClient): Future[bool] {.async.} =
 # Helper to run async tests
 template asyncTest(name: string, body: untyped) =
   test name:
-    proc asyncBody() {.async: (raises: [CancelledError, CatchableError]).} =
+    proc asyncBody() {.async: (raises: [Exception]).} =
       body
 
     waitFor asyncBody()
@@ -260,7 +260,7 @@ suite "LspClient Integration - Document Synchronization":
 
       # Save with text
       let r = await client.didSave("file:///test.nim", some("echo \"Hello\""))
-      check result.isOk
+      check r.isOk
 
       client.kill()
 
@@ -281,8 +281,8 @@ suite "LspClient Integration - LSP Features":
 
       # Request completion
       let r = await client.completion("file:///test.nim", 0, 5)
-      check result.isOk
-      let items = result.get
+      check r.isOk
+      let items = r.get
       check items.len >= 1
       check items[0].label == "testFunc"
 
@@ -303,7 +303,7 @@ suite "LspClient Integration - LSP Features":
 
       let r = await client.hover("file:///test.nim", 0, 0)
       check r.isOk
-      let hover = result.get
+      let hover = r.get
       check hover.isSome
 
       client.kill()
@@ -343,8 +343,8 @@ suite "LspClient Integration - LSP Features":
       discard await client.didOpen("file:///test.nim", "nim", 1, "proc test()")
 
       let r = await client.gotoDeclaration("file:///test.nim", 0, 5)
-      check result.isOk
-      let locations = result.get
+      check r.isOk
+      let locations = r.get
       check locations.len >= 1
       check locations[0].uri == "file:///test/declaration.nim"
 
@@ -364,8 +364,8 @@ suite "LspClient Integration - LSP Features":
       discard await client.didOpen("file:///test.nim", "nim", 1, "let x = 1")
 
       let r = await client.references("file:///test.nim", 0, 4)
-      check result.isOk
-      let locations = result.get
+      check r.isOk
+      let locations = r.get
       check locations.len >= 2
 
       client.kill()
@@ -384,8 +384,8 @@ suite "LspClient Integration - LSP Features":
       discard await client.didOpen("file:///test.nim", "nim", 1, "let x = 1")
 
       let r = await client.documentHighlight("file:///test.nim", 0, 4)
-      check result.isOk
-      let highlights = result.get
+      check r.isOk
+      let highlights = r.get
       check highlights.len >= 1
 
       client.kill()
@@ -404,8 +404,8 @@ suite "LspClient Integration - LSP Features":
       discard await client.didOpen("file:///test.nim", "nim", 1, "echo   test")
 
       let r = await client.formatting("file:///test.nim")
-      check result.isOk
-      let edits = result.get
+      check r.isOk
+      let edits = r.get
       check edits.len >= 1
 
       client.kill()
@@ -424,9 +424,9 @@ suite "LspClient Integration - LSP Features":
       discard await client.didOpen("file:///test.nim", "nim", 1, "let x = 1")
 
       let r = await client.inlayHints("file:///test.nim", 0, 0, 10, 0)
-      check result.isOk
+      check r.isOk
       # lasm config has inlayHint enabled with hints
-      let hints = result.get
+      let hints = r.get
       check hints.len >= 1
 
       client.kill()
@@ -445,9 +445,9 @@ suite "LspClient Integration - LSP Features":
       discard await client.didOpen("file:///test.nim", "nim", 1, "proc test()")
 
       let r = await client.semanticTokensFull("file:///test.nim")
-      check result.isOk
+      check r.isOk
       # lasm config has semanticTokens enabled with tokens
-      let tokens = result.get
+      let tokens = r.get
       check tokens.isSome
 
       client.kill()
@@ -514,8 +514,8 @@ suite "LspClient Integration - Error Handling":
 
     # Try to send request without starting
     let r = await client.sendRequest("test", %*{})
-    check result.isErr
-    check result.error == "Client not running"
+    check r.isErr
+    check r.error == "Client not running"
 
   asyncTest "notification on stopped client returns error":
     # No lasm needed - testing client behavior without server
@@ -523,8 +523,8 @@ suite "LspClient Integration - Error Handling":
 
     # Try to send notification without starting
     let r = await client.sendNotification("test", %*{})
-    check result.isErr
-    check result.error == "Client not running"
+    check r.isErr
+    check r.error == "Client not running"
 
   asyncTest "didOpen on uninitialized client returns error":
     if not lasmAvailable():
@@ -538,8 +538,8 @@ suite "LspClient Integration - Error Handling":
 
       # capabilities not set yet
       let r = await client.didOpen("file:///test.nim", "nim", 1, "test")
-      check result.isErr
-      check result.error == "Client not initialized"
+      check r.isErr
+      check r.error == "Client not initialized"
 
       client.kill()
 
@@ -549,8 +549,8 @@ suite "LspClient Integration - sendAndWait":
     let client = newLspClient("nim", "dummy-server", @[], "/tmp")
 
     let r = await client.sendAndWait("test/method", %*{})
-    check result.isErr
-    check result.error == "Client not running"
+    check r.isErr
+    check r.error == "Client not running"
 
   asyncTest "sendAndWait returns result for valid request":
     if not lasmAvailable():
@@ -573,6 +573,6 @@ suite "LspClient Integration - sendAndWait":
           "position": {"line": 0, "character": 5},
         },
       )
-      check result.isOk
+      check r.isOk
 
       client.kill()
