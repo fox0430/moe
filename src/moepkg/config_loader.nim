@@ -1518,12 +1518,6 @@ proc toTomlBool(val: bool): string =
 proc toTomlString(val: string): string =
   "\"" & val & "\""
 
-proc toTomlOptionString(val: Option[string]): string =
-  if val.isSome:
-    toTomlString(val.get)
-  else:
-    "\"\""
-
 proc toTomlStringArray(val: seq[string]): string =
   result = "["
   for i, s in val:
