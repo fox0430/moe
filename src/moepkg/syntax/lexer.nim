@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -21,26 +21,15 @@
 # Resources.
 #
 
-from flags import
-  TokenizerFlag,
-  TokenizerFlags
+from flags import TokenizerFlag, TokenizerFlags
 
-from highlite import
-  GeneralTokenizer,
-  TokenClass,
-  symChars,
-  wsChars
+from tokenizer import GeneralTokenizer, TokenClass, symChars, wsChars
 
-from lexer/curlyopenlexer import
-  lexCurlyDashComment
+from lexer/curly_open_lexer import lexCurlyDashComment
 
-from lexer/endlexer import
-  endLine
+from lexer/end_lexer import endLine
 
-from lexer/hashlexer import
-  lexHashLineComment
-
-
+from lexer/hash_lexer import lexHashLineComment
 
 #
 # Procedures.
@@ -52,8 +41,9 @@ from lexer/hashlexer import
 ## a backtick can be either the beginning of a special string literal or just a
 ## punctuation mark.
 
-proc lexBacktick*(lexer: var GeneralTokenizer, position: int,
-    flags: TokenizerFlags): int =
+proc lexBacktick*(
+    lexer: var GeneralTokenizer, position: int, flags: TokenizerFlags
+): int =
   result = position
 
   if lexer.buf[result] == '`':
@@ -72,7 +62,6 @@ proc lexBacktick*(lexer: var GeneralTokenizer, position: int,
               case lexer.buf[result]
               of '\0':
                 break
-
               of '`':
                 inc result
 
@@ -82,7 +71,6 @@ proc lexBacktick*(lexer: var GeneralTokenizer, position: int,
                   if lexer.buf[result] == '`':
                     inc result
                     break
-
               else:
                 inc result
       else:
@@ -90,18 +78,14 @@ proc lexBacktick*(lexer: var GeneralTokenizer, position: int,
           case lexer.buf[result]
           of '\0':
             break
-
           of '`':
             inc result
             break
-
           else:
             inc result
     else:
       lexer.kind = gtPunctuation
       inc result
-
-
 
 ## Lex an opening curly bracket (``{``).
 ##
@@ -109,8 +93,9 @@ proc lexBacktick*(lexer: var GeneralTokenizer, position: int,
 ## an opening curly bracket can be either a punctuation mark or the introduction
 ## of a nested comment.
 
-proc lexCurlyOpen*(lexer: var GeneralTokenizer, position: int,
-    flags: TokenizerFlags): int =
+proc lexCurlyOpen*(
+    lexer: var GeneralTokenizer, position: int, flags: TokenizerFlags
+): int =
   result = position
 
   if lexer.buf[result] == '{':
@@ -122,8 +107,6 @@ proc lexCurlyOpen*(lexer: var GeneralTokenizer, position: int,
         lexer.kind = gtLongComment
         result = lexer.lexCurlyDashComment(result, flags)
 
-
-
 ## Lex a dash character (``-``).
 ##
 ## Depending on the respective language's lexing rules, determined by its flags,
@@ -131,8 +114,7 @@ proc lexCurlyOpen*(lexer: var GeneralTokenizer, position: int,
 ## beginning of a preprocessor block, the start of a built-in instruction or
 ## just a punctuation mark.
 
-proc lexDash*(lexer: var GeneralTokenizer, position: int,
-    flags: TokenizerFlags): int =
+proc lexDash*(lexer: var GeneralTokenizer, position: int, flags: TokenizerFlags): int =
   result = position
 
   if lexer.buf[result] == '-':
@@ -176,7 +158,6 @@ proc lexDash*(lexer: var GeneralTokenizer, position: int,
             case lexer.buf[result]
             of '\0':
               break
-
             of '-':
               inc result
 
@@ -186,11 +167,8 @@ proc lexDash*(lexer: var GeneralTokenizer, position: int,
                 if lexer.buf[result] == '-':
                   inc result
                   break
-
             else:
               inc result
-
-
 
 ## Lex a hash character (``#``).
 ##
@@ -198,15 +176,14 @@ proc lexDash*(lexer: var GeneralTokenizer, position: int,
 ## a hash character might either be the introduction of a comment or just a
 ## punctuation mark.
 
-proc lexHash*(lexer: var GeneralTokenizer, position: int,
-    flags: TokenizerFlags): int =
+proc lexHash*(lexer: var GeneralTokenizer, position: int, flags: TokenizerFlags): int =
   result = position
 
   if lexer.buf[result] == '#':
     if hasHashComments in flags:
       lexer.kind = gtComment
       result = lexer.lexHashLineComment(result, flags)
-    elif hasHashHeadings in flags and lexer.state == gtWhitespace:
+    elif hasHashHeadings in flags and lexer.state in {gtWhitespace, low(TokenClass)}:
       lexer.kind = gtBuiltin
       lexer.state = gtBuiltin
       result = lexer.endLine(result)
@@ -214,16 +191,13 @@ proc lexHash*(lexer: var GeneralTokenizer, position: int,
       lexer.kind = gtPunctuation
       inc result
 
-
-
 ## Lex an opening sharp bracket (``<``).
 ##
 ## Depending on the respective language's lexing rules, determined by its flags,
 ## an opening sharp bracket might either be the introduction of a comment, a
 ## function, an operator or just a punctuation mark.
 
-proc lexSharp*(lexer: var GeneralTokenizer, position: int,
-    flags: TokenizerFlags): int =
+proc lexSharp*(lexer: var GeneralTokenizer, position: int, flags: TokenizerFlags): int =
   let nested = hasNestedComments in flags
   var depth = 0
   result = position
@@ -256,7 +230,6 @@ proc lexSharp*(lexer: var GeneralTokenizer, position: int,
               case lexer.buf[result]
               of '\0':
                 break
-
               of '<':
                 inc result
 
@@ -271,7 +244,6 @@ proc lexSharp*(lexer: var GeneralTokenizer, position: int,
 
                       if nested:
                         inc depth
-
               of '-':
                 inc result
 
@@ -286,11 +258,8 @@ proc lexSharp*(lexer: var GeneralTokenizer, position: int,
                       break
                     elif nested:
                       dec depth
-
               else:
                 inc result
-
-
 
 ## Lex a symbol.
 ##
@@ -308,8 +277,6 @@ proc lexSymbol*(lexer: var GeneralTokenizer, position: int): int =
     while lexer.buf[result] in symChars:
       add id, lexer.buf[result]
       inc result
-
-
 
 ## Lex all whitespace characters.
 ##
@@ -330,5 +297,3 @@ proc lexWhitespace*(lexer: var GeneralTokenizer, position: int): int =
         lexer.state = gtNone
 
       inc result
-
-#[############################################################################]#

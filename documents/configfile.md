@@ -20,8 +20,8 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | terminalDefault |
 | blinkBlock |
 | blinkIbeam |
-| noneBlinkBlock |
-| noneBlinkIbeam |
+| nonBlinkBlock |
+| nonBlinkIbeam |
 
 
 ### TerminalColorMode
@@ -37,7 +37,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | 24bit |
 
 
-### ClipbloardTool
+### ClipboardTool
 
 - type: string
 
@@ -46,8 +46,8 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | xsel |
 | xclip |
 | wl-clipboard |
-| wsl-default |
-| macOS-default |
+| win32yank |
+| pbcopy |
 
 
 ### StatusLineItem
@@ -84,21 +84,23 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | syntax | bool | true | Enable syntax highlighting |
 | indentationLines | bool | true | Enable indentation lines |
 | tabStop | integer | 2 | Tab width |
+| expandTab | bool | false | Expand tabs to spaces |
 | sidebar | bool | true | Enable Sidebars for editor views |
 | ignorecase | bool | true | Enable ignorecase when searching |
-| smartcase | bool | true | Enable semartcase when searching |
+| smartcase | bool | true | Enable smartcase when searching |
 | autoCloseParen | bool | true | Automatic closing brackets |
-| autoDeleteParen | bool | | Automatic delete brackets |
+| autoDeleteParen | bool | true | Automatic delete brackets |
 | autoIndent | bool | true | Automatic indentation |
 | disableChangeCursor | bool | false | Disable change of the cursor shape |
 | defaultCursor | CursorShape | terminalDefault | The cursor shape of the terminal emulator you are using |
-| normalModeCursor | CursorShape |terminalDefault | The cursor shape in Normal mode |
+| normalModeCursor | CursorShape | blinkBlock | The cursor shape in Normal mode |
 | insertModeCursor | CursorShape | blinkIbeam | The cursor shape in insert mode |
 | liveReloadOfConf | bool | false | Enable live reload of the configuration file |
-| liveReloadOfFile | bool | false | Enable live reload of opening files |
-| incrementalSearch | bool | false | Enable incremental search |
-| popUpWindowInExmode | bool | true | Show Pop-up window in Ex mode |
+| liveReloadOfFile | bool | true | Enable live reload of opening files |
+| incrementalSearch | bool | true | Enable incremental search |
+| popupWindowInExmode | bool | true | Show Pop-up window in Ex mode |
 | colorMode | TerminalColorMode | 24bit | Terminal color mode |
+| mouse | bool | false | Enable mouse cursor movement |
 
 
 ### Clipboard table
@@ -113,7 +115,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| allBuffer | bool | false | Display all buffer in tab line |
+| enable | bool | true | Enable tab line |
 
 
 ### StatusLine table
@@ -121,12 +123,13 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | multipleStatusLine | bool | true | Show multiple status lines |
-| merge | bool | fale | Enable merge the status line with the command line |
+| merge | bool | false | Enable merge the status line with the command line |
 | mode | bool | true | Display the current mode |
+| filename | bool | true | Display the filename |
 | chanedMark | bool | true | Display the buffer changed mark |
 | directory | bool | true | Display the directory of the path |
-| gitbranchName | bool | true | Display the current git branch name |
-| showChangedLine | bool | true | Display number of changed lines |
+| gitBranchName | bool | true | Display the current git branch name |
+| gitChangedLines | bool | true | Display number of changed lines |
 | showGitInactive | bool | false | Display the git branch name on the status line in inactive windows |
 | showModeInactive | bool | false | Display the mode on the status line in inactive windows |
 | setupText | string | {lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType} | Text to customize the items displayed in the status line. Please check StatusLineItem |
@@ -136,7 +139,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| buildOnSave | bool | false | Enable build on save |
+| enable | bool | false | Enable build on save |
 | workspaceRoot | string | | Project root directory |
 | command | string | | Override commands executed at build |
 
@@ -204,6 +207,8 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | filerLogNotify | bool | true | Filer messages/notifications to the log |
 | restoreScreenNotify | bool | true | Restore messages/notifications in the command line |
 | restoreLogNotify | bool | true | Restore messages/notifications to the log |
+| lspScreenNotify | bool | true | Lsp messages/notifications in the command line |
+| lspLogNotify | bool | true | Lsp messages/notifications to the log |
 
 
 ### Filer table
@@ -217,7 +222,8 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | General-purpose autocompletion |
+| enable | bool | true | Enable/Disable General-purpose autocompletion |
+| windowBorder | bool | true | Show borderline on completion window |
 
 
 ### AutoSave table
@@ -236,7 +242,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | exCommandHistoryLimit | integer | 1000 | The maximum entries of Ex command history to save |
 | search | bool | true | Saving search history |
 | searchHistoryLimit | integer | 1000 | The maximum entries of search history to save |
-| curosrPosition | bool | true | Saving last cursor position |
+| cursorPosition | bool | true | Saving last cursor position |
 
 
 ### Debug.WindowNode table
@@ -270,11 +276,11 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | widthOfLineNum | bool | true | Editorview.widthOfLineNum |
 | height | bool | true | Editorview.height |
 | width | bool | true | Editorview.width |
-| originalLine | bool | true | Editorview.originalLine |
-| start | bool | true | Editorview.start |
-| length | bool | true | Editorview.length |
+| originalLine | bool | false | Editorview.originalLine |
+| start | bool | false | Editorview.start |
+| length | bool | false | Editorview.length |
 
-### Debug.BufStatus table
+### Debug.BufferStatus table
 
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
@@ -292,6 +298,41 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | bufferLen | bool | true | BufStatus.buffer.len |
 
 
+### Debug.Search table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | Search debug info |
+
+
+### Debug.MacroState table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | Macro state debug info |
+
+
+### Debug.Visual table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | Visual selection debug info |
+
+
+### Debug.JumpList table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | Jump list debug info |
+
+
+### Debug.Lsp table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP debug info |
+
+
 ### Git table
 
 | Name | Type | Default Value | Description |
@@ -304,7 +345,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | Syntax checker |
+| enable | bool | false | Syntax checker |
 
 
 ### SmoothScroll table
@@ -312,15 +353,102 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | enable | bool | true | Smooth scroll |
-| minDelay | integer | 5 | Minimum delay |
-| maxDelay | integer | 20 | Maximum delay |
+| friction | float | 80.0 | Friction coefficient (velocity decay rate) |
+| airDrag | float | 2.0 | Air drag coefficient (velocity resistance) |
+
+
+### KeyMapping table
+
+Persistent key remappings per editor mode. Uses the same key notation as `:nmap`/`:imap` runtime commands.
+
+Values can be either a command name (e.g., `"save"`) or a key sequence (e.g., `"Escape"`).
+
+Supported modes: `Normal`, `Insert`, `Visual`, `Replace`.
+
+```toml
+[KeyMapping.Normal]
+"C-s" = "save"
+
+[KeyMapping.Insert]
+"jj" = "Escape"
+
+[KeyMapping.Visual]
+"C-c" = "Escape"
+
+[KeyMapping.Replace]
+"C-c" = "Escape"
+```
+
+#### Available commands
+
+| Command | Description |
+|:----|:----|
+| save | Save file |
+| save-and-quit | Save and quit |
+| quit-force | Quit without saving |
+| close-window | Close current window |
+| undo | Undo |
+| redo | Redo |
+| move-left | Move cursor left |
+| move-right | Move cursor right |
+| move-up | Move cursor up |
+| move-down | Move cursor down |
+| page-up | Page up |
+| page-down | Page down |
+| half-page-up | Half page up |
+| half-page-down | Half page down |
+| line-home | Move to line start |
+| line-end | Move to line end |
+| line-first-non-blank | Move to first non-blank |
+| goto-first-line | Go to first line |
+| goto-last-line | Go to last line |
+| word-forward | Move to next word |
+| word-backward | Move to previous word |
+| word-end | Move to end of word |
+| paragraph-forward | Move to next paragraph |
+| paragraph-backward | Move to previous paragraph |
+| search-next | Next search match |
+| search-prev | Previous search match |
+| delete-line | Delete line |
+| yank-line | Yank line |
+| paste-after | Paste after cursor |
+| paste-before | Paste before cursor |
+| join-lines | Join lines |
+| indent-line | Indent line |
+| dedent-line | Dedent line |
+| fold-open | Open fold |
+| fold-close | Close fold |
+| fold-toggle | Toggle fold |
+| increment-number | Increment number |
+| decrement-number | Decrement number |
+| quickrun | Run QuickRun |
+| lsp-goto-definition | LSP go to definition |
+| lsp-find-references | LSP find references |
+| lsp-hover | LSP hover info |
+| lsp-rename | LSP rename symbol |
+| lsp-document-symbol | LSP document symbols |
+| lsp-selection-range | LSP selection range |
+| buffer-next-tab | Next buffer tab |
+| buffer-prev-tab | Previous buffer tab |
+
+#### Application order
+
+Key mappings are applied in this order (later overrides earlier):
+
+1. Built-in default bindings
+2. `keybindings.toml`
+3. `moerc.toml` `[KeyMapping]`
+4. Runtime `:nmap`/`:imap` commands
+
+Also see [Runtime Key Mapping](howtouse.md#runtime-key-mapping) for session-only mappings.
 
 
 ### Lsp table
 
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP (Language Server Protocol) Client |
+| enable | bool | false | LSP (Language Server Protocol) Client |
+| timeout | integer | 5000 | Timeout in milliseconds for LSP requests (0 = no timeout) |
 
 
 ### Lsp.Completion table
@@ -367,6 +495,20 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | enable | bool | true | LSP Diagnostics |
+
+
+### Lsp.SignatureHelp table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Signature Help |
+
+
+### Lsp.DocumentFormatting table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Document Formatting |
 
 
 ### Lsp.FoldingRange table
@@ -443,7 +585,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP Code Lens |
+| enable | bool | false | LSP Code Lens |
 
 
 ### Lsp.Rename table
@@ -467,12 +609,24 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | enable | bool | true | LSP Execute Command |
 
 
+### LspTraceLevel
+
+- type: string
+
+| Name |
+|:-----------------------------|
+| off |
+| messages |
+| verbose |
+
+
 ### Lsp.{languageId} table
 
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | extensions | Array of string | | File extensions |
 | command | string | | LSP server command |
+| trace | LspTraceLevel | off | LSP trace level for debugging |
 | rustAnalyzerRunSingle | bool | true | `rust-analyzer.runSingle`. Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled. |
 | rustAnalyzerDebugSingle | bool | true | `rust-analyzer.debugSingle`. Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled. |
 
@@ -490,8 +644,8 @@ Please check more [details](https://github.com/fox0430/moe/blob/develop/document
 ### Theme table
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| kind | ThemeKind | default | Theme kind |
-| path | string | | A path of user theme. Also Please set `"config"` to `Theme.kind`. |
+| kind | ThemeKind | config | Theme kind |
+| path | string | ~/.config/moe/themes/dark.toml | A path of user theme. Also Please set `"config"` to `Theme.kind`. |
 
 
 ### Color table (Theme)
@@ -545,6 +699,8 @@ And, `termDefaultBg` and `termDefaultFg`.
 | statusLineExModeLabelBg | Mode label background color in status line in Ex mode |
 | statusLineExModeInactive | Text color of status line in Ex mode when inactive |
 | statusLineExModeInactiveBg | Background color of Status line in Ex mode when inactive |
+| statusLineGitChangedLines | Text color of git changed lines count |
+| statusLineGitChangedLinesBg | Background color of git changed lines count |
 | statusLineGitBranch | Text color of git branch |
 | statusLineGitBranchBg | Background color of git branch |
 | tab | Text color of tab title in tab line |
@@ -583,6 +739,9 @@ And, `termDefaultBg` and `termDefaultFg`.
 | table | Syntax highlighting color |
 | date | Syntax highlighting color |
 | operator | Syntax highlighting color |
+| namespace | Syntax highlighting color (LSP Semantic Tokens) |
+| className | Syntax highlighting color (LSP Semantic Tokens) |
+| enumName | Syntax highlighting color (LSP Semantic Tokens) |
 | enumMember | Syntax highlighting color (LSP Semantic Tokens) |
 | interfaceName | Syntax highlighting color (LSP Semantic Tokens) |
 | typeParameter | Syntax highlighting color (LSP Semantic Tokens) |
@@ -629,17 +788,21 @@ And, `termDefaultBg` and `termDefaultFg`.
 | toolModule | Syntax highlighting color (LSP Semantic Tokens) |
 | union | Syntax highlighting color (LSP Semantic Tokens) |
 | unresolvedReference | Syntax highlighting color (LSP Semantic Tokens) |
+| inlayHint | LSP inlay hint text color |
+| inlineValue | LSP inline value text color |
+| codeLens | LSP code lens text color |
 | currentFile | Text color of current file name in Filer mode |
+| currentFileBg | Background color of current file name in Filer mode |
 | file | Text color of file name in Filer mode |
 | fileBg | Background color of file name in Filer mode |
 | dir | Text of directory name in filer mode |
 | dirBg | Background of directory name in filer mode |
 | pcLink | Text of symbolic links to file in filer mode |
 | pcLinkBg | Background of symbolic links to file in filer mode |
-| popUpWindow | Pop-up window text color |
-| popUpWindowBg | Pop-up window background color |
-| popUpWinCurrentLine | Pop-up window current line text color |
-| popUpWinCurrentLineBg | Pop-up window current line background color |
+| popupWindow | Pop-up window text color |
+| popupWindowBg | Pop-up window background color |
+| popupWinCurrentLine | Pop-up window current line text color |
+| popupWinCurrentLineBg | Pop-up window current line background color |
 | replaceText | Text color of replacing text |
 | replaceTextBg | Background color of replacing text |
 | parenPair | Pair of bracket highlighting |
@@ -668,6 +831,8 @@ And, `termDefaultBg` and `termDefaultFg`.
 | backupManagerCurrentLineBg | Current line color on Backup manager |
 | configModeCurrentLine | Current line color in Configuration mode |
 | configModeCurrentLineBg | Current line color in Configuration mode |
+| foldingLine | Folding line text color |
+| foldingLineBg | Folding line background color |
 | sidebarGitAddedSign | An added lines sign color of Git in sidebars |
 | sidebarGitAddedSignBg | An added lines sign color of Git in sidebars |
 | sidebarGitDeletedSign | A deleted lines sign color of Git in sidebars |

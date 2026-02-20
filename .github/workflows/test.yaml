@@ -1,6 +1,6 @@
 ######################## GNU General Public License 3.0 ########################
 ##                                                                            ##
-## Copyright (C) 2017─2025 Shuhei Nogawa                                      ##
+## Copyright (C) 2017─2026 Shuhei Nogawa                                      ##
 ##                                                                            ##
 ## This program is free software: you can redistribute it and/or modify       ##
 ## it under the terms of the GNU General Public License as published by       ##
@@ -25,7 +25,9 @@ on:
       - '.github/workflows/test.yaml'
       - 'example/**'
       - 'moe.nimble'
+      - 'nimble.lock'
       - 'src/**'
+      - 'tools/paralleltest.nim'
       - 'tests/**'
 
 permissions:
@@ -53,7 +55,7 @@ jobs:
         os:
           - ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - run: |
         sudo apt-get update
         sudo apt-get install -y \
@@ -65,7 +67,7 @@ jobs:
 
     - name: Cache nimble
       id: cache-nimble
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ~/.nimble
         key: unit-tests-nimble-v2-${{ github.sha }}
@@ -74,16 +76,18 @@ jobs:
 
     - uses: jiro4989/setup-nim-action@v2
       with:
-        nim-version: 2.2.2
+        nim-version: 2.2.6
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Install nimlangserver and nph
+    - name: Install lasm
       run: |
-        nimble install nimlangserver
-        nimble install nph
+        nimble install lasm@#head
+
+    - name: Build moe
+      run: |
+        nimble build
 
     - name: Run unit test
       run: |
-        nimble install stew # Workaround
-
-        xvfb-run env XDG_SESSION_TYPE=x11 nimble test --verbose -y
+        nimble setup
+        xvfb-run env XDG_SESSION_TYPE=x11 nimble --useSystemNim ptest

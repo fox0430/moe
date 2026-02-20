@@ -1,0 +1,519 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+## Tests for motion.nim
+
+import std/unittest
+
+import pkg/results
+
+import ../src/moepkg/buffer {.all.}
+import ../src/moepkg/types {.all.}
+import ../src/moepkg/motion {.all.}
+
+suite "TillChar Motion":
+  test "tillChar moves to correct position":
+    # Setup: "abcxyz"
+    let buffer = newTextBuffer("abcxyz")
+    let executor = newMotionExecutor(buffer)
+
+    # Start at 'a' (column 0), find 'x' (column 3)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.tillChar(currentPos, "x", 1)
+
+    check result.y == 0
+    check result.x == 2 # Should be at 'c', which is column 2
+
+  test "findChar moves to correct position":
+    # Setup: "abcxyz"
+    let buffer = newTextBuffer("abcxyz")
+    let executor = newMotionExecutor(buffer)
+
+    # Start at 'a' (column 0), find 'x' (column 3)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.findChar(currentPos, "x", 1)
+
+    check result.y == 0
+    check result.x == 3 # Should be at 'x', which is column 3
+
+suite "OperatorRange":
+  test "calculateOperatorRange for TillChar":
+    # Setup: "abcxyz"
+    let buffer = newTextBuffer("abcxyz")
+
+    # Simulate dtx: start at column 0, tillChar moves to column 2
+    let startPos = BufferPosition(line: 0, column: 0)
+    let endPos = BufferPosition(line: 0, column: 2)
+
+    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.TillChar)
+
+    check range.start.column == 0
+    check range.endPos.column == 2
+
+  test "extractRangeText for TillChar range":
+    # Setup: "abcxyz"
+    let buffer = newTextBuffer("abcxyz")
+
+    # Range from calculateOperatorRange (with inclusive semantics)
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 0, column: 2),
+      isLinewise: false,
+    )
+
+    let text = extractRangeText(buffer, range)
+
+    check text == "abc"
+
+suite "Basic Motion - Left/Right":
+  test "moveLeft from middle of line":
+    let buffer = newTextBuffer("hello")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 3, y: 0)
+    let result = executor.moveLeft(currentPos, 1)
+    check result.x == 2
+    check result.y == 0
+
+  test "moveLeft with count":
+    let buffer = newTextBuffer("hello")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 4, y: 0)
+    let result = executor.moveLeft(currentPos, 3)
+    check result.x == 1
+
+  test "moveLeft at beginning of line":
+    let buffer = newTextBuffer("hello")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveLeft(currentPos, 1)
+    check result.x == 0
+
+  test "moveRight from beginning":
+    let buffer = newTextBuffer("hello")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveRight(currentPos, 1)
+    check result.x == 1
+
+  test "moveRight with count":
+    let buffer = newTextBuffer("hello")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveRight(currentPos, 3)
+    check result.x == 3
+
+  test "moveRight at end of line":
+    let buffer = newTextBuffer("hello")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 4, y: 0)
+    let result = executor.moveRight(currentPos, 1)
+    check result.x == 4 # Should stay at last character
+
+suite "Basic Motion - Up/Down":
+  test "moveDown from first line":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveDown(currentPos, 1)
+    check result.y == 1
+
+  test "moveDown with count":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveDown(currentPos, 2)
+    check result.y == 2
+
+  test "moveDown at last line":
+    let buffer = newTextBuffer("line1\nline2")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 1)
+    let result = executor.moveDown(currentPos, 1)
+    check result.y == 1 # Should stay at last line
+
+  test "moveUp from second line":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 2)
+    let result = executor.moveUp(currentPos, 1)
+    check result.y == 1
+
+  test "moveUp with count":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 3)
+    let result = executor.moveUp(currentPos, 2)
+    check result.y == 1
+
+  test "moveUp at first line":
+    let buffer = newTextBuffer("line1\nline2")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveUp(currentPos, 1)
+    check result.y == 0 # Should stay at first line
+
+suite "Line Motion":
+  test "moveHome moves to column 0":
+    let buffer = newTextBuffer("  hello")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 5, y: 0)
+    let result = executor.moveHome(currentPos)
+    check result.x == 0
+
+  test "moveFirstNonBlank skips whitespace":
+    let buffer = newTextBuffer("  hello")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveFirstNonBlank(currentPos)
+    check result.x == 2 # First non-whitespace is 'h'
+
+  test "moveFirstNonBlank with tabs":
+    let buffer = newTextBuffer("\t\thello")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveFirstNonBlank(currentPos)
+    check result.x == 2
+
+  test "moveEnd moves to last character":
+    let buffer = newTextBuffer("hello")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveEnd(currentPos)
+    check result.x == 4 # Last character 'o' is at index 4
+
+  test "moveLastNonBlank with trailing spaces":
+    let buffer = newTextBuffer("hello   ")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveLastNonBlank(currentPos)
+    check result.x == 4 # Last non-whitespace 'o' is at index 4
+
+suite "Word Motion":
+  test "moveWordForward basic":
+    let buffer = newTextBuffer("hello world")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveWordForward(currentPos, 1)
+    check result.x == 6 # 'w' of "world"
+
+  test "moveWordForward with symbols":
+    let buffer = newTextBuffer("hello,world")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveWordForward(currentPos, 1)
+    check result.x == 5 # ',' is a separate word
+
+  test "moveWordForward across lines":
+    let buffer = newTextBuffer("hello\nworld")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 3, y: 0)
+    let result = executor.moveWordForward(currentPos, 1)
+    check result.y == 1
+    check result.x == 0
+
+  test "moveWordBackward basic":
+    let buffer = newTextBuffer("hello world")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 8, y: 0)
+    let result = executor.moveWordBackward(currentPos, 1)
+    check result.x == 6 # Start of "world"
+
+  test "moveWordBackward to previous word":
+    let buffer = newTextBuffer("hello world")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 6, y: 0)
+    let result = executor.moveWordBackward(currentPos, 1)
+    check result.x == 0 # Start of "hello"
+
+  test "moveWordEnd basic":
+    let buffer = newTextBuffer("hello world")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveWordEnd(currentPos, 1)
+    check result.x == 4 # End of "hello"
+
+  test "moveWordEnd to next word end":
+    let buffer = newTextBuffer("hello world")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 4, y: 0)
+    let result = executor.moveWordEnd(currentPos, 1)
+    check result.x == 10 # End of "world"
+
+suite "Find/Till Char Backward":
+  test "findCharBackward finds previous occurrence":
+    let buffer = newTextBuffer("abcxabc")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 6, y: 0)
+    let result = executor.findCharBackward(currentPos, "a", 1)
+    check result.x == 4
+
+  test "findCharBackward with count":
+    let buffer = newTextBuffer("abcxabc")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 6, y: 0)
+    let result = executor.findCharBackward(currentPos, "a", 2)
+    check result.x == 0
+
+  test "tillCharBackward stops after target":
+    let buffer = newTextBuffer("abcxyz")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 5, y: 0)
+    let result = executor.tillCharBackward(currentPos, "c", 1)
+    check result.x == 3 # One after 'c'
+
+suite "Paragraph Motion":
+  test "moveParagraphForward to blank line":
+    let buffer = newTextBuffer("line1\nline2\n\nline4")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveParagraphForward(currentPos, 1)
+    check result.y == 2 # Blank line
+
+  test "moveParagraphBackward to blank line":
+    let buffer = newTextBuffer("line1\n\nline3\nline4")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 3)
+    let result = executor.moveParagraphBackward(currentPos, 1)
+    check result.y == 1 # Blank line
+
+suite "First/Last Line Motion":
+  test "moveFirstLine goes to line 0":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 2, y: 2)
+    let result = executor.moveFirstLine(currentPos)
+    check result.y == 0
+    check result.x == 0
+
+  test "moveLastLine goes to last line":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveLastLine(currentPos)
+    check result.y == 2
+
+  test "moveLastLine with count goes to specific line":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveLastLine(currentPos, 2)
+    check result.y == 1 # Line 2 (0-indexed)
+
+suite "Matching Bracket":
+  test "moveToMatchingBracket forward":
+    let buffer = newTextBuffer("(hello)")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveToMatchingBracket(currentPos)
+    check result.x == 6 # Closing ')'
+
+  test "moveToMatchingBracket backward":
+    let buffer = newTextBuffer("(hello)")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 6, y: 0)
+    let result = executor.moveToMatchingBracket(currentPos)
+    check result.x == 0 # Opening '('
+
+  test "moveToMatchingBracket nested":
+    let buffer = newTextBuffer("((inner))")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveToMatchingBracket(currentPos)
+    check result.x == 8 # Outer closing ')'
+
+  test "moveToMatchingBracket with braces":
+    let buffer = newTextBuffer("{hello}")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveToMatchingBracket(currentPos)
+    check result.x == 6
+
+suite "Text Objects - Word":
+  test "findWordBoundaries inner word":
+    let buffer = newTextBuffer("hello world")
+    let cursor = BufferPosition(line: 0, column: 2)
+    let result = findWordBoundaries(buffer, cursor, inner = true)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 0
+    check range.endPos.column == 4 # 'hello' is columns 0-4
+
+  test "findWordBoundaries around word":
+    let buffer = newTextBuffer("hello world")
+    let cursor = BufferPosition(line: 0, column: 2)
+    let result = findWordBoundaries(buffer, cursor, inner = false)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 0
+    check range.endPos.column == 5 # 'hello ' including trailing space
+
+suite "Text Objects - Quoted":
+  test "findQuotedBoundaries inner double quote":
+    let buffer = newTextBuffer("say \"hello\" world")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findQuotedBoundaries(buffer, cursor, '"', inner = true)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 5
+    check range.endPos.column == 9 # 'hello'
+
+  test "findQuotedBoundaries around double quote":
+    let buffer = newTextBuffer("say \"hello\" world")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findQuotedBoundaries(buffer, cursor, '"', inner = false)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 4
+    check range.endPos.column == 10 # '"hello"'
+
+  test "findQuotedBoundaries single quote":
+    let buffer = newTextBuffer("say 'hello' world")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findQuotedBoundaries(buffer, cursor, '\'', inner = true)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 5
+    check range.endPos.column == 9
+
+suite "Text Objects - Parenthesis":
+  test "findMatchingParen inner":
+    let buffer = newTextBuffer("func(arg)")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 5
+    check range.endPos.column == 7
+
+  test "findMatchingParen around":
+    let buffer = newTextBuffer("func(arg)")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findMatchingParen(buffer, cursor, '(', ')', inner = false)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 4
+    check range.endPos.column == 8
+
+  test "findMatchingParen multi-line":
+    let buffer = newTextBuffer("func(\n  arg\n)")
+    let cursor = BufferPosition(line: 1, column: 2)
+    let result = findMatchingParen(buffer, cursor, '(', ')', inner = true)
+    check result.isOk
+    let range = result.get
+    check range.start.line == 0
+    check range.endPos.line == 2
+
+suite "calculateTextObjectRange":
+  test "word text object":
+    let buffer = newTextBuffer("hello world")
+    let cursor = BufferPosition(line: 0, column: 7)
+    let result = calculateTextObjectRange(buffer, cursor, toWord, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 6
+    check range.endPos.column == 10
+
+  test "double quoted text object":
+    let buffer = newTextBuffer("say \"hi\"")
+    let cursor = BufferPosition(line: 0, column: 5)
+    let result = calculateTextObjectRange(buffer, cursor, toQuotedDouble, tomInner)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 5
+    check range.endPos.column == 6
+
+  test "parenthesis text object":
+    let buffer = newTextBuffer("(test)")
+    let cursor = BufferPosition(line: 0, column: 2)
+    let result = calculateTextObjectRange(buffer, cursor, toParenthesis, tomAround)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 0
+    check range.endPos.column == 5
+
+suite "deleteRange":
+  test "deleteRange single line":
+    let buffer = newTextBuffer("hello world")
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 0, column: 4),
+      isLinewise: false,
+    )
+    let result = deleteRange(buffer, range)
+    check result.isOk
+    check buffer.getLine(0) == " world"
+
+  test "deleteRange linewise":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let range = OperatorRange(
+      start: BufferPosition(line: 1, column: 0),
+      endPos: BufferPosition(line: 1, column: 5),
+      isLinewise: true,
+    )
+    let result = deleteRange(buffer, range)
+    check result.isOk
+    check buffer.len == 2
+    check buffer.getLine(0) == "line1"
+    check buffer.getLine(1) == "line3"
+
+suite "Page Motion":
+  test "movePageDown":
+    let buffer = newTextBuffer("l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.movePageDown(currentPos, 1, 5)
+    check result.y == 4 # Moved down by viewport height - 1
+
+  test "movePageUp":
+    let buffer = newTextBuffer("l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 8)
+    let result = executor.movePageUp(currentPos, 1, 5)
+    check result.y == 4 # Moved up by viewport height - 1
+
+  test "moveHalfPageDown":
+    let buffer = newTextBuffer("l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveHalfPageDown(currentPos, 1, 10)
+    check result.y == 4 # Moved down by half of (viewport height - 1)
+
+  test "moveHalfPageUp":
+    let buffer = newTextBuffer("l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 8)
+    let result = executor.moveHalfPageUp(currentPos, 1, 10)
+    check result.y == 4
+
+suite "Next/Previous Line FirstNonBlank":
+  test "moveNextLineFirstNonBlank":
+    let buffer = newTextBuffer("hello\n  world")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 2, y: 0)
+    let result = executor.moveNextLineFirstNonBlank(currentPos, 1)
+    check result.y == 1
+    check result.x == 2 # First non-blank on line 2
+
+  test "movePreviousLineFirstNonBlank":
+    let buffer = newTextBuffer("  hello\nworld")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 2, y: 1)
+    let result = executor.movePreviousLineFirstNonBlank(currentPos, 1)
+    check result.y == 0
+    check result.x == 2 # First non-blank on line 1

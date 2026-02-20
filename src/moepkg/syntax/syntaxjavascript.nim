@@ -31,160 +31,412 @@
 #    distribution, for details about the copyright.
 #
 
-import highlite
+import tokenizer, syntaxhtml
 
-const
-  javaScriptkeywords* = ["Array", "ArrayBuffer", "Attr", "BigInt64Array",
-    "BigUint64Array", "Boolean", "Buffer", "CDATASection", "CharacterData",
-    "Collator", "Comment", "DOMException", "DOMImplementation",
-    "DOMSTRING_SIZE_ERR", "DataViewDate", "DateTimeFormat", "Document",
-    "DocumentFragment", "DocumentType", "Element", "Entity",
-    "EntityReference", "Float32Array", "Float64Array", "Function",
-    "HIERARCHY_REQUEST_ERR", "INDEX_SIZE_ERR", "INUSE_ATTRIBUTE_ERR",
-    "INVALID_ACCESS_ERR", "INVALID_CHARACTER_ERR", "INVALID_MODIFICATION_ERR",
-    "INVALID_STATE_ERR", "Int16Array", "Int32Array", "Int8Array", "Intl",
-    "Iterator", "JSON", "Map", "MathNumber", "NAMESPACE_ERR",
-    "NOT_FOUND_ERR", "NOT_SUPPORTED_ERR", "NO_DATA_ALLOWED_ERR",
-    "NO_MODIFICATION_ALLOWED_ERR", "NamedNodeMap", "Node", "NodeList",
-    "Notation", "NumberFormat", "Object", "Object", "ParallelArray",
-    "ProcessingInstruction", "PromiseProxy", "Reflect", "RegExp",
-    "SYNTAX_ERR", "Set", "String", "String", "Symbol", "Text", "Uint16Array",
-    "Uint32Array", "Uint8Array", "Uint8ClampedArray", "Uint8ClampedArray",
-    "WRONG_DOCUMENT_ERR", "WeakMap", "WeakSet", "WebAssembly", "abstract",
-    "apply", "arguments", "as", "assert", "async", "await", "boolean",
-    "break", "byte", "catchexport", "char", "charAt", "class", "console",
-    "console", "const", "continue", "decodeURI", "decodeURIComponent",
-    "delete", "do", "document", "double", "else", "encodeURI",
-    "encodeURIComponenteval", "enum", "except", "false", "fetch", "final",
-    "finally", "float", "for", "from", "function", "global", "goto", "if",
-    "implementsprotected", "import", "in", "indexOf", "instanceof", "int",
-    "interface", "is", "isFinite", "isNaN", "join", "keys", "let", "log",
-    "long", "native", "new", "null", "onblur", "onclick", "oncontextmenu",
-    "ondblclick", "onfocus", "onkeydown", "onkeypress", "onkeyup",
-    "onmousedown", "onmousemove", "onmouseout", "onmouseover", "onmouseup",
-    "onresize", "or", "package", "parseFloat", "parseIntuneval", "pass",
-    "private", "public", "push", "require", "return", "short", "switch",
-    "synchronized", "throw", "throws", "transient", "true", "try", "value",
-    "var", "void", "volatile", "while", "window", "yield"
-  ]
+const javaScriptkeywords* = [
+  "Array", "ArrayBuffer", "Attr", "BigInt64Array", "BigUint64Array", "Boolean",
+  "Buffer", "CDATASection", "CharacterData", "Collator", "Comment", "DOMException",
+  "DOMImplementation", "DOMSTRING_SIZE_ERR", "DataView", "Date", "DateTimeFormat",
+  "Document", "DocumentFragment", "DocumentType", "Element", "Entity",
+  "EntityReference", "Error", "Float32Array", "Float64Array", "Function",
+  "HIERARCHY_REQUEST_ERR", "INDEX_SIZE_ERR", "INUSE_ATTRIBUTE_ERR",
+  "INVALID_ACCESS_ERR", "INVALID_CHARACTER_ERR", "INVALID_MODIFICATION_ERR",
+  "INVALID_STATE_ERR", "Int16Array", "Int32Array", "Int8Array", "Intl", "Iterator",
+  "JSON", "Map", "Math", "NAMESPACE_ERR", "NOT_FOUND_ERR", "NOT_SUPPORTED_ERR",
+  "NO_DATA_ALLOWED_ERR", "NO_MODIFICATION_ALLOWED_ERR", "NamedNodeMap", "Node",
+  "NodeList", "Notation", "Number", "NumberFormat", "Object", "ParallelArray",
+  "ProcessingInstruction", "Promise", "PromiseProxy", "Reflect", "RegExp", "SYNTAX_ERR",
+  "Set", "String", "Symbol", "Text", "Uint16Array", "Uint32Array", "Uint8Array",
+  "Uint8ClampedArray", "WRONG_DOCUMENT_ERR", "WeakMap", "WeakSet", "WebAssembly",
+  "abstract", "apply", "arguments", "as", "assert", "async", "await", "boolean",
+  "break", "byte", "case", "catch", "char", "charAt", "class", "console", "const",
+  "constructor", "continue", "default", "decodeURI", "decodeURIComponent", "delete",
+  "do", "document", "double", "else", "encodeURI", "encodeURIComponent", "enum", "eval",
+  "except", "export", "false", "fetch", "filter", "final", "finally", "float", "for",
+  "from", "function", "global", "globalThis", "goto", "if", "implements", "import",
+  "in", "indexOf", "instanceof", "int", "interface", "is", "isFinite", "isNaN", "join",
+  "keys", "let", "log", "long", "map", "native", "new", "null", "onblur", "onclick",
+  "oncontextmenu", "ondblclick", "onfocus", "onkeydown", "onkeypress", "onkeyup",
+  "onmousedown", "onmousemove", "onmouseout", "onmouseover", "onmouseup", "onresize",
+  "or", "package", "parseFloat", "parseInt", "pass", "private", "protected", "public",
+  "push", "reduce", "reject", "require", "resolve", "return", "short", "static",
+  "switch", "synchronized", "then", "throw", "throws", "transient", "true", "try",
+  "typeof", "uneval", "value", "var", "void", "volatile", "while", "window", "yield",
+]
+
+# Template literal depth and brace depth are now tracked in GeneralTokenizer
 
 proc javaScriptNextToken*(g: var GeneralTokenizer) =
   ## javaScriptNextToken is Incomplete
 
   const
-    hexChars = {'0'..'9', 'A'..'F', 'a'..'f'}
-    octChars = {'0'..'7'}
-    binChars = {'0'..'1'}
-    symChars = {'A'..'Z', 'a'..'z', '0'..'9', '_', '\x80'..'\xFF'}
+    hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
+    octChars = {'0' .. '7'}
+    binChars = {'0' .. '1'}
+    symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
-  if g.state == gtStringLit:
-    g.kind = gtStringLit
+
+  # Reset state when starting fresh (pos = 0 and not in template literal state)
+  if g.pos == 0 and g.state != gtLongStringLit:
+    g.templateLiteralDepth = 0
+    g.braceDepthStack = @[]
+    g.inJsxMode = false
+    g.jsxTagDepth = 0
+
+  # If we're in JSX mode, delegate to HTML tokenizer
+  if g.inJsxMode and g.state != gtLongStringLit:
+    htmlNextToken(g)
+    # Check if we should exit JSX mode
+    if g.buf[g.pos] == '{' and g.buf[g.pos - 1] != '\\':
+      # Entering JSX expression
+      g.inJsxMode = false
+      return
+    elif g.kind == gtOperator and g.buf[g.pos - 1] == '>':
+      # Check if this is the end of a closing tag
+      if g.jsxTagDepth == 0:
+        g.inJsxMode = false
+    return
+
+  # Handle block comment continuation
+  if g.state == gtLongComment:
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+      g.length = 0
+      return
+    g.kind = gtLongComment
     while true:
       case g.buf[pos]
-      of '\\':
-        g.kind = gtEscapeSequence
+      of '*':
         inc(pos)
-        case g.buf[pos]
-        of 'x', 'X':
+        if g.buf[pos] == '/':
           inc(pos)
-          if g.buf[pos] in hexChars: inc(pos)
-          if g.buf[pos] in hexChars: inc(pos)
-        of '0'..'9':
-          while g.buf[pos] in {'0'..'9'}: inc(pos)
-        of '\0':
           g.state = gtNone
-        else: inc(pos)
+          break
+      of '\0':
         break
-      of '\0', '\x0D', '\x0A':
-        g.state = gtNone
-        break
-      of '\"':
-        inc(pos)
-        g.state = gtNone
-        break
-      else: inc(pos)
-  else:
-    case g.buf[pos]
-    of ' ', '\x09'..'\x0D':
-      g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
-    of '/':
-      inc(pos)
-      if g.buf[pos] == '/':
-        g.kind = gtComment
-        while not (g.buf[pos] in {'\0', '\x0A', '\x0D'}): inc(pos)
-      elif g.buf[pos] == '*':
-        g.kind = gtLongComment
-        var nested = 0
-        inc(pos)
-        while true:
-          case g.buf[pos]
-          of '*':
-            inc(pos)
-            if g.buf[pos] == '/':
-              inc(pos)
-              if nested == 0: break
-          of '/':
-            inc(pos)
-            if g.buf[pos] == '*': inc(pos)
-          of '\0':
-            break
-          else: inc(pos)
-    of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
-      var id = ""
-      while g.buf[pos] in symChars:
-        add(id, g.buf[pos])
-        inc(pos)
-      if isKeyword(javaScriptkeywords, id) >= 0: g.kind = gtKeyword
-      else: g.kind = gtIdentifier
-    of '0':
-      inc(pos)
-      case g.buf[pos]
-      of 'b', 'B':
-        inc(pos)
-        while g.buf[pos] in binChars: inc(pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
-      of 'x', 'X':
-        inc(pos)
-        while g.buf[pos] in hexChars: inc(pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
-      of '0'..'7':
-        inc(pos)
-        while g.buf[pos] in octChars: inc(pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
       else:
-        pos = generalNumber(g, pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
-    of '1'..'9':
-      pos = generalNumber(g, pos)
-      if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
-    of '\"', '\'':
+        inc(pos)
+    g.length = pos - g.pos
+    g.pos = pos
+    return
+
+  # Handle template literal state
+  if g.state == gtLongStringLit:
+    # We're inside a template literal
+    let startPos = pos
+    while true:
+      case g.buf[pos]
+      of '\0':
+        g.kind = gtLongStringLit
+        # Keep state as gtLongStringLit for continuation on next line
+        break
+      of '`':
+        # End of template literal
+        inc(pos)
+        g.kind = gtLongStringLit
+        g.state = gtNone
+        if g.templateLiteralDepth > 0:
+          dec(g.templateLiteralDepth)
+        break
+      of '\\':
+        inc(pos)
+        if g.buf[pos] == '\0':
+          g.kind = gtLongStringLit
+          # Keep state as gtLongStringLit for continuation
+          break
+        inc(pos)
+      of '$':
+        if g.buf[pos + 1] == '{':
+          # Found interpolation start
+          if pos > g.start:
+            # Return the string part before interpolation
+            g.kind = gtLongStringLit
+          else:
+            # Return the ${ as operator
+            inc(pos, 2)
+            g.kind = gtOperator
+            g.state = gtNone # Exit template literal state temporarily
+            # Push 0 to track brace depth for this interpolation
+            g.braceDepthStack.add(0)
+          break
+        else:
+          inc(pos)
+      of '<':
+        # Check if this looks like HTML in template literal
+        if pos > startPos:
+          # Return the string part before HTML
+          g.kind = gtLongStringLit
+          break
+        else:
+          # Try to parse as HTML tag
+          let htmlStart = pos
+          inc(pos)
+          if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
+            # This looks like an HTML tag, use HTML tokenizer
+            var htmlTokenizer = g
+            htmlTokenizer.pos = htmlStart
+            htmlTokenizer.start = htmlStart
+            htmlNextToken(htmlTokenizer)
+            # Copy the result
+            g.kind = htmlTokenizer.kind
+            g.pos = htmlTokenizer.pos
+            g.length = htmlTokenizer.length
+            return
+          else:
+            # Not HTML, treat as regular string content
+            discard
+      else:
+        inc(pos)
+    g.length = pos - g.pos
+    if g.kind != gtEof and g.length <= 0:
+      assert false, "javaScriptNextToken: produced an empty token"
+    g.pos = pos
+    return
+
+  case g.buf[pos]
+  of ' ', '\x09' .. '\x0D':
+    g.kind = gtWhitespace
+    while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
       inc(pos)
-      g.kind = gtStringLit
+  of '<':
+    # Check for JSX tags outside of template literals
+    if pos + 1 < g.buf.len and g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
+      # This looks like JSX/HTML, switch to JSX mode
+      g.inJsxMode = true
+      htmlNextToken(g)
+      return
+    else:
+      # Regular less-than operator
+      g.kind = gtOperator
+      while g.buf[pos] in opChars:
+        inc(pos)
+  of '/':
+    inc(pos)
+    if g.buf[pos] == '/':
+      g.kind = gtComment
+      while not (g.buf[pos] in {'\0', '\x0A', '\x0D'}):
+        inc(pos)
+    elif g.buf[pos] == '*':
+      g.kind = gtLongComment
+      var nested = 0
+      inc(pos)
       while true:
         case g.buf[pos]
+        of '*':
+          inc(pos)
+          if g.buf[pos] == '/':
+            inc(pos)
+            if nested == 0:
+              break
+        of '/':
+          inc(pos)
+          if g.buf[pos] == '*':
+            inc(pos)
         of '\0':
+          g.state = gtLongComment
           break
-        of '\"', '\'':
+        else:
+          inc(pos)
+    else:
+      # Division operator or /=
+      g.kind = gtOperator
+      if g.buf[pos] == '=':
+        inc(pos)
+  of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
+    var id = ""
+    while g.buf[pos] in symChars:
+      add(id, g.buf[pos])
+      inc(pos)
+
+    # Check if this identifier is a key (followed by colon)
+    var isKey = false
+    var tempPos = pos
+    # Skip whitespace after identifier
+    while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t', '\n', '\r'}:
+      inc(tempPos)
+    # Check if next non-whitespace character is colon
+    if tempPos < g.buf.len and g.buf[tempPos] == ':':
+      isKey = true
+
+    if isKeyword(javaScriptkeywords, id) >= 0:
+      g.kind = gtKeyword
+    elif isKey:
+      g.kind = gtKey
+    else:
+      g.kind = gtIdentifier
+  of '0':
+    inc(pos)
+    case g.buf[pos]
+    of 'b', 'B':
+      g.kind = gtBinNumber
+      inc(pos)
+      while g.buf[pos] in binChars:
+        inc(pos)
+      if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        inc(pos)
+    of 'x', 'X':
+      g.kind = gtHexNumber
+      inc(pos)
+      while g.buf[pos] in hexChars:
+        inc(pos)
+      if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        inc(pos)
+    of 'o', 'O':
+      g.kind = gtOctNumber
+      inc(pos)
+      while g.buf[pos] in octChars:
+        inc(pos)
+      if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        inc(pos)
+    of '0' .. '7':
+      g.kind = gtOctNumber
+      inc(pos)
+      while g.buf[pos] in octChars:
+        inc(pos)
+      if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        inc(pos)
+    else:
+      pos = generalNumber(g, pos)
+      if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        inc(pos)
+  of '1' .. '9':
+    pos = generalNumber(g, pos)
+    if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+      inc(pos)
+  of '\"', '\'':
+    let quote = g.buf[pos]
+    inc(pos)
+
+    # Check if this string is a key (for object literals with quotes)
+    var isKey = false
+    var tempPos = pos
+    # Skip to end of string to check if it's followed by colon
+    while tempPos < g.buf.len and g.buf[tempPos] != '\0':
+      case g.buf[tempPos]
+      of '\"', '\'':
+        if g.buf[tempPos] == quote:
+          inc(tempPos)
+          # Skip whitespace after closing quote
+          while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t', '\n', '\r'}:
+            inc(tempPos)
+          # Check if next non-whitespace character is colon
+          if tempPos < g.buf.len and g.buf[tempPos] == ':':
+            isKey = true
+          break
+        else:
+          inc(tempPos)
+      of '\\':
+        inc(tempPos, 2) # Skip escape sequence
+      else:
+        inc(tempPos)
+
+    # Set kind based on whether this is a key or value
+    if isKey:
+      g.kind = gtKey
+    else:
+      g.kind = gtStringLit
+
+    while true:
+      case g.buf[pos]
+      of '\0':
+        break
+      of '\r', '\n':
+        if quote == '\"':
+          break
+        else:
+          inc(pos)
+      of '\"', '\'':
+        if g.buf[pos] == quote:
           inc(pos)
           break
-        of '\\':
-          g.state = g.kind
+        else:
+          inc(pos)
+      of '\\':
+        inc(pos)
+        if g.buf[pos] == '\0':
           break
-        else: inc(pos)
-    of '(', ')', '[', ']', '{', '}', ':', ',', ';', '.':
-      inc(pos)
-      g.kind = gtPunctuation
-    of '\0':
-      g.kind = gtEof
-    else:
-      if g.buf[pos] in opChars:
-        g.kind = gtOperator
-        while g.buf[pos] in opChars: inc(pos)
+        inc(pos)
       else:
         inc(pos)
-        g.kind = gtNone
+  of '`':
+    inc(pos)
+    g.kind = gtLongStringLit
+    g.state = gtLongStringLit
+    inc(g.templateLiteralDepth)
+    # Only consume until first ${
+    while true:
+      case g.buf[pos]
+      of '\0':
+        # Keep state for continuation
+        break
+      of '`':
+        inc(pos)
+        g.state = gtNone
+        if g.templateLiteralDepth > 0:
+          dec(g.templateLiteralDepth)
+        break
+      of '\\':
+        inc(pos)
+        if g.buf[pos] == '\0':
+          # Keep state for continuation
+          break
+        inc(pos)
+      of '$':
+        if g.buf[pos + 1] == '{':
+          # Stop here, next token will be ${
+          break
+        else:
+          inc(pos)
+      else:
+        inc(pos)
+  of '(', ')', '[', ']', ':', ',', ';':
+    inc(pos)
+    g.kind = gtPunctuation
+  of '.':
+    inc(pos)
+    if g.buf[pos] == '.' and g.buf[pos + 1] == '.':
+      # Spread operator ...
+      inc(pos, 2)
+      g.kind = gtOperator
+    else:
+      g.kind = gtPunctuation
+  of '{':
+    inc(pos)
+    if g.braceDepthStack.len > 0:
+      inc(g.braceDepthStack[^1])
+    g.kind = gtPunctuation
+  of '}':
+    inc(pos)
+    if g.braceDepthStack.len > 0:
+      if g.braceDepthStack[^1] == 0:
+        # This closes a template interpolation
+        discard g.braceDepthStack.pop()
+        g.kind = gtOperator
+        g.state = gtLongStringLit # Go back to template literal
+      else:
+        # This is a regular brace inside interpolation
+        dec(g.braceDepthStack[^1])
+        g.kind = gtPunctuation
+    else:
+      g.kind = gtPunctuation
+      # Check if we should return to JSX mode after closing expression
+      if pos < g.buf.len and g.buf[pos] == '<':
+        g.inJsxMode = true
+  of '\0':
+    g.kind = gtEof
+  else:
+    if g.buf[pos] in opChars:
+      g.kind = gtOperator
+      while g.buf[pos] in opChars:
+        inc(pos)
+    elif g.buf[pos] == '>' and g.inJsxMode:
+      # Handle JSX closing tags
+      htmlNextToken(g)
+      return
+    else:
+      inc(pos)
+      g.kind = gtNone
   g.length = pos - g.pos
   if g.kind != gtEof and g.length <= 0:
     assert false, "clikeNextToken: produced an empty token"

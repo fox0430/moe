@@ -1,0 +1,21 @@
+name: Check `nph` formatting
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/nph.yaml'
+      - 'src/**'
+      - 'tests/**'
+
+jobs:
+  nph:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check `nph` formatting
+        uses: arnetheduck/nph-action@v1
+        with:
+          version: latest
+          options: "src/ tests/"
+          fail: true
+          suggest: true

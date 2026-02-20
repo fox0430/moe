@@ -34,134 +34,139 @@
 import std/strutils
 from std/algorithm import binarySearch
 
-import flags, highlite, lexer
+import flags, tokenizer, lexer
 
 const
-  HexChars = {'0'..'9', 'A'..'F', 'a'..'f', '_'}
-  OctChars = {'0'..'7', '_'}
-  BinChars = {'0'..'1', '_'}
-  SymChars = {'a'..'z', 'A'..'Z', '0'..'9', '\x80'..'\xFF'}
+  HexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f', '_'}
+  OctChars = {'0' .. '7', '_'}
+  BinChars = {'0' .. '1', '_'}
+  SymChars = {'a' .. 'z', 'A' .. 'Z', '0' .. '9', '\x80' .. '\xFF'}
 
   # The following list comes from doc/keywords.txt, make sure it is
   # synchronized with this array by running the module itself as a test case.
-  NimKeywords* = ["addr", "and", "as", "asm", "bind", "block",
-    "break", "case", "cast", "concept", "const", "continue", "converter",
-    "defer", "discard", "distinct", "div", "do",
-    "elif", "else", "end", "enum", "except", "export",
-    "finally", "for", "from", "func",
-    "if", "import", "in", "include",
-    "interface", "is", "isnot", "iterator", "let", "macro", "method",
-    "mixin", "mod", "nil", "not", "notin", "object", "of", "or", "out", "proc",
-    "ptr", "raise", "ref", "return", "shl", "shr", "static",
-    "template", "try", "tuple", "type", "using", "var", "when", "while",
-    "xor", "yield"]
+  NimKeywords* = [
+    "addr", "and", "as", "asm", "bind", "block", "break", "case", "cast", "concept",
+    "const", "continue", "converter", "defer", "discard", "distinct", "div", "do",
+    "elif", "else", "end", "enum", "except", "export", "finally", "for", "from", "func",
+    "if", "import", "in", "include", "interface", "is", "isnot", "iterator", "let",
+    "macro", "method", "mixin", "mod", "nil", "not", "notin", "object", "of", "or",
+    "out", "proc", "ptr", "raise", "ref", "return", "shl", "shr", "static", "template",
+    "try", "tuple", "type", "using", "var", "when", "while", "xor", "yield",
+  ]
 
-  NimBooleans* = ["true", "false"]
+  NimBooleans* = ["false", "true"]
 
   NimSpecialVars* = ["result"]
 
-  NimPragmas* = ["acyclic", "asmNoStackFrame", "assertions", "base", "bitsize",
-    "booldefine", "borrow", "boundChecks", "bycopy", "byref", "callconv",
-    "cdecl", "checks", "closure", "codegendecl", "compile", "compileTime",
-    "computedGoto", "constructor", "deprecated", "discardable", "dynlib",
-    "effects", "emit", "error", "experimental", "explain", "exportc", "extern",
-    "fastcall", "fatal", "final", "floatChecks", "gcsafe", "gensym", "global",
-    "guard", "header", "hint", "hint", "hints", "importc", "importcpp",
-    "importobjc", "incompletestruct", "infChecks", "inheritable", "inject",
-    "injectstmt", "inline", "intdefine", "line", "linearScanEnd", "link",
-    "locks", "nanChecks", "nilChecks", "nimcall", "noInit", "noReturn",
-    "noRewrite", "noSideEffect", "noconv", "nodecl", "optimization",
-    "overflowChecks", "package", "packed", "passC", "passL", "patterns", "pop",
-    "pragma", "pure", "push", "raises", "register", "requiresInit", "safecall",
-    "shallow", "size", "stdcall", "strdefine", "syscall", "tags", "threadvar",
-    "union", "unroll", "used", "varargs", "voliatile", "warning", "warnings"]
+  NimPragmas* = [
+    "acyclic", "asmNoStackFrame", "assertions", "base", "bitsize", "booldefine",
+    "borrow", "boundChecks", "bycopy", "byref", "callconv", "cdecl", "checks",
+    "closure", "codegendecl", "compile", "compileTime", "computedGoto", "constructor",
+    "deprecated", "discardable", "dynlib", "effects", "emit", "error", "experimental",
+    "explain", "exportc", "extern", "fastcall", "fatal", "final", "floatChecks",
+    "gcsafe", "gensym", "global", "guard", "header", "hint", "hints", "importc",
+    "importcpp", "importobjc", "incompletestruct", "infChecks", "inheritable", "inject",
+    "injectstmt", "inline", "intdefine", "line", "linearScanEnd", "link", "locks",
+    "nanChecks", "nilChecks", "nimcall", "noInit", "noReturn", "noRewrite",
+    "noSideEffect", "noconv", "nodecl", "optimization", "overflowChecks", "package",
+    "packed", "passC", "passL", "patterns", "pop", "pragma", "pure", "push", "raises",
+    "register", "requiresInit", "safecall", "shallow", "size", "stdcall", "strdefine",
+    "syscall", "tags", "threadvar", "union", "unroll", "used", "varargs", "voliatile",
+    "warning", "warnings",
+  ]
 
   # Builtin types, objects, procs, and exceptions
-  NimBuiltins* = ["AccessViolationError", "AlignType", "ArithmeticError",
-    "AssertionError", "BiggestFloat", "BiggestInt", "Byte", "ByteAddress",
-    "CloseFile", "CompileDate", "CompileTime", "Conversion", "DeadThreadError",
-    "DivByZeroError", "EndOfFile", "Endianness", "Exception", "ExecIOEffect",
-    "FieldError", "File", "FileHandle", "FileMode", "FileModeFileHandle",
-    "FloatDivByZeroError", "FloatInexactError", "FloatInvalidOpError",
-    "FloatOverflowError", "FloatUnderflowError", "FloatingPointError",
-    "FlushFile", "GC_Strategy", "GC_disable", "GC_disableMarkAnd", "GC_enable",
-    "GC_enableMarkAndSweep", "GC_fullCollect", "GC_getStatistics", "GC_ref",
-    "GC_setStrategy", "GC_unref", "IOEffect", "IOError", "IndexError",
-    "KeyError", "LibHandle", "LibraryError", "Msg", "Natural", "NimNode",
-    "OSError", "ObjectAssignmentError", "ObjectConversionError", "OpenFile",
-    "Ordinal", "OutOfMemError", "OverflowError", "PFloat32", "PFloat64",
-    "PFrame", "PInt32", "PInt64", "Positive", "ProcAddr", "QuitFailure",
-    "QuitSuccess", "RangeError", "ReadBytes", "ReadChars", "ReadIOEffect",
-    "RefCount", "ReraiseError", "ResourceExhaustedError", "RootEffect",
-    "RootObj", "RootObjRootRef", "Slice", "SomeInteger", "SomeNumber",
-    "SomeOrdinal", "SomeReal", "SomeSignedInt", "SomeUnsignedInt",
-    "StackOverflowError", "Sweep", "SystemError", "TFrame", "THINSTANCE",
-    "TResult", "TaintedString", "TimeEffect", "Utf16Char", "ValueError",
-    "WideCString", "WriteIOEffect", "abs", "add", "addQuitProc", "alloc",
-    "alloc0", "array", "assert", "autoany", "bool", "byte", "card", "cchar",
-    "cdouble", "cfloat", "char", "chr", "cint", "clong", "clongdouble",
-    "clonglong", "copy", "copyMem", "countdown", "countup", "cpuEndian",
-    "cschar", "cshort", "csize", "cstring", "cstringArray", "cuchar", "cuint",
-    "culong", "culonglong", "cushort", "dbgLineHook", "dealloc", "dec",
-    "defined", "echo", "equalMem", "equalmem", "excl", "expr", "fileHandle",
-    "find", "float", "float32", "float64", "fmt", "getCurrentException",
+  NimBuiltins* = [
+    "AccessViolationError", "AlignType", "ArithmeticError", "AssertionError",
+    "BiggestFloat", "BiggestInt", "Byte", "ByteAddress", "CloseFile", "CompileDate",
+    "CompileTime", "Conversion", "DeadThreadError", "DivByZeroError", "EndOfFile",
+    "Endianness", "Exception", "ExecIOEffect", "FieldError", "File", "FileHandle",
+    "FileMode", "FileModeFileHandle", "FloatDivByZeroError", "FloatInexactError",
+    "FloatInvalidOpError", "FloatOverflowError", "FloatUnderflowError",
+    "FloatingPointError", "FlushFile", "GC_Strategy", "GC_disable", "GC_disableMarkAnd",
+    "GC_enable", "GC_enableMarkAndSweep", "GC_fullCollect", "GC_getStatistics",
+    "GC_ref", "GC_setStrategy", "GC_unref", "IOEffect", "IOError", "IndexError",
+    "KeyError", "LibHandle", "LibraryError", "Msg", "Natural", "NimNode", "OSError",
+    "ObjectAssignmentError", "ObjectConversionError", "OpenFile", "Ordinal",
+    "OutOfMemError", "OverflowError", "PFloat32", "PFloat64", "PFrame", "PInt32",
+    "PInt64", "Positive", "ProcAddr", "QuitFailure", "QuitSuccess", "RangeError",
+    "ReadBytes", "ReadChars", "ReadIOEffect", "RefCount", "ReraiseError",
+    "ResourceExhaustedError", "RootEffect", "RootObj", "RootObjRootRef", "Slice",
+    "SomeInteger", "SomeNumber", "SomeOrdinal", "SomeReal", "SomeSignedInt",
+    "SomeUnsignedInt", "StackOverflowError", "Sweep", "SystemError", "TFrame",
+    "THINSTANCE", "TResult", "TaintedString", "TimeEffect", "Utf16Char", "ValueError",
+    "WideCString", "WriteIOEffect", "abs", "add", "addQuitProc", "alloc", "alloc0",
+    "array", "assert", "autoany", "bool", "byte", "card", "cchar", "cdouble", "cfloat",
+    "char", "chr", "cint", "clong", "clongdouble", "clonglong", "copy", "copyMem",
+    "countdown", "countup", "cpuEndian", "cschar", "cshort", "csize", "cstring",
+    "cstringArray", "cuchar", "cuint", "culong", "culonglong", "cushort", "dbgLineHook",
+    "dealloc", "dec", "defined", "echo", "equalMem", "equalmem", "excl", "expr",
+    "fileHandle", "find", "float", "float32", "float64", "fmt", "getCurrentException",
     "getFilePos", "getFileSize", "getFreeMem", "getOccupiedMem", "getRefcount",
-    "getTotalMem", "guarded", "high", "hostCPU", "hostOS", "inc", "incl",
-    "inf", "int", "int16", "int32", "int64", "int8", "isNil", "items", "len",
-    "lines", "low", "max", "min", "moveMem", "movemem", "nan", "neginf", "new",
-    "newSeq", "newString", "newseq", "newstring", "nimMajor", "nimMinor",
-    "nimPatch", "nimVersion", "nimmajor", "nimminor", "nimpatch", "nimversion",
-    "openArray", "openarray", "ord", "peg", "pointer", "pop", "pred", "ptr",
-    "quit", "range", "re", "readBuffer", "readChar", "readFile", "readLine",
-    "readbuffer", "readfile", "readline", "realloc", "ref", "repr", "seq",
-    "seqToPtr", "seqtoptr", "set", "setFilePos", "setLen", "setfilepos",
-    "setlen", "shared", "sizeof", "sql", "stderr", "stdin", "stdout", "stmt",
-    "string", "succ", "swap", "toBiggestFloat", "toBiggestInt", "toFloat",
-    "toInt", "toU16", "toU32", "toU8", "tobiggestfloat", "tobiggestint",
-    "tofloat", "toint", "tou16", "tou32", "tou8", "typed", "typedesc", "uint",
-    "uint16", "uint32", "uint32uint64", "uint64", "uint8", "untyped",
-    "varArgs", "void", "write", "writeBuffer", "writeBytes", "writeChars",
-    "writeLine", "writeLn", "ze", "ze64", "zeroMem"]
+    "getTotalMem", "guarded", "high", "hostCPU", "hostOS", "inc", "incl", "inf", "int",
+    "int16", "int32", "int64", "int8", "isNil", "items", "len", "lines", "low", "max",
+    "min", "moveMem", "movemem", "nan", "neginf", "new", "newSeq", "newString",
+    "newseq", "newstring", "nimMajor", "nimMinor", "nimPatch", "nimVersion", "nimmajor",
+    "nimminor", "nimpatch", "nimversion", "openArray", "openarray", "ord", "peg",
+    "pointer", "pop", "pred", "ptr", "quit", "range", "re", "readBuffer", "readChar",
+    "readFile", "readLine", "readbuffer", "readfile", "readline", "realloc", "ref",
+    "repr", "seq", "seqToPtr", "seqtoptr", "set", "setFilePos", "setLen", "setfilepos",
+    "setlen", "shared", "sizeof", "sql", "stderr", "stdin", "stdout", "stmt", "string",
+    "succ", "swap", "toBiggestFloat", "toBiggestInt", "toFloat", "toInt", "toU16",
+    "toU32", "toU8", "tobiggestfloat", "tobiggestint", "tofloat", "toint", "tou16",
+    "tou32", "tou8", "typed", "typedesc", "uint", "uint16", "uint32", "uint32uint64",
+    "uint64", "uint8", "untyped", "varArgs", "void", "write", "writeBuffer",
+    "writeBytes", "writeChars", "writeLine", "writeLn", "ze", "ze64", "zeroMem",
+  ]
 
   # Nim Standard Library names
-  NimStdLibs* = ["algorithm", "asyncdispatch", "asyncfile", "asyncftpclient",
-    "asynchttpserver", "asyncjs", "asyncnet", "asyncstreams", "atomics",
-    "base64", "bitops", "browsers", "cgi", "channels_builtin", "colors",
-    "complex", "cookies", "coro", "cpuinfo", "critbits", "cstrutils",
-    "db_mysql", "db_postgres", "db_sqlite", "deques", "distros", "docutils",
-    "dom", "dynlib", "editdistance", "encodings", "endians", "enumerate",
-    "enumutils", "fenv", "hashes", "heapqueue", "highlite", "htmlgen",
-    "htmlparser", "httpclient", "intsets", "jsbigints", "jsconsole",
-    "jscore", "jsffi", "json", "jsonutils", "lenientops", "lexbase", "lists",
-    "locks", "logging", "macrocache", "macros", "marshal", "math", "md5",
-    "memfiles", "mimetypes", "monotimes", "mysql", "nativesockets", "net",
-    "odbcsql", "oids", "openssl", "options", "os", "osproc", "packages",
-    "packedsets", "parsecfg", "parsecsv", "parsejson", "parseopt", "parsesql",
-    "parseutils", "parsexml", "pcre", "pegs", "posix", "posix_utils",
-    "postgres", "punycode", "random", "rationals", "rdstdin", "re", "registry",
-    "rlocks", "ropes", "rst", "rstast", "rstgen", "segfaults", "selectors",
-    "sequtils", "sets", "setutils", "sha1", "sharedlist", "sharedtables",
-    "smtp", "sqlite3", "stats", "std", "strbasics", "streams", "strformat",
-    "strmisc", "strscans", "strtabs", "strutils", "sugar", "sums", "sysrand",
-    "tables", "terminal", "threadpool", "threads", "times", "typeinfo",
-    "typetraits", "unicode", "unidecode", "unittest", "uri", "varints",
-    "volatile", "winlean", "with", "wordwrap", "xmlparser", "xmltree"]
+  NimStdLibs* = [
+    "algorithm", "asyncdispatch", "asyncfile", "asyncftpclient", "asynchttpserver",
+    "asyncjs", "asyncnet", "asyncstreams", "atomics", "base64", "bitops", "browsers",
+    "cgi", "channels_builtin", "colors", "complex", "cookies", "coro", "cpuinfo",
+    "critbits", "cstrutils", "db_mysql", "db_postgres", "db_sqlite", "deques",
+    "distros", "docutils", "dom", "dynlib", "editdistance", "encodings", "endians",
+    "enumerate", "enumutils", "fenv", "hashes", "heapqueue", "highlite", "htmlgen",
+    "htmlparser", "httpclient", "intsets", "jsbigints", "jsconsole", "jscore", "jsffi",
+    "json", "jsonutils", "lenientops", "lexbase", "lists", "locks", "logging",
+    "macrocache", "macros", "marshal", "math", "md5", "memfiles", "mimetypes",
+    "monotimes", "mysql", "nativesockets", "net", "odbcsql", "oids", "openssl",
+    "options", "os", "osproc", "packages", "packedsets", "parsecfg", "parsecsv",
+    "parsejson", "parseopt", "parsesql", "parseutils", "parsexml", "pcre", "pegs",
+    "posix", "posix_utils", "postgres", "punycode", "random", "rationals", "rdstdin",
+    "re", "registry", "rlocks", "ropes", "rst", "rstast", "rstgen", "segfaults",
+    "selectors", "sequtils", "sets", "setutils", "sha1", "sharedlist", "sharedtables",
+    "smtp", "sqlite3", "stats", "std", "strbasics", "streams", "strformat", "strmisc",
+    "strscans", "strtabs", "strutils", "sugar", "sums", "sysrand", "tables", "terminal",
+    "threadpool", "threads", "times", "typeinfo", "typetraits", "unicode", "unidecode",
+    "unittest", "uri", "varints", "volatile", "winlean", "with", "wordwrap",
+    "xmlparser", "xmltree",
+  ]
 
 proc nimGetKeyword(id: string): TokenClass =
   for k in NimKeywords:
-    if cmpIgnoreStyle(id, k) == 0: return gtKeyword
+    if cmpIgnoreStyle(id, k) == 0:
+      return gtKeyword
 
-  if binarySearch(NimBooleans, id) > -1: return gtBoolean
-  elif binarySearch(NimSpecialVars, id) > -1: return gtSpecialVar
-  elif id[0] in 'A'..'Z': return gtTypeName
-  elif binarySearch(NimBuiltins, id) > -1: return gtBuiltin
-  elif binarySearch(NimStdLibs, id) > -1: return gtBuiltin
-  elif binarySearch(NimPragmas, id) > -1: return gtPragma
-  else: return gtIdentifier
+  if binarySearch(NimBooleans, id) > -1:
+    return gtBoolean
+  elif binarySearch(NimSpecialVars, id) > -1:
+    return gtSpecialVar
+  elif id[0] in 'A' .. 'Z':
+    return gtTypeName
+  elif binarySearch(NimBuiltins, id) > -1:
+    return gtBuiltin
+  elif binarySearch(NimStdLibs, id) > -1:
+    return gtBuiltin
+  elif binarySearch(NimPragmas, id) > -1:
+    return gtPragma
+  else:
+    return gtIdentifier
 
 proc isSymStr(str: string): bool {.inline.} =
   for c in str:
-    if not (c in SymChars): return false
+    if not (c in SymChars):
+      return false
   return true
 
 proc nimNumberPostfix(g: var GeneralTokenizer, position: int): int =
@@ -172,30 +177,38 @@ proc nimNumberPostfix(g: var GeneralTokenizer, position: int): int =
     of 'f', 'F':
       g.kind = gtFloatNumber
       inc(pos)
-      if g.buf[pos] in {'0'..'9'}: inc(pos)
-      if g.buf[pos] in {'0'..'9'}: inc(pos)
+      if g.buf[pos] in {'0' .. '9'}:
+        inc(pos)
+      if g.buf[pos] in {'0' .. '9'}:
+        inc(pos)
     of 'i', 'I':
       inc(pos)
-      if g.buf[pos] in {'0'..'9'}: inc(pos)
-      if g.buf[pos] in {'0'..'9'}: inc(pos)
+      if g.buf[pos] in {'0' .. '9'}:
+        inc(pos)
+      if g.buf[pos] in {'0' .. '9'}:
+        inc(pos)
     else:
       discard
   result = pos
 
 proc nimNumber(g: var GeneralTokenizer, position: int): int =
-  const decChars = {'0'..'9', '_'}
+  const decChars = {'0' .. '9', '_'}
   var pos = position
   g.kind = gtDecNumber
-  while g.buf[pos] in decChars: inc(pos)
+  while g.buf[pos] in decChars:
+    inc(pos)
   if g.buf[pos] == '.':
     g.kind = gtFloatNumber
     inc(pos)
-    while g.buf[pos] in decChars: inc(pos)
+    while g.buf[pos] in decChars:
+      inc(pos)
   if g.buf[pos] in {'e', 'E'}:
     g.kind = gtFloatNumber
     inc(pos)
-    if g.buf[pos] in {'+', '-'}: inc(pos)
-    while g.buf[pos] in decChars: inc(pos)
+    if g.buf[pos] in {'+', '-'}:
+      inc(pos)
+    while g.buf[pos] in decChars:
+      inc(pos)
   result = nimNumberPostfix(g, pos)
 
 proc nimNextToken*(g: var GeneralTokenizer) =
@@ -211,12 +224,15 @@ proc nimNextToken*(g: var GeneralTokenizer) =
         case g.buf[pos]
         of 'x', 'X':
           inc(pos)
-          if g.buf[pos] in HexChars: inc(pos)
-        of '0'..'9':
-          while g.buf[pos] in {'0'..'9'}: inc(pos)
+          if g.buf[pos] in HexChars:
+            inc(pos)
+        of '0' .. '9':
+          while g.buf[pos] in {'0' .. '9'}:
+            inc(pos)
         of '\0':
           g.state = gtNone
-        else: inc(pos)
+        else:
+          inc(pos)
         break
       of '\0', '\x0D', '\x0A':
         g.state = gtNone
@@ -225,14 +241,34 @@ proc nimNextToken*(g: var GeneralTokenizer) =
         inc(pos)
         g.state = gtNone
         break
-      else: inc(pos)
+      else:
+        inc(pos)
+  elif g.state == gtLongStringLit:
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+    else:
+      g.kind = gtLongStringLit
+    while g.kind != gtEof:
+      case g.buf[pos]
+      of '\0':
+        break
+      of '\"':
+        inc(pos)
+        if g.buf[pos] == '\"' and g.buf[pos + 1] == '\"' and g.buf[pos + 2] != '\"':
+          inc(pos, 2)
+          g.state = gtNone
+          break
+      else:
+        inc(pos)
   else:
     case g.buf[pos]
-    of ' ', '\x09'..'\x0D':
+    of ' ', '\x09' .. '\x0D':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
-    of '#': pos = g.lexHash(pos, flagsNim)
-    of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
+      while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+        inc(pos)
+    of '#':
+      pos = g.lexHash(pos, flagsNim)
+    of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
       var id = ""
       while g.buf[pos] in SymChars + {'_'}:
         add(id, g.buf[pos])
@@ -244,14 +280,15 @@ proc nimNextToken*(g: var GeneralTokenizer) =
           while true:
             case g.buf[pos]
             of '\0':
+              g.state = gtLongStringLit
               break
             of '\"':
               inc(pos)
-              if g.buf[pos] == '\"' and g.buf[pos+1] == '\"' and
-                  g.buf[pos+2] != '\"':
+              if g.buf[pos] == '\"' and g.buf[pos + 1] == '\"' and g.buf[pos + 2] != '\"':
                 inc(pos, 2)
                 break
-            else: inc(pos)
+            else:
+              inc(pos)
         elif binarySearch(NimBuiltins, id) > -1:
           g.kind = gtBuiltin
         elif isSymStr(id):
@@ -260,13 +297,14 @@ proc nimNextToken*(g: var GeneralTokenizer) =
           g.kind = gtRawData
           inc(pos)
           while not (g.buf[pos] in {'\0', '\x0A', '\x0D'}):
-            if g.buf[pos] == '"' and g.buf[pos+1] != '"': break
+            if g.buf[pos] == '"' and g.buf[pos + 1] != '"':
+              break
             inc(pos)
-          if g.buf[pos] == '\"': inc(pos)
+          if g.buf[pos] == '\"':
+            inc(pos)
       else:
-        if (g.buf[pos] == '(' or g.buf[pos] == '*') and
-           nimGetKeyword(id) == gtIdentifier:
-             g.kind = gtFunctionName
+        if (g.buf[pos] == '(' or g.buf[pos] == '*') and nimGetKeyword(id) == gtIdentifier:
+          g.kind = gtFunctionName
         else:
           g.kind = nimGetKeyword(id)
     of '0':
@@ -275,20 +313,24 @@ proc nimNextToken*(g: var GeneralTokenizer) =
       of 'b', 'B':
         g.kind = gtBinNumber
         inc(pos)
-        while g.buf[pos] in BinChars: inc(pos)
+        while g.buf[pos] in BinChars:
+          inc(pos)
         pos = nimNumberPostfix(g, pos)
       of 'x', 'X':
         g.kind = gtHexNumber
         inc(pos)
-        while g.buf[pos] in HexChars: inc(pos)
+        while g.buf[pos] in HexChars:
+          inc(pos)
         pos = nimNumberPostfix(g, pos)
       of 'o', 'O':
         g.kind = gtOctNumber
         inc(pos)
-        while g.buf[pos] in OctChars: inc(pos)
+        while g.buf[pos] in OctChars:
+          inc(pos)
         pos = nimNumberPostfix(g, pos)
-      else: pos = nimNumber(g, pos)
-    of '1'..'9':
+      else:
+        pos = nimNumber(g, pos)
+    of '1' .. '9':
       pos = nimNumber(g, pos)
     of '\'':
       inc(pos)
@@ -302,7 +344,8 @@ proc nimNextToken*(g: var GeneralTokenizer) =
           break
         of '\\':
           inc(pos, 2)
-        else: inc(pos)
+        else:
+          inc(pos)
     of '\"':
       inc(pos)
       if (g.buf[pos] == '\"') and (g.buf[pos + 1] == '\"'):
@@ -311,15 +354,15 @@ proc nimNextToken*(g: var GeneralTokenizer) =
         while true:
           case g.buf[pos]
           of '\0':
+            g.state = gtLongStringLit
             break
           of '\"':
             inc(pos)
-            if g.buf[pos] == '\"' and
-               g.buf[pos+1] == '\"' and
-               g.buf[pos+2] != '\"':
-                 inc(pos, 2)
-                 break
-          else: inc(pos)
+            if g.buf[pos] == '\"' and g.buf[pos + 1] == '\"' and g.buf[pos + 2] != '\"':
+              inc(pos, 2)
+              break
+          else:
+            inc(pos)
       else:
         g.kind = gtStringLit
         while true:
@@ -332,7 +375,8 @@ proc nimNextToken*(g: var GeneralTokenizer) =
           of '\\':
             g.state = g.kind
             break
-          else: inc(pos)
+          else:
+            inc(pos)
     of '(', ')', '[', ']', '{', '}', '`', ':', ',', ';':
       inc(pos)
       g.kind = gtPunctuation
@@ -342,7 +386,8 @@ proc nimNextToken*(g: var GeneralTokenizer) =
       if g.buf[pos] in opChars:
         let sp = pos
         g.kind = gtOperator
-        while g.buf[pos] in opChars: inc(pos)
+        while g.buf[pos] in opChars:
+          inc(pos)
         let ep = pos
         if sp + 1 == ep and g.buf[sp] == '*' and g.buf[ep] == '(':
           g.kind = gtSpecialVar

@@ -31,24 +31,24 @@
 #    distribution, for details about the copyright.
 #
 
-import flags
-import highlite
+import flags, tokenizer
 
-const
-  cKeywords* = ["_Bool", "_Complex", "_Imaginary", "auto",
-    "break", "case", "char", "const", "continue", "default", "do", "double",
-    "else", "enum", "extern", "float", "for", "goto", "if", "inline", "int",
-    "long", "register", "restrict", "return", "short", "signed", "sizeof",
-    "static", "struct", "switch", "typedef", "union", "unsigned", "void",
-    "volatile", "while"]
+const cKeywords* = [
+  "_Bool", "_Complex", "_Imaginary", "auto", "break", "case", "char", "const",
+  "continue", "default", "do", "double", "else", "enum", "extern", "float", "for",
+  "goto", "if", "inline", "int", "long", "register", "restrict", "return", "short",
+  "signed", "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned",
+  "void", "volatile", "while",
+]
 
-proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
-                     flags: TokenizerFlags) =
+proc clikeNextToken*(
+    g: var GeneralTokenizer, keywords: openArray[string], flags: TokenizerFlags
+) =
   const
-    hexChars = {'0'..'9', 'A'..'F', 'a'..'f'}
-    octChars = {'0'..'7'}
-    binChars = {'0'..'1'}
-    symChars = {'A'..'Z', 'a'..'z', '0'..'9', '_', '\x80'..'\xFF'}
+    hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
+    octChars = {'0' .. '7'}
+    binChars = {'0' .. '1'}
+    symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
   if g.state == gtStringLit:
@@ -61,13 +61,17 @@ proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
         case g.buf[pos]
         of 'x', 'X':
           inc(pos)
-          if g.buf[pos] in hexChars: inc(pos)
-          if g.buf[pos] in hexChars: inc(pos)
-        of '0'..'9':
-          while g.buf[pos] in {'0'..'9'}: inc(pos)
+          if g.buf[pos] in hexChars:
+            inc(pos)
+          if g.buf[pos] in hexChars:
+            inc(pos)
+        of '0' .. '9':
+          while g.buf[pos] in {'0' .. '9'}:
+            inc(pos)
         of '\0':
           g.state = gtNone
-        else: inc(pos)
+        else:
+          inc(pos)
         break
       of '\0', '\r', '\n':
         g.state = gtNone
@@ -76,17 +80,45 @@ proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
         inc(pos)
         g.state = gtNone
         break
-      else: inc(pos)
+      else:
+        inc(pos)
+  elif g.state == gtLongComment:
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+    else:
+      g.kind = gtLongComment
+    var nested = 0
+    while g.kind != gtEof:
+      case g.buf[pos]
+      of '*':
+        inc(pos)
+        if g.buf[pos] == '/':
+          inc(pos)
+          if nested == 0:
+            g.state = gtNone
+            break
+      of '/':
+        inc(pos)
+        if g.buf[pos] == '*':
+          inc(pos)
+          if hasNestedComments in flags:
+            inc(nested)
+      of '\0':
+        break
+      else:
+        inc(pos)
   else:
     case g.buf[pos]
-    of ' ', '\t'..'\r':
+    of ' ', '\t' .. '\r':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\t'..'\r'}: inc(pos)
+      while g.buf[pos] in {' ', '\t' .. '\r'}:
+        inc(pos)
     of '/':
       inc(pos)
       if g.buf[pos] == '/':
         g.kind = gtComment
-        while not (g.buf[pos] in {'\0', '\n', '\r'}): inc(pos)
+        while not (g.buf[pos] in {'\0', '\n', '\r'}):
+          inc(pos)
       elif g.buf[pos] == '*':
         g.kind = gtLongComment
         var nested = 0
@@ -97,54 +129,74 @@ proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
             inc(pos)
             if g.buf[pos] == '/':
               inc(pos)
-              if nested == 0: break
+              if nested == 0:
+                break
           of '/':
             inc(pos)
             if g.buf[pos] == '*':
               inc(pos)
-              if hasNestedComments in flags: inc(nested)
+              if hasNestedComments in flags:
+                inc(nested)
           of '\0':
+            g.state = gtLongComment
             break
-          else: inc(pos)
+          else:
+            inc(pos)
       else:
         g.kind = gtOperator
-        while g.buf[pos] in opChars: inc(pos)
+        while g.buf[pos] in opChars:
+          inc(pos)
     of '#':
       inc(pos)
       if hasPreprocessor in flags:
         g.kind = gtPreprocessor
-        while g.buf[pos] in {' ', '\t'}: inc(pos)
-        while g.buf[pos] in symChars: inc(pos)
+        while g.buf[pos] in {' ', '\t'}:
+          inc(pos)
+        while g.buf[pos] in symChars:
+          inc(pos)
       else:
         g.kind = gtOperator
-    of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
+    of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
       var id = ""
       while g.buf[pos] in symChars:
         add(id, g.buf[pos])
         inc(pos)
-      if isKeyword(keywords, id) >= 0: g.kind = gtKeyword
-      else: g.kind = gtIdentifier
+      if isKeyword(keywords, id) >= 0:
+        g.kind = gtKeyword
+      else:
+        g.kind = gtIdentifier
     of '0':
       inc(pos)
       case g.buf[pos]
       of 'b', 'B':
+        g.kind = gtBinNumber
         inc(pos)
-        while g.buf[pos] in binChars: inc(pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+        while g.buf[pos] in binChars:
+          inc(pos)
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+          inc(pos)
       of 'x', 'X':
+        g.kind = gtHexNumber
         inc(pos)
-        while g.buf[pos] in hexChars: inc(pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
-      of '0'..'7':
+        while g.buf[pos] in hexChars:
+          inc(pos)
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+          inc(pos)
+      of '0' .. '7':
+        g.kind = gtOctNumber
         inc(pos)
-        while g.buf[pos] in octChars: inc(pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+        while g.buf[pos] in octChars:
+          inc(pos)
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+          inc(pos)
       else:
         pos = generalNumber(g, pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
-    of '1'..'9':
+        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+          inc(pos)
+    of '1' .. '9':
       pos = generalNumber(g, pos)
-      if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+      while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        inc(pos)
     of '\'':
       pos = generalStrLit(g, pos)
       g.kind = gtCharLit
@@ -153,7 +205,7 @@ proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
       g.kind = gtStringLit
       while true:
         case g.buf[pos]
-        of '\0':
+        of '\0', '\r', '\n':
           break
         of '\"':
           inc(pos)
@@ -161,16 +213,25 @@ proc clikeNextToken*(g: var GeneralTokenizer, keywords: openArray[string],
         of '\\':
           g.state = g.kind
           break
-        else: inc(pos)
-    of '(', ')', '[', ']', '{', '}', ':', ',', ';', '.':
+        else:
+          inc(pos)
+    of '(', ')', '[', ']', '{', '}', ',', ';', '.':
       inc(pos)
       g.kind = gtPunctuation
+    of ':':
+      inc(pos)
+      if g.buf[pos] == ':':
+        inc(pos)
+        g.kind = gtOperator
+      else:
+        g.kind = gtPunctuation
     of '\0':
       g.kind = gtEof
     else:
       if g.buf[pos] in opChars:
         g.kind = gtOperator
-        while g.buf[pos] in opChars: inc(pos)
+        while g.buf[pos] in opChars:
+          inc(pos)
       else:
         inc(pos)
         g.kind = gtNone

@@ -2,20 +2,20 @@
 
 moe adopts the mode and keybinding like vi/vim.
 You can easily adapt if you have used vi/vim.
-Currently you can use normal mode, visual mode, replace mode, insert mode, ex mode, filer mode.
+Currently you can use normal mode, visual mode, replace mode, insert mode, ex mode, filer mode, terminal mode.
 
 # Install and compile
 
 ## Requires
 - [Nim](https://nim-lang.org) 2.0.10 or higher
-- [Ncurses](https://invisible-island.net/ncurses) 6.1 or higher
 
 ### Install
 
 I recommend using nimble to install:
 
 ```
-$ nimble install moe
+# Latest developmental state inside Github repository
+$ nimble install moe@#head
 ```
 
 If you want to compile moe or use a version in development:
@@ -24,20 +24,6 @@ If you want to compile moe or use a version in development:
 $ git clone https://github.com/fox0430/moe
 $ cd moe
 $ nimble install
-```
-
-If you are running Linux Ubuntu, or a distribution based on Ubuntu, you will likely need to run
-
-```
-$ sudo apt install libncurses5-dev libncursesw5-dev
-$ nimble install moe
-```
-
-Fedora
-
-```
-$ sudo dnf install ncurses-devel
-$ nimble install moe
 ```
 
 ### Debug build

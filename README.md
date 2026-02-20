@@ -19,14 +19,13 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - UTF-8 and other encodings support (Incomplete)
 
-- Vim like mode (Normal, Insert, Visual, Replace, Ex, Filer)
+- Vim like mode (Normal, Insert, Visual, Replace, Command, Filer, etc...)
 
 - Vim like keybinds
 
-- Infinite undo/redo
+- Undo/redo
 
 - Syntax highlighting:
-
   - C
   - C++
   - C#
@@ -43,19 +42,19 @@ This project's goals are easily customizable, high productivity, user friendly, 
   - YAML
   - JSON
 
-- Auto-complete
+- Auto-completion
 
 - Configuration file (TOML)
 
-- Configuration mode
-
-- Live reload of the configuration file
-
-- Vertical/Horizontal split window
+- Configuration mode (UI)
 
 - Tab line
 
 - Indentation lines
+
+- Highlight current words
+
+- Highlight/Delete trailing spaces
 
 - Auto close/delete paren
 
@@ -65,7 +64,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Auto save
 
-- Suggestions in ex mode
+- Suggestions in Command mode
 
 - TrueColor (24bit color)
 
@@ -73,15 +72,9 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Build on save
 
-- Multiple status line
-
 - QuickRun
 
 - Automatic backups
-
-- Highlight current words
-
-- Highlight/Delete trailing spaces
 
 - Vim like register
 
@@ -92,6 +85,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
   - Nim
 
 - Macros
+
+- Terminal ( >= 0.5.0 )
 
 - Language Server Protocol (WIP)
 
@@ -133,17 +128,15 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 ## Planned features
 
-- Supports regular expression and PEG
+- Supports regular expression
 
 - Supports EditorConfig
 
-- Window management
+- Key bindings
 
 - Snippets
 
 - Spell checker
-
-- Terminal
 
 - Select data structures
 
@@ -151,11 +144,9 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Fuzzy search
 
-- Plugins
+- Plugin system
 
 - Supports huge file
-
-- Funny animation...
 
 ## Install
 
@@ -163,15 +154,27 @@ We recommend Linux environments.
 
 ### Requires
 
+
 - [Nim](https://nim-lang.org) 2.0.10 or higher
 
-- [Ncurses](https://invisible-island.net/ncurses) 6.1 or higher
 
 - [xclip](https://github.com/astrand/xclip) v0.13 or higher (Option on GNU/Linux)
 
 - [xsel](http://www.kfish.org/software/xsel/) (Option on GNU/Linux)
 
 - [wl-clipboard](https://github.com/bugaevc/wl-clipboard) (Option on GNU/Linux)
+
+Version <= 0.4.0 (Ncurses base)
+
+- [Ncurses](https://invisible-island.net/ncurses) 6.1 or higher
+
+```sh
+nimble install moe
+```
+
+Check [detail](https://github.com/fox0430/moe/blob/v0.4.0/documents/overview.md)
+
+Version >= 0.5.0 ([Celina](https://github.com/fox0430/celina) base)
 
 ```sh
 # Latest developmental state inside Github repository
@@ -182,9 +185,9 @@ Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md
 
 ## Usage
 
-[Documents (Latest)](https://github.com/fox0430/moe/blob/develop/documents/index.md)
+[Documents (Celina base)](https://github.com/fox0430/moe/blob/develop/documents/index.md)
 
-[Documents (Release)](https://github.com/fox0430/moe/blob/master/documents/index.md)
+[Documents (Ncurses base)](https://github.com/fox0430/moe/blob/v0.4.0/documents/index.md)
 
 ## The origin of the name
 moe is a recursive acronym for "moe is an optimal editor".    

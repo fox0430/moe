@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,201 +17,285 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, times, oids, json]
+## Auto backup functionality for moe editor
+##
+## Backup files are stored in a configurable directory (default: ~/.cache/moe/backups).
+## Each source file gets its own subdirectory identified by a unique ID.
+## Backup filenames are timestamps (e.g., "2025-01-15T10:30:45+09:00").
+## A backup.json file in each subdirectory maps the backup to the source file.
+
+import std/[os, times, oids, json, options, strutils, algorithm]
+
 import pkg/results
-import settings, unicodeext, fileutils, bufferstatus, gapbuffer, messages,
-       commandline
 
-type
-  AutoBackupStatus* = object
-    lastBackupTime*: DateTime
+import config, logger
 
-proc initAutoBackupStatus*(): AutoBackupStatus {.inline.} =
-  result.lastBackupTime = now()
+const
+  BackupJsonFilename = "backup.json"
+  DefaultBackupDir* = "~/.cache/moe/backups"
+  BackupDateFormat = "yyyy-MM-dd'T'HH:mm:sszzz"
+  MaxBackupFiles* = 100 ## Maximum number of backup files per source file
 
-template backupInfoJsonPath(backupDir: Runes): Runes =
-  backupDir / "backup.json".toRunes
+type BackupResult* = Result[string, string]
 
-# Return true if already exists or create dir successfully.
-proc createDir(dir: Runes): bool =
-  if dirExists($dir):
-    return true
+proc expandBackupDir*(backupDir: string): string =
+  ## Expand ~ in backup directory path
+  ## Handles: ~/path, ~, but NOT ~user (which would require getpwnam)
+  if backupDir.len == 1 and backupDir[0] == '~':
+    return getHomeDir()
+  elif backupDir.len > 1 and backupDir[0] == '~' and backupDir[1] == '/':
+    return getHomeDir() / backupDir[2 .. ^1]
+  return backupDir
+
+proc getBaseBackupDir*(config: AutoBackupConfig): string =
+  ## Get the base backup directory from config or use default
+  if config.backupDir.isSome:
+    expandBackupDir(config.backupDir.get)
   else:
-    try: createDir($dir)
-    except CatchableError: return false
+    expandBackupDir(DefaultBackupDir)
 
+proc backupInfoJsonPath(backupDir: string): string {.inline.} =
+  backupDir / BackupJsonFilename
+
+proc createBackupDir(dir: string): bool =
+  ## Return true if dir already exists or is successfully created
+  if dirExists(dir):
     return true
-
-# Return true if valid json.
-proc validateBackupInfoJson*(jsonNode: JsonNode): bool =
-  jsonNode.contains("path") and
-  jsonNode["path"].kind == JsonNodeKind.JString and
-  jsonNode["path"].getStr.len > 0
-
-# Return path of backupDir.
-# Return empty Runes if error or isn't exist.
-proc getBackupDir*(baseBackupDir, sourceFilePath: Runes): Runes =
-  if not dirExists($baseBackupDir):
-    return "".toRunes
-
-  for file in walkPattern($baseBackupDir / "*/backup.json" ):
-    let backupJson =
-      try: json.parseFile(file)
-      except CatchableError: return "".toRunes
-
-    if validateBackupInfoJson(backupJson):
-      if backupJson["path"].getStr == $sourceFilePath:
-        return file.splitPath.head.toRunes
-
-# Valid filename is DateTime string.
-# Example: "2022-10-26T08:28:50+09:00"
-proc validateBackupFileName*(filename: string): bool =
   try:
-    discard filename.parse("yyyy-MM-dd\'T\'HH:mm:sszzz")
+    createDir(dir)
+    return true
   except CatchableError:
     return false
 
-  return true
+proc validateBackupInfoJson(jsonNode: JsonNode): bool =
+  ## Return true if JSON has required fields
+  jsonNode.contains("path") and jsonNode["path"].kind == JsonNodeKind.JString and
+    jsonNode["path"].getStr.len > 0
 
-# Return the backup dir for `sourceFilePath`.
-# `sourceFilePath` is need to absolute path.
-proc backupDir*(baseBackupDir, sourceFilePath: string): string =
-  for jsonFilePath in walkPattern($baseBackupDir / "*/backup.json" ):
+proc getBackupDirForSource*(baseBackupDir, sourceFilePath: string): string =
+  ## Find existing backup directory for a source file
+  ## Returns empty string if not found
+  if not dirExists(baseBackupDir):
+    return ""
+
+  for jsonFilePath in walkPattern(baseBackupDir / "*" / BackupJsonFilename):
     let backupJson =
-      try: json.parseFile(jsonFilePath)
-      except CatchableError: return ""
+      try:
+        json.parseFile(jsonFilePath)
+      except CatchableError:
+        continue
 
     if validateBackupInfoJson(backupJson):
       if backupJson["path"].getStr == sourceFilePath:
-        return (jsonFilePath.splitPath).head
+        return jsonFilePath.parentDir
 
-template isPcFile*(f: tuple[kind: PathComponent, path: string]): bool =
-  f.kind == PathComponent.pcFile
+  return ""
 
-# `sourceFilePath` is need to absolute path.
-proc getBackupFiles*(baseBackupDir, sourceFilePath: Runes): seq[Runes] =
-  let backupDir = backupDir($baseBackupDir, $sourceFilePath)
-  if dirExists(backupDir):
-    for f in walkDir(backupDir):
-      let filename = f.path.splitPath.tail
-      if f.isPcFile and validateBackupFileName(filename):
-        result.add(filename.toRunes)
-
-# Return path of backupDir.
-# Create dirs for base dir and for the backup source.
-proc initBackupDir(baseBackupDir, sourceFilePath: Runes): Runes =
-  if createDir(baseBackupDir):
-    let backupDir = getBackupDir(baseBackupDir, sourceFilePath)
-    if backupDir.len > 0:
-      return backupDir
-    else:
-      let
-        # `id` is the directory name for `sourceFilePath`.
-        id = genOid()
-        backupDir = baseBackupDir / id.toRunes
-
-      if not createDir(backupDir):
-        return "".toRunes
-
-      return backupDir
-
-# Return the filename for the backup.
-template genFilename(): Runes = now().toRunes
-
-# Return true if the buffer changed after the previous backup.
-proc diff(baseBackupDir, sourceFilePath: Runes, buffer: string): bool =
-  const FORMAT = "yyyy-MM-dd\'T\'HH:mm:sszzz"
-  var mostRecentFile = ""
-
-  for f in getBackupFiles(baseBackupDir, sourceFilePath):
-    let filename = $f
-    if mostRecentFile.len == 0:
-      mostRecentFile = filename
-    else:
-      if filename.parse(FORMAT) > mostRecentFile.parse(FORMAT):
-        mostRecentFile = filename
-
-  if fileExists(mostRecentFile):
-    let mostRecentBuffer = openFile(mostRecentFile.toRunes)
-    if mostRecentBuffer.isOk:
-      return $mostRecentBuffer.get.text == buffer[0 ..< ^1]
-    else:
-      return false
-
-# Return true if successful.
-proc writeBackupFile(
-  path, buffer: Runes,
-  encoding: CharacterEncoding): bool {.inline.} =
-
-    return saveFile(path, buffer, encoding).isOk
-
-# Return true if successful.
-# Save json file for backup info in the same dir of backup files.
-proc writeBackupInfoJson(backupDir, sourceFilePath: Runes): bool =
-  # `path` is the absolute path of backup source file.
-  let jsonNode = %* { "path": $sourceFilePath }
-
+proc validateBackupFileName*(filename: string): bool =
+  ## Valid filename is DateTime string (e.g., "2025-01-15T10:30:45+09:00")
   try:
-    writeFile($backupInfoJsonPath(backupDir), $jsonNode)
+    discard filename.parse(BackupDateFormat)
+    return true
   except CatchableError:
     return false
 
-  return true
+proc getBackupFilesInDir*(backupDir: string): seq[string] =
+  ## Get all backup files in a backup directory (internal version)
+  ## backupDir: the specific backup directory for a source file
+  if backupDir.len == 0 or not dirExists(backupDir):
+    return @[]
 
-# Backup buffer to {autoBackupStatus.backupDir}/{id}/.
-# Ignore if there is no change from the previous backup.
+  for f in walkDir(backupDir):
+    if f.kind == PathComponent.pcFile:
+      let filename = f.path.extractFilename
+      if validateBackupFileName(filename):
+        result.add(filename)
+
+proc getBackupFiles*(baseBackupDir, sourceFilePath: string): seq[string] =
+  ## Get all backup files for a source file (public API)
+  let backupDir = getBackupDirForSource(baseBackupDir, sourceFilePath)
+  getBackupFilesInDir(backupDir)
+
+proc initBackupDir(baseBackupDir, sourceFilePath: string): string =
+  ## Initialize backup directory for a source file
+  ## Returns the backup directory path, or empty string on error
+  if not createBackupDir(baseBackupDir):
+    return ""
+
+  # Check if a backup directory already exists for this source file
+  let existingDir = getBackupDirForSource(baseBackupDir, sourceFilePath)
+  if existingDir.len > 0:
+    return existingDir
+
+  # Create a new directory with a unique ID
+  let
+    id = $genOid()
+    backupDir = baseBackupDir / id
+
+  if not createBackupDir(backupDir):
+    return ""
+
+  return backupDir
+
+proc genBackupFilename(): string {.inline.} =
+  ## Generate a backup filename from current timestamp
+  now().format(BackupDateFormat)
+
+proc getMostRecentBackupInDir(backupDir: string): string =
+  ## Get the most recent backup file content from a backup directory (internal version)
+  ## Returns empty string if no backup exists or on error
+  let backupFiles = getBackupFilesInDir(backupDir)
+  if backupFiles.len == 0:
+    return ""
+
+  var mostRecentFile = ""
+  var mostRecentTime: DateTime
+
+  for filename in backupFiles:
+    try:
+      let fileTime = filename.parse(BackupDateFormat)
+      if mostRecentFile.len == 0 or fileTime > mostRecentTime:
+        mostRecentFile = filename
+        mostRecentTime = fileTime
+    except CatchableError:
+      continue
+
+  if mostRecentFile.len == 0:
+    return ""
+
+  let backupFilePath = backupDir / mostRecentFile
+  try:
+    return readFile(backupFilePath)
+  except CatchableError:
+    return ""
+
+proc getMostRecentBackup(baseBackupDir, sourceFilePath: string): string {.used.} =
+  ## Get the most recent backup file content for comparison (public API)
+  ## Returns empty string if no backup exists or on error
+  let backupDir = getBackupDirForSource(baseBackupDir, sourceFilePath)
+  if backupDir.len == 0:
+    return ""
+  getMostRecentBackupInDir(backupDir)
+
+proc writeBackupInfoJson(backupDir, sourceFilePath: string): bool =
+  ## Write backup info JSON file
+  let jsonNode = %*{"path": sourceFilePath}
+  try:
+    writeFile(backupInfoJsonPath(backupDir), $jsonNode)
+    return true
+  except CatchableError:
+    return false
+
+proc cleanupOldBackupsInDir(backupDir: string, maxFiles: int) =
+  ## Remove oldest backup files if count exceeds maxFiles (internal version)
+  let backupFiles = getBackupFilesInDir(backupDir)
+  if backupFiles.len <= maxFiles:
+    return
+
+  # Sort by timestamp (oldest first)
+  var sortedFiles: seq[tuple[time: DateTime, name: string]] = @[]
+  for filename in backupFiles:
+    try:
+      let fileTime = filename.parse(BackupDateFormat)
+      sortedFiles.add((time: fileTime, name: filename))
+    except CatchableError:
+      continue
+
+  # Sort by time ascending (oldest first)
+  sortedFiles.sort(
+    proc(a, b: tuple[time: DateTime, name: string]): int =
+      if a.time < b.time:
+        -1
+      elif a.time > b.time:
+        1
+      else:
+        0
+  )
+
+  # Delete oldest files to keep only maxFiles
+  let toDelete = sortedFiles.len - maxFiles
+  for i in 0 ..< toDelete:
+    let filePath = backupDir / sortedFiles[i].name
+    try:
+      removeFile(filePath)
+      logDebug("backup", "Removed old backup: " & filePath)
+    except CatchableError:
+      discard
+
+proc cleanupOldBackups(baseBackupDir, sourceFilePath: string, maxFiles: int) {.used.} =
+  ## Remove oldest backup files if count exceeds maxFiles (public API)
+  let backupDir = getBackupDirForSource(baseBackupDir, sourceFilePath)
+  if backupDir.len == 0:
+    return
+  cleanupOldBackupsInDir(backupDir, maxFiles)
+
 proc backupBuffer*(
-  bufStatus: BufferStatus,
-  autoBackupSettings: AutoBackupSettings,
-  notificationSettings: NotificationSettings,
-  commandLine: var CommandLine) =
+    filePath: Option[string], content: string, config: AutoBackupConfig
+): BackupResult =
+  ## Backup the buffer content to the backup directory
+  ## Returns Ok with backup file path on success, Err with message on failure
+  ##
+  ## Conditions checked:
+  ## - filePath must be Some
+  ## - Source file directory must not be in dirToExclude
+  ## - Content must be different from the most recent backup
 
-    if bufStatus.path.len == 0: return
+  # Check if file path exists
+  if filePath.isNone:
+    return err("No file path")
 
-    let
-      sourceFilePath = absolutePath($bufStatus.path)
-      sourceFileDir = (sourceFilePath.splitPath).head
-      dirToExclude = autoBackupSettings.dirToExclude
+  let
+    sourceFilePath = absolutePath(filePath.get)
+    sourceFileDir = sourceFilePath.parentDir
+    baseBackupDir = getBaseBackupDir(config)
 
-    if dirToExclude.contains(ru sourceFileDir): return
+  # Check if source directory is excluded
+  # Properly handle path boundaries to avoid /etc matching /etcfoo
+  for excludeDir in config.dirToExclude:
+    if sourceFileDir == excludeDir:
+      # Exact match
+      return err("Directory excluded from backup")
+    elif excludeDir.endsWith("/"):
+      # excludeDir already has trailing slash
+      if sourceFileDir.startsWith(excludeDir):
+        return err("Directory excluded from backup")
+    else:
+      # Add trailing slash for proper prefix matching
+      if sourceFileDir.startsWith(excludeDir & "/"):
+        return err("Directory excluded from backup")
 
-    let
-      baseBackupDir = autoBackupSettings.backupDir
-      backupFilename = genFilename()
+  # Initialize backup directory (this is the only call to getBackupDirForSource)
+  let backupDir = initBackupDir(baseBackupDir, sourceFilePath)
+  if backupDir.len == 0:
+    return err("Failed to create backup directory")
 
-    let backupDir = initBackupDir(baseBackupDir, sourceFilePath.toRunes)
-    if backupDir.len == 0:
-      commandLine.writeAutoBackupFailedMessage(
-        backupFilename,
-        notificationSettings)
-      return
+  # Use provided content
+  let currentContent = content
 
-    let isSame = diff(
-      baseBackupDir,
-      sourceFilePath.toRunes,
-      bufStatus.buffer.toString)
-    if not isSame:
-      commandLine.writeStartAutoBackupMessage(notificationSettings)
+  # Check if content is different from most recent backup
+  # Use *InDir version to avoid redundant getBackupDirForSource call
+  let mostRecentContent = getMostRecentBackupInDir(backupDir)
+  if mostRecentContent == currentContent:
+    return err("No changes since last backup")
 
-      let
-        backupFilePath = backupDir / backupFilename
-        buffer = bufStatus.buffer.toRunes
-        encoding = bufStatus.characterEncoding
+  # Generate backup filename and write
+  let
+    backupFilename = genBackupFilename()
+    backupFilePath = backupDir / backupFilename
 
-      if not writeBackupFile(backupFilePath, buffer, encoding):
-        commandLine.writeAutoBackupFailedMessage(
-          backupFilename,
-          notificationSettings)
-        return
+  try:
+    writeFile(backupFilePath, currentContent)
+  except CatchableError as e:
+    return err("Failed to write backup: " & e.msg)
 
-      if not fileExists($backupInfoJsonPath(backupDir)):
-        if not writeBackupInfoJson(backupDir, sourceFilePath.toRunes):
-          commandLine.writeAutoBackupFailedMessage(
-            backupFilename,
-            notificationSettings)
-          return
+  # Write backup info JSON if it doesn't exist
+  if not fileExists(backupInfoJsonPath(backupDir)):
+    if not writeBackupInfoJson(backupDir, sourceFilePath):
+      return err("Failed to write backup info")
 
-      let message = "Automatic backup successful: " & $backupFilePath
-      commandLine.writeAutoBackupSuccessMessage(
-        message,
-        notificationSettings)
+  # Cleanup old backups to prevent disk filling
+  # Use *InDir version to avoid redundant getBackupDirForSource call
+  cleanupOldBackupsInDir(backupDir, MaxBackupFiles)
+
+  logInfo("backup", "Created backup: " & backupFilePath)
+  return ok(backupFilePath)

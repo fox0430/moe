@@ -73,3 +73,35 @@ moe can use Vim-like registers.
 ### No name register
 
 Stores the value of the last used register.
+
+## Runtime Key Mapping
+
+moe supports Vim-like runtime key mapping commands. You can remap keys during an editing session using Ex mode commands.
+
+- `:nmap {lhs} {rhs}` - Map keys in Normal mode
+- `:imap {lhs} {rhs}` - Map keys in Insert mode
+- `:vmap {lhs} {rhs}` - Map keys in Visual modes
+- `:rmap {lhs} {rhs}` - Map keys in Replace mode
+- `:map {lhs} {rhs}` - Map keys in all modes
+
+All mappings are non-recursive (equivalent to Vim's `noremap`). `noremap`, `nnoremap`, `inoremap`, `vnoremap` are available as aliases.
+
+Mappings are session-only and are not persisted across restarts. For persistent key mappings, use the `[KeyMapping]` section in `moerc.toml`. See [configfile.md](configfile.md#keymapping-table).
+
+Key notation supports regular keys (`a`, `j`), modifier keys (`C-s`, `M-x`), special keys (`Escape`, `Enter`, `Tab`, `F1`-`F12`), and multi-key sequences in both space-separated (`j j`) and Vim-style concatenated (`jj`) notation.
+
+See [How to use - Runtime Key Mapping](howtouse.md#runtime-key-mapping) for full details.
+
+## Terminal mode
+
+moe has a built-in terminal emulator. You can run a shell or any command inside the editor window.
+
+- `:terminal` - Open an interactive shell (default shell)
+- `:terminal command` - Run a specific command (e.g. `:terminal ls -la`)
+
+Terminal mode has two sub-modes:
+
+- **Terminal-Input**: All keystrokes are forwarded to the running shell/command. Press `Ctrl-\ Ctrl-n` to switch to Terminal-Normal sub-mode.
+- **Terminal-Normal**: Browse the terminal output. Press `i` or `a` to return to Terminal-Input sub-mode. Press `:` to enter command mode.
+
+When a command finishes (e.g. `:terminal ls`), the output is displayed in a read-only scrollback view (Terminal-Normal sub-mode). When an interactive shell exits, the terminal window is automatically closed.

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,83 +17,114 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/strformat
-import pkg/results
-import syntax/highlite
-import unicodeext, backgroundprocess
+import std/[strformat, strutils]
+
+import pkg/[results, chronos]
+
+import background_process
+import syntax/tokenizer
+
+export background_process
 
 type
   BuildCommand = tuple[cmd: string, args: seq[string]]
 
   BuildProcess* = object
     command*: BackgroundProcessCommand
-    filePath*: Runes
+    filePath*: string
     process*: BackgroundProcess
 
-proc isRunning*(bp: BuildProcess): bool {.inline.} = bp.process.isRunning
+proc isRunning*(bp: BuildProcess): bool {.inline.} =
+  bp.process.isRunning
 
-proc isFinish*(bp: BuildProcess): bool {.inline.} = bp.process.isFinish
-
-proc result*(bp: var BuildProcess): Result[seq[string], string] {.inline.} =
-  bp.process.result
+proc isFinish*(bp: BuildProcess): bool {.inline.} =
+  bp.process.isFinish
 
 proc nimBuildCommand(path: string): BuildCommand {.inline.} =
   return (cmd: "nim", args: @["c", path])
 
+proc rustBuildCommand(path: string): BuildCommand {.inline.} =
+  return (cmd: "cargo", args: @["build"])
+
 proc buildCommand(
-  path: string,
-  lang: SourceLanguage,
-  workspaceRoot: string): Result[BackgroundProcessCommand, string] =
+    path: string, lang: SourceLanguage, workspaceRoot: string
+): Result[BackgroundProcessCommand, string] =
+  var command: BuildCommand
+  case lang
+  of SourceLanguage.langNim:
+    command = path.nimBuildCommand
+  of SourceLanguage.langRust:
+    command = path.rustBuildCommand
+  else:
+    return Result[BackgroundProcessCommand, string].err "Unknown language"
 
-    var command: BuildCommand
-    case lang:
-      of SourceLanguage.langNim:
-        command = path.nimBuildCommand
-      else:
-        return Result[BackgroundProcessCommand, string].err "Unknown language"
-
-    return Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(
-      cmd: command.cmd,
-      args: command.args,
-      workingDir: workspaceRoot)
-
-proc startBackgroundBuild*(
-  path: Runes,
-  language: SourceLanguage,
-  workspaceRoot: Runes = ru""): Result[BuildProcess, string] =
-    ## Start a background process for exec the build command.
-
-    let command = buildCommand($path, language, $workspaceRoot)
-    if command.isErr:
-      return Result[BuildProcess, string].err fmt"Failed to exec build commands: {command.error}"
-
-    let backgroundProcess = startBackgroundProcess(command.get)
-    if backgroundProcess.isErr:
-      return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
-
-    return Result[BuildProcess, string].ok BuildProcess(
-      command: command.get,
-      filePath: path,
-      process: backgroundProcess.get)
+  return Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(
+    cmd: command.cmd, args: command.args, workingDir: workspaceRoot
+  )
 
 proc startBackgroundBuild*(
-  customCommand: BuildCommand,
-  language: SourceLanguage,
-  workspaceRoot: Runes = ru""): Result[BuildProcess, string] =
-    ## Start the build on a background process.
+    path: string, language: SourceLanguage, workspaceRoot: string = ""
+): Future[Result[BuildProcess, string]] {.async: (raises: []).} =
+  ## Start a background process for exec the build command.
 
-    if customCommand.cmd.len == 0:
-      return Result[BuildProcess, string].err fmt"command is empty"
+  let command = buildCommand(path, language, workspaceRoot)
+  if command.isErr:
+    return Result[BuildProcess, string].err fmt"Failed to exec build commands: {command.error}"
 
-    let command = BackgroundProcessCommand(
-      cmd: customCommand.cmd,
-      args: customCommand.args,
-      workingDir: $workspaceRoot)
+  let backgroundProcess = await startBackgroundProcess(command.get)
+  if backgroundProcess.isErr:
+    return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
 
-    let backgroundProcess = startBackgroundProcess(command)
-    if backgroundProcess.isErr:
-      return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
+  return Result[BuildProcess, string].ok BuildProcess(
+    command: command.get, filePath: path, process: backgroundProcess.get
+  )
 
-    return Result[BuildProcess, string].ok BuildProcess(
-      command: command,
-      process: backgroundProcess.get)
+proc startBackgroundBuild*(
+    customCommand: BuildCommand, language: SourceLanguage, workspaceRoot: string = ""
+): Future[Result[BuildProcess, string]] {.async: (raises: []).} =
+  ## Start the build on a background process.
+
+  if customCommand.cmd.len == 0:
+    return Result[BuildProcess, string].err fmt"command is empty"
+
+  let command = BackgroundProcessCommand(
+    cmd: customCommand.cmd, args: customCommand.args, workingDir: workspaceRoot
+  )
+
+  let backgroundProcess = await startBackgroundProcess(command)
+  if backgroundProcess.isErr:
+    return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
+
+  return Result[BuildProcess, string].ok BuildProcess(
+    command: command, process: backgroundProcess.get
+  )
+
+proc parseCommandString*(cmdStr: string): BuildCommand =
+  ## Parse a command string into BuildCommand tuple.
+  ## E.g., "nim c -d:release file.nim" -> (cmd: "nim", args: @["c", "-d:release", "file.nim"])
+  let parts = cmdStr.split(' ')
+  if parts.len == 0:
+    return (cmd: "", args: @[])
+  elif parts.len == 1:
+    return (cmd: parts[0], args: @[])
+  else:
+    return (cmd: parts[0], args: parts[1 .. ^1])
+
+proc startBackgroundBuildOnSave*(
+    path: string,
+    language: SourceLanguage,
+    customCommand: string = "",
+    workspaceRoot: string = "",
+): Future[Result[BuildProcess, string]] {.async: (raises: []).} =
+  ## Start a background build for buildOnSave.
+  ## If customCommand is provided, use it; otherwise use language-specific command.
+
+  if customCommand.len > 0:
+    let parsed = parseCommandString(customCommand)
+    return await startBackgroundBuild(parsed, language, workspaceRoot)
+  else:
+    return await startBackgroundBuild(path, language, workspaceRoot)
+
+proc waitForAsync*(bp: BuildProcess): Future[seq[string]] {.async: (raises: []).} =
+  ## Wait for build process to complete and return output
+  return await bp.process.waitForAsync()

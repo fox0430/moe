@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,1823 +17,1198 @@
 #                                                                              #
 #[############################################################################]#
 
-# NOTE: Language Server Protocol Specification - 3.17
-# https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
+## LSP Client Implementation using chronos async I/O
+## Manages communication with Language Server Protocol servers
 
-import std/[strformat, strutils, json, options, os, posix, tables, times,
-            logging]
+import std/[json, options, os, strutils, tables]
 
 import pkg/results
-import pkg/[chronos, chronos/asyncproc]
+import pkg/chronos
+import pkg/chronos/asyncproc
 
-import ../appinfo
-import ../independentutils
-import ../settings
+import jsonrpc
+import protocol/types
+import ../app_info
+import ../logger
 
-import protocol/[enums, types]
-import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
-       definition, references, rename, typedefinition, implementation,
-       callhierarchy, documenthighlight, documentlink, codelens, foldingrange,
-       executecommand, selectionrange, documentsymbol, inlinevalue,
-       signaturehelp, formatting
-
-export chronos
+export types, chronos
 
 type
-  LspError* = object
-    code*: int
-      # Error code.
-    message*: string
-      # Error message.
-    data*: string
-      # Error data.
+  LspServerState* = enum
+    lssStopped
+    lssStarting
+    lssRunning
+    lssShuttingDown
+    lssCrashed
 
-  LspCapabilities* = object
-    completion*: Option[LspCompletionOptions]
-    definition*: bool
-    diagnostics*: bool
-    hover*: bool
-    semanticTokens*: Option[SemanticTokensLegend]
-    inlayHint*: bool
-    inlineValue*: bool
-    references*: bool
-    rename*: bool
-    typeDefinition*: bool
-    implementation*: bool
-    declaration*: bool
-    callHierarchy*: bool
-    documentHighlight*: bool
-    documentLink*: bool
-    codeLens*: bool
-    executeCommand*: Option[seq[string]]
-    foldingRange*: bool
-    selectionRange*: bool
-    documentSymbol*: bool
-    signatureHelp*: Option[SignatureHelpOptions]
-    formatting*: bool
-
-  LspProgressTable* = Table[ProgressToken, ProgressReport]
-
-  WaitLspResponse* = ref object
-    bufferId*: int
-    requestId*: int
-    lspMethod*: LspMethod
-
-  RequestId* = int
+  WaitingResponse* = object
+    id*: RequestId
+    methodName*: string
 
   LspClient* = ref object
-    closed*: bool
-      # Set true if the LSP server closed (crashed).
+    state*: LspServerState
+    languageId*: string
+    serverCommand*: string
+    serverArgs*: seq[string]
+    workspaceRoot*: string
     serverProcess: AsyncProcessRef
-      # LSP server process.
     serverStreams: Streams
-      # Input/Output streams for the LSP server process.
     outputStreamFuture: Future[JsonRpcResponseResult]
-      # The feture of the output stream.
-    capabilities*: Option[LspCapabilities]
-      # LSP server capabilities
-    progress*: LspProgressTable
-      # Use in window/workDoneProgress
-    waitingResponses*: Table[RequestId, WaitLspResponse]
-      # Waiting responses from the LSP server.
-    log*: LspLog
-      # Request/Response log.
-    lastId*: RequestId
-      # Last request ID
-    serverName*: string
-      # The LSP server name
-    command*: string
-      # The LSP server start command
+    rpcState: JsonRpcState
+    capabilities*: Option[ServerCapabilities]
+    serverInfo*: Option[ServerInfo]
+    waitingResponses*: Table[RequestId, WaitingResponse]
+    pendingInitRequest*: Option[RequestId] # Tracks pending initialize request
+    needsSendInitialized*: bool # True when we need to send "initialized" notification
+    initError*: string # Error message if initialization failed
+    # Callbacks for server notifications
+    onDiagnostics*:
+      proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe, raises: [].}
+    onLogMessage*: proc(msgType: MessageType, message: string) {.gcsafe, raises: [].}
+    onShowMessage*: proc(msgType: MessageType, message: string) {.gcsafe, raises: [].}
 
-type
-  R = Result
+proc newLspClient*(
+    languageId, command: string, args: seq[string] = @[], workspaceRoot: string = ""
+): LspClient =
+  ## Create a new LSP client
+  LspClient(
+    state: lssStopped,
+    languageId: languageId,
+    serverCommand: command,
+    serverArgs: args,
+    workspaceRoot:
+      if workspaceRoot.len > 0:
+        workspaceRoot
+      else:
+        getCurrentDir(),
+    serverProcess: nil,
+    serverStreams: nil,
+    outputStreamFuture: nil,
+    rpcState: newJsonRpcState(),
+    capabilities: none(ServerCapabilities),
+    serverInfo: none(ServerInfo),
+    waitingResponses: initTable[RequestId, WaitingResponse](),
+    pendingInitRequest: none(RequestId),
+    needsSendInitialized: false,
+    onDiagnostics: nil,
+    onLogMessage: nil,
+    onShowMessage: nil,
+  )
 
-  LspClientReadableResult* = R[bool, string]
-
-  initLspClientResult* = R[LspClient, string]
-
-  LspRestartClientResult* = R[(), string]
-
-  LspErrorParseResult* = R[LspError, string]
-  LspSendRequestResult* = R[(), string]
-  LspSendNotifyResult* = R[(), string]
-
-  LspInitializeResult* = R[(), string]
-
-proc running*(c: LspClient): bool {.inline.} =
-  ## Return true if the LSP server process running.
-
-  result = false
-
-  if not c.isNil and not c.serverProcess.isNil:
-    let r = c.serverProcess.running
-    if r.isOk: return r.get
-
-proc serverProcessId*(c: LspClient): int {.inline.} =
-  ## Return a process id of the LSP server process.
-
-  result = -1
-
-  if c.running:
-    return c.serverProcess.processID
-
-proc exit*(c: LspClient) {.inline.} =
-  ## Exit a LSP server process.
-  ## TODO: Send a shutdown request?
-
-  if c.running:
-    discard c.serverProcess.terminate
-
-proc kill*(c: LspClient): Result[(), string] =
-  ## kill a LSP server process.
-
-  if c.running:
-    let r = c.serverProcess.kill
-    if r.isErr:
-      return Result[(), string].err $r.error
-
-  return Result[(), string].ok ()
-
-template isInitialized*(c: LspClient): bool = c.capabilities.isSome
-
-template addRequestLog*(c: LspClient, m: JsonNode) =
-  c.log.add LspMessage(
-    timestamp: now(),
-    kind: LspMessageKind.request,
-    message: m)
-
-template addResponseLog*(c: LspClient, m: JsonNode) =
-  c.log.add LspMessage(
-    timestamp: now(),
-    kind: LspMessageKind.response,
-    message: m)
-
-template addNotifyFromClientLog*(c: LspClient, m: JsonNode) =
-  c.log.add LspMessage(
-    timestamp: now(),
-    kind: LspMessageKind.notifyFromClient,
-    message: m)
-
-template addNotifyFromServerLog*(c: LspClient, m: JsonNode) =
-  c.log.add LspMessage(
-    timestamp: now(),
-    kind: LspMessageKind.notifyFromServer,
-    message: m)
-
-proc createProgress*(c: LspClient, token: ProgressToken) =
-  ## Add a new progress to the `LspClint.progress`.
-
-  if not c.progress.contains(token):
-    c.progress[token] = ProgressReport(state: ProgressState.create)
-
-proc beginProgress*(
-  c: LspClient,
-  token: ProgressToken,
-  p: WorkDoneProgressBegin): Result[(), string] =
-    ## Begin the progress in the `LspClint.progress`.
-
-    if not c.progress.contains(token):
-      return Result[(), string].err "token not found"
-
-    c.progress[token].state = ProgressState.begin
-    c.progress[token].title = p.title
-    if p.message.isSome:
-      c.progress[token].message = p.message.get
-    if p.percentage.isSome:
-      c.progress[token].percentage = some(p.percentage.get.Natural)
-
-    return Result[(), string].ok ()
-
-proc reportProgress*(
-  c: LspClient,
-  token: ProgressToken,
-  report: WorkDoneProgressReport): Result[(), string] =
-    ## Update the progress in the `LspClint.progress`.
-
-    if not c.progress.contains(token):
-      return Result[(), string].err "token not found"
-
-    if ProgressState.report != c.progress[token].state:
-      c.progress[token].state = ProgressState.report
-
-    if report.message.isSome:
-      c.progress[token].message = report.message.get
-    if report.percentage.isSome:
-      c.progress[token].percentage = some(report.percentage.get.Natural)
-
-    return Result[(), string].ok ()
-
-proc endProgress*(
-  c: LspClient,
-  token: ProgressToken,
-  p: WorkDoneProgressEnd): Result[(), string] =
-    ## End the progress in the `LspClint.progress`.
-
-    if not c.progress.contains(token):
-      return Result[(), string].err "token not found"
-
-    c.progress[token].state = ProgressState.end
-
-    if p.message.isSome:
-      c.progress[token].message = p.message.get
-
-    return Result[(), string].ok ()
-
-proc delProgress*(c: LspClient, token: ProgressToken): Result[(), string] =
-  ## Delete the progress from the `LspClint.progress`.
-
-  if not c.progress.contains(token):
-    return Result[(), string].err "token not found"
-
-  c.progress.del(token)
-
-  return Result[(), string].ok ()
-
-proc readable*(c: LspClient): LspClientReadableResult =
-  if c.outputStreamFuture.isNil:
-    return LspClientReadableResult.ok false
-
-  return LspClientReadableResult.ok c.outputStreamFuture.finished
-
-proc read*(c: LspClient): Future[JsonRpcResponseResult] {.async.} =
-  ## Read a response from the LSP server.
-
-  let r = await c.outputStreamFuture
-
-  c.outputStreamFuture = c.serverStreams.output.read
-
+proc running*(client: LspClient): bool {.inline.} =
+  ## Return true if the LSP server process is running
+  if client.serverProcess.isNil:
+    return false
+  let r = client.serverProcess.running
   if r.isOk:
-    return JsonRpcResponseResult.ok r.get
-  else:
-    return JsonRpcResponseResult.err r.error
+    return r.get
+  return false
 
-proc request(
-  c: LspClient,
-  bufferId: int,
-  lspMethod: LspMethod,
-  params: JsonNode): Future[Result[int, string]] {.async.} =
-    ## Send a request to the LSP server and set to waitingResponse.
-    ## Return request id.
+proc isRunning*(client: LspClient): bool =
+  client.state == lssRunning and client.running
 
-    c.lastId.inc
-    let req = newRequest(c.lastId, lspMethod.toLspMethodStr, params)
+proc isStopped*(client: LspClient): bool =
+  client.state == lssStopped
 
-    c.addRequestLog(req)
+proc isInitialized*(client: LspClient): bool =
+  client.capabilities.isSome
 
-    let r = await c.serverStreams.input.sendRequest(req)
-    if r.isErr:
-      return Result[int, string].err r.error
+proc isStarting*(client: LspClient): bool =
+  ## Check if the client is currently starting/initializing
+  client.state == lssStarting
 
-    c.waitingResponses[c.lastId] = WaitLspResponse(
-      bufferId: bufferId,
-      requestId: c.lastId,
-      lspMethod: lspMethod)
+proc isReady*(client: LspClient): bool =
+  ## Check if the client is fully ready to handle requests
+  client.state == lssRunning and client.running and client.capabilities.isSome
 
-    return Result[int, string].ok c.lastId
+proc canSend*(client: LspClient): bool =
+  ## Check if the client can send messages (starting or running state)
+  client.state in {lssStarting, lssRunning} and client.running
 
-proc notify(
-  c: LspClient,
-  lspMethod: LspMethod,
-  params: JsonNode): Future[Result[(), string]] {.async.} =
-    ## Send a notification to the LSP server.
+proc readable*(client: LspClient): Result[bool, string] =
+  ## Check if there is data available to read (non-blocking)
+  if client.outputStreamFuture.isNil:
+    return Result[bool, string].ok(false)
+  return Result[bool, string].ok(client.outputStreamFuture.finished)
 
-    let notify = newNotify(lspMethod.toLspMethodStr, params)
+proc read*(client: LspClient): Future[JsonRpcResponseResult] {.async.} =
+  ## Read a response from the LSP server
+  let r = await client.outputStreamFuture
+  # Start reading the next message
+  client.outputStreamFuture = client.serverStreams.output.read()
+  return r
 
-    c.addNotifyFromClientLog(notify)
-
-    return await c.serverStreams.input.sendNotify(notify)
-
-template isLspError*(res: JsonNode): bool = res.contains("error")
-
-template isRequest*(res: JsonNode): bool =
-  res.contains("id") and res.contains("method")
-
-template isNotify*(res: JsonNode): bool =
-  res.contains("method")
-
-proc parseLspError*(res: JsonNode): LspErrorParseResult =
+proc handleNotification*(
+    client: LspClient, meth: string, params: JsonNode
+) {.gcsafe, raises: [].} =
+  ## Handle incoming notification from server
   try:
-    return LspErrorParseResult.ok res["error"].to(LspError)
-  except:
-    return LspErrorParseResult.err fmt"Invalid error: {$res}"
+    case meth
+    of "textDocument/publishDiagnostics":
+      if client.onDiagnostics != nil:
+        let uri = params["uri"].getStr
+        var diagnostics: seq[Diagnostic] = @[]
+        if params.hasKey("diagnostics"):
+          for d in params["diagnostics"]:
+            diagnostics.add(parseDiagnostic(d))
+        client.onDiagnostics(uri, diagnostics)
+    of "window/logMessage":
+      if client.onLogMessage != nil:
+        let msgType = MessageType(params["type"].getInt)
+        let message = params["message"].getStr
+        client.onLogMessage(msgType, message)
+    of "window/showMessage":
+      if client.onShowMessage != nil:
+        let msgType = MessageType(params["type"].getInt)
+        let message = params["message"].getStr
+        client.onShowMessage(msgType, message)
+    of "$/logTrace":
+      if client.onLogMessage != nil:
+        var message = params["message"].getStr
+        if params.hasKey("verbose"):
+          message &= "\n" & params["verbose"].getStr
+        client.onLogMessage(mtInfo, message)
+    else:
+      logDebug("lsp", "handleNotification: unknown notification: " & meth)
+  except CatchableError as e:
+    logDebug("lsp", "handleNotification: error handling " & meth & ": " & e.msg)
 
-proc setWaitResponse*(
-  c: LspClient,
-  bufferId: int,
-  lspMethod: LspMethod) {.inline.} =
+proc deleteWaitingResponse*(client: LspClient, id: RequestId) {.inline.} =
+  if client.waitingResponses.contains(id):
+    client.waitingResponses.del(id)
 
-    c.waitingResponses[c.lastId] = WaitLspResponse(
-      bufferId: bufferId,
-      requestId: c.lastId,
-      lspMethod: lspMethod)
+proc getWaitingResponse*(client: LspClient, id: RequestId): Option[WaitingResponse] =
+  if client.waitingResponses.contains(id):
+    return some(client.waitingResponses[id])
+  return none(WaitingResponse)
 
-proc deleteWaitingResponse*(c: LspClient, id: RequestId) {.inline.} =
-  if c.waitingResponses.contains(id):
-    c.waitingResponses.del(id)
+proc checkInitComplete*(client: LspClient): bool =
+  ## Check if async initialization has completed (success or failure)
+  ## Returns true if init is done, false if still in progress
+  ## Uses a short timeout to avoid blocking the UI
+  if client.state != lssStarting:
+    return true
 
-proc isWaitingResponse*(c: LspClient, bufferId: int): bool {.inline.} =
-  for v in c.waitingResponses.values:
-    if v.bufferId == bufferId:
+  # Check if we're waiting for init response
+  if client.pendingInitRequest.isNone:
+    return true
+
+  # Check if the output future is ready
+  if client.outputStreamFuture.isNil:
+    return false
+
+  # Check if the future has completed (non-blocking)
+  if not client.outputStreamFuture.finished:
+    return false
+
+  logDebug("lsp", "checkInitComplete: got data, reading...")
+
+  let respResult = client.outputStreamFuture.read()
+
+  # Start reading the next message
+  client.outputStreamFuture = client.serverStreams.output.read()
+
+  if respResult.isErr:
+    client.state = lssCrashed
+    client.initError = "Initialize failed: " & respResult.error
+    logDebug("lsp", "checkInitComplete: read error: " & respResult.error)
+    return true
+
+  let response = respResult.get
+  let requestId = client.pendingInitRequest.get
+  logDebug(
+    "lsp",
+    "checkInitComplete: got response, hasId=" & $response.hasKey("id") & " hasMethod=" &
+      $response.hasKey("method"),
+  )
+
+  # Check if this is a notification - handle it and keep waiting
+  if response.hasKey("method") and not response.hasKey("id"):
+    logDebug("lsp", "checkInitComplete: got notification, continuing to wait...")
+    client.handleNotification(
+      response["method"].getStr,
+      if response.hasKey("params"):
+        response["params"]
+      else:
+        newJObject(),
+    )
+    return false # Keep waiting for init response
+
+  # Check if this is the response to our initialize request
+  if response.hasKey("id") and response["id"].getInt == requestId:
+    # Check for error response
+    if response.hasKey("error"):
+      client.state = lssCrashed
+      client.initError =
+        "Initialize error: " & response["error"]["message"].getStr("Unknown error")
+      logDebug("lsp", "checkInitComplete: init error response")
       return true
 
-proc isWaitingResponse*(
-  c: LspClient,
-  bufferId: int,
-  lspMethod: LspMethod): bool {.inline.} =
+    # Parse server capabilities from result
+    if response.hasKey("result"):
+      let resultNode = response["result"]
+      if resultNode.hasKey("capabilities"):
+        client.capabilities = some(parseServerCapabilities(resultNode["capabilities"]))
+      if resultNode.hasKey("serverInfo"):
+        let si = resultNode["serverInfo"]
+        var info = ServerInfo(name: si["name"].getStr)
+        if si.hasKey("version"):
+          info.version = some(si["version"].getStr)
+        client.serverInfo = some(info)
 
-    for v in c.waitingResponses.values:
-      if v.bufferId == bufferId and v.lspMethod == lspMethod:
-        return true
+    client.deleteWaitingResponse(requestId)
+    client.pendingInitRequest = none(RequestId)
 
-proc isWaitingForegroundResponse*(
-  c: LspClient,
-  bufferId: int): bool {.inline.} =
+    # Mark that we need to send the "initialized" notification
+    # This will be done by the poll loop to avoid async issues
+    client.needsSendInitialized = true
+    client.state = lssRunning
+    logDebug("lsp", "checkInitComplete: init response received, state=" & $client.state)
+    return true
 
-    for v in c.waitingResponses.values:
-      if v.bufferId == bufferId and v.lspMethod.isForegroundWait:
-        return true
+  # Unexpected response - keep waiting
+  return false
 
-proc getWaitingResponse*(
-  c: LspClient,
-  id: RequestId): Option[WaitLspResponse] {.inline.} =
+# Request/notification sending
 
-    if c.waitingResponses.contains(id):
-      return some(c.waitingResponses[id])
+proc sendRequest*(
+    client: LspClient, meth: string, params: JsonNode
+): Future[Result[RequestId, string]] {.async.} =
+  ## Send a request to the server
+  if not client.canSend:
+    return Result[RequestId, string].err("Client not running")
 
-proc getWaitingResponse*(
-  c: LspClient,
-  bufferId: int,
-  lspMethod: LspMethod): Option[WaitLspResponse] {.inline.} =
+  let id = client.rpcState.getNextId()
+  let req = %*{"jsonrpc": "2.0", "id": id, "method": meth, "params": params}
 
-    for v in c.waitingResponses.values:
-      if v.bufferId == bufferId and v.lspMethod == lspMethod:
-        return some(v)
+  let sendResult = await client.serverStreams.input.sendRequest(req)
+  if sendResult.isErr:
+    return Result[RequestId, string].err(sendResult.error)
 
-proc getLatestWaitingResponse*(c: LspClient): Option[WaitLspResponse] =
-  var latest = -1
-  for k in c.waitingResponses.keys:
-    if k > latest: latest = k
+  client.rpcState.addPending(id, meth)
+  client.waitingResponses[id] = WaitingResponse(id: id, methodName: meth)
+  return Result[RequestId, string].ok(id)
 
-  if latest > -1:
-    return some(c.waitingResponses[latest])
+proc sendNotification*(
+    client: LspClient, meth: string, params: JsonNode
+): Future[Result[void, string]] {.async.} =
+  ## Send a notification to the server
+  if not client.canSend:
+    return Result[void, string].err("Client not running")
 
-proc getForegroundWaitingResponse*(
-  c: LspClient,
-  bufferId: int): Option[WaitLspResponse] =
+  let notify = %*{"jsonrpc": "2.0", "method": meth, "params": params}
+  return await client.serverStreams.input.sendNotify(notify)
 
-    for v in c.waitingResponses.values:
-      if v.bufferId == bufferId and v.lspMethod.isForegroundWait:
-        return some(v)
+# Initialize request
+proc buildClientCapabilities(): JsonNode =
+  ## Build client capabilities for initialize request
+  %*{
+    "textDocument": {
+      "synchronization": {
+        "dynamicRegistration": false,
+        "willSave": false,
+        "willSaveWaitUntil": false,
+        "didSave": true,
+      },
+      "completion": {
+        "dynamicRegistration": false,
+        "completionItem": {
+          "snippetSupport": false,
+          "commitCharactersSupport": true,
+          "documentationFormat": ["plaintext", "markdown"],
+          "deprecatedSupport": true,
+          "preselectSupport": true,
+        },
+        "contextSupport": true,
+      },
+      "hover": {"dynamicRegistration": false, "contentFormat": ["plaintext"]},
+      "signatureHelp": {
+        "dynamicRegistration": false,
+        "signatureInformation": {"documentationFormat": ["plaintext", "markdown"]},
+      },
+      "declaration": {"dynamicRegistration": false},
+      "definition": {"dynamicRegistration": false},
+      "typeDefinition": {"dynamicRegistration": false},
+      "implementation": {"dynamicRegistration": false},
+      "references": {"dynamicRegistration": false},
+      "documentHighlight": {"dynamicRegistration": false},
+      "documentLink": {"dynamicRegistration": false, "tooltipSupport": true},
+      "documentSymbol":
+        {"dynamicRegistration": false, "hierarchicalDocumentSymbolSupport": true},
+      "publishDiagnostics":
+        {"relatedInformation": true, "tagSupport": {"valueSet": [1, 2]}},
+      "rename": {"dynamicRegistration": false, "prepareSupport": false},
+      "codeAction": {
+        "dynamicRegistration": false,
+        "codeActionLiteralSupport": {
+          "codeActionKind": {
+            "valueSet": [
+              "", "quickfix", "refactor", "refactor.extract", "refactor.inline",
+              "refactor.rewrite", "source", "source.organizeImports", "source.fixAll",
+            ]
+          }
+        },
+        "isPreferredSupport": true,
+        "disabledSupport": true,
+        "dataSupport": true,
+        "resolveSupport": {"properties": ["edit"]},
+      },
+      "formatting": {"dynamicRegistration": false},
+      "rangeFormatting": {"dynamicRegistration": false},
+      "inlayHint": {"dynamicRegistration": false},
+      "inlineValue": {"dynamicRegistration": false},
+      "selectionRange": {"dynamicRegistration": false},
+      "callHierarchy": {"dynamicRegistration": false},
+      "codeLens": {"dynamicRegistration": false},
+      "foldingRange": {
+        "dynamicRegistration": false,
+        "rangeLimit": 5000,
+        "lineFoldingOnly": true,
+        "foldingRangeKind": {"valueSet": ["comment", "imports", "region"]},
+      },
+      "semanticTokens": {
+        "dynamicRegistration": false,
+        "requests": {"range": true, "full": {"delta": false}},
+        "tokenTypes": [
+          "namespace", "type", "class", "enum", "interface", "struct", "typeParameter",
+          "parameter", "variable", "property", "enumMember", "event", "function",
+          "method", "macro", "keyword", "modifier", "comment", "string", "number",
+          "regexp", "operator", "decorator",
+        ],
+        "tokenModifiers": [
+          "declaration", "definition", "readonly", "static", "deprecated", "abstract",
+          "async", "modification", "documentation", "defaultLibrary",
+        ],
+        "formats": ["relative"],
+        "overlappingTokenSupport": false,
+        "multilineTokenSupport": true,
+      },
+    },
+    "workspace": {"applyEdit": true, "workspaceFolders": false, "configuration": false},
+  }
 
-proc initLspClient*(command: string): Future[initLspClientResult] {.async.} =
-  ## Start a LSP server process and init streams.
+proc startAsync*(client: LspClient): Future[void] {.async: (raises: []).} =
+  ## Start the LSP server process and send initialize request (non-blocking)
+  ## The response will be handled by checkInitComplete() in the poll loop
+  ## Errors are stored in client.initError and client.state is set to lssCrashed
+  if client.state != lssStopped:
+    client.initError = "Client already started"
+    return
 
+  client.state = lssStarting
+  logDebug("lsp", "startAsync: starting LSP server")
+
+  # Build command with args
+  let commandParts = client.serverCommand.split(' ')
+  let command = commandParts[0]
+  var args = client.serverArgs
+  if commandParts.len > 1:
+    args = commandParts[1 ..^ 1] & args
+
+  # Start server process
   const
     WorkingDir = ""
     Env = nil
-  let
-    commandSplit = command.split(' ')
-    args =
-      if commandSplit.len > 1: commandSplit[1 .. ^1]
-      else: @[]
-    opts: set[AsyncProcessOption] = {UsePath, EvalCommand, StdErrToStdOut}
-
-  var c = LspClient()
+  let opts: set[AsyncProcessOption] = {UsePath, StdErrToStdOut}
 
   try:
-    c.serverProcess = await startProcess(
-      commandSplit[0],
+    client.serverProcess = await startProcess(
+      command,
       WorkingDir,
       args,
       Env,
       opts,
       stdoutHandle = AsyncProcess.Pipe,
-      stdinHandle = AsyncProcess.Pipe)
-  except CatchableError as e:
-    return initLspClientResult.err fmt"server start failed: {e.msg}"
-
-  c.serverStreams = Streams(
-    input: InputStream(stream: c.serverProcess.stdinStream),
-    output: OutputStream(stream: c.serverProcess.stdoutStream))
-
-  c.outputStreamFuture = c.serverStreams.output.read
-
-  c.serverName = commandSplit[0]
-
-  c.command = command
-
-  return initLspClientResult.ok c
-
-proc restart*(c: LspClient): Future[LspRestartClientResult] {.async.} =
-  ## Restart the LSP server process.
-  ## Logs will be taken over.
-
-  if c.running: c.exit
-
-  let beforeLog = c.log
-
-  const
-    WorkingDir = ""
-    Env = nil
-  let
-    commandSplit = c.command.split(' ')
-    args =
-      if commandSplit.len > 1: commandSplit[1 .. ^1]
-      else: @[]
-    opts: set[AsyncProcessOption] = {UsePath, EvalCommand, StdErrToStdOut}
-
-  try:
-    c.serverProcess = await startProcess(
-      commandSplit[0],
-      WorkingDir,
-      args,
-      Env,
-      opts,
-      stdoutHandle = AsyncProcess.Pipe,
-      stdinHandle = AsyncProcess.Pipe)
-  except CatchableError as e:
-    return LspRestartClientResult.err fmt"server start failed: {e.msg}"
-
-  c.serverStreams = Streams(
-    input: InputStream(stream: c.serverProcess.stdinStream),
-    output: OutputStream(stream: c.serverProcess.stdoutStream))
-
-  c.serverName = commandSplit[0]
-
-  c.log = beforeLog
-
-  return LspRestartClientResult.ok ()
-
-proc initInitializeParams*(
-  serverName, workspaceRoot: string,
-  trace: TraceValue,
-  experimental: Option[JsonNode] = none(JsonNode)): InitializeParams =
-
-    let
-      path =
-        if workspaceRoot.len == 0: none(string)
-        else: some(workspaceRoot)
-      uri =
-        if workspaceRoot.len == 0: none(string)
-        else: some(workspaceRoot.pathToUri)
-      workspaceDir =
-        if workspaceRoot.len == 0: getCurrentDir()
-        else: workspaceRoot
-
-    result = InitializeParams(
-      processId: some(%getCurrentProcessId()),
-      rootPath: path,
-      rootUri: uri,
-      locale: some("en_US"),
-      clientInfo: some(ClientInfo(
-        name: "moe",
-        version: some(moeSemVersionStr())
-      )),
-      capabilities: ClientCapabilities(
-        workspace: some(WorkspaceClientCapabilities(
-          applyEdit: some(true),
-          didChangeConfiguration: some(DidChangeConfigurationCapability(
-            dynamicRegistration: some(true)
-          )),
-          executeCommand: some(ExecuteCommandClientCapability(
-            dynamicRegistration: some(true)
-          )),
-          codeLens: some(CodeLensWorkspaceClientCapabilities(
-            refreshSupport: some(true)
-          )),
-          semanticTokens: some(SemanticTokensWorkspaceClientCapabilities(
-            refreshSupport: some(true)
-          )),
-          inlayHint: some(InlayHintWorkspaceClientCapabilities(
-            refreshSupport: some(true)
-          ))
-        )),
-        textDocument: some(TextDocumentClientCapabilities(
-          hover: some(HoverClientCapabilities(
-            dynamicRegistration: some(true),
-            contentFormat: some(@["plaintext"])
-          )),
-          signatureHelp: some(SignatureHelpClientCapabilities(
-            dynamicRegistration: some(true),
-            signatureInformation: some(SignatureInformationCapability(
-              documentationFormat: some(@["plaintext"])
-            ))
-          )),
-          publishDiagnostics: some(PublishDiagnosticsClientCapabilities(
-            dynamicRegistration: some(true)
-          )),
-          formatting: some(DocumentFormattingClientCapabilities(
-            dynamicRegistration: some(true)
-          )),
-          foldingRange: some(FoldingRangeClientCapabilities(
-            dynamicRegistration: some(true),
-            lineFoldingOnly: some(true)
-          )),
-          completion: some(CompletionClientCapabilities(
-            dynamicRegistration: some(true),
-            completionItem: some(CompletionItemCapability(
-              snippetSupport: some(false),
-              commitCharactersSupport: some(false),
-              deprecatedSupport: some(false)
-            )),
-            contextSupport: some(true)
-          )),
-          selectionRange: some(SelectionRangeClientCapabilities(
-            dynamicRegistration: some(true),
-          )),
-          semanticTokens: some(SemanticTokensClientCapabilities(
-            dynamicRegistration: some(true),
-            tokenTypes: @[],
-            tokenModifiers: @[],
-            formats: @[],
-            requests: SemanticTokensClientCapabilitiesRequest(
-              range: some(false),
-              full: some(true))
-          )),
-          inlayHint: some(InlayHintClientCapabilities(
-            dynamicRegistration: some(true),
-            resolveSupport: none(InlayHintClientCapabilitiesResolveSupport)
-          )),
-          inlineValue: some(InlineValueClientCapabilitie(
-            dynamicRegistration: some(true)
-          )),
-          declaration: some(DeclarationClientCapabilities(
-            dynamicRegistration: some(true),
-            linkSupport: some(false)
-          )),
-          definition: some(DefinitionClientCapabilities(
-            dynamicRegistration: some(true)
-          )),
-          references: some(ReferenceClientCapabilities(
-            dynamicRegistration: some(true)
-          )),
-          rename: some(RenameClientCapabilities(
-            dynamicRegistration: some(true),
-            prepareSupport: some(false)
-          )),
-          typeDefinition: some(TypeDefinitionClientCapabilities(
-            dynamicRegistration: some(true),
-            linkSupport: some(false)
-          )),
-          implementation: some(ImplementationClientCapabilities(
-            dynamicRegistration: some(true),
-            linkSupport: some(false)
-          )),
-          codeLens: some(CodeLensClientClientCapabilities(
-            dynamicRegistration: some(true)
-          )),
-          documentHighlight: some(DocumentHighlightClientCapabilies(
-            dynamicRegistration: some(true)
-          )),
-          documentLink: some(DocumentLinkClientCapabilities(
-            dynamicRegistration: some(true),
-            toolsopSupport: some(false),
-          ))
-        )),
-        window: some(WindowCapabilities(
-          workDoneProgress: some(false)
-        )),
-        experimental: experimental
-      ),
-      workspaceFolders: some(
-        @[
-          WorkspaceFolder(
-            uri: workspaceDir.pathToUri,
-            name: workspaceDir.splitPath.tail)
-        ]
-      ),
-      trace: some($trace)
+      stdinHandle = AsyncProcess.Pipe,
     )
+  except CancelledError:
+    client.state = lssCrashed
+    client.initError = "LSP server start cancelled"
+    logDebug("lsp", "startAsync: cancelled")
+    return
+  except CatchableError as e:
+    client.state = lssCrashed
+    client.initError = "Failed to start LSP server: " & e.msg
+    logDebug("lsp", "startAsync: failed to start process: " & e.msg)
+    return
 
-proc setCapabilities(
-  c: LspClient,
-  initResult: InitializeResult,
-  settings: LspFeatureSettings) =
-    ## Set server capabilities to the LspClient from InitializeResult.
+  logDebug("lsp", "startAsync: process started")
 
-    var capabilities = LspCapabilities()
+  # Set up streams
+  client.serverStreams = Streams(
+    input: InputStream(stream: client.serverProcess.stdinStream),
+    output: OutputStream(stream: client.serverProcess.stdoutStream),
+  )
 
-    if settings.completion.enable and
-       initResult.capabilities.completionProvider.isSome:
-         capabilities.completion = initResult.capabilities.completionProvider
+  # Start reading from output stream
+  client.outputStreamFuture = client.serverStreams.output.read()
 
-    if settings.formatting.enable and
-       initResult.capabilities.documentFormattingProvider.isSome:
-         if initResult.capabilities.documentFormattingProvider.get.kind == JBool:
-           capabilities.formatting =
-             initResult.capabilities.documentFormattingProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.documentFormattingProvider.get.to(
-               DocumentFormattingOptions
-             )
-             capabilities.formatting = true
-           except CatchableError:
-             # Invalid documentFormattingProvider
-             discard
+  # Send initialize request
+  let rootUri = "file://" & client.workspaceRoot
+  let initParams = %*{
+    "processId": getCurrentProcessId(),
+    "clientInfo": {"name": "moe", "version": moeSemVersionStr()},
+    "rootUri": rootUri,
+    "rootPath": client.workspaceRoot,
+    "capabilities": buildClientCapabilities(),
+    "trace": "off",
+  }
 
-    if settings.declaration.enable and
-       initResult.capabilities.declarationProvider.isSome:
-         if initResult.capabilities.declarationProvider.get.kind == JBool:
-           capabilities.declaration =
-             initResult.capabilities.declarationProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.declarationProvider.get.to(
-               DeclarationOptions)
-             capabilities.declaration = true
-           except CatchableError:
-             discard
-           if not capabilities.declaration:
-             try:
-               discard initResult.capabilities.declarationProvider.get.to(
-                 DeclarationRegistrationOptions)
-               capabilities.declaration = true
-             except CatchableError:
-               # Invalid declarationProvider
-               discard
+  try:
+    let reqResult = await client.sendRequest("initialize", initParams)
+    if reqResult.isErr:
+      client.state = lssCrashed
+      client.initError = "Failed to send initialize: " & reqResult.error
+      logDebug("lsp", "startAsync: failed to send initialize: " & reqResult.error)
+      return
 
-    if settings.definition.enable and
-       initResult.capabilities.definitionProvider.isSome:
-         if initResult.capabilities.definitionProvider.get.kind == JBool:
-           capabilities.definition =
-             initResult.capabilities.definitionProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.definitionProvider.get.to(
-               DefinitionOptions)
-             capabilities.definition = true
-           except:
-             # Invalid definitionProvider
-             discard
+    # Store the request ID so checkInitComplete can match the response
+    client.pendingInitRequest = some(reqResult.get)
+    logDebug("lsp", "startAsync: initialize request sent, waiting for response")
+  except CancelledError:
+    client.state = lssCrashed
+    client.initError = "Initialize request cancelled"
+    logDebug("lsp", "startAsync: cancelled during initialize")
+    return
+  except CatchableError as e:
+    client.state = lssCrashed
+    client.initError = "Initialize request failed: " & e.msg
+    logDebug("lsp", "startAsync: failed during initialize: " & e.msg)
+    return
 
-    if settings.typeDefinition.enable and
-       initResult.capabilities.typeDefinitionProvider.isSome:
-         if initResult.capabilities.typeDefinitionProvider.get.kind == JBool:
-           capabilities.typeDefinition =
-             initResult.capabilities.typeDefinitionProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.typeDefinitionProvider.get.to(
-               TypeDefinitionOptions)
-             capabilities.typeDefinition = true
-           except:
-             # Invalid typeDefinitionProvider
-             discard
+proc startInBackground*(client: LspClient) =
+  ## Start the LSP server initialization in the background (non-blocking)
+  ## Check isReady() or checkInitComplete() to see when initialization is done
+  ## Any errors will be stored in client.initError
+  logDebug("lsp", "startInBackground called, current state=" & $client.state)
+  if client.state != lssStopped:
+    logDebug("lsp", "startInBackground: not stopped, returning")
+    return
 
-    if settings.implementation.enable and
-       initResult.capabilities.implementationProvider.isSome:
-         if initResult.capabilities.implementationProvider.get.kind == JBool:
-           capabilities.implementation =
-             initResult.capabilities.implementationProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.implementationProvider.get.to(
-               ImplementationOptions)
-             capabilities.implementation = true
-           except CatchableError:
-             discard
-           if not capabilities.implementation:
-             try:
-               discard initResult.capabilities.implementationProvider.get.to(
-                 TextDocumentAndStaticRegistrationOptions)
-               capabilities.implementation = true
-             except CatchableError:
-               # Invalid implementationProvider
-               discard
+  logDebug("lsp", "startInBackground: starting...")
+  asyncSpawn client.startAsync()
 
-    if settings.diagnostics.enable and
-       initResult.capabilities.diagnosticProvider.isSome:
-         try:
-           discard initResult.capabilities.diagnosticProvider.get.to(
-             DiagnosticOptions)
-           capabilities.diagnostics = true
-         except CatchableError:
-           discard
-         if not capabilities.diagnostics:
-           try:
-             discard initResult.capabilities.diagnosticProvider.get.to(
-               DiagnosticRegistrationOptions)
-             capabilities.diagnostics = true
-           except CatchableError:
-             # Invalid diagnosticProvider
-             discard
+proc stop*(client: LspClient): Future[Result[void, string]] {.async.} =
+  ## Stop the LSP server gracefully
+  if client.state != lssRunning:
+    return Result[void, string].ok()
 
-    if settings.signatureHelp.enable and
-       initResult.capabilities.signatureHelpProvider.isSome:
-         capabilities.signatureHelp =
-           initResult.capabilities.signatureHelpProvider
+  client.state = lssShuttingDown
 
-    if settings.hover.enable and
-       initResult.capabilities.hoverProvider.isSome:
-         if initResult.capabilities.hoverProvider.get.kind == JBool:
-           capabilities.hover =
-             initResult.capabilities.hoverProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.hoverProvider.get.to(HoverOptions)
-             capabilities.hover = true
-           except:
-             # Invalid hoverProvider
-             discard
+  # Send shutdown request
+  let shutdownResult = await client.sendRequest("shutdown", newJNull())
+  if shutdownResult.isOk:
+    # Wait briefly for response
+    await sleepAsync(milliseconds(100))
 
-    if settings.inlayHint.enable and
-       initResult.capabilities.inlayHintProvider.isSome:
-         capabilities.inlayHint = true
+  # Send exit notification
+  discard await client.sendNotification("exit", %*{})
 
-    if settings.inlineValue.enable and
-       initResult.capabilities.inlineValueProvider.isSome:
-         if initResult.capabilities.inlineValueProvider.get.kind == JBool:
-           capabilities.inlineValue =
-            initResult.capabilities.inlineValueProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.inlineValueProvider.get.to(
-               InlineValueOptions)
-             capabilities.inlineValue = true
-           except:
-             discard
-           if not capabilities.inlineValue:
-             try:
-               discard initResult.capabilities.inlineValueProvider.get.to(
-                 InlineValueRegistrationOptions)
-               capabilities.inlineValue = true
-             except:
-               # Invalid inlineValueProvider
-               discard
+  # Kill process
+  if client.serverProcess != nil:
+    discard client.serverProcess.kill()
 
-    if settings.references.enable and
-       initResult.capabilities.referencesProvider.isSome:
-         if initResult.capabilities.referencesProvider.get.kind == JBool:
-           capabilities.references =
-             initResult.capabilities.referencesProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.referencesProvider.get.to(
-               ReferenceOptions)
-             capabilities.references = true
-           except:
-             # Invalid referencesProvider
-             discard
+  client.state = lssStopped
+  client.serverProcess = nil
+  client.serverStreams = nil
+  client.outputStreamFuture = nil
 
-    if settings.callHierarchy.enable and
-       initResult.capabilities.callHierarchyProvider.isSome:
-         if initResult.capabilities.callHierarchyProvider.get.kind == JBool:
-           capabilities.callHierarchy =
-             initResult.capabilities.callHierarchyProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.callHierarchyProvider.get.to(
-               CallHierarchyOptions)
-             capabilities.callHierarchy = true
-           except CatchableError:
-             discard
-           if not capabilities.callHierarchy:
-             try:
-               discard initResult.capabilities.callHierarchyProvider.get.to(
-                 CallHierarchyRegistrationOptions)
-               capabilities.callHierarchy = true
-             except CatchableError:
-               # Invalid callHierarchyProvider
-               discard
+  return Result[void, string].ok()
 
-    if settings.documentHighlight.enable and
-       initResult.capabilities.documentHighlightProvider.isSome:
-         if initResult.capabilities.documentHighlightProvider.get.kind == JBool:
-           capabilities.documentHighlight =
-             initResult.capabilities.documentHighlightProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.documentHighlightProvider.get.to(
-               DocumentHighlightOptions)
-             capabilities.callHierarchy = true
-           except CatchableError:
-               # Invalid documentHighlightProvider
-               discard
-
-    if settings.documentLink.enable and
-       initResult.capabilities.documentLinkProvider.isSome:
-         capabilities.documentLink = true
-
-    if settings.codeLens.enable and
-       initResult.capabilities.codeLensProvider.isSome:
-         capabilities.codeLens = true
-
-    if settings.rename.enable and
-       initResult.capabilities.renameProvider.isSome:
-         if initResult.capabilities.renameProvider.get.kind == JBool:
-           capabilities.rename =
-             initResult.capabilities.renameProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.renameProvider.get.to(
-               RenameOptions)
-             capabilities.rename = true
-           except CatchableError:
-             # Invalid renameProvider
-             discard
-
-    if settings.semanticTokens.enable and
-       initResult.capabilities.semanticTokensProvider.isSome and
-       initResult.capabilities.semanticTokensProvider.get.contains("legend"):
-         try:
-           capabilities.semanticTokens = some(
-             initResult.capabilities.semanticTokensProvider.get["legend"].to(
-               SemanticTokensLegend))
-         except CatchableError:
-           # Invalid SemanticTokensLegend
-           discard
-
-    if settings.executeCommand.enable and
-       initResult.capabilities.executeCommandProvider.isSome:
-         capabilities.executeCommand = some(
-           initResult.capabilities.executeCommandProvider.get.commands)
-
-    if settings.foldingRange.enable and
-       initResult.capabilities.foldingRangeProvider.isSome:
-         if initResult.capabilities.foldingRangeProvider.get.kind == JBool:
-           capabilities.foldingRange =
-             initResult.capabilities.foldingRangeProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.foldingRangeProvider.get.to(
-               FoldingRangeOptions)
-             capabilities.rename = true
-           except CatchableError:
-             # Invalid foldingRangeProvider
-             discard
-
-    if settings.selectionRange.enable and
-       initResult.capabilities.selectionRangeProvider.isSome:
-         if initResult.capabilities.selectionRangeProvider.get.kind == JBool:
-           capabilities.selectionRange =
-             initResult.capabilities.selectionRangeProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.selectionRangeProvider.get.to(
-               SelectionRangeOptions)
-             capabilities.selectionRange = true
-           except CatchableError:
-             discard
-           if not capabilities.selectionRange:
-            try:
-              discard initResult.capabilities.selectionRangeProvider.get.to(
-                SelectionRangeRegistrationOptions)
-              capabilities.selectionRange = true
-            except CatchableError:
-              # Invalid selectionRangeProvider
-              discard
-
-    if settings.documentSymbol.enable and
-       initResult.capabilities.documentSymbolProvider.isSome:
-         if initResult.capabilities.documentSymbolProvider.get.kind == JBool:
-           capabilities.documentSymbol =
-             initResult.capabilities.documentSymbolProvider.get.getBool
-         else:
-           try:
-             discard initResult.capabilities.documentSymbolProvider.get.to(
-               DocumentSymbolOptions)
-             capabilities.documentSymbol = true
-           except CatchableError:
-             discard
-             # Invalid documentSymbolProvider
-
-    c.capabilities = some(capabilities)
-
-proc cancelRequest*(
-  c: LspClient,
-  bufferId: int,
-  requestId: RequestId): Future[LspSendNotifyResult] {.async.} =
-    ## Send a cancelRequest notification to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#cancelRequest
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return LspSendNotifyResult.err "server crashed"
-
-    c.deleteWaitingResponse(requestId)
-
-    let params = %* CancelParams(id: some(%*requestId))
-
-    let err = await c.notify(LspMethod.cancelRequest, params)
-    if err.isErr:
-      return LspSendNotifyResult.err fmt"cancelRequest notification failed: {err.error}"
-
-    return LspSendNotifyResult.ok ()
-
-proc cancelRequest*(
-  c: LspClient,
-  waitRes: WaitLspResponse): Future[LspSendRequestResult] {.async.} =
-    ## Send a cancel request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#cancelRequest
-
-    return await c.cancelRequest(waitRes.bufferId, waitRes.requestId)
-
-proc cancelRequest*(
-  c: LspClient,
-  bufferId: int,
-  lspMethod: LspMethod): Future[LspSendRequestResult] {.async.} =
-
-    let w = c.getWaitingResponse(bufferId, lspMethod)
-    if w.isSome:
-      return await c.cancelRequest(w.get)
-
-    return LspSendRequestResult.ok ()
-
-proc cancelForegroundRequest*(
-  c: LspClient,
-  bufferId: int): Future[LspSendRequestResult] {.async.} =
-
-    let w = c.getForegroundWaitingResponse(bufferId)
-    if w.isSome:
-      return await c.cancelRequest(w.get)
-
-    return LspSendRequestResult.ok ()
-
-proc initialize*(
-  c: LspClient,
-  bufferId: int,
-  initParams: InitializeParams): Future[LspSendRequestResult] {.async.} =
-    ## Send a initialize request to the server and check server capabilities.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return LspSendRequestResult.err "server crashed"
-
-    let params = %* initParams
-
-    let r = await c.request(bufferId, LspMethod.initialize, params)
-    if r.isErr:
-      return LspSendRequestResult.err fmt"Initialize request failed: {r.error}"
-
-    return LspSendRequestResult.ok ()
-
-proc initCapacities*(
-  c: LspClient,
-  settings: LspFeatureSettings,
-  res: JsonNode): LspInitializeResult =
-
-    var initResult: InitializeResult
+proc kill*(client: LspClient) =
+  ## Forcefully kill the LSP server
+  if client.serverProcess != nil:
     try:
-      initResult = res["result"].to(InitializeResult)
+      discard client.serverProcess.kill()
     except CatchableError as e:
-      let msg = fmt"json to InitializeResult failed {e.msg}"
-      return LspInitializeResult.err fmt"Initialize request failed: {msg}"
-
-    c.setCapabilities(initResult, settings)
-
-    c.deleteWaitingResponse(res["id"].getInt)
-
-    return LspInitializeResult.ok ()
-
-proc initialized*(c: LspClient): Future[LspSendNotifyResult] {.async.} =
-  ## Send a initialized notification to the server.
-  ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialized
-
-  if not c.running:
-    if not c.closed: c.closed = true
-    return LspSendNotifyResult.err "server crashed"
-
-  let params = %* {}
-
-  let err = await c.notify(LspMethod.initialized, params)
-  if err.isErr:
-    return LspSendNotifyResult.err fmt"Invalid notification failed: {err.error}"
-
-  return LspSendNotifyResult.ok ()
-
-proc shutdown*(c: LspClient, bufferId: int): Future[LspSendNotifyResult] {.async.} =
-  ## Send a shutdown request to the server.
-  ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#shutdown
-
-  if not c.running:
-    if not c.closed: c.closed = true
-    return LspSendNotifyResult.err "server crashed"
-
-  if not c.isInitialized:
-    return R[(), string].err "lsp unavailable"
-
-  let id = await c.request(bufferId, LspMethod.shutdown, %*{})
-  if id.isErr:
-    return LspSendNotifyResult.err "Shutdown request failed: {id.error}"
-
-  return LspSendNotifyResult.ok ()
-
-proc workspaceDidChangeConfiguration*(
-  c: LspClient): Future[LspSendNotifyResult] {.async.} =
-    ## Send a workspace/didChangeConfiguration notification to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_didChangeConfiguration
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return LspSendNotifyResult.err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    let params = %* DidChangeConfigurationParams()
-
-    let err = await c.notify(LspMethod.workspaceDidChangeConfiguration, params)
-    if err.isErr:
-      return LspSendNotifyResult.err fmt"Invalid workspace/didChangeConfiguration failed: {err.error}"
-
-    return LspSendNotifyResult.ok ()
-
-proc initTextDocumentDidOpenParams(
-  uri, languageId, text: string): DidOpenTextDocumentParams {.inline.} =
-
-    DidOpenTextDocumentParams(
-      textDocument: TextDocumentItem(
-        uri: uri,
-        languageId: languageId,
-        version: 1,
-        text: text))
-
-proc textDocumentDidOpen*(
-  c: LspClient,
-  path, languageId, text: string): Future[LspSendNotifyResult] {.async.} =
-    ## Send a textDocument/didOpen notification to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didOpen
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return LspSendNotifyResult.err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    let params = %* initTextDocumentDidOpenParams(
-      path.pathToUri,
-      languageId,
-      text)
-
-    let err = await c.notify(LspMethod.textDocumentDidOpen, params)
-    if err.isErr:
-      return LspSendNotifyResult.err fmt"textDocument/didOpen notification failed: {err.error}"
-
-    return LspSendNotifyResult.ok ()
-
-proc initTextDocumentDidChangeParams(
-  version: Natural,
-  path, text: string,
-  range: Option[BufferRange] = none(BufferRange)): DidChangeTextDocumentParams {.inline.} =
-
-    if range.isSome:
-      ## Send range
-      return DidChangeTextDocumentParams(
-        textDocument: VersionedTextDocumentIdentifier(
-          uri: path.pathToUri,
-          version: some(%version)),
-        contentChanges: @[
-          TextDocumentContentChangeEvent(
-            text: text,
-            range: some(range.get.toLspRange))
-        ])
-    else:
-      ## Send all text
-      return DidChangeTextDocumentParams(
-        textDocument: VersionedTextDocumentIdentifier(
-          uri: path.pathToUri,
-          version: some(%version)),
-        contentChanges: @[TextDocumentContentChangeEvent(text: text)])
-
-proc textDocumentDidChange*(
-  c: LspClient,
-  version: Natural,
-  path, text: string,
-  range: Option[BufferRange] = none(BufferRange)): Future[LspSendNotifyResult] {.async.} =
-    ## Send a textDocument/didChange notification to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didChange
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return LspSendNotifyResult.err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    let params = %* initTextDocumentDidChangeParams(version, path, text, range)
-
-    let err = await c.notify(LspMethod.textDocumentDidChange, params)
-    if err.isErr:
-      return LspSendNotifyResult.err fmt"textDocument/didChange notification failed: {err.error}"
-
-    return LspSendNotifyResult.ok ()
-
-proc initTextDocumentDidSaveParams(
-  version: Natural,
-  path, text: string): DidSaveTextDocumentParams {.inline.} =
-
-    DidSaveTextDocumentParams(
-      textDocument: VersionedTextDocumentIdentifier(
-        uri: path.pathToUri,
-        version: some(%version)),
-      text: some(text))
-
-proc textDocumentDidSave*(
-  c: LspClient,
-  version: Natural,
-  path, text: string): Future[LspSendNotifyResult] {.async.} =
-    ## Send a textDocument/didSave notification to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didSave
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return LspSendNotifyResult.err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    let params = %* initTextDocumentDidSaveParams(version, path, text)
-
-    let err = await c.notify(LspMethod.textDocumentDidChange, params)
-    if err.isErr:
-      return LspSendNotifyResult.err fmt"textDocument/didSave notification failed: {err.error}"
-
-    return LspSendNotifyResult.ok ()
-
-proc initTextDocumentDidClose(
-  path: string): DidCloseTextDocumentParams {.inline.} =
-
-    DidCloseTextDocumentParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri))
-
-proc textDocumentDidClose*(
-  c: LspClient,
-  text: string): Future[LspSendNotifyResult] {.async.} =
-    ## Send a textDocument/didClose notification to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didClose
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return LspSendNotifyResult.err "server crashed"
-
-    let params = %* initTextDocumentDidClose(text)
-
-    let err = await c.notify(LspMethod.textDocumentDidClose, params)
-    if err.isErr:
-      return LspSendNotifyResult.err fmt"textDocument/didClose notification failed: {err.error}"
-
-    return LspSendNotifyResult.ok ()
-
-proc textDocumentHover*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  position: BufferPosition): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/hover request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_hover
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.hover:
-      return R[(), string].err "textDocument/hover unavailable"
-
-    let params = %* initHoverParams(path, position.toLspPosition)
-    let id = await c.request(bufferId, LspMethod.textDocumentHover, params)
-    if id.isErr:
-      return R[(), string].err fmt"textDocument/hover request failed: {id.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentCompletion*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  position: BufferPosition,
-  isIncompleteTrigger: bool,
-  character: string): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/completion request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.completion.isSome:
-      return R[(), string].err "textDocument/completion unavailable"
-
-    let params = %* initCompletionParams(
-      path,
-      position,
-      c.capabilities.get.completion.get,
-      isIncompleteTrigger,
-      character)
-
-    let id = await c.request(bufferId, LspMethod.textDocumentCompletion, params)
-    if id.isErr:
-      return R[(), string].err fmt"textDocument/completion request failed: {id.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentSemanticTokens*(
-  c: LspClient,
-  bufferId: int,
-  path: string): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/semanticTokens/full request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if c.capabilities.get.semanticTokens.isNone:
-      return R[(), string].err "textDocument/semanticTokens unavailable"
-
-    let params = %* initSemanticTokensParams(path)
-
-    let id = await c.request(bufferId, LspMethod.textDocumentSemanticTokensFull, params)
-    if id.isErr:
-      return R[(), string].err fmt"textDocument/semanticTokens/full request failed: {id.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentInlayHint*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  range: BufferRange): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/inlayHint request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_inlayHint
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.inlayHint:
-      return R[(), string].err "textDocument/inlayHint unavailable"
-
-    let params = %* initInlayHintParams(path, range)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentInlayHint, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/inlayHint request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentDefinition*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  posi: BufferPosition): Future[LspSendRequestResult] {.async.}  =
-    ## Send a textDocument/definition request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_definition
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.definition:
-      return R[(), string].err "textDocument/definition unavailable"
-
-    let params = %* initDefinitionParams(path, posi)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentDefinition, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/definition request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentReferences*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  posi: BufferPosition): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/references request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_references
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.references:
-      return R[(), string].err "textDocument/references unavailable"
-
-    let params = %* initReferenceParams(path, posi.toLspPosition)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentReferences, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/references request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentRename*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  posi: BufferPosition,
-  newName: string): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/rename request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_rename
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.rename:
-      return R[(), string].err "textDocument/rename unavailable"
-
-    let params = %* initRenameParams(path, posi.toLspPosition, newName)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentRename, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/rename request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentTypeDefinition*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  posi: BufferPosition): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/typeDefinition request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_typeDefinition
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.typeDefinition:
-      return R[(), string].err "textDocument/typeDefinition unavailable"
-
-    let params = %* initTypeDefinitionParams(path, posi)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentTypeDefinition, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/typeDefinition request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentImplementation*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  posi: BufferPosition): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/implementation request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_implementation
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.implementation:
-      return R[(), string].err "textDocument/implementation unavailable"
-
-    let params = %* initImplementationParams(path, posi)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentImplementation, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/implementation request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentDeclaration*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  posi: BufferPosition): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/declaration request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_declaration
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.declaration:
-      return R[(), string].err "textDocument/declaration unavailable"
-
-    let params = %* initImplementationParams(path, posi)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentDeclaration, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/declaration request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentPrepareCallHierarchy*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  posi: BufferPosition): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/prepareCallHierarchy request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_prepareCallHierarchy
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.callHierarchy:
-      return R[(), string].err "textDocument/prepareCallHierarchy unavailable"
-
-    let params = %* initCallHierarchyPrepareParams(path, posi)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentPrepareCallHierarchy, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/prepareCallHierarchy request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentIncomingCalls*(
-  c: LspClient,
-  bufferId: int,
-  item: CallHierarchyItem): Future[LspSendRequestResult] {.async.} =
-    ## Send a callHierarchy/incomingCalls request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_incomingCalls
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.callHierarchy:
-      return R[(), string].err "callHierarchy/incomingCalls unavailable"
-
-    let params = %* initCallHierarchyIncomingParams(item)
-
-    let r = await c.request(bufferId, LspMethod.callHierarchyIncomingCalls, params)
-    if r.isErr:
-      return R[(), string].err fmt"callHierarchy/incomingCalls request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentOutgoingCalls*(
-  c: LspClient,
-  bufferId: int,
-  item: CallHierarchyItem): Future[LspSendRequestResult] {.async.} =
-    ## Send a callHierarchy/outgoingCalls request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_outgoingCalls
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.callHierarchy:
-      return R[(), string].err "callHierarchy/outgoingCalls unavailable"
-
-    let params = %* initCallHierarchyOutgoingParams(item)
-
-    let r = await c.request(bufferId, LspMethod.callHierarchyOutgoingCalls, params)
-    if r.isErr:
-      return R[(), string].err fmt"callHierarchy/outgoingCalls request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentDocumentHighlight*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  posi: BufferPosition): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/documentHighlight request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentHighlight
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.documentHighlight:
-      return R[(), string].err "textDocument/documentHighlight unavailable"
-
-    let params = %* initDocumentHighlightParamas(path, posi)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentDocumentHighlight, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/documentHighlight request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentDocumentLink*(
-  c: LspClient,
-  bufferId: int,
-  path: string): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/documentLink request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentLink
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.documentLink:
-      return R[(), string].err "textDocument/documentLink unavailable"
-
-    let params = %* initDocumentLinkParams(path)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentDocumentLink, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/documentLink request failed: {r.error}"
-
-    return R[(), string].ok ()
+      logDebug("lsp", "kill: failed to kill server process: " & e.msg)
+
+  client.state = lssStopped
+  client.serverProcess = nil
+  client.serverStreams = nil
+  client.outputStreamFuture = nil
+
+# Document synchronization
+
+proc didOpen*(
+    client: LspClient, uri: string, languageId: string, version: int, text: string
+): Future[Result[void, string]] {.async.} =
+  ## Notify server that a document was opened
+  if not client.isInitialized:
+    return Result[void, string].err("Client not initialized")
+
+  let params = %*{
+    "textDocument":
+      {"uri": uri, "languageId": languageId, "version": version, "text": text}
+  }
+  return await client.sendNotification("textDocument/didOpen", params)
+
+proc didClose*(client: LspClient, uri: string): Future[Result[void, string]] {.async.} =
+  ## Notify server that a document was closed
+  if not client.isInitialized:
+    return Result[void, string].err("Client not initialized")
+
+  let params = %*{"textDocument": {"uri": uri}}
+  return await client.sendNotification("textDocument/didClose", params)
+
+proc didChange*(
+    client: LspClient, uri: string, version: int, text: string
+): Future[Result[void, string]] {.async.} =
+  ## Notify server that a document changed (full sync)
+  if not client.isInitialized:
+    return Result[void, string].err("Client not initialized")
+
+  let params = %*{
+    "textDocument": {"uri": uri, "version": version}, "contentChanges": [{"text": text}]
+  }
+  return await client.sendNotification("textDocument/didChange", params)
+
+proc didSave*(
+    client: LspClient, uri: string, text: Option[string] = none(string)
+): Future[Result[void, string]] {.async.} =
+  ## Notify server that a document was saved
+  if not client.isInitialized:
+    return Result[void, string].err("Client not initialized")
+
+  var params = %*{"textDocument": {"uri": uri}}
+  if text.isSome:
+    params["text"] = %text.get
+  return await client.sendNotification("textDocument/didSave", params)
+
+# Notification handling
+proc processResponse*(client: LspClient, response: JsonNode): Option[RequestId] =
+  ## Process a response and return the request ID if it was a response
+  if response.hasKey("id") and not response.hasKey("method"):
+    # This is a response
+    let id = response["id"].getInt
+    client.deleteWaitingResponse(id)
+    discard client.rpcState.removePending(id)
+    return some(id)
+  elif response.hasKey("method"):
+    # This is a notification
+    let meth = response["method"].getStr
+    let params =
+      if response.hasKey("params"):
+        response["params"]
+      else:
+        newJObject()
+    client.handleNotification(meth, params)
+  return none(RequestId)
+
+# Helper to send request and wait for response
+proc sendAndWait*(
+    client: LspClient, meth: string, params: JsonNode
+): Future[Result[JsonNode, string]] {.async.} =
+  ## Send a request and wait for its response
+  if not client.isRunning:
+    return Result[JsonNode, string].err("Client not running")
+
+  let reqResult = await client.sendRequest(meth, params)
+  if reqResult.isErr:
+    return Result[JsonNode, string].err(reqResult.error)
+
+  # Wait for the response, processing any notifications that arrive first
+  var response: JsonNode
+  while true:
+    let respResult = await client.read()
+    if respResult.isErr:
+      return Result[JsonNode, string].err(respResult.error)
+
+    response = respResult.get
+
+    # Check if this is a notification (has method but no id)
+    if response.hasKey("method") and not response.hasKey("id"):
+      client.handleNotification(
+        response["method"].getStr, response.getOrDefault("params")
+      )
+      continue
+
+    # This is a response, break out of the loop
+    break
+
+  # Check for error response
+  if response.hasKey("error"):
+    let errMsg = response["error"]["message"].getStr("Unknown error")
+    return Result[JsonNode, string].err(errMsg)
+
+  if response.hasKey("result"):
+    return Result[JsonNode, string].ok(response["result"])
+  else:
+    return Result[JsonNode, string].ok(newJNull())
+
+# LSP Feature Requests
+
+proc completion*(
+    client: LspClient, uri: string, line, character: int
+): Future[Result[seq[CompletionItem], string]] {.async.} =
+  ## Request completion at a position
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let respResult = await client.sendAndWait("textDocument/completion", params)
+  if respResult.isErr:
+    return Result[seq[CompletionItem], string].err(respResult.error)
+
+  let resp = respResult.get
+  var items: seq[CompletionItem] = @[]
+
+  # Handle both CompletionList and CompletionItem[] responses
+  if resp.kind == JArray:
+    for item in resp:
+      items.add(parseCompletionItem(item))
+  elif resp.kind == JObject and resp.hasKey("items"):
+    for item in resp["items"]:
+      items.add(parseCompletionItem(item))
+
+  return Result[seq[CompletionItem], string].ok(items)
+
+proc hover*(
+    client: LspClient, uri: string, line, character: int
+): Future[Result[Option[Hover], string]] {.async.} =
+  ## Request hover information at a position
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let respResult = await client.sendAndWait("textDocument/hover", params)
+  if respResult.isErr:
+    return Result[Option[Hover], string].err(respResult.error)
+
+  let resp = respResult.get
+  if resp.kind == JNull:
+    return Result[Option[Hover], string].ok(none(Hover))
+
+  return Result[Option[Hover], string].ok(some(parseHover(resp)))
+
+proc gotoDefinition*(
+    client: LspClient, uri: string, line, character: int
+): Future[Result[seq[Location], string]] {.async.} =
+  ## Request go to definition
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let respResult = await client.sendAndWait("textDocument/definition", params)
+  if respResult.isErr:
+    return Result[seq[Location], string].err(respResult.error)
+
+  return Result[seq[Location], string].ok(parseLocations(respResult.get))
+
+proc gotoDeclaration*(
+    client: LspClient, uri: string, line, character: int
+): Future[Result[seq[Location], string]] {.async.} =
+  ## Request go to declaration
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let respResult = await client.sendAndWait("textDocument/declaration", params)
+  if respResult.isErr:
+    return Result[seq[Location], string].err(respResult.error)
+
+  return Result[seq[Location], string].ok(parseLocations(respResult.get))
+
+proc gotoTypeDefinition*(
+    client: LspClient, uri: string, line, character: int
+): Future[Result[seq[Location], string]] {.async.} =
+  ## Request go to type definition
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let respResult = await client.sendAndWait("textDocument/typeDefinition", params)
+  if respResult.isErr:
+    return Result[seq[Location], string].err(respResult.error)
+
+  return Result[seq[Location], string].ok(parseLocations(respResult.get))
+
+proc gotoImplementation*(
+    client: LspClient, uri: string, line, character: int
+): Future[Result[seq[Location], string]] {.async.} =
+  ## Request go to implementation
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let respResult = await client.sendAndWait("textDocument/implementation", params)
+  if respResult.isErr:
+    return Result[seq[Location], string].err(respResult.error)
+
+  return Result[seq[Location], string].ok(parseLocations(respResult.get))
+
+proc references*(
+    client: LspClient,
+    uri: string,
+    line, character: int,
+    includeDeclaration: bool = true,
+): Future[Result[seq[Location], string]] {.async.} =
+  ## Request find references
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "position": {"line": line, "character": character},
+    "context": {"includeDeclaration": includeDeclaration},
+  }
+
+  let respResult = await client.sendAndWait("textDocument/references", params)
+  if respResult.isErr:
+    return Result[seq[Location], string].err(respResult.error)
+
+  return Result[seq[Location], string].ok(parseLocations(respResult.get))
+
+proc documentHighlight*(
+    client: LspClient, uri: string, line, character: int
+): Future[Result[seq[DocumentHighlight], string]] {.async.} =
+  ## Request document highlights at a position
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let respResult = await client.sendAndWait("textDocument/documentHighlight", params)
+  if respResult.isErr:
+    return Result[seq[DocumentHighlight], string].err(respResult.error)
+
+  var highlights: seq[DocumentHighlight] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      highlights.add(parseDocumentHighlight(item))
+
+  return Result[seq[DocumentHighlight], string].ok(highlights)
+
+proc documentLink*(
+    client: LspClient, uri: string
+): Future[Result[seq[DocumentLink], string]] {.async.} =
+  ## Request document links
+  let params = %*{"textDocument": {"uri": uri}}
+
+  let respResult = await client.sendAndWait("textDocument/documentLink", params)
+  if respResult.isErr:
+    return Result[seq[DocumentLink], string].err(respResult.error)
+
+  var links: seq[DocumentLink] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      links.add(parseDocumentLink(item))
+
+  return Result[seq[DocumentLink], string].ok(links)
 
 proc documentLinkResolve*(
-  c: LspClient,
-  bufferId: int,
-  documentLink: DocumentLink): Future[LspSendRequestResult] {.async.} =
-    ## Send a documentLink/resolve request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentLink_resolve
+    client: LspClient, link: DocumentLink
+): Future[Result[DocumentLink, string]] {.async.} =
+  ## Resolve a document link
+  let params = documentLinkToJson(link)
 
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
+  let respResult = await client.sendAndWait("documentLink/resolve", params)
+  if respResult.isErr:
+    return Result[DocumentLink, string].err(respResult.error)
 
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
+  return Result[DocumentLink, string].ok(parseDocumentLink(respResult.get))
 
-    if not c.capabilities.get.documentLink:
-      return R[(), string].err "textDocument/documentLink unavailable"
+proc signatureHelp*(
+    client: LspClient, uri: string, line, character: int
+): Future[Result[Option[SignatureHelp], string]] {.async.} =
+  ## Request signature help at a position
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
 
-    let params = %* documentLink
+  let respResult = await client.sendAndWait("textDocument/signatureHelp", params)
+  if respResult.isErr:
+    return Result[Option[SignatureHelp], string].err(respResult.error)
 
-    let r = await c.request(bufferId, LspMethod.textDocumentDocumentLink, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/documentLink request failed: {r.error}"
+  let resp = respResult.get
+  if resp.kind == JNull:
+    return Result[Option[SignatureHelp], string].ok(none(SignatureHelp))
 
-    return R[(), string].ok ()
+  return Result[Option[SignatureHelp], string].ok(some(parseSignatureHelp(resp)))
 
-proc textDocumentCodeLens*(
-  c: LspClient,
-  bufferId: int,
-  path: string): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/codeLens request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_codeLens
+proc formatting*(
+    client: LspClient, uri: string, tabSize: int = 2, insertSpaces: bool = true
+): Future[Result[seq[TextEdit], string]] {.async.} =
+  ## Request document formatting
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
+  }
 
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
+  let respResult = await client.sendAndWait("textDocument/formatting", params)
+  if respResult.isErr:
+    return Result[seq[TextEdit], string].err(respResult.error)
 
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
+  var edits: seq[TextEdit] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      edits.add(parseTextEdit(item))
 
-    if not c.capabilities.get.codeLens:
-      return R[(), string].err "textDocument/codeLens unavailable"
+  return Result[seq[TextEdit], string].ok(edits)
 
-    let params = %* initCodeLensParams(path)
+proc rangeFormatting*(
+    client: LspClient,
+    uri: string,
+    startLine, startChar, endLine, endChar: int,
+    tabSize: int = 2,
+    insertSpaces: bool = true,
+): Future[Result[seq[TextEdit], string]] {.async.} =
+  ## Request range formatting
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "range": {
+      "start": {"line": startLine, "character": startChar},
+      "end": {"line": endLine, "character": endChar},
+    },
+    "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
+  }
 
-    let r = await c.request(bufferId, LspMethod.textDocumentCodeLens, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/codeLens request failed: {r.error}"
+  let respResult = await client.sendAndWait("textDocument/rangeFormatting", params)
+  if respResult.isErr:
+    return Result[seq[TextEdit], string].err(respResult.error)
 
-    return R[(), string].ok ()
+  var edits: seq[TextEdit] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      edits.add(parseTextEdit(item))
+
+  return Result[seq[TextEdit], string].ok(edits)
+
+proc documentSymbol*(
+    client: LspClient, uri: string
+): Future[Result[DocumentSymbolResult, string]] {.async.} =
+  ## Request document symbols
+  let params = %*{"textDocument": {"uri": uri}}
+
+  let respResult = await client.sendAndWait("textDocument/documentSymbol", params)
+  if respResult.isErr:
+    return Result[DocumentSymbolResult, string].err(respResult.error)
+
+  return
+    Result[DocumentSymbolResult, string].ok(parseDocumentSymbolResult(respResult.get))
+
+proc inlayHints*(
+    client: LspClient, uri: string, startLine, startChar, endLine, endChar: int
+): Future[Result[seq[InlayHint], string]] {.async.} =
+  ## Request inlay hints for a range
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "range": {
+      "start": {"line": startLine, "character": startChar},
+      "end": {"line": endLine, "character": endChar},
+    },
+  }
+
+  let respResult = await client.sendAndWait("textDocument/inlayHint", params)
+  if respResult.isErr:
+    return Result[seq[InlayHint], string].err(respResult.error)
+
+  var hints: seq[InlayHint] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      let parsed = parseInlayHint(item)
+      if parsed.isSome:
+        hints.add(parsed.get)
+
+  return Result[seq[InlayHint], string].ok(hints)
+
+proc semanticTokensFull*(
+    client: LspClient, uri: string
+): Future[Result[Option[SemanticTokens], string]] {.async.} =
+  ## Request full semantic tokens for a document
+  let params = %*{"textDocument": {"uri": uri}}
+
+  let respResult = await client.sendAndWait("textDocument/semanticTokens/full", params)
+  if respResult.isErr:
+    return Result[Option[SemanticTokens], string].err(respResult.error)
+
+  let resp = respResult.get
+  if resp.kind == JNull:
+    return Result[Option[SemanticTokens], string].ok(none(SemanticTokens))
+
+  return Result[Option[SemanticTokens], string].ok(some(parseSemanticTokens(resp)))
+
+proc semanticTokensRange*(
+    client: LspClient, uri: string, startLine, startChar, endLine, endChar: int
+): Future[Result[Option[SemanticTokens], string]] {.async.} =
+  ## Request semantic tokens for a range
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "range": {
+      "start": {"line": startLine, "character": startChar},
+      "end": {"line": endLine, "character": endChar},
+    },
+  }
+
+  let respResult = await client.sendAndWait("textDocument/semanticTokens/range", params)
+  if respResult.isErr:
+    return Result[Option[SemanticTokens], string].err(respResult.error)
+
+  let resp = respResult.get
+  if resp.kind == JNull:
+    return Result[Option[SemanticTokens], string].ok(none(SemanticTokens))
+
+  return Result[Option[SemanticTokens], string].ok(some(parseSemanticTokens(resp)))
+
+proc selectionRange*(
+    client: LspClient, uri: string, positions: seq[Position]
+): Future[Result[seq[SelectionRange], string]] {.async.} =
+  ## Request selection ranges for multiple positions
+  var posArray = newJArray()
+  for pos in positions:
+    posArray.add(%*{"line": pos.line, "character": pos.character})
+
+  let params = %*{"textDocument": {"uri": uri}, "positions": posArray}
+
+  let respResult = await client.sendAndWait("textDocument/selectionRange", params)
+  if respResult.isErr:
+    return Result[seq[SelectionRange], string].err(respResult.error)
+
+  var ranges: seq[SelectionRange] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      ranges.add(parseSelectionRange(item))
+
+  return Result[seq[SelectionRange], string].ok(ranges)
+
+proc selectionRange*(
+    client: LspClient, uri: string, line, character: int
+): Future[Result[Option[SelectionRange], string]] {.async.} =
+  ## Request selection range for a single position
+  let positions = @[Position(line: line, character: character)]
+  let selResult = await client.selectionRange(uri, positions)
+  if selResult.isErr:
+    return Result[Option[SelectionRange], string].err(selResult.error)
+
+  let ranges = selResult.get
+  if ranges.len > 0:
+    return Result[Option[SelectionRange], string].ok(some(ranges[0]))
+  else:
+    return Result[Option[SelectionRange], string].ok(none(SelectionRange))
+
+proc inlineValues*(
+    client: LspClient,
+    uri: string,
+    startLine, startChar, endLine, endChar: int,
+    frameId: int,
+    stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar: int,
+): Future[Result[seq[InlineValue], string]] {.async.} =
+  ## Request inline values for debugging
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "viewPort": {
+      "start": {"line": startLine, "character": startChar},
+      "end": {"line": endLine, "character": endChar},
+    },
+    "context": {
+      "frameId": frameId,
+      "stoppedLocation": {
+        "start": {"line": stoppedLine, "character": stoppedStartChar},
+        "end": {"line": stoppedEndLine, "character": stoppedEndChar},
+      },
+    },
+  }
+
+  let respResult = await client.sendAndWait("textDocument/inlineValue", params)
+  if respResult.isErr:
+    return Result[seq[InlineValue], string].err(respResult.error)
+
+  var values: seq[InlineValue] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      values.add(parseInlineValue(item))
+
+  return Result[seq[InlineValue], string].ok(values)
+
+proc codeLens*(
+    client: LspClient, uri: string
+): Future[Result[seq[CodeLens], string]] {.async.} =
+  ## Request code lenses for a document
+  let params = %*{"textDocument": {"uri": uri}}
+
+  let respResult = await client.sendAndWait("textDocument/codeLens", params)
+  if respResult.isErr:
+    return Result[seq[CodeLens], string].err(respResult.error)
+
+  var lenses: seq[CodeLens] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      lenses.add(parseCodeLens(item))
+
+  return Result[seq[CodeLens], string].ok(lenses)
 
 proc codeLensResolve*(
-  c: LspClient,
-  bufferId: int,
-  codeLens: CodeLens): Future[LspSendRequestResult] {.async.} =
-    ## Send a codeLens/resolve request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#codeLens_resolve
+    client: LspClient, lens: CodeLens
+): Future[Result[CodeLens, string]] {.async.} =
+  ## Resolve a code lens
+  let params = codeLensToJson(lens)
 
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
+  let respResult = await client.sendAndWait("codeLens/resolve", params)
+  if respResult.isErr:
+    return Result[CodeLens, string].err(respResult.error)
 
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
+  return Result[CodeLens, string].ok(parseCodeLens(respResult.get))
 
-    if not c.capabilities.get.codeLens:
-      return R[(), string].err "codeLens/resolve unavailable"
+proc codeAction*(
+    client: LspClient,
+    uri: string,
+    startLine, startChar, endLine, endChar: int,
+    diagnostics: seq[Diagnostic] = @[],
+    only: seq[string] = @[],
+): Future[Result[seq[CodeAction], string]] {.async.} =
+  ## Request code actions for a range
+  ## - diagnostics: Relevant diagnostics in the range
+  ## - only: Filter by code action kinds (e.g., ["quickfix", "refactor"])
+  var context = CodeActionContext(diagnostics: diagnostics)
+  if only.len > 0:
+    context.only = some(only)
+  context.triggerKind = some(1) # Invoked by user
 
-    let params = %* codeLens
+  let params = CodeActionParams(
+    textDocument: TextDocumentIdentifier(uri: uri),
+    range: Range(
+      start: Position(line: startLine, character: startChar),
+      `end`: Position(line: endLine, character: endChar),
+    ),
+    context: context,
+  )
 
-    let r = await c.request(bufferId, LspMethod.codeLensResolve, params)
-    if r.isErr:
-      return R[(), string].err fmt"codeLens/resolve request failed: {r.error}"
+  let respResult = await client.sendAndWait("textDocument/codeAction", params.toJson)
+  if respResult.isErr:
+    return Result[seq[CodeAction], string].err(respResult.error)
 
-    return R[(), string].ok ()
+  var actions: seq[CodeAction] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      # Server may return Command or CodeAction
+      if item.hasKey("title") and item.hasKey("command") and not item.hasKey("edit"):
+        # This is a bare Command - wrap it in CodeAction
+        let cmd = parseCommand(item)
+        actions.add(CodeAction(title: cmd.title, command: some(cmd)))
+      else:
+        actions.add(parseCodeAction(item))
 
-proc workspaceExecuteCommand*(
-  c: LspClient,
-  bufferId: int,
-  command: string,
-  args: JsonNode): Future[LspSendRequestResult] {.async.} =
-    ## Send a workspace/executeCommand request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#command
+  return Result[seq[CodeAction], string].ok(actions)
 
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
+proc codeActionResolve*(
+    client: LspClient, action: CodeAction
+): Future[Result[CodeAction, string]] {.async.} =
+  ## Resolve a code action to get full details (e.g., workspace edit)
+  let respResult = await client.sendAndWait("codeAction/resolve", action.toJson)
+  if respResult.isErr:
+    return Result[CodeAction, string].err(respResult.error)
 
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
+  return Result[CodeAction, string].ok(parseCodeAction(respResult.get))
 
-    if c.capabilities.get.executeCommand.isNone:
-      return R[(), string].err "workspace/executeCommand unavailable"
+proc executeCommand*(
+    client: LspClient, command: string, arguments: seq[JsonNode] = @[]
+): Future[Result[JsonNode, string]] {.async.} =
+  ## Execute a command on the server
+  var args = newJArray()
+  for arg in arguments:
+    args.add(arg)
 
-    let params = %* initExecuteCommandParams(command, args)
+  let params = %*{"command": command, "arguments": args}
 
-    let r = await c.request(bufferId, LspMethod.workspaceExecuteCommand, params)
-    if r.isErr:
-      return R[(), string].err fmt"workspace/executeCommand request failed: {r.error}"
+  let respResult = await client.sendAndWait("workspace/executeCommand", params)
+  if respResult.isErr:
+    return Result[JsonNode, string].err(respResult.error)
 
-    return R[(), string].ok ()
+  return Result[JsonNode, string].ok(respResult.get)
 
-proc textDocumentFoldingRange*(
-  c: LspClient,
-  bufferId: int,
-  path: string): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/foldingRange request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_foldingRange
+proc callHierarchyPrepare*(
+    client: LspClient, uri: string, line, character: int
+): Future[Result[seq[CallHierarchyItem], string]] {.async.} =
+  ## Prepare call hierarchy at a position
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
 
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
+  let respResult = await client.sendAndWait("textDocument/prepareCallHierarchy", params)
+  if respResult.isErr:
+    return Result[seq[CallHierarchyItem], string].err(respResult.error)
 
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
+  var items: seq[CallHierarchyItem] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      items.add(parseCallHierarchyItem(item))
 
-    if not c.capabilities.get.foldingRange:
-      return R[(), string].err "textDocument/foldingRange unavailable"
+  return Result[seq[CallHierarchyItem], string].ok(items)
 
-    let params = %* initFoldingRangeParam(path)
+proc callHierarchyIncomingCalls*(
+    client: LspClient, item: CallHierarchyItem
+): Future[Result[seq[CallHierarchyIncomingCall], string]] {.async.} =
+  ## Request incoming calls for a call hierarchy item
+  let params = %*{"item": callHierarchyItemToJson(item)}
 
-    let r = await c.request(bufferId, LspMethod.textDocumentFoldingRange, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/foldingRange request failed: {r.error}"
+  let respResult = await client.sendAndWait("callHierarchy/incomingCalls", params)
+  if respResult.isErr:
+    return Result[seq[CallHierarchyIncomingCall], string].err(respResult.error)
 
-    return R[(), string].ok ()
+  var calls: seq[CallHierarchyIncomingCall] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      calls.add(parseCallHierarchyIncomingCall(item))
 
-proc textDocumentSelectionRange*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  positions: seq[BufferPosition]): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/selectionRange request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_selectionRange
+  return Result[seq[CallHierarchyIncomingCall], string].ok(calls)
 
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
+proc callHierarchyOutgoingCalls*(
+    client: LspClient, item: CallHierarchyItem
+): Future[Result[seq[CallHierarchyOutgoingCall], string]] {.async.} =
+  ## Request outgoing calls for a call hierarchy item
+  let params = %*{"item": callHierarchyItemToJson(item)}
 
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
+  let respResult = await client.sendAndWait("callHierarchy/outgoingCalls", params)
+  if respResult.isErr:
+    return Result[seq[CallHierarchyOutgoingCall], string].err(respResult.error)
 
-    if not c.capabilities.get.selectionRange:
-      return R[(), string].err "textDocument/foldingRange unavailable"
+  var calls: seq[CallHierarchyOutgoingCall] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      calls.add(parseCallHierarchyOutgoingCall(item))
 
-    let params = %* initSelectionRangeParams(path, positions)
+  return Result[seq[CallHierarchyOutgoingCall], string].ok(calls)
 
-    let r = await c.request(bufferId, LspMethod.textDocumentSelectionRange, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/selectionRange request failed: {r.error}"
+proc foldingRange*(
+    client: LspClient, uri: string
+): Future[Result[seq[FoldingRange], string]] {.async.} =
+  ## Request folding ranges for a document
+  let params = %*{"textDocument": {"uri": uri}}
 
-    return R[(), string].ok ()
+  let respResult = await client.sendAndWait("textDocument/foldingRange", params)
+  if respResult.isErr:
+    return Result[seq[FoldingRange], string].err(respResult.error)
 
-proc textDocumentDocumentSymbol*(
-  c: LspClient,
-  bufferId: int,
-  path: string): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/symbol request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentSymbol
+  var ranges: seq[FoldingRange] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      ranges.add(parseFoldingRange(item))
 
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
+  return Result[seq[FoldingRange], string].ok(ranges)
 
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
+# Poll for messages (processes any available notifications)
+proc poll*(client: LspClient): Future[void] {.async.} =
+  ## Poll for and process any available messages from the server
+  if not client.isRunning:
+    return
 
-    if not c.capabilities.get.documentSymbol:
-      return R[(), string].err "textDocument/documentSymbol unavailable"
+  # Check if there's a response ready
+  let readableResult = client.readable()
+  if readableResult.isErr or not readableResult.get:
+    return
 
-    let params = %* initDocumentSymbolParams(path)
+  # Read and process the message
+  let respResult = await client.read()
+  if respResult.isErr:
+    return
 
-    let r = await c.request(bufferId, LspMethod.textDocumentDocumentSymbol, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/documentSymbol request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentInlineValue*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  range: BufferRange): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/inlineValue request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_inlineValue
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.inlineValue:
-      return R[(), string].err "textDocument/inlineValue unavailable"
-
-    # TODO: Fix frameId
-    let context = InlineValueContext(
-      frameId: 0,
-      stoppedLocation: range.toLspRange)
-    let params = %* initInlineValueParams(path, range.toLspRange, context)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentInlineValue, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/inlineValue request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentSignatureHelp*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  position: BufferPosition,
-  kind: SignatureHelpTriggerKind,
-  triggerChar: Option[string] = none(string),
-  active: Option[SignatureHelp] = none(SignatureHelp)): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/signatureHelp request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_signatureHelp
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
-
-    if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
-
-    if not c.capabilities.get.signatureHelp.isSome:
-      return R[(), string].err "textDocument/signatureHelp unavailable"
-
-    let params = %* initSignatureHelpParams(
-      path,
-      position.toLspPosition,
-      kind,
-      triggerChar,
-      active)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentSignatureHelp, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/signatureHelp request failed: {r.error}"
-
-    return R[(), string].ok ()
-
-proc textDocumentFormatting*(
-  c: LspClient,
-  bufferId: int,
-  path: string,
-  options: FormattingOptions): Future[LspSendRequestResult] {.async.} =
-    ## Send a textDocument/documentFormatting request to the server.
-    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_formatting
-
-    if not c.running:
-      if not c.closed: c.closed = true
-      return LspSendRequestResult.err "server crashed"
-
-    if not c.isInitialized:
-      return LspSendRequestResult.err "lsp unavailable"
-
-    if not c.capabilities.get.formatting:
-      return LspSendRequestResult.err "textDocument/formatting unavailable"
-
-    let params = %* initDocumentFormattingParams(path, options)
-
-    let r = await c.request(bufferId, LspMethod.textDocumentFormatting, params)
-    if r.isErr:
-      return
-        LspSendRequestResult.err fmt"textDocument/formatting request failed: {r.error}"
-
-    return LspSendRequestResult.ok ()
+  let response = respResult.get
+  if response.hasKey("method"):
+    # This is a notification
+    let meth = response["method"].getStr
+    let params =
+      if response.hasKey("params"):
+        response["params"]
+      else:
+        newJObject()
+    client.handleNotification(meth, params)

@@ -1,0 +1,212 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+## POSIX pseudo-terminal (PTY) wrapper for terminal emulation.
+## Provides PTY creation, non-blocking I/O, resize, and process lifecycle.
+
+import std/[os, posix, options]
+
+proc poll(
+  fds: ptr TPollfd, nfds: Tnfds, timeout: cint
+): cint {.importc, header: "<poll.h>".}
+
+import pkg/results
+
+type PtyHandle* = ref object
+  masterFd*: cint
+  childPid*: Pid
+  closed*: bool
+
+# POSIX PTY bindings
+when defined(macosx):
+  proc forkpty(
+    amaster: var cint, name: cstring, termp: pointer, winp: pointer
+  ): Pid {.importc, header: "<util.h>".}
+
+else:
+  proc forkpty(
+    amaster: var cint, name: cstring, termp: pointer, winp: pointer
+  ): Pid {.importc, header: "<pty.h>".}
+
+type Winsize {.importc: "struct winsize", header: "<sys/ioctl.h>".} = object
+  ws_row: cushort
+  ws_col: cushort
+  ws_xpixel: cushort
+  ws_ypixel: cushort
+
+when defined(macosx):
+  const TIOCSWINSZ = 0x80087467.culong
+else:
+  const TIOCSWINSZ = 0x5414.culong
+
+proc ioctl(
+  fd: cint, request: culong
+): cint {.importc, header: "<sys/ioctl.h>", varargs.}
+
+proc openPtyAndSpawn*(
+    command: string = "", cols: int = 80, rows: int = 24
+): Result[PtyHandle, string] =
+  ## Create a PTY pair via forkpty() and spawn a shell (or command) in the child.
+  ## Returns the master fd and child pid on success.
+
+  var masterFd: cint
+  var ws: Winsize
+  ws.ws_col = cols.cushort
+  ws.ws_row = rows.cushort
+
+  let pid = forkpty(masterFd, nil, nil, addr ws)
+  if pid < 0:
+    return err("forkpty failed: " & $strerror(errno))
+
+  if pid == 0:
+    # Child process
+    putEnv("TERM", "xterm-256color")
+
+    if command.len > 0:
+      let shell = getEnv("SHELL", "/bin/sh")
+      discard execl(shell.cstring, shell.cstring, "-c".cstring, command.cstring, nil)
+    else:
+      let shell = getEnv("SHELL", "/bin/sh")
+      discard execl(shell.cstring, shell.cstring, nil)
+
+    # execl only returns on error
+    quit(1)
+
+  # Parent process: set master fd to non-blocking
+  let flags = fcntl(masterFd, F_GETFL)
+  if flags == -1:
+    discard close(masterFd)
+    return err("fcntl F_GETFL failed")
+  if fcntl(masterFd, F_SETFL, flags or O_NONBLOCK) == -1:
+    discard close(masterFd)
+    return err("fcntl F_SETFL O_NONBLOCK failed")
+
+  ok(PtyHandle(masterFd: masterFd, childPid: pid, closed: false))
+
+proc writeToPty*(pty: PtyHandle, data: string): Result[void, string] =
+  ## Write raw bytes to the PTY master fd (forwards keystrokes to the shell).
+  if pty.closed:
+    return err("PTY is closed")
+  if data.len == 0:
+    return ok()
+
+  var written = 0
+  while written < data.len:
+    let n = write(pty.masterFd, unsafeAddr data[written], data.len - written)
+    if n < 0:
+      if errno == EINTR:
+        continue
+      if errno == EAGAIN or errno == EWOULDBLOCK:
+        var pfd: TPollfd
+        pfd.fd = pty.masterFd
+        pfd.events = POLLOUT
+        discard poll(addr pfd, 1, 100)
+        continue
+      return err("write to PTY failed: " & $strerror(errno))
+    written += n.int
+
+  ok()
+
+proc readFromPty*(pty: PtyHandle, maxBytes: int = 4096): string =
+  ## Non-blocking read from PTY master fd.
+  ## Returns empty string if no data is available.
+  if pty.closed:
+    return ""
+
+  var buf = newString(maxBytes)
+  let n = read(pty.masterFd, addr buf[0], maxBytes)
+  if n < 0:
+    if errno == EINTR:
+      let n2 = read(pty.masterFd, addr buf[0], maxBytes)
+      if n2 <= 0:
+        return ""
+      buf.setLen(n2)
+      return buf
+    return ""
+  if n == 0:
+    return ""
+  buf.setLen(n)
+  buf
+
+proc resizePty*(pty: PtyHandle, cols, rows: int) =
+  ## Send TIOCSWINSZ ioctl to update the terminal size.
+  ## The kernel sends SIGWINCH to the child process group.
+  if pty.closed:
+    return
+
+  var ws: Winsize
+  ws.ws_col = cols.cushort
+  ws.ws_row = rows.cushort
+  discard ioctl(pty.masterFd, TIOCSWINSZ, addr ws)
+
+proc isAlive*(pty: PtyHandle): bool =
+  ## Check if the child process is still running.
+  if pty.closed:
+    return false
+
+  var status: cint
+  let r = waitpid(pty.childPid, status, WNOHANG)
+  # waitpid returns 0 if child is still running
+  return r == 0
+
+proc waitForExit*(pty: PtyHandle): int =
+  ## Wait for the child process to exit and return the exit code.
+  var status: cint
+  discard waitpid(pty.childPid, status, 0)
+  if WIFEXITED(status):
+    WEXITSTATUS(status)
+  else:
+    -1
+
+proc checkExitStatus*(pty: PtyHandle): Option[int] =
+  ## Non-blocking check for process exit. Reaps the zombie and returns the exit
+  ## code in a single waitpid call. Returns none if the process is still running.
+  if pty.closed:
+    return some(-1)
+
+  var status: cint
+  let r = waitpid(pty.childPid, status, WNOHANG)
+  if r > 0:
+    # Process exited and was reaped
+    if WIFEXITED(status):
+      return some(WEXITSTATUS(status).int)
+    else:
+      return some(-1)
+  elif r == 0:
+    # Still running
+    return none(int)
+  else:
+    # waitpid error (e.g. already reaped) — treat as exited
+    return some(-1)
+
+proc closePty*(pty: PtyHandle) =
+  ## Close the master fd and clean up.
+  if pty.closed:
+    return
+  pty.closed = true
+
+  discard close(pty.masterFd)
+
+  # Check if child is still running and kill if needed
+  var status: cint
+  let r = waitpid(pty.childPid, status, WNOHANG)
+  if r == 0:
+    # Still running — send SIGTERM and wait
+    discard kill(pty.childPid, SIGTERM)
+    discard waitpid(pty.childPid, status, 0)
