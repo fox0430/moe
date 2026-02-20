@@ -44,6 +44,8 @@ mouse = true                           # Enable mouse support
 
 lineWrap = true                        # Wrap long lines
 
+timeoutlen = 1000                      # Key mapping timeout in ms (0 = no timeout)
+
 mouse = true
 
 [Clipboard]

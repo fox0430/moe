@@ -349,6 +349,17 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
     boolSet: proc(c: EditorConfig, v: bool) =
       c.standard.lineWrap = v,
   )
+  result.add ConfigItemDescriptor(
+    kind: cvkInt,
+    displayName: "timeoutlen",
+    section: "Standard",
+    intGet: proc(c: EditorConfig): int =
+      c.standard.timeoutlen,
+    intSet: proc(c: EditorConfig, v: int) =
+      c.standard.timeoutlen = v,
+    intMin: 0,
+    intMax: 10000,
+  )
 
   # Clipboard section
   result.add ConfigItemDescriptor(

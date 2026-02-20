@@ -345,7 +345,7 @@ proc loadStandardConfig(
     "sidebar", "autoCloseParen", "autoIndent", "ignorecase", "smartcase",
     "disableChangeCursor", "defaultCursor", "normalModeCursor", "insertModeCursor",
     "liveReloadOfConf", "incrementalSearch", "popupWindowInExmode", "autoDeleteParen",
-    "liveReloadOfFile", "colorMode", "mouse", "lineWrap",
+    "liveReloadOfFile", "colorMode", "mouse", "lineWrap", "timeoutlen",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "number", config.number, vr, section)
@@ -382,6 +382,7 @@ proc loadStandardConfig(
   )
   loadBool(table, "mouse", config.mouse, vr, section)
   loadBool(table, "lineWrap", config.lineWrap, vr, section)
+  loadInt(table, "timeoutlen", config.timeoutlen, vr, section, minVal = 0)
 
 proc loadClipboardConfig(
     table: TomlTableRef, config: var ClipboardConfig, vr: var ValidationResult
@@ -1686,6 +1687,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "colorMode = " & toTomlString($config.standard.colorMode)
   lines.add "mouse = " & toTomlBool(config.standard.mouse)
   lines.add "lineWrap = " & toTomlBool(config.standard.lineWrap)
+  lines.add "timeoutlen = " & $config.standard.timeoutlen
   lines.add ""
 
   # Clipboard section

@@ -1586,8 +1586,9 @@ proc checkRuntimeKeySeqMapping(
   if hasLongerMatch:
     # Prefix match exists: wait for more keys
     if exactMatch.isSome:
-      # Both exact and longer match possible; for now, wait for longer match
-      # (Timeout-based disambiguation would go here in the future)
+      # Both exact and longer match possible: wait for more keys.
+      # If no key arrives within timeoutlen, handleKeyMappingTimeout
+      # will flush and execute the exact match.
       discard
     return some(
       HandlerResult(

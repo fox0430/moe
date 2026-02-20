@@ -101,6 +101,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | popupWindowInExmode | bool | true | Show Pop-up window in Ex mode |
 | colorMode | TerminalColorMode | 24bit | Terminal color mode |
 | mouse | bool | false | Enable mouse cursor movement |
+| timeoutlen | integer | 1000 | Key mapping timeout in milliseconds (0 = no timeout) |
 
 
 ### Clipboard table
