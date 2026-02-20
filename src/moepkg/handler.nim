@@ -2072,6 +2072,14 @@ proc handleEvent*(e: Editor, event: Event): bool =
           termState.feedInput("\x03")
           return true
 
+    # Command overlay: clear command line and exit overlay
+    if e.state.isCommandOverlay:
+      e.state.commandCompletionManager.cancelCompletion()
+      e.cancelSubstitutePreview()
+      e.state.exitOverlay()
+      e.setMode(e.state.mode)
+      return true
+
     if e.state.mode == EditorMode.Normal:
       # Normal mode: show exit message like Vim
       e.state.statusMessage = "Type :qa and press <Enter> to exit"
