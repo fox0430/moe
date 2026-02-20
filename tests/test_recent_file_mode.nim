@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, options, strutils]
+import std/[unittest, os, options]
 import pkg/results
 import ../src/moepkg/recent_file_mode
 

@@ -39,14 +39,6 @@ proc saveActiveWindowState*(e: Editor) =
     if e.state.hasOverlay:
       e.activeWindow.mode = e.state.baseMode
 
-proc restoreActiveWindowState(e: Editor) =
-  ## Share the active window's viewport reference with motionController and editor
-  ## Note: cursor and mode are accessed directly from EditorWindow
-  if e.windowManager.windows.len > 0 and
-      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
-    e.viewport = e.activeWindow.viewport
-
 proc syncActiveWindow*(e: Editor) =
   ## Sync the active window's buffer and viewport with the executor and motion controller
   ## Viewport is shared by reference - reassigning shares the active window's viewport

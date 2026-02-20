@@ -32,7 +32,6 @@ import ../src/moepkg/key_bindings {.all.}
 import ../src/moepkg/config {.all.}
 import ../src/moepkg/modes {.all.}
 import ../src/moepkg/registers {.all.}
-import ../src/moepkg/clipboard {.all.}
 
 proc createTestContext(buffer: TextBuffer): CommandContext =
   let state = EditorState()
@@ -90,8 +89,7 @@ suite "executeCommand - Motion commands":
 
     let cmd = Command(kind: ctMotion, motion: Motion.Right, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.column == 1
 
   test "execute motion with count (3l)":
@@ -102,8 +100,7 @@ suite "executeCommand - Motion commands":
 
     let cmd = Command(kind: ctMotion, motion: Motion.Right, count: 3)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.column == 3
 
   test "execute word motion (w)":
@@ -114,8 +111,7 @@ suite "executeCommand - Motion commands":
 
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.column == 6 # Position at 'w' in "world"
 
   test "execute motion Down (j)":
@@ -126,8 +122,7 @@ suite "executeCommand - Motion commands":
 
     let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.line == 1
 
   test "execute motion Up (k)":
@@ -138,8 +133,7 @@ suite "executeCommand - Motion commands":
 
     let cmd = Command(kind: ctMotion, motion: Motion.Up, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.line == 1
 
   test "execute FirstLine motion (gg)":
@@ -150,8 +144,7 @@ suite "executeCommand - Motion commands":
 
     let cmd = Command(kind: ctMotion, motion: Motion.FirstLine, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.line == 0
 
   test "execute LastLine motion (G)":
@@ -162,8 +155,7 @@ suite "executeCommand - Motion commands":
 
     let cmd = Command(kind: ctMotion, motion: Motion.LastLine, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.line == 2
 
 suite "executeCommand - Mode switch commands":
@@ -174,8 +166,7 @@ suite "executeCommand - Mode switch commands":
 
     let cmd = Command(kind: ctModeSwitch, targetMode: EditorMode.Insert, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.state.mode == EditorMode.Insert
 
   test "switch to Visual mode":
@@ -185,8 +176,7 @@ suite "executeCommand - Mode switch commands":
 
     let cmd = Command(kind: ctModeSwitch, targetMode: EditorMode.Visual, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.state.mode == EditorMode.Visual
 
   test "switch from Insert to Normal mode":
@@ -197,8 +187,7 @@ suite "executeCommand - Mode switch commands":
 
     let cmd = Command(kind: ctModeSwitch, targetMode: EditorMode.Normal, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.state.mode == EditorMode.Normal
 
 suite "executeCommand - Overlay switch commands":
@@ -209,8 +198,7 @@ suite "executeCommand - Overlay switch commands":
 
     let cmd = Command(kind: ctOverlaySwitch, targetOverlay: okCommand, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.state.overlay.isSome
     check ctx.state.overlay.get.kind == okCommand
 
@@ -226,8 +214,7 @@ suite "executeCommand - Overlay switch commands":
       count: 1,
     )
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.state.overlay.isSome
     check ctx.state.overlay.get.kind == okSearch
 
@@ -243,8 +230,7 @@ suite "executeCommand - Overlay switch commands":
       count: 1,
     )
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.state.overlay.isSome
     check ctx.state.overlay.get.kind == okSearch
 
@@ -263,8 +249,7 @@ suite "executeCommand - Operator pending commands":
       count: 1,
     )
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.column == 4 # Position at 'o' in "hello"
 
   test "find character backward (F)":
@@ -281,8 +266,7 @@ suite "executeCommand - Operator pending commands":
       count: 1,
     )
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.column == 7 # Position at 'o' in "world"
 
   test "till character (t)":
@@ -299,8 +283,7 @@ suite "executeCommand - Operator pending commands":
       count: 1,
     )
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.column == 3 # Position before 'o' in "hello"
 
   test "till character backward (T)":
@@ -317,8 +300,7 @@ suite "executeCommand - Operator pending commands":
       count: 1,
     )
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check ctx.cursor.column == 8 # Position after 'o' in "world"
 
   test "find character not found does nothing":
@@ -354,8 +336,7 @@ suite "executeCommand - Operator + Motion":
     # Execute motion (w) which completes the operator
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "world test"
     check ctx.cursor.column == 0
 
@@ -373,8 +354,7 @@ suite "executeCommand - Operator + Motion":
     # Execute motion (2w)
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 2)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "test end"
 
   test "yank word (yw)":
@@ -391,8 +371,7 @@ suite "executeCommand - Operator + Motion":
     # Execute motion (w)
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world" # Buffer unchanged
     check ctx.state.yankRegister == "hello "
 
@@ -410,8 +389,7 @@ suite "executeCommand - Operator + Motion":
     # Execute motion (w)
     let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "world"
     check ctx.state.mode == EditorMode.Insert
 
@@ -429,8 +407,7 @@ suite "executeCommand - Operator + Motion":
     # Execute motion ($)
     let cmd = Command(kind: ctMotion, motion: Motion.End, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello "
 
   test "delete line motion (dj)":
@@ -447,8 +424,7 @@ suite "executeCommand - Operator + Motion":
     # Execute motion (j) - this becomes a linewise operation
     let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer.len == 1
     check buffer[0] == "line3"
 
@@ -466,8 +442,7 @@ suite "executeCommand - Operator + Motion":
     # Execute motion (j) - deletes all lines
     let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer.len == 1
     check buffer[0] == ""
 
@@ -532,8 +507,7 @@ suite "executeCommand - Operator + Motion":
     # Execute motion (j) - only 1 line, motion down stays on line 0
     let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer.len == 1
 
 suite "executeCommand - Delete with find motion":
@@ -557,8 +531,7 @@ suite "executeCommand - Delete with find motion":
       count: 1,
     )
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == " world"
 
   test "delete till character (dt)":
@@ -581,8 +554,7 @@ suite "executeCommand - Delete with find motion":
       count: 1,
     )
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "o world"
 
   test "change find character (cf)":
@@ -605,8 +577,7 @@ suite "executeCommand - Delete with find motion":
       count: 1,
     )
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == " world"
     check ctx.state.mode == EditorMode.Insert
 
@@ -622,8 +593,7 @@ suite "executeCommand - Action commands":
 
     let cmd = Command(kind: ctAction, commandId: "edit.undo", count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello"
 
   test "execute redo action":
@@ -638,8 +608,7 @@ suite "executeCommand - Action commands":
 
     let cmd = Command(kind: ctAction, commandId: "edit.redo", count: 1)
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world"
 
 suite "executeCommand - Repeat command (.)":
@@ -660,8 +629,7 @@ suite "executeCommand - Repeat command (.)":
     # Now repeat with . command
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let repeatCmd = Command(kind: ctAction, commandId: "edit.repeat", count: 1)
-    let result = registry.executeCommand(ctx, repeatCmd)
-    check result.isOk
+    check registry.executeCommand(ctx, repeatCmd).isOk
     check buffer[0] == "test end"
 
 suite "executeCommand - Record last edit":
@@ -808,8 +776,7 @@ suite "Handler - Paste operations":
     ctx.state.yankIsLine = false
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("paste.after"))
-    check result.isOk
+    check registry.execute(ctx, custom("paste.after")).isOk
     check buffer[0] == "helloXYZ world"
 
   test "paste after cursor (p) - linewise":
@@ -820,8 +787,7 @@ suite "Handler - Paste operations":
     ctx.state.yankIsLine = true
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("paste.after"))
-    check result.isOk
+    check registry.execute(ctx, custom("paste.after")).isOk
     check buffer.len == 3
     check buffer[1] == "new line"
 
@@ -833,8 +799,7 @@ suite "Handler - Paste operations":
     ctx.state.yankIsLine = false
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("paste.after"), @["3"])
-    check result.isOk
+    check registry.execute(ctx, custom("paste.after"), @["3"]).isOk
     check buffer[0] == "helloXXX"
 
   test "paste empty register returns error":
@@ -857,8 +822,7 @@ suite "Handler - Paste operations":
     ctx.state.yankIsLine = false
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("paste.before"))
-    check result.isOk
+    check registry.execute(ctx, custom("paste.before")).isOk
     check buffer[0] == "helloXYZ world"
 
 suite "Handler - Delete char operations":
@@ -868,8 +832,7 @@ suite "Handler - Delete char operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("delete.char"))
-    check result.isOk
+    check registry.execute(ctx, custom("delete.char")).isOk
     check buffer[0] == "ello"
     check ctx.state.yankRegister == "h"
 
@@ -879,8 +842,7 @@ suite "Handler - Delete char operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("delete.char"), @["3"])
-    check result.isOk
+    check registry.execute(ctx, custom("delete.char"), @["3"]).isOk
     check buffer[0] == "lo"
     check ctx.state.yankRegister == "hel"
 
@@ -890,8 +852,7 @@ suite "Handler - Delete char operations":
     ctx.cursor = BufferPosition(line: 0, column: 1)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("delete.char"))
-    check result.isOk
+    check registry.execute(ctx, custom("delete.char")).isOk
     check buffer[0] == "h"
     check ctx.cursor.column == 0 # Adjusted to stay in bounds
 
@@ -911,8 +872,7 @@ suite "Handler - Delete char operations":
     ctx.cursor = BufferPosition(line: 0, column: 2)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("delete.char.before"))
-    check result.isOk
+    check registry.execute(ctx, custom("delete.char.before")).isOk
     check buffer[0] == "hllo"
     check ctx.cursor.column == 1
 
@@ -933,8 +893,7 @@ suite "Handler - Delete line operations":
     ctx.cursor = BufferPosition(line: 1, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("delete.line"))
-    check result.isOk
+    check registry.execute(ctx, custom("delete.line")).isOk
     check buffer.len == 2
     check buffer[0] == "line1"
     check buffer[1] == "line3"
@@ -945,8 +904,7 @@ suite "Handler - Delete line operations":
     ctx.cursor = BufferPosition(line: 1, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("delete.line"), @["3"])
-    check result.isOk
+    check registry.execute(ctx, custom("delete.line"), @["3"]).isOk
     check buffer.len == 2
     check buffer[0] == "line1"
     check buffer[1] == "line5"
@@ -957,8 +915,7 @@ suite "Handler - Delete line operations":
     ctx.cursor = BufferPosition(line: 1, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("delete.line"))
-    check result.isOk
+    check registry.execute(ctx, custom("delete.line")).isOk
     check buffer.len == 1
     check buffer[0] == "line1"
     check ctx.cursor.line == 0
@@ -969,8 +926,7 @@ suite "Handler - Delete line operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("delete.line"))
-    check result.isOk
+    check registry.execute(ctx, custom("delete.line")).isOk
     check buffer.len == 1
     check buffer[0] == ""
     check ctx.cursor.line == 0
@@ -981,8 +937,7 @@ suite "Handler - Delete line operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("delete.line"))
-    check result.isOk
+    check registry.execute(ctx, custom("delete.line")).isOk
     check buffer.len == 1
     check buffer[0] == ""
 
@@ -992,8 +947,7 @@ suite "Handler - Delete line operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("delete.line"), @["2"])
-    check result.isOk
+    check registry.execute(ctx, custom("delete.line"), @["2"]).isOk
     check buffer.len == 1
     check buffer[0] == ""
     check ctx.cursor.line == 0
@@ -1061,8 +1015,7 @@ suite "Handler - Yank line operations":
     ctx.cursor = BufferPosition(line: 1, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("yank.line"))
-    check result.isOk
+    check registry.execute(ctx, custom("yank.line")).isOk
     check buffer.len == 3 # Buffer unchanged
     check "line2" in ctx.state.yankRegister
     check ctx.state.yankIsLine == true
@@ -1077,8 +1030,7 @@ suite "Handler - Yank line operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("yank.line"), @["3"])
-    check result.isOk
+    check registry.execute(ctx, custom("yank.line"), @["3"]).isOk
     check buffer.len == 4 # Buffer unchanged
     check "line1" in ctx.state.yankRegister
     check "line2" in ctx.state.yankRegister
@@ -1135,8 +1087,7 @@ suite "Handler - Substitute operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("substitute.char"))
-    check result.isOk
+    check registry.execute(ctx, custom("substitute.char")).isOk
     check buffer[0] == "ello"
     check ctx.state.mode == EditorMode.Insert
 
@@ -1146,8 +1097,7 @@ suite "Handler - Substitute operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("substitute.char"), @["3"])
-    check result.isOk
+    check registry.execute(ctx, custom("substitute.char"), @["3"]).isOk
     check buffer[0] == "lo"
     check ctx.state.mode == EditorMode.Insert
 
@@ -1157,8 +1107,7 @@ suite "Handler - Substitute operations":
     ctx.cursor = BufferPosition(line: 0, column: 5)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("substitute.line"))
-    check result.isOk
+    check registry.execute(ctx, custom("substitute.line")).isOk
     check buffer[0] == ""
     check ctx.state.mode == EditorMode.Insert
 
@@ -1169,8 +1118,7 @@ suite "Handler - Join lines":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("join.lines"))
-    check result.isOk
+    check registry.execute(ctx, custom("join.lines")).isOk
     check buffer.len == 1
     check buffer[0] == "line1 line2"
 
@@ -1180,8 +1128,7 @@ suite "Handler - Join lines":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("join.lines"), @["3"])
-    check result.isOk
+    check registry.execute(ctx, custom("join.lines"), @["3"]).isOk
     # 3J joins current line with next 3 lines (all 4 lines become 1)
     check buffer.len == 1
     check buffer[0] == "line1 line2 line3 line4"
@@ -1203,8 +1150,7 @@ suite "Handler - Toggle case":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("toggle.case"))
-    check result.isOk
+    check registry.execute(ctx, custom("toggle.case")).isOk
     check buffer[0] == "hEllo" or buffer[0][0] == 'h' # First char toggled
 
   test "toggle case multiple chars (3~)":
@@ -1213,8 +1159,7 @@ suite "Handler - Toggle case":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("toggle.case"), @["3"])
-    check result.isOk
+    check registry.execute(ctx, custom("toggle.case"), @["3"]).isOk
     # "Hel" -> "hEL"
     check buffer[0][0] == 'h'
     check buffer[0][1] == 'E'
@@ -1231,8 +1176,7 @@ suite "Handler - Replace char (r)":
       kind: ctOperatorPending, operatorType: "replace", targetChar: "X", count: 1
     )
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "Xello"
 
   test "replace multiple chars (3ra)":
@@ -1245,8 +1189,7 @@ suite "Handler - Replace char (r)":
       kind: ctOperatorPending, operatorType: "replace", targetChar: "a", count: 3
     )
 
-    let result = registry.executeCommand(ctx, cmd)
-    check result.isOk
+    check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "aaalo"
 
   test "replace at end of line returns error":
@@ -1270,8 +1213,7 @@ suite "Handler - Insert operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcInsertLineBelow))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcInsertLineBelow)).isOk
     check buffer.len == 3
     check buffer[0] == "line1"
     check buffer[1] == ""
@@ -1284,8 +1226,7 @@ suite "Handler - Insert operations":
     ctx.setCursor(1, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcInsertLineAbove))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcInsertLineAbove)).isOk
     check buffer.len == 3
     # Insert line above at line 1 creates empty line at line 1
     check buffer[1] == ""
@@ -1301,8 +1242,7 @@ suite "Handler - Scroll operations":
     ctx.motionController.viewportManager.viewport.topLine = 0
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcScrollCursorTop))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcScrollCursorTop)).isOk
     check ctx.motionController.viewportManager.viewport.topLine == 5
 
   test "scroll cursor to center (zz)":
@@ -1315,8 +1255,7 @@ suite "Handler - Scroll operations":
     ctx.motionController.viewportManager.viewport.height = 24
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcScrollCursorCenter))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcScrollCursorCenter)).isOk
     # Cursor at line 12 should be centered
     check ctx.motionController.viewportManager.viewport.topLine > 0
 
@@ -1330,8 +1269,7 @@ suite "Handler - Scroll operations":
     ctx.motionController.viewportManager.viewport.height = 24
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcScrollCursorBottom))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcScrollCursorBottom)).isOk
 
 suite "Handler - Visual mode operations":
   test "visual delete":
@@ -1340,8 +1278,7 @@ suite "Handler - Visual mode operations":
     ctx.setupVisual(0, 0, 0, 4)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualDelete))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualDelete)).isOk
     check buffer[0] == " world"
     check ctx.state.mode == EditorMode.Normal
 
@@ -1351,8 +1288,7 @@ suite "Handler - Visual mode operations":
     ctx.setupVisual(0, 0, 0, 4)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualYank))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualYank)).isOk
     check buffer[0] == "hello world" # Buffer unchanged
     check "hello" in ctx.state.yankRegister
     check ctx.state.mode == EditorMode.Normal
@@ -1363,8 +1299,7 @@ suite "Handler - Visual mode operations":
     ctx.setupVisual(0, 0, 1, 0, EditorMode.VisualLine)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualIndent))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualIndent)).isOk
     # Lines should be indented
     check buffer[0].len > 5 or buffer[0][0] == ' '
 
@@ -1374,8 +1309,7 @@ suite "Handler - Visual mode operations":
     ctx.setupVisual(0, 0, 0, 4)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualLowercase))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualLowercase)).isOk
     check buffer[0] == "hello WORLD"
 
   test "visual uppercase":
@@ -1384,8 +1318,7 @@ suite "Handler - Visual mode operations":
     ctx.setupVisual(0, 0, 0, 4)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualUppercase))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualUppercase)).isOk
     check buffer[0] == "HELLO world"
 
   test "visual join lines":
@@ -1394,8 +1327,7 @@ suite "Handler - Visual mode operations":
     ctx.setupVisual(0, 0, 1, 0, EditorMode.VisualLine)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualJoinLines))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualJoinLines)).isOk
     check buffer.len == 2
     check buffer[0] == "line1 line2"
 
@@ -1405,8 +1337,7 @@ suite "Handler - Visual mode operations":
     ctx.setupVisual(0, 0, 0, 4)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualChange))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualChange)).isOk
     check buffer[0] == " world"
     check ctx.state.mode == EditorMode.Insert
 
@@ -1417,8 +1348,7 @@ suite "Handler - Increment/Decrement":
     ctx.cursor = BufferPosition(line: 0, column: 7) # On '4'
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcEditIncrementNumber))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcEditIncrementNumber)).isOk
     check "43" in buffer[0]
 
   test "decrement number (Ctrl-X)":
@@ -1427,8 +1357,7 @@ suite "Handler - Increment/Decrement":
     ctx.cursor = BufferPosition(line: 0, column: 7) # On '4'
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcEditDecrementNumber))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcEditDecrementNumber)).isOk
     check "41" in buffer[0]
 
   test "increment negative number":
@@ -1437,8 +1366,7 @@ suite "Handler - Increment/Decrement":
     ctx.cursor = BufferPosition(line: 0, column: 7) # On '-'
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcEditIncrementNumber))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcEditIncrementNumber)).isOk
     check "-4" in buffer[0]
 
   test "decrement to negative":
@@ -1447,8 +1375,7 @@ suite "Handler - Increment/Decrement":
     ctx.cursor = BufferPosition(line: 0, column: 7) # On '0'
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcEditDecrementNumber))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcEditDecrementNumber)).isOk
     check "-1" in buffer[0]
 
 suite "Handler - Indent/Dedent":
@@ -1458,8 +1385,7 @@ suite "Handler - Indent/Dedent":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("indent.line"))
-    check result.isOk
+    check registry.execute(ctx, custom("indent.line")).isOk
     # Line should start with whitespace (space or tab)
     check buffer[0][0] == ' ' or buffer[0][0] == '\t'
 
@@ -1469,8 +1395,7 @@ suite "Handler - Indent/Dedent":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("dedent.line"))
-    check result.isOk
+    check registry.execute(ctx, custom("dedent.line")).isOk
     check buffer[0].len < 9 # Line should be shorter
 
 suite "Handler - Fold operations":
@@ -1481,8 +1406,7 @@ suite "Handler - Fold operations":
     let registry = createTestRegistry()
 
     # Fold toggle should work (may not have visible effect without actual fold)
-    let result = registry.execute(ctx, builtin(bcFoldToggle))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcFoldToggle)).isOk
 
   test "fold open all":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -1490,8 +1414,7 @@ suite "Handler - Fold operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcFoldOpenAll))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcFoldOpenAll)).isOk
 
   test "fold close all":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -1499,8 +1422,7 @@ suite "Handler - Fold operations":
     ctx.cursor = BufferPosition(line: 0, column: 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcFoldCloseAll))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcFoldCloseAll)).isOk
 
 suite "Handler - Text Object operations":
   test "textobject.inner without pending operator enters Insert mode":
@@ -1511,8 +1433,7 @@ suite "Handler - Text Object operations":
     let registry = createTestRegistry()
 
     # Call textobject.inner without pending operator
-    let result = registry.execute(ctx, custom("textobject.inner"))
-    check result.isOk
+    check registry.execute(ctx, custom("textobject.inner")).isOk
     check ctx.state.mode == EditorMode.Insert
 
   test "textobject.around without pending operator enters Insert mode (append)":
@@ -1523,8 +1444,7 @@ suite "Handler - Text Object operations":
     let registry = createTestRegistry()
 
     # Call textobject.around without pending operator
-    let result = registry.execute(ctx, custom("textobject.around"))
-    check result.isOk
+    check registry.execute(ctx, custom("textobject.around")).isOk
     check ctx.state.mode == EditorMode.Insert
     check ctx.cursor.column == 1 # Cursor moved right for append
 
@@ -1541,8 +1461,7 @@ suite "Handler - Text Object operations":
     )
 
     # Call textobject.inner
-    let result = registry.execute(ctx, custom("textobject.inner"))
-    check result.isOk
+    check registry.execute(ctx, custom("textobject.inner")).isOk
     check ctx.state.editState.pendingTextObject.isSome
     check ctx.state.editState.pendingTextObject.get.modifier == tomInner
 
@@ -1559,8 +1478,7 @@ suite "Handler - Text Object operations":
     )
 
     # Call textobject.around
-    let result = registry.execute(ctx, custom("textobject.around"))
-    check result.isOk
+    check registry.execute(ctx, custom("textobject.around")).isOk
     check ctx.state.editState.pendingTextObject.isSome
     check ctx.state.editState.pendingTextObject.get.modifier == tomAround
 
@@ -1580,8 +1498,7 @@ suite "Handler - Text Object operations":
     discard registry.execute(ctx, custom("textobject.inner"))
 
     # Now execute text object kind (word)
-    let result = registry.execute(ctx, custom("textobject.word"))
-    check result.isOk
+    check registry.execute(ctx, custom("textobject.word")).isOk
     # "world" should be deleted
     check "world" notin buffer[0]
 
@@ -1601,8 +1518,7 @@ suite "Handler - Text Object operations":
     discard registry.execute(ctx, custom("textobject.around"))
 
     # Now execute text object kind (word)
-    let result = registry.execute(ctx, custom("textobject.word"))
-    check result.isOk
+    check registry.execute(ctx, custom("textobject.word")).isOk
     # "world " should be deleted (including surrounding space)
     check "world" notin buffer[0]
 
@@ -1672,8 +1588,7 @@ suite "Handler - Visual Paragraph motion":
     ctx.setupVisual(0, 0, 0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveParagraphForward))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveParagraphForward)).isOk
     # Cursor should move to blank line or past it
     check ctx.state.cursor.line >= 2
 
@@ -1683,8 +1598,7 @@ suite "Handler - Visual Paragraph motion":
     ctx.setupVisual(4, 0, 4, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveParagraphBackward))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveParagraphBackward)).isOk
     # Cursor should move to blank line or before it
     check ctx.state.cursor.line <= 2
 
@@ -1694,8 +1608,7 @@ suite "Handler - Visual Paragraph motion":
     ctx.setupVisual(0, 0, 0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveParagraphForward), @["2"])
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveParagraphForward), @["2"]).isOk
     # Should move past 2 paragraph boundaries
     check ctx.state.cursor.line >= 3
 
@@ -1707,8 +1620,7 @@ suite "Handler - Operator commands":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("operator.delete"))
-    check result.isOk
+    check registry.execute(ctx, custom("operator.delete")).isOk
     check ctx.state.editState.pendingOperator.isSome
     check ctx.state.editState.pendingOperator.get.operatorType == OpDelete
 
@@ -1719,8 +1631,7 @@ suite "Handler - Operator commands":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("operator.change"))
-    check result.isOk
+    check registry.execute(ctx, custom("operator.change")).isOk
     check ctx.state.editState.pendingOperator.isSome
     check ctx.state.editState.pendingOperator.get.operatorType == OpChange
 
@@ -1731,8 +1642,7 @@ suite "Handler - Operator commands":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("operator.yank"))
-    check result.isOk
+    check registry.execute(ctx, custom("operator.yank")).isOk
     check ctx.state.editState.pendingOperator.isSome
     check ctx.state.editState.pendingOperator.get.operatorType == OpYank
 
@@ -1748,8 +1658,7 @@ suite "Handler - Operator commands":
     check ctx.state.editState.pendingOperator.isSome
 
     # Second d - completes dd (delete line)
-    let result = registry.execute(ctx, custom("operator.delete"))
-    check result.isOk
+    check registry.execute(ctx, custom("operator.delete")).isOk
     check buffer.len == 2
     check buffer[0] == "line1"
     check buffer[1] == "line3"
@@ -1764,8 +1673,7 @@ suite "Handler - Operator commands":
     # First d
     discard registry.execute(ctx, custom("operator.delete"))
     # Second d
-    let result = registry.execute(ctx, custom("operator.delete"))
-    check result.isOk
+    check registry.execute(ctx, custom("operator.delete")).isOk
     check buffer.len == 1
     check buffer[0] == ""
     check ctx.cursor.line == 0
@@ -1795,8 +1703,7 @@ suite "Handler - Operator commands":
     let registry = createTestRegistry()
 
     discard registry.execute(ctx, custom("operator.delete"))
-    let result = registry.execute(ctx, custom("operator.delete"))
-    check result.isOk
+    check registry.execute(ctx, custom("operator.delete")).isOk
     check buffer.len == 2
 
     # Single undo should restore
@@ -1819,8 +1726,7 @@ suite "Handler - Operator commands":
     check ctx.state.editState.pendingOperator.isSome
 
     # Second y - completes yy (yank line)
-    let result = registry.execute(ctx, custom("operator.yank"))
-    check result.isOk
+    check registry.execute(ctx, custom("operator.yank")).isOk
     check buffer.len == 3 # Buffer unchanged
     check "line2" in ctx.state.yankRegister
     # Register system must also be updated
@@ -1842,8 +1748,7 @@ suite "Handler - Operator commands":
     # yy on line 1
     ctx.cursor = BufferPosition(line: 1, column: 0)
     discard registry.execute(ctx, custom("operator.yank"))
-    let result = registry.execute(ctx, custom("operator.yank"))
-    check result.isOk
+    check registry.execute(ctx, custom("operator.yank")).isOk
 
     # p should paste "bbb", not "a"
     let pasteResult = registry.execute(ctx, custom("paste.after"))
@@ -1862,8 +1767,7 @@ suite "Handler - Operator commands":
     check ctx.state.editState.pendingOperator.isSome
 
     # Second c - completes cc (change line)
-    let result = registry.execute(ctx, custom("operator.change"))
-    check result.isOk
+    check registry.execute(ctx, custom("operator.change")).isOk
     check buffer[1] == "" # Line content deleted
     check ctx.state.mode == EditorMode.Insert
 
@@ -1874,8 +1778,7 @@ suite "Handler - Visual mode extended operations":
     ctx.setupVisual(0, 0, 0, 4)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualToggleCase))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualToggleCase)).isOk
     check buffer[0] == "hELLO World"
     check ctx.state.mode == EditorMode.Normal
 
@@ -1885,8 +1788,7 @@ suite "Handler - Visual mode extended operations":
     ctx.setupVisual(0, 0, 1, 0, EditorMode.VisualLine)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualDedent))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualDedent)).isOk
     # Lines should be dedented
     check buffer[0].len < 9 or buffer[0][0] != ' '
 
@@ -1896,8 +1798,7 @@ suite "Handler - Visual mode extended operations":
     ctx.setupVisual(0, 0, 0, 4)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualToInsertMode))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualToInsertMode)).isOk
     check ctx.state.mode == EditorMode.Insert
 
   test "visual swap selection (o)":
@@ -1906,8 +1807,7 @@ suite "Handler - Visual mode extended operations":
     ctx.setupVisual(0, 0, 0, 4)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualSwapSelection))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualSwapSelection)).isOk
     # State cursor should move to the start of selection
     check ctx.state.cursor.column == 0
 
@@ -1926,8 +1826,7 @@ suite "Handler - Visual mode extended operations":
     ctx.state.yankIsLine = false
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualPaste))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualPaste)).isOk
     # Result depends on implementation - just check it succeeded
 
 suite "Handler - Visual Move Commands":
@@ -1937,8 +1836,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 0, 5)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveLeft))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveLeft)).isOk
     # Cursor should have moved left
     check ctx.state.cursor.column == 4
 
@@ -1948,8 +1846,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 0, 5)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveRight))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveRight)).isOk
     # Cursor should have moved right
     check ctx.state.cursor.column == 6
 
@@ -1959,8 +1856,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 1, 2)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveUp))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveUp)).isOk
     check ctx.state.cursor.line == 0
 
   test "visual move down":
@@ -1969,8 +1865,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 1, 2)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveDown))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveDown)).isOk
     check ctx.state.cursor.line == 2
 
   test "visual move home (0)":
@@ -1979,8 +1874,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 4, 0, 8)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveHome))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveHome)).isOk
     check ctx.state.cursor.column == 0
 
   test "visual move end ($)":
@@ -1989,8 +1883,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 0, 3)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveEnd))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveEnd)).isOk
     check ctx.state.cursor.column == 10 # End of "hello world"
 
   test "visual move first non-blank (^)":
@@ -1999,8 +1892,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 8, 0, 10)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveFirstNonBlank))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveFirstNonBlank)).isOk
     check ctx.state.cursor.column == 4 # First non-blank
 
   test "visual move first line (gg)":
@@ -2009,8 +1901,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(1, 0, 2, 2)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveFirstLine))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveFirstLine)).isOk
     check ctx.state.cursor.line == 0
 
   test "visual move last line (G)":
@@ -2019,8 +1910,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 1, 2)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveLastLine))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveLastLine)).isOk
     check ctx.state.cursor.line == 2 # Last line
 
   test "visual move word (w)":
@@ -2029,8 +1919,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveWord))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveWord)).isOk
     check ctx.state.cursor.column == 6 # Start of "world"
 
   test "visual move word back (b)":
@@ -2039,8 +1928,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 6, 0, 10)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveWordBack))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveWordBack)).isOk
     check ctx.state.cursor.column == 6 # Back to "world"
 
   test "visual move word end (e)":
@@ -2049,8 +1937,7 @@ suite "Handler - Visual Move Commands":
     ctx.setupVisual(0, 0, 0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcVisualMoveWordEnd))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcVisualMoveWordEnd)).isOk
     check ctx.state.cursor.column == 4 # End of "hello"
 
 suite "Handler - Insert Mode Operations":
@@ -2061,8 +1948,7 @@ suite "Handler - Insert Mode Operations":
     ctx.setCursor(0, 5)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcInsertChar), @["X"])
-    check result.isOk
+    check registry.execute(ctx, builtin(bcInsertChar), @["X"]).isOk
     check buffer[0] == "helloX world"
 
   test "insert backspace":
@@ -2072,8 +1958,7 @@ suite "Handler - Insert Mode Operations":
     ctx.setCursor(0, 5)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcInsertBackspace))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcInsertBackspace)).isOk
     check buffer[0] == "hell world"
 
   test "insert delete":
@@ -2083,8 +1968,7 @@ suite "Handler - Insert Mode Operations":
     ctx.setCursor(0, 5)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcInsertDelete))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcInsertDelete)).isOk
     check buffer[0] == "helloworld" # Space deleted
 
   test "insert newline":
@@ -2094,8 +1978,7 @@ suite "Handler - Insert Mode Operations":
     ctx.setCursor(0, 5)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcInsertNewline))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcInsertNewline)).isOk
     check buffer.len == 2
     check buffer[0] == "hello"
     check buffer[1] == " world"
@@ -2107,8 +1990,7 @@ suite "Handler - Insert Mode Operations":
     ctx.setCursor(0, 2)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcInsertAppend))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcInsertAppend)).isOk
     check ctx.state.mode == EditorMode.Insert
     check ctx.state.cursor.column == 3 # Cursor moved right
 
@@ -2119,8 +2001,7 @@ suite "Handler - Insert Mode Operations":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcInsertAppendEnd))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcInsertAppendEnd)).isOk
     check ctx.state.mode == EditorMode.Insert
     check ctx.state.cursor.column == 5 # End of line
 
@@ -2131,8 +2012,7 @@ suite "Handler - Mode Switch Commands":
     ctx.state.mode = EditorMode.Insert
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcModeNormal))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcModeNormal)).isOk
     check ctx.state.mode == EditorMode.Normal
 
   test "mode insert":
@@ -2142,8 +2022,7 @@ suite "Handler - Mode Switch Commands":
     ctx.setCursor(0, 2)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcModeInsert))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcModeInsert)).isOk
     check ctx.state.mode == EditorMode.Insert
 
   test "mode command (overlay)":
@@ -2152,8 +2031,7 @@ suite "Handler - Mode Switch Commands":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcModeCommand))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcModeCommand)).isOk
     # Command mode is an overlay, not a separate mode
 
 suite "Handler - Fold Operations":
@@ -2164,7 +2042,7 @@ suite "Handler - Fold Operations":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcFoldOpen))
+    discard registry.execute(ctx, builtin(bcFoldOpen))
     # Just check it doesn't crash - fold operation depends on fold state
     check true # Just verify no crash
 
@@ -2175,7 +2053,7 @@ suite "Handler - Fold Operations":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcFoldClose))
+    discard registry.execute(ctx, builtin(bcFoldClose))
     # Just check it doesn't crash
     check true # Just verify no crash
 
@@ -2185,7 +2063,7 @@ suite "Handler - Fold Operations":
     ctx.setupVisual(1, 0, 2, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcFoldCreate))
+    discard registry.execute(ctx, builtin(bcFoldCreate))
     # Just check it doesn't crash
     check true # Just verify no crash
 
@@ -2196,7 +2074,7 @@ suite "Handler - Fold Operations":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcFoldDelete))
+    discard registry.execute(ctx, builtin(bcFoldDelete))
     # Just check it doesn't crash
     check true # Just verify no crash
 
@@ -2206,8 +2084,7 @@ suite "Handler - Fold Operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcFoldDeleteAll))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcFoldDeleteAll)).isOk
 
 suite "Handler - Search Commands":
   test "search word forward (#)":
@@ -2217,7 +2094,7 @@ suite "Handler - Search Commands":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("search.word.forward"))
+    discard registry.execute(ctx, custom("search.word.forward"))
     # Just check it doesn't crash - search might not find anything
     check true # Just verify no crash
 
@@ -2228,7 +2105,7 @@ suite "Handler - Search Commands":
     ctx.setCursor(0, 12)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("search.word.backward"))
+    discard registry.execute(ctx, custom("search.word.backward"))
     # Just check it doesn't crash
     check true # Just verify no crash
 
@@ -2240,7 +2117,7 @@ suite "Handler - Search Commands":
     ctx.state.search.lastText = "hello"
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("search.next"))
+    discard registry.execute(ctx, custom("search.next"))
     # Just check it doesn't crash
     check true # Just verify no crash
 
@@ -2252,7 +2129,7 @@ suite "Handler - Search Commands":
     ctx.state.search.lastText = "hello"
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("search.prev"))
+    discard registry.execute(ctx, custom("search.prev"))
     # Just check it doesn't crash
     check true # Just verify no crash
 
@@ -2264,8 +2141,7 @@ suite "Handler - Other Commands":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("show.char.info"))
-    check result.isOk
+    check registry.execute(ctx, custom("show.char.info")).isOk
 
   test "autoindent line (==)":
     let buffer = newTextBuffer("    hello")
@@ -2274,7 +2150,7 @@ suite "Handler - Other Commands":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("autoindent.line"))
+    discard registry.execute(ctx, custom("autoindent.line"))
     # Just check it doesn't crash
     check true # Just verify no crash
 
@@ -2284,7 +2160,7 @@ suite "Handler - Other Commands":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcQuickRun))
+    discard registry.execute(ctx, builtin(bcQuickRun))
     # Just check it doesn't crash - actual execution depends on config
     check true # Just verify no crash
 
@@ -2295,8 +2171,7 @@ suite "Handler - Other Commands":
     ctx.setCursor(0, 6)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("operator.delete.to.end"))
-    check result.isOk
+    check registry.execute(ctx, custom("operator.delete.to.end")).isOk
     check buffer[0] == "hello "
 
   test "operator change to end (C)":
@@ -2306,8 +2181,7 @@ suite "Handler - Other Commands":
     ctx.setCursor(0, 6)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("operator.change.to.end"))
-    check result.isOk
+    check registry.execute(ctx, custom("operator.change.to.end")).isOk
     check buffer[0] == "hello "
     check ctx.state.mode == EditorMode.Insert
 
@@ -2319,8 +2193,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(0, 5)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionLeft))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionLeft)).isOk
     check ctx.cursor.column == 4
 
   test "motion right (l)":
@@ -2330,8 +2203,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(0, 5)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionRight))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionRight)).isOk
     check ctx.cursor.column == 6
 
   test "motion up (k)":
@@ -2341,8 +2213,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(1, 2)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionUp))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionUp)).isOk
     check ctx.cursor.line == 0
 
   test "motion down (j)":
@@ -2352,8 +2223,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(1, 2)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionDown))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionDown)).isOk
     check ctx.cursor.line == 2
 
   test "motion home (0)":
@@ -2363,8 +2233,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(0, 8)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionHome))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionHome)).isOk
     check ctx.cursor.column == 0
 
   test "motion end ($)":
@@ -2374,8 +2243,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionEnd))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionEnd)).isOk
     check ctx.cursor.column == 10
 
   test "motion first non-blank (^)":
@@ -2385,8 +2253,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(0, 10)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionFirstNonBlank))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionFirstNonBlank)).isOk
     check ctx.cursor.column == 4
 
   test "motion first line (gg)":
@@ -2396,8 +2263,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(2, 2)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionFirstLine))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionFirstLine)).isOk
     check ctx.cursor.line == 0
 
   test "motion last line (G)":
@@ -2407,8 +2273,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionLastLine))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionLastLine)).isOk
     check ctx.cursor.line == 2
 
   # Note: bcMotionWord, bcMotionWordBack, bcMotionWordEnd are not registered as
@@ -2422,8 +2287,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionMatchBracket))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionMatchBracket)).isOk
     check ctx.cursor.column == 12
 
   test "motion page down (Ctrl+f)":
@@ -2433,8 +2297,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionPageDown))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionPageDown)).isOk
 
   test "motion page up (Ctrl+b)":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
@@ -2443,8 +2306,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(4, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionPageUp))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionPageUp)).isOk
 
   test "motion viewport high (H)":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
@@ -2453,8 +2315,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(3, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionViewportHigh))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionViewportHigh)).isOk
     check ctx.cursor.line == 0
 
   test "motion viewport middle (M)":
@@ -2464,8 +2325,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionViewportMiddle))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionViewportMiddle)).isOk
 
   test "motion viewport low (L)":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4\nline5")
@@ -2474,8 +2334,7 @@ suite "Handler - Basic Motion Commands":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcMotionViewportLow))
-    check result.isOk
+    check registry.execute(ctx, builtin(bcMotionViewportLow)).isOk
     check ctx.cursor.line == 4
 
 suite "Handler - Undo/Redo Commands":
@@ -2485,7 +2344,7 @@ suite "Handler - Undo/Redo Commands":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcEditUndo))
+    discard registry.execute(ctx, builtin(bcEditUndo))
     # Undo may fail if there's nothing to undo
     check true # Just verify no crash
 
@@ -2495,7 +2354,7 @@ suite "Handler - Undo/Redo Commands":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcEditRedo))
+    discard registry.execute(ctx, builtin(bcEditRedo))
     # Redo may fail if there's nothing to redo
     check true # Just verify no crash
 
@@ -2507,7 +2366,7 @@ suite "Handler - Jump Commands":
     ctx.setCursor(2, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcJumpBack))
+    discard registry.execute(ctx, builtin(bcJumpBack))
     # Jump may fail if there's nothing in jump list
     check true # Just verify no crash
 
@@ -2518,7 +2377,7 @@ suite "Handler - Jump Commands":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcJumpForward))
+    discard registry.execute(ctx, builtin(bcJumpForward))
     # Jump may fail if there's nothing in jump list
     check true # Just verify no crash
 
@@ -2529,7 +2388,7 @@ suite "Handler - File Operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcFileSave))
+    discard registry.execute(ctx, builtin(bcFileSave))
     # File save may fail without proper buffer path
     check true # Just verify no crash
 
@@ -2539,7 +2398,7 @@ suite "Handler - File Operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcFileNew))
+    discard registry.execute(ctx, builtin(bcFileNew))
     # Just check it doesn't crash
     check true # Just verify no crash
 
@@ -2549,7 +2408,7 @@ suite "Handler - File Operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcFileClose))
+    discard registry.execute(ctx, builtin(bcFileClose))
     # Just check it doesn't crash
     check true # Just verify no crash
 
@@ -2559,7 +2418,7 @@ suite "Handler - File Operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcFileOpen))
+    discard registry.execute(ctx, builtin(bcFileOpen))
     # Just check it doesn't crash
     check true # Just verify no crash
 
@@ -2569,7 +2428,7 @@ suite "Handler - File Operations":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcFiler))
+    discard registry.execute(ctx, builtin(bcFiler))
     # Just check it doesn't crash
     check true # Just verify no crash
 
@@ -2581,7 +2440,7 @@ suite "Handler - LSP Commands":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcLspGotoDefinition))
+    discard registry.execute(ctx, builtin(bcLspGotoDefinition))
     # LSP may fail without server running
     check true # Just verify no crash
 
@@ -2592,7 +2451,7 @@ suite "Handler - LSP Commands":
     ctx.setCursor(0, 0)
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcLspFindReferences))
+    discard registry.execute(ctx, builtin(bcLspFindReferences))
     # LSP may fail without server running
     check true # Just verify no crash
 
@@ -2602,7 +2461,7 @@ suite "Handler - LSP Commands":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcLspCallHierarchyIncoming))
+    discard registry.execute(ctx, builtin(bcLspCallHierarchyIncoming))
     # LSP may fail without server running
     check true # Just verify no crash
 
@@ -2612,7 +2471,7 @@ suite "Handler - LSP Commands":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcLspCallHierarchyOutgoing))
+    discard registry.execute(ctx, builtin(bcLspCallHierarchyOutgoing))
     # LSP may fail without server running
     check true # Just verify no crash
 
@@ -2622,7 +2481,7 @@ suite "Handler - LSP Commands":
     ctx.state.mode = EditorMode.Normal
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, builtin(bcLspCodeLensExecute))
+    discard registry.execute(ctx, builtin(bcLspCodeLensExecute))
     # LSP may fail without server running
     check true # Just verify no crash
 
@@ -2652,8 +2511,7 @@ suite "Handler - Edit Repeat Command":
     )
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("edit.repeat"))
-    check result.isOk
+    check registry.execute(ctx, custom("edit.repeat")).isOk
     check buffer[0] == "helloX world"
 
   test "edit.repeat with delete char command":
@@ -2665,8 +2523,7 @@ suite "Handler - Edit Repeat Command":
       some(LastEditCommand(kind: lecDeleteChar, deleteCount: 1, deleteForward: true))
     let registry = createTestRegistry()
 
-    let result = registry.execute(ctx, custom("edit.repeat"))
-    check result.isOk
+    check registry.execute(ctx, custom("edit.repeat")).isOk
     check buffer[0] == "ello world"
 
 suite "Handler - Special Commands":

@@ -48,7 +48,6 @@ proc renderConfig*(
 
   let
     configState = window.configModeState.get
-    headerY = window.viewport.y + tabLineOffset
     listStartY = window.viewport.y + tabLineOffset
     listEndY = window.viewport.y + window.viewport.height - reservedBottom
     width = window.viewport.width
