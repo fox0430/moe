@@ -1464,6 +1464,113 @@ suite "CommandModeHandler - handleCommandModeInput":
     let result = handler.handleCommandModeInput(buffer, ":unknowncommand")
     check result.kind == cmrError
 
+suite "CommandModeHandler - handleCommandModeInput map commands":
+  test "Handle :nmap returns cmrMapAdd":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":nmap C-s Escape")
+    check result.kind == cmrMapAdd
+    check result.mapAddLhs == "C-s"
+    check result.mapAddRhs == "Escape"
+    check EditorMode.Normal in result.mapAddModes
+    check result.mapAddModes.len == 1
+
+  test "Handle :imap returns cmrMapAdd for Insert":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":imap jj Escape")
+    check result.kind == cmrMapAdd
+    check result.mapAddLhs == "jj"
+    check result.mapAddRhs == "Escape"
+    check EditorMode.Insert in result.mapAddModes
+
+  test "Handle :vmap returns cmrMapAdd for Visual modes":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":vmap C-c Escape")
+    check result.kind == cmrMapAdd
+    check EditorMode.Visual in result.mapAddModes
+    check EditorMode.VisualBlock in result.mapAddModes
+    check EditorMode.VisualLine in result.mapAddModes
+
+  test "Handle :rmap returns cmrMapAdd for Replace":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":rmap C-a Escape")
+    check result.kind == cmrMapAdd
+    check EditorMode.Replace in result.mapAddModes
+
+  test "Handle :map returns cmrMapAdd for all modes":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":map C-a Escape")
+    check result.kind == cmrMapAdd
+    check result.mapAddModes.len == 6
+
+  test "Handle :nunmap returns cmrMapRemove":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":nunmap C-s")
+    check result.kind == cmrMapRemove
+    check result.mapRemoveLhs == "C-s"
+    check EditorMode.Normal in result.mapRemoveModes
+
+  test "Handle :unmap returns cmrMapRemove for all modes":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":unmap C-s")
+    check result.kind == cmrMapRemove
+    check result.mapRemoveModes.len == 6
+
+  test "Handle :nmapclear returns cmrMapClear":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":nmapclear")
+    check result.kind == cmrMapClear
+    check EditorMode.Normal in result.mapClearModes
+
+  test "Handle :mapclear returns cmrMapClear for all modes":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":mapclear")
+    check result.kind == cmrMapClear
+    check result.mapClearModes.len == 6
+
+  test "Handle :nnoremap alias":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":nnoremap C-a g g")
+    check result.kind == cmrMapAdd
+    check result.mapAddLhs == "C-a"
+    check result.mapAddRhs == "g g"
+    check EditorMode.Normal in result.mapAddModes
+
+  test "Handle :nmap without args returns error":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":nmap")
+    check result.kind == cmrError
+    check "Usage" in result.errorMessage
+
+  test "Handle :nmap with only LHS returns error":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":nmap C-s")
+    check result.kind == cmrError
+    check "Usage" in result.errorMessage
+
 suite "CommandModeHandler - Result Helper Functions":
   test "shouldQuit returns true for quit result":
     let result = CommandModeResult(kind: cmrQuit, forceQuit: false)

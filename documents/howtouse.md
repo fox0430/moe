@@ -15,6 +15,7 @@
 - [Terminal Mode](#terminal-mode)
 - [Configuration Mode](#configuration-mode)
 - [Command Mode](#command-mode)
+- [Runtime Key Mapping](#runtime-key-mapping)
 
 
 ## Exiting
@@ -388,6 +389,61 @@ All keystrokes are forwarded to the running shell/command.
 | `jump` | Open Jump list viewer |
 | `terminal` | Open terminal emulator (default shell) |
 | `terminal command` | Run command in terminal emulator |
+
+</details>
+
+### Runtime Key Mapping
+
+<details open>
+  <summary>Runtime key mapping commands</summary>
+
+Map, unmap, and clear runtime key mappings. All mappings are non-recursive (noremap).
+Mappings are session-only and not persisted across restarts.
+
+| Command| Description |
+|:-----------------------------|:---------------------------|
+| `nmap {lhs} {rhs}` | Map keys in Normal mode |
+| `imap {lhs} {rhs}` | Map keys in Insert mode |
+| `vmap {lhs} {rhs}` | Map keys in Visual modes |
+| `rmap {lhs} {rhs}` | Map keys in Replace mode |
+| `map {lhs} {rhs}` | Map keys in all modes |
+| `nunmap {lhs}` | Remove mapping in Normal mode |
+| `iunmap {lhs}` | Remove mapping in Insert mode |
+| `vunmap {lhs}` | Remove mapping in Visual modes |
+| `runmap {lhs}` | Remove mapping in Replace mode |
+| `unmap {lhs}` | Remove mapping in all modes |
+| `nmapclear` | Clear all Normal mode mappings |
+| `imapclear` | Clear all Insert mode mappings |
+| `vmapclear` | Clear all Visual mode mappings |
+| `rmapclear` | Clear all Replace mode mappings |
+| `mapclear` | Clear all mode mappings |
+
+`noremap`, `nnoremap`, `inoremap`, `vnoremap` are aliases (all mappings are non-recursive).
+
+**Key notation:**
+
+| Notation | Meaning |
+|:----|:----|
+| `a`, `j`, `0` | Regular keys |
+| `C-s`, `M-x` | Modifier keys (`C`=Ctrl, `M`=Alt, `S`=Shift) |
+| `Escape`, `Enter`, `Tab` | Special keys |
+| `Up`, `Down`, `F1`-`F12` | Arrow and function keys |
+| `Space` | Space key |
+| `j j`, `g g` | Multi-key sequences (space-separated) |
+| `jj`, `gg` | Vim-style concatenated keys (equivalent to `j j`, `g g`) |
+
+`{rhs}` can be a command name or a key sequence (e.g. `Escape`).
+
+**Examples:**
+
+```
+:nmap C-s save-and-quit  " Ctrl-S saves and quits (Normal mode)
+:imap jj Escape          " jj exits Insert mode
+:nmap C-a g g            " Ctrl-A goes to first line
+:vmap C-c Escape         " Ctrl-C exits Visual mode
+:nunmap C-s              " Remove Ctrl-S mapping in Normal mode
+:nmapclear               " Clear all Normal mode runtime mappings
+```
 
 </details>
 

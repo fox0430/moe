@@ -172,6 +172,26 @@ const CommandDescriptions = {
   "lspcallhierarchyoutgoing": "Show outgoing calls",
   # Terminal
   "terminal": "Open terminal emulator",
+  # Key mapping commands
+  "map": "Map keys (all modes)",
+  "noremap": "Map keys (all modes)",
+  "nmap": "Map keys (Normal mode)",
+  "nnoremap": "Map keys (Normal mode)",
+  "imap": "Map keys (Insert mode)",
+  "inoremap": "Map keys (Insert mode)",
+  "vmap": "Map keys (Visual modes)",
+  "vnoremap": "Map keys (Visual modes)",
+  "rmap": "Map keys (Replace mode)",
+  "unmap": "Unmap keys (all modes)",
+  "nunmap": "Unmap keys (Normal mode)",
+  "iunmap": "Unmap keys (Insert mode)",
+  "vunmap": "Unmap keys (Visual modes)",
+  "runmap": "Unmap keys (Replace mode)",
+  "mapclear": "Clear mappings (all modes)",
+  "nmapclear": "Clear mappings (Normal mode)",
+  "imapclear": "Clear mappings (Insert mode)",
+  "vmapclear": "Clear mappings (Visual modes)",
+  "rmapclear": "Clear mappings (Replace mode)",
 }.toTable
 
 # Commands that take file path arguments

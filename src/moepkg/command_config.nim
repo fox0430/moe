@@ -188,6 +188,31 @@ proc loadDefaultConfig*(config: CommandConfig) =
   # Terminal
   config.addAlias("terminal", claTerminal)
 
+  # Key mapping commands
+  config.addAlias("map", claMap)
+  config.addAlias("noremap", claMap)
+  config.addAlias("nmap", claNmap)
+  config.addAlias("nnoremap", claNmap)
+  config.addAlias("imap", claImap)
+  config.addAlias("inoremap", claImap)
+  config.addAlias("vmap", claVmap)
+  config.addAlias("vnoremap", claVmap)
+  config.addAlias("rmap", claRmap)
+
+  # Key unmapping commands
+  config.addAlias("unmap", claUnmap)
+  config.addAlias("nunmap", claNunmap)
+  config.addAlias("iunmap", claIunmap)
+  config.addAlias("vunmap", claVunmap)
+  config.addAlias("runmap", claRunmap)
+
+  # Key mapping clear commands
+  config.addAlias("mapclear", claMapclear)
+  config.addAlias("nmapclear", claNmapclear)
+  config.addAlias("imapclear", claImapclear)
+  config.addAlias("vmapclear", claVmapclear)
+  config.addAlias("rmapclear", claRmapclear)
+
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser
   # Clear existing aliases

@@ -480,13 +480,22 @@ proc extractInsertedText(transaction: buffer.BufferTransaction): string =
       sb.add(extractInsertedText(nestedTransaction))
   return sb.toString()
 
-# Forward declaration for playbackMacro
+# Forward declarations
 proc playbackMacro*(
   manager: HandlerManager,
   buffer: TextBuffer,
   state: EditorState,
   viewport: ViewPort,
   keys: seq[string],
+): HandlerResult
+
+proc handleKeyCombo*(
+  manager: HandlerManager,
+  buffer: TextBuffer,
+  state: EditorState,
+  viewport: ViewPort,
+  keyCombo: KeyCombo,
+  window: Option[EditorWindow] = none(EditorWindow),
 ): HandlerResult
 
 proc handleNormalMode*(
@@ -819,6 +828,49 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrSubstitute, hrSubstituteCount: r.substituteCount)
   of cmrTerminal:
     return HandlerResult(kind: hrEnterTerminal, enterTerminalCommand: r.terminalCommand)
+  of cmrMapAdd:
+    var firstError = ""
+    var modeNames: seq[string] = @[]
+    for mode in r.mapAddModes:
+      let err =
+        manager.keyBindingRegistry.addRuntimeMapping(mode, r.mapAddLhs, r.mapAddRhs)
+      if err.len > 0:
+        if firstError.len == 0:
+          firstError = err
+      else:
+        modeNames.add(modeLabel(mode))
+    if firstError.len > 0:
+      return HandlerResult(kind: hrError, errorMessage: firstError)
+    let msg =
+      "Mapped in " & modeNames.join(", ") & ": " & r.mapAddLhs & " -> " & r.mapAddRhs
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
+    )
+  of cmrMapRemove:
+    var firstError = ""
+    var modeNames: seq[string] = @[]
+    for mode in r.mapRemoveModes:
+      let err = manager.keyBindingRegistry.removeRuntimeMapping(mode, r.mapRemoveLhs)
+      if err.len > 0:
+        if firstError.len == 0:
+          firstError = err
+      else:
+        modeNames.add(modeLabel(mode))
+    if firstError.len > 0:
+      return HandlerResult(kind: hrError, errorMessage: firstError)
+    let msg = "Unmapped in " & modeNames.join(", ") & ": " & r.mapRemoveLhs
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
+    )
+  of cmrMapClear:
+    var modeNames: seq[string] = @[]
+    for mode in r.mapClearModes:
+      manager.keyBindingRegistry.clearRuntimeMappings(mode)
+      modeNames.add(modeLabel(mode))
+    let msg = "Cleared " & modeNames.join(", ") & " mode mappings"
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
+    )
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -1481,6 +1533,89 @@ proc handleTerminalMode*(
 const MaxMacroRecursionDepth = 100
   ## Maximum macro recursion depth to prevent infinite loops
 
+proc checkRuntimeKeySeqMapping(
+    manager: HandlerManager,
+    buffer: TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    keyCombo: KeyCombo,
+): Option[HandlerResult] =
+  ## Check if current key (and accumulated keys) match a runtime key-sequence mapping.
+  ## Returns Some(result) if the key was consumed (either matched or waiting for more),
+  ## or None if the key should be processed normally.
+  let mappings = manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
+  if mappings.len == 0:
+    # No key-seq mappings for this mode, also flush any accumulated keys
+    if manager.keyBindingRegistry.runtimeMappingState.keys.len > 0:
+      manager.keyBindingRegistry.clearRuntimeMappingState()
+    return none(HandlerResult)
+
+  # Add current key to accumulator
+  manager.keyBindingRegistry.runtimeMappingState.keys.add(keyCombo)
+  let accKeys = manager.keyBindingRegistry.runtimeMappingState.keys
+
+  # Check for exact match and prefix match
+  var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
+  var hasLongerMatch = false
+
+  for m in mappings:
+    if m.triggerKeys == accKeys:
+      exactMatch = some(m)
+    elif m.triggerKeys.len > accKeys.len:
+      # Check if accKeys is a prefix of this mapping's trigger
+      var isPrefix = true
+      for i in 0 ..< accKeys.len:
+        if m.triggerKeys[i] != accKeys[i]:
+          isPrefix = false
+          break
+      if isPrefix:
+        hasLongerMatch = true
+
+  if exactMatch.isSome and not hasLongerMatch:
+    # Exact match with no longer alternatives: execute the mapping
+    manager.keyBindingRegistry.clearRuntimeMappingState()
+    manager.keyBindingRegistry.isReplayingMapping = true
+    let playbackResult =
+      manager.playbackMacro(buffer, state, viewport, exactMatch.get.targetKeys)
+    manager.keyBindingRegistry.isReplayingMapping = false
+    return some(playbackResult)
+
+  if hasLongerMatch:
+    # Prefix match exists: wait for more keys
+    if exactMatch.isSome:
+      # Both exact and longer match possible; for now, wait for longer match
+      # (Timeout-based disambiguation would go here in the future)
+      discard
+    return some(
+      HandlerResult(
+        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      )
+    )
+
+  # No match at all
+  if accKeys.len == 1:
+    # Only the current key was accumulated, no match: pass through normally
+    manager.keyBindingRegistry.clearRuntimeMappingState()
+    return none(HandlerResult)
+
+  # Multiple keys accumulated but no match: flush accumulated keys by replaying them
+  let keysToFlush = accKeys[0 ..< accKeys.len - 1] # All except the last one
+  manager.keyBindingRegistry.clearRuntimeMappingState()
+
+  # Replay flushed keys with mapping expansion disabled
+  manager.keyBindingRegistry.isReplayingMapping = true
+  for k in keysToFlush:
+    let flushResult = manager.handleKeyCombo(buffer, state, viewport, k)
+    if flushResult.kind == hrHandled and flushResult.modeTransition.isSome:
+      state.mode = flushResult.modeTransition.get
+    if flushResult.kind == hrError or flushResult.kind == hrQuit:
+      manager.keyBindingRegistry.isReplayingMapping = false
+      return some(flushResult)
+  manager.keyBindingRegistry.isReplayingMapping = false
+
+  # Now process the current key normally (re-enter mapping check)
+  return none(HandlerResult)
+
 proc handleKeyCombo*(
     manager: HandlerManager,
     buffer: TextBuffer,
@@ -1499,6 +1634,13 @@ proc handleKeyCombo*(
     if completed:
       state.cursor.line = cursorLine
       # Viewport will be updated by updateViewport after cursor is set
+
+  # Runtime key-sequence mapping precheck (noremap: skip during replay)
+  if not manager.keyBindingRegistry.isReplayingMapping:
+    let expandResult =
+      manager.checkRuntimeKeySeqMapping(buffer, state, viewport, keyCombo)
+    if expandResult.isSome:
+      return expandResult.get
 
   # Delegate to appropriate mode handler
   case state.mode

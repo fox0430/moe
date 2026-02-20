@@ -338,6 +338,46 @@ jump - Open Jump list viewer
 terminal         - Open terminal emulator (default shell)
 terminal command - Run command in terminal emulator
 
+## Runtime Key Mapping
+
+nmap {lhs} {rhs}  - Map keys in Normal mode
+imap {lhs} {rhs}  - Map keys in Insert mode
+vmap {lhs} {rhs}  - Map keys in Visual modes
+rmap {lhs} {rhs}  - Map keys in Replace mode
+map {lhs} {rhs}   - Map keys in all modes
+
+nunmap {lhs}      - Remove key mapping in Normal mode
+iunmap {lhs}      - Remove key mapping in Insert mode
+vunmap {lhs}      - Remove key mapping in Visual modes
+runmap {lhs}      - Remove key mapping in Replace mode
+unmap {lhs}       - Remove key mapping in all modes
+
+nmapclear         - Clear all mappings in Normal mode
+imapclear         - Clear all mappings in Insert mode
+vmapclear         - Clear all mappings in Visual modes
+rmapclear         - Clear all mappings in Replace mode
+mapclear          - Clear all mappings in all modes
+
+noremap, nnoremap, inoremap, vnoremap are aliases (all mappings are non-recursive).
+
+Key notation:
+  a, j, 0           - Regular keys
+  C-s, M-x, C-M-a   - Modifier keys (C=Ctrl, M=Alt)
+  Escape, Enter, Tab - Special keys
+  Up, Down, F1-F12   - Arrow and function keys
+  Space              - Space key
+  j j, g g           - Multi-key sequences (space-separated)
+  jj, gg             - Vim-style concatenated keys (equivalent to j j, g g)
+
+{rhs} can be a command name or a key sequence (e.g. Escape).
+Use :help to see the list of available command names.
+
+Examples:
+  :nmap C-s save-and-quit      - Ctrl-S saves and quits (Normal mode)
+  :imap jj Escape              - jj exits Insert mode
+  :nmap C-a g g                - Ctrl-A goes to first line (Normal mode)
+  :vmap C-c Escape             - Ctrl-C exits Visual mode
+
 # Terminal mode
 
 ## Terminal-Input sub-mode (default)
