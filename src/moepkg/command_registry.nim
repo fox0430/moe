@@ -2861,6 +2861,18 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     shouldRecordJump = true,
   )
 
+  # Word motion commands
+  registry.registerMotionCommand(
+    bcMotionWord, "Move Word", "Move to start of next word", Motion.WordForward
+  )
+  registry.registerMotionCommand(
+    bcMotionWordBack, "Move Word Back", "Move to start of previous word",
+    Motion.WordBackward,
+  )
+  registry.registerMotionCommand(
+    bcMotionWordEnd, "Move Word End", "Move to end of next word", Motion.WordEnd
+  )
+
   # Scroll commands
   registry.register(
     builtin(bcScrollCursorTop),

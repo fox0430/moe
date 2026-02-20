@@ -22,7 +22,7 @@
 ## This module provides a flexible keybinding system that allows
 ## mapping keys to commands through configuration files.
 
-import std/[tables, strutils, options, sequtils, hashes]
+import std/[tables, sets, strutils, options, sequtils, hashes]
 
 import pkg/celina
 
@@ -1603,6 +1603,17 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.bindKey(EditorMode.Normal, "g l", "lsp-document-link")
 
+  # Save file
+  registry.registerCommand(
+    Command(
+      name: "save",
+      description: "Save file",
+      kind: ctAction,
+      commandId: "file.save",
+      args: @[],
+    )
+  )
+
   # ZZ - Save and quit
   registry.registerCommand(
     Command(
@@ -2800,3 +2811,10 @@ proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
   )
 
   return some(combo)
+
+proc getValidMappingCommands*(): HashSet[string] =
+  ## Returns a set of valid command names for key mapping validation.
+  var registry = newKeyBindingRegistry()
+  registry.setupDefaultBindings()
+  for name in registry.commandRegistry.keys:
+    result.incl(name)

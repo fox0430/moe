@@ -250,6 +250,22 @@ airDrag = 2.0                          # Air drag coefficient (velocity resistan
 autoSplit = true                       # Auto-split on startup when opening multiple files
 splitType = "vertical"                 # Split type: "vertical" or "horizontal"
 
+# Key mapping settings - persistent key remappings per mode
+# Same key notation as :nmap/:imap commands
+# Values can be command names (e.g., "save") or key sequences (e.g., "Escape")
+#
+# [KeyMapping.Normal]
+# "C-s" = "save"
+#
+# [KeyMapping.Insert]
+# "jj" = "Escape"
+#
+# [KeyMapping.Visual]
+# "C-c" = "Escape"
+#
+# [KeyMapping.Replace]
+# "C-c" = "Escape"
+
 # Debug mode settings - controls what sections are shown in :debug view
 # Use :debug command to open the debug viewer (vertical split, auto-refreshes every 500ms)
 

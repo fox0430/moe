@@ -342,6 +342,13 @@ type
     # Language server configs (language name -> config)
     servers*: Table[string, LspServerConfig]
 
+  # Key mapping settings
+  KeyMappingConfig* = object
+    normal*: OrderedTable[string, string]
+    insert*: OrderedTable[string, string]
+    visual*: OrderedTable[string, string]
+    replace*: OrderedTable[string, string]
+
   # Main configuration
   EditorConfig* = ref object
     standard*: StandardConfig
@@ -364,6 +371,7 @@ type
     debug*: DebugConfig
     theme*: ThemeConfig
     lsp*: LspConfig
+    keyMapping*: KeyMappingConfig
 
 proc isToolAvailable(toolCommand: string): bool =
   ## Check if a command-line tool is available in PATH
@@ -583,5 +591,11 @@ proc newEditorConfig*(): EditorConfig =
       semanticTokens: LspFeatureConfig(enable: true),
       executeCommand: LspFeatureConfig(enable: true),
       servers: initTable[string, LspServerConfig](),
+    ),
+    keyMapping: KeyMappingConfig(
+      normal: initOrderedTable[string, string](),
+      insert: initOrderedTable[string, string](),
+      visual: initOrderedTable[string, string](),
+      replace: initOrderedTable[string, string](),
     ),
   )

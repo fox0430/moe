@@ -1042,3 +1042,39 @@ suite "Integration - mapping removal and clear":
 
     check manager.keyBindingRegistry.getRuntimeKeySeqMappings(Normal).len == 0
     check manager.keyBindingRegistry.getRuntimeKeySeqMappings(Insert).len == 1
+
+suite "All mapping commands are valid":
+  test "All BuiltinCommandId values are registered in CommandRegistry":
+    # Commands dispatched by normal_handler/handler_manager at a higher level.
+    # These require editor-level context (buffer switching, LSP client, etc.)
+    # and are intentionally not registered in CommandRegistry.
+    const dispatchedByHandler = [
+      bcJumpBack, bcJumpForward, bcFileSave, bcFileOpen, bcFileNew, bcFileClose,
+      bcFiler, bcLspGotoDefinition, bcLspFindReferences, bcLspCodeLensExecute,
+      bcLspCallHierarchyIncoming, bcLspCallHierarchyOutgoing,
+    ]
+
+    let cmdRegistry = newCommandRegistry()
+    cmdRegistry.registerBuiltinCommands()
+
+    var missing: seq[string] = @[]
+    for id in BuiltinCommandId:
+      if id == bcNone or id in dispatchedByHandler:
+        continue
+      let cmd = cmdRegistry.findCommand(builtin(id))
+      if cmd.isNone or cmd.get.handler.isNil:
+        missing.add($id)
+
+    if missing.len > 0:
+      echo "Missing commands: ", missing
+    check missing.len == 0
+
+  test "All commands from setupDefaultBindings are valid mapping targets":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    for commandName in registry.commandRegistry.keys:
+      let err = registry.addRuntimeMapping(Normal, "C-t", commandName)
+      check err == ""
+      # Clean up by removing the mapping for the next iteration
+      discard registry.removeRuntimeMapping(Normal, "C-t")
