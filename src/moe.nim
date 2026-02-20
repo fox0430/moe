@@ -105,29 +105,10 @@ proc handleResize(e: Editor) =
   # Set the editor's full redraw flag
   e.state.needsFullRedraw = true
 
-proc lspPollingTask(editor: Editor, running: ptr bool) {.async.} =
-  ## Background task for periodic LSP polling
-  ## Ensures LSP messages are processed even when no user input occurs
-  const pollInterval = timer.milliseconds(50)
-  while running[]:
-    {.cast(gcsafe).}:
-      {.cast(raises: []).}:
-        try:
-          editor.lsp.poll(0)
-          # Also cleanup stale progress entries periodically
-          editor.lsp.cleanupStaleProgress()
-        except:
-          discard
-    await sleepAsync(pollInterval)
-
 proc runEditor(
     editor: Editor, app: AsyncApp, cmdLineConfig: CmdLineConfig, log: Logger
 ) {.async.} =
   ## Async entry point for the editor main loop
-
-  # Start LSP polling background task
-  var lspPollingRunning = true
-  asyncSpawn lspPollingTask(editor, addr lspPollingRunning)
 
   {.cast(gcsafe).}:
     app.onEventAsync proc(e: Event, app: AsyncApp): Future[bool] {.async.} =
@@ -164,6 +145,13 @@ proc runEditor(
           app.setApplicationTimeout(0) # One-shot: disable until next prefix match
           return true
 
+    app.onTickAsync proc(app: AsyncApp): Future[bool] {.async.} =
+      {.cast(gcsafe).}:
+        {.cast(raises: []).}:
+          editor.lsp.poll(0)
+          editor.lsp.cleanupStaleProgress()
+      return true
+
     app.onRenderAsync proc(buffer: var Buffer) =
       {.cast(gcsafe).}:
         {.cast(raises: []).}:
@@ -194,9 +182,6 @@ proc runEditor(
     # Run the async main loop
     # Note: Bracketed Paste Mode is enabled via AppConfig(bracketedPaste: true)
     await app.runAsync()
-
-    # Stop LSP polling background task
-    lspPollingRunning = false
 
     # Restore cursor to default style on exit
     if not editor.config.standard.disableChangeCursor:
