@@ -372,9 +372,9 @@ proc handleLogViewerModeKey*(
         if searchResult.isSome:
           state.cursor = searchResult.get
         else:
-          state.setStatusMessage("Pattern not found: " & state.search.lastText)
+          state.statusMessage = "Pattern not found: " & state.search.lastText
       else:
-        state.setStatusMessage("No previous search")
+        state.statusMessage = "No previous search"
       return LogViewerResult(kind: lvrHandled)
     of "N":
       # Search prev - find previous occurrence of last search
@@ -387,9 +387,9 @@ proc handleLogViewerModeKey*(
         if searchResult.isSome:
           state.cursor = searchResult.get
         else:
-          state.setStatusMessage("Pattern not found: " & state.search.lastText)
+          state.statusMessage = "Pattern not found: " & state.search.lastText
       else:
-        state.setStatusMessage("No previous search")
+        state.statusMessage = "No previous search"
       return LogViewerResult(kind: lvrHandled)
     of "*":
       # Search word forward - search for word under cursor
@@ -403,7 +403,7 @@ proc handleLogViewerModeKey*(
         if searchResult.isSome:
           state.cursor = searchResult.get
         else:
-          state.setStatusMessage("Pattern not found: " & word)
+          state.statusMessage = "Pattern not found: " & word
       return LogViewerResult(kind: lvrHandled)
     of "#":
       # Search word backward - search for word under cursor
@@ -417,7 +417,7 @@ proc handleLogViewerModeKey*(
         if searchResult.isSome:
           state.cursor = searchResult.get
         else:
-          state.setStatusMessage("Pattern not found: " & word)
+          state.statusMessage = "Pattern not found: " & word
       return LogViewerResult(kind: lvrHandled)
     else:
       discard
