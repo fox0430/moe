@@ -831,6 +831,20 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrSubstitute, hrSubstituteCount: r.substituteCount)
   of cmrTerminal:
     return HandlerResult(kind: hrEnterTerminal, enterTerminalCommand: r.terminalCommand)
+  of cmrMapList:
+    var lines: seq[string] = @[]
+    for mode in r.mapListModes:
+      let mappings = manager.keyBindingRegistry.listRuntimeMappings(mode)
+      for m in mappings:
+        lines.add(modeLabel(mode) & "  " & m)
+    let msg =
+      if lines.len > 0:
+        lines.join("\n")
+      else:
+        "No mapping"
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
+    )
   of cmrMapAdd:
     var firstError = ""
     var modeNames: seq[string] = @[]

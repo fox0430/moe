@@ -807,6 +807,21 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         ""
     return CommandLineResult(kind: claTerminal, terminalCommand: termCmd)
   of claMap, claNmap, claImap, claVmap, claRmap:
+    if cmd.args.len == 0:
+      # No arguments: list mappings
+      case cmd.action
+      of claMap:
+        return CommandLineResult(kind: claMap, mapLhs: "", mapRhs: "")
+      of claNmap:
+        return CommandLineResult(kind: claNmap, mapLhs: "", mapRhs: "")
+      of claImap:
+        return CommandLineResult(kind: claImap, mapLhs: "", mapRhs: "")
+      of claVmap:
+        return CommandLineResult(kind: claVmap, mapLhs: "", mapRhs: "")
+      of claRmap:
+        return CommandLineResult(kind: claRmap, mapLhs: "", mapRhs: "")
+      else:
+        discard
     if cmd.args.len < 2:
       let cmdName =
         case cmd.action

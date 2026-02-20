@@ -121,6 +121,7 @@ type
     cmrMapAdd # Add runtime key mapping (:map, :nmap, etc.)
     cmrMapRemove # Remove runtime key mapping (:unmap, :nunmap, etc.)
     cmrMapClear # Clear runtime key mappings (:mapclear, :nmapclear, etc.)
+    cmrMapList # List runtime key mappings (:map, :nmap, etc. with no args)
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -240,6 +241,8 @@ type
       mapRemoveModes*: seq[EditorMode]
     of cmrMapClear:
       mapClearModes*: seq[EditorMode]
+    of cmrMapList:
+      mapListModes*: seq[EditorMode]
     of cmrError:
       errorMessage*: string
 
@@ -962,6 +965,9 @@ proc handleCommandModeInput*(
           EditorMode.Normal, EditorMode.Insert, EditorMode.Visual,
           EditorMode.VisualBlock, EditorMode.VisualLine, EditorMode.Replace,
         ]
+    if cmdResult.mapLhs == "":
+      # No arguments: list mappings
+      return CommandModeResult(kind: cmrMapList, mapListModes: modes)
     return CommandModeResult(
       kind: cmrMapAdd,
       mapAddLhs: cmdResult.mapLhs,

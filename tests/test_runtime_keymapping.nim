@@ -507,10 +507,35 @@ suite "Ex command parsing - map commands":
     check result.kind == claNmap
     check result.mapLhs == "C-s"
 
-  test "Parse :nmap without args returns error":
+  test "Parse :nmap without args returns list request":
     let result = parser.parseAndExecute(":nmap")
-    check result.kind == claUnknown
-    check "Usage" in result.errorMessage
+    check result.kind == claNmap
+    check result.mapLhs == ""
+    check result.mapRhs == ""
+
+  test "Parse :map without args returns list request":
+    let result = parser.parseAndExecute(":map")
+    check result.kind == claMap
+    check result.mapLhs == ""
+    check result.mapRhs == ""
+
+  test "Parse :imap without args returns list request":
+    let result = parser.parseAndExecute(":imap")
+    check result.kind == claImap
+    check result.mapLhs == ""
+    check result.mapRhs == ""
+
+  test "Parse :vmap without args returns list request":
+    let result = parser.parseAndExecute(":vmap")
+    check result.kind == claVmap
+    check result.mapLhs == ""
+    check result.mapRhs == ""
+
+  test "Parse :rmap without args returns list request":
+    let result = parser.parseAndExecute(":rmap")
+    check result.kind == claRmap
+    check result.mapLhs == ""
+    check result.mapRhs == ""
 
   test "Parse :nmap with only LHS returns error":
     let result = parser.parseAndExecute(":nmap C-s")
