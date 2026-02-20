@@ -346,6 +346,12 @@ vmap {lhs} {rhs}  - Map keys in Visual modes
 rmap {lhs} {rhs}  - Map keys in Replace mode
 map {lhs} {rhs}   - Map keys in all modes
 
+nmap              - List all Normal mode mappings
+imap              - List all Insert mode mappings
+vmap              - List all Visual mode mappings
+rmap              - List all Replace mode mappings
+map               - List all mode mappings
+
 nunmap {lhs}      - Remove key mapping in Normal mode
 iunmap {lhs}      - Remove key mapping in Insert mode
 vunmap {lhs}      - Remove key mapping in Visual modes
@@ -377,6 +383,8 @@ Examples:
   :imap jj Escape              - jj exits Insert mode
   :nmap C-a g g                - Ctrl-A goes to first line (Normal mode)
   :vmap C-c Escape             - Ctrl-C exits Visual mode
+  :nmap                        - List all Normal mode mappings
+  :map                         - List all mode mappings
 
 # Terminal mode
 
