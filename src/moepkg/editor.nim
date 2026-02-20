@@ -462,6 +462,24 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Load custom key_bindings from TOML
   keyRegistry.loadDefaultKeybindings()
 
+  # Apply key mappings from config (moerc.toml [KeyMapping] section)
+  for lhs, rhs in editorConfig.keyMapping.normal:
+    let err = keyRegistry.addRuntimeMapping(EditorMode.Normal, lhs, rhs)
+    if err.len > 0:
+      logWarn("editor", "KeyMapping.Normal error: " & err)
+  for lhs, rhs in editorConfig.keyMapping.insert:
+    let err = keyRegistry.addRuntimeMapping(EditorMode.Insert, lhs, rhs)
+    if err.len > 0:
+      logWarn("editor", "KeyMapping.Insert error: " & err)
+  for lhs, rhs in editorConfig.keyMapping.visual:
+    let err = keyRegistry.addRuntimeMapping(EditorMode.Visual, lhs, rhs)
+    if err.len > 0:
+      logWarn("editor", "KeyMapping.Visual error: " & err)
+  for lhs, rhs in editorConfig.keyMapping.replace:
+    let err = keyRegistry.addRuntimeMapping(EditorMode.Replace, lhs, rhs)
+    if err.len > 0:
+      logWarn("editor", "KeyMapping.Replace error: " & err)
+
   # Load command configuration
   cmdConfig.loadDefaultConfig
 

@@ -544,6 +544,9 @@ proc handleNormalMode*(
     return HandlerResult(kind: hrUnhandled)
   of nmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+  of nmrSave:
+    # Save file
+    return HandlerResult(kind: hrSave, saveFilename: none(string), forceSave: false)
   of nmrSaveAndQuit:
     # ZZ command - Save and quit
     return HandlerResult(

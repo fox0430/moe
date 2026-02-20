@@ -357,6 +357,92 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | airDrag | float | 2.0 | Air drag coefficient (velocity resistance) |
 
 
+### KeyMapping table
+
+Persistent key remappings per editor mode. Uses the same key notation as `:nmap`/`:imap` runtime commands.
+
+Values can be either a command name (e.g., `"save"`) or a key sequence (e.g., `"Escape"`).
+
+Supported modes: `Normal`, `Insert`, `Visual`, `Replace`.
+
+```toml
+[KeyMapping.Normal]
+"C-s" = "save"
+
+[KeyMapping.Insert]
+"jj" = "Escape"
+
+[KeyMapping.Visual]
+"C-c" = "Escape"
+
+[KeyMapping.Replace]
+"C-c" = "Escape"
+```
+
+#### Available commands
+
+| Command | Description |
+|:----|:----|
+| save | Save file |
+| save-and-quit | Save and quit |
+| quit-force | Quit without saving |
+| close-window | Close current window |
+| undo | Undo |
+| redo | Redo |
+| move-left | Move cursor left |
+| move-right | Move cursor right |
+| move-up | Move cursor up |
+| move-down | Move cursor down |
+| page-up | Page up |
+| page-down | Page down |
+| half-page-up | Half page up |
+| half-page-down | Half page down |
+| line-home | Move to line start |
+| line-end | Move to line end |
+| line-first-non-blank | Move to first non-blank |
+| goto-first-line | Go to first line |
+| goto-last-line | Go to last line |
+| word-forward | Move to next word |
+| word-backward | Move to previous word |
+| word-end | Move to end of word |
+| paragraph-forward | Move to next paragraph |
+| paragraph-backward | Move to previous paragraph |
+| search-next | Next search match |
+| search-prev | Previous search match |
+| delete-line | Delete line |
+| yank-line | Yank line |
+| paste-after | Paste after cursor |
+| paste-before | Paste before cursor |
+| join-lines | Join lines |
+| indent-line | Indent line |
+| dedent-line | Dedent line |
+| fold-open | Open fold |
+| fold-close | Close fold |
+| fold-toggle | Toggle fold |
+| increment-number | Increment number |
+| decrement-number | Decrement number |
+| quickrun | Run QuickRun |
+| lsp-goto-definition | LSP go to definition |
+| lsp-find-references | LSP find references |
+| lsp-hover | LSP hover info |
+| lsp-rename | LSP rename symbol |
+| lsp-document-symbol | LSP document symbols |
+| lsp-selection-range | LSP selection range |
+| buffer-next-tab | Next buffer tab |
+| buffer-prev-tab | Previous buffer tab |
+
+#### Application order
+
+Key mappings are applied in this order (later overrides earlier):
+
+1. Built-in default bindings
+2. `keybindings.toml`
+3. `moerc.toml` `[KeyMapping]`
+4. Runtime `:nmap`/`:imap` commands
+
+Also see [Runtime Key Mapping](howtouse.md#runtime-key-mapping) for session-only mappings.
+
+
 ### Lsp table
 
 | Name | Type | Default Value | Description |

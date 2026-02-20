@@ -37,6 +37,7 @@ type
     nmrHandled
     nmrUnhandled
     nmrError
+    nmrSave
     nmrSaveAndQuit
     nmrQuitWithoutSave
     nmrCloseWindow # Signal to handler_manager to close current window (Ctrl-W c)
@@ -74,6 +75,8 @@ type
       discard
     of nmrError:
       errorMessage*: string
+    of nmrSave:
+      discard
     of nmrSaveAndQuit:
       discard
     of nmrQuitWithoutSave:
@@ -634,6 +637,9 @@ proc handleNormalModeKey*(
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
+    of "file.save":
+      # Save file
+      return NormalModeResult(kind: nmrSave)
     of "file.save.and.quit":
       # ZZ command - Save and quit
       return NormalModeResult(kind: nmrSaveAndQuit)

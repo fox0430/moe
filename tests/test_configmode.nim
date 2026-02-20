@@ -1792,7 +1792,8 @@ suite "ConfigMode - descriptor completeness":
       "theme", "lsp",
     ].toHashSet
     let excluded = [
-      "buildOnSave", "tabLine", "quickRun", "persist", "startUpFileOpen", "debug"
+      "buildOnSave", "tabLine", "quickRun", "persist", "startUpFileOpen", "debug",
+      "keyMapping",
     ].toHashSet
 
     var cfg = newEditorConfig()

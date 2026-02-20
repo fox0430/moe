@@ -22,11 +22,11 @@
 ## This module handles loading configuration from TOML files and converting
 ## them into EditorConfig structures.
 
-import std/[os, options, tables, strutils, sequtils]
+import std/[os, options, tables, sets, strutils, sequtils]
 
 import pkg/[parsetoml, results]
 
-import config, color, theme, vscode_theme
+import config, color, theme, vscode_theme, key_bindings
 
 # Configuration validation types and utilities
 
@@ -956,6 +956,65 @@ proc loadLspConfig(
       else:
         vr.errors.add(InvalidItem(kind: iikUnknownKey, name: fullKey(section, key)))
 
+proc loadKeyMappingModeConfig(
+    table: TomlTableRef,
+    target: var OrderedTable[string, string],
+    vr: var ValidationResult,
+    section: string,
+    validCommands: HashSet[string],
+) =
+  for key, value in table:
+    if value.kind != TomlValueKind.String:
+      vr.addError(fullKey(section, key), $value, "string")
+      continue
+
+    # LHS (key) validation
+    let lhsKeys = parseKeyString(key)
+    if lhsKeys.len == 0:
+      vr.addError(
+        fullKey(section, key), key, "valid key (e.g. \"C-s\", \"jj\", \"g d\")"
+      )
+      continue
+
+    # RHS (target) validation: command name or key sequence
+    let rhs = value.getStr()
+    let rhsKeys = parseKeyString(rhs)
+    if rhsKeys.len == 0 and rhs notin validCommands:
+      vr.addError(fullKey(section, key), rhs, "valid command name or key sequence")
+      continue
+
+    target[key] = rhs
+
+proc loadKeyMappingConfig(
+    table: TomlTableRef, config: var KeyMappingConfig, vr: var ValidationResult
+) =
+  const section = "KeyMapping"
+  const validKeys = ["Normal", "Insert", "Visual", "Replace"]
+  checkUnknownKeys(table, validKeys, section, vr)
+
+  let validCommands = getValidMappingCommands()
+
+  if table.hasKey("Normal"):
+    loadKeyMappingModeConfig(
+      table["Normal"].getTable(), config.normal, vr, "KeyMapping.Normal", validCommands
+    )
+  if table.hasKey("Insert"):
+    loadKeyMappingModeConfig(
+      table["Insert"].getTable(), config.insert, vr, "KeyMapping.Insert", validCommands
+    )
+  if table.hasKey("Visual"):
+    loadKeyMappingModeConfig(
+      table["Visual"].getTable(), config.visual, vr, "KeyMapping.Visual", validCommands
+    )
+  if table.hasKey("Replace"):
+    loadKeyMappingModeConfig(
+      table["Replace"].getTable(),
+      config.replace,
+      vr,
+      "KeyMapping.Replace",
+      validCommands,
+    )
+
 proc loadConfigFromToml*(
     path: string
 ): Result[(EditorConfig, ValidationResult), string] =
@@ -985,7 +1044,7 @@ proc loadConfigFromToml*(
     "Standard", "Clipboard", "BuildOnSave", "TabLine", "StatusLine", "Git",
     "SyntaxChecker", "Theme", "AutoSave", "Notification", "QuickRun", "AutoBackup",
     "SmoothScroll", "Highlight", "Filer", "Autocomplete", "Persist", "StartUp", "Lsp",
-    "Debug",
+    "Debug", "KeyMapping",
   ]
   checkUnknownKeys(toml.getTable(), knownSections, "", vr)
 
@@ -1055,6 +1114,9 @@ proc loadConfigFromToml*(
 
   if toml.hasKey("Debug"):
     loadDebugConfig(toml["Debug"].getTable(), config.debug, vr)
+
+  if toml.hasKey("KeyMapping"):
+    loadKeyMappingConfig(toml["KeyMapping"].getTable(), config.keyMapping, vr)
 
   return Result[(EditorConfig, ValidationResult), string].ok((config, vr))
 
@@ -1903,6 +1965,31 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
     lines.add "trace = " & toTomlString($server.trace)
     lines.add "rustAnalyzerRunSingle = " & toTomlBool(server.rustAnalyzerRunSingle)
     lines.add "rustAnalyzerDebugSingle = " & toTomlBool(server.rustAnalyzerDebugSingle)
+    lines.add ""
+
+  # KeyMapping section (only output modes that have mappings)
+  if config.keyMapping.normal.len > 0:
+    lines.add "[KeyMapping.Normal]"
+    for lhs, rhs in config.keyMapping.normal:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.insert.len > 0:
+    lines.add "[KeyMapping.Insert]"
+    for lhs, rhs in config.keyMapping.insert:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.visual.len > 0:
+    lines.add "[KeyMapping.Visual]"
+    for lhs, rhs in config.keyMapping.visual:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.replace.len > 0:
+    lines.add "[KeyMapping.Replace]"
+    for lhs, rhs in config.keyMapping.replace:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
     lines.add ""
 
   # Debug section

@@ -399,6 +399,7 @@ All keystrokes are forwarded to the running shell/command.
 
 Map, unmap, and clear runtime key mappings. All mappings are non-recursive (noremap).
 Mappings are session-only and not persisted across restarts.
+For persistent key mappings, use the `[KeyMapping]` section in `moerc.toml`. See [configfile.md](configfile.md#keymapping-table).
 
 | Command| Description |
 |:-----------------------------|:---------------------------|
