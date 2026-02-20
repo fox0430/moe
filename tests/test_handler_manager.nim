@@ -20,7 +20,7 @@
 ## Tests for handler_manager.nim
 ## This module tests the unified handler manager functionality.
 
-import std/[unittest, options, tables]
+import std/[unittest, options, tables, strutils]
 
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/types {.all.}
@@ -29,7 +29,10 @@ import ../src/moepkg/modes {.all.}
 import ../src/moepkg/motion {.all.}
 import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/registers {.all.}
+import ../src/moepkg/command_line {.all.}
+import ../src/moepkg/command_config {.all.}
 import ../src/moepkg/command_handlers/handler_manager {.all.}
+import ../src/moepkg/command_handlers/command_handler {.all.}
 import ../src/moepkg/command_handlers/visual_handler {.all.}
 import ../src/moepkg/command_handlers/insert_handler {.all.}
 
@@ -73,12 +76,20 @@ proc createTestManager(): HandlerManager =
 
   let replaceHandler = ReplaceModeHandler(keyBindingRegistry: keyBindingRegistry)
 
+  let commandLineParser = newCommandLineParser()
+  let commandConfig = newCommandConfig()
+  commandConfig.loadDefaultConfig()
+  commandConfig.applyToParser(commandLineParser)
+  let commandHandler =
+    newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
+
   HandlerManager(
     keyBindingRegistry: keyBindingRegistry,
     commandRegistry: commandRegistry,
     motionController: motionController,
     normalHandler: normalHandler,
     insertHandler: insertHandler,
+    commandHandler: commandHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
   )
@@ -599,3 +610,38 @@ suite "HandlerManager - Visual Block insert replication":
     check state.editState.visualBlockInsertContext.isNone
     # Cursor should be at column 0 (non-block behavior)
     check state.cursor.column == 0
+
+suite "HandlerManager - Map list commands":
+  test ":nmap with no args and no mappings shows No mapping":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+
+    let result = manager.handleCommandMode(buffer, ":nmap")
+    check result.kind == hrHandled
+    check result.statusMessage == "No mapping"
+
+  test ":nmap with no args lists existing mappings":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+
+    discard
+      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "C-a", "g g")
+
+    let result = manager.handleCommandMode(buffer, ":nmap")
+    check result.kind == hrHandled
+    check "NORMAL" in result.statusMessage
+    check "C-a -> g g" in result.statusMessage
+
+  test ":map with no args lists mappings from all modes":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+
+    discard
+      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "C-a", "g g")
+    discard
+      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "jj", "Escape")
+
+    let result = manager.handleCommandMode(buffer, ":map")
+    check result.kind == hrHandled
+    check "NORMAL" in result.statusMessage
+    check "INSERT" in result.statusMessage

@@ -1563,6 +1563,14 @@ suite "CommandModeHandler - handleCommandModeInput map commands":
     check result.kind == cmrMapList
     check result.mapListModes == @[EditorMode.Normal]
 
+  test "Handle :map without args returns cmrMapList for all modes":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":map")
+    check result.kind == cmrMapList
+    check result.mapListModes.len == 6
+
   test "Handle :nmap with only LHS returns error":
     let handler = setupHandler()
     let buffer = setupBuffer()
