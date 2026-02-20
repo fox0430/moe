@@ -19,7 +19,7 @@
 
 ## Tests for editor_lsp.nim
 
-import std/[unittest, os, options, importutils, strutils]
+import std/[unittest, os, options, strutils]
 
 import ../src/moepkg/[editor, buffer, config, config_loader, types]
 import ../src/moepkg/editor_lsp {.all.}
