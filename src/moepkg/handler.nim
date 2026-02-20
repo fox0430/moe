@@ -3244,3 +3244,55 @@ proc handlePendingAsyncOperations*(
   ## Wrapper for handlePendingAsyncOperationsImpl with gcsafe cast
   {.cast(gcsafe).}:
     await handlePendingAsyncOperationsImpl(e)
+
+proc handleKeyMappingTimeout*(e: Editor) =
+  ## Called when the key mapping timeout fires.
+  ## If keys are accumulated in runtimeMappingState, flush them:
+  ## - If an exact match exists, execute the mapping
+  ## - Otherwise, replay each key individually
+
+  let registry = e.keyBindingRegistry
+  if registry.runtimeMappingState.keys.len == 0:
+    return
+
+  let accKeys = registry.runtimeMappingState.keys
+
+  e.syncStateFromWindow()
+
+  let activeBuffer = e.activeBuffer
+  let activeViewport = e.viewport
+
+  # Check for exact match among runtime key-seq mappings
+  let mappings = registry.getRuntimeKeySeqMappings(e.state.mode)
+  var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
+  for m in mappings:
+    if m.triggerKeys == accKeys:
+      exactMatch = some(m)
+      break
+
+  registry.clearRuntimeMappingState()
+
+  if exactMatch.isSome:
+    # Exact match found: execute the mapping via playbackMacro
+    registry.isReplayingMapping = true
+    let r = e.handlerManager.playbackMacro(
+      activeBuffer, e.state, activeViewport, exactMatch.get.targetKeys
+    )
+    registry.isReplayingMapping = false
+
+    # Handle mode transition
+    if r.kind == hrHandled and r.modeTransition.isSome:
+      e.state.mode = r.modeTransition.get
+  else:
+    # No exact match: replay each accumulated key individually
+    registry.isReplayingMapping = true
+    for k in accKeys:
+      let r = e.handlerManager.handleKeyCombo(activeBuffer, e.state, activeViewport, k)
+      if r.kind == hrHandled and r.modeTransition.isSome:
+        e.state.mode = r.modeTransition.get
+      if r.kind == hrError or r.kind == hrQuit:
+        break
+    registry.isReplayingMapping = false
+
+  e.syncStateToWindow()
+  e.state.needsFullRedraw = true

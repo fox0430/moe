@@ -80,6 +80,7 @@ type
     colorMode*: ColorMode
     mouse*: bool
     lineWrap*: bool
+    timeoutlen*: int ## Key mapping timeout in ms (0 = no timeout)
 
   # Clipboard settings
   ClipboardConfig* = object
@@ -430,6 +431,7 @@ proc newEditorConfig*(): EditorConfig =
       colorMode: cm24bit,
       mouse: false,
       lineWrap: true,
+      timeoutlen: 1000,
     ),
     clipboard: ClipboardConfig(enable: true, tool: detectClipboardTool()),
     buildOnSave: BuildOnSaveConfig(

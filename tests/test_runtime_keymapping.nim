@@ -1043,6 +1043,154 @@ suite "Integration - mapping removal and clear":
     check manager.keyBindingRegistry.getRuntimeKeySeqMappings(Normal).len == 0
     check manager.keyBindingRegistry.getRuntimeKeySeqMappings(Insert).len == 1
 
+suite "Timeout flush - exact match with longer match pending":
+  test "Exact match and longer match: keys accumulate (wait state)":
+    ## When both "j" (exact) and "jj" (longer) are mapped,
+    ## pressing 'j' should accumulate (hasLongerMatch = true)
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState(EditorMode.Insert)
+    let viewport = createTestViewport()
+
+    # Map both "j" → "a" and "jj" → Escape in Insert mode
+    let err1 = manager.keyBindingRegistry.addRuntimeMapping(Insert, "j", "a")
+    check err1 == ""
+    let err2 = manager.keyBindingRegistry.addRuntimeMapping(Insert, "jj", "Escape")
+    check err2 == ""
+
+    # Press 'j': should accumulate because both exact and longer match exist
+    let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
+    let r = manager.handleKeyCombo(buffer, state, viewport, j)
+    check r.kind == hrHandled
+    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 1
+
+  test "Timeout flush finds exact match for accumulated keys":
+    ## Simulate what handleKeyMappingTimeout does:
+    ## accumulated keys = ["j"], mappings include "j" → "a"
+    ## → exact match should be found and executed
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState(EditorMode.Insert)
+    let viewport = createTestViewport()
+
+    let err1 = manager.keyBindingRegistry.addRuntimeMapping(Insert, "j", "a")
+    check err1 == ""
+    let err2 = manager.keyBindingRegistry.addRuntimeMapping(Insert, "jj", "Escape")
+    check err2 == ""
+
+    # Simulate accumulated state (as if 'j' was pressed and we're waiting)
+    let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
+    manager.keyBindingRegistry.runtimeMappingState.keys = @[j]
+
+    # Simulate timeout flush logic: find exact match
+    let accKeys = manager.keyBindingRegistry.runtimeMappingState.keys
+    let mappings = manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
+    var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
+    for m in mappings:
+      if m.triggerKeys == accKeys:
+        exactMatch = some(m)
+        break
+
+    check exactMatch.isSome
+    check exactMatch.get.targetKeys.len == 1
+    check exactMatch.get.targetKeys[0] == "a"
+
+    # Execute the exact match via playbackMacro
+    manager.keyBindingRegistry.clearRuntimeMappingState()
+    manager.keyBindingRegistry.isReplayingMapping = true
+    let r = manager.playbackMacro(buffer, state, viewport, exactMatch.get.targetKeys)
+    manager.keyBindingRegistry.isReplayingMapping = false
+    check r.kind == hrHandled
+    # Should still be in Insert mode (mapping target was 'a', not Escape)
+    check state.mode == EditorMode.Insert
+
+  test "Timeout flush executes exact match that causes mode transition":
+    ## accumulated keys = ["j"], mappings include "j" → Escape
+    ## → exact match executes Escape, causing Insert → Normal transition
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState(EditorMode.Insert)
+    let viewport = createTestViewport()
+
+    let err1 = manager.keyBindingRegistry.addRuntimeMapping(Insert, "j", "Escape")
+    check err1 == ""
+    let err2 = manager.keyBindingRegistry.addRuntimeMapping(Insert, "jj", "a")
+    check err2 == ""
+
+    # Simulate accumulated state
+    let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
+    manager.keyBindingRegistry.runtimeMappingState.keys = @[j]
+
+    # Find exact match
+    let accKeys = manager.keyBindingRegistry.runtimeMappingState.keys
+    let mappings = manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
+    var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
+    for m in mappings:
+      if m.triggerKeys == accKeys:
+        exactMatch = some(m)
+        break
+
+    check exactMatch.isSome
+
+    # Execute via playbackMacro (mirrors handleKeyMappingTimeout logic)
+    manager.keyBindingRegistry.clearRuntimeMappingState()
+    manager.keyBindingRegistry.isReplayingMapping = true
+    let r = manager.playbackMacro(buffer, state, viewport, exactMatch.get.targetKeys)
+    manager.keyBindingRegistry.isReplayingMapping = false
+
+    # playbackMacro applies mode transitions internally
+    check state.mode == EditorMode.Normal
+
+  test "Timeout flush replays keys when no exact match":
+    ## accumulated keys = ["j"], but only "jj" → Escape is mapped (no "j" mapping)
+    ## → no exact match, replay 'j' as literal key
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState(EditorMode.Insert)
+    let viewport = createTestViewport()
+
+    let err = manager.keyBindingRegistry.addRuntimeMapping(Insert, "jj", "Escape")
+    check err == ""
+
+    # Simulate accumulated state
+    let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
+    manager.keyBindingRegistry.runtimeMappingState.keys = @[j]
+
+    # Simulate timeout flush logic: find exact match
+    let accKeys = manager.keyBindingRegistry.runtimeMappingState.keys
+    let mappings = manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
+    var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
+    for m in mappings:
+      if m.triggerKeys == accKeys:
+        exactMatch = some(m)
+        break
+
+    check exactMatch.isNone
+
+    # No exact match: replay keys individually
+    manager.keyBindingRegistry.clearRuntimeMappingState()
+    manager.keyBindingRegistry.isReplayingMapping = true
+    for k in accKeys:
+      let r = manager.handleKeyCombo(buffer, state, viewport, k)
+      check r.kind == hrHandled
+    manager.keyBindingRegistry.isReplayingMapping = false
+
+    # Should still be in Insert mode (j was inserted as text, not expanded)
+    check state.mode == EditorMode.Insert
+    # 'j' should have been inserted into the buffer
+    let line = buffer.getLine(0)
+    check $line == "jhello"
+
+  test "Empty accumulated keys: timeout flush is no-op":
+    let manager = createTestManager()
+    # No keys accumulated
+    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
+    # Nothing to flush - this is the guard check in handleKeyMappingTimeout
+
 suite "All mapping commands are valid":
   test "All BuiltinCommandId values are registered in CommandRegistry":
     # Commands dispatched by normal_handler/handler_manager at a higher level.

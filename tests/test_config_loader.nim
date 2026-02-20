@@ -98,6 +98,43 @@ number = true
     check not vr.hasErrors
     check config.standard.lineWrap == true
 
+  test "timeoutlen loads from TOML":
+    let tomlStr = """
+[Standard]
+timeoutlen = 500
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.timeoutlen == 500
+
+  test "timeoutlen defaults to 1000 when not specified":
+    let tomlStr = """
+[Standard]
+number = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.timeoutlen == 1000
+
+  test "timeoutlen = 0 is valid (no timeout)":
+    let tomlStr = """
+[Standard]
+timeoutlen = 0
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.timeoutlen == 0
+
+  test "timeoutlen negative value is detected":
+    let tomlStr = """
+[Standard]
+timeoutlen = -1
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "Standard.timeoutlen" in vr.errors[0].name
+    check config.standard.timeoutlen == 1000 # Default value
+
   test "Invalid bool type is detected":
     let tomlStr = """
 [Standard]

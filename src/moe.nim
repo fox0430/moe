@@ -147,7 +147,22 @@ proc runEditor(
             except Exception as e:
               logError("moe", "handlePendingAsyncOperations failed: " & e.msg)
 
+          # Key mapping timeout control
+          if editor.keyBindingRegistry.runtimeMappingState.keys.len > 0:
+            let tl = editor.config.standard.timeoutlen
+            if tl > 0 and app.getApplicationTimeout() == 0:
+              app.setApplicationTimeout(tl)
+          elif app.getApplicationTimeout() > 0:
+            app.setApplicationTimeout(0)
+
           return shouldContinue
+
+    app.onTimeoutAsync proc(app: AsyncApp): Future[bool] {.async.} =
+      {.cast(gcsafe).}:
+        {.cast(raises: []).}:
+          editor.handleKeyMappingTimeout()
+          app.setApplicationTimeout(0) # One-shot: disable until next prefix match
+          return true
 
     app.onRenderAsync proc(buffer: var Buffer) =
       {.cast(gcsafe).}:
