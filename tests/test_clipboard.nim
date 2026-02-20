@@ -91,6 +91,20 @@ proc isXselAvailable(): bool =
 proc isWlClipboardAvailable(): bool =
   existsEnv("WAYLAND_DISPLAY") and isToolAvailable("wl-copy")
 
+proc readClipboardWithRetry(
+    tool: ClipboardTool, expected: string, maxRetries: int = 10, delayMs: int = 100
+): Result[string, string] =
+  ## Retry reading from clipboard until the expected value is returned.
+  ## Clipboard tools like xsel fork a background daemon to hold selection
+  ## ownership, which may not be ready immediately after the write returns.
+  for i in 0 ..< maxRetries:
+    result = readFromClipboardSync(tool)
+    if result.isOk and result.get() == expected:
+      return
+    sleep(delayMs)
+  # Final attempt
+  return readFromClipboardSync(tool)
+
 suite "clipboard: readFromClipboardSync and writeToClipboardSync":
   test "write and read with xclip":
     if not isXclipAvailable():
@@ -116,7 +130,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       let writeResult = writeToClipboardSync(cbtXsel, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(cbtXsel)
+      let readResult = readClipboardWithRetry(cbtXsel, testText)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -144,7 +158,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       let writeResult = writeToClipboardSync(cbtXsel, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(cbtXsel)
+      let readResult = readClipboardWithRetry(cbtXsel, testText)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -156,7 +170,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       let writeResult = writeToClipboardSync(cbtXsel, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(cbtXsel)
+      let readResult = readClipboardWithRetry(cbtXsel, testText)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -168,7 +182,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       let writeResult = writeToClipboardSync(cbtXsel, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(cbtXsel)
+      let readResult = readClipboardWithRetry(cbtXsel, testText)
       check readResult.isOk
       check readResult.get() == testText
 
