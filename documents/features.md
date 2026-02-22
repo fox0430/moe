@@ -13,7 +13,7 @@ You can set an interval to execute backups.
 
 QuickRun is like vim-quickrun.
 
-You can use ```\ + r``` in normal mode. And ```run``` or ```Q``` command in ex mode.  
+You can use ```\ + r``` in normal mode. And ```run``` or ```Q``` command in Command mode.  
 Currently QuickRun supports these languages by default and runs the following command internally.
 
 - Nim ```nim c -r filename```
@@ -76,7 +76,7 @@ Stores the value of the last used register.
 
 ## Runtime Key Mapping
 
-moe supports Vim-like runtime key mapping commands. You can remap keys during an editing session using Ex mode commands.
+moe supports Vim-like runtime key mapping commands. You can remap keys during an editing session using Command mode commands.
 
 - `:nmap {lhs} {rhs}` - Map keys in Normal mode
 - `:imap {lhs} {rhs}` - Map keys in Insert mode
