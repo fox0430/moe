@@ -80,7 +80,7 @@ yl         - Yank a character
 yt any     - Yank characters to a any character
 p          - Paste the clipboard
 n          - Search forwards
-:          - Start Ex mode
+:          - Start command mode
 u          - Undo
 Ctrl-r     - Redo
 >          - Indent
@@ -253,7 +253,7 @@ i  - Detail Information
 D  - Delete file
 v  - Split window and open file or directory
 
-# Ex mode
+# Command mode
 
 number          - Jump to line number; e.g. :10
 ! shell command - Shell command execution

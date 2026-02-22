@@ -63,7 +63,7 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.statusLineFilerModeLabel: makeColorPair("#000000", "#ffffff"),
   EditorColorPairIndex.statusLineFilerModeInactive: makeColorPair("#09aefa", "#ffffff"),
 
-  # Status line - Ex mode
+  # Status line - Command mode
   EditorColorPairIndex.statusLineExMode: makeColorPair("#ffffff", "#09aefa"),
   EditorColorPairIndex.statusLineExModeLabel: makeColorPair("#000000", "#ffffff"),
   EditorColorPairIndex.statusLineExModeInactive: makeColorPair("#09aefa", "#ffffff"),

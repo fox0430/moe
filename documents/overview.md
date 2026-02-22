@@ -2,7 +2,7 @@
 
 moe adopts the mode and keybinding like vi/vim.
 You can easily adapt if you have used vi/vim.
-Currently you can use normal mode, visual mode, replace mode, insert mode, ex mode, filer mode, terminal mode.
+Currently you can use normal mode, visual mode, replace mode, insert mode, command mode, filer mode, terminal mode.
 
 # Install and compile
 

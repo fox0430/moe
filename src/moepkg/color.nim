@@ -138,7 +138,7 @@ type
     statusLineFilerModeLabel
     statusLineFilerModeInactive
 
-    # Status line - Ex mode
+    # Status line - Command mode
     statusLineExMode
     statusLineExModeLabel
     statusLineExModeInactive

@@ -67,7 +67,7 @@
 | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd><br> |Half Page Up :arrow_up: |
 | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd><br> | Half Page Down :arrow_down: |
 | <kbd>**d**</kbd> <kbd>**$**</kbd> OR  <kbd>**D**</kbd><br> | Delete until the end of the line |
-| <kbd>**:**</kbd><br> | Start Ex mode |
+| <kbd>**:**</kbd><br> | Start Command mode |
 | <kbd>**u**</kbd><br> | Undo |
 | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd><br> | Redo |
 | <kbd>**>**</kbd><br> | Indent |

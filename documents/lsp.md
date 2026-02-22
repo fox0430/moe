@@ -111,11 +111,11 @@ Results will be received from the LPS server and displayed automatically.
 
 ### Document Formatting
 
-`lspformat` in Ex mode. Format the buffer.
+`lspformat` in Command mode. Format the buffer.
 
 ### Folding Range
 
-`lspfold` in Ex mode. All existing folds will be expande.
+`lspfold` in Command mode. All existing folds will be expande.
 
 ![moe](https://github.com/user-attachments/assets/9fac0f03-fa70-49f8-9da0-ea9ae0c0ce04)
 

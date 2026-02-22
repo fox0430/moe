@@ -98,7 +98,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | liveReloadOfConf | bool | false | Enable live reload of the configuration file |
 | liveReloadOfFile | bool | true | Enable live reload of opening files |
 | incrementalSearch | bool | true | Enable incremental search |
-| popupWindowInExmode | bool | true | Show Pop-up window in Ex mode |
+| popupWindowInExmode | bool | true | Show Pop-up window in Command mode |
 | colorMode | TerminalColorMode | 24bit | Terminal color mode |
 | mouse | bool | false | Enable mouse cursor movement |
 | timeoutlen | integer | 1000 | Key mapping timeout in milliseconds (0 = no timeout) |
@@ -239,8 +239,8 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| exCommand | bool | true | Saving Ex command history |
-| exCommandHistoryLimit | integer | 1000 | The maximum entries of Ex command history to save |
+| exCommand | bool | true | Saving command history |
+| exCommandHistoryLimit | integer | 1000 | The maximum entries of command history to save |
 | search | bool | true | Saving search history |
 | searchHistoryLimit | integer | 1000 | The maximum entries of search history to save |
 | cursorPosition | bool | true | Saving last cursor position |
@@ -694,12 +694,12 @@ And, `termDefaultBg` and `termDefaultFg`.
 | statusLineFilerModeLabelBg | Mode label background color in status line in Filer mode |
 | statusLineFilerModeInactive | Text color of status line in Filer mode when inactive |
 | statusLineFilerModeInactiveBg | Background color of Status line in Filer mode when inactive |
-| statusLineExMode | Text color of Status line in Ex mode |
-| statusLineExModeBg | Background color of Status line in Ex mode |
-| statusLineExModeLabel | Mode label text color in status line in Ex mode |
-| statusLineExModeLabelBg | Mode label background color in status line in Ex mode |
-| statusLineExModeInactive | Text color of status line in Ex mode when inactive |
-| statusLineExModeInactiveBg | Background color of Status line in Ex mode when inactive |
+| statusLineExMode | Text color of Status line in Command mode |
+| statusLineExModeBg | Background color of Status line in Command mode |
+| statusLineExModeLabel | Mode label text color in status line in Command mode |
+| statusLineExModeLabelBg | Mode label background color in status line in Command mode |
+| statusLineExModeInactive | Text color of status line in Command mode when inactive |
+| statusLineExModeInactiveBg | Background color of Status line in Command mode when inactive |
 | statusLineGitChangedLines | Text color of git changed lines count |
 | statusLineGitChangedLinesBg | Background color of git changed lines count |
 | statusLineGitBranch | Text color of git branch |
