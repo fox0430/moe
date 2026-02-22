@@ -684,6 +684,7 @@ proc enterCommandOverlay*(state: EditorState) =
   # Initialize command text (legacy field)
   state.commandText = ":"
   state.commandCursor = 0
+  state.commandState.historyIndex = -1
 
 proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
   ## Enter search mode overlay
@@ -720,6 +721,7 @@ proc exitOverlay*(state: EditorState) =
     # Clear overlay-specific state
     state.commandText = ""
     state.commandCursor = 0
+    state.commandState.historyIndex = -1
     state.search.text = ""
     state.search.historyIndex = -1
 
