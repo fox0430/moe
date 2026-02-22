@@ -182,16 +182,20 @@ const CommandDescriptions = {
   "vmap": "Map keys (Visual modes)",
   "vnoremap": "Map keys (Visual modes)",
   "rmap": "Map keys (Replace mode)",
+  "cmap": "Map keys (Command-line mode)",
+  "cnoremap": "Map keys (Command-line mode)",
   "unmap": "Unmap keys (all modes)",
   "nunmap": "Unmap keys (Normal mode)",
   "iunmap": "Unmap keys (Insert mode)",
   "vunmap": "Unmap keys (Visual modes)",
   "runmap": "Unmap keys (Replace mode)",
+  "cunmap": "Unmap keys (Command-line mode)",
   "mapclear": "Clear mappings (all modes)",
   "nmapclear": "Clear mappings (Normal mode)",
   "imapclear": "Clear mappings (Insert mode)",
   "vmapclear": "Clear mappings (Visual modes)",
   "rmapclear": "Clear mappings (Replace mode)",
+  "cmapclear": "Clear mappings (Command-line mode)",
 }.toTable
 
 # Commands that take file path arguments

@@ -990,7 +990,7 @@ proc loadKeyMappingConfig(
     table: TomlTableRef, config: var KeyMappingConfig, vr: var ValidationResult
 ) =
   const section = "KeyMapping"
-  const validKeys = ["Normal", "Insert", "Visual", "Replace"]
+  const validKeys = ["Normal", "Insert", "Visual", "Replace", "CommandLine"]
   checkUnknownKeys(table, validKeys, section, vr)
 
   let validCommands = getValidMappingCommands()
@@ -1013,6 +1013,14 @@ proc loadKeyMappingConfig(
       config.replace,
       vr,
       "KeyMapping.Replace",
+      validCommands,
+    )
+  if table.hasKey("CommandLine"):
+    loadKeyMappingModeConfig(
+      table["CommandLine"].getTable(),
+      config.commandLine,
+      vr,
+      "KeyMapping.CommandLine",
       validCommands,
     )
 
@@ -1991,6 +1999,12 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   if config.keyMapping.replace.len > 0:
     lines.add "[KeyMapping.Replace]"
     for lhs, rhs in config.keyMapping.replace:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.commandLine.len > 0:
+    lines.add "[KeyMapping.CommandLine]"
+    for lhs, rhs in config.keyMapping.commandLine:
       lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
     lines.add ""
 

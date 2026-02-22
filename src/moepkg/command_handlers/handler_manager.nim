@@ -1756,6 +1756,9 @@ proc handleKeyCombo*(
     else:
       return
         HandlerResult(kind: hrError, errorMessage: "Terminal state not initialized")
+  of EditorMode.CommandLine:
+    # Command-line mode is handled via overlay in handler.nim, not here
+    return HandlerResult(kind: hrUnhandled)
   of EditorMode.RecentFile:
     # Recent File mode requires its own state, not EditorState
     # This should be handled at a higher level with RecentFileModeState

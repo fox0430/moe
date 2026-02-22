@@ -948,7 +948,7 @@ proc handleCommandModeInput*(
       cmdResult.hasRange, cmdResult.isGlobal, cmdResult.startLine, cmdResult.endLine,
       currentLine,
     )
-  of claMap, claNmap, claImap, claVmap, claRmap:
+  of claMap, claNmap, claImap, claVmap, claRmap, claCmap:
     let modes =
       case cmdResult.kind
       of claNmap:
@@ -959,6 +959,8 @@ proc handleCommandModeInput*(
         @[EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]
       of claRmap:
         @[EditorMode.Replace]
+      of claCmap:
+        @[EditorMode.CommandLine]
       else:
         # claMap: all editable modes
         @[
@@ -974,7 +976,7 @@ proc handleCommandModeInput*(
       mapAddRhs: cmdResult.mapRhs,
       mapAddModes: modes,
     )
-  of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap:
+  of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap, claCunmap:
     let modes =
       case cmdResult.kind
       of claNunmap:
@@ -985,6 +987,8 @@ proc handleCommandModeInput*(
         @[EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]
       of claRunmap:
         @[EditorMode.Replace]
+      of claCunmap:
+        @[EditorMode.CommandLine]
       else:
         @[
           EditorMode.Normal, EditorMode.Insert, EditorMode.Visual,
@@ -993,7 +997,7 @@ proc handleCommandModeInput*(
     return CommandModeResult(
       kind: cmrMapRemove, mapRemoveLhs: cmdResult.unmapLhs, mapRemoveModes: modes
     )
-  of claMapclear, claNmapclear, claImapclear, claVmapclear, claRmapclear:
+  of claMapclear, claNmapclear, claImapclear, claVmapclear, claRmapclear, claCmapclear:
     let modes =
       case cmdResult.kind
       of claNmapclear:
@@ -1004,6 +1008,8 @@ proc handleCommandModeInput*(
         @[EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]
       of claRmapclear:
         @[EditorMode.Replace]
+      of claCmapclear:
+        @[EditorMode.CommandLine]
       else:
         @[
           EditorMode.Normal, EditorMode.Insert, EditorMode.Visual,

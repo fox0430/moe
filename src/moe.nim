@@ -141,9 +141,9 @@ proc runEditor(
     app.onTimeoutAsync proc(app: AsyncApp): Future[bool] {.async.} =
       {.cast(gcsafe).}:
         {.cast(raises: []).}:
-          editor.handleKeyMappingTimeout()
+          let shouldContinue = editor.handleKeyMappingTimeout()
           app.setApplicationTimeout(0) # One-shot: disable until next prefix match
-          return true
+          return shouldContinue
 
     app.onTickAsync proc(app: AsyncApp): Future[bool] {.async.} =
       {.cast(gcsafe).}:

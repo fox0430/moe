@@ -1251,3 +1251,128 @@ suite "All mapping commands are valid":
       check err == ""
       # Clean up by removing the mapping for the next iteration
       discard registry.removeRuntimeMapping(Normal, "C-t")
+
+suite "Ex command parsing - cmap commands":
+  setup:
+    let parser = newCommandLineParser()
+    let config = newCommandConfig()
+    config.loadDefaultConfig()
+    config.applyToParser(parser)
+
+  test "Parse :cmap C-a Home":
+    let result = parser.parseAndExecute(":cmap C-a Home")
+    check result.kind == claCmap
+    check result.mapLhs == "C-a"
+    check result.mapRhs == "Home"
+
+  test "Parse :cnoremap C-a Home (alias)":
+    let result = parser.parseAndExecute(":cnoremap C-a Home")
+    check result.kind == claCmap
+    check result.mapLhs == "C-a"
+    check result.mapRhs == "Home"
+
+  test "Parse :cmap without args returns list request":
+    let result = parser.parseAndExecute(":cmap")
+    check result.kind == claCmap
+    check result.mapLhs == ""
+    check result.mapRhs == ""
+
+  test "Parse :cmap with only LHS returns error":
+    let result = parser.parseAndExecute(":cmap C-a")
+    check result.kind == claUnknown
+    check "Usage" in result.errorMessage
+
+  test "Parse :cunmap C-a":
+    let result = parser.parseAndExecute(":cunmap C-a")
+    check result.kind == claCunmap
+    check result.unmapLhs == "C-a"
+
+  test "Parse :cunmap without args returns error":
+    let result = parser.parseAndExecute(":cunmap")
+    check result.kind == claUnknown
+    check "Usage" in result.errorMessage
+
+  test "Parse :cmapclear":
+    let result = parser.parseAndExecute(":cmapclear")
+    check result.kind == claCmapclear
+
+suite "CommandModeHandler - cmap commands":
+  setup:
+    let parser = newCommandLineParser()
+    let config = newCommandConfig()
+    config.loadDefaultConfig()
+    config.applyToParser(parser)
+    let commandRegistry = newCommandRegistry()
+    let handler = newCommandModeHandler(parser, config, commandRegistry)
+
+  test "handleCommandModeInput :cmap returns cmrMapAdd with CommandLine mode":
+    let buffer = newTextBuffer()
+    let result = handler.handleCommandModeInput(buffer, ":cmap C-a Home")
+    check result.kind == cmrMapAdd
+    check result.mapAddLhs == "C-a"
+    check result.mapAddRhs == "Home"
+    check EditorMode.CommandLine in result.mapAddModes
+    check result.mapAddModes.len == 1
+
+  test "handleCommandModeInput :cmap without args returns cmrMapList":
+    let buffer = newTextBuffer()
+    let result = handler.handleCommandModeInput(buffer, ":cmap")
+    check result.kind == cmrMapList
+    check EditorMode.CommandLine in result.mapListModes
+
+  test "handleCommandModeInput :cunmap returns cmrMapRemove with CommandLine mode":
+    let buffer = newTextBuffer()
+    let result = handler.handleCommandModeInput(buffer, ":cunmap C-a")
+    check result.kind == cmrMapRemove
+    check result.mapRemoveLhs == "C-a"
+    check EditorMode.CommandLine in result.mapRemoveModes
+    check result.mapRemoveModes.len == 1
+
+  test "handleCommandModeInput :cmapclear returns cmrMapClear with CommandLine mode":
+    let buffer = newTextBuffer()
+    let result = handler.handleCommandModeInput(buffer, ":cmapclear")
+    check result.kind == cmrMapClear
+    check EditorMode.CommandLine in result.mapClearModes
+    check result.mapClearModes.len == 1
+
+suite "addRuntimeMapping - CommandLine mode":
+  test "Add mapping for CommandLine mode":
+    var registry = newKeyBindingRegistry()
+    let err = registry.addRuntimeMapping(EditorMode.CommandLine, "C-a", "Home")
+    check err == ""
+    check registry.runtimeMappings[EditorMode.CommandLine].len == 1
+
+  test "CommandLine mapping is independent from Normal":
+    var registry = newKeyBindingRegistry()
+    discard registry.addRuntimeMapping(EditorMode.CommandLine, "C-a", "Home")
+    discard registry.addRuntimeMapping(EditorMode.Normal, "C-a", "Escape")
+    check registry.runtimeMappings[EditorMode.CommandLine].len == 1
+    check registry.runtimeMappings[EditorMode.Normal].len == 1
+
+  test "Remove CommandLine mapping":
+    var registry = newKeyBindingRegistry()
+    discard registry.addRuntimeMapping(EditorMode.CommandLine, "C-a", "Home")
+    let err = registry.removeRuntimeMapping(EditorMode.CommandLine, "C-a")
+    check err == ""
+    check registry.runtimeMappings[EditorMode.CommandLine].len == 0
+
+  test "Clear CommandLine mappings":
+    var registry = newKeyBindingRegistry()
+    discard registry.addRuntimeMapping(EditorMode.CommandLine, "C-a", "Home")
+    discard registry.addRuntimeMapping(EditorMode.CommandLine, "C-b", "End")
+    registry.clearRuntimeMappings(EditorMode.CommandLine)
+    check registry.runtimeMappings[EditorMode.CommandLine].len == 0
+
+  test "List CommandLine mappings":
+    var registry = newKeyBindingRegistry()
+    discard registry.addRuntimeMapping(EditorMode.CommandLine, "C-a", "Home")
+    let listings = registry.listRuntimeMappings(EditorMode.CommandLine)
+    check listings.len == 1
+    check "C-a -> Home" in listings
+
+  test "getRuntimeKeySeqMappings for CommandLine mode":
+    var registry = newKeyBindingRegistry()
+    discard registry.addRuntimeMapping(EditorMode.CommandLine, "C-a", "Home")
+    let mappings = registry.getRuntimeKeySeqMappings(EditorMode.CommandLine)
+    check mappings.len == 1
+    check mappings[0].triggerStr == "C-a"

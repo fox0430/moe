@@ -364,7 +364,7 @@ Persistent key remappings per editor mode. Uses the same key notation as `:nmap`
 
 Values can be either a command name (e.g., `"save"`) or a key sequence (e.g., `"Escape"`).
 
-Supported modes: `Normal`, `Insert`, `Visual`, `Replace`.
+Supported modes: `Normal`, `Insert`, `Visual`, `Replace`, `CommandLine`.
 
 ```toml
 [KeyMapping.Normal]
@@ -378,6 +378,9 @@ Supported modes: `Normal`, `Insert`, `Visual`, `Replace`.
 
 [KeyMapping.Replace]
 "C-c" = "Escape"
+
+[KeyMapping.CommandLine]
+"C-a" = "Home"
 ```
 
 #### Available commands
@@ -439,7 +442,7 @@ Key mappings are applied in this order (later overrides earlier):
 1. Built-in default bindings
 2. `keybindings.toml`
 3. `moerc.toml` `[KeyMapping]`
-4. Runtime `:nmap`/`:imap` commands
+4. Runtime `:nmap`/`:imap`/`:cmap` commands
 
 Also see [Runtime Key Mapping](howtouse.md#runtime-key-mapping) for session-only mappings.
 

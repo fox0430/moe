@@ -349,6 +349,7 @@ type
     insert*: OrderedTable[string, string]
     visual*: OrderedTable[string, string]
     replace*: OrderedTable[string, string]
+    commandLine*: OrderedTable[string, string]
 
   # Main configuration
   EditorConfig* = ref object
@@ -599,5 +600,6 @@ proc newEditorConfig*(): EditorConfig =
       insert: initOrderedTable[string, string](),
       visual: initOrderedTable[string, string](),
       replace: initOrderedTable[string, string](),
+      commandLine: initOrderedTable[string, string](),
     ),
   )
