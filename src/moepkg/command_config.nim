@@ -198,6 +198,8 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("vmap", claVmap)
   config.addAlias("vnoremap", claVmap)
   config.addAlias("rmap", claRmap)
+  config.addAlias("cmap", claCmap)
+  config.addAlias("cnoremap", claCmap)
 
   # Key unmapping commands
   config.addAlias("unmap", claUnmap)
@@ -205,6 +207,7 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("iunmap", claIunmap)
   config.addAlias("vunmap", claVunmap)
   config.addAlias("runmap", claRunmap)
+  config.addAlias("cunmap", claCunmap)
 
   # Key mapping clear commands
   config.addAlias("mapclear", claMapclear)
@@ -212,6 +215,7 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("imapclear", claImapclear)
   config.addAlias("vmapclear", claVmapclear)
   config.addAlias("rmapclear", claRmapclear)
+  config.addAlias("cmapclear", claCmapclear)
 
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser

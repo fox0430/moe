@@ -345,6 +345,8 @@ proc enterTerminalInActiveWindow(e: Editor, command: string) =
   e.setMode(EditorMode.Terminal)
   activeWin.mode = EditorMode.Terminal
 
+proc handleCommandModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool
+
 proc handleCommandModeEvent(e: Editor, event: Event): bool =
   ## Handle Command mode events (special handling for text input)
   if event.kind != EventKind.Key:
@@ -355,7 +357,70 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
   if keyComboOpt.isNone:
     return true
 
-  let keyCombo = keyComboOpt.get
+  return e.handleCommandModeKeyCombo(keyComboOpt.get)
+
+proc handleCommandModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
+  ## Handle a KeyCombo in command-line mode, with runtime mapping support.
+
+  # Runtime key mapping check for command-line mode
+  if not e.keyBindingRegistry.isReplayingMapping:
+    let registry = e.keyBindingRegistry
+    let mappings = registry.getRuntimeKeySeqMappings(EditorMode.CommandLine)
+    if mappings.len > 0:
+      registry.runtimeMappingState.keys.add(keyCombo)
+      let accKeys = registry.runtimeMappingState.keys
+      var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
+      var hasLongerMatch = false
+      for m in mappings:
+        if m.triggerKeys == accKeys:
+          exactMatch = some(m)
+        elif m.triggerKeys.len > accKeys.len and
+            m.triggerKeys[0 ..< accKeys.len] == accKeys:
+          hasLongerMatch = true
+
+      if exactMatch.isSome and not hasLongerMatch:
+        # Exact match: execute mapping
+        registry.clearRuntimeMappingState()
+        registry.isReplayingMapping = true
+        var replayResult = true
+        for targetKeyStr in exactMatch.get.targetKeys:
+          let targetKeyOpt = stringToKeyCombo(targetKeyStr)
+          if targetKeyOpt.isSome:
+            if not e.handleCommandModeKeyCombo(targetKeyOpt.get):
+              replayResult = false
+              break
+        registry.isReplayingMapping = false
+        return replayResult
+
+      if hasLongerMatch:
+        # Wait for more keys or timeout
+        return true
+
+      # No match: flush accumulated keys
+      let keysToFlush = registry.runtimeMappingState.keys
+      registry.clearRuntimeMappingState()
+      registry.isReplayingMapping = true
+      var flushResult = true
+      for k in keysToFlush:
+        if not e.handleCommandModeKeyCombo(k):
+          flushResult = false
+          break
+      registry.isReplayingMapping = false
+      return flushResult
+    elif registry.runtimeMappingState.keys.len > 0:
+      # No command-line mappings but keys accumulated (mappings removed) - flush
+      let keysToFlush = registry.runtimeMappingState.keys
+      registry.clearRuntimeMappingState()
+      registry.isReplayingMapping = true
+      var flushResult = true
+      for k in keysToFlush:
+        if not e.handleCommandModeKeyCombo(k):
+          flushResult = false
+          break
+      registry.isReplayingMapping = false
+      if not flushResult:
+        return false
+      # Fall through to process current key normally
 
   # Handle Escape to exit Command mode and return to previous (base) mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:
@@ -3245,17 +3310,52 @@ proc handlePendingAsyncOperations*(
   {.cast(gcsafe).}:
     await handlePendingAsyncOperationsImpl(e)
 
-proc handleKeyMappingTimeout*(e: Editor) =
+proc handleKeyMappingTimeout*(e: Editor): bool =
   ## Called when the key mapping timeout fires.
   ## If keys are accumulated in runtimeMappingState, flush them:
   ## - If an exact match exists, execute the mapping
   ## - Otherwise, replay each key individually
+  ## Returns true to continue running, false to quit.
 
   let registry = e.keyBindingRegistry
   if registry.runtimeMappingState.keys.len == 0:
-    return
+    return true
 
   let accKeys = registry.runtimeMappingState.keys
+
+  # Command-line overlay: use CommandLine mode mappings and replay via
+  # handleCommandModeKeyCombo instead of the standard mode dispatch.
+  if e.state.isCommandOverlay:
+    let mappings = registry.getRuntimeKeySeqMappings(EditorMode.CommandLine)
+    var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
+    for m in mappings:
+      if m.triggerKeys == accKeys:
+        exactMatch = some(m)
+        break
+
+    registry.clearRuntimeMappingState()
+    var shouldContinue = true
+
+    if exactMatch.isSome:
+      registry.isReplayingMapping = true
+      for targetKeyStr in exactMatch.get.targetKeys:
+        let targetKeyOpt = stringToKeyCombo(targetKeyStr)
+        if targetKeyOpt.isSome:
+          if not e.handleCommandModeKeyCombo(targetKeyOpt.get):
+            shouldContinue = false
+            break
+      registry.isReplayingMapping = false
+    else:
+      # No exact match: replay each accumulated key individually
+      registry.isReplayingMapping = true
+      for k in accKeys:
+        if not e.handleCommandModeKeyCombo(k):
+          shouldContinue = false
+          break
+      registry.isReplayingMapping = false
+
+    e.state.needsFullRedraw = true
+    return shouldContinue
 
   e.syncStateFromWindow()
 
@@ -3271,6 +3371,7 @@ proc handleKeyMappingTimeout*(e: Editor) =
       break
 
   registry.clearRuntimeMappingState()
+  var shouldContinue = true
 
   if exactMatch.isSome:
     # Exact match found: execute the mapping via playbackMacro
@@ -3283,6 +3384,8 @@ proc handleKeyMappingTimeout*(e: Editor) =
     # Handle mode transition
     if r.kind == hrHandled and r.modeTransition.isSome:
       e.state.mode = r.modeTransition.get
+    if r.kind == hrQuit:
+      shouldContinue = false
   else:
     # No exact match: replay each accumulated key individually
     registry.isReplayingMapping = true
@@ -3290,9 +3393,13 @@ proc handleKeyMappingTimeout*(e: Editor) =
       let r = e.handlerManager.handleKeyCombo(activeBuffer, e.state, activeViewport, k)
       if r.kind == hrHandled and r.modeTransition.isSome:
         e.state.mode = r.modeTransition.get
-      if r.kind == hrError or r.kind == hrQuit:
+      if r.kind == hrQuit:
+        shouldContinue = false
+        break
+      if r.kind == hrError:
         break
     registry.isReplayingMapping = false
 
   e.syncStateToWindow()
   e.state.needsFullRedraw = true
+  return shouldContinue

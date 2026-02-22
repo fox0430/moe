@@ -307,6 +307,9 @@ proc handleModeSwitch*(
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.CallHierarchy))
   of EditorMode.Terminal:
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Terminal))
+  of EditorMode.CommandLine:
+    # Command-line mode is handled via overlay, not direct mode switch
+    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   of EditorMode.Normal:
     # Already in Normal mode
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))

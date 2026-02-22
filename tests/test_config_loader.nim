@@ -1689,7 +1689,7 @@ suite "Config Validation - KeyMapping section":
     check config.keyMapping.normal["C-s"] == "save"
     check config.keyMapping.normal["jj"] == "Escape"
 
-  test "All four modes":
+  test "All five modes":
     let toml = """
 [KeyMapping.Normal]
 "C-s" = "save"
@@ -1702,6 +1702,9 @@ suite "Config Validation - KeyMapping section":
 
 [KeyMapping.Replace]
 "C-c" = "Escape"
+
+[KeyMapping.CommandLine]
+"C-a" = "Home"
 """
     let (config, vr) = loadFromTomlString(toml)
     check not vr.hasErrors
@@ -1709,10 +1712,12 @@ suite "Config Validation - KeyMapping section":
     check config.keyMapping.insert.len == 1
     check config.keyMapping.visual.len == 1
     check config.keyMapping.replace.len == 1
+    check config.keyMapping.commandLine.len == 1
     check config.keyMapping.normal["C-s"] == "save"
     check config.keyMapping.insert["jj"] == "Escape"
     check config.keyMapping.visual["C-c"] == "Escape"
     check config.keyMapping.replace["C-c"] == "Escape"
+    check config.keyMapping.commandLine["C-a"] == "Home"
 
   test "Empty KeyMapping section":
     let toml = """
@@ -1724,6 +1729,7 @@ suite "Config Validation - KeyMapping section":
     check config.keyMapping.insert.len == 0
     check config.keyMapping.visual.len == 0
     check config.keyMapping.replace.len == 0
+    check config.keyMapping.commandLine.len == 0
 
   test "No KeyMapping section uses defaults":
     let toml = """
@@ -1736,6 +1742,7 @@ number = true
     check config.keyMapping.insert.len == 0
     check config.keyMapping.visual.len == 0
     check config.keyMapping.replace.len == 0
+    check config.keyMapping.commandLine.len == 0
 
   test "Unknown mode name reports error":
     let toml = """
@@ -1805,6 +1812,7 @@ suite "Config - saveConfigToToml with KeyMapping":
     var config = newEditorConfig()
     config.keyMapping.normal["C-s"] = "save"
     config.keyMapping.insert["jj"] = "Escape"
+    config.keyMapping.commandLine["C-a"] = "Home"
 
     let saveResult = saveConfigToToml(config, testFile)
     check saveResult.isOk
@@ -1819,6 +1827,8 @@ suite "Config - saveConfigToToml with KeyMapping":
     check loaded.keyMapping.insert["jj"] == "Escape"
     check loaded.keyMapping.visual.len == 0
     check loaded.keyMapping.replace.len == 0
+    check loaded.keyMapping.commandLine.len == 1
+    check loaded.keyMapping.commandLine["C-a"] == "Home"
 
   test "Empty KeyMapping not saved":
     inc testFileCounter

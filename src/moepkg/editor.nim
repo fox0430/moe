@@ -479,6 +479,10 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     let err = keyRegistry.addRuntimeMapping(EditorMode.Replace, lhs, rhs)
     if err.len > 0:
       logWarn("editor", "KeyMapping.Replace error: " & err)
+  for lhs, rhs in editorConfig.keyMapping.commandLine:
+    let err = keyRegistry.addRuntimeMapping(EditorMode.CommandLine, lhs, rhs)
+    if err.len > 0:
+      logWarn("editor", "KeyMapping.CommandLine error: " & err)
 
   # Load command configuration
   cmdConfig.loadDefaultConfig

@@ -80,16 +80,19 @@ type
     claImap # :imap {lhs} {rhs} (insert mode)
     claVmap # :vmap {lhs} {rhs} (visual modes)
     claRmap # :rmap {lhs} {rhs} (replace mode)
+    claCmap # :cmap {lhs} {rhs} (command-line mode)
     claUnmap # :unmap {lhs} (all modes)
     claNunmap # :nunmap {lhs} (normal mode)
     claIunmap # :iunmap {lhs} (insert mode)
     claVunmap # :vunmap {lhs} (visual modes)
     claRunmap # :runmap {lhs} (replace mode)
+    claCunmap # :cunmap {lhs} (command-line mode)
     claMapclear # :mapclear (all modes)
     claNmapclear # :nmapclear (normal mode)
     claImapclear # :imapclear (insert mode)
     claVmapclear # :vmapclear (visual modes)
     claRmapclear # :rmapclear (replace mode)
+    claCmapclear # :cmapclear (command-line mode)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -202,12 +205,12 @@ type
       discard
     of claTerminal:
       terminalCommand*: string # Optional command (empty = default shell)
-    of claMap, claNmap, claImap, claVmap, claRmap:
+    of claMap, claNmap, claImap, claVmap, claRmap, claCmap:
       mapLhs*: string
       mapRhs*: string
-    of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap:
+    of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap, claCunmap:
       unmapLhs*: string
-    of claMapclear, claNmapclear, claImapclear, claVmapclear, claRmapclear:
+    of claMapclear, claNmapclear, claImapclear, claVmapclear, claRmapclear, claCmapclear:
       discard
     of claUnknown:
       errorMessage*: string
@@ -233,11 +236,13 @@ const ArgumentRequiredActions* = {
   claImap, # requires lhs and rhs
   claVmap, # requires lhs and rhs
   claRmap, # requires lhs and rhs
+  claCmap, # requires lhs and rhs
   claUnmap, # requires lhs
   claNunmap, # requires lhs
   claIunmap, # requires lhs
   claVunmap, # requires lhs
   claRunmap, # requires lhs
+  claCunmap, # requires lhs
   claUnknown, # invalid command
 }
 
@@ -806,7 +811,7 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       else:
         ""
     return CommandLineResult(kind: claTerminal, terminalCommand: termCmd)
-  of claMap, claNmap, claImap, claVmap, claRmap:
+  of claMap, claNmap, claImap, claVmap, claRmap, claCmap:
     if cmd.args.len == 0:
       # No arguments: list mappings
       case cmd.action
@@ -820,6 +825,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         return CommandLineResult(kind: claVmap, mapLhs: "", mapRhs: "")
       of claRmap:
         return CommandLineResult(kind: claRmap, mapLhs: "", mapRhs: "")
+      of claCmap:
+        return CommandLineResult(kind: claCmap, mapLhs: "", mapRhs: "")
       else:
         discard
     if cmd.args.len < 2:
@@ -829,6 +836,7 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         of claImap: "imap"
         of claVmap: "vmap"
         of claRmap: "rmap"
+        of claCmap: "cmap"
         else: "map"
       return CommandLineResult(
         kind: claUnknown, errorMessage: "Usage: :" & cmdName & " {lhs} {rhs}"
@@ -846,9 +854,11 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       return CommandLineResult(kind: claVmap, mapLhs: lhs, mapRhs: rhs)
     of claRmap:
       return CommandLineResult(kind: claRmap, mapLhs: lhs, mapRhs: rhs)
+    of claCmap:
+      return CommandLineResult(kind: claCmap, mapLhs: lhs, mapRhs: rhs)
     else:
       discard
-  of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap:
+  of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap, claCunmap:
     if cmd.args.len < 1:
       let cmdName =
         case cmd.action
@@ -856,6 +866,7 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         of claIunmap: "iunmap"
         of claVunmap: "vunmap"
         of claRunmap: "runmap"
+        of claCunmap: "cunmap"
         else: "unmap"
       return CommandLineResult(
         kind: claUnknown, errorMessage: "Usage: :" & cmdName & " {lhs}"
@@ -872,6 +883,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       return CommandLineResult(kind: claVunmap, unmapLhs: lhs)
     of claRunmap:
       return CommandLineResult(kind: claRunmap, unmapLhs: lhs)
+    of claCunmap:
+      return CommandLineResult(kind: claCunmap, unmapLhs: lhs)
     else:
       discard
   of claMapclear:
@@ -884,6 +897,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claVmapclear)
   of claRmapclear:
     return CommandLineResult(kind: claRmapclear)
+  of claCmapclear:
+    return CommandLineResult(kind: claCmapclear)
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText
