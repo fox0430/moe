@@ -1853,3 +1853,127 @@ suite "handleCommandModeEvent - all command mode commands execute":
     check cont == true
     check not e.state.isCommandOverlay
     check e.state.commandText == ""
+
+proc makeUpArrowEvent(): Event =
+  Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.ArrowUp))
+
+proc makeDownArrowEvent(): Event =
+  Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.ArrowDown))
+
+proc makeCharEvent(c: string): Event =
+  Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Char, char: c))
+
+proc makeBackspaceEvent(): Event =
+  Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Backspace))
+
+suite "Command Mode - History Navigation":
+  test "Up with empty history does nothing":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    # No history entries
+    e.state.commandState.history = @[]
+
+    let cont = handleCommandModeEvent(e, makeUpArrowEvent())
+
+    check cont == true
+    check e.state.commandText == ":"
+    check e.state.commandCursor == 0
+    check e.state.commandState.historyIndex == -1
+
+  test "Up navigates to most recent entry":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandState.history = @["w", "q"]
+
+    let cont = handleCommandModeEvent(e, makeUpArrowEvent())
+
+    check cont == true
+    check e.state.commandText == ":w"
+    check e.state.commandCursor == 1
+    check e.state.commandState.historyIndex == 0
+
+  test "Up twice navigates to second entry":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandState.history = @["w", "q"]
+
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    let cont = handleCommandModeEvent(e, makeUpArrowEvent())
+
+    check cont == true
+    check e.state.commandText == ":q"
+    check e.state.commandCursor == 1
+    check e.state.commandState.historyIndex == 1
+
+  test "Up stops at oldest entry":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandState.history = @["w", "q"]
+
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    let cont = handleCommandModeEvent(e, makeUpArrowEvent())
+
+    check cont == true
+    # Still at the oldest entry
+    check e.state.commandText == ":q"
+    check e.state.commandState.historyIndex == 1
+
+  test "Down navigates to newer entry":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandState.history = @["w", "q"]
+
+    # Navigate to oldest
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    # Navigate back to newer
+    let cont = handleCommandModeEvent(e, makeDownArrowEvent())
+
+    check cont == true
+    check e.state.commandText == ":w"
+    check e.state.commandCursor == 1
+    check e.state.commandState.historyIndex == 0
+
+  test "Down from index 0 resets to empty command":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandState.history = @["w", "q"]
+
+    # Navigate to most recent
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    # Navigate past it
+    let cont = handleCommandModeEvent(e, makeDownArrowEvent())
+
+    check cont == true
+    check e.state.commandText == ":"
+    check e.state.commandCursor == 0
+    check e.state.commandState.historyIndex == -1
+
+  test "Character input resets historyIndex":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandState.history = @["w", "q"]
+
+    # Navigate into history
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    check e.state.commandState.historyIndex == 0
+
+    # Type a character
+    discard handleCommandModeEvent(e, makeCharEvent("x"))
+
+    check e.state.commandState.historyIndex == -1
+
+  test "Backspace resets historyIndex":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterCommandOverlay()
+    e.state.commandState.history = @["w", "q"]
+
+    # Navigate into history (sets commandText to ":w")
+    discard handleCommandModeEvent(e, makeUpArrowEvent())
+    check e.state.commandState.historyIndex == 0
+
+    # Backspace
+    discard handleCommandModeEvent(e, makeBackspaceEvent())
+
+    check e.state.commandState.historyIndex == -1

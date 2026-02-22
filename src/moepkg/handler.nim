@@ -1356,6 +1356,7 @@ proc handleCommandModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
 
   # Handle Backspace - delete character before cursor
   if keyCombo.isSpecial and keyCombo.special == skBackspace:
+    e.state.commandState.historyIndex = -1
     if e.state.commandCursor > 0 and e.state.commandText.len > 1:
       # Calculate position in commandText (cursor is 0-based after ":")
       let pos = e.state.commandCursor # Position after ":"
@@ -1403,8 +1404,45 @@ proc handleCommandModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
     e.state.commandCompletionManager.cancelCompletion()
     return true
 
+  # Up arrow: Navigate to previous (older) command in history
+  if keyCombo.isSpecial and keyCombo.special == skUp:
+    if e.state.commandState.history.len > 0:
+      # If not yet navigating history, start from the most recent entry
+      if e.state.commandState.historyIndex == -1:
+        e.state.commandState.historyIndex = 0
+      # Otherwise, move to the next older entry
+      elif e.state.commandState.historyIndex < e.state.commandState.history.high:
+        e.state.commandState.historyIndex += 1
+
+      # Update command text with history entry
+      e.state.commandText =
+        ":" & e.state.commandState.history[e.state.commandState.historyIndex]
+      e.state.commandCursor = e.state.commandText.len - 1
+      e.state.commandCompletionManager.cancelCompletion()
+      e.updateSubstitutePreviewIfNeeded()
+    return true
+
+  # Down arrow: Navigate to next (newer) command in history
+  if keyCombo.isSpecial and keyCombo.special == skDown:
+    if e.state.commandState.history.len > 0 and e.state.commandState.historyIndex >= 0:
+      # Move to newer entry
+      if e.state.commandState.historyIndex > 0:
+        e.state.commandState.historyIndex -= 1
+        e.state.commandText =
+          ":" & e.state.commandState.history[e.state.commandState.historyIndex]
+        e.state.commandCursor = e.state.commandText.len - 1
+      else:
+        # Reached the newest entry, clear to empty command
+        e.state.commandState.historyIndex = -1
+        e.state.commandText = ":"
+        e.state.commandCursor = 0
+      e.state.commandCompletionManager.cancelCompletion()
+      e.updateSubstitutePreviewIfNeeded()
+    return true
+
   # Handle character input - insert at cursor position
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+    e.state.commandState.historyIndex = -1
     # Guard against empty commandText (should have at least ":")
     if e.state.commandText.len == 0:
       e.state.commandText = ":"
