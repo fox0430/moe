@@ -1733,6 +1733,7 @@ suite "Config Validation - KeyMapping section":
 """
     let (config, vr) = loadFromTomlString(toml)
     check not vr.hasErrors
+    check config.keyMapping.all.len == 0
     check config.keyMapping.normal.len == 0
     check config.keyMapping.insert.len == 0
     check config.keyMapping.visual.len == 0
@@ -1746,6 +1747,7 @@ number = true
 """
     let (config, vr) = loadFromTomlString(toml)
     check not vr.hasErrors
+    check config.keyMapping.all.len == 0
     check config.keyMapping.normal.len == 0
     check config.keyMapping.insert.len == 0
     check config.keyMapping.visual.len == 0
@@ -1810,6 +1812,46 @@ number = true
     check not vr.hasErrors
     check config.keyMapping.insert["jj"] == "Escape"
 
+  test "All key mappings":
+    let toml = """
+[KeyMapping.All]
+"C-s" = "save"
+"C-q" = "Escape"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.all.len == 2
+    check config.keyMapping.all["C-s"] == "save"
+    check config.keyMapping.all["C-q"] == "Escape"
+
+  test "All with mode-specific coexistence":
+    let toml = """
+[KeyMapping.All]
+"C-s" = "save"
+
+[KeyMapping.Normal]
+"C-n" = "Escape"
+
+[KeyMapping.Insert]
+"jj" = "Escape"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.all.len == 1
+    check config.keyMapping.all["C-s"] == "save"
+    check config.keyMapping.normal.len == 1
+    check config.keyMapping.normal["C-n"] == "Escape"
+    check config.keyMapping.insert.len == 1
+    check config.keyMapping.insert["jj"] == "Escape"
+
+  test "Empty All section":
+    let toml = """
+[KeyMapping.All]
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.all.len == 0
+
 suite "Config - saveConfigToToml with KeyMapping":
   test "KeyMapping round-trip":
     inc testFileCounter
@@ -1831,6 +1873,7 @@ suite "Config - saveConfigToToml with KeyMapping":
     check loadResult.isOk
     let (loaded, vr) = loadResult.get
     check not vr.hasErrors
+    check loaded.keyMapping.all.len == 0
     check loaded.keyMapping.normal.len == 1
     check loaded.keyMapping.normal["C-s"] == "save"
     check loaded.keyMapping.insert.len == 1
@@ -1839,6 +1882,30 @@ suite "Config - saveConfigToToml with KeyMapping":
     check loaded.keyMapping.replace.len == 0
     check loaded.keyMapping.commandLine.len == 1
     check loaded.keyMapping.commandLine["C-a"] == "Home"
+
+  test "KeyMapping.All round-trip":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_keymap_all_save_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.keyMapping.all["C-s"] = "save"
+    config.keyMapping.normal["C-n"] = "Escape"
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.keyMapping.all.len == 1
+    check loaded.keyMapping.all["C-s"] == "save"
+    check loaded.keyMapping.normal.len == 1
+    check loaded.keyMapping.normal["C-n"] == "Escape"
 
   test "Empty KeyMapping not saved":
     inc testFileCounter

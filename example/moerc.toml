@@ -254,6 +254,13 @@ splitType = "vertical"                 # Split type: "vertical" or "horizontal"
 # Same key notation as :nmap/:imap commands
 # Values can be command names (e.g., "save") or key sequences (e.g., "Escape")
 #
+# [KeyMapping.All] applies to all editable modes (Normal, Insert, Visual,
+# VisualBlock, VisualLine, Replace). Mode-specific sections override All.
+# Use [KeyMapping.CommandLine] separately for command-line mode.
+#
+# [KeyMapping.All]
+# "C-s" = "save"
+#
 # [KeyMapping.Normal]
 # "C-s" = "save"
 #

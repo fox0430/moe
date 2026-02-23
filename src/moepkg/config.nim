@@ -345,6 +345,7 @@ type
 
   # Key mapping settings
   KeyMappingConfig* = object
+    all*: OrderedTable[string, string]
     normal*: OrderedTable[string, string]
     insert*: OrderedTable[string, string]
     visual*: OrderedTable[string, string]
@@ -596,6 +597,7 @@ proc newEditorConfig*(): EditorConfig =
       servers: initTable[string, LspServerConfig](),
     ),
     keyMapping: KeyMappingConfig(
+      all: initOrderedTable[string, string](),
       normal: initOrderedTable[string, string](),
       insert: initOrderedTable[string, string](),
       visual: initOrderedTable[string, string](),
