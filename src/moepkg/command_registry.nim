@@ -2119,7 +2119,12 @@ proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
   # Adjust cursor position if needed
   if ctx.cursor.line >= ctx.buffer.len:
     ctx.cursor.line = max(0, ctx.buffer.len - 1)
-  ctx.cursor.column = 0
+  # Preserve column position, clamped to end of new current line
+  let newLine = ctx.buffer.getLine(ctx.cursor.line)
+  if newLine.charLen > 0:
+    ctx.cursor.column = min(ctx.cursor.column, newLine.charLen - 1)
+  else:
+    ctx.cursor.column = 0
 
   # Also write to system clipboard if enabled
   if ctx.clipboardConfig.enable:
@@ -2385,9 +2390,14 @@ proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), strin
     if commitResult.isErr:
       return err("Failed to commit transaction: " & commitResult.error)
 
-    # Move cursor to beginning of line
+    # Move cursor to start line, preserve column position
     ctx.cursor.line = min(startLine, ctx.buffer.len - 1)
-    ctx.cursor.column = 0
+    # Preserve column position, clamped to end of new current line
+    let newLine = ctx.buffer.getLine(ctx.cursor.line)
+    if newLine.charLen > 0:
+      ctx.cursor.column = min(ctx.cursor.column, newLine.charLen - 1)
+    else:
+      ctx.cursor.column = 0
 
     # Record this command for repeat (.)
     ctx.state.editState.lastEditCommand =
