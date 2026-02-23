@@ -992,7 +992,9 @@ proc loadKeyMappingConfig(
   const section = "KeyMapping"
   const validKeys = [
     "All", "Normal", "Insert", "Visual", "VisualAll", "VisualLine", "VisualBlock",
-    "Replace", "CommandLine",
+    "Replace", "CommandLine", "Filer", "LogViewer", "Help", "BufferManager",
+    "BackupManager", "DiffViewer", "Config", "References", "DocumentSymbol",
+    "CallHierarchy", "RecentFile", "Debug", "Terminal",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
 
@@ -1052,6 +1054,94 @@ proc loadKeyMappingConfig(
       config.commandLine,
       vr,
       "KeyMapping.CommandLine",
+      validCommands,
+    )
+  if table.hasKey("Filer"):
+    loadKeyMappingModeConfig(
+      table["Filer"].getTable(), config.filer, vr, "KeyMapping.Filer", validCommands
+    )
+  if table.hasKey("LogViewer"):
+    loadKeyMappingModeConfig(
+      table["LogViewer"].getTable(),
+      config.logViewer,
+      vr,
+      "KeyMapping.LogViewer",
+      validCommands,
+    )
+  if table.hasKey("Help"):
+    loadKeyMappingModeConfig(
+      table["Help"].getTable(), config.help, vr, "KeyMapping.Help", validCommands
+    )
+  if table.hasKey("BufferManager"):
+    loadKeyMappingModeConfig(
+      table["BufferManager"].getTable(),
+      config.bufferManager,
+      vr,
+      "KeyMapping.BufferManager",
+      validCommands,
+    )
+  if table.hasKey("BackupManager"):
+    loadKeyMappingModeConfig(
+      table["BackupManager"].getTable(),
+      config.backupManager,
+      vr,
+      "KeyMapping.BackupManager",
+      validCommands,
+    )
+  if table.hasKey("DiffViewer"):
+    loadKeyMappingModeConfig(
+      table["DiffViewer"].getTable(),
+      config.diffViewer,
+      vr,
+      "KeyMapping.DiffViewer",
+      validCommands,
+    )
+  if table.hasKey("Config"):
+    loadKeyMappingModeConfig(
+      table["Config"].getTable(), config.config, vr, "KeyMapping.Config", validCommands
+    )
+  if table.hasKey("References"):
+    loadKeyMappingModeConfig(
+      table["References"].getTable(),
+      config.references,
+      vr,
+      "KeyMapping.References",
+      validCommands,
+    )
+  if table.hasKey("DocumentSymbol"):
+    loadKeyMappingModeConfig(
+      table["DocumentSymbol"].getTable(),
+      config.documentSymbol,
+      vr,
+      "KeyMapping.DocumentSymbol",
+      validCommands,
+    )
+  if table.hasKey("CallHierarchy"):
+    loadKeyMappingModeConfig(
+      table["CallHierarchy"].getTable(),
+      config.callHierarchy,
+      vr,
+      "KeyMapping.CallHierarchy",
+      validCommands,
+    )
+  if table.hasKey("RecentFile"):
+    loadKeyMappingModeConfig(
+      table["RecentFile"].getTable(),
+      config.recentFile,
+      vr,
+      "KeyMapping.RecentFile",
+      validCommands,
+    )
+  if table.hasKey("Debug"):
+    loadKeyMappingModeConfig(
+      table["Debug"].getTable(), config.debug, vr, "KeyMapping.Debug", validCommands
+    )
+  if table.hasKey("Terminal"):
+    loadKeyMappingModeConfig(
+      table["Terminal"].getTable(),
+      config.terminal,
+      vr,
+      "KeyMapping.Terminal",
       validCommands,
     )
 
@@ -2060,6 +2150,84 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   if config.keyMapping.commandLine.len > 0:
     lines.add "[KeyMapping.CommandLine]"
     for lhs, rhs in config.keyMapping.commandLine:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.filer.len > 0:
+    lines.add "[KeyMapping.Filer]"
+    for lhs, rhs in config.keyMapping.filer:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.logViewer.len > 0:
+    lines.add "[KeyMapping.LogViewer]"
+    for lhs, rhs in config.keyMapping.logViewer:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.help.len > 0:
+    lines.add "[KeyMapping.Help]"
+    for lhs, rhs in config.keyMapping.help:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.bufferManager.len > 0:
+    lines.add "[KeyMapping.BufferManager]"
+    for lhs, rhs in config.keyMapping.bufferManager:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.backupManager.len > 0:
+    lines.add "[KeyMapping.BackupManager]"
+    for lhs, rhs in config.keyMapping.backupManager:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.diffViewer.len > 0:
+    lines.add "[KeyMapping.DiffViewer]"
+    for lhs, rhs in config.keyMapping.diffViewer:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.config.len > 0:
+    lines.add "[KeyMapping.Config]"
+    for lhs, rhs in config.keyMapping.config:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.references.len > 0:
+    lines.add "[KeyMapping.References]"
+    for lhs, rhs in config.keyMapping.references:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.documentSymbol.len > 0:
+    lines.add "[KeyMapping.DocumentSymbol]"
+    for lhs, rhs in config.keyMapping.documentSymbol:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.callHierarchy.len > 0:
+    lines.add "[KeyMapping.CallHierarchy]"
+    for lhs, rhs in config.keyMapping.callHierarchy:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.recentFile.len > 0:
+    lines.add "[KeyMapping.RecentFile]"
+    for lhs, rhs in config.keyMapping.recentFile:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.debug.len > 0:
+    lines.add "[KeyMapping.Debug]"
+    for lhs, rhs in config.keyMapping.debug:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.terminal.len > 0:
+    lines.add "[KeyMapping.Terminal]"
+    for lhs, rhs in config.keyMapping.terminal:
       lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
     lines.add ""
 

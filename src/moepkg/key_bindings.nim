@@ -717,6 +717,14 @@ proc getRuntimeKeySeqMappings*(
     if m.kind == rmkKeySequence:
       result.add(m)
 
+proc getAllRuntimeMappings*(
+    registry: KeyBindingRegistry, mode: EditorMode
+): seq[RuntimeKeyMapping] =
+  ## Get all runtime mappings for the given mode (both rmkCommand and rmkKeySequence)
+  if mode notin registry.runtimeMappings:
+    return @[]
+  return registry.runtimeMappings[mode]
+
 proc isDigitKey*(combo: KeyCombo): bool =
   ## Check if the key combination is a digit (0-9)
   not combo.isSpecial and combo.modifiers == {} and combo.char.len == 1 and

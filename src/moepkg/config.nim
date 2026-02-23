@@ -354,6 +354,19 @@ type
     visualBlock*: OrderedTable[string, string]
     replace*: OrderedTable[string, string]
     commandLine*: OrderedTable[string, string]
+    filer*: OrderedTable[string, string]
+    logViewer*: OrderedTable[string, string]
+    help*: OrderedTable[string, string]
+    bufferManager*: OrderedTable[string, string]
+    backupManager*: OrderedTable[string, string]
+    diffViewer*: OrderedTable[string, string]
+    config*: OrderedTable[string, string]
+    references*: OrderedTable[string, string]
+    documentSymbol*: OrderedTable[string, string]
+    callHierarchy*: OrderedTable[string, string]
+    recentFile*: OrderedTable[string, string]
+    debug*: OrderedTable[string, string]
+    terminal*: OrderedTable[string, string]
 
   # Main configuration
   EditorConfig* = ref object
@@ -609,5 +622,18 @@ proc newEditorConfig*(): EditorConfig =
       visualBlock: initOrderedTable[string, string](),
       replace: initOrderedTable[string, string](),
       commandLine: initOrderedTable[string, string](),
+      filer: initOrderedTable[string, string](),
+      logViewer: initOrderedTable[string, string](),
+      help: initOrderedTable[string, string](),
+      bufferManager: initOrderedTable[string, string](),
+      backupManager: initOrderedTable[string, string](),
+      diffViewer: initOrderedTable[string, string](),
+      config: initOrderedTable[string, string](),
+      references: initOrderedTable[string, string](),
+      documentSymbol: initOrderedTable[string, string](),
+      callHierarchy: initOrderedTable[string, string](),
+      recentFile: initOrderedTable[string, string](),
+      debug: initOrderedTable[string, string](),
+      terminal: initOrderedTable[string, string](),
     ),
   )

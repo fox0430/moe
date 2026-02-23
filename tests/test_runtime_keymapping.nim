@@ -1374,3 +1374,60 @@ suite "addRuntimeMapping - CommandLine mode":
     let mappings = registry.getRuntimeKeySeqMappings(EditorMode.CommandLine)
     check mappings.len == 1
     check mappings[0].triggerStr == "C-a"
+
+suite "rmkCommand mapping - findBinding integration":
+  test "C-j rmkCommand mapping found by processKey in Normal mode":
+    var registry = newKeyBindingRegistry()
+    # Register the command
+    let cmd = Command(
+      name: "window-prev",
+      description: "Switch to previous window",
+      count: 1,
+      kind: ctAction,
+      commandId: "window.prev",
+    )
+    registry.registerCommand(cmd)
+
+    # Add runtime mapping: C-j -> window-prev
+    let err = registry.addRuntimeMapping(EditorMode.Normal, "C-j", "window-prev")
+    check err == ""
+
+    # Verify it's in runtimeMappings as rmkCommand
+    check registry.runtimeMappings[EditorMode.Normal].len == 1
+    check registry.runtimeMappings[EditorMode.Normal][0].kind == rmkCommand
+
+    # Verify it's also in bindings (via bindKey)
+    let ctrlJ = KeyCombo(isSpecial: false, char: "j", modifiers: {kmCtrl})
+    let binding = registry.findSingleBinding(EditorMode.Normal, ctrlJ)
+    check binding.isSome
+    check binding.get.name == "window-prev"
+    check binding.get.commandId == "window.prev"
+
+    # Verify processKey finds it too
+    let cmdResult = registry.processKey(EditorMode.Normal, ctrlJ)
+    check cmdResult.isSome
+    check cmdResult.get.name == "window-prev"
+
+  test "C-j rmkCommand mapping found by getAllRuntimeMappings for Filer mode":
+    var registry = newKeyBindingRegistry()
+    let cmd = Command(
+      name: "window-prev",
+      description: "Switch to previous window",
+      count: 1,
+      kind: ctAction,
+      commandId: "window.prev",
+    )
+    registry.registerCommand(cmd)
+
+    let err = registry.addRuntimeMapping(EditorMode.Filer, "C-j", "window-prev")
+    check err == ""
+
+    # getRuntimeKeySeqMappings should NOT include rmkCommand
+    let seqMappings = registry.getRuntimeKeySeqMappings(EditorMode.Filer)
+    check seqMappings.len == 0
+
+    # getAllRuntimeMappings SHOULD include rmkCommand
+    let allMappings = registry.getAllRuntimeMappings(EditorMode.Filer)
+    check allMappings.len == 1
+    check allMappings[0].kind == rmkCommand
+    check allMappings[0].commandName == "window-prev"

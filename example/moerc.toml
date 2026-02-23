@@ -254,9 +254,8 @@ splitType = "vertical"                 # Split type: "vertical" or "horizontal"
 # Same key notation as :nmap/:imap commands
 # Values can be command names (e.g., "save") or key sequences (e.g., "Escape")
 #
-# [KeyMapping.All] applies to all editable modes (Normal, Insert, Visual,
-# VisualBlock, VisualLine, Replace). Mode-specific sections override All.
-# Use [KeyMapping.CommandLine] separately for command-line mode.
+# [KeyMapping.All] applies to all modes (except QuickRun).
+# Mode-specific sections override All.
 #
 # [KeyMapping.All]
 # "C-s" = "save"
@@ -287,6 +286,48 @@ splitType = "vertical"                 # Split type: "vertical" or "horizontal"
 
 # [KeyMapping.CommandLine]
 # "C-a" = "Home"
+#
+# Special mode key mappings (Filer, LogViewer, Help, BufferManager, etc.)
+# These work the same way as editing mode mappings.
+#
+# [KeyMapping.Filer]
+# "C-c" = "Escape"
+#
+# [KeyMapping.LogViewer]
+# "C-c" = "Escape"
+#
+# [KeyMapping.Help]
+# "C-c" = "Escape"
+#
+# [KeyMapping.BufferManager]
+# "C-c" = "Escape"
+#
+# [KeyMapping.BackupManager]
+# "C-c" = "Escape"
+#
+# [KeyMapping.DiffViewer]
+# "C-c" = "Escape"
+#
+# [KeyMapping.Config]
+# "C-c" = "Escape"
+#
+# [KeyMapping.References]
+# "C-c" = "Escape"
+#
+# [KeyMapping.DocumentSymbol]
+# "C-c" = "Escape"
+#
+# [KeyMapping.CallHierarchy]
+# "C-c" = "Escape"
+#
+# [KeyMapping.RecentFile]
+# "C-c" = "Escape"
+#
+# [KeyMapping.Debug]
+# "C-c" = "Escape"
+#
+# [KeyMapping.Terminal]
+# "C-c" = "Escape"
 
 # Debug mode settings - controls what sections are shown in :debug view
 # Use :debug command to open the debug viewer (vertical split, auto-refreshes every 500ms)
