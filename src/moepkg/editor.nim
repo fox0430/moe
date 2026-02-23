@@ -463,6 +463,17 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   keyRegistry.loadDefaultKeybindings()
 
   # Apply key mappings from config (moerc.toml [KeyMapping] section)
+  # Apply "All" mappings to every mode first (mode-specific mappings can override)
+  const allModes = [
+    EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
+    EditorMode.VisualLine, EditorMode.Replace,
+  ]
+  for lhs, rhs in editorConfig.keyMapping.all:
+    for mode in allModes:
+      let err = keyRegistry.addRuntimeMapping(mode, lhs, rhs)
+      if err.len > 0:
+        logWarn("editor", "KeyMapping.All error (" & $mode & "): " & err)
+
   for lhs, rhs in editorConfig.keyMapping.normal:
     let err = keyRegistry.addRuntimeMapping(EditorMode.Normal, lhs, rhs)
     if err.len > 0:
