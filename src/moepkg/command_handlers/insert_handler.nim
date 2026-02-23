@@ -636,6 +636,18 @@ proc handleInsertModeKey*(
       # Cancel completion on motion
       handler.completionManager.cancelCompletion()
       return handler.handleMotion(buffer, state, cmd.motion)
+    of ctAction, ctCustom:
+      # Handle action commands (e.g., from :imap)
+      handler.completionManager.cancelCompletion()
+      case cmd.commandId
+      of "insert.backspace":
+        return handler.handleBackspace(buffer, state)
+      of "insert.delete":
+        return handler.handleDelete(buffer, state)
+      of "insert.newline":
+        return handler.handleNewline(buffer, state)
+      else:
+        return InsertModeResult(kind: imrUnhandled)
     else:
       # Other command types not supported in insert mode
       return InsertModeResult(kind: imrUnhandled)

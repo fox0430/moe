@@ -391,6 +391,10 @@ Supported modes: `Normal`, `Insert`, `Visual`, `Replace`, `CommandLine`.
 | save-and-quit | Save and quit |
 | quit-force | Quit without saving |
 | close-window | Close current window |
+| file-new | Create new empty buffer |
+| file-open | Open file (enter filer) |
+| file-close | Close current buffer |
+| filer-open | Open file explorer |
 | undo | Undo |
 | redo | Redo |
 | move-left | Move cursor left |
@@ -417,6 +421,9 @@ Supported modes: `Normal`, `Insert`, `Visual`, `Replace`, `CommandLine`.
 | yank-line | Yank line |
 | paste-after | Paste after cursor |
 | paste-before | Paste before cursor |
+| clipboard-copy | Copy selected text to system clipboard |
+| clipboard-paste | Paste text from system clipboard |
+| clipboard-cut | Cut selected text to system clipboard |
 | join-lines | Join lines |
 | indent-line | Indent line |
 | dedent-line | Dedent line |
@@ -425,6 +432,11 @@ Supported modes: `Normal`, `Insert`, `Visual`, `Replace`, `CommandLine`.
 | fold-toggle | Toggle fold |
 | increment-number | Increment number |
 | decrement-number | Decrement number |
+| macro-record | Start/stop macro recording |
+| macro-play | Play macro from register |
+| register-select | Select register for next command |
+| window-next | Switch to next window |
+| window-prev | Switch to previous window |
 | quickrun | Run QuickRun |
 | lsp-goto-definition | LSP go to definition |
 | lsp-find-references | LSP find references |
@@ -432,8 +444,12 @@ Supported modes: `Normal`, `Insert`, `Visual`, `Replace`, `CommandLine`.
 | lsp-rename | LSP rename symbol |
 | lsp-document-symbol | LSP document symbols |
 | lsp-selection-range | LSP selection range |
+| lsp-call-hierarchy-outgoing | LSP outgoing call hierarchy |
 | buffer-next-tab | Next buffer tab |
 | buffer-prev-tab | Previous buffer tab |
+| insert-backspace | Delete character before cursor (Insert mode) |
+| insert-delete | Delete character at cursor (Insert mode) |
+| insert-newline | Insert newline (Insert mode) |
 
 #### Application order
 

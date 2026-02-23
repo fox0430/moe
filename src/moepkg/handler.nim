@@ -2373,6 +2373,11 @@ proc handleEvent*(e: Editor, event: Event): bool =
           e.state.pendingRegister = none(char)
           cancelled = true
 
+        # Cancel pending key binding sequence
+        if e.keyBindingRegistry.hasActiveSequence():
+          e.keyBindingRegistry.clearSequence()
+          cancelled = true
+
         # Cancel window command mode (Ctrl-w)
         if e.state.pendingCommand != PendingNone:
           e.state.pendingCommand = PendingNone
@@ -2395,11 +2400,6 @@ proc handleEvent*(e: Editor, event: Event): bool =
       else:
         # Any other key resets the Escape counter
         e.state.lastKeyWasEscape = false
-
-      # Ctrl-W window commands (no syncState needed in Normal mode)
-      let winCmd = e.handleWindowCommand(keyCombo, syncState = false)
-      if winCmd.isSome:
-        return winCmd.get
 
   # Ctrl-W window commands for special/viewer modes
   if e.state.mode notin {
@@ -3046,14 +3046,42 @@ proc handleEvent*(e: Editor, event: Event): bool =
     discard e.switchToBuffer(r.bufferArg)
   of hrHandled, hrUnhandled, hrError:
     discard # Fall through to post-processing
-  of hrCloseWindow, hrVSplit, hrHSplit, hrNew, hrVnew, hrEnew, hrEdit, hrSetBoolOption,
-      hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight, hrSave, hrBufferDelete,
-      hrStripWhitespace, hrShellCommand, hrBackground, hrMan, hrSubstitute, hrQuickRun,
-      hrBuild, hrDebug, hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList,
-      hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
-      hrEnterFiler, hrEnterLogViewer, hrEnterHelpViewer, hrEnterBufferManager,
-      hrEnterBackupManager, hrEnterDiffViewer, hrEnterReferences, hrEnterDocumentSymbol,
-      hrEnterCallHierarchy, hrEnterTerminal:
+  of hrCloseWindow:
+    let shouldQuit = e.closeWindow()
+    if shouldQuit:
+      return false
+  of hrNextWindow:
+    e.switchToNextWindow()
+  of hrPrevWindow:
+    e.switchToPrevWindow()
+  of hrEnew:
+    let enewResult = e.enew()
+    if enewResult.isErr:
+      logError("handler", "Enew failed: " & enewResult.error)
+      e.state.statusMessage = "Error: " & enewResult.error
+  of hrEnterFiler:
+    let startPath =
+      if r.enterFilerPath.isSome:
+        r.enterFilerPath.get
+      elif e.activeWindow.buffer.filePath.isSome:
+        parentDir(e.activeWindow.buffer.filePath.get)
+      else:
+        getCurrentDir()
+    e.enterFilerInActiveWindow(startPath)
+  of hrBufferDelete:
+    let shouldQuit = e.closeWindow()
+    if shouldQuit:
+      let enewResult = e.enew()
+      if enewResult.isErr:
+        logError("handler", "Enew failed after buffer delete: " & enewResult.error)
+        e.state.statusMessage = "Error: " & enewResult.error
+  of hrVSplit, hrHSplit, hrNew, hrVnew, hrEdit, hrSetBoolOption, hrSetIntOption,
+      hrSetFloatOption, hrClearSearchHighlight, hrSave, hrStripWhitespace,
+      hrShellCommand, hrBackground, hrMan, hrSubstitute, hrQuickRun, hrBuild, hrDebug,
+      hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList, hrRecentFile,
+      hrRecentFileOpenFile, hrRecentFileQuit, hrEnterLogViewer, hrEnterHelpViewer,
+      hrEnterBufferManager, hrEnterBackupManager, hrEnterDiffViewer, hrEnterReferences,
+      hrEnterDocumentSymbol, hrEnterCallHierarchy, hrEnterTerminal:
     discard # Handled by handleCommandModeEvent or other code paths
 
   # Handle overlay transitions

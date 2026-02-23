@@ -137,6 +137,7 @@ type
       # Last executed macro register for @@ (was: lastMacroRegister)
     waitingForRegister*: bool # Waiting for register name after q or @
     commandType*: string # "record" or "playback" (was: macroCommandType)
+    recordStartKey*: string # Key string that started recording (for stop detection)
     pendingCount*: int # Numeric prefix for macro playback (was: pendingMacroCount)
     playbackDepth*: int # Current macro recursion depth (was: macroPlaybackDepth)
 

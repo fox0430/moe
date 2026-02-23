@@ -57,6 +57,11 @@ type
     nmrJumpToBuffer # Signal to handler_manager to jump to buffer and position
     nmrBufferNext # Signal to handler_manager to switch to next buffer
     nmrBufferPrev # Signal to handler_manager to switch to previous buffer
+    nmrNewFile # Signal to handler_manager to create new empty buffer
+    nmrEnterFiler # Signal to handler_manager to enter filer mode
+    nmrBufferDelete # Signal to handler_manager to delete current buffer
+    nmrNextWindow # Signal to handler_manager to switch to next window
+    nmrPrevWindow # Signal to handler_manager to switch to previous window
 
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
     motionController*: MotionController
@@ -117,6 +122,16 @@ type
     of nmrBufferNext:
       discard
     of nmrBufferPrev:
+      discard
+    of nmrBufferDelete:
+      discard
+    of nmrNewFile:
+      discard
+    of nmrEnterFiler:
+      discard
+    of nmrNextWindow:
+      discard
+    of nmrPrevWindow:
       discard
 
 proc updateCursorToJumpPosition(
@@ -458,66 +473,23 @@ proc handleNormalModeKey*(
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
   # Handle macro recording - check if we're in recording mode
-  # and this is not the 'q' key that would stop recording
   if state.macroState.isRecording:
-    # Check if this is 'q' to stop recording
-    if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == "q":
+    # Check if this key matches the key that started recording (stop recording)
+    let currentKeyStr = keyComboToString(keyCombo)
+    if currentKeyStr == state.macroState.recordStartKey:
       # Stop recording
       state.macroState.registers[state.macroState.register] =
         state.macroState.recordedKeys
       state.macroState.isRecording = false
       state.macroState.recordedKeys = @[]
+      state.macroState.recordStartKey = ""
       state.statusMessage = ""
+      handler.keyBindingRegistry.clearSequence()
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
       # Record this key
-      state.macroState.recordedKeys.add(keyComboToString(keyCombo))
+      state.macroState.recordedKeys.add(currentKeyStr)
       # Continue processing the key normally
-
-  # Check for macro commands before processing through key bindings
-  # Handle 'q' for macro recording start
-  if not state.macroState.isRecording and not keyCombo.isSpecial and
-      keyCombo.modifiers == {} and keyCombo.char == "q":
-    # Wait for the next key (register name)
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "record"
-    state.statusMessage = "recording @"
-    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-
-  # Handle '@' for macro playback - only when NOT recording
-  if not state.macroState.isRecording and not keyCombo.isSpecial and
-      keyCombo.modifiers == {} and keyCombo.char == "@":
-    # Get numeric prefix (e.g., 3@a means play macro 3 times)
-    state.macroState.pendingCount = handler.keyBindingRegistry.getNumericPrefix()
-    # Clear the numeric prefix since we've consumed it
-    handler.keyBindingRegistry.clearSequence()
-    # Wait for the next key (register name)
-    state.macroState.waitingForRegister = true
-    state.macroState.commandType = "playback"
-    state.statusMessage = "@"
-    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-
-  # Handle '"' for register selection
-  # When pendingRegister is '\0' (null), we're waiting for register name
-  # When pendingRegister is a valid register name, we proceed with the command
-  if state.pendingRegister.isSome and state.pendingRegister.get == '\0':
-    # We're waiting for a register name after "
-    if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char.len > 0:
-      let registerChar = keyCombo.char[0]
-      if isValidRegisterName(registerChar):
-        state.pendingRegister = some(registerChar)
-        # Now wait for the actual command (y, d, p, etc.)
-        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-      else:
-        # Invalid register name, cancel
-        state.pendingRegister = none(char)
-        state.statusMessage = ""
-        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-    else:
-      # Cancel on special key
-      state.pendingRegister = none(char)
-      state.statusMessage = ""
-      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
   # Handle pending text object - waiting for text object kind (w, ", (, etc.)
   # This handles the second part of commands like 'diw', 'da"', 'ci(' etc.
@@ -570,12 +542,6 @@ proc handleNormalModeKey*(
       state.editState.pendingOperator = none(PendingOperator)
       state.statusMessage = ""
       # Fall through to process the key normally
-
-  # Handle '"' key to start register selection
-  # This must come AFTER pendingTextObject check so ci" works correctly
-  if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == "\"":
-    state.pendingRegister = some('\0') # Placeholder - next key will be actual register
-    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
   # Process the key (handles numeric prefixes, sequences, etc.)
   let cmdOption = handler.keyBindingRegistry.processKey(EditorMode.Normal, keyCombo)
@@ -650,8 +616,27 @@ proc handleNormalModeKey*(
       # ZQ command - Quit without saving
       return NormalModeResult(kind: nmrQuitWithoutSave)
     of "window.close":
-      # Ctrl-W c command - Close current window
+      # Close current window
       return NormalModeResult(kind: nmrCloseWindow)
+    of "file.close":
+      # Close current buffer
+      return NormalModeResult(kind: nmrBufferDelete)
+    of "window.next":
+      return NormalModeResult(kind: nmrNextWindow)
+    of "window.prev":
+      return NormalModeResult(kind: nmrPrevWindow)
+    of "macro.record":
+      state.macroState.waitingForRegister = true
+      state.macroState.commandType = "record"
+      state.macroState.recordStartKey = keyComboToString(keyCombo)
+      state.statusMessage = "recording @"
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+    of "file.new":
+      # Create new empty buffer
+      return NormalModeResult(kind: nmrNewFile)
+    of "file.open", "filer.open":
+      # Enter filer mode to open a file
+      return NormalModeResult(kind: nmrEnterFiler)
     of "buffer.next.tab":
       return NormalModeResult(kind: nmrBufferNext)
     of "buffer.prev.tab":
@@ -730,24 +715,70 @@ proc handleNormalModeKey*(
       else:
         return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
   of ctOperatorPending:
-    # Handle operators that require additional input (f, t, r, etc)
-    let ctx = CommandContext(
-      buffer: buffer,
-      state: state,
-      viewport: viewport,
-      cursor: state.cursor,
-      motionController: handler.motionController,
-      keyBindingRegistry: handler.keyBindingRegistry,
-      clipboardConfig: handler.clipboardConfig,
-      smoothScrollConfig: handler.smoothScrollConfig,
-      notificationConfig: handler.notificationConfig,
-    )
-    let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
-    state.cursor = ctx.cursor
-    if cmdResult.isOk:
-      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+    case cmd.operatorType
+    of "macro-play":
+      let registerChar =
+        if cmd.targetChar.len > 0:
+          cmd.targetChar[0]
+        else:
+          '\0'
+      let count = if cmd.count > 0: cmd.count else: 1
+      if registerChar == '@':
+        # @@ - repeat last macro
+        if state.macroState.lastRegister.isSome:
+          let reg = state.macroState.lastRegister.get
+          if state.macroState.registers.hasKey(reg):
+            let keys = state.macroState.registers[reg]
+            return requestMacroPlayback(keys, count)
+          else:
+            state.statusMessage = "Register @" & $reg & " is empty"
+            return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+        else:
+          state.statusMessage = "No previous macro"
+          return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      elif registerChar >= 'a' and registerChar <= 'z':
+        if state.macroState.registers.hasKey(registerChar):
+          state.macroState.lastRegister = some(registerChar)
+          let keys = state.macroState.registers[registerChar]
+          return requestMacroPlayback(keys, count)
+        else:
+          state.statusMessage = "Register @" & $registerChar & " is empty"
+          return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      else:
+        state.statusMessage = "Invalid register (use a-z or @)"
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+    of "register-select":
+      let registerChar =
+        if cmd.targetChar.len > 0:
+          cmd.targetChar[0]
+        else:
+          '\0'
+      if isValidRegisterName(registerChar):
+        state.pendingRegister = some(registerChar)
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      else:
+        state.pendingRegister = none(char)
+        state.statusMessage = "Invalid register"
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
-      return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
+      # Handle operators that require additional input (f, t, r, etc)
+      let ctx = CommandContext(
+        buffer: buffer,
+        state: state,
+        viewport: viewport,
+        cursor: state.cursor,
+        motionController: handler.motionController,
+        keyBindingRegistry: handler.keyBindingRegistry,
+        clipboardConfig: handler.clipboardConfig,
+        smoothScrollConfig: handler.smoothScrollConfig,
+        notificationConfig: handler.notificationConfig,
+      )
+      let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
+      state.cursor = ctx.cursor
+      if cmdResult.isOk:
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      else:
+        return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
   of ctCustom, ctTextObject, ctOperator:
     # Check for LSP commands first
     if cmd.commandId == "lsp.goto.definition":

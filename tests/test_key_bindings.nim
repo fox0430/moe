@@ -1381,6 +1381,193 @@ suite "Default bindings coverage":
     check EditorMode.Insert in registry.bindings
     check EditorMode.Replace in registry.bindings
 
+suite "Clipboard commands registration":
+  test "clipboard-copy is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "clipboard-copy" in registry.commandRegistry
+    check registry.commandRegistry["clipboard-copy"].name == "clipboard-copy"
+    check registry.commandRegistry["clipboard-copy"].kind == ctAction
+    check registry.commandRegistry["clipboard-copy"].commandId == "edit.copy"
+
+  test "clipboard-paste is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "clipboard-paste" in registry.commandRegistry
+    check registry.commandRegistry["clipboard-paste"].name == "clipboard-paste"
+    check registry.commandRegistry["clipboard-paste"].kind == ctAction
+    check registry.commandRegistry["clipboard-paste"].commandId == "edit.paste"
+
+  test "clipboard-cut is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "clipboard-cut" in registry.commandRegistry
+    check registry.commandRegistry["clipboard-cut"].name == "clipboard-cut"
+    check registry.commandRegistry["clipboard-cut"].kind == ctAction
+    check registry.commandRegistry["clipboard-cut"].commandId == "edit.cut"
+
+suite "LSP call hierarchy outgoing command":
+  test "lsp-call-hierarchy-outgoing is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "lsp-call-hierarchy-outgoing" in registry.commandRegistry
+    check registry.commandRegistry["lsp-call-hierarchy-outgoing"].commandId ==
+      "lsp.callhierarchy.outgoing"
+
+  test "gH sequence is bound to lsp-call-hierarchy-outgoing":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    registry.clearSequence()
+    discard registry.processKey(EditorMode.Normal, toKeyCombo('g'))
+    let result = registry.processKey(EditorMode.Normal, toKeyCombo('H'))
+    check result.isSome
+    check result.get.name == "lsp-call-hierarchy-outgoing"
+
+suite "File operation commands registration":
+  test "file-open is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "file-open" in registry.commandRegistry
+    check registry.commandRegistry["file-open"].kind == ctAction
+    check registry.commandRegistry["file-open"].commandId == "file.open"
+
+  test "file-new is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "file-new" in registry.commandRegistry
+    check registry.commandRegistry["file-new"].kind == ctAction
+    check registry.commandRegistry["file-new"].commandId == "file.new"
+
+  test "file-close is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "file-close" in registry.commandRegistry
+    check registry.commandRegistry["file-close"].kind == ctAction
+    check registry.commandRegistry["file-close"].commandId == "file.close"
+
+  test "filer-open is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "filer-open" in registry.commandRegistry
+    check registry.commandRegistry["filer-open"].kind == ctAction
+    check registry.commandRegistry["filer-open"].commandId == "filer.open"
+
+suite "Insert mode internal commands registration":
+  test "insert-backspace is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "insert-backspace" in registry.commandRegistry
+    check registry.commandRegistry["insert-backspace"].kind == ctAction
+    check registry.commandRegistry["insert-backspace"].commandId == "insert.backspace"
+
+  test "insert-delete is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "insert-delete" in registry.commandRegistry
+    check registry.commandRegistry["insert-delete"].kind == ctAction
+    check registry.commandRegistry["insert-delete"].commandId == "insert.delete"
+
+  test "insert-newline is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "insert-newline" in registry.commandRegistry
+    check registry.commandRegistry["insert-newline"].kind == ctAction
+    check registry.commandRegistry["insert-newline"].commandId == "insert.newline"
+
+suite "Macro/Register/Window commands registration":
+  test "macro-record is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "macro-record" in registry.commandRegistry
+    check registry.commandRegistry["macro-record"].kind == ctAction
+    check registry.commandRegistry["macro-record"].commandId == "macro.record"
+
+  test "macro-play is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "macro-play" in registry.commandRegistry
+    check registry.commandRegistry["macro-play"].kind == ctOperatorPending
+    check registry.commandRegistry["macro-play"].operatorType == "macro-play"
+
+  test "register-select is registered":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "register-select" in registry.commandRegistry
+    check registry.commandRegistry["register-select"].kind == ctOperatorPending
+    check registry.commandRegistry["register-select"].operatorType == "register-select"
+
+  test "window-next is registered with C-w k binding":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "window-next" in registry.commandRegistry
+    check registry.commandRegistry["window-next"].kind == ctAction
+    check registry.commandRegistry["window-next"].commandId == "window.next"
+
+  test "window-prev is registered with C-w j binding":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check "window-prev" in registry.commandRegistry
+    check registry.commandRegistry["window-prev"].kind == ctAction
+    check registry.commandRegistry["window-prev"].commandId == "window.prev"
+
+suite "hasActiveSequence":
+  test "false when no sequence active":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check registry.hasActiveSequence() == false
+
+  test "true when keys in sequence":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    # Press 'g' (starts a sequence like g g)
+    discard registry.processKey(EditorMode.Normal, toKeyCombo('g'))
+    check registry.hasActiveSequence() == true
+
+  test "true when waitingForChar":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    # Press 'f' (operator pending, waiting for char)
+    discard registry.processKey(EditorMode.Normal, toKeyCombo('f'))
+    check registry.hasActiveSequence() == true
+
+  test "true when numeric prefix active":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    # Press '3' (numeric prefix)
+    discard registry.processKey(EditorMode.Normal, toKeyCombo('3'))
+    check registry.hasActiveSequence() == true
+
+  test "false after clearSequence":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    discard registry.processKey(EditorMode.Normal, toKeyCombo('g'))
+    check registry.hasActiveSequence() == true
+
+    registry.clearSequence()
+    check registry.hasActiveSequence() == false
+
 # Note: eventToKeyCombo tests are omitted due to celina.KeyModifier namespace
 # conflicts with key_bindings.KeyModifier. The function is tested indirectly
 # through integration tests when the editor processes keyboard events.
