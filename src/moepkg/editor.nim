@@ -482,10 +482,23 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     let err = keyRegistry.addRuntimeMapping(EditorMode.Insert, lhs, rhs)
     if err.len > 0:
       logWarn("editor", "KeyMapping.Insert error: " & err)
+  for lhs, rhs in editorConfig.keyMapping.visualAll:
+    for mode in [EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]:
+      let err = keyRegistry.addRuntimeMapping(mode, lhs, rhs)
+      if err.len > 0:
+        logWarn("editor", "KeyMapping.VisualAll error (" & $mode & "): " & err)
   for lhs, rhs in editorConfig.keyMapping.visual:
     let err = keyRegistry.addRuntimeMapping(EditorMode.Visual, lhs, rhs)
     if err.len > 0:
       logWarn("editor", "KeyMapping.Visual error: " & err)
+  for lhs, rhs in editorConfig.keyMapping.visualLine:
+    let err = keyRegistry.addRuntimeMapping(EditorMode.VisualLine, lhs, rhs)
+    if err.len > 0:
+      logWarn("editor", "KeyMapping.VisualLine error: " & err)
+  for lhs, rhs in editorConfig.keyMapping.visualBlock:
+    let err = keyRegistry.addRuntimeMapping(EditorMode.VisualBlock, lhs, rhs)
+    if err.len > 0:
+      logWarn("editor", "KeyMapping.VisualBlock error: " & err)
   for lhs, rhs in editorConfig.keyMapping.replace:
     let err = keyRegistry.addRuntimeMapping(EditorMode.Replace, lhs, rhs)
     if err.len > 0:

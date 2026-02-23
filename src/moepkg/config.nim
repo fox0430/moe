@@ -349,6 +349,9 @@ type
     normal*: OrderedTable[string, string]
     insert*: OrderedTable[string, string]
     visual*: OrderedTable[string, string]
+    visualAll*: OrderedTable[string, string]
+    visualLine*: OrderedTable[string, string]
+    visualBlock*: OrderedTable[string, string]
     replace*: OrderedTable[string, string]
     commandLine*: OrderedTable[string, string]
 
@@ -601,6 +604,9 @@ proc newEditorConfig*(): EditorConfig =
       normal: initOrderedTable[string, string](),
       insert: initOrderedTable[string, string](),
       visual: initOrderedTable[string, string](),
+      visualAll: initOrderedTable[string, string](),
+      visualLine: initOrderedTable[string, string](),
+      visualBlock: initOrderedTable[string, string](),
       replace: initOrderedTable[string, string](),
       commandLine: initOrderedTable[string, string](),
     ),
