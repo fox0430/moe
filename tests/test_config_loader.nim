@@ -1774,6 +1774,19 @@ number = true
     check config.keyMapping.visualBlock.len == 0
     check config.keyMapping.replace.len == 0
     check config.keyMapping.commandLine.len == 0
+    check config.keyMapping.filer.len == 0
+    check config.keyMapping.logViewer.len == 0
+    check config.keyMapping.help.len == 0
+    check config.keyMapping.bufferManager.len == 0
+    check config.keyMapping.backupManager.len == 0
+    check config.keyMapping.diffViewer.len == 0
+    check config.keyMapping.config.len == 0
+    check config.keyMapping.references.len == 0
+    check config.keyMapping.documentSymbol.len == 0
+    check config.keyMapping.callHierarchy.len == 0
+    check config.keyMapping.recentFile.len == 0
+    check config.keyMapping.debug.len == 0
+    check config.keyMapping.terminal.len == 0
 
   test "Unknown mode name reports error":
     let toml = """
@@ -1962,6 +1975,137 @@ number = true
     let errorNames = vr.errors.mapIt(it.name)
     check "KeyMapping.VisualBlock.C-s" in errorNames
 
+  test "Filer key mappings":
+    let toml = """
+[KeyMapping.Filer]
+"C-s" = "Escape"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.filer.len == 1
+    check config.keyMapping.filer["C-s"] == "Escape"
+
+  test "Multiple special mode key mappings":
+    let toml = """
+[KeyMapping.Filer]
+"C-s" = "Escape"
+
+[KeyMapping.LogViewer]
+"C-c" = "Escape"
+
+[KeyMapping.Help]
+"C-c" = "Escape"
+
+[KeyMapping.BufferManager]
+"C-c" = "Escape"
+
+[KeyMapping.BackupManager]
+"C-c" = "Escape"
+
+[KeyMapping.DiffViewer]
+"C-c" = "Escape"
+
+[KeyMapping.Config]
+"C-c" = "Escape"
+
+[KeyMapping.References]
+"C-c" = "Escape"
+
+[KeyMapping.DocumentSymbol]
+"C-c" = "Escape"
+
+[KeyMapping.CallHierarchy]
+"C-c" = "Escape"
+
+[KeyMapping.RecentFile]
+"C-c" = "Escape"
+
+[KeyMapping.Debug]
+"C-c" = "Escape"
+
+[KeyMapping.Terminal]
+"C-c" = "Escape"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.filer.len == 1
+    check config.keyMapping.logViewer.len == 1
+    check config.keyMapping.help.len == 1
+    check config.keyMapping.bufferManager.len == 1
+    check config.keyMapping.backupManager.len == 1
+    check config.keyMapping.diffViewer.len == 1
+    check config.keyMapping.config.len == 1
+    check config.keyMapping.references.len == 1
+    check config.keyMapping.documentSymbol.len == 1
+    check config.keyMapping.callHierarchy.len == 1
+    check config.keyMapping.recentFile.len == 1
+    check config.keyMapping.debug.len == 1
+    check config.keyMapping.terminal.len == 1
+
+  test "Empty special mode KeyMapping section":
+    let toml = """
+[KeyMapping]
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.filer.len == 0
+    check config.keyMapping.logViewer.len == 0
+    check config.keyMapping.help.len == 0
+    check config.keyMapping.bufferManager.len == 0
+    check config.keyMapping.backupManager.len == 0
+    check config.keyMapping.diffViewer.len == 0
+    check config.keyMapping.config.len == 0
+    check config.keyMapping.references.len == 0
+    check config.keyMapping.documentSymbol.len == 0
+    check config.keyMapping.callHierarchy.len == 0
+    check config.keyMapping.recentFile.len == 0
+    check config.keyMapping.debug.len == 0
+    check config.keyMapping.terminal.len == 0
+
+  test "Invalid RHS in Filer reports error":
+    let toml = """
+[KeyMapping.Filer]
+"C-s" = "not-a-command"
+"""
+    let (_, vr) = loadFromTomlString(toml)
+    check vr.hasErrors
+    let errorNames = vr.errors.mapIt(it.name)
+    check "KeyMapping.Filer.C-s" in errorNames
+
+  test "Valid command name RHS in special mode":
+    let toml = """
+[KeyMapping.Filer]
+"C-s" = "save"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.filer["C-s"] == "save"
+
+  test "Valid key sequence RHS in special mode":
+    let toml = """
+[KeyMapping.Terminal]
+"jj" = "Escape"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.terminal["jj"] == "Escape"
+
+  test "Special mode does not affect editing modes":
+    let toml = """
+[KeyMapping.Filer]
+"C-s" = "save"
+
+[KeyMapping.Normal]
+"C-n" = "Escape"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.filer.len == 1
+    check config.keyMapping.normal.len == 1
+    check config.keyMapping.insert.len == 0
+    check config.keyMapping.visual.len == 0
+    check config.keyMapping.logViewer.len == 0
+
 suite "Config - saveConfigToToml with KeyMapping":
   test "KeyMapping round-trip":
     inc testFileCounter
@@ -2049,6 +2193,51 @@ suite "Config - saveConfigToToml with KeyMapping":
     check loaded.keyMapping.visualLine["C-l"] == "Escape"
     check loaded.keyMapping.visualBlock.len == 1
     check loaded.keyMapping.visualBlock["C-b"] == "Escape"
+
+  test "Special mode KeyMapping round-trip":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_keymap_special_save_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.keyMapping.filer["C-s"] = "Escape"
+    config.keyMapping.logViewer["C-c"] = "Escape"
+    config.keyMapping.help["C-c"] = "Escape"
+    config.keyMapping.bufferManager["C-c"] = "Escape"
+    config.keyMapping.backupManager["C-c"] = "Escape"
+    config.keyMapping.diffViewer["C-c"] = "Escape"
+    config.keyMapping.config["C-c"] = "Escape"
+    config.keyMapping.references["C-c"] = "Escape"
+    config.keyMapping.documentSymbol["C-c"] = "Escape"
+    config.keyMapping.callHierarchy["C-c"] = "Escape"
+    config.keyMapping.recentFile["C-c"] = "Escape"
+    config.keyMapping.debug["C-c"] = "Escape"
+    config.keyMapping.terminal["C-c"] = "Escape"
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.keyMapping.filer.len == 1
+    check loaded.keyMapping.filer["C-s"] == "Escape"
+    check loaded.keyMapping.logViewer.len == 1
+    check loaded.keyMapping.help.len == 1
+    check loaded.keyMapping.bufferManager.len == 1
+    check loaded.keyMapping.backupManager.len == 1
+    check loaded.keyMapping.diffViewer.len == 1
+    check loaded.keyMapping.config.len == 1
+    check loaded.keyMapping.references.len == 1
+    check loaded.keyMapping.documentSymbol.len == 1
+    check loaded.keyMapping.callHierarchy.len == 1
+    check loaded.keyMapping.recentFile.len == 1
+    check loaded.keyMapping.debug.len == 1
+    check loaded.keyMapping.terminal.len == 1
 
   test "Empty KeyMapping not saved":
     inc testFileCounter

@@ -645,3 +645,185 @@ suite "HandlerManager - Map list commands":
     check result.kind == hrHandled
     check "NORMAL" in result.statusMessage
     check "INSERT" in result.statusMessage
+
+suite "HandlerManager - executeCommandDirect":
+  # Existing ctAction commands
+  test "window.next returns hrNextWindow":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("window-next")
+    check r.isSome
+    check r.get.kind == hrNextWindow
+
+  test "file.save returns hrSave":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("save")
+    check r.isSome
+    check r.get.kind == hrSave
+
+  test "buffer.next.tab returns hrBufferNext":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("buffer-next-tab")
+    check r.isSome
+    check r.get.kind == hrBufferNext
+
+  # New ctAction LSP commands
+  test "lsp.format returns hrLspFormat":
+    let manager = createTestManager()
+    # Register a test command for lsp.format (not in default key bindings)
+    manager.keyBindingRegistry.registerCommand(
+      Command(
+        name: "test-lsp-format",
+        description: "Format (LSP)",
+        kind: ctAction,
+        commandId: "lsp.format",
+        args: @[],
+      )
+    )
+    let r = manager.executeCommandDirect("test-lsp-format")
+    check r.isSome
+    check r.get.kind == hrLspFormat
+
+  test "lsp.restart returns hrLspRestart":
+    let manager = createTestManager()
+    manager.keyBindingRegistry.registerCommand(
+      Command(
+        name: "test-lsp-restart",
+        description: "Restart LSP",
+        kind: ctAction,
+        commandId: "lsp.restart",
+        args: @[],
+      )
+    )
+    let r = manager.executeCommandDirect("test-lsp-restart")
+    check r.isSome
+    check r.get.kind == hrLspRestart
+
+  test "lsp.fold returns hrLspFold":
+    let manager = createTestManager()
+    manager.keyBindingRegistry.registerCommand(
+      Command(
+        name: "test-lsp-fold",
+        description: "Fold (LSP)",
+        kind: ctAction,
+        commandId: "lsp.fold",
+        args: @[],
+      )
+    )
+    let r = manager.executeCommandDirect("test-lsp-fold")
+    check r.isSome
+    check r.get.kind == hrLspFold
+
+  # ctCustom commands
+  test "lsp.goto.definition returns hrLspGotoDefinition":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("lsp-goto-definition")
+    check r.isSome
+    check r.get.kind == hrLspGotoDefinition
+
+  test "lsp.goto.declaration returns hrLspGotoDeclaration":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("lsp-goto-declaration")
+    check r.isSome
+    check r.get.kind == hrLspGotoDeclaration
+
+  test "lsp.find.references returns hrLspFindReferences":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("lsp-find-references")
+    check r.isSome
+    check r.get.kind == hrLspFindReferences
+
+  test "lsp.codelens.execute returns hrLspCodeLensExecute":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("lsp-codelens-execute")
+    check r.isSome
+    check r.get.kind == hrLspCodeLensExecute
+
+  test "lsp.callhierarchy.incoming returns hrLspCallHierarchyIncoming":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("lsp-call-hierarchy")
+    check r.isSome
+    check r.get.kind == hrLspCallHierarchyIncoming
+
+  test "lsp.callhierarchy.outgoing returns hrLspCallHierarchyOutgoing":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("lsp-call-hierarchy-outgoing")
+    check r.isSome
+    check r.get.kind == hrLspCallHierarchyOutgoing
+
+  test "lsp.goto.type.definition returns hrLspTypeDefinition":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("lsp-goto-type-definition")
+    check r.isSome
+    check r.get.kind == hrLspTypeDefinition
+
+  test "lsp.goto.implementation returns hrLspImplementation":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("lsp-goto-implementation")
+    check r.isSome
+    check r.get.kind == hrLspImplementation
+
+  test "lsp.hover returns hrLspHover":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("lsp-hover")
+    check r.isSome
+    check r.get.kind == hrLspHover
+
+  test "lsp.rename returns hrLspRename with empty newName":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("lsp-rename")
+    check r.isSome
+    check r.get.kind == hrLspRename
+    check r.get.hrLspNewName == ""
+
+  test "lsp.selection.range returns hrLspSelectionRange":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("lsp-selection-range")
+    check r.isSome
+    check r.get.kind == hrLspSelectionRange
+
+  test "lsp.document.link returns hrLspDocumentLink":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("lsp-document-link")
+    check r.isSome
+    check r.get.kind == hrLspDocumentLink
+
+  test "quickrun returns hrQuickRun":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("quickrun")
+    check r.isSome
+    check r.get.kind == hrQuickRun
+
+  # Unsupported commands (context-dependent) return none
+  test "motion command returns none":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("move-left")
+    check r.isNone
+
+  test "operator command returns none":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("operator-delete")
+    check r.isNone
+
+  # Unknown command returns none
+  test "unknown command returns none":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("nonexistent-command")
+    check r.isNone
+
+  # ctModeSwitch
+  test "mode switch command returns modeTransition":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("switch-to-insert")
+    check r.isSome
+    check r.get.kind == hrHandled
+    check r.get.modeTransition.isSome
+    check r.get.modeTransition.get == EditorMode.Insert
+
+  # ctOverlaySwitch
+  test "overlay switch command returns overlayTransition":
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("switch-to-command")
+    check r.isSome
+    check r.get.kind == hrHandled
+    check r.get.overlayTransition.isSome
+    check r.get.overlayTransition.get == okCommand

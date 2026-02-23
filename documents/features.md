@@ -87,7 +87,7 @@ moe supports Vim-like runtime key mapping commands. You can remap keys during an
 
 All mappings are non-recursive (equivalent to Vim's `noremap`). `noremap`, `nnoremap`, `inoremap`, `vnoremap`, `cnoremap` are available as aliases.
 
-Mappings are session-only and are not persisted across restarts. For persistent key mappings, use the `[KeyMapping]` section in `moerc.toml`. Use `[KeyMapping.All]` to apply mappings to all editable modes at once, `[KeyMapping.VisualAll]` for all visual modes, or mode-specific sections like `[KeyMapping.Normal]`, `[KeyMapping.Visual]`, `[KeyMapping.VisualLine]`, `[KeyMapping.VisualBlock]` for individual modes. See [configfile.md](configfile.md#keymapping-table).
+Mappings are session-only and are not persisted across restarts. For persistent key mappings, use the `[KeyMapping]` section in `moerc.toml`. Use `[KeyMapping.All]` to apply mappings to all modes at once, `[KeyMapping.VisualAll]` for all visual modes, mode-specific sections like `[KeyMapping.Normal]`, `[KeyMapping.Visual]`, `[KeyMapping.VisualLine]`, `[KeyMapping.VisualBlock]` for individual modes, or special mode sections like `[KeyMapping.Filer]`, `[KeyMapping.BufferManager]`, `[KeyMapping.Terminal]`, etc. See [configfile.md](configfile.md#keymapping-table).
 
 Key notation supports regular keys (`a`, `j`), modifier keys (`C-s`, `M-x`), special keys (`Escape`, `Enter`, `Tab`, `F1`-`F12`), and multi-key sequences in both space-separated (`j j`) and Vim-style concatenated (`jj`) notation.
 

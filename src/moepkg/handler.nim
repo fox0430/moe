@@ -3428,8 +3428,14 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
   let activeBuffer = e.activeBuffer
   let activeViewport = e.viewport
 
-  # Check for exact match among runtime key-seq mappings
-  let mappings = registry.getRuntimeKeySeqMappings(e.state.mode)
+  # Check for exact match among runtime mappings.
+  # For file-edit modes, only key-sequence mappings (rmkCommand handled by findBinding).
+  # For special modes, also check rmkCommand mappings.
+  let mappings =
+    if e.state.mode.isFileEditMode or e.state.mode == EditorMode.CommandLine:
+      registry.getRuntimeKeySeqMappings(e.state.mode)
+    else:
+      registry.getAllRuntimeMappings(e.state.mode)
   var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
   for m in mappings:
     if m.triggerKeys == accKeys:
@@ -3439,24 +3445,39 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
   registry.clearRuntimeMappingState()
   var shouldContinue = true
 
-  if exactMatch.isSome:
-    # Exact match found: execute the mapping via playbackMacro
-    registry.isReplayingMapping = true
-    let r = e.handlerManager.playbackMacro(
-      activeBuffer, e.state, activeViewport, exactMatch.get.targetKeys
-    )
-    registry.isReplayingMapping = false
+  let activeWindow = some(e.activeWindow)
 
-    # Handle mode transition
-    if r.kind == hrHandled and r.modeTransition.isSome:
-      e.state.mode = r.modeTransition.get
-    if r.kind == hrQuit:
-      shouldContinue = false
+  if exactMatch.isSome:
+    let matched = exactMatch.get
+    if matched.kind == rmkCommand:
+      # Command mapping: execute the command directly
+      let cmdResult = e.handlerManager.executeCommandDirect(matched.commandName)
+      if cmdResult.isSome:
+        let r = cmdResult.get
+        if r.kind == hrHandled and r.modeTransition.isSome:
+          e.state.mode = r.modeTransition.get
+        if r.kind == hrQuit:
+          shouldContinue = false
+    else:
+      # Key-sequence mapping: execute via playbackMacro
+      registry.isReplayingMapping = true
+      let r = e.handlerManager.playbackMacro(
+        activeBuffer, e.state, activeViewport, matched.targetKeys, activeWindow
+      )
+      registry.isReplayingMapping = false
+
+      # Handle mode transition
+      if r.kind == hrHandled and r.modeTransition.isSome:
+        e.state.mode = r.modeTransition.get
+      if r.kind == hrQuit:
+        shouldContinue = false
   else:
     # No exact match: replay each accumulated key individually
     registry.isReplayingMapping = true
     for k in accKeys:
-      let r = e.handlerManager.handleKeyCombo(activeBuffer, e.state, activeViewport, k)
+      let r = e.handlerManager.handleKeyCombo(
+        activeBuffer, e.state, activeViewport, k, activeWindow
+      )
       if r.kind == hrHandled and r.modeTransition.isSome:
         e.state.mode = r.modeTransition.get
       if r.kind == hrQuit:

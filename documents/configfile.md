@@ -364,16 +364,18 @@ Persistent key remappings per editor mode. Uses the same key notation as `:nmap`
 
 Values can be either a command name (e.g., `"save"`) or a key sequence (e.g., `"Escape"`).
 
-Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `CommandLine`.
+Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `CommandLine`, `Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`.
 
-`[KeyMapping.All]` applies mappings to all editable modes: Normal, Insert, Visual, VisualBlock, VisualLine, and Replace. This matches the behavior of the `:map` command. Mode-specific sections override `All`. Use `[KeyMapping.CommandLine]` separately for command-line mode.
+`[KeyMapping.All]` applies mappings to all modes (except QuickRun). Mode-specific sections override `All`.
 
 `[KeyMapping.VisualAll]` applies mappings to all visual modes: Visual, VisualLine, and VisualBlock.
 
 `[KeyMapping.Visual]`, `[KeyMapping.VisualLine]`, and `[KeyMapping.VisualBlock]` apply to the specific visual mode only and override `VisualAll`.
 
+Special mode sections (`Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`) apply mappings to the corresponding special mode and override `All`.
+
 ```toml
-# Apply to all editable modes (excludes CommandLine)
+# Apply to all modes (except QuickRun)
 [KeyMapping.All]
 "C-s" = "save"
 
@@ -405,6 +407,46 @@ Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`,
 
 [KeyMapping.CommandLine]
 "C-a" = "Home"
+
+# Special modes
+[KeyMapping.Filer]
+"C-c" = "Escape"
+
+[KeyMapping.LogViewer]
+"C-c" = "Escape"
+
+[KeyMapping.Help]
+"C-c" = "Escape"
+
+[KeyMapping.BufferManager]
+"C-c" = "Escape"
+
+[KeyMapping.BackupManager]
+"C-c" = "Escape"
+
+[KeyMapping.DiffViewer]
+"C-c" = "Escape"
+
+[KeyMapping.Config]
+"C-c" = "Escape"
+
+[KeyMapping.References]
+"C-c" = "Escape"
+
+[KeyMapping.DocumentSymbol]
+"C-c" = "Escape"
+
+[KeyMapping.CallHierarchy]
+"C-c" = "Escape"
+
+[KeyMapping.RecentFile]
+"C-c" = "Escape"
+
+[KeyMapping.Debug]
+"C-c" = "Escape"
+
+[KeyMapping.Terminal]
+"C-c" = "Escape"
 ```
 
 #### Available commands
@@ -463,11 +505,17 @@ Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`,
 | window-prev | Switch to previous window |
 | quickrun | Run QuickRun |
 | lsp-goto-definition | LSP go to definition |
+| lsp-goto-declaration | LSP go to declaration |
+| lsp-goto-type-definition | LSP go to type definition |
+| lsp-goto-implementation | LSP go to implementation |
 | lsp-find-references | LSP find references |
 | lsp-hover | LSP hover info |
 | lsp-rename | LSP rename symbol |
 | lsp-document-symbol | LSP document symbols |
+| lsp-document-link | LSP follow document link |
 | lsp-selection-range | LSP selection range |
+| lsp-codelens-execute | LSP execute CodeLens |
+| lsp-call-hierarchy | LSP incoming call hierarchy |
 | lsp-call-hierarchy-outgoing | LSP outgoing call hierarchy |
 | buffer-next-tab | Next buffer tab |
 | buffer-prev-tab | Previous buffer tab |
@@ -483,7 +531,7 @@ Key mappings are applied in this order (later overrides earlier):
 2. `keybindings.toml`
 3. `moerc.toml` `[KeyMapping.All]`
 4. `moerc.toml` `[KeyMapping.VisualAll]`
-5. `moerc.toml` `[KeyMapping.Normal]`, `[KeyMapping.Visual]`, `[KeyMapping.VisualLine]`, `[KeyMapping.VisualBlock]`, etc. (mode-specific)
+5. `moerc.toml` mode-specific sections (`[KeyMapping.Normal]`, `[KeyMapping.Visual]`, `[KeyMapping.Filer]`, etc.)
 6. Runtime `:nmap`/`:imap`/`:cmap` commands
 
 Also see [Runtime Key Mapping](howtouse.md#runtime-key-mapping) for session-only mappings.

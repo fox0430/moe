@@ -22,7 +22,7 @@
 ## This module provides a unified interface for all mode-specific handlers,
 ## maintaining the shared infrastructure while delegating to specialized handlers.
 
-import std/[options, strutils, unicode]
+import std/[options, strutils, tables, unicode]
 
 import pkg/[results, celina]
 
@@ -30,6 +30,7 @@ import
   ../[
     types, buffer, modes, motion, key_bindings, command_line, command_config,
     command_registry, config, string_builder, filer, recent_file_mode, lsp_integration,
+    logger,
   ]
 import ../lsp/protocol/types as lspTypes
 import
@@ -487,6 +488,7 @@ proc playbackMacro*(
   state: EditorState,
   viewport: ViewPort,
   keys: seq[string],
+  window: Option[EditorWindow] = none(EditorWindow),
 ): HandlerResult
 
 proc handleKeyCombo*(
@@ -1557,6 +1559,107 @@ proc handleTerminalMode*(
   of trError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc executeCommandDirect*(
+    manager: HandlerManager, commandName: string
+): Option[HandlerResult] =
+  ## Execute a named command directly, returning a HandlerResult.
+  ## This is used for rmkCommand runtime mappings in modes that don't use
+  ## findBinding (Special modes like Filer, LogViewer, etc.).
+  ## Returns none if the command is unknown or not executable directly.
+
+  if not manager.keyBindingRegistry.commandRegistry.hasKey(commandName):
+    return none(HandlerResult)
+
+  let command = manager.keyBindingRegistry.commandRegistry[commandName]
+  case command.kind
+  of ctAction:
+    case command.commandId
+    of "window.next":
+      return some(HandlerResult(kind: hrNextWindow))
+    of "window.prev":
+      return some(HandlerResult(kind: hrPrevWindow))
+    of "window.close":
+      return some(HandlerResult(kind: hrCloseWindow, forceClose: false))
+    of "file.save":
+      return some(HandlerResult(kind: hrSave))
+    of "file.save.and.quit":
+      return some(HandlerResult(kind: hrSaveAndQuit))
+    of "file.quit.force":
+      return some(HandlerResult(kind: hrQuit))
+    of "file.close":
+      return some(HandlerResult(kind: hrBufferDelete))
+    of "file.new":
+      return some(HandlerResult(kind: hrEnew))
+    of "file.open", "filer.open":
+      return some(HandlerResult(kind: hrEnterFiler, enterFilerPath: none(string)))
+    of "buffer.next.tab":
+      return some(HandlerResult(kind: hrBufferNext))
+    of "buffer.prev.tab":
+      return some(HandlerResult(kind: hrBufferPrev))
+    of "lsp.format":
+      return some(HandlerResult(kind: hrLspFormat))
+    of "lsp.restart":
+      return some(HandlerResult(kind: hrLspRestart))
+    of "lsp.fold":
+      return some(HandlerResult(kind: hrLspFold))
+    else:
+      logWarn "executeCommandDirect",
+        "Command '" & command.commandId &
+          "' cannot be executed directly in special modes; use key sequence mapping instead"
+      return none(HandlerResult)
+  of ctCustom:
+    case command.commandId
+    of "lsp.goto.definition":
+      return some(HandlerResult(kind: hrLspGotoDefinition))
+    of "lsp.goto.declaration":
+      return some(HandlerResult(kind: hrLspGotoDeclaration))
+    of "lsp.find.references":
+      return some(HandlerResult(kind: hrLspFindReferences))
+    of "lsp.codelens.execute":
+      return some(HandlerResult(kind: hrLspCodeLensExecute))
+    of "lsp.callhierarchy.incoming":
+      return some(HandlerResult(kind: hrLspCallHierarchyIncoming))
+    of "lsp.callhierarchy.outgoing":
+      return some(HandlerResult(kind: hrLspCallHierarchyOutgoing))
+    of "lsp.goto.type.definition":
+      return some(HandlerResult(kind: hrLspTypeDefinition))
+    of "lsp.goto.implementation":
+      return some(HandlerResult(kind: hrLspImplementation))
+    of "lsp.hover":
+      return some(HandlerResult(kind: hrLspHover))
+    of "lsp.rename":
+      return some(HandlerResult(kind: hrLspRename, hrLspNewName: ""))
+    of "lsp.selection.range":
+      return some(HandlerResult(kind: hrLspSelectionRange))
+    of "lsp.document.link":
+      return some(HandlerResult(kind: hrLspDocumentLink))
+    of "quickrun":
+      return some(HandlerResult(kind: hrQuickRun))
+    else:
+      logWarn "executeCommandDirect",
+        "Command '" & command.commandId &
+          "' cannot be executed directly in special modes; use key sequence mapping instead"
+      return none(HandlerResult)
+  of ctModeSwitch:
+    return some(
+      HandlerResult(
+        kind: hrHandled, modeTransition: some(command.targetMode), statusMessage: ""
+      )
+    )
+  of ctOverlaySwitch:
+    return some(
+      HandlerResult(
+        kind: hrHandled,
+        overlayTransition: some(command.targetOverlay),
+        statusMessage: "",
+      )
+    )
+  of ctMotion, ctOperator, ctTextObject, ctOperatorPending:
+    logWarn "executeCommandDirect",
+      "Command '" & commandName &
+        "' cannot be executed directly in special modes; use key sequence mapping instead"
+    return none(HandlerResult)
+
 const MaxMacroRecursionDepth = 100
   ## Maximum macro recursion depth to prevent infinite loops
 
@@ -1566,13 +1669,22 @@ proc checkRuntimeKeySeqMapping(
     state: EditorState,
     viewport: ViewPort,
     keyCombo: KeyCombo,
+    window: Option[EditorWindow] = none(EditorWindow),
 ): Option[HandlerResult] =
-  ## Check if current key (and accumulated keys) match a runtime key-sequence mapping.
+  ## Check if current key (and accumulated keys) match a runtime mapping.
+  ## For file-edit modes (Normal, Insert, Visual, Replace), only rmkKeySequence
+  ## mappings are checked (rmkCommand is handled by findBinding in mode handlers).
+  ## For special modes (Filer, LogViewer, etc.), rmkCommand mappings are also checked
+  ## and executed directly via executeCommandDirect.
   ## Returns Some(result) if the key was consumed (either matched or waiting for more),
   ## or None if the key should be processed normally.
-  let mappings = manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
+  let mappings =
+    if state.mode.isFileEditMode or state.mode == EditorMode.CommandLine:
+      manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
+    else:
+      manager.keyBindingRegistry.getAllRuntimeMappings(state.mode)
   if mappings.len == 0:
-    # No key-seq mappings for this mode, also flush any accumulated keys
+    # No mappings for this mode, also flush any accumulated keys
     if manager.keyBindingRegistry.runtimeMappingState.keys.len > 0:
       manager.keyBindingRegistry.clearRuntimeMappingState()
     return none(HandlerResult)
@@ -1601,11 +1713,21 @@ proc checkRuntimeKeySeqMapping(
   if exactMatch.isSome and not hasLongerMatch:
     # Exact match with no longer alternatives: execute the mapping
     manager.keyBindingRegistry.clearRuntimeMappingState()
-    manager.keyBindingRegistry.isReplayingMapping = true
-    let playbackResult =
-      manager.playbackMacro(buffer, state, viewport, exactMatch.get.targetKeys)
-    manager.keyBindingRegistry.isReplayingMapping = false
-    return some(playbackResult)
+    let matched = exactMatch.get
+    if matched.kind == rmkCommand:
+      # Command mapping: execute the command directly
+      let cmdResult = manager.executeCommandDirect(matched.commandName)
+      if cmdResult.isSome:
+        return cmdResult
+      # If command not directly executable, fall through to normal handling
+      return none(HandlerResult)
+    else:
+      # Key-sequence mapping: replay target keys
+      manager.keyBindingRegistry.isReplayingMapping = true
+      let playbackResult =
+        manager.playbackMacro(buffer, state, viewport, matched.targetKeys, window)
+      manager.keyBindingRegistry.isReplayingMapping = false
+      return some(playbackResult)
 
   if hasLongerMatch:
     # Prefix match exists: wait for more keys
@@ -1633,7 +1755,7 @@ proc checkRuntimeKeySeqMapping(
   # Replay flushed keys with mapping expansion disabled
   manager.keyBindingRegistry.isReplayingMapping = true
   for k in keysToFlush:
-    let flushResult = manager.handleKeyCombo(buffer, state, viewport, k)
+    let flushResult = manager.handleKeyCombo(buffer, state, viewport, k, window)
     if flushResult.kind == hrHandled and flushResult.modeTransition.isSome:
       state.mode = flushResult.modeTransition.get
     if flushResult.kind == hrError or flushResult.kind == hrQuit:
@@ -1666,7 +1788,7 @@ proc handleKeyCombo*(
   # Runtime key-sequence mapping precheck (noremap: skip during replay)
   if not manager.keyBindingRegistry.isReplayingMapping:
     let expandResult =
-      manager.checkRuntimeKeySeqMapping(buffer, state, viewport, keyCombo)
+      manager.checkRuntimeKeySeqMapping(buffer, state, viewport, keyCombo, window)
     if expandResult.isSome:
       return expandResult.get
 
@@ -1786,6 +1908,7 @@ proc playbackMacro*(
     state: EditorState,
     viewport: ViewPort,
     keys: seq[string],
+    window: Option[EditorWindow] = none(EditorWindow),
 ): HandlerResult =
   ## Play back a recorded macro, handling mode transitions properly
   ## This dispatches each key to the appropriate mode handler based on current mode
@@ -1819,7 +1942,7 @@ proc playbackMacro*(
     let keyCombo = keyComboOpt.get
 
     # Dispatch to appropriate mode handler based on current state.mode
-    let keyResult = manager.handleKeyCombo(buffer, state, viewport, keyCombo)
+    let keyResult = manager.handleKeyCombo(buffer, state, viewport, keyCombo, window)
 
     # Handle mode transitions from keyResult
     if keyResult.kind == hrHandled and keyResult.modeTransition.isSome:
