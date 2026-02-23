@@ -76,7 +76,7 @@ jobs:
 
     - uses: jiro4989/setup-nim-action@v2
       with:
-        nim-version: 2.2.6
+        nim-version: 2.2.8
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Install lasm
