@@ -515,6 +515,11 @@ proc clearSequence*(registry: KeyBindingRegistry) =
   registry.sequenceState.numericPrefix = ""
   registry.sequenceState.hasNumericPrefix = false
 
+proc hasActiveSequence*(registry: KeyBindingRegistry): bool =
+  ## Check if there is an active key sequence in progress
+  registry.sequenceState.keys.len > 0 or registry.sequenceState.waitingForChar or
+    registry.sequenceState.hasNumericPrefix
+
 proc parseKeyString*(s: string): seq[KeyCombo] =
   ## Parse a key string into a sequence of KeyCombos.
   ## Supports space-separated tokens (e.g., "C-s Enter", "g g") and
@@ -1431,6 +1436,37 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   # Bind P key to paste-before (must be after registerCommand)
   registry.bindKey(EditorMode.Normal, "P", "paste-before")
 
+  # Clipboard commands (system clipboard)
+  registry.registerCommand(
+    Command(
+      name: "clipboard-copy",
+      description: "Copy selected text to system clipboard",
+      kind: ctAction,
+      commandId: "edit.copy",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "clipboard-paste",
+      description: "Paste text from system clipboard",
+      kind: ctAction,
+      commandId: "edit.paste",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "clipboard-cut",
+      description: "Cut selected text to system clipboard",
+      kind: ctAction,
+      commandId: "edit.cut",
+      args: @[],
+    )
+  )
+
   registry.registerCommand(
     Command(
       name: "join-lines",
@@ -1538,6 +1574,18 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
   registry.bindKey(EditorMode.Normal, "g h", "lsp-call-hierarchy")
+
+  # LSP - Call hierarchy outgoing (gH)
+  registry.registerCommand(
+    Command(
+      name: "lsp-call-hierarchy-outgoing",
+      description: "Show outgoing call hierarchy (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.callhierarchy.outgoing",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g H", "lsp-call-hierarchy-outgoing")
 
   # LSP - Hover (K)
   registry.registerCommand(
@@ -1652,6 +1700,112 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   # Bind Ctrl-W c key sequence to close-window
   registry.bindKey(EditorMode.Normal, "C-w c", "close-window")
+
+  # Ctrl-W k - Switch to next window
+  registry.registerCommand(
+    Command(
+      name: "window-next",
+      description: "Switch to next window",
+      kind: ctAction,
+      commandId: "window.next",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "C-w k", "window-next")
+
+  # Ctrl-W j - Switch to previous window
+  registry.registerCommand(
+    Command(
+      name: "window-prev",
+      description: "Switch to previous window",
+      kind: ctAction,
+      commandId: "window.prev",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "C-w j", "window-prev")
+
+  # q - Macro record (toggle)
+  registry.registerCommand(
+    Command(
+      name: "macro-record",
+      description: "Start/stop macro recording",
+      kind: ctAction,
+      commandId: "macro.record",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "q", "macro-record")
+
+  # @ - Macro play
+  registry.registerCommand(
+    Command(
+      name: "macro-play",
+      description: "Play macro from register",
+      kind: ctOperatorPending,
+      operatorType: "macro-play",
+      reverse: false,
+      targetChar: "",
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "@", "macro-play")
+
+  # " - Register select
+  registry.registerCommand(
+    Command(
+      name: "register-select",
+      description: "Select register for next command",
+      kind: ctOperatorPending,
+      operatorType: "register-select",
+      reverse: false,
+      targetChar: "",
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "\"", "register-select")
+
+  # File open (enter filer to pick a file)
+  registry.registerCommand(
+    Command(
+      name: "file-open",
+      description: "Open file (enter filer)",
+      kind: ctAction,
+      commandId: "file.open",
+      args: @[],
+    )
+  )
+
+  # File new (create new empty buffer)
+  registry.registerCommand(
+    Command(
+      name: "file-new",
+      description: "Create new empty buffer",
+      kind: ctAction,
+      commandId: "file.new",
+      args: @[],
+    )
+  )
+
+  # File close (close current buffer)
+  registry.registerCommand(
+    Command(
+      name: "file-close",
+      description: "Close current buffer",
+      kind: ctAction,
+      commandId: "file.close",
+      args: @[],
+    )
+  )
+
+  # Filer open (enter file explorer)
+  registry.registerCommand(
+    Command(
+      name: "filer-open",
+      description: "Open file explorer",
+      kind: ctAction,
+      commandId: "filer.open",
+      args: @[],
+    )
+  )
 
   # Indent/dedent commands
   registry.registerCommand(
@@ -2008,7 +2162,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       args: @[],
     )
   )
-  registry.bindKey(EditorMode.Normal, "\"", "textobject-quote-double")
+  # Note: No bindKey for " in Normal mode - register-select takes precedence.
+  # Text objects are handled by pendingTextObject raw dispatch.
 
   registry.registerCommand(
     Command(
@@ -2247,6 +2402,37 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       description: "Insert at first non-blank character",
       kind: ctAction,
       commandId: "insert.first.non.blank",
+      args: @[],
+    )
+  )
+
+  # Insert mode internal operations (for :imap)
+  registry.registerCommand(
+    Command(
+      name: "insert-backspace",
+      description: "Delete character before cursor (insert mode)",
+      kind: ctAction,
+      commandId: "insert.backspace",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "insert-delete",
+      description: "Delete character at cursor (insert mode)",
+      kind: ctAction,
+      commandId: "insert.delete",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "insert-newline",
+      description: "Insert newline (insert mode)",
+      kind: ctAction,
+      commandId: "insert.newline",
       args: @[],
     )
   )

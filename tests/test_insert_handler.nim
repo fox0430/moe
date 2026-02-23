@@ -1699,3 +1699,63 @@ suite "InsertModeHandler - Path completion":
     check buf.getLine(0) == "./src "
     check not handler.completionManager.isPathCompletion
     check not handler.completionManager.isActive()
+
+suite "InsertModeHandler - imap action commands":
+  test "imap insert-backspace deletes character before cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    # Map Q to insert-backspace via :imap
+    let err = handler.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Insert, "Q", "insert-backspace"
+    )
+    check err == ""
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "Q")
+    let result = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == "Hell"
+    check state.cursor.column == 4
+
+  test "imap insert-delete deletes character at cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let err = handler.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Insert, "Q", "insert-delete"
+    )
+    check err == ""
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "Q")
+    let result = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == "ello"
+    check state.cursor.column == 0
+
+  test "imap insert-newline inserts newline at cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    let err = handler.keyBindingRegistry.addRuntimeMapping(
+      EditorMode.Insert, "Q", "insert-newline"
+    )
+    check err == ""
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "Q")
+    let result = handler.handleInsertModeKey(buf, state, keyCombo)
+
+    check result.kind == imrHandled
+    check buf.len == 2
+    check buf.getLine(0) == "Hel"
+    check buf.getLine(1) == "lo"

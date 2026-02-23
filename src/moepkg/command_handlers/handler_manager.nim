@@ -617,6 +617,16 @@ proc handleNormalMode*(
     return HandlerResult(kind: hrBufferNext)
   of nmrBufferPrev:
     return HandlerResult(kind: hrBufferPrev)
+  of nmrBufferDelete:
+    return HandlerResult(kind: hrBufferDelete)
+  of nmrNewFile:
+    return HandlerResult(kind: hrEnew)
+  of nmrEnterFiler:
+    return HandlerResult(kind: hrEnterFiler, enterFilerPath: none(string))
+  of nmrNextWindow:
+    return HandlerResult(kind: hrNextWindow)
+  of nmrPrevWindow:
+    return HandlerResult(kind: hrPrevWindow)
 
 proc handleInsertMode*(
     manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
