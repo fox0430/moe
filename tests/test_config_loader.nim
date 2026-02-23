@@ -1697,7 +1697,7 @@ suite "Config Validation - KeyMapping section":
     check config.keyMapping.normal["C-s"] == "save"
     check config.keyMapping.normal["jj"] == "Escape"
 
-  test "All five modes":
+  test "All modes":
     let toml = """
 [KeyMapping.Normal]
 "C-s" = "save"
@@ -1706,6 +1706,15 @@ suite "Config Validation - KeyMapping section":
 "jj" = "Escape"
 
 [KeyMapping.Visual]
+"C-c" = "Escape"
+
+[KeyMapping.VisualAll]
+"C-a" = "Escape"
+
+[KeyMapping.VisualLine]
+"C-c" = "Escape"
+
+[KeyMapping.VisualBlock]
 "C-c" = "Escape"
 
 [KeyMapping.Replace]
@@ -1719,11 +1728,17 @@ suite "Config Validation - KeyMapping section":
     check config.keyMapping.normal.len == 1
     check config.keyMapping.insert.len == 1
     check config.keyMapping.visual.len == 1
+    check config.keyMapping.visualAll.len == 1
+    check config.keyMapping.visualLine.len == 1
+    check config.keyMapping.visualBlock.len == 1
     check config.keyMapping.replace.len == 1
     check config.keyMapping.commandLine.len == 1
     check config.keyMapping.normal["C-s"] == "save"
     check config.keyMapping.insert["jj"] == "Escape"
     check config.keyMapping.visual["C-c"] == "Escape"
+    check config.keyMapping.visualAll["C-a"] == "Escape"
+    check config.keyMapping.visualLine["C-c"] == "Escape"
+    check config.keyMapping.visualBlock["C-c"] == "Escape"
     check config.keyMapping.replace["C-c"] == "Escape"
     check config.keyMapping.commandLine["C-a"] == "Home"
 
@@ -1737,6 +1752,9 @@ suite "Config Validation - KeyMapping section":
     check config.keyMapping.normal.len == 0
     check config.keyMapping.insert.len == 0
     check config.keyMapping.visual.len == 0
+    check config.keyMapping.visualAll.len == 0
+    check config.keyMapping.visualLine.len == 0
+    check config.keyMapping.visualBlock.len == 0
     check config.keyMapping.replace.len == 0
     check config.keyMapping.commandLine.len == 0
 
@@ -1751,6 +1769,9 @@ number = true
     check config.keyMapping.normal.len == 0
     check config.keyMapping.insert.len == 0
     check config.keyMapping.visual.len == 0
+    check config.keyMapping.visualAll.len == 0
+    check config.keyMapping.visualLine.len == 0
+    check config.keyMapping.visualBlock.len == 0
     check config.keyMapping.replace.len == 0
     check config.keyMapping.commandLine.len == 0
 
@@ -1852,6 +1873,95 @@ number = true
     check not vr.hasErrors
     check config.keyMapping.all.len == 0
 
+  test "VisualLine key mappings":
+    let toml = """
+[KeyMapping.VisualLine]
+"C-c" = "Escape"
+"C-y" = "yank"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.visualLine.len == 2
+    check config.keyMapping.visualLine["C-c"] == "Escape"
+    check config.keyMapping.visualLine["C-y"] == "yank"
+
+  test "VisualBlock key mappings":
+    let toml = """
+[KeyMapping.VisualBlock]
+"C-c" = "Escape"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.visualBlock.len == 1
+    check config.keyMapping.visualBlock["C-c"] == "Escape"
+
+  test "VisualAll key mappings":
+    let toml = """
+[KeyMapping.VisualAll]
+"C-c" = "Escape"
+"C-y" = "yank"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.visualAll.len == 2
+    check config.keyMapping.visualAll["C-c"] == "Escape"
+    check config.keyMapping.visualAll["C-y"] == "yank"
+
+  test "VisualAll with mode-specific coexistence":
+    let toml = """
+[KeyMapping.VisualAll]
+"C-c" = "Escape"
+
+[KeyMapping.Visual]
+"C-v" = "save"
+
+[KeyMapping.VisualLine]
+"C-l" = "Escape"
+
+[KeyMapping.VisualBlock]
+"C-b" = "Escape"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.visualAll.len == 1
+    check config.keyMapping.visualAll["C-c"] == "Escape"
+    check config.keyMapping.visual.len == 1
+    check config.keyMapping.visual["C-v"] == "save"
+    check config.keyMapping.visualLine.len == 1
+    check config.keyMapping.visualLine["C-l"] == "Escape"
+    check config.keyMapping.visualBlock.len == 1
+    check config.keyMapping.visualBlock["C-b"] == "Escape"
+
+  test "Invalid RHS in VisualAll reports error":
+    let toml = """
+[KeyMapping.VisualAll]
+"C-s" = "not-a-command"
+"""
+    let (_, vr) = loadFromTomlString(toml)
+    check vr.hasErrors
+    let errorNames = vr.errors.mapIt(it.name)
+    check "KeyMapping.VisualAll.C-s" in errorNames
+
+  test "Invalid RHS in VisualLine reports error":
+    let toml = """
+[KeyMapping.VisualLine]
+"C-s" = "not-a-command"
+"""
+    let (_, vr) = loadFromTomlString(toml)
+    check vr.hasErrors
+    let errorNames = vr.errors.mapIt(it.name)
+    check "KeyMapping.VisualLine.C-s" in errorNames
+
+  test "Invalid RHS in VisualBlock reports error":
+    let toml = """
+[KeyMapping.VisualBlock]
+"C-s" = "not-a-command"
+"""
+    let (_, vr) = loadFromTomlString(toml)
+    check vr.hasErrors
+    let errorNames = vr.errors.mapIt(it.name)
+    check "KeyMapping.VisualBlock.C-s" in errorNames
+
 suite "Config - saveConfigToToml with KeyMapping":
   test "KeyMapping round-trip":
     inc testFileCounter
@@ -1879,6 +1989,9 @@ suite "Config - saveConfigToToml with KeyMapping":
     check loaded.keyMapping.insert.len == 1
     check loaded.keyMapping.insert["jj"] == "Escape"
     check loaded.keyMapping.visual.len == 0
+    check loaded.keyMapping.visualAll.len == 0
+    check loaded.keyMapping.visualLine.len == 0
+    check loaded.keyMapping.visualBlock.len == 0
     check loaded.keyMapping.replace.len == 0
     check loaded.keyMapping.commandLine.len == 1
     check loaded.keyMapping.commandLine["C-a"] == "Home"
@@ -1906,6 +2019,36 @@ suite "Config - saveConfigToToml with KeyMapping":
     check loaded.keyMapping.all["C-s"] == "save"
     check loaded.keyMapping.normal.len == 1
     check loaded.keyMapping.normal["C-n"] == "Escape"
+
+  test "VisualAll/VisualLine/VisualBlock round-trip":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_keymap_visual_save_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.keyMapping.visualAll["C-c"] = "Escape"
+    config.keyMapping.visual["C-v"] = "save"
+    config.keyMapping.visualLine["C-l"] = "Escape"
+    config.keyMapping.visualBlock["C-b"] = "Escape"
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.keyMapping.visualAll.len == 1
+    check loaded.keyMapping.visualAll["C-c"] == "Escape"
+    check loaded.keyMapping.visual.len == 1
+    check loaded.keyMapping.visual["C-v"] == "save"
+    check loaded.keyMapping.visualLine.len == 1
+    check loaded.keyMapping.visualLine["C-l"] == "Escape"
+    check loaded.keyMapping.visualBlock.len == 1
+    check loaded.keyMapping.visualBlock["C-b"] == "Escape"
 
   test "Empty KeyMapping not saved":
     inc testFileCounter

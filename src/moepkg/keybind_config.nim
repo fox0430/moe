@@ -43,6 +43,10 @@ proc parseMode(s: string): Option[EditorMode] =
     some(EditorMode.Insert)
   of "visual":
     some(EditorMode.Visual)
+  of "visualline":
+    some(EditorMode.VisualLine)
+  of "visualblock":
+    some(EditorMode.VisualBlock)
   of "replace":
     some(EditorMode.Replace)
   else:

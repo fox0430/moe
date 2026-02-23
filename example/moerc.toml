@@ -267,7 +267,19 @@ splitType = "vertical"                 # Split type: "vertical" or "horizontal"
 # [KeyMapping.Insert]
 # "jj" = "Escape"
 #
+# [KeyMapping.Visual] applies to characterwise Visual mode only.
+# [KeyMapping.VisualAll] applies to all visual modes (Visual, VisualBlock, VisualLine).
+# [KeyMapping.VisualLine] and [KeyMapping.VisualBlock] for specific visual modes.
 # [KeyMapping.Visual]
+# "C-c" = "Escape"
+#
+# [KeyMapping.VisualAll]
+# "C-c" = "Escape"
+#
+# [KeyMapping.VisualLine]
+# "C-c" = "Escape"
+#
+# [KeyMapping.VisualBlock]
 # "C-c" = "Escape"
 #
 # [KeyMapping.Replace]

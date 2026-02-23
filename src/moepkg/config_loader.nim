@@ -990,7 +990,10 @@ proc loadKeyMappingConfig(
     table: TomlTableRef, config: var KeyMappingConfig, vr: var ValidationResult
 ) =
   const section = "KeyMapping"
-  const validKeys = ["All", "Normal", "Insert", "Visual", "Replace", "CommandLine"]
+  const validKeys = [
+    "All", "Normal", "Insert", "Visual", "VisualAll", "VisualLine", "VisualBlock",
+    "Replace", "CommandLine",
+  ]
   checkUnknownKeys(table, validKeys, section, vr)
 
   let validCommands = getValidMappingCommands()
@@ -1010,6 +1013,30 @@ proc loadKeyMappingConfig(
   if table.hasKey("Visual"):
     loadKeyMappingModeConfig(
       table["Visual"].getTable(), config.visual, vr, "KeyMapping.Visual", validCommands
+    )
+  if table.hasKey("VisualAll"):
+    loadKeyMappingModeConfig(
+      table["VisualAll"].getTable(),
+      config.visualAll,
+      vr,
+      "KeyMapping.VisualAll",
+      validCommands,
+    )
+  if table.hasKey("VisualLine"):
+    loadKeyMappingModeConfig(
+      table["VisualLine"].getTable(),
+      config.visualLine,
+      vr,
+      "KeyMapping.VisualLine",
+      validCommands,
+    )
+  if table.hasKey("VisualBlock"):
+    loadKeyMappingModeConfig(
+      table["VisualBlock"].getTable(),
+      config.visualBlock,
+      vr,
+      "KeyMapping.VisualBlock",
+      validCommands,
     )
   if table.hasKey("Replace"):
     loadKeyMappingModeConfig(
@@ -2003,6 +2030,24 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   if config.keyMapping.visual.len > 0:
     lines.add "[KeyMapping.Visual]"
     for lhs, rhs in config.keyMapping.visual:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.visualAll.len > 0:
+    lines.add "[KeyMapping.VisualAll]"
+    for lhs, rhs in config.keyMapping.visualAll:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.visualLine.len > 0:
+    lines.add "[KeyMapping.VisualLine]"
+    for lhs, rhs in config.keyMapping.visualLine:
+      lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
+    lines.add ""
+
+  if config.keyMapping.visualBlock.len > 0:
+    lines.add "[KeyMapping.VisualBlock]"
+    for lhs, rhs in config.keyMapping.visualBlock:
       lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
     lines.add ""
 
