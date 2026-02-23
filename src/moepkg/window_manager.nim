@@ -448,19 +448,29 @@ proc vsplit*(
     origX + splitWidth + WindowSeparatorWidth
   wm.deactivateAllWindows()
 
+  # When opening the same buffer, inherit cursor position and viewport scroll
+  let isSameBuffer = newBuffer == currentBuffer
+  let newCursor =
+    if isSameBuffer:
+      cursorPosition
+    else:
+      BufferPosition(line: 0, column: 0)
+  let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
+  let newLeftColumn = if isSameBuffer: currentViewport.leftColumn else: 0
+
   # Create new window for left half
   let newWindow = EditorWindow(
     buffer: newBuffer,
     bufferList: @[newBuffer], # Initialize with current buffer only
     viewport: ViewPort(
-      topLine: 0,
-      leftColumn: 0,
+      topLine: newTopLine,
+      leftColumn: newLeftColumn,
       width: splitWidth,
       height: origHeight,
       x: origX,
       y: origY,
     ),
-    cursor: BufferPosition(line: 0, column: 0),
+    cursor: newCursor,
     active: true,
     mode: EditorMode.Normal, # New windows start in Normal mode
   )
@@ -514,19 +524,29 @@ proc vsplitWithBuffer*(
     origX + splitWidth + WindowSeparatorWidth
   wm.deactivateAllWindows()
 
+  # When opening the same buffer, inherit cursor position and viewport scroll
+  let isSameBuffer = newBuffer == currentBuffer
+  let newCursor =
+    if isSameBuffer:
+      cursorPosition
+    else:
+      BufferPosition(line: 0, column: 0)
+  let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
+  let newLeftColumn = if isSameBuffer: currentViewport.leftColumn else: 0
+
   # Create new window for left half with the provided buffer
   let newWindow = EditorWindow(
     buffer: newBuffer,
     bufferList: @[newBuffer], # Initialize with current buffer only
     viewport: ViewPort(
-      topLine: 0,
-      leftColumn: 0,
+      topLine: newTopLine,
+      leftColumn: newLeftColumn,
       width: splitWidth,
       height: origHeight,
       x: origX,
       y: origY,
     ),
-    cursor: BufferPosition(line: 0, column: 0),
+    cursor: newCursor,
     active: true,
     mode: EditorMode.Normal, # New windows start in Normal mode
   )
@@ -611,6 +631,16 @@ proc hsplit*(
     separatorOffset
   wm.deactivateAllWindows()
 
+  # When opening the same buffer, inherit cursor position and viewport scroll
+  let isSameBuffer = newBuffer == currentBuffer
+  let newCursor =
+    if isSameBuffer:
+      cursorPosition
+    else:
+      BufferPosition(line: 0, column: 0)
+  let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
+  let newLeftColumn = if isSameBuffer: currentViewport.leftColumn else: 0
+
   # Create new window for top half
   # In multi status line mode, top window gets its own status line
   # In single status line mode, top window has no status line
@@ -618,14 +648,14 @@ proc hsplit*(
     buffer: newBuffer,
     bufferList: @[newBuffer], # Initialize with current buffer only
     viewport: ViewPort(
-      topLine: 0,
-      leftColumn: 0,
+      topLine: newTopLine,
+      leftColumn: newLeftColumn,
       width: origWidth,
       height: topContentHeight + (if multiStatusLine: StatusLineHeight else: 0),
       x: origX,
       y: origY,
     ),
-    cursor: BufferPosition(line: 0, column: 0),
+    cursor: newCursor,
     active: true,
     mode: EditorMode.Normal, # New windows start in Normal mode
   )
@@ -692,19 +722,29 @@ proc hsplitWithBuffer*(
     separatorOffset
   wm.deactivateAllWindows()
 
+  # When opening the same buffer, inherit cursor position and viewport scroll
+  let isSameBuffer = newBuffer == currentBuffer
+  let newCursor =
+    if isSameBuffer:
+      cursorPosition
+    else:
+      BufferPosition(line: 0, column: 0)
+  let newTopLine = if isSameBuffer: currentViewport.topLine else: 0
+  let newLeftColumn = if isSameBuffer: currentViewport.leftColumn else: 0
+
   # Create new window for top half with the provided buffer
   let newWindow = EditorWindow(
     buffer: newBuffer,
     bufferList: @[newBuffer], # Initialize with current buffer only
     viewport: ViewPort(
-      topLine: 0,
-      leftColumn: 0,
+      topLine: newTopLine,
+      leftColumn: newLeftColumn,
       width: origWidth,
       height: topContentHeight + (if multiStatusLine: StatusLineHeight else: 0),
       x: origX,
       y: origY,
     ),
-    cursor: BufferPosition(line: 0, column: 0),
+    cursor: newCursor,
     active: true,
     mode: EditorMode.Normal, # New windows start in Normal mode
   )

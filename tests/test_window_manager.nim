@@ -860,3 +860,125 @@ suite "EditorWindowManager - Split Size Proportions":
     check wm.windows[0].viewport.height == 10
     check wm.windows[1].viewport.y == 11
     check wm.windows[1].viewport.height == 13
+
+suite "EditorWindowManager - Split inherits cursor position for same buffer":
+  test "vsplit same buffer inherits cursor position":
+    let wm = createSingleWindowManager(80, 24)
+    wm.windows[0].cursor = BufferPosition(line: 5, column: 10)
+    wm.windows[0].viewport.topLine = 3
+    wm.windows[0].viewport.leftColumn = 2
+
+    let result = wm.vsplit(
+      wm.windows[0].buffer, wm.windows[0].viewport, BufferPosition(line: 5, column: 10)
+    )
+
+    check result.isOk
+    check wm.windows[0].cursor.line == 5
+    check wm.windows[0].cursor.column == 10
+    check wm.windows[0].viewport.topLine == 3
+    check wm.windows[0].viewport.leftColumn == 2
+
+  test "vsplit different file starts at position 0":
+    let wm = createSingleWindowManager(80, 24)
+    wm.windows[0].cursor = BufferPosition(line: 5, column: 10)
+    wm.windows[0].viewport.topLine = 3
+    wm.windows[0].viewport.leftColumn = 2
+
+    let newBuf = newTextBuffer()
+    discard newBuf.insertText(BufferPosition(line: 0, column: 0), "New content")
+
+    let result = wm.vsplitWithBuffer(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 5, column: 10),
+      newBuf,
+    )
+
+    check result.isOk
+    check wm.windows[0].cursor.line == 0
+    check wm.windows[0].cursor.column == 0
+    check wm.windows[0].viewport.topLine == 0
+    check wm.windows[0].viewport.leftColumn == 0
+
+  test "hsplit same buffer inherits cursor position":
+    let wm = createSingleWindowManager(80, 24)
+    wm.windows[0].cursor = BufferPosition(line: 5, column: 10)
+    wm.windows[0].viewport.topLine = 3
+    wm.windows[0].viewport.leftColumn = 2
+
+    let result = wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 5, column: 10),
+      multiStatusLine = false,
+    )
+
+    check result.isOk
+    check wm.windows[0].cursor.line == 5
+    check wm.windows[0].cursor.column == 10
+    check wm.windows[0].viewport.topLine == 3
+    check wm.windows[0].viewport.leftColumn == 2
+
+  test "hsplit different file starts at position 0":
+    let wm = createSingleWindowManager(80, 24)
+    wm.windows[0].cursor = BufferPosition(line: 5, column: 10)
+    wm.windows[0].viewport.topLine = 3
+    wm.windows[0].viewport.leftColumn = 2
+
+    let newBuf = newTextBuffer()
+    discard newBuf.insertText(BufferPosition(line: 0, column: 0), "New content")
+
+    let result = wm.hsplitWithBuffer(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 5, column: 10),
+      multiStatusLine = false,
+      newBuf,
+    )
+
+    check result.isOk
+    check wm.windows[0].cursor.line == 0
+    check wm.windows[0].cursor.column == 0
+    check wm.windows[0].viewport.topLine == 0
+    check wm.windows[0].viewport.leftColumn == 0
+
+  test "vsplitWithBuffer same buffer inherits cursor position":
+    let wm = createSingleWindowManager(80, 24)
+    let originalBuffer = wm.windows[0].buffer
+    wm.windows[0].cursor = BufferPosition(line: 5, column: 10)
+    wm.windows[0].viewport.topLine = 3
+    wm.windows[0].viewport.leftColumn = 2
+
+    let result = wm.vsplitWithBuffer(
+      originalBuffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 5, column: 10),
+      originalBuffer,
+    )
+
+    check result.isOk
+    check wm.windows[0].cursor.line == 5
+    check wm.windows[0].cursor.column == 10
+    check wm.windows[0].viewport.topLine == 3
+    check wm.windows[0].viewport.leftColumn == 2
+
+  test "hsplitWithBuffer same buffer inherits cursor position":
+    let wm = createSingleWindowManager(80, 24)
+    let originalBuffer = wm.windows[0].buffer
+    wm.windows[0].cursor = BufferPosition(line: 5, column: 10)
+    wm.windows[0].viewport.topLine = 3
+    wm.windows[0].viewport.leftColumn = 2
+
+    let result = wm.hsplitWithBuffer(
+      originalBuffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 5, column: 10),
+      multiStatusLine = false,
+      originalBuffer,
+    )
+
+    check result.isOk
+    check wm.windows[0].cursor.line == 5
+    check wm.windows[0].cursor.column == 10
+    check wm.windows[0].viewport.topLine == 3
+    check wm.windows[0].viewport.leftColumn == 2
