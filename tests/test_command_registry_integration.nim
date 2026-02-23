@@ -920,6 +920,44 @@ suite "Handler - Delete line operations":
     check buffer[0] == "line1"
     check ctx.cursor.line == 0
 
+  test "dd preserves column position when next line is long enough":
+    let buffer = newTextBuffer("short\nhello world\nlong enough line")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 8)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.line")).isOk
+    check buffer.len == 2
+    check buffer[0] == "short"
+    check buffer[1] == "long enough line"
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 8
+
+  test "dd clamps column to end of shorter line":
+    let buffer = newTextBuffer("hello world\nhi\nthird")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 9)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.line")).isOk
+    check buffer.len == 2
+    check buffer[0] == "hi"
+    check buffer[1] == "third"
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 1 # "hi" has charLen 2, so max column is 1
+
+  test "dd preserves column when deleting last line":
+    let buffer = newTextBuffer("hello\nworld!")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 3)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.line")).isOk
+    check buffer.len == 1
+    check buffer[0] == "hello"
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 3
+
   test "dd on single line buffer clears line content":
     let buffer = newTextBuffer("only line")
     let ctx = createTestContext(buffer)
@@ -1662,6 +1700,40 @@ suite "Handler - Operator commands":
     check buffer.len == 2
     check buffer[0] == "line1"
     check buffer[1] == "line3"
+
+  test "double operator (dd) preserves column position":
+    let buffer = newTextBuffer("first line\nsecond line here\nthird line!!")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 10)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # First d
+    discard registry.execute(ctx, custom("operator.delete"))
+    # Second d - completes dd
+    check registry.execute(ctx, custom("operator.delete")).isOk
+    check buffer.len == 2
+    check buffer[0] == "first line"
+    check buffer[1] == "third line!!"
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 10 # preserved
+
+  test "double operator (dd) clamps column to shorter line":
+    let buffer = newTextBuffer("first line\nlong second line\nhi")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 14)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # First d
+    discard registry.execute(ctx, custom("operator.delete"))
+    # Second d - completes dd
+    check registry.execute(ctx, custom("operator.delete")).isOk
+    check buffer.len == 2
+    check buffer[0] == "first line"
+    check buffer[1] == "hi"
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 1 # "hi" has charLen 2, clamped to 1
 
   test "double operator (dd) on single line buffer clears line":
     let buffer = newTextBuffer("only line")
