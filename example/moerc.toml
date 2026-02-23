@@ -46,8 +46,6 @@ lineWrap = true                        # Wrap long lines
 
 timeoutlen = 1000                      # Key mapping timeout in ms (0 = no timeout)
 
-mouse = true
-
 [Clipboard]
 
 enable = true                          # Clipboard integration
@@ -76,7 +74,7 @@ mode = true                            # Show mode in status line
 
 filename = true                        # Show filename in status line
 
-chanedMark = true                      # Show changed mark [+]
+changedMark = true                     # Show changed mark [+]
 
 directory = true                       # Show full directory path - false shows just filename
 
