@@ -1076,7 +1076,9 @@ suite "Config - saveConfigToToml":
     defer:
       removeFile(testFile)
 
-    let config = newEditorConfig()
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
     let result = saveConfigToToml(config, testFile)
     check result.isOk
     check fileExists(testFile)
@@ -1087,7 +1089,9 @@ suite "Config - saveConfigToToml":
     defer:
       removeFile(testFile)
 
-    let config = newEditorConfig()
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
     let saveResult = saveConfigToToml(config, testFile)
     check saveResult.isOk
 
@@ -1141,7 +1145,9 @@ suite "Config - saveConfigToToml":
     defer:
       removeDir(testDir)
 
-    let config = newEditorConfig()
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
     let result = saveConfigToToml(config, testFile)
     check result.isOk
     check fileExists(testFile)
@@ -1152,7 +1158,9 @@ suite "Config - saveConfigToToml":
     defer:
       removeFile(testFile)
 
-    let config = newEditorConfig()
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
     let result = saveConfigToToml(config, testFile)
     check result.isOk
 
@@ -1810,6 +1818,8 @@ suite "Config - saveConfigToToml with KeyMapping":
       removeFile(testFile)
 
     var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
     config.keyMapping.normal["C-s"] = "save"
     config.keyMapping.insert["jj"] = "Escape"
     config.keyMapping.commandLine["C-a"] = "Home"
@@ -1837,6 +1847,8 @@ suite "Config - saveConfigToToml with KeyMapping":
       removeFile(testFile)
 
     var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
 
     let saveResult = saveConfigToToml(config, testFile)
     check saveResult.isOk
