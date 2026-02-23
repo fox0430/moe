@@ -56,7 +56,7 @@ tool = "xsel"                          # Tool: xsel, xclip, wl-clipboard, etc.
 
 enable = false                         # Build on save feature
 
-workspaceRoot = "/home/fox/git/moe"    # Working directory for build
+# workspaceRoot = "/path/to/project"   # Working directory for build
 
 command = "nimble build"               # Custom build command
 
