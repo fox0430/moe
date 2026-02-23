@@ -1020,7 +1020,7 @@ suite "NormalModeHandler - Text Object Pending State":
 
     # Press Escape to cancel
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let result = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
+    discard handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check state.editState.pendingTextObject.isNone
 

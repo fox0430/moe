@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, options, tables, strutils]
-import pkg/results
+
 import ../src/moepkg/command_line
 
 suite "CommandLine - processEscapeSequences":

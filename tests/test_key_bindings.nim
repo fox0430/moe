@@ -1371,10 +1371,8 @@ suite "Default bindings coverage":
 
     # Note: These are bound as string "Escape" which may not match
     # Let's check if they exist via the string parsing path
-    let insertEsc =
-      registry.findSingleBinding(EditorMode.Insert, toSpecialKeyCombo(skEscape))
-    let replaceEsc =
-      registry.findSingleBinding(EditorMode.Replace, toSpecialKeyCombo(skEscape))
+    discard registry.findSingleBinding(EditorMode.Insert, toSpecialKeyCombo(skEscape))
+    discard registry.findSingleBinding(EditorMode.Replace, toSpecialKeyCombo(skEscape))
 
     # The bindings are done via string, need to verify the implementation
     # For now, just check the registry has entries for these modes

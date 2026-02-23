@@ -27,8 +27,6 @@
 
 import std/[options, strutils, os]
 
-import pkg/results
-
 import ../[buffer, gap_buffer, modes, command_line, command_config, command_registry]
 
 type

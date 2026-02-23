@@ -34,8 +34,6 @@ suite "Search History - File Operations":
       removeFile(testHistoryPath)
 
   test "save and load empty history":
-    let history: seq[string] = @[]
-
     # Save to temp file
     writeFile(testHistoryPath, "")
 

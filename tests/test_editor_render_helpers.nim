@@ -20,7 +20,9 @@
 ## Tests for editor_render_helpers.nim
 
 import std/[unittest, options, tables]
-import pkg/[results, celina]
+
+import pkg/celina
+
 import
   ../src/moepkg/
     [editor, buffer, config, config_loader, modes, types, color, render_utils]
@@ -533,27 +535,6 @@ suite "IndentInfo structure":
     check info.hasContent == true
 
 suite "renderLineSegmentWithSelection - trailing space highlight":
-  proc setupEditor(mode: EditorMode): (Editor, TextBuffer, var Buffer, RenderContext) =
-    let config = newEditorConfig()
-    let vr = newValidationResult()
-    var e = newEditor(config, vr)
-    e.config.highlight.trailingSpaces = true
-    e.config.highlight.fullWidthSpace = true
-    e.state.display.showSyntax = false
-    e.state.display.showCursorLine = false
-    e.state.display.showIndentationLines = false
-
-    let tb = newTextBuffer("hello   ")
-    var buf = newBuffer(80, 1)
-    let ctx = RenderContext(
-      cursorLine: -1,
-      cursorCol: -1,
-      hasSelection: false,
-      windowMode: mode,
-      windowRightEdge: 80,
-    )
-    (e, tb, buf, ctx)
-
   test "Normal mode highlights trailing spaces":
     let config = newEditorConfig()
     let vr = newValidationResult()
