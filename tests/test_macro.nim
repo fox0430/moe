@@ -23,11 +23,8 @@
 
 import std/[unittest, options, tables]
 
-import pkg/results
-
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/modes {.all.}
+import ../src/moepkg/types
+import ../src/moepkg/modes
 
 suite "Macro Recording":
   test "start macro recording (qa)":
@@ -178,23 +175,6 @@ suite "Macro Playback":
 
     # Simulate: @@ (no previous macro)
     check state.macroState.lastRegister.isNone
-
-suite "Key Serialization":
-  test "keyComboToString - regular characters":
-    let combo1 = KeyCombo(isSpecial: false, char: "d")
-    let combo2 = KeyCombo(isSpecial: false, char: "j")
-
-    # These would be tested via the keyComboToString function
-    # which is in normal_handler.nim
-    discard
-
-  test "keyComboToString - special keys":
-    let comboEnter = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0)
-    let comboEsc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0)
-
-    # These would be tested via the keyComboToString function
-    # which is in normal_handler.nim
-    discard
 
 suite "Macro Edge Cases":
   test "cannot start recording while already recording":

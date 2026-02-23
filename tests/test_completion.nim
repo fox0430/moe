@@ -18,9 +18,8 @@
 #[############################################################################]#
 
 import std/[unittest, options, strutils]
-from std/strutils import contains
 
-import pkg/[results, celina]
+import pkg/celina
 
 import ../src/moepkg/[buffer, completion, unicode_utils]
 import ../src/moepkg/lsp/protocol/types as lspTypes

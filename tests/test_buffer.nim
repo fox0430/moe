@@ -645,7 +645,6 @@ suite "Buffer - File Operations":
 
   test "saveFile and loadFile roundtrip":
     let testFile = "/tmp/moe_test_roundtrip.txt"
-    let content = "Test content\nWith multiple lines\n"
 
     let buf1 = newTextBuffer()
     discard buf1.insertText(

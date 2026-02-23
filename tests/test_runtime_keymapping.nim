@@ -843,7 +843,7 @@ suite "Integration - handleKeyCombo with runtime key-seq mapping":
 
     # 'k' does not match 'j j' → flush 'j' and process 'k' normally
     let k = KeyCombo(isSpecial: false, char: "k", modifiers: {})
-    let r2 = manager.handleKeyCombo(buffer, state, viewport, k)
+    discard manager.handleKeyCombo(buffer, state, viewport, k)
     # Accumulator should be cleared after flush
     check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
 
@@ -856,9 +856,9 @@ suite "Integration - handleKeyCombo with runtime key-seq mapping":
 
     # No runtime mappings registered. 'a' should pass through normally.
     let a = KeyCombo(isSpecial: false, char: "a", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, a)
+    let r = manager.handleKeyCombo(buffer, state, viewport, a)
     # Should be handled by insert mode handler, not blocked by mapping precheck
-    check result.kind == hrHandled
+    check r.kind == hrHandled
 
   test "Single-key mapping in Insert mode triggers":
     let manager = createTestManager()
@@ -925,7 +925,7 @@ suite "Integration - noremap verification":
     # With isReplayingMapping = true, handleKeyCombo should skip mapping precheck
     manager.keyBindingRegistry.isReplayingMapping = true
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let result = manager.handleKeyCombo(buffer, state, viewport, keyA)
+    discard manager.handleKeyCombo(buffer, state, viewport, keyA)
     # The key should have been processed normally (not consumed by mapping)
     # Accumulator should remain empty
     check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
@@ -944,7 +944,7 @@ suite "Integration - noremap verification":
 
     # Press C-a in Insert mode: should NOT trigger the Normal mapping
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let result = manager.handleKeyCombo(buffer, state, viewport, keyA)
+    discard manager.handleKeyCombo(buffer, state, viewport, keyA)
     # Accumulator should be empty (no key-seq mappings registered for Insert)
     check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
 
@@ -1039,15 +1039,13 @@ suite "Integration - mapping removal and clear":
 
     # Key should pass through to normal insert handler
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let result = manager.handleKeyCombo(buffer, state, viewport, keyA)
+    discard manager.handleKeyCombo(buffer, state, viewport, keyA)
     check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
 
   test "Cleared mappings no longer trigger":
     let manager = createTestManager()
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
-    let state = createTestState(EditorMode.Insert)
-    let viewport = createTestViewport()
 
     # Add mappings then clear
     discard manager.keyBindingRegistry.addRuntimeMapping(Insert, "C-a", "Escape")
@@ -1163,7 +1161,7 @@ suite "Timeout flush - exact match with longer match pending":
     # Execute via playbackMacro (mirrors handleKeyMappingTimeout logic)
     manager.keyBindingRegistry.clearRuntimeMappingState()
     manager.keyBindingRegistry.isReplayingMapping = true
-    let r = manager.playbackMacro(buffer, state, viewport, exactMatch.get.targetKeys)
+    discard manager.playbackMacro(buffer, state, viewport, exactMatch.get.targetKeys)
     manager.keyBindingRegistry.isReplayingMapping = false
 
     # playbackMacro applies mode transitions internally

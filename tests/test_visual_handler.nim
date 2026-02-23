@@ -21,8 +21,6 @@
 
 import std/[unittest, options, tables]
 
-import pkg/results
-
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/types {.all.}
 import ../src/moepkg/key_bindings {.all.}
@@ -424,7 +422,7 @@ suite "VisualModeHandler - handleVisualModeKey":
     let viewport = createTestViewport()
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    discard handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check state.visualSelection.active == false
 

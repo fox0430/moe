@@ -599,12 +599,11 @@ suite "GapBuffer - Edge Cases & Stress Tests":
     check gb[0].len == 105 # "start" + 100 'x's
 
   test "deleteAtLineCol at exact line boundary":
-    let gb = newGapBuffer("12345")
     # Delete from position 5 (end of line), should delete newline if multi-line
-    let gb2 = newGapBuffer("12345\n67890")
-    gb2.deleteAtLineCol(0, 5, 1) # Delete newline
-    check gb2.len == 1
-    check gb2[0] == "1234567890"
+    let gb = newGapBuffer("12345\n67890")
+    gb.deleteAtLineCol(0, 5, 1) # Delete newline
+    check gb.len == 1
+    check gb[0] == "1234567890"
 
   test "insertLine at every position in sequence":
     let gb = newGapBuffer()
@@ -1140,13 +1139,10 @@ suite "GapBuffer - findLineStart":
 suite "GapBuffer - Gap Management (Low-level)":
   test "gap expansion on many insertions":
     let gb = newGapBuffer()
-    let initialGapInfo = gb.getGapInfo()
 
     # Insert many lines to force gap expansion
     for i in 0 ..< 100:
       gb.insertLine(i, "Line " & $i)
-
-    let finalGapInfo = gb.getGapInfo()
 
     # Verify all lines are intact
     check gb.lineCount() == 101 # 100 inserted + 1 initial
