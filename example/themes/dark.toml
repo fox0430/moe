@@ -212,6 +212,8 @@ configModeCurrentLineBg = "#008080"
 
 currentLineBg = "#444444"
 
+currentColumnBg = "#444444"
+
 foldingLine = "#808080"
 foldingLineBg = "#3f3f3f"
 

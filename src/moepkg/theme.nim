@@ -208,6 +208,7 @@ const DefaultColors*: ThemeColors = [
 
   # Current line background
   EditorColorPairIndex.currentLineBg: makeColorPair("#f8f5e3", "#444444"),
+  EditorColorPairIndex.currentColumnBg: makeColorPair("#f8f5e3", "#444444"),
   EditorColorPairIndex.foldingLine: makeColorPair("#808080", "#3f3f3f"),
 
   # Side bar

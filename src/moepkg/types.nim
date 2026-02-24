@@ -165,6 +165,7 @@ type
     showLineNumbers*: bool # Whether to show line numbers
     showCurrentLineNumber*: bool # Whether to highlight current line number
     showCursorLine*: bool # Whether to highlight the cursor line
+    showCursorColumn*: bool # Whether to highlight the cursor column
     showSyntax*: bool # Whether to apply syntax highlighting
     showIndentationLines*: bool # Whether to show indentation guide lines
     showSidebar*: bool # Whether to show the sidebar

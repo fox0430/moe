@@ -523,6 +523,139 @@ suite "getSelectionStyle - Cursor line":
     )
     check true
 
+suite "bufferColToDisplayCol":
+  test "Simple ASCII text":
+    check bufferColToDisplayCol("hello", 0, 4) == 0
+    check bufferColToDisplayCol("hello", 3, 4) == 3
+    check bufferColToDisplayCol("hello", 5, 4) == 5
+
+  test "Tab expansion":
+    # Tab at start expands to tabStop width
+    check bufferColToDisplayCol("\thello", 1, 4) == 4
+    check bufferColToDisplayCol("\thello", 1, 8) == 8
+    # Tab after some chars
+    check bufferColToDisplayCol("ab\tc", 3, 4) == 4 # "ab"=2, tab fills to 4
+    check bufferColToDisplayCol("abc\td", 4, 4) == 4 # "abc"=3, tab fills to 4
+
+  test "Wide characters":
+    # CJK characters take 2 display columns
+    check bufferColToDisplayCol("日本語", 1, 4) == 2
+    check bufferColToDisplayCol("日本語", 2, 4) == 4
+
+  test "With startCol offset":
+    # startCol skips initial characters
+    check bufferColToDisplayCol("hello", 3, 4, startCol = 1) == 2 # "el" = 2
+    check bufferColToDisplayCol("hello", 5, 4, startCol = 2) == 3 # "llo" = 3
+
+  test "bufferCol before startCol returns -1":
+    check bufferColToDisplayCol("hello", 1, 4, startCol = 3) == -1
+    check bufferColToDisplayCol("hello", 0, 4, startCol = 1) == -1
+
+  test "Empty string":
+    check bufferColToDisplayCol("", 0, 4) == 0
+
+  test "bufferCol past end of string":
+    # Iterates all chars, result = display width of entire string
+    check bufferColToDisplayCol("abc", 10, 4) == 3
+
+suite "getSelectionStyle - Cursor column":
+  test "Returns cursor column bg when on cursor column":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    e.state.display.showDocumentHighlight = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 3),
+      cursorLine = 1,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+      displayCol = 5,
+      cursorDisplayCol = 5,
+    )
+    check style.bg == cursorColumnHighlightStyle().bg
+
+  test "No cursor column style when showCursorColumn is false":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = false
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 3),
+      cursorLine = 1,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+      displayCol = 5,
+      cursorDisplayCol = 5,
+    )
+    check style.bg == normalStyle().bg
+
+  test "No cursor column style when displayCol does not match":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 3),
+      cursorLine = 1,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+      displayCol = 3,
+      cursorDisplayCol = 5,
+    )
+    check style.bg == normalStyle().bg
+
+  test "Cursor line takes priority over cursor column at intersection":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    e.state.display.showCursorLine = true
+    e.state.display.showSyntax = false
+    e.state.display.showDocumentHighlight = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    # At intersection (same line AND same column): cursorLine wins
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 5),
+      cursorLine = 0,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+      displayCol = 5,
+      cursorDisplayCol = 5,
+    )
+    check style.bg == cursorLineHighlightStyle().bg
+
+  test "No cursor column when displayCol params not provided":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    # Without displayCol/cursorDisplayCol params (default -1), no column highlight
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 5),
+      cursorLine = 1,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+    )
+    check style.bg == normalStyle().bg
+
 suite "IndentInfo structure":
   test "Default values":
     var info: IndentInfo

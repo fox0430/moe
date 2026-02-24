@@ -239,6 +239,13 @@ suite "CommandModeHandler - executeSet Boolean Options":
     check result.boolOption == bsoCursorLine
     check result.boolValue == true
 
+  test "Set cursorcolumn on":
+    let handler = setupHandler()
+    let result = handler.executeSet("cursorcolumn", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoCursorColumn
+    check result.boolValue == true
+
   test "Set syntax on":
     let handler = setupHandler()
     let result = handler.executeSet("syntax", none(string))
@@ -415,6 +422,13 @@ suite "CommandModeHandler - executeSet Boolean Options":
     check result.boolOption == bsoCursorLine
     check result.boolValue == false
 
+  test "Set nocursorcolumn off":
+    let handler = setupHandler()
+    let result = handler.executeSet("nocursorcolumn", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoCursorColumn
+    check result.boolValue == false
+
   test "Set nosyntax off":
     let handler = setupHandler()
     let result = handler.executeSet("nosyntax", none(string))
@@ -463,6 +477,13 @@ suite "CommandModeHandler - executeSet Boolean Options":
     let result = handler.executeSet("cul", none(string))
     check result.kind == cmrSetBoolOption
     check result.boolOption == bsoCursorLine
+    check result.boolValue == true
+
+  test "Set cursorcolumn with abbreviation (cuc)":
+    let handler = setupHandler()
+    let result = handler.executeSet("cuc", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoCursorColumn
     check result.boolValue == true
 
   test "Set statusline with abbreviation (stl)":
@@ -534,6 +555,13 @@ suite "CommandModeHandler - executeSet Boolean Options":
     let result = handler.executeSet("nocul", none(string))
     check result.kind == cmrSetBoolOption
     check result.boolOption == bsoCursorLine
+    check result.boolValue == false
+
+  test "Set nocursorcolumn with abbreviation (nocuc)":
+    let handler = setupHandler()
+    let result = handler.executeSet("nocuc", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoCursorColumn
     check result.boolValue == false
 
   test "Set nostatusline with abbreviation (nostl)":

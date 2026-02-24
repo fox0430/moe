@@ -144,6 +144,15 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
   )
   result.add ConfigItemDescriptor(
     kind: cvkBool,
+    displayName: "currentColumn",
+    section: "Highlight",
+    boolGet: proc(c: EditorConfig): bool =
+      c.highlight.currentColumn,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.highlight.currentColumn = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
     displayName: "statusLine",
     section: "Standard",
     boolGet: proc(c: EditorConfig): bool =
@@ -492,6 +501,15 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
       c.highlight.currentLine,
     boolSet: proc(c: EditorConfig, v: bool) =
       c.highlight.currentLine = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "currentColumn",
+    section: "Highlight",
+    boolGet: proc(c: EditorConfig): bool =
+      c.highlight.currentColumn,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.highlight.currentColumn = v,
   )
   result.add ConfigItemDescriptor(
     kind: cvkBool,

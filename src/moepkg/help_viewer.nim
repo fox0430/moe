@@ -308,6 +308,7 @@ stripwhitespace - Delete trailing spaces
 ignorecase - Change setting to ignorecase
 smartcase - Change setting to smartcase
 cursorline on or cursorline off - Change the highlight setting of the current line
+cursorcolumn on or cursorcolumn off - Change the highlight setting of the current column
 build - Build the current buffer
 lspfold - LSP Folding Range
 lspformat - LSP Document Formatting

@@ -34,6 +34,7 @@ type
     ## Boolean setting options that can be toggled via :set command
     bsoNumber # line numbers
     bsoCursorLine # cursor line highlight
+    bsoCursorColumn # cursor column highlight
     bsoStatusLine # status line
     bsoSyntax # syntax highlighting
     bsoIndentationLines # indentation guide lines
@@ -353,6 +354,15 @@ proc executeSet*(
   of "nocursorline", "nocul":
     return CommandModeResult(
       kind: cmrSetBoolOption, boolOption: bsoCursorLine, boolValue: false
+    )
+  # Cursor column
+  of "cursorcolumn", "cuc":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoCursorColumn, boolValue: true
+    )
+  of "nocursorcolumn", "nocuc":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoCursorColumn, boolValue: false
     )
   # Status line
   of "statusline", "stl":

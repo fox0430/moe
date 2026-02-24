@@ -663,6 +663,10 @@ proc handleCommandModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
           e.config.highlight.currentLine = val
           e.state.display.showCursorLine = val
           e.state.statusMessage = "cursorline = " & $val
+        of bsoCursorColumn:
+          e.config.highlight.currentColumn = val
+          e.state.display.showCursorColumn = val
+          e.state.statusMessage = "cursorcolumn = " & $val
         of bsoStatusLine:
           e.config.standard.statusLine = val
           e.state.display.showStatusLine = val

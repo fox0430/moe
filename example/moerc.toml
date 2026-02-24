@@ -107,6 +107,8 @@ setupText = "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} 
 
 currentLine = true                     # Highlight current line
 
+currentColumn = false                  # Highlight current column
+
 reservedWord = ["TODO", "WIP", "NOTE"] # Highlight reserved words
 
 replaceText = true                     # Live substitute preview - shows :s/foo/bar/ changes in real-time
