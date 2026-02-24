@@ -466,7 +466,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Apply "All" mappings to every mode first (mode-specific mappings can override)
   for lhs, rhs in editorConfig.keyMapping.all:
     for mode in EditorMode:
-      if mode == EditorMode.QuickRun:
+      if mode == EditorMode.CommandLine:
         continue
       let err = keyRegistry.addRuntimeMapping(mode, lhs, rhs)
       if err.len > 0:

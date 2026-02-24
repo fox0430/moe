@@ -366,7 +366,7 @@ Values can be either a command name (e.g., `"save"`) or a key sequence (e.g., `"
 
 Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `CommandLine`, `Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`.
 
-`[KeyMapping.All]` applies mappings to all modes (except QuickRun). Mode-specific sections override `All`.
+`[KeyMapping.All]` applies mappings to all modes (except CommandLine). Mode-specific sections override `All`.
 
 `[KeyMapping.VisualAll]` applies mappings to all visual modes: Visual, VisualLine, and VisualBlock.
 
@@ -375,7 +375,7 @@ Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`,
 Special mode sections (`Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`) apply mappings to the corresponding special mode and override `All`.
 
 ```toml
-# Apply to all modes (except QuickRun)
+# Apply to all modes (except CommandLine)
 [KeyMapping.All]
 "C-s" = "save"
 
