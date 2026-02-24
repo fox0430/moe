@@ -273,11 +273,9 @@ bnext           - Switch to the next buffer
 bfirst          - Switch to the first buffer
 blast           - Switch to the last buffer
 bd or bd number - Delete buffer
-buf             - Open the buffer manager
-
 vs          - Vertical split window
 vs filename - Open in a vertical split window
-sv          - Horizontal split window
+sp          - Horizontal split window
 sp filename - Open in a horizontal split window
 
 livereload on or livereload off - Change setting of live reload of configuration file
@@ -300,7 +298,7 @@ highlightfullspace on or highlightfullspace off - Change setting to highlight fu
 buildonsave on or buildonsave off - Change setting to build on save
 indentationlines on  or indentationlines off - Change setting to indentation lines
 showGitInactive on or showGitInactive off - Change status line setting to show/hide git branch name in inactive window
-nohlsearch - Turn off search highlights
+noh - Turn off search highlights
 hlsearch on or hlsearch off - Change setting to highlight search results
 highlightparen on or highlightparen off - Change setting to highlight matching parentheses
 icon - Setting show/hidden icons in filer mode
@@ -323,7 +321,7 @@ help - Open this help
 
 putconfigfile - Put a sample configuration file in ~/.config/moe
 
-run - Quick run
+quickrun - Quick run
 
 recent - Open recent file selection mode (Only supported on Linux)
 

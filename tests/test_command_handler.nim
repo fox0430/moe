@@ -1092,13 +1092,6 @@ suite "CommandModeHandler - handleCommandModeInput":
     let result = handler.handleCommandModeInput(buffer, ":vnew")
     check result.kind == cmrVnew
 
-  test "Handle :enew command":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":enew")
-    check result.kind == cmrEnew
-
   test "Handle :bn command":
     let handler = setupHandler()
     let buffer = setupBuffer()
@@ -1126,27 +1119,6 @@ suite "CommandModeHandler - handleCommandModeInput":
 
     let result = handler.handleCommandModeInput(buffer, ":log")
     check result.kind == cmrLogViewer
-
-  test "Handle :run command":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":run")
-    check result.kind == cmrQuickRun
-
-  test "Handle :buffers command":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":buffers")
-    check result.kind == cmrBufferManager
-
-  test "Handle :nohlsearch command":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":nohlsearch")
-    check result.kind == cmrClearSearchHighlight
 
   test "Handle :! shell command":
     let handler = setupHandler()
@@ -1311,41 +1283,6 @@ suite "CommandModeHandler - handleCommandModeInput":
     check result.kind == cmrSubstitute
     check result.substituteCount == 1
 
-  test "Handle :x command (alias for :wq)":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":x")
-    check result.kind == cmrSaveAndQuit
-
-  test "Handle :xit command (alias for :wq)":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":xit")
-    check result.kind == cmrSaveAndQuit
-
-  test "Handle :quit command (alias for :q)":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":quit")
-    check result.kind == cmrCloseWindow
-
-  test "Handle :write command (alias for :w)":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":write")
-    check result.kind == cmrSave
-
-  test "Handle :edit command (alias for :e)":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":edit test.nim")
-    check result.kind == cmrEdit
-
   test "Handle :bnext command (alias for :bn)":
     let handler = setupHandler()
     let buffer = setupBuffer()
@@ -1380,27 +1317,6 @@ suite "CommandModeHandler - handleCommandModeInput":
 
     let result = handler.handleCommandModeInput(buffer, ":bdelete")
     check result.kind == cmrBufferDelete
-
-  test "Handle :vsplit command (alias for :vs)":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":vsplit")
-    check result.kind == cmrVSplit
-
-  test "Handle :split command (alias for :sp)":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":split")
-    check result.kind == cmrHSplit
-
-  test "Handle :qall command (alias for :qa)":
-    let handler = setupHandler()
-    let buffer = setupBuffer()
-
-    let result = handler.handleCommandModeInput(buffer, ":qall")
-    check result.kind == cmrQuit
 
   test "Handle :ls command (alias for :buffers)":
     let handler = setupHandler()

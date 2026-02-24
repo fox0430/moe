@@ -344,10 +344,9 @@ All keystrokes are forwarded to the running shell/command.
 | `bfirst` | Switch to the first buffer |
 | `blast` | Switch to the last buffer |
 | `bd` or `bd number` | Delete buffer |
-| `buf` | Open buffer manager |
 | `vs` | Vertical split window |
 | `vs filename` | Open in vertical split window |
-| `sv` | Horizontal split window |
+| `sp` | Horizontal split window |
 | `sp filename` | Open in horizontal split window |
 | `livereload on` or `livereload off` | Change setting of live reload of configuration file |
 | `theme themeName` | Change color theme : Example `theme dark` |
@@ -367,7 +366,7 @@ All keystrokes are forwarded to the running shell/command.
 | `buildonsave on` or `buildonsave off` | Change setting to build on save |
 | `indentationlines on`  or `indentationlines off` | Change setting to indentation lines |
 | `showGitInactive on` or `showGitInactive off` | Change status line setting to show/hide git branch name in inactive window |
-| `nohlsearch` | Turn off highlights |
+| `noh` | Turn off highlights |
 | `icon` | Setting show/hidden icons in filer mode |
 | `stripwhitespace` | Delete trailing spaces |
 | `ignorecase` | Change setting to ignorecase |
@@ -381,7 +380,7 @@ All keystrokes are forwarded to the running shell/command.
 | `lsprestart` | Restart the current LSP server |
 | `help` | Open help |
 | `putconfigfile` | Put a sample configuration file in ~/.config/moe |
-| `run` | Quick run |
+| `quickrun` | Quick run |
 | `recent` | Open recent file selection mode (Only supported on Linux) |
 | `backup` | Open backup manager |
 | `config` | Open configuration mode |
