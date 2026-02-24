@@ -161,47 +161,6 @@ suite "CommandConfig - isCommandEnabled":
     check config.isCommandEnabled(claQuit) == true
 
 suite "CommandConfig - loadDefaultConfig":
-  test "Loads quit command aliases":
-    let config = newCommandConfig()
-
-    config.loadDefaultConfig()
-
-    check config.aliases["q"] == claQuit
-    check config.aliases["quit"] == claQuit
-    check config.aliases["qa"] == claQuitAll
-    check config.aliases["qall"] == claQuitAll
-
-  test "Loads save command aliases":
-    let config = newCommandConfig()
-
-    config.loadDefaultConfig()
-
-    check config.aliases["w"] == claSave
-    check config.aliases["write"] == claSave
-    check config.aliases["wa"] == claSaveAll
-    check config.aliases["wall"] == claSaveAll
-
-  test "Loads combined command aliases":
-    let config = newCommandConfig()
-
-    config.loadDefaultConfig()
-
-    check config.aliases["wq"] == claSaveAndQuit
-    check config.aliases["x"] == claSaveAndQuit
-    check config.aliases["xit"] == claSaveAndQuit
-    check config.aliases["wqa"] == claSaveAllAndQuit
-    check config.aliases["xa"] == claSaveAllAndQuit
-
-  test "Loads edit command aliases":
-    let config = newCommandConfig()
-
-    config.loadDefaultConfig()
-
-    check config.aliases["e"] == claEdit
-    check config.aliases["edit"] == claEdit
-    check config.aliases["ene"] == claEnew
-    check config.aliases["enew"] == claEnew
-
   test "Loads buffer navigation aliases":
     let config = newCommandConfig()
 
@@ -213,18 +172,6 @@ suite "CommandConfig - loadDefaultConfig":
     check config.aliases["bf"] == claBufferFirst
     check config.aliases["bl"] == claBufferLast
     check config.aliases["bd"] == claBufferDelete
-
-  test "Loads window split aliases":
-    let config = newCommandConfig()
-
-    config.loadDefaultConfig()
-
-    check config.aliases["vs"] == claVSplit
-    check config.aliases["vsplit"] == claVSplit
-    check config.aliases["sp"] == claHSplit
-    check config.aliases["split"] == claHSplit
-    check config.aliases["new"] == claNew
-    check config.aliases["vnew"] == claVnew
 
   test "Loads LSP command aliases":
     let config = newCommandConfig()

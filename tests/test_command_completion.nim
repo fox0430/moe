@@ -17,9 +17,10 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils]
+import std/[unittest, os, strutils, tables, algorithm, sequtils, importutils]
 
-import ../src/moepkg/[command_completion, command_line, command_config]
+import ../src/moepkg/command_completion {.all.}
+import ../src/moepkg/[command_line, command_config]
 
 suite "CommandCompletion - fuzzyMatch":
   test "Exact match":
@@ -925,6 +926,22 @@ suite "CommandCompletion - edge cases":
     let commands = collectCommands(parser)
     for cmd in commands:
       check cmd.description.len > 0
+
+  test "loadDefaultConfig aliases and CommandDescriptions are in sync":
+    let config = newCommandConfig()
+    config.loadDefaultConfig()
+
+    var configAliases: seq[string]
+    for alias in config.aliases.keys:
+      configAliases.add(alias)
+    configAliases.sort()
+
+    var descKeys: seq[string]
+    for key in CommandDescriptions.keys:
+      descKeys.add(key)
+    descKeys.sort()
+
+    check configAliases == descKeys
 
   test "SetOptions contains common vim options":
     let options = collectSetOptions("")
