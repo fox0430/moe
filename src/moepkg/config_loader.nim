@@ -992,7 +992,7 @@ proc loadKeyMappingConfig(
   const section = "KeyMapping"
   const validKeys = [
     "All", "Normal", "Insert", "Visual", "VisualAll", "VisualLine", "VisualBlock",
-    "Replace", "CommandLine", "Filer", "LogViewer", "Help", "BufferManager",
+    "Replace", "Command", "Filer", "LogViewer", "Help", "BufferManager",
     "BackupManager", "DiffViewer", "Config", "References", "DocumentSymbol",
     "CallHierarchy", "RecentFile", "Debug", "Terminal",
   ]
@@ -1048,12 +1048,12 @@ proc loadKeyMappingConfig(
       "KeyMapping.Replace",
       validCommands,
     )
-  if table.hasKey("CommandLine"):
+  if table.hasKey("Command"):
     loadKeyMappingModeConfig(
-      table["CommandLine"].getTable(),
-      config.commandLine,
+      table["Command"].getTable(),
+      config.command,
       vr,
-      "KeyMapping.CommandLine",
+      "KeyMapping.Command",
       validCommands,
     )
   if table.hasKey("Filer"):
@@ -2147,9 +2147,9 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
       lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
     lines.add ""
 
-  if config.keyMapping.commandLine.len > 0:
-    lines.add "[KeyMapping.CommandLine]"
-    for lhs, rhs in config.keyMapping.commandLine:
+  if config.keyMapping.command.len > 0:
+    lines.add "[KeyMapping.Command]"
+    for lhs, rhs in config.keyMapping.command:
       lines.add toTomlString(lhs) & " = " & toTomlString(rhs)
     lines.add ""
 

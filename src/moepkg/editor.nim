@@ -460,7 +460,8 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   keyRegistry.setupDefaultBindings
 
   # Load custom key_bindings from TOML
-  keyRegistry.loadDefaultKeybindings()
+  var configVr = vr
+  keyRegistry.loadDefaultKeybindings(configVr)
 
   # Apply key mappings from config (moerc.toml [KeyMapping] section)
   # Apply "All" mappings to every mode first (mode-specific mappings can override)
@@ -501,10 +502,10 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     let err = keyRegistry.addRuntimeMapping(EditorMode.Replace, lhs, rhs)
     if err.len > 0:
       logWarn("editor", "KeyMapping.Replace error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.commandLine:
+  for lhs, rhs in editorConfig.keyMapping.command:
     let err = keyRegistry.addRuntimeMapping(EditorMode.CommandLine, lhs, rhs)
     if err.len > 0:
-      logWarn("editor", "KeyMapping.CommandLine error: " & err)
+      logWarn("editor", "KeyMapping.Command error: " & err)
 
   for lhs, rhs in editorConfig.keyMapping.filer:
     let err = keyRegistry.addRuntimeMapping(EditorMode.Filer, lhs, rhs)
@@ -775,8 +776,8 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       discard
 
   # Display validation errors in status message if any
-  if vr.hasErrors:
-    let errorMessages = vr.toErrorMessages
+  if configVr.hasErrors:
+    let errorMessages = configVr.toErrorMessages
     result.state.statusMessage = "Config error: " & errorMessages[0]
     # Log all errors
     for msg in errorMessages:

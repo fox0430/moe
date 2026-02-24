@@ -353,7 +353,7 @@ type
     visualLine*: OrderedTable[string, string]
     visualBlock*: OrderedTable[string, string]
     replace*: OrderedTable[string, string]
-    commandLine*: OrderedTable[string, string]
+    command*: OrderedTable[string, string]
     filer*: OrderedTable[string, string]
     logViewer*: OrderedTable[string, string]
     help*: OrderedTable[string, string]
@@ -621,7 +621,7 @@ proc newEditorConfig*(): EditorConfig =
       visualLine: initOrderedTable[string, string](),
       visualBlock: initOrderedTable[string, string](),
       replace: initOrderedTable[string, string](),
-      commandLine: initOrderedTable[string, string](),
+      command: initOrderedTable[string, string](),
       filer: initOrderedTable[string, string](),
       logViewer: initOrderedTable[string, string](),
       help: initOrderedTable[string, string](),
