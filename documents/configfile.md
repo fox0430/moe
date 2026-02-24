@@ -364,7 +364,7 @@ Persistent key remappings per editor mode. Uses the same key notation as `:nmap`
 
 Values can be either a command name (e.g., `"save"`) or a key sequence (e.g., `"Escape"`).
 
-Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `CommandLine`, `Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`.
+Supported modes: `All`, `Normal`, `Insert`, `Visual`, `VisualAll`, `VisualLine`, `VisualBlock`, `Replace`, `Command`, `Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupManager`, `DiffViewer`, `Config`, `References`, `DocumentSymbol`, `CallHierarchy`, `RecentFile`, `Debug`, `Terminal`.
 
 `[KeyMapping.All]` applies mappings to all modes (except CommandLine). Mode-specific sections override `All`.
 
@@ -405,7 +405,7 @@ Special mode sections (`Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupMan
 [KeyMapping.Replace]
 "C-c" = "Escape"
 
-[KeyMapping.CommandLine]
+[KeyMapping.Command]
 "C-a" = "Home"
 
 # Special modes
@@ -535,6 +535,110 @@ Key mappings are applied in this order (later overrides earlier):
 6. Runtime `:nmap`/`:imap`/`:cmap` commands
 
 Also see [Runtime Key Mapping](howtouse.md#runtime-key-mapping) for session-only mappings.
+
+
+### keybindings.toml
+
+An alternative keybinding configuration file with typed commands and richer options than `[KeyMapping]`.
+
+The file is searched in the following locations (in order):
+
+1. `$XDG_CONFIG_HOME/moe/keybindings.toml`
+2. `~/.config/moe/keybindings.toml`
+3. `./keybindings.toml` (current directory)
+
+Each keybinding is defined as a `[[keybinding]]` entry.
+
+#### Required fields
+
+| Field | Type | Description |
+|:---|:---|:---|
+| mode | string | Editor mode (see below) |
+| key | string | Key or key sequence to bind |
+
+#### Supported modes
+
+Individual modes: `normal`, `insert`, `visual`, `visualline`, `visualblock`, `replace`, `command`, `filer`, `quickrun`, `logviewer`, `help`, `buffermanager`, `backupmanager`, `diffviewer`, `recentfile`, `debug`, `config`, `references`, `documentsymbol`, `callhierarchy`, `terminal`.
+
+Meta modes:
+- `all` - All modes except Command mode
+- `visualall` - Visual, VisualLine, VisualBlock
+
+#### Command types
+
+| command_type | Required field | Description |
+|:---|:---|:---|
+| `action` (default) | `command` | General editor action |
+| `mode_switch` | `target_mode` | Switch editor mode |
+| `overlay_switch` | `target_overlay` | Switch to overlay (one of: `command`, `search`, `rename`) |
+| `text_object` | `command` | Text object operation |
+| `operator` | `command` | Vim-style operator |
+| `custom` | `command` | User-defined command |
+| `key_sequence` | `target_keys` | Remap key to another key sequence |
+
+Optional field `args` (array of strings) is available for `action`, `text_object`, `operator`, and `custom` types.
+
+#### Key notation
+
+- Single character: `"h"`, `"j"`
+- Modifiers: `"C-s"` (Ctrl), `"M-x"` (Alt/Meta), `"S-Tab"` (Shift), `"C-M-s"` (combined)
+- Special keys: `"Escape"`, `"Enter"`, `"Tab"`, `"Backspace"`, `"Delete"`, `"Space"`, `"Up"`, `"Down"`, `"Left"`, `"Right"`, `"PageUp"`, `"PageDown"`, `"Home"`, `"End"`, `"F1"`-`"F12"`
+- Multi-key sequences: `"g d"` (space-separated), `"jj"` (Vim-style concatenated)
+
+#### Examples
+
+```toml
+# Action: bind Ctrl-s to save
+[[keybinding]]
+mode = "normal"
+key = "C-s"
+command = "save"
+
+# Mode switch: Escape to normal mode
+[[keybinding]]
+mode = "insert"
+key = "Escape"
+command_type = "mode_switch"
+target_mode = "normal"
+
+# Overlay switch: open search overlay
+[[keybinding]]
+mode = "normal"
+key = "C-f"
+command_type = "overlay_switch"
+target_overlay = "search"
+
+# Key sequence remap: jj to Escape in insert mode
+[[keybinding]]
+mode = "insert"
+key = "jj"
+command_type = "key_sequence"
+target_keys = "Escape"
+
+# Multi-key sequence: g d to goto definition
+[[keybinding]]
+mode = "normal"
+key = "g d"
+command = "lsp-goto-definition"
+
+# All modes (except Command mode)
+[[keybinding]]
+mode = "all"
+key = "C-q"
+command = "quit-force"
+
+# Custom command with args
+[[keybinding]]
+mode = "normal"
+key = "C-p"
+command_type = "custom"
+command = "search.forward"
+args = ["case_sensitive"]
+```
+
+#### Available commands
+
+The same commands as `[KeyMapping]` are available. See [Available commands](#available-commands) above.
 
 
 ### Lsp table

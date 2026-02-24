@@ -1,0 +1,138 @@
+# moe keybindings configuration
+#
+# Place this file at:
+#   $XDG_CONFIG_HOME/moe/keybindings.toml
+#   or ~/.config/moe/keybindings.toml
+#
+# Each entry is a [[keybinding]] with the following fields:
+#   mode          (required) - Editor mode or meta mode
+#   key           (required) - Key or key sequence
+#   command_type  (optional) - Default: "action"
+#   command       (for action, text_object, operator, custom)
+#   target_mode   (for mode_switch)
+#   target_overlay (for overlay_switch: "command", "search", "rename")
+#   target_keys   (for key_sequence)
+#   args          (optional array of strings)
+#
+# Supported modes:
+#   normal, insert, visual, visualline, visualblock, replace, command,
+#   filer, quickrun, logviewer, help, buffermanager, backupmanager,
+#   diffviewer, recentfile, debug, config, references, documentsymbol,
+#   callhierarchy, terminal
+#
+# Meta modes:
+#   all       - All modes except Command mode
+#   visualall - Visual, VisualLine, VisualBlock
+#
+# Key notation:
+#   Single key:      "h", "j", "0"
+#   Ctrl modifier:   "C-s", "C-q"
+#   Alt modifier:    "M-x", "M-w"
+#   Shift modifier:  "S-Tab"
+#   Combined:        "C-M-s"
+#   Special keys:    "Escape", "Enter", "Tab", "Backspace", "Delete",
+#                    "Space", "Up", "Down", "Left", "Right",
+#                    "PageUp", "PageDown", "Home", "End", "F1"-"F12"
+#   Multi-key:       "g d" (space-separated), "jj" (Vim-style)
+
+
+# --- Action examples ---
+
+# [[keybinding]]
+# mode = "normal"
+# key = "C-s"
+# command = "save"
+
+# [[keybinding]]
+# mode = "normal"
+# key = "C-q"
+# command = "quit-force"
+
+# [[keybinding]]
+# mode = "normal"
+# key = "u"
+# command = "undo"
+
+# [[keybinding]]
+# mode = "normal"
+# key = "C-r"
+# command = "redo"
+
+
+# --- Multi-key sequence ---
+
+# [[keybinding]]
+# mode = "normal"
+# key = "g d"
+# command = "lsp-goto-definition"
+
+# [[keybinding]]
+# mode = "normal"
+# key = "g r"
+# command = "lsp-find-references"
+
+
+# --- Mode switch ---
+
+# [[keybinding]]
+# mode = "insert"
+# key = "Escape"
+# command_type = "mode_switch"
+# target_mode = "normal"
+
+
+# --- Overlay switch ---
+
+# [[keybinding]]
+# mode = "normal"
+# key = ":"
+# command_type = "overlay_switch"
+# target_overlay = "command"
+
+# [[keybinding]]
+# mode = "normal"
+# key = "/"
+# command_type = "overlay_switch"
+# target_overlay = "search"
+
+
+# --- Key sequence remap ---
+# Remap a key to another key sequence (equivalent to [KeyMapping] in moerc.toml)
+
+# [[keybinding]]
+# mode = "insert"
+# key = "jj"
+# command_type = "key_sequence"
+# target_keys = "Escape"
+
+# [[keybinding]]
+# mode = "normal"
+# key = "C-a"
+# command_type = "key_sequence"
+# target_keys = "g g"
+
+
+# --- Meta modes ---
+
+# Apply to all modes except Command mode
+# [[keybinding]]
+# mode = "all"
+# key = "C-q"
+# command = "quit-force"
+
+# Apply to all visual modes (Visual, VisualLine, VisualBlock)
+# [[keybinding]]
+# mode = "visualall"
+# key = "C-c"
+# command_type = "mode_switch"
+# target_mode = "normal"
+
+
+# --- Custom command with args ---
+
+# [[keybinding]]
+# mode = "normal"
+# key = "C-p"
+# command_type = "custom"
+# command = "search.forward"
+# args = ["case_sensitive"]

@@ -25,7 +25,7 @@ import std/[os, strutils, tables, options]
 
 import pkg/parsetoml
 
-import key_bindings, modes
+import key_bindings, modes, config_loader
 
 type KeybindingConfig* = object ## Structure for keybinding configuration
   mode*: EditorMode
@@ -34,23 +34,71 @@ type KeybindingConfig* = object ## Structure for keybinding configuration
   commandType*: CommandType
   args*: seq[string]
 
-proc parseMode(s: string): Option[EditorMode] =
-  ## Parse mode string to EditorMode enum
+const allModeChoices* =
+  "one of: normal, insert, visual, visualline, visualblock, replace, " &
+  "command, filer, quickrun, logviewer, help, buffermanager, " &
+  "backupmanager, diffviewer, recentfile, debug, config, references, " &
+  "documentsymbol, callhierarchy, terminal, all, visualall"
+
+proc parseModes(s: string): seq[EditorMode] =
+  ## Parse mode string to seq of EditorMode enums.
+  ## Supports all 21 editor modes plus meta modes:
+  ## - "all": all modes except CommandLine
+  ## - "visualall": Visual, VisualLine, VisualBlock
+  ## Returns empty seq for unknown modes.
   case s.toLowerAscii
   of "normal":
-    some(EditorMode.Normal)
+    @[EditorMode.Normal]
   of "insert":
-    some(EditorMode.Insert)
+    @[EditorMode.Insert]
   of "visual":
-    some(EditorMode.Visual)
+    @[EditorMode.Visual]
   of "visualline":
-    some(EditorMode.VisualLine)
+    @[EditorMode.VisualLine]
   of "visualblock":
-    some(EditorMode.VisualBlock)
+    @[EditorMode.VisualBlock]
   of "replace":
-    some(EditorMode.Replace)
+    @[EditorMode.Replace]
+  of "command":
+    @[EditorMode.CommandLine]
+  of "filer":
+    @[EditorMode.Filer]
+  of "quickrun":
+    @[EditorMode.QuickRun]
+  of "logviewer":
+    @[EditorMode.LogViewer]
+  of "help":
+    @[EditorMode.Help]
+  of "buffermanager":
+    @[EditorMode.BufferManager]
+  of "backupmanager":
+    @[EditorMode.BackupManager]
+  of "diffviewer":
+    @[EditorMode.DiffViewer]
+  of "recentfile":
+    @[EditorMode.RecentFile]
+  of "debug":
+    @[EditorMode.Debug]
+  of "config":
+    @[EditorMode.Config]
+  of "references":
+    @[EditorMode.References]
+  of "documentsymbol":
+    @[EditorMode.DocumentSymbol]
+  of "callhierarchy":
+    @[EditorMode.CallHierarchy]
+  of "terminal":
+    @[EditorMode.Terminal]
+  of "all":
+    var modes: seq[EditorMode] = @[]
+    for m in EditorMode:
+      if m != EditorMode.CommandLine:
+        modes.add(m)
+    modes
+  of "visualall":
+    @[EditorMode.Visual, EditorMode.VisualLine, EditorMode.VisualBlock]
   else:
-    none(EditorMode)
+    @[]
 
 proc parseOverlay(s: string): Option[OverlayKind] =
   ## Parse overlay string to OverlayKind enum
@@ -65,7 +113,9 @@ proc parseOverlay(s: string): Option[OverlayKind] =
     none(OverlayKind)
 
 proc parseCommandType(s: string): CommandType =
-  ## Parse command type string
+  ## Parse command type string.
+  ## Note: "key_sequence" is handled by an early branch in loadKeybindingsFromToml
+  ## before this proc is called, so it is intentionally absent here.
   case s.toLowerAscii
   of "motion": ctMotion
   of "action": ctAction
@@ -78,22 +128,67 @@ proc parseCommandType(s: string): CommandType =
   else: ctAction
     # default to action
 
+proc addKeySequenceMapping*(
+    registry: KeyBindingRegistry, mode: EditorMode, keyStr: string, targetKeyStr: string
+) =
+  ## Add a key→key_sequence mapping to the registry (runtimeMappings only).
+  ## Unlike addKeybinding, this does NOT register in bindings/sequences tables.
+  ## The mapping is replayed via playbackMacro at runtime.
+  let triggerKeys = parseKeyString(keyStr)
+  if triggerKeys.len == 0:
+    return
+
+  let targetKeys = parseKeyString(targetKeyStr)
+  if targetKeys.len == 0:
+    return
+
+  var targetKeyStrs: seq[string] = @[]
+  for k in targetKeys:
+    targetKeyStrs.add(keyComboToString(k))
+
+  if not registry.runtimeMappings.hasKey(mode):
+    registry.runtimeMappings[mode] = @[]
+
+  registry.runtimeMappings[mode].add(
+    RuntimeKeyMapping(
+      kind: rmkKeySequence,
+      triggerKeys: triggerKeys,
+      triggerStr: keyStr,
+      targetStr: targetKeyStr,
+      targetKeys: targetKeyStrs,
+    )
+  )
+
 proc addKeybinding*(
     registry: KeyBindingRegistry, mode: EditorMode, keyStr: string, cmd: Command
 ) =
-  ## Add a keybinding to the registry
-  if not registry.bindings.hasKey(mode):
-    registry.bindings[mode] = @[]
-
-  let keyComboOpt = parseKeyCombo(keyStr)
-  if keyComboOpt.isNone:
-    # Invalid key combination, skip
+  ## Add a keybinding to the registry (supports multi-key sequences)
+  let keys = parseKeyString(keyStr)
+  if keys.len == 0:
     return
 
-  let binding = KeyBinding(combo: keyComboOpt.get, command: cmd, context: mode)
-  registry.bindings[mode].add(binding)
+  if keys.len == 1:
+    registry.bindKey(mode, keys[0], cmd)
+  else:
+    registry.bindSequence(mode, keys, cmd)
 
-proc loadKeybindingsFromToml*(registry: KeyBindingRegistry, tomlPath: string) =
+  # Register in runtimeMappings for replay protection (isReplayingMapping)
+  if not registry.runtimeMappings.hasKey(mode):
+    registry.runtimeMappings[mode] = @[]
+
+  registry.runtimeMappings[mode].add(
+    RuntimeKeyMapping(
+      kind: rmkCommand,
+      triggerKeys: keys,
+      triggerStr: keyStr,
+      targetStr: cmd.name,
+      commandName: cmd.name,
+    )
+  )
+
+proc loadKeybindingsFromToml*(
+    registry: KeyBindingRegistry, tomlPath: string, vr: var ValidationResult
+) =
   ## Load key_bindings from a TOML configuration file
   ##
   ## Example TOML structure:
@@ -115,10 +210,23 @@ proc loadKeybindingsFromToml*(registry: KeyBindingRegistry, tomlPath: string) =
   ## command_type = "mode_switch"
   ## target_mode = "normal"
   ##
+  ## [[keybinding]]
+  ## mode = "insert"
+  ## key = "jj"
+  ## command_type = "key_sequence"
+  ## target_keys = "Escape"
+  ##
   if not fileExists(tomlPath):
     return
 
-  let toml = parseFile(tomlPath)
+  var toml: TomlValueRef
+  try:
+    toml = parseFile(tomlPath)
+  except CatchableError:
+    let e = getCurrentException()
+    vr.addError("keybindings", e.msg, "valid TOML file")
+    return
+
   let tomlTable = toml.getTable()
 
   # Check for keybinding array
@@ -127,26 +235,65 @@ proc loadKeybindingsFromToml*(registry: KeyBindingRegistry, tomlPath: string) =
 
   let bindings = tomlTable["keybinding"]
   if bindings.kind != TomlValueKind.Array:
+    vr.addError("keybinding", $bindings.kind, "Array")
     return
 
-  for bindingVal in bindings.getElems():
+  let elems = bindings.getElems()
+  for i, bindingVal in elems:
+    let entryName = "keybinding[" & $i & "]"
+
     if bindingVal.kind != TomlValueKind.Table:
+      vr.addError(entryName, $bindingVal.kind, "Table")
       continue
 
     let binding = bindingVal.getTable()
 
     # Parse required fields
-    if not (binding.hasKey("mode") and binding.hasKey("key")):
+    if not binding.hasKey("mode"):
+      vr.addError(entryName & ".mode", "(missing)", allModeChoices)
+      continue
+    if not binding.hasKey("key"):
+      vr.addError(entryName & ".key", "(missing)", "key string (e.g. \"C-s\", \"h\")")
       continue
 
     let modeStr = binding["mode"].getStr()
     let keyStr = binding["key"].getStr()
 
-    let modeOpt = parseMode(modeStr)
-    if modeOpt.isNone:
+    let modes = parseModes(modeStr)
+    if modes.len == 0:
+      vr.addError(entryName & ".mode", modeStr, allModeChoices)
       continue
 
-    let mode = modeOpt.get
+    # Validate key string
+    let keys = parseKeyString(keyStr)
+    if keys.len == 0:
+      vr.addError(
+        entryName & ".key", keyStr, "valid key string (e.g. \"C-s\", \"g d\")"
+      )
+      continue
+
+    # Handle key_sequence type separately (no Command object)
+    if binding.hasKey("command_type") and
+        binding["command_type"].getStr().toLowerAscii in ["key_sequence", "keysequence"]:
+      if not binding.hasKey("target_keys"):
+        vr.addError(
+          entryName & ".target_keys",
+          "(missing)",
+          "key string (e.g. \"Escape\", \"C-c\")",
+        )
+      else:
+        let targetKeyStr = binding["target_keys"].getStr()
+        let targetKeys = parseKeyString(targetKeyStr)
+        if targetKeys.len == 0:
+          vr.addError(
+            entryName & ".target_keys",
+            targetKeyStr,
+            "valid key string (e.g. \"Escape\", \"C-c\")",
+          )
+        else:
+          for mode in modes:
+            registry.addKeySequenceMapping(mode, keyStr, targetKeyStr)
+      continue
 
     # Parse command type (default to action)
     let cmdType =
@@ -160,20 +307,36 @@ proc loadKeybindingsFromToml*(registry: KeyBindingRegistry, tomlPath: string) =
 
     case cmdType
     of ctModeSwitch:
-      if binding.hasKey("target_mode"):
-        let targetModeOpt = parseMode(binding["target_mode"].getStr())
-        if targetModeOpt.isSome:
+      if not binding.hasKey("target_mode"):
+        vr.addError(entryName & ".target_mode", "(missing)", allModeChoices)
+      else:
+        let targetModes = parseModes(binding["target_mode"].getStr())
+        if targetModes.len == 0:
+          vr.addError(
+            entryName & ".target_mode", binding["target_mode"].getStr(), allModeChoices
+          )
+        else:
           let cmd = Command(
             kind: ctModeSwitch,
             name: "mode_switch",
             description: "Switch to " & binding["target_mode"].getStr(),
-            targetMode: targetModeOpt.get,
+            targetMode: targetModes[0],
           )
           cmdOpt = some(cmd)
     of ctOverlaySwitch:
-      if binding.hasKey("target_overlay"):
+      if not binding.hasKey("target_overlay"):
+        vr.addError(
+          entryName & ".target_overlay", "(missing)", "one of: command, search, rename"
+        )
+      else:
         let targetOverlayOpt = parseOverlay(binding["target_overlay"].getStr())
-        if targetOverlayOpt.isSome:
+        if targetOverlayOpt.isNone:
+          vr.addError(
+            entryName & ".target_overlay",
+            binding["target_overlay"].getStr(),
+            "one of: command, search, rename",
+          )
+        else:
           let cmd = Command(
             kind: ctOverlaySwitch,
             name: "overlay_switch",
@@ -182,27 +345,39 @@ proc loadKeybindingsFromToml*(registry: KeyBindingRegistry, tomlPath: string) =
           )
           cmdOpt = some(cmd)
     of ctAction, ctTextObject, ctOperator, ctCustom:
-      if binding.hasKey("command"):
-        let commandId = binding["command"].getStr()
-        var args: seq[string] = @[]
-        if binding.hasKey("args"):
-          for arg in binding["args"].getElems():
-            args.add(arg.getStr())
-        let cmd = Command(
-          kind: cmdType,
-          name: commandId,
-          description: commandId,
-          commandId: commandId,
-          args: args,
+      if not binding.hasKey("command"):
+        vr.addError(
+          entryName & ".command", "(missing)", "command string (e.g. \"file.save\")"
         )
-        cmdOpt = some(cmd)
+      else:
+        let commandId = binding["command"].getStr()
+        # Check command existence when registry has been populated
+        if registry.commandRegistry.len > 0 and commandId notin registry.commandRegistry:
+          vr.addError(entryName & ".command", commandId, "registered command name")
+        else:
+          var args: seq[string] = @[]
+          if binding.hasKey("args"):
+            for arg in binding["args"].getElems():
+              args.add(arg.getStr())
+          let cmd = Command(
+            kind: cmdType,
+            name: commandId,
+            description: commandId,
+            commandId: commandId,
+            args: args,
+          )
+          cmdOpt = some(cmd)
     of ctMotion, ctOperatorPending:
-      # These command types require special handling not supported in TOML config yet
-      discard
+      vr.addError(
+        entryName & ".command_type",
+        binding["command_type"].getStr(),
+        "one of: action, mode_switch, overlay_switch, text_object, operator, custom, key_sequence",
+      )
 
-    # Add the keybinding if command was successfully created
+    # Add the keybinding to each mode if command was successfully created
     if cmdOpt.isSome:
-      registry.addKeybinding(mode, keyStr, cmdOpt.get)
+      for mode in modes:
+        registry.addKeybinding(mode, keyStr, cmdOpt.get)
 
 proc getKeybindingsPath*(): string =
   ## Get the path to the key bindings configuration file
@@ -224,8 +399,8 @@ proc getKeybindingsPath*(): string =
   # Return the default location even if it doesn't exist
   return getConfigDir() / "moe" / "keybindings.toml"
 
-proc loadDefaultKeybindings*(registry: KeyBindingRegistry) =
+proc loadDefaultKeybindings*(registry: KeyBindingRegistry, vr: var ValidationResult) =
   ## Load key bindings from the default location
   let keybindingsPath = getKeybindingsPath()
   if fileExists(keybindingsPath):
-    registry.loadKeybindingsFromToml(keybindingsPath)
+    registry.loadKeybindingsFromToml(keybindingsPath, vr)
