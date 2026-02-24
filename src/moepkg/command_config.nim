@@ -66,46 +66,32 @@ proc loadDefaultConfig*(config: CommandConfig) =
 
   # Standard quit commands
   config.addAlias("q", claQuit)
-  config.addAlias("quit", claQuit)
   config.addAlias("qa", claQuitAll)
-  config.addAlias("qall", claQuitAll)
 
   # Save commands
   config.addAlias("w", claSave)
-  config.addAlias("write", claSave)
   config.addAlias("wa", claSaveAll)
-  config.addAlias("wall", claSaveAll)
 
   # Combined commands
   config.addAlias("wq", claSaveAndQuit)
-  config.addAlias("x", claSaveAndQuit)
-  config.addAlias("xit", claSaveAndQuit)
   config.addAlias("wqa", claSaveAllAndQuit)
-  config.addAlias("xa", claSaveAllAndQuit)
 
   # Edit commands
   config.addAlias("e", claEdit)
-  config.addAlias("edit", claEdit)
   config.addAlias("ene", claEnew)
-  config.addAlias("enew", claEnew)
 
   # Settings
   config.addAlias("set", claSet)
-  config.addAlias("se", claSet)
 
   # Help
   config.addAlias("help", claHelp)
 
   # Substitute
   config.addAlias("s", claSubstitute)
-  config.addAlias("substitute", claSubstitute)
 
   # Window split
   config.addAlias("vs", claVSplit)
-  config.addAlias("vsplit", claVSplit)
   config.addAlias("sp", claHSplit)
-  config.addAlias("sv", claHSplit)
-  config.addAlias("split", claHSplit)
   config.addAlias("new", claNew)
   config.addAlias("vnew", claVnew)
 
@@ -133,15 +119,10 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("messages", claLogViewer)
 
   # QuickRun
-  config.addAlias("run", claQuickRun)
   config.addAlias("quickrun", claQuickRun)
-  config.addAlias("qr", claQuickRun)
 
   # Buffer manager
-  config.addAlias("buffers", claBufferManager)
-  config.addAlias("buf", claBufferManager)
   config.addAlias("ls", claBufferManager)
-  config.addAlias("files", claBufferManager)
 
   # Backup manager
   config.addAlias("backup", claBackupManager)
@@ -150,7 +131,7 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("recent", claRecentFile)
 
   # Clear search highlight
-  config.addAlias("nohlsearch", claClearSearchHighlight)
+  config.addAlias("noh", claClearSearchHighlight)
 
   # Background (pause editor and show terminal)
   config.addAlias("bg", claBackground)
@@ -176,7 +157,7 @@ proc loadDefaultConfig*(config: CommandConfig) =
   # Theme
   config.addAlias("theme", claTheme)
 
-  # LSP commands (lowercase - parser converts input to lowercase)
+  # LSP commands
   config.addAlias("lsplog", claLspLog)
   config.addAlias("lspformat", claLspFormat)
   config.addAlias("lsprestart", claLspRestart)
