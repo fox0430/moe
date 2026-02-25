@@ -175,7 +175,7 @@ type
     showDocumentHighlight*: bool # Whether to show document highlights
     lineWrap*: bool # Whether to wrap long lines
     tabStop*: int # Tab width (number of spaces per tab character)
-    shiftWidth*: int # Indent width for >>/<<, 0 = use tabStop
+    shiftWidth*: int # Indent width, 0 = use tabStop
     softTabStop*: int # Tab/Backspace width in insert mode, 0 = use tabStop
     expandTab*: bool # Insert spaces instead of tab character
     autoIndent*: bool # Automatically indent new lines

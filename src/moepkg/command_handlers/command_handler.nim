@@ -63,7 +63,7 @@ type
   IntSettingOption* = enum
     ## Integer setting options that can be set via :set command
     isoTabStop # tab stop width
-    isoShiftWidth # indent width for >>/<<
+    isoShiftWidth # indent width
     isoSoftTabStop # tab/backspace width in insert mode
 
   FloatSettingOption* = enum

@@ -62,7 +62,7 @@ type
     syntax*: bool
     indentationLines*: bool
     tabStop*: int
-    shiftWidth*: int ## Indent width for >>/<<, 0 = use tabStop (Vim compatible)
+    shiftWidth*: int ## Indent width, 0 = use tabStop (Vim compatible)
     softTabStop*: int
       ## Tab/Backspace width in insert mode, 0 = use tabStop (Vim compatible)
     expandTab*: bool
