@@ -1075,11 +1075,11 @@ suite "vscode_theme - editor.background propagation":
     let result = makeColorThemeFromVSCodeThemeFile(themeJson)
     let themeBg = Rgb(red: 0x2d, green: 0x31, blue: 0x42)
 
-    # Status line has non-black default (#09aefa) - should NOT be changed
+    # Status line has non-black default (#61afef) - should NOT be changed
     check result[EditorColorPairIndex.statusLineNormalMode].background.rgb != themeBg
-    # Select area has non-black default (#800080) - should NOT be changed
+    # Select area has non-black default (#5c3d6e) - should NOT be changed
     check result[EditorColorPairIndex.selectArea].background.rgb != themeBg
-    # Search result has non-black default (#ff0000) - should NOT be changed
+    # Search result has non-black default (#be5046) - should NOT be changed
     check result[EditorColorPairIndex.searchResult].background.rgb != themeBg
-    # Current line bg has non-black default (#444444) - should NOT be changed
+    # Current line bg has non-black default (#3e4452) - should NOT be changed
     check result[EditorColorPairIndex.currentLineBg].background.rgb != themeBg
