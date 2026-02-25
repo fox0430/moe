@@ -365,7 +365,7 @@ proc handleCommandModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
   # Runtime key mapping check for command-line mode
   if not e.keyBindingRegistry.isReplayingMapping:
     let registry = e.keyBindingRegistry
-    let mappings = registry.getRuntimeKeySeqMappings(EditorMode.CommandLine)
+    let mappings = registry.getRuntimeKeySeqMappings(EditorMode.Command)
     if mappings.len > 0:
       registry.runtimeMappingState.keys.add(keyCombo)
       let accKeys = registry.runtimeMappingState.keys
@@ -3396,10 +3396,10 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
 
   let accKeys = registry.runtimeMappingState.keys
 
-  # Command-line overlay: use CommandLine mode mappings and replay via
+  # Command overlay: use CommandLine mode mappings and replay via
   # handleCommandModeKeyCombo instead of the standard mode dispatch.
   if e.state.isCommandOverlay:
-    let mappings = registry.getRuntimeKeySeqMappings(EditorMode.CommandLine)
+    let mappings = registry.getRuntimeKeySeqMappings(EditorMode.Command)
     var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
     for m in mappings:
       if m.triggerKeys == accKeys:
@@ -3439,7 +3439,7 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
   # For file-edit modes, only key-sequence mappings (rmkCommand handled by findBinding).
   # For special modes, also check rmkCommand mappings.
   let mappings =
-    if e.state.mode.isFileEditMode or e.state.mode == EditorMode.CommandLine:
+    if e.state.mode.isFileEditMode or e.state.mode == EditorMode.Command:
       registry.getRuntimeKeySeqMappings(e.state.mode)
     else:
       registry.getAllRuntimeMappings(e.state.mode)

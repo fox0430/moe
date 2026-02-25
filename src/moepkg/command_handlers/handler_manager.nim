@@ -1679,7 +1679,7 @@ proc checkRuntimeKeySeqMapping(
   ## Returns Some(result) if the key was consumed (either matched or waiting for more),
   ## or None if the key should be processed normally.
   let mappings =
-    if state.mode.isFileEditMode or state.mode == EditorMode.CommandLine:
+    if state.mode.isFileEditMode or state.mode == EditorMode.Command:
       manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
     else:
       manager.keyBindingRegistry.getAllRuntimeMappings(state.mode)
@@ -1888,8 +1888,8 @@ proc handleKeyCombo*(
     else:
       return
         HandlerResult(kind: hrError, errorMessage: "Terminal state not initialized")
-  of EditorMode.CommandLine:
-    # Command-line mode is handled via overlay in handler.nim, not here
+  of EditorMode.Command:
+    # Command mode is handled via overlay in handler.nim, not here
     return HandlerResult(kind: hrUnhandled)
   of EditorMode.RecentFile:
     # Recent File mode requires its own state, not EditorState
