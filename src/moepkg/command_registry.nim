@@ -502,10 +502,27 @@ proc executeOperatorOnRange(
 # Forward declaration for recordJump (defined below)
 proc recordJump*(state: EditorState)
 
+proc findAllCharPositions(buffer: TextBuffer, line: int, targetChar: string): seq[int] =
+  ## Find all column positions of targetChar on the given line.
+  ## Used for f/F/t/T match highlighting.
+  if line >= 0 and line < buffer.len:
+    let lineContent = buffer.getLine(line)
+    var charIdx = 0
+    for rune in lineContent.runes:
+      if $rune == targetChar:
+        result.add(charIdx)
+      charIdx.inc
+
 proc executeCommand*(
     registry: CommandRegistry, ctx: CommandContext, cmd: key_bindings.Command
 ): Result[(), string] =
   ## Execute a keybinding command
+
+  # Clear f/F/t/T match highlight when executing a non-find/till command
+  if cmd.kind != ctOperatorPending or cmd.operatorType notin ["find", "till"]:
+    ctx.state.findCharMatches = @[]
+    ctx.state.findCharMatchLine = 0
+
   case cmd.kind
   of ctMotion:
     # Check if we have a pending operator
@@ -739,6 +756,12 @@ proc executeCommand*(
         if r.isErr:
           return err(r.error)
         ctx.cursor = r.value
+
+        # Highlight all matching characters on cursor line
+        ctx.state.findCharMatchLine = ctx.cursor.line
+        ctx.state.findCharMatches =
+          findAllCharPositions(ctx.buffer, ctx.cursor.line, cmd.targetChar)
+
         return Result[(), string].ok ()
     of "till":
       # Execute till character motion
@@ -836,6 +859,12 @@ proc executeCommand*(
         if r.isErr:
           return err(r.error)
         ctx.cursor = r.value
+
+        # Highlight all matching characters on cursor line
+        ctx.state.findCharMatchLine = ctx.cursor.line
+        ctx.state.findCharMatches =
+          findAllCharPositions(ctx.buffer, ctx.cursor.line, cmd.targetChar)
+
         return Result[(), string].ok ()
     of "replace":
       # Execute replace character action (r command)

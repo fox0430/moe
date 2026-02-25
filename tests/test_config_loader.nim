@@ -280,6 +280,15 @@ reservedWord = ["TODO", "FIXME"]
     check config.highlight.currentLine == true
     check config.highlight.reservedWord == @["TODO", "FIXME"]
 
+  test "findCharHighlight loads from TOML":
+    let tomlStr = """
+[Highlight]
+findCharHighlight = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.highlight.findCharHighlight == false
+
   test "Invalid reservedWord (not array) is detected":
     let tomlStr = """
 [Highlight]

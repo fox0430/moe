@@ -121,6 +121,8 @@ trailingSpaces = true                  # Highlight trailing spaces
 
 currentWord = true                     # Highlight current word - highlights all occurrences of word under cursor
 
+findCharHighlight = true               # Highlight f/F/t/T matches
+
 [AutoBackup]
 
 enable = false                         # Auto-backup feature

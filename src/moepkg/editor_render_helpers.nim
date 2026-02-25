@@ -160,11 +160,17 @@ proc getSelectionStyle*(
     not e.state.isSearchOverlay and e.state.currentWord.len > 0 and
     not isInSameWordAsCursor and buffer.isPositionInWord(pos, e.state.currentWord)
 
+  let isInFindCharMatch =
+    e.config.highlight.findCharHighlight and e.state.findCharMatches.len > 0 and
+    pos.line == e.state.findCharMatchLine and pos.column in e.state.findCharMatches
+
   if hasSelection and e.state.visualSelection.isPositionInSelection(pos):
     visualStyle()
   elif isMatchingParen:
     # Highlight matching paren with special style
     parenPairStyle()
+  elif isInFindCharMatch:
+    findCharMatchStyle()
   elif isInCurrentWord:
     # Highlight other occurrences of the current word
     # (disabled in Search mode to avoid interfering with search highlighting)

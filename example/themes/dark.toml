@@ -180,6 +180,9 @@ parenPairBg = "#09aefa"
 currentWord = "#ffffff"
 currentWordBg = "#09aefa"
 
+findCharMatch = "#ffffff"
+findCharMatchBg = "#ff5500"
+
 highlightFullWidthSpace = "#ff0000"
 
 highlightTrailingSpaces = "#ff0000"

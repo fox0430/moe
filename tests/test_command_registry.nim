@@ -736,3 +736,192 @@ suite "CommandRegistry - Edge cases":
 
     # Too many args should fail
     check registry.execute(nil, "optional.args", @["1", "2", "3", "4"]).isErr
+
+suite "findAllCharPositions":
+  test "Single occurrence":
+    let buffer = newTextBuffer("abcdef")
+    let positions = findAllCharPositions(buffer, 0, "c")
+    check positions == @[2]
+
+  test "Multiple occurrences":
+    let buffer = newTextBuffer("abacada")
+    let positions = findAllCharPositions(buffer, 0, "a")
+    check positions == @[0, 2, 4, 6]
+
+  test "No occurrences":
+    let buffer = newTextBuffer("abcdef")
+    let positions = findAllCharPositions(buffer, 0, "z")
+    check positions.len == 0
+
+  test "Empty line":
+    let buffer = newTextBuffer("")
+    let positions = findAllCharPositions(buffer, 0, "a")
+    check positions.len == 0
+
+  test "Invalid line (negative)":
+    let buffer = newTextBuffer("abc")
+    let positions = findAllCharPositions(buffer, -1, "a")
+    check positions.len == 0
+
+  test "Invalid line (beyond buffer)":
+    let buffer = newTextBuffer("abc")
+    let positions = findAllCharPositions(buffer, 5, "a")
+    check positions.len == 0
+
+  test "Multi-line buffer, specific line":
+    let buffer = newTextBuffer("abc\naxaya\nxyz")
+    let positions = findAllCharPositions(buffer, 1, "a")
+    check positions == @[0, 2, 4]
+
+suite "f/F/t/T highlight - executeCommand sets findCharMatches":
+  proc createFindTestContext(buffer: TextBuffer): CommandContext =
+    let state = EditorState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.mode = EditorMode.Normal
+
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+    let motionController = newMotionController(buffer, state, viewport)
+
+    result = CommandContext(
+      buffer: buffer,
+      state: state,
+      cursor: state.cursor,
+      motionController: motionController,
+      clipboardConfig: ClipboardConfig(enable: false),
+      keyBindingRegistry: newKeyBindingRegistry(),
+    )
+
+  test "find-char sets highlight positions":
+    let buffer = newTextBuffer("abacada")
+    let ctx = createFindTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let cmd = Command(
+      name: "find-char",
+      description: "Find character forward",
+      kind: ctOperatorPending,
+      operatorType: "find",
+      reverse: false,
+      targetChar: "a",
+      count: 1,
+    )
+    let r = registry.executeCommand(ctx, cmd)
+    check r.isOk
+    check ctx.state.findCharMatches == @[0, 2, 4, 6]
+    check ctx.state.findCharMatchLine == 0
+
+  test "find-char-backward sets highlight positions":
+    let buffer = newTextBuffer("abacada")
+    let ctx = createFindTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let cmd = Command(
+      name: "find-char-backward",
+      description: "Find character backward",
+      kind: ctOperatorPending,
+      operatorType: "find",
+      reverse: true,
+      targetChar: "a",
+      count: 1,
+    )
+    let r = registry.executeCommand(ctx, cmd)
+    check r.isOk
+    check ctx.state.findCharMatches == @[0, 2, 4, 6]
+    check ctx.state.findCharMatchLine == 0
+
+  test "till-char sets highlight positions":
+    let buffer = newTextBuffer("abacada")
+    let ctx = createFindTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let cmd = Command(
+      name: "till-char",
+      description: "Till character forward",
+      kind: ctOperatorPending,
+      operatorType: "till",
+      reverse: false,
+      targetChar: "c",
+      count: 1,
+    )
+    let r = registry.executeCommand(ctx, cmd)
+    check r.isOk
+    # "abacada": c is at position 3
+    check ctx.state.findCharMatches == @[3]
+    check ctx.state.findCharMatchLine == 0
+
+  test "till-char-backward sets highlight positions":
+    let buffer = newTextBuffer("abacada")
+    let ctx = createFindTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let cmd = Command(
+      name: "till-char-backward",
+      description: "Till character backward",
+      kind: ctOperatorPending,
+      operatorType: "till",
+      reverse: true,
+      targetChar: "c",
+      count: 1,
+    )
+    let r = registry.executeCommand(ctx, cmd)
+    check r.isOk
+    # "abacada": c is at position 3
+    check ctx.state.findCharMatches == @[3]
+    check ctx.state.findCharMatchLine == 0
+
+  test "Non-find/till command clears highlight":
+    let buffer = newTextBuffer("abacada")
+    let ctx = createFindTestContext(buffer)
+    ctx.state.findCharMatches = @[0, 2, 4, 6]
+    ctx.state.findCharMatchLine = 0
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    # Execute a motion command (right) to clear the highlight
+    let cmd = Command(
+      name: "motion-right",
+      description: "Move right",
+      kind: ctMotion,
+      motion: Motion.Right,
+      count: 1,
+    )
+    let r = registry.executeCommand(ctx, cmd)
+    check r.isOk
+    check ctx.state.findCharMatches.len == 0
+
+  test "Operator+find does not set highlight":
+    let buffer = newTextBuffer("abacada")
+    let ctx = createFindTestContext(buffer)
+    ctx.state.registers = initRegisters()
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    # Set pending operator (simulate 'd')
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(
+        operatorType: OpDelete,
+        operatorCount: 1,
+        startPos: BufferPosition(line: 0, column: 0),
+      )
+    )
+
+    let cmd = Command(
+      name: "find-char",
+      description: "Find character forward",
+      kind: ctOperatorPending,
+      operatorType: "find",
+      reverse: false,
+      targetChar: "c",
+      count: 1,
+    )
+    let r = registry.executeCommand(ctx, cmd)
+    check r.isOk
+    # With pending operator, highlight should not be set
+    check ctx.state.findCharMatches.len == 0

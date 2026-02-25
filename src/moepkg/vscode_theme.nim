@@ -514,6 +514,11 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.currentColumnBg].background =
       ThemeColor(rgb: colorFromNode(colors{"editor.lineHighlightBackground"}))
 
+  # Find character match highlight (f/F/t/T) - use findMatchHighlightBackground
+  if colors != nil and colors.contains("editor.findMatchHighlightBackground"):
+    result[EditorColorPairIndex.findCharMatch].background =
+      ThemeColor(rgb: colorFromNode(colors{"editor.findMatchHighlightBackground"}))
+
   # Git diff colors
   if colors != nil and colors.contains("gitDecoration.addedResourceForeground"):
     result[EditorColorPairIndex.diffViewerAddedLine].foreground =

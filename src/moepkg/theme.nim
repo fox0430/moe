@@ -85,6 +85,7 @@ const DefaultColors*: ThemeColors = [
 
   # Search result
   EditorColorPairIndex.searchResult: makeColorPair("#ffffff", "#ff0000"),
+  EditorColorPairIndex.findCharMatch: makeColorPair("#ffffff", "#ff0000"),
 
   # Visual mode selection
   EditorColorPairIndex.selectArea: makeColorPair("#ffffff", "#800080"),

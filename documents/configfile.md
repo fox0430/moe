@@ -156,6 +156,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | fullWidthSpace | bool | true | Highlight full-width spaces |
 | trailingSpaces | bool | true | Highlight trailing spaces |
 | currentWord | bool | true | Highlight other uses of the current word under the cursor |
+| findCharHighlight | bool | true | Highlight f/F/t/T matches |
 
 
 ### AutoBackup table
@@ -1008,6 +1009,8 @@ And, `termDefaultBg` and `termDefaultFg`.
 | parenPairBg | Pair of bracket highlighting |
 | currentWord | Current word highlighting |
 | currentWordBg | Current word highlighting |
+| findCharMatch | f/F/t/T match highlighting |
+| findCharMatchBg | f/F/t/T match highlighting |
 | highlightFullWidthSpace | Full-width space color |
 | highlightTrailingSpaces | Trailing space color |
 | reservedWord | Reserved word text color |

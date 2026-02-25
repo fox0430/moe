@@ -430,6 +430,139 @@ suite "getSelectionStyle - Matching paren":
     )
     check true
 
+suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
+  test "Returns findCharMatch style for matched position":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    e.state.findCharMatches = @[0, 2, 4, 6]
+    e.state.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 2),
+      cursorLine = 0,
+      cursorCol = 2,
+      windowMode = EditorMode.Normal,
+    )
+    check style == findCharMatchStyle()
+
+  test "Does not return findCharMatch style for non-matched position":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    e.state.findCharMatches = @[0, 2, 4, 6]
+    e.state.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 1),
+      cursorLine = 0,
+      cursorCol = 2,
+      windowMode = EditorMode.Normal,
+    )
+    check style != findCharMatchStyle()
+
+  test "Does not return findCharMatch style for different line":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard
+      e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada\nabacada")
+    e.state.findCharMatches = @[0, 2, 4, 6]
+    e.state.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 1, column: 2),
+      cursorLine = 0,
+      cursorCol = 2,
+      windowMode = EditorMode.Normal,
+    )
+    check style != findCharMatchStyle()
+
+  test "No findCharMatch style when matches list is empty":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    e.state.findCharMatches = @[]
+    e.state.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 0,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+    check style != findCharMatchStyle()
+
+  test "Visual selection takes priority over findCharMatch":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.Visual
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 6)
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    e.state.findCharMatches = @[0, 2, 4, 6]
+    e.state.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = true,
+      pos = BufferPosition(line: 0, column: 2),
+      cursorLine = 0,
+      cursorCol = 6,
+      windowMode = EditorMode.Visual,
+    )
+    check style == visualStyle()
+
+  test "Matching paren takes priority over findCharMatch":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "(abacada)")
+    e.state.matchingParenPos = some(BufferPosition(line: 0, column: 8))
+    e.state.findCharMatches = @[1, 3, 5, 7]
+    e.state.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 8),
+      cursorLine = 0,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+    check style == parenPairStyle()
+
+  test "No findCharMatch style when findCharHighlight config is false":
+    let e = createTestEditor()
+    e.config.highlight.findCharHighlight = false
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    e.state.findCharMatches = @[0, 2, 4, 6]
+    e.state.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 2),
+      cursorLine = 0,
+      cursorCol = 2,
+      windowMode = EditorMode.Normal,
+    )
+    check style != findCharMatchStyle()
+
 suite "getSelectionStyle - Search highlight":
   test "Returns search highlight style when search matches":
     let e = createTestEditor()
