@@ -857,6 +857,7 @@ And, `termDefaultBg` and `termDefaultFg`.
 | foreground | Default text color |
 | background | Default background olor |
 | currentLineBg | Background color of the editor current line |
+| currentColumnBg | Background color of the editor current column |
 | lineNum | Text color of line numbers  |
 | lineNumBg | Background color of line numbers |
 | currentLineNum | Text color of current line number highlighting |

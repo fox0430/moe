@@ -78,6 +78,10 @@ proc cursorLineHighlightStyle*(): Style =
   ## Get current line background highlight style from theme
   getThemeStyle(EditorColorPairIndex.currentLineBg)
 
+proc cursorColumnHighlightStyle*(): Style =
+  ## Get current column background highlight style from theme
+  getThemeStyle(EditorColorPairIndex.currentColumnBg)
+
 proc indentationLineStyle*(): Style =
   ## Get indentation guide style (slightly darker than background)
   let colorPair = getThemeColor(EditorColorPairIndex.default)

@@ -64,6 +64,7 @@ type
     ## Context for rendering operations to reduce parameter passing
     cursorLine*: int
     cursorCol*: int
+    cursorDisplayCol*: int ## Screen column of cursor (accounting for tabs/wide chars)
     hasSelection*: bool
     selStart*: BufferPosition
     selEnd*: BufferPosition

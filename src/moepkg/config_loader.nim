@@ -532,11 +532,12 @@ proc loadHighlightConfig(
 ) =
   const section = "Highlight"
   const validKeys = [
-    "currentLine", "reservedWord", "replaceText", "pairOfParen", "fullWidthSpace",
-    "trailingSpaces", "currentWord",
+    "currentLine", "currentColumn", "reservedWord", "replaceText", "pairOfParen",
+    "fullWidthSpace", "trailingSpaces", "currentWord",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "currentLine", config.currentLine, vr, section)
+  loadBool(table, "currentColumn", config.currentColumn, vr, section)
   loadStringArray(table, "reservedWord", config.reservedWord, vr, section)
   loadBool(table, "replaceText", config.replaceText, vr, section)
   loadBool(table, "pairOfParen", config.pairOfParen, vr, section)
@@ -1540,6 +1541,8 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.configModeCurrentLine)
   of "currentLineBg":
     return some(EditorColorPairIndex.currentLineBg)
+  of "currentColumnBg":
+    return some(EditorColorPairIndex.currentColumnBg)
   of "foldingLine":
     return some(EditorColorPairIndex.foldingLine)
   of "sidebarGitAddedSign":
@@ -1864,6 +1867,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   # Highlight section
   lines.add "[Highlight]"
   lines.add "currentLine = " & toTomlBool(config.highlight.currentLine)
+  lines.add "currentColumn = " & toTomlBool(config.highlight.currentColumn)
   lines.add "reservedWord = " & toTomlStringArray(config.highlight.reservedWord)
   lines.add "replaceText = " & toTomlBool(config.highlight.replaceText)
   lines.add "pairOfParen = " & toTomlBool(config.highlight.pairOfParen)

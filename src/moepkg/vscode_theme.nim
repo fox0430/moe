@@ -510,6 +510,9 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
   if colors != nil and colors.contains("editor.lineHighlightBackground"):
     result[EditorColorPairIndex.currentLineBg].background =
       ThemeColor(rgb: colorFromNode(colors{"editor.lineHighlightBackground"}))
+    # Use same color for column highlight (VSCode has no separate setting)
+    result[EditorColorPairIndex.currentColumnBg].background =
+      ThemeColor(rgb: colorFromNode(colors{"editor.lineHighlightBackground"}))
 
   # Git diff colors
   if colors != nil and colors.contains("gitDecoration.addedResourceForeground"):

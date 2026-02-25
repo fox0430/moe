@@ -283,6 +283,8 @@ type
 
     # Current line background
     currentLineBg
+    # Current column background
+    currentColumnBg
     foldingLine
 
     # Side bar

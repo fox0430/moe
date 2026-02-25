@@ -120,6 +120,7 @@ type
     fullWidthSpace*: bool
     trailingSpaces*: bool
     currentWord*: bool
+    currentColumn*: bool
 
   # Auto backup settings
   AutoBackupConfig* = object

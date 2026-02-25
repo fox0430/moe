@@ -29,6 +29,27 @@ proc colorIndexToStyle*(colorIdx: EditorColorPairIndex): Style =
   ## Convert EditorColorPairIndex to Celina Style using theme colors
   getThemeStyle(colorIdx)
 
+proc bufferColToDisplayCol*(
+    text: string, bufferCol: int, tabStop: int, startCol: int = 0
+): int =
+  ## Convert a buffer column (character index) to a display column (screen position).
+  ## Accounts for tab expansion and wide characters.
+  ## startCol: first visible column (e.g. leftColumn for horizontal scroll).
+  ## The result is relative to startCol, matching the rendering loop's behavior.
+  ## Returns -1 if bufferCol is before startCol (cursor scrolled off-screen).
+  if bufferCol < startCol:
+    return -1
+  var currentChar = 0
+  for rune in text.runes:
+    if currentChar >= bufferCol:
+      break
+    if currentChar >= startCol:
+      if rune == '\t'.Rune:
+        result += tabStop - (result mod tabStop)
+      else:
+        result += runeWidth(rune)
+    currentChar.inc
+
 proc analyzeIndentation*(lineText: string): IndentInfo =
   ## Analyze a line once to determine indentation properties
   ## Returns cached information to avoid repeated line scanning (O(n) instead of O(n²))
@@ -115,9 +136,13 @@ proc getSelectionStyle*(
     cursorLine: int,
     cursorCol: int,
     windowMode: EditorMode,
+    displayCol: int = -1,
+    cursorDisplayCol: int = -1,
 ): Style =
   ## Get the appropriate style for a character based on selection state and syntax
   ## windowMode: The mode of the window being rendered (for correct per-window highlighting)
+  ## displayCol: screen column of this character (for cursor column highlight)
+  ## cursorDisplayCol: screen column of cursor (for cursor column highlight)
 
   # Check if this position is the matching paren (highlight matching paren)
   let isMatchingParen =
@@ -188,6 +213,9 @@ proc getSelectionStyle*(
           style.bg = getDocumentHighlightStyle(highlightKind.get).bg
         elif e.state.display.showCursorLine and pos.line == cursorLine:
           style.bg = cursorLineHighlightStyle().bg
+        elif e.state.display.showCursorColumn and displayCol >= 0 and
+            displayCol == cursorDisplayCol:
+          style.bg = cursorColumnHighlightStyle().bg
         style
       else:
         # Check document highlight first
@@ -196,6 +224,9 @@ proc getSelectionStyle*(
           getDocumentHighlightStyle(highlightKind.get)
         elif e.state.display.showCursorLine and pos.line == cursorLine:
           cursorLineHighlightStyle()
+        elif e.state.display.showCursorColumn and displayCol >= 0 and
+            displayCol == cursorDisplayCol:
+          cursorColumnHighlightStyle()
         else:
           normalStyle()
     elif e.hasSyntaxHighlight(buffer, windowMode):
@@ -210,6 +241,9 @@ proc getSelectionStyle*(
         style.bg = getDocumentHighlightStyle(highlightKind.get).bg
       elif e.state.display.showCursorLine and pos.line == cursorLine:
         style.bg = cursorLineHighlightStyle().bg
+      elif e.state.display.showCursorColumn and displayCol >= 0 and
+          displayCol == cursorDisplayCol:
+        style.bg = cursorColumnHighlightStyle().bg
       style
     else:
       # Check document highlight first
@@ -218,6 +252,9 @@ proc getSelectionStyle*(
         getDocumentHighlightStyle(highlightKind.get)
       elif e.state.display.showCursorLine and pos.line == cursorLine:
         cursorLineHighlightStyle()
+      elif e.state.display.showCursorColumn and displayCol >= 0 and
+          displayCol == cursorDisplayCol:
+        cursorColumnHighlightStyle()
       else:
         normalStyle()
   elif e.hasSyntaxHighlight(buffer, windowMode):
@@ -232,6 +269,9 @@ proc getSelectionStyle*(
       style.bg = getDocumentHighlightStyle(highlightKind.get).bg
     elif e.state.display.showCursorLine and pos.line == cursorLine:
       style.bg = cursorLineHighlightStyle().bg
+    elif e.state.display.showCursorColumn and displayCol >= 0 and
+        displayCol == cursorDisplayCol:
+      style.bg = cursorColumnHighlightStyle().bg
     style
   else:
     # Check document highlight first
@@ -240,6 +280,9 @@ proc getSelectionStyle*(
       getDocumentHighlightStyle(highlightKind.get)
     elif e.state.display.showCursorLine and pos.line == cursorLine:
       cursorLineHighlightStyle()
+    elif e.state.display.showCursorColumn and displayCol >= 0 and
+        displayCol == cursorDisplayCol:
+      cursorColumnHighlightStyle()
     else:
       normalStyle()
 
@@ -352,8 +395,14 @@ proc renderLineSegmentWithSelection*(
       let
         pos = BufferPosition(line: lineIndex, column: charIdx)
         style = e.getSelectionStyle(
-          textBuffer, ctx.hasSelection, pos, ctx.cursorLine, ctx.cursorCol,
+          textBuffer,
+          ctx.hasSelection,
+          pos,
+          ctx.cursorLine,
+          ctx.cursorCol,
           ctx.windowMode,
+          displayCol = displayX,
+          cursorDisplayCol = ctx.cursorDisplayCol,
         )
       renderChar(rune, charIdx, style)
       charIdx += 1
@@ -365,20 +414,29 @@ proc renderLineSegmentWithSelection*(
         col = startColumn + charIdx
         pos = BufferPosition(line: lineIndex, column: col)
         style = e.getSelectionStyle(
-          textBuffer, ctx.hasSelection, pos, ctx.cursorLine, ctx.cursorCol,
+          textBuffer,
+          ctx.hasSelection,
+          pos,
+          ctx.cursorLine,
+          ctx.cursorCol,
           ctx.windowMode,
+          displayCol = displayX,
+          cursorDisplayCol = ctx.cursorDisplayCol,
         )
       renderChar(rune, col, style)
       charIdx += 1
 
   # Fill the rest of the line to the window right edge.
   # Always fill to clear stale content (e.g. old cursor line highlight).
-  let fillStyle =
-    if e.state.display.showCursorLine and lineIndex == ctx.cursorLine:
-      cursorLineHighlightStyle()
-    else:
-      normalStyle()
   while screenX + displayX < ctx.windowRightEdge:
+    let fillStyle =
+      if e.state.display.showCursorLine and lineIndex == ctx.cursorLine:
+        cursorLineHighlightStyle()
+      elif e.state.display.showCursorColumn and ctx.cursorDisplayCol >= 0 and
+        displayX == ctx.cursorDisplayCol:
+        cursorColumnHighlightStyle()
+      else:
+        normalStyle()
     buffer.setString(screenX + displayX, screenY, " ", fillStyle)
     displayX += 1
 
@@ -388,16 +446,20 @@ proc fillLineBackground*(
     screenX, screenY: int,
     lineIndex, cursorLine: int,
     windowRightEdge: int,
+    cursorDisplayCol: int = -1,
 ) =
   ## Fill the rest of the line to the window right edge.
   ## Uses cursor line highlight for the cursor line, normal style otherwise.
-  let fillStyle =
-    if e.state.display.showCursorLine and lineIndex == cursorLine:
-      cursorLineHighlightStyle()
-    else:
-      normalStyle()
   var displayX = 0
   while screenX + displayX < windowRightEdge:
+    let fillStyle =
+      if e.state.display.showCursorLine and lineIndex == cursorLine:
+        cursorLineHighlightStyle()
+      elif e.state.display.showCursorColumn and cursorDisplayCol >= 0 and
+        displayX == cursorDisplayCol:
+        cursorColumnHighlightStyle()
+      else:
+        normalStyle()
     buffer.setString(screenX + displayX, screenY, " ", fillStyle)
     displayX += 1
 

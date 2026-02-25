@@ -62,7 +62,7 @@ proc renderWindowLineWrapped*(
       let lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
       if lineNumScreenX + lineNumStr.len <= buffer.area.width:
         buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
-    # Fill with cursor line highlight if on cursor line
+    # Fill with cursor line/column highlight if on cursor line/column
     let textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
     e.fillLineBackground(
       buffer,
@@ -71,6 +71,7 @@ proc renderWindowLineWrapped*(
       lineIndex,
       window.cursor.line,
       window.viewport.x + window.viewport.width,
+      cursorDisplayCol = ctx.cursorDisplayCol,
     )
     inc screenY
     inc lineIndex
@@ -200,6 +201,7 @@ proc renderWindowLineNoWrap*(
       lineIndex,
       window.cursor.line,
       window.viewport.x + window.viewport.width,
+      cursorDisplayCol = ctx.cursorDisplayCol,
     )
 
 proc renderWindowSidebar*(
@@ -285,10 +287,22 @@ proc renderWindow*(
   let (hasSelection, selStart, selEnd) =
     e.getVisualSelection(window.mode, window.active)
 
+  # Compute cursor's display column (accounting for tabs/wide chars and scroll offset)
+  let leftCol = if e.state.display.lineWrap: 0 else: window.viewport.leftColumn
+  let cursorDisplayCol =
+    if window.cursor.line < lineCount:
+      let cursorLineText = window.buffer.getLine(window.cursor.line)
+      bufferColToDisplayCol(
+        cursorLineText, window.cursor.column, e.state.display.tabStop, leftCol
+      )
+    else:
+      window.cursor.column
+
   # Create render context for this window
   let ctx = RenderContext(
     cursorLine: window.cursor.line,
     cursorCol: window.cursor.column,
+    cursorDisplayCol: cursorDisplayCol,
     hasSelection: hasSelection,
     selStart: selStart,
     selEnd: selEnd,
