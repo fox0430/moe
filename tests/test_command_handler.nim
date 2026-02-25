@@ -358,6 +358,34 @@ suite "CommandModeHandler - executeSet Boolean Options":
     check result.boolOption == bsoHighlightPairOfParen
     check result.boolValue == true
 
+  test "Set highlightfindchar on":
+    let handler = setupHandler()
+    let result = handler.executeSet("highlightfindchar", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoHighlightFindChar
+    check result.boolValue == true
+
+  test "Set hfc on (abbreviation)":
+    let handler = setupHandler()
+    let result = handler.executeSet("hfc", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoHighlightFindChar
+    check result.boolValue == true
+
+  test "Set nohighlightfindchar off":
+    let handler = setupHandler()
+    let result = handler.executeSet("nohighlightfindchar", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoHighlightFindChar
+    check result.boolValue == false
+
+  test "Set nohfc off (abbreviation)":
+    let handler = setupHandler()
+    let result = handler.executeSet("nohfc", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoHighlightFindChar
+    check result.boolValue == false
+
   test "Set multistatusline on":
     let handler = setupHandler()
     let result = handler.executeSet("multistatusline", none(string))

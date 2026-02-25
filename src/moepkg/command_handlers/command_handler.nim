@@ -49,6 +49,7 @@ type
     bsoHighlightCurrentWord # highlight current word
     bsoHighlightFullWidthSpace # highlight full-width space
     bsoHighlightPairOfParen # highlight pair of parentheses
+    bsoHighlightFindChar # highlight f/F/t/T matches
     bsoMultipleStatusLine # multiple status line
     bsoIgnoreCase # ignore case in search
     bsoSmartCase # smart case in search
@@ -487,6 +488,15 @@ proc executeSet*(
   of "nohighlightparen", "nohp":
     return CommandModeResult(
       kind: cmrSetBoolOption, boolOption: bsoHighlightPairOfParen, boolValue: false
+    )
+  # Highlight find char (f/F/t/T)
+  of "highlightfindchar", "hfc":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightFindChar, boolValue: true
+    )
+  of "nohighlightfindchar", "nohfc":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightFindChar, boolValue: false
     )
   # Multiple status line
   of "multistatusline", "msl":

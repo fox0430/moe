@@ -293,6 +293,7 @@ smoothscroll on or smoothscroll off - Change setting to smooth scroll
 scrollfriction number - Set smooth scroll friction; for example scrollfriction 10
 scrollairdrag number - Set smooth scroll air drag; for example scrollairdrag 10
 highlightcurrentword on or highlightcurrentword off - Change setting to highlight other uses of the current word
+highlightfindchar on or highlightfindchar off - Change setting to highlight f/F/t/T matches
 clipboard on or clipboard off - Change setting to system clipboard
 highlightfullspace on or highlightfullspace off - Change setting to highlight full width space
 buildonsave on or buildonsave off - Change setting to build on save

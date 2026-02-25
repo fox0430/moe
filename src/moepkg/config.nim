@@ -121,6 +121,7 @@ type
     trailingSpaces*: bool
     currentWord*: bool
     currentColumn*: bool
+    findCharHighlight*: bool
 
   # Auto backup settings
   AutoBackupConfig* = object
@@ -479,6 +480,7 @@ proc newEditorConfig*(): EditorConfig =
       fullWidthSpace: true,
       trailingSpaces: true,
       currentWord: true,
+      findCharHighlight: true,
     ),
     autoBackup: AutoBackupConfig(
       enable: false,

@@ -612,6 +612,9 @@ type
     # Overlay state for transient modes (Command, Search, Rename)
     # When set, the editor displays an overlay on top of the base mode
     overlay*: Option[OverlayState]
+    # f/F/t/T command match highlight
+    findCharMatches*: seq[int] # Matched column positions on cursor line
+    findCharMatchLine*: int # Line number of the matches
 
 proc `==`*(a, b: ViewPort): bool =
   ## Structural equality for ViewPort (ref object defaults to pointer comparison)

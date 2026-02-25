@@ -160,6 +160,8 @@ type
 
     # Search result
     searchResult
+    # Find character match highlight (f/F/t/T)
+    findCharMatch
 
     # Visual mode selection
     selectArea

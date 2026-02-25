@@ -533,7 +533,7 @@ proc loadHighlightConfig(
   const section = "Highlight"
   const validKeys = [
     "currentLine", "currentColumn", "reservedWord", "replaceText", "pairOfParen",
-    "fullWidthSpace", "trailingSpaces", "currentWord",
+    "fullWidthSpace", "trailingSpaces", "currentWord", "findCharHighlight",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "currentLine", config.currentLine, vr, section)
@@ -544,6 +544,7 @@ proc loadHighlightConfig(
   loadBool(table, "fullWidthSpace", config.fullWidthSpace, vr, section)
   loadBool(table, "trailingSpaces", config.trailingSpaces, vr, section)
   loadBool(table, "currentWord", config.currentWord, vr, section)
+  loadBool(table, "findCharHighlight", config.findCharHighlight, vr, section)
 
 proc loadFilerConfig(
     table: TomlTableRef, config: var FilerConfig, vr: var ValidationResult
@@ -1347,6 +1348,8 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.warnMessage)
   of "searchResult":
     return some(EditorColorPairIndex.searchResult)
+  of "findCharMatch":
+    return some(EditorColorPairIndex.findCharMatch)
   of "selectArea":
     return some(EditorColorPairIndex.selectArea)
   of "keyword":
@@ -1874,6 +1877,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "fullWidthSpace = " & toTomlBool(config.highlight.fullWidthSpace)
   lines.add "trailingSpaces = " & toTomlBool(config.highlight.trailingSpaces)
   lines.add "currentWord = " & toTomlBool(config.highlight.currentWord)
+  lines.add "findCharHighlight = " & toTomlBool(config.highlight.findCharHighlight)
   lines.add ""
 
   # AutoBackup section
