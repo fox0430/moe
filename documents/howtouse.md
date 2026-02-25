@@ -408,25 +408,25 @@ For persistent key mappings, use the `[KeyMapping]` section in `moerc.toml`. See
 | `imap {lhs} {rhs}` | Map keys in Insert mode |
 | `vmap {lhs} {rhs}` | Map keys in Visual modes |
 | `rmap {lhs} {rhs}` | Map keys in Replace mode |
-| `cmap {lhs} {rhs}` | Map keys in Command-line mode |
+| `cmap {lhs} {rhs}` | Map keys in Command mode |
 | `map {lhs} {rhs}` | Map keys in all modes |
 | `nmap` | List all Normal mode mappings |
 | `imap` | List all Insert mode mappings |
 | `vmap` | List all Visual mode mappings |
 | `rmap` | List all Replace mode mappings |
-| `cmap` | List all Command-line mode mappings |
+| `cmap` | List all Command mode mappings |
 | `map` | List all mode mappings |
 | `nunmap {lhs}` | Remove mapping in Normal mode |
 | `iunmap {lhs}` | Remove mapping in Insert mode |
 | `vunmap {lhs}` | Remove mapping in Visual modes |
 | `runmap {lhs}` | Remove mapping in Replace mode |
-| `cunmap {lhs}` | Remove mapping in Command-line mode |
+| `cunmap {lhs}` | Remove mapping in Command mode |
 | `unmap {lhs}` | Remove mapping in all modes |
 | `nmapclear` | Clear all Normal mode mappings |
 | `imapclear` | Clear all Insert mode mappings |
 | `vmapclear` | Clear all Visual mode mappings |
 | `rmapclear` | Clear all Replace mode mappings |
-| `cmapclear` | Clear all Command-line mode mappings |
+| `cmapclear` | Clear all Command mode mappings |
 | `mapclear` | Clear all mode mappings |
 
 `noremap`, `nnoremap`, `inoremap`, `vnoremap`, `cnoremap` are aliases (all mappings are non-recursive).
@@ -452,7 +452,7 @@ For persistent key mappings, use the `[KeyMapping]` section in `moerc.toml`. See
 :imap jj Escape          " jj exits Insert mode
 :nmap C-a g g            " Ctrl-A goes to first line
 :vmap C-c Escape         " Ctrl-C exits Visual mode
-:cmap C-a Home           " Ctrl-A moves to line start (Command-line mode)
+:cmap C-a Home           " Ctrl-A moves to line start (Command mode)
 :nmap                    " List all Normal mode mappings
 :map                     " List all mode mappings
 :nunmap C-s              " Remove Ctrl-S mapping in Normal mode

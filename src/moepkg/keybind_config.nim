@@ -60,7 +60,7 @@ proc parseModes(s: string): seq[EditorMode] =
   of "replace":
     @[EditorMode.Replace]
   of "command":
-    @[EditorMode.CommandLine]
+    @[EditorMode.Command]
   of "filer":
     @[EditorMode.Filer]
   of "quickrun":
@@ -92,7 +92,7 @@ proc parseModes(s: string): seq[EditorMode] =
   of "all":
     var modes: seq[EditorMode] = @[]
     for m in EditorMode:
-      if m != EditorMode.CommandLine:
+      if m != EditorMode.Command:
         modes.add(m)
     modes
   of "visualall":

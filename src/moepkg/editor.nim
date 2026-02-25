@@ -467,7 +467,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Apply "All" mappings to every mode first (mode-specific mappings can override)
   for lhs, rhs in editorConfig.keyMapping.all:
     for mode in EditorMode:
-      if mode == EditorMode.CommandLine:
+      if mode == EditorMode.Command:
         continue
       let err = keyRegistry.addRuntimeMapping(mode, lhs, rhs)
       if err.len > 0:
@@ -503,7 +503,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     if err.len > 0:
       logWarn("editor", "KeyMapping.Replace error: " & err)
   for lhs, rhs in editorConfig.keyMapping.command:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.CommandLine, lhs, rhs)
+    let err = keyRegistry.addRuntimeMapping(EditorMode.Command, lhs, rhs)
     if err.len > 0:
       logWarn("editor", "KeyMapping.Command error: " & err)
 

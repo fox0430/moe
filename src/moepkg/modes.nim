@@ -34,7 +34,7 @@ type
     VisualBlock
     VisualLine
     Replace
-    CommandLine
+    Command
     Filer
     QuickRun
     LogViewer
@@ -71,7 +71,7 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.VisualBlock: "VISUAL BLOCK"
   of EditorMode.VisualLine: "VISUAL LINE"
   of EditorMode.Replace: "REPLACE"
-  of EditorMode.CommandLine: "COMMAND"
+  of EditorMode.Command: "COMMAND"
   of EditorMode.Filer: "FILER"
   of EditorMode.QuickRun: "QUICKRUN"
   of EditorMode.LogViewer: "LOG"

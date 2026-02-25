@@ -45,7 +45,7 @@ suite "KeybindConfig - parseModes":
     check parseModes("replace") == @[EditorMode.Replace]
 
   test "parse command mode":
-    check parseModes("command") == @[EditorMode.CommandLine]
+    check parseModes("command") == @[EditorMode.Command]
 
   test "parse filer mode":
     check parseModes("filer") == @[EditorMode.Filer]
@@ -92,7 +92,7 @@ suite "KeybindConfig - parseModes":
   test "parse all meta mode":
     let modes = parseModes("all")
     check modes.len == 20 # All except CommandLine
-    check EditorMode.CommandLine notin modes
+    check EditorMode.Command notin modes
     check EditorMode.Normal in modes
     check EditorMode.Insert in modes
     check EditorMode.Visual in modes
@@ -957,7 +957,7 @@ command = "quit"
     check not vr.hasErrors
     # Should be registered in all modes except CommandLine
     for mode in EditorMode:
-      if mode == EditorMode.CommandLine:
+      if mode == EditorMode.Command:
         check registry.bindings[mode].len == 0
       else:
         check registry.bindings[mode].len > 0
@@ -1053,7 +1053,7 @@ target_keys = "Escape"
 
     check not vr.hasErrors
     for mode in EditorMode:
-      if mode == EditorMode.CommandLine:
+      if mode == EditorMode.Command:
         check not registry.runtimeMappings.hasKey(mode) or
           registry.runtimeMappings[mode].len == 0
       else:

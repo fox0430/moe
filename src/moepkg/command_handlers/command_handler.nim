@@ -978,7 +978,7 @@ proc handleCommandModeInput*(
       of claRmap:
         @[EditorMode.Replace]
       of claCmap:
-        @[EditorMode.CommandLine]
+        @[EditorMode.Command]
       else:
         # claMap: all editable modes
         @[
@@ -1006,7 +1006,7 @@ proc handleCommandModeInput*(
       of claRunmap:
         @[EditorMode.Replace]
       of claCunmap:
-        @[EditorMode.CommandLine]
+        @[EditorMode.Command]
       else:
         @[
           EditorMode.Normal, EditorMode.Insert, EditorMode.Visual,
@@ -1027,7 +1027,7 @@ proc handleCommandModeInput*(
       of claRmapclear:
         @[EditorMode.Replace]
       of claCmapclear:
-        @[EditorMode.CommandLine]
+        @[EditorMode.Command]
       else:
         @[
           EditorMode.Normal, EditorMode.Insert, EditorMode.Visual,

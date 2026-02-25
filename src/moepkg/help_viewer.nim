@@ -344,28 +344,28 @@ nmap {lhs} {rhs}  - Map keys in Normal mode
 imap {lhs} {rhs}  - Map keys in Insert mode
 vmap {lhs} {rhs}  - Map keys in Visual modes
 rmap {lhs} {rhs}  - Map keys in Replace mode
-cmap {lhs} {rhs}  - Map keys in Command-line mode
+cmap {lhs} {rhs}  - Map keys in Command mode
 map {lhs} {rhs}   - Map keys in all modes
 
 nmap              - List all Normal mode mappings
 imap              - List all Insert mode mappings
 vmap              - List all Visual mode mappings
 rmap              - List all Replace mode mappings
-cmap              - List all Command-line mode mappings
+cmap              - List all Command mode mappings
 map               - List all mode mappings
 
 nunmap {lhs}      - Remove key mapping in Normal mode
 iunmap {lhs}      - Remove key mapping in Insert mode
 vunmap {lhs}      - Remove key mapping in Visual modes
 runmap {lhs}      - Remove key mapping in Replace mode
-cunmap {lhs}      - Remove key mapping in Command-line mode
+cunmap {lhs}      - Remove key mapping in Command mode
 unmap {lhs}       - Remove key mapping in all modes
 
 nmapclear         - Clear all mappings in Normal mode
 imapclear         - Clear all mappings in Insert mode
 vmapclear         - Clear all mappings in Visual modes
 rmapclear         - Clear all mappings in Replace mode
-cmapclear         - Clear all mappings in Command-line mode
+cmapclear         - Clear all mappings in Command mode
 mapclear          - Clear all mappings in all modes
 
 noremap, nnoremap, inoremap, vnoremap, cnoremap are aliases (all mappings are non-recursive).
@@ -387,7 +387,7 @@ Examples:
   :imap jj Escape              - jj exits Insert mode
   :nmap C-a g g                - Ctrl-A goes to first line (Normal mode)
   :vmap C-c Escape             - Ctrl-C exits Visual mode
-  :cmap C-a Home               - Ctrl-A moves to start (Command-line mode)
+  :cmap C-a Home               - Ctrl-A moves to start (Command mode)
   :nmap                        - List all Normal mode mappings
   :map                         - List all mode mappings
 

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-## Command line mode parser and executor
+## Command mode parser and executor
 ##
 ## This module handles parsing and execution of commands entered in command mode
 ## (e.g., :q, :w, :wq, :e filename, :set number, etc.)

@@ -82,8 +82,8 @@ moe supports Vim-like runtime key mapping commands. You can remap keys during an
 - `:imap {lhs} {rhs}` - Map keys in Insert mode
 - `:vmap {lhs} {rhs}` - Map keys in Visual modes
 - `:rmap {lhs} {rhs}` - Map keys in Replace mode
-- `:cmap {lhs} {rhs}` - Map keys in Command-line mode
-- `:map {lhs} {rhs}` - Map keys in all modes (except Command-line mode)
+- `:cmap {lhs} {rhs}` - Map keys in Command mode
+- `:map {lhs} {rhs}` - Map keys in all modes (except Command mode)
 
 All mappings are non-recursive (equivalent to Vim's `noremap`). `noremap`, `nnoremap`, `inoremap`, `vnoremap`, `cnoremap` are available as aliases.
 

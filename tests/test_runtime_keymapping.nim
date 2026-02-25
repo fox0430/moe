@@ -1309,69 +1309,69 @@ suite "CommandModeHandler - cmap commands":
     check result.kind == cmrMapAdd
     check result.mapAddLhs == "C-a"
     check result.mapAddRhs == "Home"
-    check EditorMode.CommandLine in result.mapAddModes
+    check EditorMode.Command in result.mapAddModes
     check result.mapAddModes.len == 1
 
   test "handleCommandModeInput :cmap without args returns cmrMapList":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":cmap")
     check result.kind == cmrMapList
-    check EditorMode.CommandLine in result.mapListModes
+    check EditorMode.Command in result.mapListModes
 
   test "handleCommandModeInput :cunmap returns cmrMapRemove with CommandLine mode":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":cunmap C-a")
     check result.kind == cmrMapRemove
     check result.mapRemoveLhs == "C-a"
-    check EditorMode.CommandLine in result.mapRemoveModes
+    check EditorMode.Command in result.mapRemoveModes
     check result.mapRemoveModes.len == 1
 
   test "handleCommandModeInput :cmapclear returns cmrMapClear with CommandLine mode":
     let buffer = newTextBuffer()
     let result = handler.handleCommandModeInput(buffer, ":cmapclear")
     check result.kind == cmrMapClear
-    check EditorMode.CommandLine in result.mapClearModes
+    check EditorMode.Command in result.mapClearModes
     check result.mapClearModes.len == 1
 
 suite "addRuntimeMapping - CommandLine mode":
   test "Add mapping for CommandLine mode":
     var registry = newKeyBindingRegistry()
-    let err = registry.addRuntimeMapping(EditorMode.CommandLine, "C-a", "Home")
+    let err = registry.addRuntimeMapping(EditorMode.Command, "C-a", "Home")
     check err == ""
-    check registry.runtimeMappings[EditorMode.CommandLine].len == 1
+    check registry.runtimeMappings[EditorMode.Command].len == 1
 
   test "CommandLine mapping is independent from Normal":
     var registry = newKeyBindingRegistry()
-    discard registry.addRuntimeMapping(EditorMode.CommandLine, "C-a", "Home")
+    discard registry.addRuntimeMapping(EditorMode.Command, "C-a", "Home")
     discard registry.addRuntimeMapping(EditorMode.Normal, "C-a", "Escape")
-    check registry.runtimeMappings[EditorMode.CommandLine].len == 1
+    check registry.runtimeMappings[EditorMode.Command].len == 1
     check registry.runtimeMappings[EditorMode.Normal].len == 1
 
   test "Remove CommandLine mapping":
     var registry = newKeyBindingRegistry()
-    discard registry.addRuntimeMapping(EditorMode.CommandLine, "C-a", "Home")
-    let err = registry.removeRuntimeMapping(EditorMode.CommandLine, "C-a")
+    discard registry.addRuntimeMapping(EditorMode.Command, "C-a", "Home")
+    let err = registry.removeRuntimeMapping(EditorMode.Command, "C-a")
     check err == ""
-    check registry.runtimeMappings[EditorMode.CommandLine].len == 0
+    check registry.runtimeMappings[EditorMode.Command].len == 0
 
   test "Clear CommandLine mappings":
     var registry = newKeyBindingRegistry()
-    discard registry.addRuntimeMapping(EditorMode.CommandLine, "C-a", "Home")
-    discard registry.addRuntimeMapping(EditorMode.CommandLine, "C-b", "End")
-    registry.clearRuntimeMappings(EditorMode.CommandLine)
-    check registry.runtimeMappings[EditorMode.CommandLine].len == 0
+    discard registry.addRuntimeMapping(EditorMode.Command, "C-a", "Home")
+    discard registry.addRuntimeMapping(EditorMode.Command, "C-b", "End")
+    registry.clearRuntimeMappings(EditorMode.Command)
+    check registry.runtimeMappings[EditorMode.Command].len == 0
 
   test "List CommandLine mappings":
     var registry = newKeyBindingRegistry()
-    discard registry.addRuntimeMapping(EditorMode.CommandLine, "C-a", "Home")
-    let listings = registry.listRuntimeMappings(EditorMode.CommandLine)
+    discard registry.addRuntimeMapping(EditorMode.Command, "C-a", "Home")
+    let listings = registry.listRuntimeMappings(EditorMode.Command)
     check listings.len == 1
     check "C-a -> Home" in listings
 
   test "getRuntimeKeySeqMappings for CommandLine mode":
     var registry = newKeyBindingRegistry()
-    discard registry.addRuntimeMapping(EditorMode.CommandLine, "C-a", "Home")
-    let mappings = registry.getRuntimeKeySeqMappings(EditorMode.CommandLine)
+    discard registry.addRuntimeMapping(EditorMode.Command, "C-a", "Home")
+    let mappings = registry.getRuntimeKeySeqMappings(EditorMode.Command)
     check mappings.len == 1
     check mappings[0].triggerStr == "C-a"
 
