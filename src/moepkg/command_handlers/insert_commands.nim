@@ -35,11 +35,21 @@ proc getLineIndent*(line: string): string =
     else:
       break
 
+proc effectiveShiftWidth*(state: EditorState): int =
+  ## Get the effective shift width (for >>/<<, auto-indent)
+  ## Returns shiftWidth if > 0, otherwise tabStop (Vim compatible)
+  if state.display.shiftWidth > 0: state.display.shiftWidth else: state.display.tabStop
+
+proc effectiveSoftTabStop*(state: EditorState): int =
+  ## Get the effective soft tab stop (for Tab/Backspace in insert mode)
+  ## Returns softTabStop if > 0, otherwise tabStop (Vim compatible)
+  if state.display.softTabStop > 0: state.display.softTabStop else: state.display.tabStop
+
 proc getIndentString*(state: EditorState): string =
-  ## Get the indent string to use for auto-indentation
-  ## Returns either a tab or spaces based on expandTab setting
+  ## Get the indent string to use for auto-indentation (>>/<<)
+  ## Uses shiftWidth when set, falls back to tabStop
   if state.display.expandTab:
-    return " ".repeat(state.display.tabStop)
+    return " ".repeat(effectiveShiftWidth(state))
   else:
     return "\t"
 

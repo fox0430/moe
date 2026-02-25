@@ -283,6 +283,8 @@ theme themeName - Change color theme; for example theme dark
 multistatusline on or multistatusline off - Change setting to show status line for each window
 syntax on or syntax off - Change setting to syntax highlighting
 tabstop number - Change setting to tabStop; for example tabstop 2
+shiftwidth number - Change indent width; 0 = use tabstop; for example shiftwidth 4
+softtabstop number - Change Tab/Backspace width in insert mode; 0 = use tabstop; for example softtabstop 4
 paren on or paren off - Change setting to auto close paren
 autoindent on or autoindent off - Change setting to auto indent
 number on or number off - Change setting to display line number

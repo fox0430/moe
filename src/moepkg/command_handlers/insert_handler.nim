@@ -196,9 +196,38 @@ proc handleBackspace*(
         # If accessing rune fails, fall through to normal backspace
         discard
 
-    # Normal backspace: move cursor back and delete
-    state.cursor.column -= 1
-    discard buffer.deleteChar(state.cursor)
+    # softTabStop-aware backspace: delete to previous boundary in leading whitespace
+    if state.display.expandTab:
+      let currentLine = buffer.getLine(pos.line)
+      # Check if cursor is within leading whitespace
+      var allSpaces = true
+      for i in 0 ..< pos.column:
+        if i < currentLine.charLen:
+          let ch = currentLine.runeAtPos(i)
+          if ch != Rune(' ') and ch != Rune('\t'):
+            allSpaces = false
+            break
+        else:
+          allSpaces = false
+          break
+      if allSpaces and pos.column > 0:
+        let sts = effectiveSoftTabStop(state)
+        let tabWidth = max(1, sts)
+        # Calculate how many chars to delete to reach previous boundary
+        let remainder = pos.column mod tabWidth
+        let deleteCount = if remainder == 0: tabWidth else: remainder
+        let actualDelete = min(deleteCount, pos.column)
+        for i in 0 ..< actualDelete:
+          state.cursor.column -= 1
+          discard buffer.deleteChar(state.cursor)
+      else:
+        # Normal backspace: move cursor back and delete
+        state.cursor.column -= 1
+        discard buffer.deleteChar(state.cursor)
+    else:
+      # Normal backspace: move cursor back and delete
+      state.cursor.column -= 1
+      discard buffer.deleteChar(state.cursor)
   elif pos.line > 0:
     # At start of line, join with previous line
     let prevLine = buffer.getLine(pos.line - 1)
@@ -241,12 +270,15 @@ proc handleTab*(
 ): InsertModeResult =
   ## Handle tab key insertion
   ## Inserts either a tab character or spaces based on expandTab setting
+  ## When expandTab is true, aligns to the next softTabStop boundary
   let pos = state.cursor
 
   if state.display.expandTab:
-    # Insert spaces instead of tab character
-    let tabWidth = max(1, state.display.tabStop) # Ensure at least 1 space
-    let spaces = " ".repeat(tabWidth)
+    # Insert spaces to align to next softTabStop boundary
+    let sts = effectiveSoftTabStop(state)
+    let tabWidth = max(1, sts) # Ensure at least 1 space
+    let spacesToInsert = tabWidth - (pos.column mod tabWidth)
+    let spaces = " ".repeat(spacesToInsert)
 
     let insertResult = buffer.insertText(pos, spaces)
     if insertResult.isErr:
@@ -254,8 +286,8 @@ proc handleTab*(
         kind: imrError, errorMessage: "Failed to insert spaces: " & insertResult.error
       )
 
-    # Move cursor right by number of spaces
-    state.cursor.column += tabWidth
+    # Move cursor right by number of spaces inserted
+    state.cursor.column += spacesToInsert
   else:
     # Insert actual tab character
     let insertResult = buffer.insertText(pos, "\t")

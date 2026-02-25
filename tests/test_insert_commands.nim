@@ -53,6 +53,8 @@ proc createTestState(): EditorState =
       showDocumentHighlight: false,
       lineWrap: true,
       tabStop: 2,
+      shiftWidth: 0,
+      softTabStop: 0,
       expandTab: true,
       autoIndent: true,
       autoCloseParen: false,
@@ -125,6 +127,79 @@ suite "Insert Commands - getIndentString":
     state.display.tabStop = 2
     let indentStr = getIndentString(state)
     check indentStr == "  "
+
+suite "Insert Commands - effectiveShiftWidth":
+  test "Returns shiftWidth when set":
+    let state = createTestState()
+    state.display.tabStop = 8
+    state.display.shiftWidth = 4
+    check effectiveShiftWidth(state) == 4
+
+  test "Falls back to tabStop when shiftWidth is 0":
+    let state = createTestState()
+    state.display.tabStop = 8
+    state.display.shiftWidth = 0
+    check effectiveShiftWidth(state) == 8
+
+suite "Insert Commands - effectiveSoftTabStop":
+  test "Returns softTabStop when set":
+    let state = createTestState()
+    state.display.tabStop = 8
+    state.display.softTabStop = 4
+    check effectiveSoftTabStop(state) == 4
+
+  test "Falls back to tabStop when softTabStop is 0":
+    let state = createTestState()
+    state.display.tabStop = 8
+    state.display.softTabStop = 0
+    check effectiveSoftTabStop(state) == 8
+
+suite "Insert Commands - getIndentString with shiftWidth":
+  test "Uses shiftWidth instead of tabStop when set":
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 8
+    state.display.shiftWidth = 4
+    let indentStr = getIndentString(state)
+    check indentStr == "    "
+
+  test "Falls back to tabStop when shiftWidth is 0":
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 8
+    state.display.shiftWidth = 0
+    let indentStr = getIndentString(state)
+    check indentStr == "        "
+
+suite "Insert Commands - indentLine with shiftWidth":
+  test "Indent uses shiftWidth when set":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 8
+    state.display.shiftWidth = 4
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    indentLine(buf, state)
+
+    check buf.getLine(0) == "    hello"
+    check state.cursor.column == 4
+
+suite "Insert Commands - dedentLine with shiftWidth":
+  test "Dedent uses shiftWidth when set":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 8
+    state.display.shiftWidth = 4
+    state.cursor = BufferPosition(line: 0, column: 4)
+
+    dedentLine(buf, state)
+
+    check buf.getLine(0) == "hello"
+    check state.cursor.column == 0
 
 suite "Insert Commands - insertChar":
   test "Insert character at beginning of line":

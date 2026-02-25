@@ -66,6 +66,108 @@ suite "Config Validation - InvalidItem and ValidationResult":
     check "invalid" in msg
     check "integer >= 1" in msg
 
+suite "Config Validation - Standard section validKeys completeness":
+  test "All StandardConfig fields are accepted in TOML":
+    ## Every field in StandardConfig should be loadable from TOML without
+    ## triggering an "unknown key" warning. If a field is added to
+    ## StandardConfig but not to validKeys in loadStandardConfig, this test
+    ## will fail.
+    let tomlStr = """
+[Standard]
+number = true
+statusLine = true
+syntax = true
+indentationLines = true
+tabStop = 4
+shiftWidth = 0
+softTabStop = 0
+expandTab = false
+sidebar = true
+autoCloseParen = true
+autoIndent = true
+ignorecase = true
+smartcase = true
+disableChangeCursor = false
+defaultCursor = "terminalDefault"
+normalModeCursor = "blinkBlock"
+insertModeCursor = "blinkIbeam"
+liveReloadOfConf = false
+incrementalSearch = true
+popupWindowInExmode = true
+autoDeleteParen = true
+liveReloadOfFile = true
+colorMode = "24bit"
+mouse = false
+lineWrap = true
+timeoutlen = 1000
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+
+  test "All StandardConfig fields round-trip through save/load":
+    ## Set every field to a non-default value, save, reload, and verify.
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_standard_roundtrip_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.standard.number = false
+    config.standard.statusLine = false
+    config.standard.syntax = false
+    config.standard.indentationLines = false
+    config.standard.tabStop = 8
+    config.standard.shiftWidth = 4
+    config.standard.softTabStop = 4
+    config.standard.expandTab = true
+    config.standard.sidebar = false
+    config.standard.autoCloseParen = false
+    config.standard.autoIndent = false
+    config.standard.ignorecase = false
+    config.standard.smartcase = false
+    config.standard.disableChangeCursor = true
+    config.standard.liveReloadOfConf = true
+    config.standard.incrementalSearch = false
+    config.standard.popupWindowInExmode = false
+    config.standard.autoDeleteParen = false
+    config.standard.liveReloadOfFile = false
+    config.standard.mouse = true
+    config.standard.lineWrap = false
+    config.standard.timeoutlen = 500
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+
+    check loaded.standard.number == false
+    check loaded.standard.statusLine == false
+    check loaded.standard.syntax == false
+    check loaded.standard.indentationLines == false
+    check loaded.standard.tabStop == 8
+    check loaded.standard.shiftWidth == 4
+    check loaded.standard.softTabStop == 4
+    check loaded.standard.expandTab == true
+    check loaded.standard.sidebar == false
+    check loaded.standard.autoCloseParen == false
+    check loaded.standard.autoIndent == false
+    check loaded.standard.ignorecase == false
+    check loaded.standard.smartcase == false
+    check loaded.standard.disableChangeCursor == true
+    check loaded.standard.liveReloadOfConf == true
+    check loaded.standard.incrementalSearch == false
+    check loaded.standard.popupWindowInExmode == false
+    check loaded.standard.autoDeleteParen == false
+    check loaded.standard.liveReloadOfFile == false
+    check loaded.standard.mouse == true
+    check loaded.standard.lineWrap == false
+    check loaded.standard.timeoutlen == 500
+
 suite "Config Validation - Standard section":
   test "Valid Standard config passes validation":
     let tomlStr = """
@@ -144,6 +246,60 @@ number = "true"
     check vr.hasErrors
     check vr.errors.len == 1
     check "Standard.number" in vr.errors[0].name
+
+  test "shiftWidth loads from TOML":
+    let tomlStr = """
+[Standard]
+shiftWidth = 4
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.shiftWidth == 4
+
+  test "softTabStop loads from TOML":
+    let tomlStr = """
+[Standard]
+softTabStop = 4
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.softTabStop == 4
+
+  test "shiftWidth defaults to 0 when not specified":
+    let tomlStr = """
+[Standard]
+number = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.shiftWidth == 0
+
+  test "softTabStop defaults to 0 when not specified":
+    let tomlStr = """
+[Standard]
+number = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.softTabStop == 0
+
+  test "Invalid shiftWidth (negative) is detected":
+    let tomlStr = """
+[Standard]
+shiftWidth = -1
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check config.standard.shiftWidth == 0 # Default value
+
+  test "Invalid softTabStop (negative) is detected":
+    let tomlStr = """
+[Standard]
+softTabStop = -1
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check config.standard.softTabStop == 0 # Default value
 
   test "Invalid tabStop (zero) is detected":
     let tomlStr = """
@@ -1125,6 +1281,44 @@ suite "Config - saveConfigToToml":
     let (loaded, vr) = loadResult.get
     check not vr.hasErrors
     check loaded.standard.tabStop == 8
+
+  test "shiftWidth value round-trips":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_sw_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.standard.shiftWidth = 4
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.standard.shiftWidth == 4
+
+  test "softTabStop value round-trips":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_sts_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.standard.softTabStop = 4
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.standard.softTabStop == 4
 
   test "Boolean setting round-trips":
     inc testFileCounter

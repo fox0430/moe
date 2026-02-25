@@ -955,7 +955,103 @@ suite "CommandCompletion - edge cases":
     check "nowrap" in optionNames
     check "hlsearch" in optionNames
     check "nohlsearch" in optionNames
-    check "expandtab" in optionNames
-    check "noexpandtab" in optionNames
     check "tabstop" in optionNames
+    check "shiftwidth" in optionNames
+    check "softtabstop" in optionNames
     check "syntax" in optionNames
+
+suite "CommandCompletion - SetOptions and executeSet sync":
+  test "All executeSet options have completion entries":
+    ## Definitive list of all primary option names accepted by
+    ## command_handler.executeSet. When adding a new :set option to
+    ## executeSet, add its primary name here; the test will fail if the
+    ## corresponding SetOptions completion entry is missing.
+    const executeSetPrimaryOptions = [
+      # Boolean options
+      "number",
+      "nonumber",
+      "cursorline",
+      "nocursorline",
+      "cursorcolumn",
+      "nocursorcolumn",
+      "statusline",
+      "nostatusline",
+      "syntax",
+      "nosyntax",
+      "indentationlines",
+      "noindentationlines",
+      "autoindent",
+      "noautoindent",
+      "autocloseparen",
+      "noautocloseparen",
+      "autodeleteparen",
+      "noautodeleteparen",
+      "clipboard",
+      "noclipboard",
+      "smoothscroll",
+      "nosmoothscroll",
+      "livereload",
+      "nolivereload",
+      "icon",
+      "noicon",
+      "highlightcurrentline",
+      "nohighlightcurrentline",
+      "highlightcurrentword",
+      "nohighlightcurrentword",
+      "highlightfullspace",
+      "nohighlightfullspace",
+      "highlightparen",
+      "nohighlightparen",
+      "highlightfindchar",
+      "nohighlightfindchar",
+      "multistatusline",
+      "nomultistatusline",
+      "ignorecase",
+      "noignorecase",
+      "smartcase",
+      "nosmartcase",
+      "incsearch",
+      "noincsearch",
+      "hlsearch",
+      "nohlsearch",
+      "buildonsave",
+      "nobuildonsave",
+      "showgitinactive",
+      "noshowgitinactive",
+      "wrap",
+      "nowrap",
+      "expandtab",
+      "noexpandtab",
+      # Integer options
+      "tabstop",
+      "shiftwidth",
+      "softtabstop",
+      # Float options
+      "scrollfriction",
+      "scrollairdrag",
+    ]
+    for opt in executeSetPrimaryOptions:
+      check opt in SetOptions
+
+  test "All SetOptions entries are in executeSet primary list":
+    ## Reverse check: every completion entry should correspond to a real
+    ## option that executeSet handles. Update executeSetPrimaryOptions
+    ## above if this test fails after adding a new option.
+    const executeSetPrimaryOptions = [
+      "number", "nonumber", "cursorline", "nocursorline", "cursorcolumn",
+      "nocursorcolumn", "statusline", "nostatusline", "syntax", "nosyntax",
+      "indentationlines", "noindentationlines", "autoindent", "noautoindent",
+      "autocloseparen", "noautocloseparen", "autodeleteparen", "noautodeleteparen",
+      "clipboard", "noclipboard", "smoothscroll", "nosmoothscroll", "livereload",
+      "nolivereload", "icon", "noicon", "highlightcurrentline",
+      "nohighlightcurrentline", "highlightcurrentword", "nohighlightcurrentword",
+      "highlightfullspace", "nohighlightfullspace", "highlightparen",
+      "nohighlightparen", "highlightfindchar", "nohighlightfindchar", "multistatusline",
+      "nomultistatusline", "ignorecase", "noignorecase", "smartcase", "nosmartcase",
+      "incsearch", "noincsearch", "hlsearch", "nohlsearch", "buildonsave",
+      "nobuildonsave", "showgitinactive", "noshowgitinactive", "wrap", "nowrap",
+      "expandtab", "noexpandtab", "tabstop", "shiftwidth", "softtabstop",
+      "scrollfriction", "scrollairdrag",
+    ]
+    for key in SetOptions.keys:
+      check key in executeSetPrimaryOptions

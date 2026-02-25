@@ -341,11 +341,12 @@ proc loadStandardConfig(
 ) =
   const section = "Standard"
   const validKeys = [
-    "number", "statusLine", "syntax", "indentationLines", "tabStop", "expandTab",
-    "sidebar", "autoCloseParen", "autoIndent", "ignorecase", "smartcase",
-    "disableChangeCursor", "defaultCursor", "normalModeCursor", "insertModeCursor",
-    "liveReloadOfConf", "incrementalSearch", "popupWindowInExmode", "autoDeleteParen",
-    "liveReloadOfFile", "colorMode", "mouse", "lineWrap", "timeoutlen",
+    "number", "statusLine", "syntax", "indentationLines", "tabStop", "shiftWidth",
+    "softTabStop", "expandTab", "sidebar", "autoCloseParen", "autoIndent", "ignorecase",
+    "smartcase", "disableChangeCursor", "defaultCursor", "normalModeCursor",
+    "insertModeCursor", "liveReloadOfConf", "incrementalSearch", "popupWindowInExmode",
+    "autoDeleteParen", "liveReloadOfFile", "colorMode", "mouse", "lineWrap",
+    "timeoutlen",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "number", config.number, vr, section)
@@ -353,6 +354,8 @@ proc loadStandardConfig(
   loadBool(table, "syntax", config.syntax, vr, section)
   loadBool(table, "indentationLines", config.indentationLines, vr, section)
   loadInt(table, "tabStop", config.tabStop, vr, section, minVal = 1)
+  loadInt(table, "shiftWidth", config.shiftWidth, vr, section, minVal = 0)
+  loadInt(table, "softTabStop", config.softTabStop, vr, section, minVal = 0)
   loadBool(table, "expandTab", config.expandTab, vr, section)
   loadBool(table, "sidebar", config.sidebar, vr, section)
   loadBool(table, "autoCloseParen", config.autoCloseParen, vr, section)
@@ -1804,6 +1807,8 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "syntax = " & toTomlBool(config.standard.syntax)
   lines.add "indentationLines = " & toTomlBool(config.standard.indentationLines)
   lines.add "tabStop = " & $config.standard.tabStop
+  lines.add "shiftWidth = " & $config.standard.shiftWidth
+  lines.add "softTabStop = " & $config.standard.softTabStop
   lines.add "expandTab = " & toTomlBool(config.standard.expandTab)
   lines.add "sidebar = " & toTomlBool(config.standard.sidebar)
   lines.add "autoCloseParen = " & toTomlBool(config.standard.autoCloseParen)

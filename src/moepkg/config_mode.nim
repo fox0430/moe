@@ -190,6 +190,28 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
     intMax: 16,
   )
   result.add ConfigItemDescriptor(
+    kind: cvkInt,
+    displayName: "shiftWidth",
+    section: "Standard",
+    intGet: proc(c: EditorConfig): int =
+      c.standard.shiftWidth,
+    intSet: proc(c: EditorConfig, v: int) =
+      c.standard.shiftWidth = v,
+    intMin: 0,
+    intMax: 16,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkInt,
+    displayName: "softTabStop",
+    section: "Standard",
+    intGet: proc(c: EditorConfig): int =
+      c.standard.softTabStop,
+    intSet: proc(c: EditorConfig, v: int) =
+      c.standard.softTabStop = v,
+    intMin: 0,
+    intMax: 16,
+  )
+  result.add ConfigItemDescriptor(
     kind: cvkBool,
     displayName: "expandTab",
     section: "Standard",

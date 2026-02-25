@@ -1104,6 +1104,40 @@ suite "ConfigMode - applyChange":
     state.incrementIntValue()
     check cfg.standard.tabStop == originalValue + 1
 
+  test "applyChange updates config for shiftWidth":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var swIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt and item.displayName == "shiftWidth":
+        swIndex = i
+        break
+
+    check swIndex >= 0
+    state.selectedIndex = swIndex
+    let originalValue = cfg.standard.shiftWidth
+
+    state.incrementIntValue()
+    check cfg.standard.shiftWidth == originalValue + 1
+
+  test "applyChange updates config for softTabStop":
+    let cfg = newEditorConfig()
+    let state = newConfigModeState(cfg)
+
+    var stsIndex = -1
+    for i, item in state.items:
+      if item.kind == cvkInt and item.displayName == "softTabStop":
+        stsIndex = i
+        break
+
+    check stsIndex >= 0
+    state.selectedIndex = stsIndex
+    let originalValue = cfg.standard.softTabStop
+
+    state.incrementIntValue()
+    check cfg.standard.softTabStop == originalValue + 1
+
   test "applyChange updates config for float":
     let cfg = newEditorConfig()
     let state = newConfigModeState(cfg)
