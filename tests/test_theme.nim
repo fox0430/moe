@@ -53,29 +53,31 @@ suite "theme - DefaultColors completeness":
 
   test "default entry has expected colors":
     let pair = DefaultColors[EditorColorPairIndex.default]
-    # Foreground: #f8f5e3 = (248, 245, 227)
-    check pair.foreground.rgb.red == 248
-    check pair.foreground.rgb.green == 245
-    check pair.foreground.rgb.blue == 227
+    # Foreground: #dde1e8 = (221, 225, 232)
+    check pair.foreground.rgb.red == 221
+    check pair.foreground.rgb.green == 225
+    check pair.foreground.rgb.blue == 232
     # Background: #000000 = (0, 0, 0)
     check pair.background.rgb.red == 0
     check pair.background.rgb.green == 0
     check pair.background.rgb.blue == 0
 
-  test "errorMessage has red foreground":
+  test "errorMessage has muted red foreground":
     let pair = DefaultColors[EditorColorPairIndex.errorMessage]
-    check pair.foreground.rgb.red == 255
-    check pair.foreground.rgb.green == 0
-    check pair.foreground.rgb.blue == 0
+    # #e06c75 = (224, 108, 117)
+    check pair.foreground.rgb.red == 224
+    check pair.foreground.rgb.green == 108
+    check pair.foreground.rgb.blue == 117
 
-  test "searchResult has red background":
+  test "searchResult has muted red background":
     let pair = DefaultColors[EditorColorPairIndex.searchResult]
-    check pair.background.rgb.red == 255
-    check pair.background.rgb.green == 0
-    check pair.background.rgb.blue == 0
+    # #be5046 = (190, 80, 70)
+    check pair.background.rgb.red == 190
+    check pair.background.rgb.green == 80
+    check pair.background.rgb.blue == 70
 
 suite "theme - initDefaultTheme":
   test "initDefaultTheme sets theme colors":
     initDefaultTheme()
     let defaultColor = getThemeColor(EditorColorPairIndex.default)
-    check defaultColor.foreground.rgb.red == 248
+    check defaultColor.foreground.rgb.red == 221
