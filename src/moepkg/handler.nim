@@ -743,6 +743,10 @@ proc handleCommandModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
           e.config.standard.lineWrap = val
           e.setLineWrap(val)
           e.state.statusMessage = "wrap = " & $val
+        of bsoExpandTab:
+          e.config.standard.expandTab = val
+          e.state.display.expandTab = val
+          e.state.statusMessage = "expandtab = " & $val
         e.state.needsFullRedraw = true
       of hrSetIntOption:
         # Handle integer option setting
@@ -753,6 +757,14 @@ proc handleCommandModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
           e.config.standard.tabStop = val
           e.state.display.tabStop = val
           e.state.statusMessage = "tabstop = " & $val
+        of isoShiftWidth:
+          e.config.standard.shiftWidth = val
+          e.state.display.shiftWidth = val
+          e.state.statusMessage = "shiftwidth = " & $val
+        of isoSoftTabStop:
+          e.config.standard.softTabStop = val
+          e.state.display.softTabStop = val
+          e.state.statusMessage = "softtabstop = " & $val
         e.state.needsFullRedraw = true
       of hrSetFloatOption:
         # Handle float option setting

@@ -58,10 +58,13 @@ type
     bsoBuildOnSave # build on save
     bsoShowGitInactive # show git branch in inactive window
     bsoLineWrap # line wrapping
+    bsoExpandTab # expand tab to spaces
 
   IntSettingOption* = enum
     ## Integer setting options that can be set via :set command
     isoTabStop # tab stop width
+    isoShiftWidth # indent width for >>/<<
+    isoSoftTabStop # tab/backspace width in insert mode
 
   FloatSettingOption* = enum
     ## Float setting options that can be set via :set command
@@ -570,6 +573,15 @@ proc executeSet*(
     return CommandModeResult(
       kind: cmrSetBoolOption, boolOption: bsoLineWrap, boolValue: false
     )
+  # Expand tab
+  of "expandtab", "et":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoExpandTab, boolValue: true
+    )
+  of "noexpandtab", "noet":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoExpandTab, boolValue: false
+    )
   # Tab stop (integer option)
   of "tabstop", "ts":
     if value.isSome:
@@ -588,6 +600,49 @@ proc executeSet*(
     else:
       return CommandModeResult(
         kind: cmrError, errorMessage: "tabstop requires a value (e.g., tabstop=4)"
+      )
+  # Shift width (integer option)
+  of "shiftwidth", "sw":
+    if value.isSome:
+      try:
+        let intVal = parseInt(value.get)
+        if intVal >= 0:
+          return CommandModeResult(
+            kind: cmrSetIntOption, intOption: isoShiftWidth, intValue: intVal
+          )
+        else:
+          return CommandModeResult(
+            kind: cmrError, errorMessage: "shiftwidth must be non-negative"
+          )
+      except ValueError:
+        return CommandModeResult(
+          kind: cmrError, errorMessage: "Invalid value for shiftwidth"
+        )
+    else:
+      return CommandModeResult(
+        kind: cmrError, errorMessage: "shiftwidth requires a value (e.g., shiftwidth=4)"
+      )
+  # Soft tab stop (integer option)
+  of "softtabstop", "sts":
+    if value.isSome:
+      try:
+        let intVal = parseInt(value.get)
+        if intVal >= 0:
+          return CommandModeResult(
+            kind: cmrSetIntOption, intOption: isoSoftTabStop, intValue: intVal
+          )
+        else:
+          return CommandModeResult(
+            kind: cmrError, errorMessage: "softtabstop must be non-negative"
+          )
+      except ValueError:
+        return CommandModeResult(
+          kind: cmrError, errorMessage: "Invalid value for softtabstop"
+        )
+    else:
+      return CommandModeResult(
+        kind: cmrError,
+        errorMessage: "softtabstop requires a value (e.g., softtabstop=4)",
       )
   # Scroll friction (float option, comfortable-motion compatible)
   of "scrollfriction", "sfr":

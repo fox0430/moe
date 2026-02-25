@@ -10,6 +10,10 @@ indentationLines = true                # Indentation guides
 
 tabStop = 2                            # Tab width
 
+shiftWidth = 0                         # Indent width  (0 = use tabStop)
+
+softTabStop = 0                        # Tab/Backspace width in insert mode (0 = use tabStop)
+
 expandTab = false                      # Insert spaces instead of tab
 
 sidebar = true                         # Show sidebar

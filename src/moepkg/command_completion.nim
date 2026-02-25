@@ -178,12 +178,57 @@ const FilePathCommands* = ["e", "edit", "w", "write", "vs", "vsplit", "sp", "spl
 
 # Set options
 const SetOptions* = {
+  # Line numbers
   "number": "Show line numbers",
   "nonumber": "Hide line numbers",
-  "relativenumber": "Show relative line numbers",
-  "norelativenumber": "Hide relative line numbers",
-  "wrap": "Enable line wrapping",
-  "nowrap": "Disable line wrapping",
+  # Cursor line/column
+  "cursorline": "Highlight cursor line",
+  "nocursorline": "Disable cursor line highlight",
+  "cursorcolumn": "Highlight cursor column",
+  "nocursorcolumn": "Disable cursor column highlight",
+  # Status line
+  "statusline": "Show status line",
+  "nostatusline": "Hide status line",
+  "multistatusline": "Status line per window",
+  "nomultistatusline": "Single status line",
+  # Syntax / indentation
+  "syntax": "Enable syntax highlighting",
+  "nosyntax": "Disable syntax highlighting",
+  "indentationlines": "Show indentation guide lines",
+  "noindentationlines": "Hide indentation guide lines",
+  # Auto features
+  "autoindent": "Auto indent new lines",
+  "noautoindent": "Disable auto indent",
+  "autocloseparen": "Auto-close parentheses/brackets/quotes",
+  "noautocloseparen": "Disable auto-close parentheses",
+  "autodeleteparen": "Auto-delete matching parentheses",
+  "noautodeleteparen": "Disable auto-delete parentheses",
+  # Clipboard
+  "clipboard": "Enable system clipboard",
+  "noclipboard": "Disable system clipboard",
+  # Scroll
+  "smoothscroll": "Enable smooth scroll",
+  "nosmoothscroll": "Disable smooth scroll",
+  "scrollfriction": "Smooth scroll friction (e.g., scrollfriction=80.0)",
+  "scrollairdrag": "Smooth scroll air drag (e.g., scrollairdrag=2.0)",
+  # Live reload
+  "livereload": "Enable live reload of config",
+  "nolivereload": "Disable live reload of config",
+  # Filer icons
+  "icon": "Show filer icons",
+  "noicon": "Hide filer icons",
+  # Highlight
+  "highlightcurrentline": "Highlight current line",
+  "nohighlightcurrentline": "Disable current line highlight",
+  "highlightcurrentword": "Highlight current word",
+  "nohighlightcurrentword": "Disable current word highlight",
+  "highlightfullspace": "Highlight full-width spaces",
+  "nohighlightfullspace": "Disable full-width space highlight",
+  "highlightparen": "Highlight matching parentheses",
+  "nohighlightparen": "Disable matching parentheses highlight",
+  "highlightfindchar": "Highlight f/F/t/T matches",
+  "nohighlightfindchar": "Disable f/F/t/T match highlight",
+  # Search
   "ignorecase": "Case insensitive search",
   "noignorecase": "Case sensitive search",
   "smartcase": "Smart case search",
@@ -192,17 +237,22 @@ const SetOptions* = {
   "nohlsearch": "Disable search highlight",
   "incsearch": "Incremental search",
   "noincsearch": "Disable incremental search",
+  # Build
+  "buildonsave": "Build on save",
+  "nobuildonsave": "Disable build on save",
+  # Git
+  "showgitinactive": "Show git branch in inactive window",
+  "noshowgitinactive": "Hide git branch in inactive window",
+  # Line wrap
+  "wrap": "Enable line wrapping",
+  "nowrap": "Disable line wrapping",
+  # Tab / indent
   "expandtab": "Use spaces instead of tabs",
-  "noexpandtab": "Use tabs",
-  "autoindent": "Auto indent new lines",
-  "noautoindent": "Disable auto indent",
+  "noexpandtab": "Use tab characters",
   "tabstop": "Tab width (e.g., tabstop=4)",
-  "syntax": "Enable syntax highlighting",
-  "nosyntax": "Disable syntax highlighting",
-  "cursorline": "Highlight cursor line",
-  "nocursorline": "Disable cursor line highlight",
-  "multistatusline": "Status line per window",
-  "nomultistatusline": "Single status line",
+  "shiftwidth": "Indent width for >>/<<  (e.g., shiftwidth=4, 0=use tabstop)",
+  "softtabstop":
+    "Tab/Backspace width in insert mode (e.g., softtabstop=4, 0=use tabstop)",
 }.toTable
 
 # Fuzzy matching (similar to completion.nim)

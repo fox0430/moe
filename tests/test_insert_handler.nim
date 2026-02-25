@@ -60,6 +60,8 @@ proc createTestState(): EditorState =
       showDocumentHighlight: false,
       lineWrap: true,
       tabStop: 2,
+      shiftWidth: 0,
+      softTabStop: 0,
       expandTab: true,
       autoIndent: true,
       autoCloseParen: false,
@@ -553,6 +555,138 @@ suite "InsertModeHandler - Tab":
     check result.kind == imrHandled
     check buf.getLine(0) == "\thello"
     check state.cursor.column == 1
+
+suite "InsertModeHandler - Tab with softTabStop":
+  test "Tab aligns to next softTabStop boundary from column 0":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 8
+    state.display.softTabStop = 4
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let result = handler.handleTab(buf, state)
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == "    hello"
+    check state.cursor.column == 4
+
+  test "Tab aligns to next softTabStop boundary from mid-position":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), " hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 8
+    state.display.softTabStop = 4
+    state.cursor = BufferPosition(line: 0, column: 1)
+
+    let result = handler.handleTab(buf, state)
+
+    check result.kind == imrHandled
+    # From column 1, next 4-boundary is column 4 => insert 3 spaces
+    check buf.getLine(0) == "    hello"
+    check state.cursor.column == 4
+
+  test "Tab inserts full softTabStop at boundary":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 8
+    state.display.softTabStop = 4
+    state.cursor = BufferPosition(line: 0, column: 4)
+
+    let result = handler.handleTab(buf, state)
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == "        hello"
+    check state.cursor.column == 8
+
+  test "Tab with softTabStop=0 uses tabStop":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 4
+    state.display.softTabStop = 0
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let result = handler.handleTab(buf, state)
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == "    hello"
+    check state.cursor.column == 4
+
+suite "InsertModeHandler - Backspace with softTabStop":
+  test "Backspace in leading whitespace deletes to previous softTabStop boundary":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 8
+    state.display.softTabStop = 4
+    state.cursor = BufferPosition(line: 0, column: 4)
+
+    let result = handler.handleBackspace(buf, state)
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == "hello"
+    check state.cursor.column == 0
+
+  test "Backspace in leading whitespace aligns to boundary":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "      hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 8
+    state.display.softTabStop = 4
+    state.cursor = BufferPosition(line: 0, column: 6)
+
+    let result = handler.handleBackspace(buf, state)
+
+    check result.kind == imrHandled
+    # From column 6, previous 4-boundary is 4 => delete 2 chars
+    check buf.getLine(0) == "    hello"
+    check state.cursor.column == 4
+
+  test "Backspace not in leading whitespace deletes single char":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "he  llo")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.display.expandTab = true
+    state.display.tabStop = 8
+    state.display.softTabStop = 4
+    state.cursor = BufferPosition(line: 0, column: 4)
+
+    let result = handler.handleBackspace(buf, state)
+
+    check result.kind == imrHandled
+    # Non-leading whitespace, so single char delete
+    check buf.getLine(0) == "he llo"
+    check state.cursor.column == 3
+
+  test "Backspace with expandTab disabled does normal delete":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.display.expandTab = false
+    state.display.softTabStop = 4
+    state.cursor = BufferPosition(line: 0, column: 4)
+
+    let result = handler.handleBackspace(buf, state)
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == "   hello"
+    check state.cursor.column == 3
 
 suite "InsertModeHandler - Motion":
   test "Handle left motion":

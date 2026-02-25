@@ -70,6 +70,8 @@ suite "Config - newEditorConfig defaults":
     check config.standard.syntax == true
     check config.standard.indentationLines == true
     check config.standard.tabStop == 2
+    check config.standard.shiftWidth == 0
+    check config.standard.softTabStop == 0
     check config.standard.expandTab == false
     check config.standard.sidebar == true
     check config.standard.autoCloseParen == true

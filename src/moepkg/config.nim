@@ -62,6 +62,9 @@ type
     syntax*: bool
     indentationLines*: bool
     tabStop*: int
+    shiftWidth*: int ## Indent width for >>/<<, 0 = use tabStop (Vim compatible)
+    softTabStop*: int
+      ## Tab/Backspace width in insert mode, 0 = use tabStop (Vim compatible)
     expandTab*: bool
     sidebar*: bool
     autoCloseParen*: bool
@@ -433,6 +436,8 @@ proc newEditorConfig*(): EditorConfig =
       syntax: true,
       indentationLines: true,
       tabStop: 2,
+      shiftWidth: 0, # 0 = use tabStop (Vim compatible)
+      softTabStop: 0, # 0 = use tabStop (Vim compatible)
       expandTab: false, # Match example/moerc.toml default
       sidebar: true,
       autoCloseParen: true,

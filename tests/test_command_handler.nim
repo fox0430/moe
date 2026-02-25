@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, strutils]
+import std/[unittest, options, strutils, sets]
 import pkg/results
 import ../src/moepkg/[buffer, command_line, command_config, command_registry, modes]
 import ../src/moepkg/command_handlers/command_handler
@@ -644,6 +644,80 @@ suite "CommandModeHandler - executeSet Integer Options":
     let result = handler.executeSet("tabstop", some("0"))
     check result.kind == cmrError
     check result.errorMessage == "tabstop must be positive"
+
+suite "CommandModeHandler - executeSet shiftWidth":
+  test "Set shiftwidth":
+    let handler = setupHandler()
+    let result = handler.executeSet("shiftwidth", some("4"))
+    check result.kind == cmrSetIntOption
+    check result.intOption == isoShiftWidth
+    check result.intValue == 4
+
+  test "Set shiftwidth with abbreviation (sw)":
+    let handler = setupHandler()
+    let result = handler.executeSet("sw", some("8"))
+    check result.kind == cmrSetIntOption
+    check result.intOption == isoShiftWidth
+    check result.intValue == 8
+
+  test "Set shiftwidth to zero (use tabStop)":
+    let handler = setupHandler()
+    let result = handler.executeSet("sw", some("0"))
+    check result.kind == cmrSetIntOption
+    check result.intOption == isoShiftWidth
+    check result.intValue == 0
+
+  test "Set shiftwidth without value returns error":
+    let handler = setupHandler()
+    let result = handler.executeSet("shiftwidth", none(string))
+    check result.kind == cmrError
+
+  test "Set shiftwidth with invalid value returns error":
+    let handler = setupHandler()
+    let result = handler.executeSet("shiftwidth", some("abc"))
+    check result.kind == cmrError
+
+  test "Set shiftwidth with negative returns error":
+    let handler = setupHandler()
+    let result = handler.executeSet("sw", some("-1"))
+    check result.kind == cmrError
+
+suite "CommandModeHandler - executeSet softTabStop":
+  test "Set softtabstop":
+    let handler = setupHandler()
+    let result = handler.executeSet("softtabstop", some("4"))
+    check result.kind == cmrSetIntOption
+    check result.intOption == isoSoftTabStop
+    check result.intValue == 4
+
+  test "Set softtabstop with abbreviation (sts)":
+    let handler = setupHandler()
+    let result = handler.executeSet("sts", some("8"))
+    check result.kind == cmrSetIntOption
+    check result.intOption == isoSoftTabStop
+    check result.intValue == 8
+
+  test "Set softtabstop to zero (use tabStop)":
+    let handler = setupHandler()
+    let result = handler.executeSet("sts", some("0"))
+    check result.kind == cmrSetIntOption
+    check result.intOption == isoSoftTabStop
+    check result.intValue == 0
+
+  test "Set softtabstop without value returns error":
+    let handler = setupHandler()
+    let result = handler.executeSet("softtabstop", none(string))
+    check result.kind == cmrError
+
+  test "Set softtabstop with invalid value returns error":
+    let handler = setupHandler()
+    let result = handler.executeSet("softtabstop", some("abc"))
+    check result.kind == cmrError
+
+  test "Set softtabstop with negative returns error":
+    let handler = setupHandler()
+    let result = handler.executeSet("sts", some("-1"))
+    check result.kind == cmrError
 
 suite "CommandModeHandler - executeSet Float Options":
   test "Set scrollfriction":
@@ -1600,3 +1674,89 @@ suite "CommandModeHandler - Result Helper Functions":
     let result =
       CommandModeResult(kind: cmrSave, saveFilename: none(string), forceSave: false)
     check getMessage(result) == ""
+
+suite "CommandModeHandler - executeSet enum coverage":
+  ## Verify that every setting enum value is reachable from executeSet.
+  ## If a new enum value is added but no :set option string maps to it,
+  ## these tests will fail.
+
+  test "Every BoolSettingOption is reachable via executeSet":
+    let handler = setupHandler()
+
+    # Map from primary option name to the enum value it produces.
+    const boolOptions: seq[(string, BoolSettingOption)] = @[
+      ("number", bsoNumber),
+      ("cursorline", bsoCursorLine),
+      ("cursorcolumn", bsoCursorColumn),
+      ("statusline", bsoStatusLine),
+      ("syntax", bsoSyntax),
+      ("indentationlines", bsoIndentationLines),
+      ("autoindent", bsoAutoIndent),
+      ("autocloseparen", bsoAutoCloseParen),
+      ("autodeleteparen", bsoAutoDeleteParen),
+      ("clipboard", bsoClipboard),
+      ("smoothscroll", bsoSmoothScroll),
+      ("livereload", bsoLiveReloadOfConf),
+      ("icon", bsoShowIcons),
+      ("highlightcurrentline", bsoHighlightCurrentLine),
+      ("highlightcurrentword", bsoHighlightCurrentWord),
+      ("highlightfullspace", bsoHighlightFullWidthSpace),
+      ("highlightparen", bsoHighlightPairOfParen),
+      ("highlightfindchar", bsoHighlightFindChar),
+      ("multistatusline", bsoMultipleStatusLine),
+      ("ignorecase", bsoIgnoreCase),
+      ("smartcase", bsoSmartCase),
+      ("incsearch", bsoIncSearch),
+      ("hlsearch", bsoHlSearch),
+      ("buildonsave", bsoBuildOnSave),
+      ("showgitinactive", bsoShowGitInactive),
+      ("wrap", bsoLineWrap),
+      ("expandtab", bsoExpandTab),
+    ]
+
+    # Verify each option returns the expected enum value
+    var coveredValues: HashSet[BoolSettingOption]
+    for (name, expected) in boolOptions:
+      let r = handler.executeSet(name, none(string))
+      check r.kind == cmrSetBoolOption
+      check r.boolOption == expected
+      coveredValues.incl(r.boolOption)
+
+    # Verify all enum values are covered
+    for v in BoolSettingOption:
+      check v in coveredValues
+
+  test "Every IntSettingOption is reachable via executeSet":
+    let handler = setupHandler()
+
+    const intOptions: seq[(string, IntSettingOption)] = @[
+      ("tabstop", isoTabStop),
+      ("shiftwidth", isoShiftWidth),
+      ("softtabstop", isoSoftTabStop),
+    ]
+
+    var coveredValues: HashSet[IntSettingOption]
+    for (name, expected) in intOptions:
+      let r = handler.executeSet(name, some("1"))
+      check r.kind == cmrSetIntOption
+      check r.intOption == expected
+      coveredValues.incl(r.intOption)
+
+    for v in IntSettingOption:
+      check v in coveredValues
+
+  test "Every FloatSettingOption is reachable via executeSet":
+    let handler = setupHandler()
+
+    const floatOptions: seq[(string, FloatSettingOption)] =
+      @[("scrollfriction", fsoScrollFriction), ("scrollairdrag", fsoScrollAirDrag)]
+
+    var coveredValues: HashSet[FloatSettingOption]
+    for (name, expected) in floatOptions:
+      let r = handler.executeSet(name, some("1.0"))
+      check r.kind == cmrSetFloatOption
+      check r.floatOption == expected
+      coveredValues.incl(r.floatOption)
+
+    for v in FloatSettingOption:
+      check v in coveredValues

@@ -601,6 +601,8 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         showDocumentHighlight: true,
         lineWrap: editorConfig.standard.lineWrap,
         tabStop: editorConfig.standard.tabStop,
+        shiftWidth: editorConfig.standard.shiftWidth,
+        softTabStop: editorConfig.standard.softTabStop,
         expandTab: editorConfig.standard.expandTab,
         autoIndent: editorConfig.standard.autoIndent,
         autoCloseParen: editorConfig.standard.autoCloseParen,
@@ -869,6 +871,8 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   e.state.display.showGitDiff = newConfig.git.showChangedLine
   e.state.display.showSyntaxChecker = newConfig.syntaxChecker.enable
   e.state.display.tabStop = newConfig.standard.tabStop
+  e.state.display.shiftWidth = newConfig.standard.shiftWidth
+  e.state.display.softTabStop = newConfig.standard.softTabStop
   e.state.display.expandTab = newConfig.standard.expandTab
   e.state.display.autoIndent = newConfig.standard.autoIndent
   e.state.display.autoCloseParen = newConfig.standard.autoCloseParen
