@@ -10,6 +10,8 @@ proc main() =
   let jobs =
     if paramCount() >= 1:
       parseInt(paramStr(1))
+    elif getEnv("MOE_TEST_JOBS").len > 0:
+      parseInt(getEnv("MOE_TEST_JOBS"))
     else:
       DefaultJobs
 
