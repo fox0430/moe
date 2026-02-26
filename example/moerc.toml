@@ -44,7 +44,7 @@ liveReloadOfFile = true                # Auto-reload when file changed externall
 
 colorMode = "24bit"                    # Color mode: "8", "16", "256", "24bit", "none"
 
-mouse = true                           # Enable mouse support
+mouse = false                           # Enable mouse support
 
 lineWrap = true                        # Wrap long lines
 
