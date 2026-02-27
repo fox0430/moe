@@ -470,9 +470,13 @@ proc executeOperatorOnRange(
 
     # Move cursor to start of change
     ctx.cursor = range.start
-    # Clamp cursor
+    # Clamp cursor to valid position
     if ctx.cursor.line >= ctx.buffer.len:
       ctx.cursor.line = max(0, ctx.buffer.len - 1)
+    if ctx.cursor.line < ctx.buffer.len:
+      let line = ctx.buffer.getLine(ctx.cursor.line)
+      # Insert mode allows cursor at charLen (append position)
+      ctx.cursor.column = min(ctx.cursor.column, line.charLen)
 
     # Restore viewport position (same logic as OpDelete)
     let newBufferLen = ctx.buffer.len
@@ -1182,41 +1186,49 @@ proc handleVisualMoveDown(ctx: CommandContext): Result[(), string] =
 proc handleVisualDelete(ctx: CommandContext): Result[(), string] =
   ## Delete visual selection
   visualDelete(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualYank(ctx: CommandContext): Result[(), string] =
   ## Yank (copy) visual selection
   visualYank(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualIndent(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Indent visual selection
   visualIndent(ctx.buffer, ctx.state, count)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualDedent(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Dedent visual selection
   visualDedent(ctx.buffer, ctx.state, count)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualLowercase(ctx: CommandContext): Result[(), string] =
   ## Convert visual selection to lowercase
   visualLowercase(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualUppercase(ctx: CommandContext): Result[(), string] =
   ## Convert visual selection to uppercase
   visualUppercase(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualToggleCase(ctx: CommandContext): Result[(), string] =
   ## Toggle case of visual selection
   visualToggleCase(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualJoinLines(ctx: CommandContext): Result[(), string] =
   ## Join lines in visual selection
   visualJoinLines(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualMoveHome(ctx: CommandContext): Result[(), string] =
@@ -1304,11 +1316,13 @@ proc handleVisualChange(ctx: CommandContext): Result[(), string] =
 proc handleVisualSwapSelection(ctx: CommandContext): Result[(), string] =
   ## Swap cursor between start and end of selection
   visualSwapSelection(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 proc handleVisualPaste(ctx: CommandContext): Result[(), string] =
   ## Paste over selection
   visualPaste(ctx.buffer, ctx.state)
+  ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
 ## Helper for clipboard operations
@@ -2076,10 +2090,10 @@ proc handleToggleCase(ctx: CommandContext, count: int = 1): Result[(), string] =
   # Move cursor to the right by the number of characters toggled
   ctx.cursor.column += charsToToggle
 
-  # Keep cursor within line bounds
+  # Keep cursor within line bounds (in Normal mode, cursor can't be on newline)
   let finalLineContent = ctx.buffer.getLine(ctx.cursor.line)
-  if ctx.cursor.column > finalLineContent.charLen:
-    ctx.cursor.column = max(0, finalLineContent.charLen)
+  if ctx.cursor.column >= finalLineContent.charLen:
+    ctx.cursor.column = max(0, finalLineContent.charLen - 1)
 
   # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand =

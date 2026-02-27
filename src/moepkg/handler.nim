@@ -30,6 +30,14 @@ import
   terminal_mode
 import command_handlers/handler_manager
 
+proc adjustCursorAfterInsertExit*(cursor: var BufferPosition, lineCharLen: int) =
+  ## Adjust cursor position when transitioning from Insert to Normal mode.
+  ## Vim moves cursor one position to the left (unless at column 0 or empty line).
+  if lineCharLen == 0:
+    cursor.column = 0
+  elif cursor.column > 0:
+    cursor.column = min(cursor.column - 1, lineCharLen - 1)
+
 proc addRunningProcess*(e: Editor, p: BackgroundProcess) =
   e.runningBackgroundProcesses.add(p)
 
@@ -2221,14 +2229,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.state.previousMode = e.state.mode
       e.setMode(EditorMode.Normal)
 
-      # Adjust cursor (Insert mode allows cursor past end of line)
-      let
-        currentLine = activeBuffer.getLine(e.activeWindow.cursor.line)
-        lineCharLen = currentLine.charLen
-      if lineCharLen == 0:
-        e.activeWindow.cursor.column = 0
-      elif e.activeWindow.cursor.column >= lineCharLen:
-        e.activeWindow.cursor.column = lineCharLen - 1
+      # Adjust cursor: move one position left when exiting Insert mode
+      let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
+      adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
 
       e.syncStateToWindow()
     return true
@@ -3153,12 +3156,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
       activeWin.mode = EditorMode.BufferManager
 
     # Adjust cursor when transitioning from Insert to Normal mode
-    # In Insert mode, cursor can be after the last character
-    # In Normal mode, cursor must be on a character (not after)
     if oldMode == EditorMode.Insert and newMode == EditorMode.Normal:
       let
-        currentLine = activeBuffer.getLine(e.activeWindow.cursor.line)
-        lineCharLen = currentLine.charLen
+        lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
         oldColumn = e.activeWindow.cursor.column
 
       logDebug(
@@ -3167,12 +3167,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
           $oldColumn & " lineCharLen=" & $lineCharLen,
       )
 
-      if lineCharLen == 0:
-        # Empty line: cursor should be at column 0
-        e.activeWindow.cursor.column = 0
-      elif e.activeWindow.cursor.column >= lineCharLen:
-        # Cursor is beyond last character, move it back to last char
-        e.activeWindow.cursor.column = lineCharLen - 1
+      adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
 
       if oldColumn != e.activeWindow.cursor.column:
         logDebug(
