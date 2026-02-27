@@ -324,30 +324,30 @@ suite "VisualModeHandler - isPositionInSelection":
 
     check isPositionInSelection(selection, BufferPosition(line: 0, column: 5)) == false
 
-suite "VisualModeHandler - isVisualMode":
+suite "VisualModeHandler - isVisualAllMode":
   test "Visual mode is visual":
-    check isVisualMode(EditorMode.Visual) == true
+    check isVisualAllMode(EditorMode.Visual) == true
 
   test "VisualLine mode is visual":
-    check isVisualMode(EditorMode.VisualLine) == true
+    check isVisualAllMode(EditorMode.VisualLine) == true
 
   test "VisualBlock mode is visual":
-    check isVisualMode(EditorMode.VisualBlock) == true
+    check isVisualAllMode(EditorMode.VisualBlock) == true
 
   test "Normal mode is not visual":
-    check isVisualMode(EditorMode.Normal) == false
+    check isVisualAllMode(EditorMode.Normal) == false
 
   test "Insert mode is not visual":
-    check isVisualMode(EditorMode.Insert) == false
+    check isVisualAllMode(EditorMode.Insert) == false
 
   test "Command mode is not visual":
-    check isVisualMode(EditorMode.Normal) == false
+    check isVisualAllMode(EditorMode.Normal) == false
 
   test "Search mode is not visual":
-    check isVisualMode(EditorMode.Insert) == false
+    check isVisualAllMode(EditorMode.Insert) == false
 
   test "Replace mode is not visual":
-    check isVisualMode(EditorMode.Replace) == false
+    check isVisualAllMode(EditorMode.Replace) == false
 
 suite "VisualModeHandler - VisualModeResult":
   test "vmrHandled result with mode transition":

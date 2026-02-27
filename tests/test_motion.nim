@@ -255,6 +255,34 @@ suite "Word Motion":
     let result = executor.moveWordEnd(currentPos, 1)
     check result.x == 10 # End of "world"
 
+  test "moveWordForward with Unicode":
+    let buffer = newTextBuffer("hello 日本語 world")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 0, y: 0)
+    let result = executor.moveWordForward(currentPos, 1)
+    check result.x == 6 # Start of '日本語'
+
+  test "moveWordForward past Unicode word":
+    let buffer = newTextBuffer("hello 日本語 world")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 6, y: 0)
+    let result = executor.moveWordForward(currentPos, 1)
+    check result.x == 10 # Start of 'world'
+
+  test "moveWordBackward with Unicode":
+    let buffer = newTextBuffer("hello 日本語 world")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 10, y: 0)
+    let result = executor.moveWordBackward(currentPos, 1)
+    check result.x == 6 # Start of '日本語'
+
+  test "moveWordEnd with Unicode":
+    let buffer = newTextBuffer("hello 日本語 world")
+    let executor = newMotionExecutor(buffer)
+    let currentPos = CursorPosition(x: 6, y: 0)
+    let result = executor.moveWordEnd(currentPos, 1)
+    check result.x == 8 # End of '日本語'
+
 suite "Find/Till Char Backward":
   test "findCharBackward finds previous occurrence":
     let buffer = newTextBuffer("abcxabc")
@@ -362,6 +390,131 @@ suite "Text Objects - Word":
     let range = result.get
     check range.start.column == 0
     check range.endPos.column == 5 # 'hello ' including trailing space
+
+  test "findWordBoundaries inner word - Unicode (Japanese)":
+    let buffer = newTextBuffer("hello 日本語 world")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findWordBoundaries(buffer, cursor, inner = true)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 6
+    check range.endPos.column == 8 # 日本語 is columns 6-8
+
+  test "findWordBoundaries around word - Unicode (Japanese)":
+    let buffer = newTextBuffer("hello 日本語 world")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findWordBoundaries(buffer, cursor, inner = false)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 6
+    check range.endPos.column == 9 # 日本語 + trailing space
+
+  test "findWordBoundaries inner on symbol":
+    let buffer = newTextBuffer("hello ++ world")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findWordBoundaries(buffer, cursor, inner = true)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 6
+    check range.endPos.column == 7 # ++ is columns 6-7
+
+  test "findWordBoundaries around on symbol":
+    let buffer = newTextBuffer("hello ++ world")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findWordBoundaries(buffer, cursor, inner = false)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 6
+    check range.endPos.column == 8 # ++ + trailing space
+
+  test "findWordBoundaries inner on whitespace":
+    let buffer = newTextBuffer("hello   world")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findWordBoundaries(buffer, cursor, inner = true)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 5
+    check range.endPos.column == 7 # spaces at columns 5-7
+
+  test "findWordBoundaries around on whitespace":
+    let buffer = newTextBuffer("hello   world")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findWordBoundaries(buffer, cursor, inner = false)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 5
+    check range.endPos.column == 12 # spaces + 'world'
+
+  test "findWordBoundaries aw cross-line from trailing whitespace":
+    let buffer = newTextBuffer("hello   \nworld")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findWordBoundaries(buffer, cursor, inner = false)
+    check result.isOk
+    let range = result.get
+    check range.start.line == 0
+    check range.start.column == 5
+    check range.endPos.line == 1
+    check range.endPos.column == 4 # 'world' on next line
+
+  test "findWordBoundaries iw on whitespace stays on same line":
+    let buffer = newTextBuffer("hello   \nworld")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findWordBoundaries(buffer, cursor, inner = true)
+    check result.isOk
+    let range = result.get
+    check range.start.line == 0
+    check range.endPos.line == 0 # stays on same line
+
+  test "findWideWordBoundaries inner on whitespace":
+    let buffer = newTextBuffer("hello   world")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findWideWordBoundaries(buffer, cursor, inner = true)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 5
+    check range.endPos.column == 7
+
+  test "findWideWordBoundaries aW cross-line from trailing whitespace":
+    let buffer = newTextBuffer("hello   \nworld")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findWideWordBoundaries(buffer, cursor, inner = false)
+    check result.isOk
+    let range = result.get
+    check range.start.line == 0
+    check range.start.column == 5
+    check range.endPos.line == 1
+    check range.endPos.column == 4
+
+  test "findWordBoundaries aw at end of line (no trailing space) uses leading":
+    let buffer = newTextBuffer("hello world")
+    let cursor = BufferPosition(line: 0, column: 7)
+    let result = findWordBoundaries(buffer, cursor, inner = false)
+    check result.isOk
+    let range = result.get
+    check range.start.column == 5 # Leading space included
+    check range.endPos.column == 10 # 'world' ends at 10
+
+  test "findWordBoundaries aw cross-line skips empty lines":
+    let buffer = newTextBuffer("hello   \n\nworld")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findWordBoundaries(buffer, cursor, inner = false)
+    check result.isOk
+    let range = result.get
+    check range.start.line == 0
+    check range.start.column == 5
+    check range.endPos.line == 2
+    check range.endPos.column == 4 # 'world' on line 2
+
+  test "findWideWordBoundaries aW cross-line skips empty lines":
+    let buffer = newTextBuffer("hello   \n\nworld")
+    let cursor = BufferPosition(line: 0, column: 6)
+    let result = findWideWordBoundaries(buffer, cursor, inner = false)
+    check result.isOk
+    let range = result.get
+    check range.start.line == 0
+    check range.start.column == 5
+    check range.endPos.line == 2
+    check range.endPos.column == 4
 
 suite "Text Objects - Quoted":
   test "findQuotedBoundaries inner double quote":

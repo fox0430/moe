@@ -109,22 +109,22 @@ suite "analyzeIndentation - Edge cases":
     check info.leadingWhitespaceEnd == 31
     check info.hasContent == true
 
-suite "isVisualMode - Comprehensive":
+suite "isVisualAllMode - Comprehensive":
   test "All visual modes return true":
-    check renderHelpers.isVisualMode(EditorMode.Visual) == true
-    check renderHelpers.isVisualMode(EditorMode.VisualLine) == true
-    check renderHelpers.isVisualMode(EditorMode.VisualBlock) == true
+    check isVisualAllMode(EditorMode.Visual) == true
+    check isVisualAllMode(EditorMode.VisualLine) == true
+    check isVisualAllMode(EditorMode.VisualBlock) == true
 
   test "All non-visual modes return false":
-    check renderHelpers.isVisualMode(EditorMode.Normal) == false
-    check renderHelpers.isVisualMode(EditorMode.Insert) == false
-    check renderHelpers.isVisualMode(EditorMode.Replace) == false
-    check renderHelpers.isVisualMode(EditorMode.Filer) == false
-    check renderHelpers.isVisualMode(EditorMode.LogViewer) == false
-    check renderHelpers.isVisualMode(EditorMode.Help) == false
-    check renderHelpers.isVisualMode(EditorMode.BufferManager) == false
-    check renderHelpers.isVisualMode(EditorMode.Config) == false
-    check renderHelpers.isVisualMode(EditorMode.Debug) == false
+    check isVisualAllMode(EditorMode.Normal) == false
+    check isVisualAllMode(EditorMode.Insert) == false
+    check isVisualAllMode(EditorMode.Replace) == false
+    check isVisualAllMode(EditorMode.Filer) == false
+    check isVisualAllMode(EditorMode.LogViewer) == false
+    check isVisualAllMode(EditorMode.Help) == false
+    check isVisualAllMode(EditorMode.BufferManager) == false
+    check isVisualAllMode(EditorMode.Config) == false
+    check isVisualAllMode(EditorMode.Debug) == false
 
 suite "getVisualSelection - Detailed":
   test "Default hasSelection is false":

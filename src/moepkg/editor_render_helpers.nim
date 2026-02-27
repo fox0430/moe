@@ -292,10 +292,6 @@ proc getSelectionStyle*(
     else:
       normalStyle()
 
-proc isVisualMode*(mode: EditorMode): bool {.inline.} =
-  ## Check if the mode is any visual mode variant
-  mode in {EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
-
 proc getVisualSelection*(
     e: Editor, windowMode: EditorMode, windowActive: bool = true
 ): tuple[hasSelection: bool, selStart, selEnd: BufferPosition] =
@@ -303,7 +299,7 @@ proc getVisualSelection*(
   ## windowMode: The mode of the window being rendered
   ## windowActive: only show selection in active window (default true for compatibility)
   let hasSelection =
-    isVisualMode(windowMode) and e.state.visualSelection.active and windowActive
+    isVisualAllMode(windowMode) and e.state.visualSelection.active and windowActive
 
   if hasSelection:
     let (start, endPos) = e.state.visualSelection.getSelectionRange()
