@@ -242,7 +242,9 @@ proc `[]`*(b: TextBuffer, lineIndex: int): string =
   b.getLine(lineIndex)
 
 proc getLineLen*(b: TextBuffer, lineIndex: int): int =
-  b.getLine(lineIndex).len
+  ## Get Unicode character count of line (not byte length).
+  ## Use this for cursor/column position calculations.
+  b.getLine(lineIndex).charLen
 
 # Word detection helpers for currentWord highlighting
 proc isWordChar(r: Rune): bool =

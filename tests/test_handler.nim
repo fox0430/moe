@@ -290,6 +290,29 @@ suite "screenToBufferPosition - Column Clamping":
     check result.get.line == 1
     check result.get.column == 0 # Empty line, column stays at 0
 
+  test "Column clamped to character count for multibyte":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 0)
+      buffer = newTextBuffer("あいう") # 3 chars, 9 bytes
+      lineNumOffset = 0
+      reservedLines = StatusAndCommandReserve
+
+    # Click at x=50, but line only has 3 characters
+    let result = screenToBufferPosition(
+      vp,
+      buffer,
+      50,
+      0,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = false,
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 2 # Clamped to max(0, charLen - 1) = 2, not 8
+
 suite "screenToBufferPosition - Line Clamping":
   test "Line clamped when clicking beyond buffer":
     let
@@ -840,6 +863,20 @@ suite "handleMouseEvent - Wheel Scroll":
     check e.windowManager.windows[0].cursor.line == 3
     # "another" has len 7, so max column is 6
     check e.windowManager.windows[0].cursor.column <= 6
+
+  test "WheelDown clamps column to character count for multibyte":
+    # "あいうえお" is 5 chars (15 bytes). After scrolling to "ab" (2 chars),
+    # column should clamp to 1, not stay at 4.
+    let e = createTestEditorWithBuffer("あいうえお\nxx\nxx\nab")
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 4)
+
+    let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 5)
+    let handled = e.handleMouseEvent(event)
+
+    check handled == true
+    check e.windowManager.windows[0].cursor.line == 3
+    # "ab" has 2 chars, so max column is 1
+    check e.windowManager.windows[0].cursor.column == 1
 
   test "Wheel event sets needsFullRedraw":
     let e =

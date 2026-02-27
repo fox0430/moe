@@ -200,7 +200,7 @@ proc parseSetupText(
     currentCol = state.cursor.column + 1
     totalCols =
       if textBuffer.len > 0 and state.cursor.line < textBuffer.len:
-        textBuffer[state.cursor.line].len
+        textBuffer.getLineLen(state.cursor.line)
       else:
         0
     percentage =

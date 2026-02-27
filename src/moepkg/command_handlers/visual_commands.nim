@@ -683,8 +683,8 @@ proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: char) =
           let startPos = BufferPosition(line: lineNum, column: startCol)
           let endPos = BufferPosition(line: lineNum, column: actualEndCol)
           let blockText = buffer.getTextInRange(startPos, endPos)
-          # Create replacement string with same length
-          let replaceText = $ch.repeat(blockText.len)
+          # Create replacement string with same character count
+          let replaceText = $ch.repeat(blockText.charLen)
           discard buffer.deleteRange(startPos, endPos)
           discard buffer.insertText(startPos, replaceText)
     of vskLine:

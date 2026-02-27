@@ -1626,7 +1626,7 @@ proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
         return err(insertResult.error)
 
       # Update cursor position for next paste
-      ctx.cursor.column = pastePos.column + pasteText.len
+      ctx.cursor.column = pastePos.column + pasteText.charLen
 
   # Commit transaction if we started one
   if actualCount > 1:
@@ -1731,7 +1731,7 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
         return err(insertResult.error)
 
       # Update cursor position for next paste
-      ctx.cursor.column = pastePos.column + pasteText.len
+      ctx.cursor.column = pastePos.column + pasteText.charLen
 
   # Commit transaction if we started one
   if actualCount > 1:
@@ -2950,10 +2950,10 @@ proc handleIncrementNumber(ctx: CommandContext, args: seq[string]): Result[(), s
     return err("Cursor out of bounds")
 
   let line = ctx.buffer.getLine(ctx.cursor.line)
-  let col = ctx.cursor.column
+  let byteCol = charToBytePos(line, ctx.cursor.column)
 
-  # Find number at or after cursor position
-  let (found, startPos, endPos, value) = findNumberAtOrAfterColumn(line, col)
+  # Find number at or after cursor position (byte space)
+  let (found, startPos, endPos, value) = findNumberAtOrAfterColumn(line, byteCol)
 
   if not found:
     return err("No number found")
@@ -2987,8 +2987,8 @@ proc handleIncrementNumber(ctx: CommandContext, args: seq[string]): Result[(), s
   if commitResult.isErr:
     return err(commitResult.error)
 
-  # Move cursor to start of the number
-  ctx.cursor.column = startPos
+  # Move cursor to start of the number (convert byte pos to char pos)
+  ctx.cursor.column = byteToCharPos(newLine, startPos)
 
   return ok(())
 
@@ -2998,10 +2998,10 @@ proc handleDecrementNumber(ctx: CommandContext, args: seq[string]): Result[(), s
     return err("Cursor out of bounds")
 
   let line = ctx.buffer.getLine(ctx.cursor.line)
-  let col = ctx.cursor.column
+  let byteCol = charToBytePos(line, ctx.cursor.column)
 
-  # Find number at or after cursor position
-  let (found, startPos, endPos, value) = findNumberAtOrAfterColumn(line, col)
+  # Find number at or after cursor position (byte space)
+  let (found, startPos, endPos, value) = findNumberAtOrAfterColumn(line, byteCol)
 
   if not found:
     return err("No number found")
@@ -3035,8 +3035,8 @@ proc handleDecrementNumber(ctx: CommandContext, args: seq[string]): Result[(), s
   if commitResult.isErr:
     return err(commitResult.error)
 
-  # Move cursor to start of the number
-  ctx.cursor.column = startPos
+  # Move cursor to start of the number (convert byte pos to char pos)
+  ctx.cursor.column = byteToCharPos(newLine, startPos)
 
   return ok(())
 

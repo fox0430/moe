@@ -827,6 +827,32 @@ suite "Handler - Paste operations":
     check registry.execute(ctx, custom("paste.before")).isOk
     check buffer[0] == "helloXYZ world"
 
+  test "paste after cursor (p) - multibyte characterwise":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 4)
+    ctx.state.yankRegister = "あいう"
+    ctx.state.yankIsLine = false
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after")).isOk
+    check buffer[0] == "helloあいう world"
+    # Cursor should be at column 5 + 3 chars = 8, not 5 + 9 bytes = 14
+    check ctx.cursor.column == 8
+
+  test "paste before cursor (P) - multibyte characterwise":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 5)
+    ctx.state.yankRegister = "あいう"
+    ctx.state.yankIsLine = false
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.before")).isOk
+    check buffer[0] == "helloあいう world"
+    # Cursor should be at column 5 + 3 chars = 8, not 5 + 9 bytes = 14
+    check ctx.cursor.column == 8
+
 suite "Handler - Delete char operations":
   test "delete char at cursor (x)":
     let buffer = newTextBuffer("hello")
@@ -1417,6 +1443,26 @@ suite "Handler - Increment/Decrement":
 
     check registry.execute(ctx, builtin(bcEditDecrementNumber)).isOk
     check "-1" in buffer[0]
+
+  test "increment number after multibyte prefix":
+    let buffer = newTextBuffer("あいう42")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 3) # Character index 3 = '4'
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcEditIncrementNumber)).isOk
+    check buffer[0] == "あいう43"
+    check ctx.cursor.column == 3 # Character index of '4' in the new line
+
+  test "decrement number after multibyte prefix":
+    let buffer = newTextBuffer("あいう42")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 3) # Character index 3 = '4'
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcEditDecrementNumber)).isOk
+    check buffer[0] == "あいう41"
+    check ctx.cursor.column == 3 # Character index of '4' in the new line
 
 suite "Handler - Indent/Dedent":
   test "indent line (>>)":

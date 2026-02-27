@@ -114,10 +114,10 @@ suite "Buffer - Basic Operations":
     check buf[1] == "Line2"
     check buf[2] == "Line3"
 
-  test "getLineLen returns byte length":
+  test "getLineLen returns character count":
     let buf = newTextBuffer("Hello\nあいう")
     check buf.getLineLen(0) == 5
-    check buf.getLineLen(1) == 9 # 3 characters * 3 bytes each
+    check buf.getLineLen(1) == 3 # 3 Unicode characters
 
   test "charLen returns character count":
     check charLen("Hello") == 5

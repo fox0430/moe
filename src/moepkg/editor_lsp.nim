@@ -25,7 +25,7 @@ import pkg/results
 
 import
   editor_types, editor_file, signature_help, documentsymbol_viewer, references_viewer,
-  callhierarchy_viewer, lsp_service, lsp_integration, buffer
+  callhierarchy_viewer, lsp_service, lsp_integration, buffer, unicode_utils
 import lsp/protocol/types as lspTypes
 
 proc maybeUpdateLsp*(e: Editor) =
@@ -164,9 +164,10 @@ proc jumpToLspLocation(e: Editor, loc: lspTypes.Location, resultKind: string): b
         activeBuffer.getLine(targetLine)
       else:
         ""
-    # Convert LSP UTF-16 character offset to UTF-8 byte offset
+    # Convert LSP UTF-16 character offset to character index
     let utf8Col = utf16OffsetToUtf8(lineText, loc.range.start.character)
-    let targetCol = min(utf8Col, max(0, lineText.len - 1))
+    let charCol = byteToCharPos(lineText, utf8Col)
+    let targetCol = min(charCol, max(0, lineText.charLen - 1))
     e.activeWindow.cursor.line = targetLine
     e.activeWindow.cursor.column = max(0, targetCol)
     e.state.statusMessage = resultKind & " at line " & $(targetLine + 1)
@@ -200,9 +201,10 @@ proc jumpToLspLocation(e: Editor, loc: lspTypes.Location, resultKind: string): b
         newActiveBuffer.getLine(targetLine)
       else:
         ""
-    # Convert LSP UTF-16 character offset to UTF-8 byte offset
+    # Convert LSP UTF-16 character offset to character index
     let utf8Col = utf16OffsetToUtf8(lineText, loc.range.start.character)
-    let targetCol = min(utf8Col, max(0, lineText.len - 1))
+    let charCol = byteToCharPos(lineText, utf8Col)
+    let targetCol = min(charCol, max(0, lineText.charLen - 1))
     e.activeWindow.cursor.line = targetLine
     e.activeWindow.cursor.column = max(0, targetCol)
     e.state.statusMessage = resultKind & " in " & path
@@ -269,9 +271,10 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
         activeBuffer.getLine(targetLine)
       else:
         ""
-    # Convert LSP UTF-16 character offset to UTF-8 byte offset
+    # Convert LSP UTF-16 character offset to character index
     let utf8Col = utf16OffsetToUtf8(lineText, column)
-    let targetCol = min(utf8Col, max(0, lineText.len - 1))
+    let charCol = byteToCharPos(lineText, utf8Col)
+    let targetCol = min(charCol, max(0, lineText.charLen - 1))
     e.activeWindow.cursor.line = targetLine
     e.activeWindow.cursor.column = max(0, targetCol)
   else:
@@ -287,9 +290,10 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
         e.textBuffer.getLine(targetLine)
       else:
         ""
-    # Convert LSP UTF-16 character offset to UTF-8 byte offset
+    # Convert LSP UTF-16 character offset to character index
     let utf8Col = utf16OffsetToUtf8(lineText, column)
-    let targetCol = min(utf8Col, max(0, lineText.len - 1))
+    let charCol = byteToCharPos(lineText, utf8Col)
+    let targetCol = min(charCol, max(0, lineText.charLen - 1))
     e.activeWindow.cursor.line = targetLine
     e.activeWindow.cursor.column = max(0, targetCol)
 
