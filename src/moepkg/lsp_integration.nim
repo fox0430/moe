@@ -861,7 +861,7 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
         # End is at start of a line (character == 0)
         # Need to point to end of previous line to include the newline
         if lspEndPos.line > 0:
-          let prevLineLen = buffer.getLine(lspEndPos.line - 1).len
+          let prevLineLen = buffer.getLine(lspEndPos.line - 1).charLen
           adjustedEndPos = BufferPosition(line: lspEndPos.line - 1, column: prevLineLen)
         else:
           # Edge case: end is at (0, 0), skip deletion

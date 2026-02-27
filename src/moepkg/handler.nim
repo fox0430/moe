@@ -1915,7 +1915,7 @@ proc screenToBufferPosition(
 
     # Clamp column to valid range
     if bufferLine >= 0 and bufferLine < buffer.len:
-      let lineLen = buffer[bufferLine].len
+      let lineLen = buffer[bufferLine].charLen
       bufferColumn = clamp(bufferColumn, 0, max(0, lineLen - 1))
 
     return some(BufferPosition(line: bufferLine, column: bufferColumn))
@@ -1996,7 +1996,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       if newLine != curLine:
         window.cursor = BufferPosition(line: newLine, column: window.cursor.column)
         # Clamp column to line length
-        let lineLen = window.buffer[newLine].len
+        let lineLen = window.buffer[newLine].charLen
         if lineLen > 0:
           window.cursor.column = min(window.cursor.column, lineLen - 1)
         else:

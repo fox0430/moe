@@ -850,6 +850,17 @@ suite "StatusLine - parseSetupText additional placeholders":
 
     check result == "0" # Should return 0 for invalid cursor position
 
+  test "Parse totalColumns for multibyte line":
+    var state = createTestState()
+    state.cursor.line = 0
+    state.cursor.column = 0
+
+    let textBuffer = createTestTextBuffer("", false, "あいうえお")
+
+    let result = parseSetupText(state, textBuffer, "{totalColumns}")
+
+    check result == "5" # 5 characters, not 15 bytes
+
 suite "StatusLine - renderStatusLine additional modes":
   test "Renders with replace mode":
     var state = createTestState()

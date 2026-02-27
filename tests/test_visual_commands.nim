@@ -628,6 +628,22 @@ suite "Visual Commands - visualReplace":
     check buf.getLine(0) == "xxxxx"
     check buf.getLine(1) == "xxxxx"
 
+  test "Replace block selection with multibyte content":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "あいう world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualReplace(buf, state, 'x')
+
+    # Should replace 3 characters, not 9 bytes worth
+    check buf.getLine(0) == "xxx world"
+
 suite "Visual Commands - visualJoinLines":
   test "Join two lines":
     let buf = newTextBuffer()
