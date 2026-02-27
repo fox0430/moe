@@ -2795,3 +2795,686 @@ suite "Cursor clamping - Visual operations sync ctx.cursor":
     check ctx.state.mode == EditorMode.Normal
     # ctx.cursor should be synced
     check ctx.cursor.line == 0
+suite "Handler - Indent/Outdent operator with text objects":
+  test "operator.indent sets pending operator":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("operator.indent")).isOk
+    check ctx.state.editState.pendingOperator.isSome
+    check ctx.state.editState.pendingOperator.get.operatorType == OpIndent
+
+  test "operator.outdent sets pending operator":
+    let buffer = newTextBuffer("  hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("operator.outdent")).isOk
+    check ctx.state.editState.pendingOperator.isSome
+    check ctx.state.editState.pendingOperator.get.operatorType == OpOutdent
+
+  test "double indent (>>) indents current line":
+    let buffer = newTextBuffer("hello\nworld\ntest")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    ctx.state.display.expandTab = true
+    ctx.state.display.tabStop = 2
+    ctx.state.display.shiftWidth = 2
+    let registry = createTestRegistry()
+
+    # First > sets pending operator
+    discard registry.execute(ctx, custom("operator.indent"))
+    check ctx.state.editState.pendingOperator.isSome
+
+    # Second > completes >> (indent line)
+    check registry.execute(ctx, custom("operator.indent")).isOk
+    check buffer[0] == "hello"
+    check buffer[1] == "  world"
+    check buffer[2] == "test"
+
+  test "double outdent (<<) dedents current line":
+    let buffer = newTextBuffer("hello\n  world\ntest")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 2)
+    ctx.state.mode = EditorMode.Normal
+    ctx.state.display.expandTab = true
+    ctx.state.display.tabStop = 2
+    ctx.state.display.shiftWidth = 2
+    let registry = createTestRegistry()
+
+    # First < sets pending operator
+    discard registry.execute(ctx, custom("operator.outdent"))
+    check ctx.state.editState.pendingOperator.isSome
+
+    # Second < completes << (dedent line)
+    check registry.execute(ctx, custom("operator.outdent")).isOk
+    check buffer[0] == "hello"
+    check buffer[1] == "world"
+    check buffer[2] == "test"
+
+  test "indent with text object (>iw) indents word line":
+    let buffer = newTextBuffer("hello\nworld\ntest")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    ctx.state.display.expandTab = true
+    ctx.state.display.tabStop = 2
+    ctx.state.display.shiftWidth = 2
+    let registry = createTestRegistry()
+
+    # Set pending operator (>)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Set text object modifier (i)
+    discard registry.execute(ctx, custom("textobject.inner"))
+
+    # Execute text object kind (word)
+    check registry.execute(ctx, custom("textobject.word")).isOk
+    # Line containing the word should be indented
+    check "  " in buffer[1]
+
+  test "outdent with text object (<i{) dedents brace block":
+    let buffer = newTextBuffer("{\n  hello\n  world\n}")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 2)
+    ctx.state.mode = EditorMode.Normal
+    ctx.state.display.expandTab = true
+    ctx.state.display.tabStop = 2
+    ctx.state.display.shiftWidth = 2
+    let registry = createTestRegistry()
+
+    # Set pending operator (<)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpOutdent, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Set text object modifier (i)
+    discard registry.execute(ctx, custom("textobject.inner"))
+
+    # Execute text object kind (brace)
+    check registry.execute(ctx, custom("textobject.brace")).isOk
+    # Lines inside braces should be dedented
+    check buffer[1] == "hello"
+    check buffer[2] == "world"
+
+suite "Handler - Lowercase/Uppercase operator with text objects":
+  test "operator.lowercase sets pending operator":
+    let buffer = newTextBuffer("HELLO WORLD")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("operator.lowercase")).isOk
+    check ctx.state.editState.pendingOperator.isSome
+    check ctx.state.editState.pendingOperator.get.operatorType == OpLowerCase
+
+  test "operator.uppercase sets pending operator":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("operator.uppercase")).isOk
+    check ctx.state.editState.pendingOperator.isSome
+    check ctx.state.editState.pendingOperator.get.operatorType == OpUpperCase
+
+  test "lowercase with text object (guiw) lowercases inner word":
+    let buffer = newTextBuffer("hello WORLD test")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6) # On 'W' in "WORLD"
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # Set pending operator (gu)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Set text object modifier (i)
+    discard registry.execute(ctx, custom("textobject.inner"))
+
+    # Execute text object kind (word)
+    check registry.execute(ctx, custom("textobject.word")).isOk
+    check "world" in buffer[0]
+    check "WORLD" notin buffer[0]
+
+  test "uppercase with text object (gUiw) uppercases inner word":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6) # On 'w' in "world"
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # Set pending operator (gU)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Set text object modifier (i)
+    discard registry.execute(ctx, custom("textobject.inner"))
+
+    # Execute text object kind (word)
+    check registry.execute(ctx, custom("textobject.word")).isOk
+    check "WORLD" in buffer[0]
+    check "hello" in buffer[0] # Other words unchanged
+    check "test" in buffer[0] # Other words unchanged
+
+  test "lowercase with quoted text object (gui\")":
+    let buffer = newTextBuffer("say \"HELLO WORLD\" now")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6) # Inside quotes
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # Set pending operator (gu)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Set text object modifier (i)
+    discard registry.execute(ctx, custom("textobject.inner"))
+
+    # Execute text object kind (double quote)
+    check registry.execute(ctx, custom("textobject.quote.double")).isOk
+    check "hello world" in buffer[0]
+
+  test "uppercase with parenthesis text object (gUi()":
+    let buffer = newTextBuffer("func(hello world)")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6) # Inside parens
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # Set pending operator (gU)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Set text object modifier (i)
+    discard registry.execute(ctx, custom("textobject.inner"))
+
+    # Execute text object kind (paren)
+    check registry.execute(ctx, custom("textobject.paren")).isOk
+    check "HELLO WORLD" in buffer[0]
+    check buffer[0].startsWith("func(")
+    check buffer[0].endsWith(")")
+
+  test "indent with brace text object (>i{) multi-line":
+    let buffer = newTextBuffer("if true {\nhello\nworld\n}")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0) # Inside braces
+    ctx.state.mode = EditorMode.Normal
+    ctx.state.display.expandTab = true
+    ctx.state.display.tabStop = 2
+    ctx.state.display.shiftWidth = 2
+    let registry = createTestRegistry()
+
+    # Set pending operator (>)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Set text object modifier (i)
+    discard registry.execute(ctx, custom("textobject.inner"))
+
+    # Execute text object kind (brace)
+    check registry.execute(ctx, custom("textobject.brace")).isOk
+    check buffer[0] == "if true {"
+    check buffer[1] == "  hello"
+    check buffer[2] == "  world"
+    check buffer[3] == "}"
+
+suite "Handler - Visual mode text object selection":
+  test "viw selects inner word":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 7) # On 'o' in "world"
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection = VisualSelection(
+      active: true,
+      start: BufferPosition(line: 0, column: 7),
+      current: BufferPosition(line: 0, column: 7),
+    )
+    let registry = createTestRegistry()
+
+    # i - sets pending text object modifier in Visual mode
+    check registry.execute(ctx, custom("textobject.inner")).isOk
+    check ctx.state.editState.pendingTextObject.isSome
+    check ctx.state.editState.pendingTextObject.get.modifier == tomInner
+    check ctx.state.mode == EditorMode.Visual # Stays in visual mode
+
+    # w - selects word
+    check registry.execute(ctx, custom("textobject.word")).isOk
+    check ctx.state.visualSelection.active == true
+    # Selection should cover "world" (columns 6-10)
+    check ctx.state.visualSelection.start.column == 6
+    check ctx.state.visualSelection.current.column == 10
+
+  test "vaw selects around word":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 7) # On 'o' in "world"
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection = VisualSelection(
+      active: true,
+      start: BufferPosition(line: 0, column: 7),
+      current: BufferPosition(line: 0, column: 7),
+    )
+    let registry = createTestRegistry()
+
+    # a - sets around text object modifier
+    check registry.execute(ctx, custom("textobject.around")).isOk
+    check ctx.state.editState.pendingTextObject.isSome
+    check ctx.state.editState.pendingTextObject.get.modifier == tomAround
+
+    # w - selects around word
+    check registry.execute(ctx, custom("textobject.word")).isOk
+    check ctx.state.visualSelection.active == true
+    # "world " should be selected (columns 6-11, including trailing space)
+    check ctx.state.visualSelection.start.column == 6
+    check ctx.state.visualSelection.current.column == 11
+
+  test "vi\" selects inner quoted string":
+    let buffer = newTextBuffer("say \"hello world\" now")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6) # Inside quotes
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection = VisualSelection(
+      active: true,
+      start: BufferPosition(line: 0, column: 6),
+      current: BufferPosition(line: 0, column: 6),
+    )
+    let registry = createTestRegistry()
+
+    # i - inner modifier
+    check registry.execute(ctx, custom("textobject.inner")).isOk
+
+    # " - double quote text object
+    check registry.execute(ctx, custom("textobject.quote.double")).isOk
+    check ctx.state.visualSelection.active == true
+    # "hello world" (content inside quotes) should be selected
+    check ctx.state.visualSelection.start.column == 5
+    check ctx.state.visualSelection.current.column == 15
+
+  test "vi{ selects inner brace block (multi-line)":
+    let buffer = newTextBuffer("if true {\nhello\nworld\n}")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0) # Inside braces
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection = VisualSelection(
+      active: true,
+      start: BufferPosition(line: 1, column: 0),
+      current: BufferPosition(line: 1, column: 0),
+    )
+    let registry = createTestRegistry()
+
+    # i - inner modifier
+    check registry.execute(ctx, custom("textobject.inner")).isOk
+
+    # { - brace text object
+    check registry.execute(ctx, custom("textobject.brace")).isOk
+    check ctx.state.visualSelection.active == true
+    # Selection should span from after { to before }
+    check ctx.state.visualSelection.start.line == 0
+    check ctx.state.visualSelection.current.line == 3
+
+  test "textobject.inner in Visual mode does not enter Insert mode":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection = VisualSelection(
+      active: true,
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 0),
+    )
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("textobject.inner")).isOk
+    check ctx.state.mode == EditorMode.Visual # Must stay in Visual mode
+    check ctx.state.editState.pendingTextObject.isSome
+
+  test "textobject.around in Visual mode does not enter Insert mode":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection = VisualSelection(
+      active: true,
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 0),
+    )
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("textobject.around")).isOk
+    check ctx.state.mode == EditorMode.Visual # Must stay in Visual mode
+    check ctx.state.editState.pendingTextObject.isSome
+
+suite "Multibyte character support":
+  test "lowercase operator with mixed ASCII and multibyte (guiw)":
+    # Multibyte characters should pass through toLowerAscii unchanged
+    let buffer = newTextBuffer("こんにちは HELLO 世界")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6) # On 'H' in "HELLO"
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # Set pending operator (gu)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Set text object modifier (i) and execute kind (w)
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.word")).isOk
+
+    check "hello" in buffer[0]
+    check "HELLO" notin buffer[0]
+    # Multibyte characters must remain unchanged
+    check "こんにちは" in buffer[0]
+    check "世界" in buffer[0]
+
+  test "uppercase operator with mixed ASCII and multibyte (gUiw)":
+    let buffer = newTextBuffer("こんにちは hello 世界")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6) # On 'h' in "hello"
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # Set pending operator (gU)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Set text object modifier (i) and execute kind (w)
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.word")).isOk
+
+    check "HELLO" in buffer[0]
+    check "こんにちは" in buffer[0]
+    check "世界" in buffer[0]
+
+  test "lowercase linewise with multibyte lines":
+    let buffer = newTextBuffer("日本語 ABC\nこんにちは DEF\n漢字 GHI")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 2, column: 0),
+      isLinewise: true,
+    )
+    check executeOperatorOnRange(ctx, OpLowerCase, range, 1).isOk
+
+    check buffer[0] == "日本語 abc"
+    check buffer[1] == "こんにちは def"
+    check buffer[2] == "漢字 ghi"
+
+  test "uppercase linewise with multibyte lines":
+    let buffer = newTextBuffer("日本語 abc\nこんにちは def\n漢字 ghi")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 0),
+      endPos: BufferPosition(line: 2, column: 0),
+      isLinewise: true,
+    )
+    check executeOperatorOnRange(ctx, OpUpperCase, range, 1).isOk
+
+    check buffer[0] == "日本語 ABC"
+    check buffer[1] == "こんにちは DEF"
+    check buffer[2] == "漢字 GHI"
+
+  test "lowercase character-wise range with multibyte":
+    # Character-wise range within a line containing multibyte chars
+    let buffer = newTextBuffer("あいう ABC うえお")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 4) # On 'A'
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 4),
+      endPos: BufferPosition(line: 0, column: 6), # "ABC"
+      isLinewise: false,
+    )
+    check executeOperatorOnRange(ctx, OpLowerCase, range, 1).isOk
+
+    check buffer[0] == "あいう abc うえお"
+
+  test "uppercase character-wise range with multibyte":
+    let buffer = newTextBuffer("あいう abc うえお")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 4)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    let range = OperatorRange(
+      start: BufferPosition(line: 0, column: 4),
+      endPos: BufferPosition(line: 0, column: 6), # "abc"
+      isLinewise: false,
+    )
+    check executeOperatorOnRange(ctx, OpUpperCase, range, 1).isOk
+
+    check buffer[0] == "あいう ABC うえお"
+
+  test "indent line with multibyte content (>>)":
+    let buffer = newTextBuffer("日本語テスト\nこんにちは\nASCII")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    ctx.state.display.expandTab = true
+    ctx.state.display.tabStop = 2
+    ctx.state.display.shiftWidth = 2
+    let registry = createTestRegistry()
+
+    # >> (double indent)
+    discard registry.execute(ctx, custom("operator.indent"))
+    check registry.execute(ctx, custom("operator.indent")).isOk
+
+    check buffer[0] == "  日本語テスト"
+    check buffer[1] == "こんにちは" # Untouched
+    check buffer[2] == "ASCII" # Untouched
+
+  test "outdent line with multibyte content (<<)":
+    let buffer = newTextBuffer("  日本語テスト\n  こんにちは\nASCII")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    ctx.state.mode = EditorMode.Normal
+    ctx.state.display.expandTab = true
+    ctx.state.display.tabStop = 2
+    ctx.state.display.shiftWidth = 2
+    let registry = createTestRegistry()
+
+    # << (double outdent)
+    discard registry.execute(ctx, custom("operator.outdent"))
+    check registry.execute(ctx, custom("operator.outdent")).isOk
+
+    check buffer[0] == "日本語テスト"
+    check buffer[1] == "  こんにちは" # Untouched
+    check buffer[2] == "ASCII" # Untouched
+
+  test "indent with brace text object containing multibyte (>i{)":
+    let buffer = newTextBuffer("関数 {\nあいうえお\nかきくけこ\n}")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0) # Inside braces
+    ctx.state.mode = EditorMode.Normal
+    ctx.state.display.expandTab = true
+    ctx.state.display.tabStop = 2
+    ctx.state.display.shiftWidth = 2
+    let registry = createTestRegistry()
+
+    # Set pending operator (>)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Set text object modifier (i) and execute kind (brace)
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.brace")).isOk
+
+    check buffer[0] == "関数 {"
+    check buffer[1] == "  あいうえお"
+    check buffer[2] == "  かきくけこ"
+    check buffer[3] == "}"
+
+  test "lowercase with quoted multibyte text (gui\")":
+    let buffer = newTextBuffer("say \"HELLO こんにちは WORLD\" end")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6) # Inside quotes
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # Set pending operator (gu)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Set text object modifier (i) and execute kind (double quote)
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.quote.double")).isOk
+
+    check "hello こんにちは world" in buffer[0]
+    check buffer[0].startsWith("say \"")
+    check "\" end" in buffer[0]
+
+  test "visual mode text object selection with multibyte (viw)":
+    let buffer = newTextBuffer("あいう hello かきく")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 5) # On 'l' in "hello"
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection = VisualSelection(
+      active: true,
+      start: BufferPosition(line: 0, column: 5),
+      current: BufferPosition(line: 0, column: 5),
+    )
+    let registry = createTestRegistry()
+
+    # i - sets pending text object modifier in Visual mode
+    check registry.execute(ctx, custom("textobject.inner")).isOk
+    check ctx.state.editState.pendingTextObject.isSome
+
+    # w - selects word
+    check registry.execute(ctx, custom("textobject.word")).isOk
+    check ctx.state.visualSelection.active == true
+    # Selection should cover "hello" (columns 4-8)
+    check ctx.state.visualSelection.start.column == 4
+    check ctx.state.visualSelection.current.column == 8
+
+  test "visual mode text object selection with quoted multibyte (vi\")":
+    let buffer = newTextBuffer("関数 \"あいうえお\" 結果")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 4) # Inside quotes
+    ctx.state.mode = EditorMode.Visual
+    ctx.state.visualSelection = VisualSelection(
+      active: true,
+      start: BufferPosition(line: 0, column: 4),
+      current: BufferPosition(line: 0, column: 4),
+    )
+    let registry = createTestRegistry()
+
+    # i - inner modifier
+    check registry.execute(ctx, custom("textobject.inner")).isOk
+
+    # " - double quote text object
+    check registry.execute(ctx, custom("textobject.quote.double")).isOk
+    check ctx.state.visualSelection.active == true
+    # Should select "あいうえお" inside quotes (columns 4-8)
+    check ctx.state.visualSelection.start.column == 4
+    check ctx.state.visualSelection.current.column == 8
+
+suite "Handler - Text Object Count (d2iw, d2aw)":
+  test "d2iw deletes two words":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # Set pending operator d with count 2
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
+    )
+
+    # i - inner modifier
+    discard registry.execute(ctx, custom("textobject.inner"))
+
+    # w - word text object
+    check registry.execute(ctx, custom("textobject.word")).isOk
+    # "hello " should be deleted (hello + trailing space as 2nd iw unit)
+    check buffer[0] == "world test"
+
+  test "d1iw is same as diw":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # Set pending operator d with count 1
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # i - inner modifier
+    discard registry.execute(ctx, custom("textobject.inner"))
+
+    # w - word text object
+    check registry.execute(ctx, custom("textobject.word")).isOk
+    # Only "hello" should be deleted
+    check buffer[0] == " world test"
+
+  test "d2aw deletes two words with trailing space":
+    let buffer = newTextBuffer("hello world test end")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # Set pending operator d with count 2
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
+    )
+
+    # a - around modifier
+    discard registry.execute(ctx, custom("textobject.around"))
+
+    # w - word text object
+    check registry.execute(ctx, custom("textobject.word")).isOk
+    # "hello world " should be deleted
+    check buffer[0] == "test end"
+
+  test "d2i\" ignores count for quote text objects":
+    let buffer = newTextBuffer("say \"hello\" world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6) # Inside quotes
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    # Set pending operator d with count 2
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
+    )
+
+    # i - inner modifier
+    discard registry.execute(ctx, custom("textobject.inner"))
+
+    # " - quote text object (count should be ignored)
+    check registry.execute(ctx, custom("textobject.quote.double")).isOk
+    # Only "hello" inside quotes should be deleted (count ignored)
+    check buffer[0] == "say \"\" world"

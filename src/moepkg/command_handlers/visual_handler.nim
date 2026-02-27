@@ -142,10 +142,6 @@ proc isPositionInSelection*(selection: VisualSelection, pos: BufferPosition): bo
       # Position is on a middle line
       return true
 
-proc isVisualMode*(mode: EditorMode): bool {.inline.} =
-  ## Check if the mode is any visual mode variant
-  mode in {EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
-
 proc executeCommand*(
     handler: VisualModeHandler,
     buffer: TextBuffer,
@@ -171,7 +167,7 @@ proc executeCommand*(
   if r.isOk:
     # Check if mode changed from a visual mode to something else
     let modeTransition =
-      if not isVisualMode(state.mode) or state.mode != originalMode:
+      if not isVisualAllMode(state.mode) or state.mode != originalMode:
         some(state.mode)
       else:
         none(EditorMode)
@@ -195,9 +191,54 @@ proc handleVisualModeKey*(
 
   # Special handling for ESC to clear selection
   if keyCombo.isSpecial and keyCombo.special == skEscape:
+    state.editState.pendingTextObject = none(PendingTextObject)
     state.clearSelection()
 
   let originalMode = state.mode
+
+  # Handle pending text object - waiting for text object kind (w, ", (, etc.)
+  # This handles viw, va", vi( etc. in Visual mode
+  if state.editState.pendingTextObject.isSome:
+    if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+      let textObjectCommandId =
+        case keyCombo.char
+        of "w": "textobject.word"
+        of "W": "textobject.wideword"
+        of "\"": "textobject.quote.double"
+        of "'": "textobject.quote.single"
+        of "`": "textobject.quote.backtick"
+        of "(", ")", "b": "textobject.paren"
+        of "[", "]": "textobject.bracket"
+        of "{", "}": "textobject.brace"
+        of "<", ">": "textobject.angle"
+        else: ""
+
+      if textObjectCommandId.len > 0:
+        let ctx = CommandContext(
+          buffer: buffer,
+          state: state,
+          viewport: viewport,
+          cursor: state.cursor,
+          motionController: handler.motionController,
+          keyBindingRegistry: handler.keyBindingRegistry,
+          notificationConfig: handler.notificationConfig,
+        )
+
+        let cmdResult = handler.commandRegistry.execute(ctx, textObjectCommandId, @[])
+        state.cursor = ctx.cursor
+
+        if cmdResult.isOk:
+          return VisualModeResult(kind: vmrHandled, modeTransition: none(EditorMode))
+        else:
+          return VisualModeResult(kind: vmrError, errorMessage: cmdResult.error)
+      else:
+        # Unknown text object kind - cancel pending state
+        state.editState.pendingTextObject = none(PendingTextObject)
+        return VisualModeResult(kind: vmrHandled, modeTransition: none(EditorMode))
+    else:
+      # Special key or key with modifiers - cancel pending state
+      state.editState.pendingTextObject = none(PendingTextObject)
+      # Fall through to process the key normally
 
   # Try to find a binding for this key in the current mode first,
   # then fall back to Visual mode for shared bindings
@@ -235,7 +276,7 @@ proc handleVisualModeKey*(
   state.cursor = ctx.cursor
 
   # Update visual selection current position if still in visual mode
-  if isVisualMode(state.mode) and state.visualSelection.active:
+  if isVisualAllMode(state.mode) and state.visualSelection.active:
     state.visualSelection.current = state.cursor
 
   if cmdResult.isErr:
@@ -243,7 +284,7 @@ proc handleVisualModeKey*(
 
   # Check for mode transition (exiting any visual mode)
   let modeTransition =
-    if not isVisualMode(state.mode) or state.mode != originalMode:
+    if not isVisualAllMode(state.mode) or state.mode != originalMode:
       some(state.mode)
     else:
       none(EditorMode)

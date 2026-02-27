@@ -500,7 +500,145 @@ proc executeOperatorOnRange(
     ctx.state.needsFullRedraw = true
 
     return ok(())
-  else:
+  of OpIndent:
+    # Indent lines in the range
+    # For character-wise ranges (e.g., i{), adjust start/end lines:
+    # If start column is at/past end of line, content starts on the next line.
+    # If end column is negative or end line has closing delimiter only, exclude it.
+    var startLine = range.start.line
+    var endLine = range.endPos.line
+    if not range.isLinewise and startLine != endLine:
+      if startLine < ctx.buffer.len:
+        let startLineContent = ctx.buffer.getLine(startLine)
+        if range.start.column >= startLineContent.charLen:
+          startLine += 1
+      if endLine < ctx.buffer.len and range.endPos.column < 0:
+        endLine -= 1
+
+    let transactionResult = ctx.buffer.beginTransaction("Indent lines")
+    if transactionResult.isErr:
+      return err("Failed to begin transaction: " & transactionResult.error)
+
+    let indentStr = getIndentString(ctx.state)
+    for lineNum in startLine .. endLine:
+      if lineNum < ctx.buffer.len:
+        let insertPos = BufferPosition(line: lineNum, column: 0)
+        discard ctx.buffer.insertText(insertPos, indentStr)
+
+    discard ctx.buffer.commitTransaction()
+
+    # Move cursor to first non-blank of start line
+    ctx.cursor.line = startLine
+    ctx.cursor.column = 0
+    if startLine < ctx.buffer.len:
+      let line = ctx.buffer.getLine(startLine)
+      for r in line.runes:
+        if $r == " " or $r == "\t":
+          ctx.cursor.column += 1
+        else:
+          break
+
+    ctx.state.needsFullRedraw = true
+    return ok(())
+  of OpOutdent:
+    # Dedent lines in the range (same line adjustment as indent)
+    var startLine = range.start.line
+    var endLine = range.endPos.line
+    if not range.isLinewise and startLine != endLine:
+      if startLine < ctx.buffer.len:
+        let startLineContent = ctx.buffer.getLine(startLine)
+        if range.start.column >= startLineContent.charLen:
+          startLine += 1
+      if endLine < ctx.buffer.len and range.endPos.column < 0:
+        endLine -= 1
+
+    let transactionResult = ctx.buffer.beginTransaction("Dedent lines")
+    if transactionResult.isErr:
+      return err("Failed to begin transaction: " & transactionResult.error)
+
+    let indentWidth = effectiveShiftWidth(ctx.state)
+    for lineNum in startLine .. endLine:
+      if lineNum < ctx.buffer.len:
+        let lineContent = ctx.buffer.getLine(lineNum)
+        let currentIndent = getLineIndent(lineContent)
+        let removeCount = min(indentWidth, currentIndent.len)
+        if removeCount > 0:
+          for i in 1 .. removeCount:
+            let deletePos = BufferPosition(line: lineNum, column: 0)
+            discard ctx.buffer.deleteChar(deletePos)
+
+    discard ctx.buffer.commitTransaction()
+
+    # Move cursor to first non-blank of start line
+    ctx.cursor.line = startLine
+    ctx.cursor.column = 0
+    if startLine < ctx.buffer.len:
+      let outdentLine = ctx.buffer.getLine(startLine)
+      for r in outdentLine.runes:
+        if $r == " " or $r == "\t":
+          ctx.cursor.column += 1
+        else:
+          break
+
+    ctx.state.needsFullRedraw = true
+    return ok(())
+  of OpLowerCase:
+    # Convert text in range to lowercase
+    let transactionResult = ctx.buffer.beginTransaction("Lowercase")
+    if transactionResult.isErr:
+      return err("Failed to begin transaction: " & transactionResult.error)
+
+    if range.isLinewise:
+      for lineNum in range.start.line .. range.endPos.line:
+        if lineNum < ctx.buffer.len:
+          let lineText = $ctx.buffer.getLine(lineNum)
+          let lineCharLen = lineText.charLen
+          if lineCharLen > 0:
+            let lowerText = lineText.toLowerAscii()
+            let startPos = BufferPosition(line: lineNum, column: 0)
+            let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
+            discard ctx.buffer.deleteRange(startPos, endPos)
+            discard ctx.buffer.insertText(startPos, lowerText)
+    else:
+      let text = extractRangeText(ctx.buffer, range)
+      let lowerText = text.toLowerAscii()
+      discard ctx.buffer.deleteRange(range.start, range.endPos)
+      discard ctx.buffer.insertText(range.start, lowerText)
+
+    discard ctx.buffer.commitTransaction()
+
+    ctx.cursor = range.start
+    ctx.state.needsFullRedraw = true
+    return ok(())
+  of OpUpperCase:
+    # Convert text in range to uppercase
+    let transactionResult = ctx.buffer.beginTransaction("Uppercase")
+    if transactionResult.isErr:
+      return err("Failed to begin transaction: " & transactionResult.error)
+
+    if range.isLinewise:
+      for lineNum in range.start.line .. range.endPos.line:
+        if lineNum < ctx.buffer.len:
+          let lineText = $ctx.buffer.getLine(lineNum)
+          let lineCharLen = lineText.charLen
+          if lineCharLen > 0:
+            let upperText = lineText.toUpperAscii()
+            let startPos = BufferPosition(line: lineNum, column: 0)
+            let endPos = BufferPosition(line: lineNum, column: lineCharLen - 1)
+            discard ctx.buffer.deleteRange(startPos, endPos)
+            discard ctx.buffer.insertText(startPos, upperText)
+    else:
+      let text = extractRangeText(ctx.buffer, range)
+      let upperText = text.toUpperAscii()
+      discard ctx.buffer.deleteRange(range.start, range.endPos)
+      discard ctx.buffer.insertText(range.start, upperText)
+
+    discard ctx.buffer.commitTransaction()
+
+    ctx.cursor = range.start
+    ctx.state.needsFullRedraw = true
+    return ok(())
+  of OpSwapCase:
     return err("Operator " & $operatorType & " not yet implemented")
 
 # Forward declaration for recordJump (defined below)
@@ -2478,6 +2616,68 @@ proc handleOperatorChange(ctx: CommandContext, count: int = 1): Result[(), strin
     setPendingOperator(ctx, OpChange, count, "c")
     return ok(())
 
+proc handleOperatorIndent(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Indent operator - waits for motion (>2w, >$, etc.) or >> for line
+  ## count: number of times to apply the operator (default: 1)
+
+  # Check if same operator was pressed (>> for indent line)
+  if ctx.state.editState.pendingOperator.isSome and
+      ctx.state.editState.pendingOperator.get.operatorType == OpIndent:
+    let startLine = ctx.cursor.line
+    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
+    let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
+    ctx.state.editState.pendingOperator = none(PendingOperator)
+
+    let range = OperatorRange(
+      start: BufferPosition(line: startLine, column: 0),
+      endPos: BufferPosition(line: endLine, column: 0),
+      isLinewise: true,
+    )
+    return executeOperatorOnRange(ctx, OpIndent, range, 1)
+  else:
+    # Set pending operator for motion
+    setPendingOperator(ctx, OpIndent, count, ">")
+    return ok(())
+
+proc handleOperatorOutdent(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Outdent operator - waits for motion (<2w, <$, etc.) or << for line
+  ## count: number of times to apply the operator (default: 1)
+
+  # Check if same operator was pressed (<< for dedent line)
+  if ctx.state.editState.pendingOperator.isSome and
+      ctx.state.editState.pendingOperator.get.operatorType == OpOutdent:
+    let startLine = ctx.cursor.line
+    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
+    let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
+    ctx.state.editState.pendingOperator = none(PendingOperator)
+
+    let range = OperatorRange(
+      start: BufferPosition(line: startLine, column: 0),
+      endPos: BufferPosition(line: endLine, column: 0),
+      isLinewise: true,
+    )
+    return executeOperatorOnRange(ctx, OpOutdent, range, 1)
+  else:
+    # Set pending operator for motion
+    setPendingOperator(ctx, OpOutdent, count, "<")
+    return ok(())
+
+proc handleOperatorLowerCase(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Lowercase operator - waits for motion (guw, gu$, etc.)
+  ## count: number of times to apply the operator (default: 1)
+
+  # Set pending operator for motion
+  setPendingOperator(ctx, OpLowerCase, count, "gu")
+  return ok(())
+
+proc handleOperatorUpperCase(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Uppercase operator - waits for motion (gUw, gU$, etc.)
+  ## count: number of times to apply the operator (default: 1)
+
+  # Set pending operator for motion
+  setPendingOperator(ctx, OpUpperCase, count, "gU")
+  return ok(())
+
 ## Text object command handlers
 
 proc handleTextObjectInner(ctx: CommandContext): Result[(), string] =
@@ -2491,6 +2691,11 @@ proc handleTextObjectInner(ctx: CommandContext): Result[(), string] =
       some(PendingTextObject(modifier: tomInner, operatorCount: operatorCount))
     ctx.state.statusMessage =
       $ctx.state.editState.pendingOperator.get.operatorType & "i"
+    return ok(())
+  elif isVisualAllMode(ctx.state.mode):
+    # In Visual mode - set text object modifier for visual selection
+    ctx.state.editState.pendingTextObject =
+      some(PendingTextObject(modifier: tomInner, operatorCount: 1))
     return ok(())
   else:
     # No pending operator - enter Insert mode
@@ -2513,6 +2718,11 @@ proc handleTextObjectAround(ctx: CommandContext): Result[(), string] =
       some(PendingTextObject(modifier: tomAround, operatorCount: operatorCount))
     ctx.state.statusMessage =
       $ctx.state.editState.pendingOperator.get.operatorType & "a"
+    return ok(())
+  elif isVisualAllMode(ctx.state.mode):
+    # In Visual mode - set text object modifier for visual selection
+    ctx.state.editState.pendingTextObject =
+      some(PendingTextObject(modifier: tomAround, operatorCount: 1))
     return ok(())
   else:
     # No pending operator - enter Append mode (move cursor right, then Insert)
@@ -4089,6 +4299,50 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     1, # Accept optional count
   )
 
+  registry.register(
+    custom("operator.indent"),
+    "Indent Operator",
+    "Indent operator - waits for motion (>w, >$, etc.) or >> for line",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleOperatorIndent(ctx, count),
+    0,
+    1, # Accept optional count
+  )
+
+  registry.register(
+    custom("operator.outdent"),
+    "Outdent Operator",
+    "Outdent operator - waits for motion (<w, <$, etc.) or << for line",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleOperatorOutdent(ctx, count),
+    0,
+    1, # Accept optional count
+  )
+
+  registry.register(
+    custom("operator.lowercase"),
+    "Lowercase Operator",
+    "Lowercase operator - waits for motion (guw, gu$, etc.)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleOperatorLowerCase(ctx, count),
+    0,
+    1, # Accept optional count
+  )
+
+  registry.register(
+    custom("operator.uppercase"),
+    "Uppercase Operator",
+    "Uppercase operator - waits for motion (gUw, gU$, etc.)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleOperatorUpperCase(ctx, count),
+    0,
+    1, # Accept optional count
+  )
+
   # D - Delete to end of line (equivalent to d$)
   registry.register(
     custom("operator.delete.to.end"),
@@ -4211,7 +4465,34 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         if rangeResult.isErr:
           return err(rangeResult.error)
 
-        let toRange = rangeResult.value
+        var toRange = rangeResult.value
+
+        # Count extension for word/WORD text objects (e.g., d2iw, d3aw)
+        # textObj.operatorCount already contains the count from the pending operator
+        let effectiveCount = max(textObj.operatorCount, 1)
+
+        if effectiveCount > 1 and kind in {toWord, toWideWord}:
+          for i in 1 ..< effectiveCount:
+            # Move cursor past current range end
+            var nextLine = toRange.endPos.line
+            var nextCol = toRange.endPos.column + 1
+            let lineRunes = ctx.buffer.getLine(nextLine).toRunes()
+            if nextCol >= lineRunes.len:
+              # Move to next line
+              nextLine.inc
+              nextCol = 0
+              if nextLine >= ctx.buffer.len:
+                break
+
+            # Use inner for intermediate words, original modifier for last
+            let modifier = if i == effectiveCount - 1: textObj.modifier else: tomInner
+
+            let nextCursor = BufferPosition(line: nextLine, column: nextCol)
+            let nextResult =
+              calculateTextObjectRange(ctx.buffer, nextCursor, kind, modifier)
+            if nextResult.isErr:
+              break
+            toRange.endPos = nextResult.value.endPos
 
         # Convert TextObjectRange to OperatorRange
         let opRange = OperatorRange(
@@ -4225,9 +4506,16 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
 
           # Execute operator on text object
           return executeOperatorOnRange(ctx, op.operatorType, opRange, op.operatorCount)
+        elif isVisualAllMode(ctx.state.mode):
+          # In Visual mode - update selection to text object range
+          ctx.state.visualSelection.start = toRange.start
+          ctx.state.visualSelection.current = toRange.endPos
+          ctx.state.visualSelection.active = true
+          ctx.cursor = toRange.endPos
+          ctx.state.needsFullRedraw = true
+          return ok(())
         else:
-          # No operator - just select the text object in visual mode (future feature)
-          return err("Text objects without operators not yet implemented"),
+          return err("Text objects require an operator or Visual mode"),
       0,
       0,
     )

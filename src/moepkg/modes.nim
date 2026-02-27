@@ -87,6 +87,10 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.CallHierarchy: "CALL HIERARCHY"
   of EditorMode.Terminal: "TERMINAL"
 
+proc isVisualAllMode*(mode: EditorMode): bool =
+  ## Check if the mode is any visual mode variant
+  mode in {EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
+
 proc overlayLabel*(o: OverlayKind): string =
   case o
   of okCommand: "COMMAND"

@@ -94,18 +94,43 @@ s or cl    - Delete the current character and enter insert mode
 ci"        - Delete the inside of double quotes and enter insert mode
 ci'        - Delete the inside of single quotes and enter insert mode
 ciw        - Delete the current word and enter insert mode
+ciW        - Delete the current WORD and enter insert mode
 ci( or ci) - Delete the inside of round brackets and enter insert mode
 ci[ or ci] - Delete the inside of square brackets and enter insert mode
 ci{ or ci} - Delete the inside of curly brackets and enter insert mode
+ca"        - Delete around double quotes and enter insert mode
+ca'        - Delete around single quotes and enter insert mode
+caw        - Delete a word (with surrounding whitespace) and enter insert mode
+caW        - Delete a WORD (with surrounding whitespace) and enter insert mode
+ca( or ca) - Delete around round brackets and enter insert mode
+ca[ or ca] - Delete around square brackets and enter insert mode
+ca{ or ca} - Delete around curly brackets and enter insert mode
 cf any     - Delete characters to the any character and enter insert mode
 ct any     - Delete characters until the character and enter insert mode
 di"        - Delete the inside of double quotes
 di'        - Delete the inside of single quotes
 diw        - Delete the current word
+diW        - Delete the current WORD
 di( or di) - Delete the inside of round brackets
 di[ or di] - Delete the inside of square brackets
 di{ or di} - Delete the inside of curly brackets
+da"        - Delete around double quotes (including quotes)
+da'        - Delete around single quotes (including quotes)
+daw        - Delete a word (including surrounding whitespace)
+daW        - Delete a WORD (including surrounding whitespace)
+da( or da) - Delete around round brackets (including brackets)
+da[ or da] - Delete around square brackets (including brackets)
+da{ or da} - Delete around curly brackets (including brackets)
 dt any     - Delete characters until the character
+yiw        - Yank the current word
+yiW        - Yank the current WORD
+yi"        - Yank the inside of double quotes
+yi'        - Yank the inside of single quotes
+yi( or yi) - Yank the inside of round brackets
+yi[ or yi] - Yank the inside of square brackets
+yi{ or yi} - Yank the inside of curly brackets
+yaw        - Yank a word (including surrounding whitespace)
+yaW        - Yank a WORD (including surrounding whitespace)
 *          - Search forwards for the word under cursor
 #          - Search backwards for the word under cursor
 f          - Move to next any character on the current line

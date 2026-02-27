@@ -80,13 +80,29 @@
 | <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**(**</kbd> OR <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**)**</kbd><br> | Delete inside round brackets and enter insert mode |
 | <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**[**</kbd> OR <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**]**</kbd><br> | Delete inside square brackets and enter insert mode |
 | <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**{**</kbd> OR <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**}**</kbd><br> | Delete inside curly brackets and enter insert mode |
-| <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**w**</kbd><br> | Delete word and enter insert mode |
+| <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**w**</kbd><br> | Delete inner word and enter insert mode |
+| <kbd>**c**</kbd> <kbd>**i**</kbd> <kbd>**W**</kbd><br> | Delete inner WORD and enter insert mode |
+| <kbd>**c**</kbd> <kbd>**a**</kbd> <kbd>**"**</kbd><br> | Delete around double quotes and enter insert mode |
+| <kbd>**c**</kbd> <kbd>**a**</kbd> <kbd>**'**</kbd><br> | Delete around single quotes and enter insert mode |
+| <kbd>**c**</kbd> <kbd>**a**</kbd> <kbd>**(**</kbd> OR <kbd>**c**</kbd> <kbd>**a**</kbd> <kbd>**)**</kbd><br> | Delete around round brackets and enter insert mode |
+| <kbd>**c**</kbd> <kbd>**a**</kbd> <kbd>**[**</kbd> OR <kbd>**c**</kbd> <kbd>**a**</kbd> <kbd>**]**</kbd><br> | Delete around square brackets and enter insert mode |
+| <kbd>**c**</kbd> <kbd>**a**</kbd> <kbd>**{**</kbd> OR <kbd>**c**</kbd> <kbd>**a**</kbd> <kbd>**}**</kbd><br> | Delete around curly brackets and enter insert mode |
+| <kbd>**c**</kbd> <kbd>**a**</kbd> <kbd>**w**</kbd><br> | Delete a word and enter insert mode |
+| <kbd>**c**</kbd> <kbd>**a**</kbd> <kbd>**W**</kbd><br> | Delete a WORD and enter insert mode |
 | <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**"**</kbd><br> | Delete inside double quotes |
 | <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**'**</kbd><br> | Delete inside single quotes |
 | <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**(**</kbd> OR <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**)**</kbd><br> | Delete inside round brackets |
 | <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**[**</kbd> OR <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**]**</kbd><br> | Delete inside square brackets |
 | <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**{**</kbd> OR <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**}**</kbd><br> | Delete inside curly brackets |
-| <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**w**</kbd><br> | Delete word |
+| <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**w**</kbd><br> | Delete inner word |
+| <kbd>**d**</kbd> <kbd>**i**</kbd> <kbd>**W**</kbd><br> | Delete inner WORD (space-separated) |
+| <kbd>**d**</kbd> <kbd>**a**</kbd> <kbd>**"**</kbd><br> | Delete around double quotes (including quotes) |
+| <kbd>**d**</kbd> <kbd>**a**</kbd> <kbd>**'**</kbd><br> | Delete around single quotes (including quotes) |
+| <kbd>**d**</kbd> <kbd>**a**</kbd> <kbd>**(**</kbd> OR <kbd>**d**</kbd> <kbd>**a**</kbd> <kbd>**)**</kbd><br> | Delete around round brackets (including brackets) |
+| <kbd>**d**</kbd> <kbd>**a**</kbd> <kbd>**[**</kbd> OR <kbd>**d**</kbd> <kbd>**a**</kbd> <kbd>**]**</kbd><br> | Delete around square brackets (including brackets) |
+| <kbd>**d**</kbd> <kbd>**a**</kbd> <kbd>**{**</kbd> OR <kbd>**d**</kbd> <kbd>**a**</kbd> <kbd>**}**</kbd><br> | Delete around curly brackets (including brackets) |
+| <kbd>**d**</kbd> <kbd>**a**</kbd> <kbd>**w**</kbd><br> | Delete a word (including surrounding whitespace) |
+| <kbd>**d**</kbd> <kbd>**a**</kbd> <kbd>**W**</kbd><br> | Delete a WORD (including surrounding whitespace) |
 | <kbd>**x**</kbd><br> | Delete current character |
 | <kbd>**S**</kbd> OR <kbd>**c**</kbd> <kbd>**c**</kbd><br> | Delete the characters in current line and start insert mode |
 | <kbd>**y**</kbd> <kbd>**y**</kbd> OR <kbd>**Y**</kbd><br> |Copy a line |
@@ -112,6 +128,15 @@
 | <kbd>**y**</kbd><kbd>**{**</kbd><br> | Yank to the previous blank line |
 | <kbd>**y**</kbd><kbd>**}**</kbd><br> | Yank to the next blank line |
 | <kbd>**y**</kbd><kbd>**l**</kbd><br> | Yank a character |
+| <kbd>**y**</kbd><kbd>**i**</kbd><kbd>**w**</kbd><br> | Yank inner word |
+| <kbd>**y**</kbd><kbd>**i**</kbd><kbd>**W**</kbd><br> | Yank inner WORD |
+| <kbd>**y**</kbd><kbd>**a**</kbd><kbd>**w**</kbd><br> | Yank a word (including surrounding whitespace) |
+| <kbd>**y**</kbd><kbd>**a**</kbd><kbd>**W**</kbd><br> | Yank a WORD (including surrounding whitespace) |
+| <kbd>**y**</kbd><kbd>**i**</kbd><kbd>**"**</kbd><br> | Yank inside double quotes |
+| <kbd>**y**</kbd><kbd>**i**</kbd><kbd>**'**</kbd><br> | Yank inside single quotes |
+| <kbd>**y**</kbd><kbd>**i**</kbd><kbd>**(**</kbd> OR <kbd>**y**</kbd><kbd>**i**</kbd><kbd>**)**</kbd><br> | Yank inside round brackets |
+| <kbd>**y**</kbd><kbd>**i**</kbd><kbd>**[**</kbd> OR <kbd>**y**</kbd><kbd>**i**</kbd><kbd>**]**</kbd><br> | Yank inside square brackets |
+| <kbd>**y**</kbd><kbd>**i**</kbd><kbd>**{**</kbd> OR <kbd>**y**</kbd><kbd>**i**</kbd><kbd>**}**</kbd><br> | Yank inside curly brackets |
 | <kbd>**X**</kbd> OR <kbd>**d**</kbd><kbd>**h**</kbd><br> | Cut a character before cursor |
 | <kbd>**g**</kbd><kbd>**a**</kbd><br> | Show current character info |
 | <kbd>**t**</kbd><kbd>**x**</kbd><br> | Move to the left of the next ```x``` (any character) on the current line |
