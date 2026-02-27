@@ -460,8 +460,8 @@ proc visualLowercase*(buffer: TextBuffer, state: EditorState) =
         let lowerText = lineText.toLowerAscii()
         # Delete and replace the line content
         let startPos = BufferPosition(line: lineNum, column: 0)
-        let endPos = BufferPosition(line: lineNum, column: max(0, lineText.len - 1))
-        if lineText.len > 0:
+        let endPos = BufferPosition(line: lineNum, column: max(0, lineText.charLen - 1))
+        if lineText.charLen > 0:
           discard buffer.deleteRange(startPos, endPos)
           discard buffer.insertText(startPos, lowerText)
     of vskChar:
@@ -544,8 +544,8 @@ proc visualUppercase*(buffer: TextBuffer, state: EditorState) =
         let upperText = lineText.toUpperAscii()
         # Delete and replace the line content
         let startPos = BufferPosition(line: lineNum, column: 0)
-        let endPos = BufferPosition(line: lineNum, column: max(0, lineText.len - 1))
-        if lineText.len > 0:
+        let endPos = BufferPosition(line: lineNum, column: max(0, lineText.charLen - 1))
+        if lineText.charLen > 0:
           discard buffer.deleteRange(startPos, endPos)
           discard buffer.insertText(startPos, upperText)
     of vskChar:
@@ -626,8 +626,8 @@ proc visualToggleCase*(buffer: TextBuffer, state: EditorState) =
         let toggledText = toggleCase(lineText)
         # Delete and replace the line content
         let startPos = BufferPosition(line: lineNum, column: 0)
-        let endPos = BufferPosition(line: lineNum, column: max(0, lineText.len - 1))
-        if lineText.len > 0:
+        let endPos = BufferPosition(line: lineNum, column: max(0, lineText.charLen - 1))
+        if lineText.charLen > 0:
           discard buffer.deleteRange(startPos, endPos)
           discard buffer.insertText(startPos, toggledText)
     of vskChar:
@@ -697,11 +697,12 @@ proc visualReplace*(buffer: TextBuffer, state: EditorState, ch: char) =
 
       for lineNum in startLine .. endLine:
         let lineText = $buffer.getLine(lineNum)
-        if lineText.len > 0:
+        if lineText.charLen > 0:
           # Create replacement string with same length
-          let replaceText = $ch.repeat(lineText.len)
+          let replaceText = $ch.repeat(lineText.charLen)
           let startPos = BufferPosition(line: lineNum, column: 0)
-          let endPos = BufferPosition(line: lineNum, column: max(0, lineText.len - 1))
+          let endPos =
+            BufferPosition(line: lineNum, column: max(0, lineText.charLen - 1))
           discard buffer.deleteRange(startPos, endPos)
           discard buffer.insertText(startPos, replaceText)
     of vskChar:

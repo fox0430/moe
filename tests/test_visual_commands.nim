@@ -1338,6 +1338,79 @@ suite "Visual Commands - Edge Cases":
 
     check buf.len == 2
 
+suite "Visual Commands - Unicode support":
+  test "Lowercase line selection with multibyte characters":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "ABCあいう")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nDEFかきく")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualLowercase(buf, state)
+
+    check buf.getLine(0) == "abcあいう"
+    check buf.getLine(1) == "defかきく"
+
+  test "Uppercase line selection with multibyte characters":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "abcあいう")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\ndefかきく")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualUppercase(buf, state)
+
+    check buf.getLine(0) == "ABCあいう"
+    check buf.getLine(1) == "DEFかきく"
+
+  test "Toggle case line selection with multibyte characters":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "AbCあいう")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nDeFかきく")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualToggleCase(buf, state)
+
+    check buf.getLine(0) == "aBcあいう"
+    check buf.getLine(1) == "dEfかきく"
+
+  test "Replace line selection with multibyte characters":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "ABCあいう")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nDEFかきく")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualReplace(buf, state, 'x')
+
+    check buf.getLine(0) == "xxxxxx"
+    check buf.getLine(1) == "xxxxxx"
+
 suite "Visual Commands - Cursor clamping after delete":
   test "Delete at end of line clamps cursor column":
     # Select the last characters of a line and delete
