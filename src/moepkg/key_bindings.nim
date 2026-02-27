@@ -1815,30 +1815,28 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
-  # Indent/dedent commands
+  # Indent/outdent operator commands (> and <)
   registry.registerCommand(
     Command(
-      name: "indent-line",
-      description: "Indent current line",
+      name: "operator-indent",
+      description: "Indent operator",
       kind: ctCustom,
-      commandId: "indent.line",
+      commandId: "operator.indent",
       args: @[],
     )
   )
+  registry.bindKey(EditorMode.Normal, ">", "operator-indent")
 
   registry.registerCommand(
     Command(
-      name: "dedent-line",
-      description: "Dedent current line",
+      name: "operator-outdent",
+      description: "Outdent operator",
       kind: ctCustom,
-      commandId: "dedent.line",
+      commandId: "operator.outdent",
       args: @[],
     )
   )
-
-  # Bind >> and << sequences for indent/dedent
-  registry.bindKey(EditorMode.Normal, "> >", "indent-line")
-  registry.bindKey(EditorMode.Normal, "< <", "dedent-line")
+  registry.bindKey(EditorMode.Normal, "<", "operator-outdent")
 
   # Auto indent command (==)
   registry.registerCommand(
@@ -2025,6 +2023,30 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
   registry.bindKey(EditorMode.Normal, "y", "operator-yank")
+
+  # gu - Lowercase operator
+  registry.registerCommand(
+    Command(
+      name: "operator-lowercase",
+      description: "Lowercase operator",
+      kind: ctCustom,
+      commandId: "operator.lowercase",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g u", "operator-lowercase")
+
+  # gU - Uppercase operator
+  registry.registerCommand(
+    Command(
+      name: "operator-uppercase",
+      description: "Uppercase operator",
+      kind: ctCustom,
+      commandId: "operator.uppercase",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g U", "operator-uppercase")
 
   # D - Delete to end of line
   registry.registerCommand(
@@ -2805,6 +2827,10 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Visual, "o", "visual-swap-selection")
   registry.bindKey(EditorMode.Visual, "p", "visual-paste")
   registry.bindKey(EditorMode.Visual, "P", "visual-paste")
+  registry.bindKey(EditorMode.Visual, "i", "textobject-inner")
+    # Inner text object (viw, vi", etc.)
+  registry.bindKey(EditorMode.Visual, "a", "textobject-around")
+    # Around text object (vaw, va", etc.)
   registry.bindKey(EditorMode.Visual, "z f", "fold-create") # Create fold from selection
   registry.bindKey(EditorMode.Visual, "Escape", "switch-to-normal") # Exit to normal mode
   registry.bindKey(EditorMode.Visual, "C-c", "switch-to-normal") # Exit to normal mode

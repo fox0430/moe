@@ -345,15 +345,18 @@ proc tillCharBackward(
 # Helper functions for word motion
 proc isWordChar(r: Rune): bool =
   ## Check if a character is part of a word (alphanumeric or underscore)
+  ## Uses Unicode-aware isAlpha to support Japanese, accented Latin, etc.
   let c = r.int32
-  return
-    (c >= 'a'.ord and c <= 'z'.ord) or (c >= 'A'.ord and c <= 'Z'.ord) or
-    (c >= '0'.ord and c <= '9'.ord) or c == '_'.ord
+  return r.isAlpha or (c >= '0'.ord and c <= '9'.ord) or c == '_'.ord
 
 proc isWhitespace(r: Rune): bool =
   ## Check if a character is whitespace
   let c = r.int32
   return c == ' '.ord or c == '\t'.ord or c == '\n'.ord or c == '\r'.ord
+
+proc isSymbolChar(r: Rune): bool =
+  ## Check if a character is a symbol (non-word, non-whitespace)
+  return not isWordChar(r) and not isWhitespace(r)
 
 proc moveWordForward(
     e: MotionExecutor, currentPos: CursorPosition, count: int
@@ -1500,62 +1503,212 @@ proc findWordBoundaries(
 
   let cursorCol = min(cursor.column, runes.len - 1)
 
-  # Find start of word
-  var startCol = cursorCol
-  # If cursor is on whitespace, move to next word
-  if isWhitespace(runes[startCol]):
-    while startCol < runes.len and isWhitespace(runes[startCol]):
-      startCol.inc
-    if startCol >= runes.len:
-      return err("No word found")
-
-  # Now find the actual word start
-  while startCol > 0 and isWordChar(runes[startCol - 1]):
-    startCol.dec
-
-  # Find end of word
-  var endCol = startCol
-  while endCol < runes.len and isWordChar(runes[endCol]):
-    endCol.inc
-
-  if inner:
-    # Inner word: just the word itself
-    # endCol points to one past the last character, so use endCol - 1 for inclusive range
-    if endCol <= startCol:
-      return err("Empty word")
-    return ok(
-      TextObjectRange(
-        start: BufferPosition(line: cursor.line, column: startCol),
-        endPos: BufferPosition(line: cursor.line, column: endCol - 1),
-        isLinewise: false,
-      )
-    )
-  else:
-    # Around word: word + trailing whitespace
-    var extendedEnd = endCol
-    while extendedEnd < runes.len and isWhitespace(runes[extendedEnd]):
-      extendedEnd.inc
-
-    # If no trailing whitespace, try leading
-    if extendedEnd == endCol and startCol > 0:
-      var extendedStart = startCol
-      while extendedStart > 0 and isWhitespace(runes[extendedStart - 1]):
-        extendedStart.dec
+  # Case 1: Cursor is on whitespace
+  if isWhitespace(runes[cursorCol]):
+    if inner:
+      # Inner whitespace: select the whitespace sequence
+      var startCol = cursorCol
+      while startCol > 0 and isWhitespace(runes[startCol - 1]):
+        startCol.dec
+      var endCol = cursorCol
+      while endCol + 1 < runes.len and isWhitespace(runes[endCol + 1]):
+        endCol.inc
       return ok(
         TextObjectRange(
-          start: BufferPosition(line: cursor.line, column: extendedStart),
-          endPos: BufferPosition(line: cursor.line, column: endCol - 1),
+          start: BufferPosition(line: cursor.line, column: startCol),
+          endPos: BufferPosition(line: cursor.line, column: endCol),
+          isLinewise: false,
+        )
+      )
+    else:
+      # Around: skip whitespace and include the next word
+      var wordStart = cursorCol
+      while wordStart < runes.len and isWhitespace(runes[wordStart]):
+        wordStart.inc
+
+      if wordStart >= runes.len:
+        # No word after whitespace on this line - search subsequent lines
+        var foundLine = -1
+        var nextCol = 0
+        var nextEndCol = 0
+        for searchLine in (cursor.line + 1) ..< buffer.len:
+          let searchLineStr = buffer.getLine(searchLine)
+          let searchRunes = searchLineStr.toRunes()
+          var col = 0
+          # Skip leading whitespace
+          while col < searchRunes.len and isWhitespace(searchRunes[col]):
+            col.inc
+          if col < searchRunes.len:
+            # Found a non-whitespace character
+            foundLine = searchLine
+            nextCol = col
+            nextEndCol = col
+            if isWordChar(searchRunes[col]):
+              while nextEndCol + 1 < searchRunes.len and
+                  isWordChar(searchRunes[nextEndCol + 1]):
+                nextEndCol.inc
+            elif isSymbolChar(searchRunes[col]):
+              while nextEndCol + 1 < searchRunes.len and
+                  isSymbolChar(searchRunes[nextEndCol + 1]):
+                nextEndCol.inc
+            break
+
+        if foundLine >= 0:
+          # Include leading whitespace on current line
+          var startCol = cursorCol
+          while startCol > 0 and isWhitespace(runes[startCol - 1]):
+            startCol.dec
+          return ok(
+            TextObjectRange(
+              start: BufferPosition(line: cursor.line, column: startCol),
+              endPos: BufferPosition(line: foundLine, column: nextEndCol),
+              isLinewise: false,
+            )
+          )
+
+        # Fallback: select whitespace on current line only
+        var startCol = cursorCol
+        while startCol > 0 and isWhitespace(runes[startCol - 1]):
+          startCol.dec
+        return ok(
+          TextObjectRange(
+            start: BufferPosition(line: cursor.line, column: startCol),
+            endPos: BufferPosition(line: cursor.line, column: runes.len - 1),
+            isLinewise: false,
+          )
+        )
+
+      # Found word on same line after whitespace
+      var endCol = wordStart
+      if isWordChar(runes[wordStart]):
+        while endCol + 1 < runes.len and isWordChar(runes[endCol + 1]):
+          endCol.inc
+      elif isSymbolChar(runes[wordStart]):
+        while endCol + 1 < runes.len and isSymbolChar(runes[endCol + 1]):
+          endCol.inc
+
+      # Include leading whitespace
+      var startCol = cursorCol
+      while startCol > 0 and isWhitespace(runes[startCol - 1]):
+        startCol.dec
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: cursor.line, column: startCol),
+          endPos: BufferPosition(line: cursor.line, column: endCol),
           isLinewise: false,
         )
       )
 
-    return ok(
-      TextObjectRange(
-        start: BufferPosition(line: cursor.line, column: startCol),
-        endPos: BufferPosition(line: cursor.line, column: extendedEnd - 1),
-        isLinewise: false,
+  # Case 2: Cursor is on a word character
+  if isWordChar(runes[cursorCol]):
+    var startCol = cursorCol
+    while startCol > 0 and isWordChar(runes[startCol - 1]):
+      startCol.dec
+
+    var endCol = cursorCol
+    while endCol + 1 < runes.len and isWordChar(runes[endCol + 1]):
+      endCol.inc
+
+    if inner:
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: cursor.line, column: startCol),
+          endPos: BufferPosition(line: cursor.line, column: endCol),
+          isLinewise: false,
+        )
       )
-    )
+    else:
+      # Around word: word + trailing whitespace
+      var extendedEnd = endCol + 1
+      while extendedEnd < runes.len and isWhitespace(runes[extendedEnd]):
+        extendedEnd.inc
+
+      if extendedEnd > endCol + 1:
+        # Has trailing whitespace
+        return ok(
+          TextObjectRange(
+            start: BufferPosition(line: cursor.line, column: startCol),
+            endPos: BufferPosition(line: cursor.line, column: extendedEnd - 1),
+            isLinewise: false,
+          )
+        )
+
+      # No trailing whitespace, try leading
+      if startCol > 0:
+        var extendedStart = startCol
+        while extendedStart > 0 and isWhitespace(runes[extendedStart - 1]):
+          extendedStart.dec
+        return ok(
+          TextObjectRange(
+            start: BufferPosition(line: cursor.line, column: extendedStart),
+            endPos: BufferPosition(line: cursor.line, column: endCol),
+            isLinewise: false,
+          )
+        )
+
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: cursor.line, column: startCol),
+          endPos: BufferPosition(line: cursor.line, column: endCol),
+          isLinewise: false,
+        )
+      )
+
+  # Case 3: Cursor is on a symbol character
+  if isSymbolChar(runes[cursorCol]):
+    var startCol = cursorCol
+    while startCol > 0 and isSymbolChar(runes[startCol - 1]):
+      startCol.dec
+
+    var endCol = cursorCol
+    while endCol + 1 < runes.len and isSymbolChar(runes[endCol + 1]):
+      endCol.inc
+
+    if inner:
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: cursor.line, column: startCol),
+          endPos: BufferPosition(line: cursor.line, column: endCol),
+          isLinewise: false,
+        )
+      )
+    else:
+      # Around symbol: symbols + trailing whitespace
+      var extendedEnd = endCol + 1
+      while extendedEnd < runes.len and isWhitespace(runes[extendedEnd]):
+        extendedEnd.inc
+
+      if extendedEnd > endCol + 1:
+        return ok(
+          TextObjectRange(
+            start: BufferPosition(line: cursor.line, column: startCol),
+            endPos: BufferPosition(line: cursor.line, column: extendedEnd - 1),
+            isLinewise: false,
+          )
+        )
+
+      # No trailing whitespace, try leading
+      if startCol > 0:
+        var extendedStart = startCol
+        while extendedStart > 0 and isWhitespace(runes[extendedStart - 1]):
+          extendedStart.dec
+        return ok(
+          TextObjectRange(
+            start: BufferPosition(line: cursor.line, column: extendedStart),
+            endPos: BufferPosition(line: cursor.line, column: endCol),
+            isLinewise: false,
+          )
+        )
+
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: cursor.line, column: startCol),
+          endPos: BufferPosition(line: cursor.line, column: endCol),
+          isLinewise: false,
+        )
+      )
+
+  return err("Unexpected character class")
 
 proc findWideWordBoundaries(
     buffer: TextBuffer, cursor: BufferPosition, inner: bool
@@ -1576,51 +1729,130 @@ proc findWideWordBoundaries(
 
   let cursorCol = min(cursor.column, runes.len - 1)
 
-  # Find start of WORD
-  var startCol = cursorCol
-  # If cursor is on whitespace, move to next WORD
-  if isWhitespace(runes[startCol]):
-    while startCol < runes.len and isWhitespace(runes[startCol]):
-      startCol.inc
-    if startCol >= runes.len:
-      return err("No WORD found")
+  # Case 1: Cursor is on whitespace
+  if isWhitespace(runes[cursorCol]):
+    if inner:
+      # Inner whitespace: select the whitespace sequence
+      var startCol = cursorCol
+      while startCol > 0 and isWhitespace(runes[startCol - 1]):
+        startCol.dec
+      var endCol = cursorCol
+      while endCol + 1 < runes.len and isWhitespace(runes[endCol + 1]):
+        endCol.inc
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: cursor.line, column: startCol),
+          endPos: BufferPosition(line: cursor.line, column: endCol),
+          isLinewise: false,
+        )
+      )
+    else:
+      # Around: skip whitespace and include the next WORD
+      var wordStart = cursorCol
+      while wordStart < runes.len and isWhitespace(runes[wordStart]):
+        wordStart.inc
 
-  # Find the actual WORD start (any non-whitespace)
+      if wordStart >= runes.len:
+        # No WORD after whitespace on this line - search subsequent lines
+        var foundLine = -1
+        var nextCol = 0
+        var nextEndCol = 0
+        for searchLine in (cursor.line + 1) ..< buffer.len:
+          let searchLineStr = buffer.getLine(searchLine)
+          let searchRunes = searchLineStr.toRunes()
+          var col = 0
+          while col < searchRunes.len and isWhitespace(searchRunes[col]):
+            col.inc
+          if col < searchRunes.len:
+            foundLine = searchLine
+            nextCol = col
+            nextEndCol = col
+            while nextEndCol + 1 < searchRunes.len and
+                not isWhitespace(searchRunes[nextEndCol + 1]):
+              nextEndCol.inc
+            break
+
+        if foundLine >= 0:
+          var startCol = cursorCol
+          while startCol > 0 and isWhitespace(runes[startCol - 1]):
+            startCol.dec
+          return ok(
+            TextObjectRange(
+              start: BufferPosition(line: cursor.line, column: startCol),
+              endPos: BufferPosition(line: foundLine, column: nextEndCol),
+              isLinewise: false,
+            )
+          )
+
+        # Fallback: select whitespace on current line only
+        var startCol = cursorCol
+        while startCol > 0 and isWhitespace(runes[startCol - 1]):
+          startCol.dec
+        return ok(
+          TextObjectRange(
+            start: BufferPosition(line: cursor.line, column: startCol),
+            endPos: BufferPosition(line: cursor.line, column: runes.len - 1),
+            isLinewise: false,
+          )
+        )
+
+      # Found WORD on same line after whitespace
+      var endCol = wordStart
+      while endCol + 1 < runes.len and not isWhitespace(runes[endCol + 1]):
+        endCol.inc
+
+      var startCol = cursorCol
+      while startCol > 0 and isWhitespace(runes[startCol - 1]):
+        startCol.dec
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: cursor.line, column: startCol),
+          endPos: BufferPosition(line: cursor.line, column: endCol),
+          isLinewise: false,
+        )
+      )
+
+  # Case 2: Cursor is on a non-whitespace character (WORD)
+  var startCol = cursorCol
   while startCol > 0 and not isWhitespace(runes[startCol - 1]):
     startCol.dec
 
-  # Find end of WORD (any non-whitespace)
-  var endCol = startCol
-  while endCol < runes.len and not isWhitespace(runes[endCol]):
+  var endCol = cursorCol
+  while endCol + 1 < runes.len and not isWhitespace(runes[endCol + 1]):
     endCol.inc
 
   if inner:
-    # Inner WORD: just the WORD itself
-    # endCol points to one past the last character, so use endCol - 1 for inclusive range
-    if endCol <= startCol:
-      return err("Empty WORD")
     return ok(
       TextObjectRange(
         start: BufferPosition(line: cursor.line, column: startCol),
-        endPos: BufferPosition(line: cursor.line, column: endCol - 1),
+        endPos: BufferPosition(line: cursor.line, column: endCol),
         isLinewise: false,
       )
     )
   else:
     # Around WORD: WORD + trailing whitespace
-    var extendedEnd = endCol
+    var extendedEnd = endCol + 1
     while extendedEnd < runes.len and isWhitespace(runes[extendedEnd]):
       extendedEnd.inc
 
-    # If no trailing whitespace, try leading
-    if extendedEnd == endCol and startCol > 0:
+    if extendedEnd > endCol + 1:
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: cursor.line, column: startCol),
+          endPos: BufferPosition(line: cursor.line, column: extendedEnd - 1),
+          isLinewise: false,
+        )
+      )
+
+    # No trailing whitespace, try leading
+    if startCol > 0:
       var extendedStart = startCol
       while extendedStart > 0 and isWhitespace(runes[extendedStart - 1]):
         extendedStart.dec
       return ok(
         TextObjectRange(
           start: BufferPosition(line: cursor.line, column: extendedStart),
-          endPos: BufferPosition(line: cursor.line, column: endCol - 1),
+          endPos: BufferPosition(line: cursor.line, column: endCol),
           isLinewise: false,
         )
       )
@@ -1628,7 +1860,7 @@ proc findWideWordBoundaries(
     return ok(
       TextObjectRange(
         start: BufferPosition(line: cursor.line, column: startCol),
-        endPos: BufferPosition(line: cursor.line, column: extendedEnd - 1),
+        endPos: BufferPosition(line: cursor.line, column: endCol),
         isLinewise: false,
       )
     )
