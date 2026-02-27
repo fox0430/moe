@@ -1410,3 +1410,84 @@ suite "Visual Commands - Unicode support":
 
     check buf.getLine(0) == "xxxxxx"
     check buf.getLine(1) == "xxxxxx"
+
+suite "Visual Commands - Cursor clamping after delete":
+  test "Delete at end of line clamps cursor column":
+    # Select the last characters of a line and delete
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 3),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+    state.cursor = BufferPosition(line: 0, column: 4)
+
+    visualDelete(buf, state)
+
+    check buf.getLine(0) == "hel"
+    # Cursor must be clamped: charLen=3, max valid col=2
+    check state.cursor.column <= 2
+    check state.cursor.line == 0
+
+  test "Delete entire line content clamps cursor to column 0":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "abc")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 2),
+      active: true,
+      kind: vskChar,
+    )
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    visualDelete(buf, state)
+
+    # Line should be empty or buffer has minimal content
+    check state.cursor.column == 0
+
+  test "Delete all lines clamps cursor line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nline2")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 4),
+      active: true,
+      kind: vskLine,
+    )
+    state.cursor = BufferPosition(line: 1, column: 4)
+
+    visualDelete(buf, state)
+
+    check buf.len >= 1
+    check state.cursor.line < buf.len
+
+  test "Block delete clamps cursor when column exceeds line length":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "abcdef")
+    discard buf.insertText(BufferPosition(line: 0, column: 6), "\nab")
+    discard buf.insertText(BufferPosition(line: 1, column: 2), "\nabcdef")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 3),
+      current: BufferPosition(line: 2, column: 5),
+      active: true,
+      kind: vskBlock,
+    )
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    visualDelete(buf, state)
+
+    # Cursor column must be valid for the current line
+    let line = buf.getLine(state.cursor.line)
+    if line.charLen > 0:
+      check state.cursor.column < line.charLen
+    else:
+      check state.cursor.column == 0

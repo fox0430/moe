@@ -1977,3 +1977,44 @@ suite "Command Mode - History Navigation":
     discard handleCommandModeEvent(e, makeBackspaceEvent())
 
     check e.state.commandState.historyIndex == -1
+
+suite "adjustCursorAfterInsertExit":
+  test "Cursor moves one position left (middle of line)":
+    var cursor = BufferPosition(line: 0, column: 3)
+    adjustCursorAfterInsertExit(cursor, 5)
+    check cursor.column == 2
+
+  test "Cursor moves one position left (end of line)":
+    var cursor = BufferPosition(line: 0, column: 5)
+    adjustCursorAfterInsertExit(cursor, 5)
+    check cursor.column == 4
+
+  test "Cursor stays at column 0 (already at beginning)":
+    var cursor = BufferPosition(line: 0, column: 0)
+    adjustCursorAfterInsertExit(cursor, 5)
+    check cursor.column == 0
+
+  test "Cursor stays at column 0 (empty line)":
+    var cursor = BufferPosition(line: 0, column: 0)
+    adjustCursorAfterInsertExit(cursor, 0)
+    check cursor.column == 0
+
+  test "Cursor clamped when beyond line end":
+    var cursor = BufferPosition(line: 0, column: 10)
+    adjustCursorAfterInsertExit(cursor, 5)
+    check cursor.column == 4
+
+  test "Cursor at column 1 moves to column 0":
+    var cursor = BufferPosition(line: 0, column: 1)
+    adjustCursorAfterInsertExit(cursor, 5)
+    check cursor.column == 0
+
+  test "Single character line with cursor at column 1":
+    var cursor = BufferPosition(line: 0, column: 1)
+    adjustCursorAfterInsertExit(cursor, 1)
+    check cursor.column == 0
+
+  test "Single character line with cursor at column 0":
+    var cursor = BufferPosition(line: 0, column: 0)
+    adjustCursorAfterInsertExit(cursor, 1)
+    check cursor.column == 0

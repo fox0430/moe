@@ -207,8 +207,16 @@ proc deleteBlockSelection(buffer: TextBuffer, state: EditorState) =
       let endPos = BufferPosition(line: lineNum, column: actualEndCol)
       discard buffer.deleteRange(startPos, endPos)
 
-  # Move cursor to start of deleted block
-  state.cursor = BufferPosition(line: startLine, column: startCol)
+  # Move cursor to start of deleted block, clamped to valid position
+  state.cursor.line = startLine
+  if buffer.len > 0:
+    let line = buffer.getLine(startLine)
+    if line.charLen > 0:
+      state.cursor.column = min(startCol, line.charLen - 1)
+    else:
+      state.cursor.column = 0
+  else:
+    state.cursor.column = 0
 
 proc deleteLineSelection(buffer: TextBuffer, state: EditorState) =
   ## Delete a line-wise selection (entire lines)
@@ -301,6 +309,16 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
 
     # Commit transaction
     discard buffer.commitTransaction()
+
+    # Clamp cursor to valid position after deletion
+    if state.cursor.line >= buffer.len:
+      state.cursor.line = max(0, buffer.len - 1)
+    if buffer.len > 0:
+      let line = buffer.getLine(state.cursor.line)
+      if line.charLen > 0:
+        state.cursor.column = min(state.cursor.column, line.charLen - 1)
+      else:
+        state.cursor.column = 0
 
     state.visualSelection.active = false
     state.needsFullRedraw = true

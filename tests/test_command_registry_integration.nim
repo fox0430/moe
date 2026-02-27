@@ -70,6 +70,7 @@ proc setupVisual(
     ctx: CommandContext,
     startLine, startCol, endLine, endCol: int,
     mode = EditorMode.Visual,
+    kind = vskChar,
 ) =
   ## Setup visual mode with selection range
   ctx.state.mode = mode
@@ -77,6 +78,7 @@ proc setupVisual(
     active: true,
     start: BufferPosition(line: startLine, column: startCol),
     current: BufferPosition(line: endLine, column: endCol),
+    kind: kind,
   )
   ctx.setCursor(endLine, endCol)
 
@@ -2613,6 +2615,186 @@ suite "Handler - Special Commands":
     check buffer[0] == "hello world"
     check ctx.cursor.column == 0
 
+suite "Cursor clamping - OpChange":
+  test "change to end of line places cursor at append position":
+    # c$ at middle of line: cursor should be at charLen (Insert mode append position)
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # On 'w'
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let cmd = Command(kind: ctMotion, motion: Motion.End, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello "
+    # Insert mode: cursor at charLen (append position after "hello ")
+    check ctx.cursor.column == buffer.getLine(0).charLen
+
+  test "change word at end of line places cursor at append position":
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    # After cw on "hello", line becomes empty, cursor at column 0 (append position)
+    let lineLen = buffer.getLine(0).charLen
+    check ctx.cursor.column <= lineLen
+
+suite "Cursor clamping - Toggle case":
+  test "toggle case at end of line clamps cursor":
+    # ~ on the last character of a line should not leave cursor past end
+    let buffer = newTextBuffer("Hi")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 1) # On 'i' (last char)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("toggle.case")).isOk
+    check buffer[0] == "HI"
+    # Cursor must stay within line bounds (charLen=2, max valid col=1)
+    check ctx.cursor.column <= 1
+
+  test "toggle case count exceeding line length clamps cursor":
+    # 5~ on a 3-char line
+    let buffer = newTextBuffer("abc")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("toggle.case"), @["5"]).isOk
+    check buffer[0] == "ABC"
+    # Cursor must be within line bounds (charLen=3, max valid col=2)
+    check ctx.cursor.column <= 2
+
+suite "Cursor clamping - Visual delete":
+  test "visual delete clamps cursor when selection is at line end":
+    # Select the last chars of a line and delete
+    let buffer = newTextBuffer("hello")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 3, 0, 4) # Select "lo"
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualDelete)).isOk
+    check buffer[0] == "hel"
+    check ctx.state.mode == EditorMode.Normal
+    # Cursor should be clamped to end of remaining text (charLen=3, max valid col=2)
+    check ctx.cursor.column <= 2
+    check ctx.cursor.line == 0
+
+  test "visual delete syncs cursor to ctx":
+    # After visual delete, ctx.cursor must reflect the updated position
+    let buffer = newTextBuffer("abcdef")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 2) # Select "abc"
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualDelete)).isOk
+    check buffer[0] == "def"
+    # ctx.cursor must be synced (not left at old position)
+    check ctx.cursor.column == 0
+    check ctx.cursor.line == 0
+
+  test "visual delete all lines clamps cursor":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 1, 4, kind = vskLine) # Select all lines
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualDelete)).isOk
+    # Buffer should have at least one line
+    check buffer.len >= 1
+    check ctx.cursor.line < buffer.len
+
+  test "visual block delete clamps cursor column":
+    # Block select beyond short line and delete
+    let buffer = newTextBuffer("abcdef\nab\nabcdef")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 3, 2, 5, kind = vskBlock) # Block select columns 3-5
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualDelete)).isOk
+    # After block delete, cursor column should be valid for the current line
+    let line = buffer.getLine(ctx.cursor.line)
+    if line.charLen > 0:
+      check ctx.cursor.column < line.charLen
+    else:
+      check ctx.cursor.column == 0
+
+suite "Cursor clamping - Visual operations sync ctx.cursor":
+  test "visual lowercase syncs cursor":
+    let buffer = newTextBuffer("HELLO WORLD")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 4)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualLowercase)).isOk
+    check buffer[0] == "hello WORLD"
+    # ctx.cursor must be synced from state.cursor (moved to selection start)
+    check ctx.cursor.column == 0
+
+  test "visual uppercase syncs cursor":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 6, 0, 10)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualUppercase)).isOk
+    check buffer[0] == "hello WORLD"
+    # ctx.cursor must be synced to selection start
+    check ctx.cursor.column == 6
+
+  test "visual toggle case syncs cursor":
+    let buffer = newTextBuffer("Hello World")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 4)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualToggleCase)).isOk
+    check buffer[0] == "hELLO World"
+    check ctx.cursor.column == 0
+
+  test "visual join lines syncs cursor":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 1, 4, kind = vskLine)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualJoinLines)).isOk
+    check buffer.len == 2
+    # ctx.cursor should be synced
+    check ctx.cursor.line == 0
+
+  test "visual swap selection syncs cursor":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 2, 0, 8)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualSwapSelection)).isOk
+    # After swap, cursor should move to the other end of selection
+    check ctx.cursor.column == 2
+
+  test "visual paste syncs cursor":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setupVisual(0, 0, 0, 4)
+    ctx.state.yankRegister = "XYZ"
+    ctx.state.yankIsLine = false
+    ctx.state.registers.setDeletedRegister("XYZ", false)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, builtin(bcVisualPaste)).isOk
+    check ctx.state.mode == EditorMode.Normal
+    # ctx.cursor should be synced
+    check ctx.cursor.line == 0
 suite "Handler - Indent/Outdent operator with text objects":
   test "operator.indent sets pending operator":
     let buffer = newTextBuffer("hello world")
