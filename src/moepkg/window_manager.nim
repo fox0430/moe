@@ -771,6 +771,299 @@ proc hsplitWithBuffer*(
 
   return ok(newBuffer)
 
+proc increaseWindowWidth*(wm: EditorWindowManager, delta: int = 1) =
+  ## Increase active window width by delta, shrinking adjacent window
+  if wm.windows.len <= 1:
+    return
+
+  let activeIdx = wm.activeWindowIndex
+
+  # Find horizontal group (same y and height)
+  let groups = wm.groupAdjacentWindowsHorizontally()
+  var myGroup: seq[int] = @[]
+  for group in groups:
+    for idx in group:
+      if idx == activeIdx:
+        myGroup = group
+        break
+    if myGroup.len > 0:
+      break
+
+  if myGroup.len <= 1:
+    return
+
+  # Sort by x position
+  var sortedGroup = myGroup
+  sortedGroup.sort(
+    proc(a, b: int): int =
+      cmp(wm.windows[a].viewport.x, wm.windows[b].viewport.x)
+  )
+
+  # Find position of active window in sorted group
+  var activePos = -1
+  for i, idx in sortedGroup:
+    if idx == activeIdx:
+      activePos = i
+      break
+
+  # Find neighbor to steal space from (prefer right, fallback to left)
+  var neighborPos = -1
+  if activePos < sortedGroup.len - 1:
+    neighborPos = activePos + 1
+  elif activePos > 0:
+    neighborPos = activePos - 1
+
+  if neighborPos < 0:
+    return
+
+  let neighborIdx = sortedGroup[neighborPos]
+
+  # Check minimum width constraint
+  if wm.windows[neighborIdx].viewport.width <= delta:
+    return
+
+  # Adjust widths
+  wm.windows[activeIdx].viewport.width += delta
+  wm.windows[neighborIdx].viewport.width -= delta
+
+  # Adjust x positions for all windows to the right of the change
+  if neighborPos > activePos:
+    # Neighbor is to the right, shift it right
+    wm.windows[neighborIdx].viewport.x += delta
+  else:
+    # Neighbor is to the left, shift active left
+    wm.windows[activeIdx].viewport.x -= delta
+
+proc decreaseWindowWidth*(wm: EditorWindowManager, delta: int = 1) =
+  ## Decrease active window width by delta, expanding adjacent window
+  if wm.windows.len <= 1:
+    return
+
+  let activeIdx = wm.activeWindowIndex
+  let activeWin = wm.windows[activeIdx]
+
+  # Check minimum width constraint for active window
+  if activeWin.viewport.width <= delta:
+    return
+
+  # Find horizontal group (same y and height)
+  let groups = wm.groupAdjacentWindowsHorizontally()
+  var myGroup: seq[int] = @[]
+  for group in groups:
+    for idx in group:
+      if idx == activeIdx:
+        myGroup = group
+        break
+    if myGroup.len > 0:
+      break
+
+  if myGroup.len <= 1:
+    return
+
+  # Sort by x position
+  var sortedGroup = myGroup
+  sortedGroup.sort(
+    proc(a, b: int): int =
+      cmp(wm.windows[a].viewport.x, wm.windows[b].viewport.x)
+  )
+
+  # Find position of active window in sorted group
+  var activePos = -1
+  for i, idx in sortedGroup:
+    if idx == activeIdx:
+      activePos = i
+      break
+
+  # Find neighbor to give space to (prefer right, fallback to left)
+  var neighborPos = -1
+  if activePos < sortedGroup.len - 1:
+    neighborPos = activePos + 1
+  elif activePos > 0:
+    neighborPos = activePos - 1
+
+  if neighborPos < 0:
+    return
+
+  let neighborIdx = sortedGroup[neighborPos]
+
+  # Adjust widths
+  wm.windows[activeIdx].viewport.width -= delta
+  wm.windows[neighborIdx].viewport.width += delta
+
+  # Adjust x positions
+  if neighborPos > activePos:
+    # Neighbor is to the right, shift it left
+    wm.windows[neighborIdx].viewport.x -= delta
+  else:
+    # Neighbor is to the left, shift active right
+    wm.windows[activeIdx].viewport.x += delta
+
+proc increaseWindowHeight*(wm: EditorWindowManager, delta: int = 1) =
+  ## Increase active window height by delta, shrinking adjacent window
+  if wm.windows.len <= 1:
+    return
+
+  let activeIdx = wm.activeWindowIndex
+
+  # Find vertical group (same x and width, stacked vertically)
+  let groups = wm.groupAdjacentWindowsVertically()
+  var myGroup: seq[int] = @[]
+  for group in groups:
+    for idx in group:
+      if idx == activeIdx:
+        myGroup = group
+        break
+    if myGroup.len > 0:
+      break
+
+  if myGroup.len <= 1:
+    return
+
+  # Sort by y position
+  var sortedGroup = myGroup
+  sortedGroup.sort(
+    proc(a, b: int): int =
+      cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
+  )
+
+  # Find position of active window in sorted group
+  var activePos = -1
+  for i, idx in sortedGroup:
+    if idx == activeIdx:
+      activePos = i
+      break
+
+  # Find neighbor to steal space from (prefer below, fallback to above)
+  var neighborPos = -1
+  if activePos < sortedGroup.len - 1:
+    neighborPos = activePos + 1
+  elif activePos > 0:
+    neighborPos = activePos - 1
+
+  if neighborPos < 0:
+    return
+
+  let neighborIdx = sortedGroup[neighborPos]
+
+  # Check minimum height constraint
+  if wm.windows[neighborIdx].viewport.height <= delta:
+    return
+
+  # Adjust heights
+  wm.windows[activeIdx].viewport.height += delta
+  wm.windows[neighborIdx].viewport.height -= delta
+
+  # Adjust y positions
+  if neighborPos > activePos:
+    # Neighbor is below, shift it down
+    wm.windows[neighborIdx].viewport.y += delta
+  else:
+    # Neighbor is above, shift active up
+    wm.windows[activeIdx].viewport.y -= delta
+
+proc decreaseWindowHeight*(wm: EditorWindowManager, delta: int = 1) =
+  ## Decrease active window height by delta, expanding adjacent window
+  if wm.windows.len <= 1:
+    return
+
+  let activeIdx = wm.activeWindowIndex
+  let activeWin = wm.windows[activeIdx]
+
+  # Check minimum height constraint for active window
+  if activeWin.viewport.height <= delta:
+    return
+
+  # Find vertical group (same x and width, stacked vertically)
+  let groups = wm.groupAdjacentWindowsVertically()
+  var myGroup: seq[int] = @[]
+  for group in groups:
+    for idx in group:
+      if idx == activeIdx:
+        myGroup = group
+        break
+    if myGroup.len > 0:
+      break
+
+  if myGroup.len <= 1:
+    return
+
+  # Sort by y position
+  var sortedGroup = myGroup
+  sortedGroup.sort(
+    proc(a, b: int): int =
+      cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
+  )
+
+  # Find position of active window in sorted group
+  var activePos = -1
+  for i, idx in sortedGroup:
+    if idx == activeIdx:
+      activePos = i
+      break
+
+  # Find neighbor to give space to (prefer below, fallback to above)
+  var neighborPos = -1
+  if activePos < sortedGroup.len - 1:
+    neighborPos = activePos + 1
+  elif activePos > 0:
+    neighborPos = activePos - 1
+
+  if neighborPos < 0:
+    return
+
+  let neighborIdx = sortedGroup[neighborPos]
+
+  # Adjust heights
+  wm.windows[activeIdx].viewport.height -= delta
+  wm.windows[neighborIdx].viewport.height += delta
+
+  # Adjust y positions
+  if neighborPos > activePos:
+    # Neighbor is below, shift it up
+    wm.windows[neighborIdx].viewport.y -= delta
+  else:
+    # Neighbor is above, shift active down
+    wm.windows[activeIdx].viewport.y += delta
+
+proc equalizeAllWindows*(wm: EditorWindowManager, multiStatusLine: bool) =
+  ## Equalize all window sizes
+  if wm.windows.len <= 1:
+    return
+
+  # Equalize widths in horizontal groups
+  let hGroups = wm.groupWindowsByY()
+  for group in hGroups:
+    if group.len > 1:
+      var sortedGroup = group
+      sortedGroup.sort(
+        proc(a, b: int): int =
+          cmp(wm.windows[a].viewport.x, wm.windows[b].viewport.x)
+      )
+      let
+        firstWindow = wm.windows[sortedGroup[0]]
+        lastWindow = wm.windows[sortedGroup[^1]]
+        totalWidth =
+          (lastWindow.viewport.x + lastWindow.viewport.width) - firstWindow.viewport.x
+        startX = firstWindow.viewport.x
+      wm.equalizeWidthsInGroup(sortedGroup, totalWidth, startX)
+
+  # Equalize heights in vertical groups
+  let vGroups = wm.groupWindowsByXAndWidth()
+  for group in vGroups:
+    if group.len > 1:
+      var sortedGroup = group
+      sortedGroup.sort(
+        proc(a, b: int): int =
+          cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
+      )
+      let
+        firstWindow = wm.windows[sortedGroup[0]]
+        lastWindow = wm.windows[sortedGroup[^1]]
+        totalHeight =
+          (lastWindow.viewport.y + lastWindow.viewport.height) - firstWindow.viewport.y
+        startY = firstWindow.viewport.y
+      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, startY, multiStatusLine)
+
 proc resizeWindows*(
     wm: EditorWindowManager,
     newWidth: int,

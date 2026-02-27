@@ -1341,7 +1341,9 @@ proc handleCommandModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
           hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
           hrBackupManagerRefresh, hrBackupManagerQuit, hrDiffViewerQuit,
           hrEnterDiffViewer, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow,
-          hrPrevWindow, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
+          hrPrevWindow, hrIncreaseWindowHeight, hrDecreaseWindowHeight,
+          hrIncreaseWindowWidth, hrDecreaseWindowWidth, hrEqualizeWindows,
+          hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
           hrLspCodeLensExecute, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
           hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit,
           hrConfigSaveConfig, hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit:
@@ -1730,17 +1732,19 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
       hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager,
       hrDiffViewerQuit, hrEnterDiffViewer, hrRecentFile, hrNextWindow, hrPrevWindow,
-      hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
-      hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
-      hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
-      hrLspSelectionRange, hrLspDocumentLink, hrShellCommand, hrBackground, hrJumpList,
-      hrBuild, hrDebug, hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig,
-      hrPutConfigFile, hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold,
-      hrLspExecuteCommand, hrSubstitute, hrMan, hrReferencesQuit, hrReferencesJumpTo,
-      hrEnterReferences, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
-      hrEnterDocumentSymbol, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
-      hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
-      hrEnterCallHierarchy, hrEnterTerminal, hrTerminalQuit:
+      hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
+      hrDecreaseWindowWidth, hrEqualizeWindows, hrLspGotoDefinition,
+      hrLspGotoDeclaration, hrLspFindReferences, hrLspCodeLensExecute,
+      hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing, hrLspTypeDefinition,
+      hrLspImplementation, hrLspHover, hrLspRename, hrLspSelectionRange,
+      hrLspDocumentLink, hrShellCommand, hrBackground, hrJumpList, hrBuild, hrDebug,
+      hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig, hrPutConfigFile,
+      hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold, hrLspExecuteCommand,
+      hrSubstitute, hrMan, hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences,
+      hrDocumentSymbolQuit, hrDocumentSymbolJumpTo, hrEnterDocumentSymbol,
+      hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
+      hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrEnterTerminal,
+      hrTerminalQuit:
     discard # Not expected from RecentFile mode handler
 
   # Handle overlay transitions (e.g., entering Command mode with :)
@@ -3076,6 +3080,16 @@ proc handleEvent*(e: Editor, event: Event): bool =
     e.switchToNextWindow()
   of hrPrevWindow:
     e.switchToPrevWindow()
+  of hrIncreaseWindowHeight:
+    e.increaseWindowHeight()
+  of hrDecreaseWindowHeight:
+    e.decreaseWindowHeight()
+  of hrIncreaseWindowWidth:
+    e.increaseWindowWidth()
+  of hrDecreaseWindowWidth:
+    e.decreaseWindowWidth()
+  of hrEqualizeWindows:
+    e.equalizeWindowSizes()
   of hrEnew:
     let enewResult = e.enew()
     if enewResult.isErr:

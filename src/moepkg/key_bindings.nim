@@ -198,6 +198,11 @@ proc toSpecialKeyCombo*(
 proc parseKeyCombo*(s: string): Option[KeyCombo] =
   ## Parse a string like "C-x" or "M-w" into a KeyCombo
   ## C = Ctrl, M = Meta/Alt, S = Shift
+
+  # Handle single-character strings directly (including "-" itself)
+  if s.len == 1:
+    return some(KeyCombo(isSpecial: false, char: s, modifiers: {}))
+
   var parts = s.split('-')
   if parts.len == 0:
     return none(KeyCombo)
@@ -1732,6 +1737,62 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
   registry.bindKey(EditorMode.Normal, "C-w j", "window-prev")
+
+  # Window resize commands
+  registry.registerCommand(
+    Command(
+      name: "window-increase-height",
+      description: "Increase window height",
+      kind: ctAction,
+      commandId: "window.increase-height",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "C-w +", "window-increase-height")
+
+  registry.registerCommand(
+    Command(
+      name: "window-decrease-height",
+      description: "Decrease window height",
+      kind: ctAction,
+      commandId: "window.decrease-height",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "C-w -", "window-decrease-height")
+
+  registry.registerCommand(
+    Command(
+      name: "window-increase-width",
+      description: "Increase window width",
+      kind: ctAction,
+      commandId: "window.increase-width",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "C-w >", "window-increase-width")
+
+  registry.registerCommand(
+    Command(
+      name: "window-decrease-width",
+      description: "Decrease window width",
+      kind: ctAction,
+      commandId: "window.decrease-width",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "C-w <", "window-decrease-width")
+
+  registry.registerCommand(
+    Command(
+      name: "window-equalize",
+      description: "Equalize all window sizes",
+      kind: ctAction,
+      commandId: "window.equalize",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "C-w =", "window-equalize")
 
   # q - Macro record (toggle)
   registry.registerCommand(

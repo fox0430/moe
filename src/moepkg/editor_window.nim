@@ -507,6 +507,31 @@ proc switchToPrevWindow*(e: Editor) =
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
     e.setActiveWindowScreenCursor(e.activeWindow)
 
+proc increaseWindowWidth*(e: Editor) =
+  ## Increase the active window's width
+  e.windowManager.increaseWindowWidth()
+  e.syncActiveWindow()
+
+proc decreaseWindowWidth*(e: Editor) =
+  ## Decrease the active window's width
+  e.windowManager.decreaseWindowWidth()
+  e.syncActiveWindow()
+
+proc increaseWindowHeight*(e: Editor) =
+  ## Increase the active window's height
+  e.windowManager.increaseWindowHeight()
+  e.syncActiveWindow()
+
+proc decreaseWindowHeight*(e: Editor) =
+  ## Decrease the active window's height
+  e.windowManager.decreaseWindowHeight()
+  e.syncActiveWindow()
+
+proc equalizeWindowSizes*(e: Editor) =
+  ## Equalize all window sizes
+  e.windowManager.equalizeAllWindows(e.state.display.multiStatusLine)
+  e.syncActiveWindow()
+
 proc closeWindow*(e: Editor): bool =
   ## Close the active window
   ## Returns true if editor should quit (last window closed)

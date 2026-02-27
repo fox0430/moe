@@ -145,6 +145,11 @@ z.         - Center the screen on the cursor
 ZZ         - Write current file and exit
 ZQ         - Same as :q!
 Ctrl-w c   - Close current window
+Ctrl-w +   - Increase window height
+Ctrl-w -   - Decrease window height
+Ctrl-w >   - Increase window width
+Ctrl-w <   - Decrease window width
+Ctrl-w =   - Equalize window sizes
 /          - Search forwards
 ?          - Search backwards
 \r         - QuickRun
