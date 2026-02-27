@@ -1750,6 +1750,10 @@ proc saveThemeToToml*(colors: ThemeColors, path: string): Result[void, string] =
 
   lines.add "# Theme color configuration"
   lines.add "# Color format: \"#RRGGBB\" (hex) or \"termDefault\" (terminal default color)"
+  lines.add "# \"termDefault\" can be used for both foreground and background."
+  lines.add "# Examples:"
+  lines.add "#   foreground = \"termDefault\"  # Use terminal's default foreground color"
+  lines.add "#   background = \"termDefault\"  # Use terminal's default background color"
   lines.add ""
   lines.add "[Colors]"
   lines.add ""

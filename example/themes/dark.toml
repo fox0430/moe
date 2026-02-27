@@ -1,6 +1,9 @@
 # Theme color configuration
 # Color format: "#RRGGBB" (hex) or "termDefault" (terminal default color)
-# Example: foreground = "termDefault"  # Use terminal's default foreground color
+# "termDefault" can be used for both foreground and background.
+# Examples:
+#   foreground = "termDefault"  # Use terminal's default foreground color
+#   background = "termDefault"  # Use terminal's default background color
 
 [Colors]
 

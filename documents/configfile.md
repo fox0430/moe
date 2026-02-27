@@ -853,7 +853,7 @@ Please check more [details](https://github.com/fox0430/moe/blob/develop/document
 Put the toml file that describes the `Colors` table in the path specified by `Theme.path` in `moerc.toml`.
 
 moe supports 24 bit color and set in hexadecimal (`#000000` ~ `#ffffff`).
-And, `termDefaultBg` and `termDefaultFg`.
+And, `termDefault` can be used for both foreground and background to use the terminal's default color.
 
 | Name |  Description |
 |:-----------------------------|:-----------------------------|
