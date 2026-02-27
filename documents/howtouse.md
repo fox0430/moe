@@ -121,6 +121,11 @@
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**j**</kbd><br> | Move to the previous window |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**k**</kbd><br> | Move to the next window |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**c**</kbd><br> | Close current window |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**+**</kbd><br> | Increase window height |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**-**</kbd><br> | Decrease window height |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**>**</kbd><br> | Increase window width |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**<**</kbd><br> | Decrease window width |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**=**</kbd><br> | Equalize window sizes |
 | <kbd>**?**</kbd><br> |`keyword` Search backwards |
 | <kbd>**/**</kbd><br> |`keyword` Search forwards |
 | <kbd>**\\**</kbd> <kbd>**r**</kbd><br> | Quick Run |

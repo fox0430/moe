@@ -982,3 +982,151 @@ suite "EditorWindowManager - Split inherits cursor position for same buffer":
     check wm.windows[0].cursor.column == 10
     check wm.windows[0].viewport.topLine == 3
     check wm.windows[0].viewport.leftColumn == 2
+
+suite "EditorWindowManager - Window Resize":
+  test "increaseWindowWidth with single window does nothing":
+    let wm = createSingleWindowManager(80, 24)
+    let origWidth = wm.windows[0].viewport.width
+    wm.increaseWindowWidth()
+    check wm.windows[0].viewport.width == origWidth
+
+  test "decreaseWindowWidth with single window does nothing":
+    let wm = createSingleWindowManager(80, 24)
+    let origWidth = wm.windows[0].viewport.width
+    wm.decreaseWindowWidth()
+    check wm.windows[0].viewport.width == origWidth
+
+  test "increaseWindowHeight with single window does nothing":
+    let wm = createSingleWindowManager(80, 24)
+    let origHeight = wm.windows[0].viewport.height
+    wm.increaseWindowHeight()
+    check wm.windows[0].viewport.height == origHeight
+
+  test "decreaseWindowHeight with single window does nothing":
+    let wm = createSingleWindowManager(80, 24)
+    let origHeight = wm.windows[0].viewport.height
+    wm.decreaseWindowHeight()
+    check wm.windows[0].viewport.height == origHeight
+
+  test "increaseWindowWidth with two horizontal windows":
+    let wm = newEditorWindowManager()
+    # Left window: active
+    wm.windows.add(createTestWindow(0, 0, 39, 24, active = true))
+    # Right window
+    wm.windows.add(createTestWindow(40, 0, 40, 24, active = false))
+    wm.activeWindowIndex = 0
+
+    wm.increaseWindowWidth()
+
+    check wm.windows[0].viewport.width == 40
+    check wm.windows[1].viewport.width == 39
+    check wm.windows[1].viewport.x == 41
+
+  test "decreaseWindowWidth with two horizontal windows":
+    let wm = newEditorWindowManager()
+    # Left window: active
+    wm.windows.add(createTestWindow(0, 0, 39, 24, active = true))
+    # Right window
+    wm.windows.add(createTestWindow(40, 0, 40, 24, active = false))
+    wm.activeWindowIndex = 0
+
+    wm.decreaseWindowWidth()
+
+    check wm.windows[0].viewport.width == 38
+    check wm.windows[1].viewport.width == 41
+    check wm.windows[1].viewport.x == 39
+
+  test "increaseWindowHeight with two vertical windows":
+    let wm = newEditorWindowManager()
+    # Top window: active
+    wm.windows.add(createTestWindow(0, 0, 80, 11, active = true))
+    # Bottom window
+    wm.windows.add(createTestWindow(0, 12, 80, 12, active = false))
+    wm.activeWindowIndex = 0
+
+    wm.increaseWindowHeight()
+
+    check wm.windows[0].viewport.height == 12
+    check wm.windows[1].viewport.height == 11
+    check wm.windows[1].viewport.y == 13
+
+  test "decreaseWindowHeight with two vertical windows":
+    let wm = newEditorWindowManager()
+    # Top window: active
+    wm.windows.add(createTestWindow(0, 0, 80, 11, active = true))
+    # Bottom window
+    wm.windows.add(createTestWindow(0, 12, 80, 12, active = false))
+    wm.activeWindowIndex = 0
+
+    wm.decreaseWindowHeight()
+
+    check wm.windows[0].viewport.height == 10
+    check wm.windows[1].viewport.height == 13
+    check wm.windows[1].viewport.y == 11
+
+  test "increaseWindowWidth respects minimum width":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 78, 24, active = true))
+    wm.windows.add(createTestWindow(79, 0, 1, 24, active = false))
+    wm.activeWindowIndex = 0
+
+    # Neighbor has width 1, cannot shrink further
+    wm.increaseWindowWidth()
+    check wm.windows[0].viewport.width == 78
+    check wm.windows[1].viewport.width == 1
+
+  test "decreaseWindowWidth respects minimum width":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 1, 24, active = true))
+    wm.windows.add(createTestWindow(2, 0, 78, 24, active = false))
+    wm.activeWindowIndex = 0
+
+    # Active window has width 1, cannot shrink further
+    wm.decreaseWindowWidth()
+    check wm.windows[0].viewport.width == 1
+    check wm.windows[1].viewport.width == 78
+
+  test "increaseWindowHeight respects minimum height":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 80, 22, active = true))
+    wm.windows.add(createTestWindow(0, 23, 80, 1, active = false))
+    wm.activeWindowIndex = 0
+
+    # Neighbor has height 1, cannot shrink further
+    wm.increaseWindowHeight()
+    check wm.windows[0].viewport.height == 22
+    check wm.windows[1].viewport.height == 1
+
+  test "decreaseWindowHeight respects minimum height":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 80, 1, active = true))
+    wm.windows.add(createTestWindow(0, 2, 80, 22, active = false))
+    wm.activeWindowIndex = 0
+
+    # Active window has height 1, cannot shrink further
+    wm.decreaseWindowHeight()
+    check wm.windows[0].viewport.height == 1
+    check wm.windows[1].viewport.height == 22
+
+  test "equalizeAllWindows with two horizontal windows":
+    let wm = newEditorWindowManager()
+    wm.windows.add(createTestWindow(0, 0, 20, 24, active = true))
+    wm.windows.add(createTestWindow(21, 0, 59, 24, active = false))
+    wm.activeWindowIndex = 0
+
+    wm.equalizeAllWindows(multiStatusLine = false)
+
+    # Both windows should have roughly equal widths
+    # Total width = 80, separator = 1, available = 79, each = 39 or 40
+    check wm.windows[0].viewport.width >= 39
+    check wm.windows[0].viewport.width <= 40
+    check wm.windows[1].viewport.width >= 39
+    check wm.windows[1].viewport.width <= 40
+
+  test "equalizeAllWindows with single window does nothing":
+    let wm = createSingleWindowManager(80, 24)
+    let origWidth = wm.windows[0].viewport.width
+    let origHeight = wm.windows[0].viewport.height
+    wm.equalizeAllWindows(multiStatusLine = false)
+    check wm.windows[0].viewport.width == origWidth
+    check wm.windows[0].viewport.height == origHeight

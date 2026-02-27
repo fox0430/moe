@@ -103,6 +103,11 @@ type
     hrRecentFileQuit # Quit recent file mode
     hrNextWindow # Move to next window
     hrPrevWindow # Move to previous window
+    hrIncreaseWindowHeight # Increase active window height
+    hrDecreaseWindowHeight # Decrease active window height
+    hrIncreaseWindowWidth # Increase active window width
+    hrDecreaseWindowWidth # Decrease active window width
+    hrEqualizeWindows # Equalize all window sizes
     hrLspGotoDefinition # Execute LSP goto definition
     hrLspGotoDeclaration # Execute LSP goto declaration
     hrLspFindReferences # Execute LSP find references
@@ -280,6 +285,9 @@ type
     of hrRecentFileQuit:
       discard
     of hrNextWindow, hrPrevWindow:
+      discard
+    of hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
+        hrDecreaseWindowWidth, hrEqualizeWindows:
       discard
     of hrLspGotoDefinition:
       discard
@@ -629,6 +637,16 @@ proc handleNormalMode*(
     return HandlerResult(kind: hrNextWindow)
   of nmrPrevWindow:
     return HandlerResult(kind: hrPrevWindow)
+  of nmrIncreaseWindowHeight:
+    return HandlerResult(kind: hrIncreaseWindowHeight)
+  of nmrDecreaseWindowHeight:
+    return HandlerResult(kind: hrDecreaseWindowHeight)
+  of nmrIncreaseWindowWidth:
+    return HandlerResult(kind: hrIncreaseWindowWidth)
+  of nmrDecreaseWindowWidth:
+    return HandlerResult(kind: hrDecreaseWindowWidth)
+  of nmrEqualizeWindows:
+    return HandlerResult(kind: hrEqualizeWindows)
 
 proc handleInsertMode*(
     manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
@@ -1578,6 +1596,16 @@ proc executeCommandDirect*(
       return some(HandlerResult(kind: hrNextWindow))
     of "window.prev":
       return some(HandlerResult(kind: hrPrevWindow))
+    of "window.increase-height":
+      return some(HandlerResult(kind: hrIncreaseWindowHeight))
+    of "window.decrease-height":
+      return some(HandlerResult(kind: hrDecreaseWindowHeight))
+    of "window.increase-width":
+      return some(HandlerResult(kind: hrIncreaseWindowWidth))
+    of "window.decrease-width":
+      return some(HandlerResult(kind: hrDecreaseWindowWidth))
+    of "window.equalize":
+      return some(HandlerResult(kind: hrEqualizeWindows))
     of "window.close":
       return some(HandlerResult(kind: hrCloseWindow, forceClose: false))
     of "file.save":
@@ -2001,10 +2029,12 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrBackupManagerDelete, hrBackupManagerOpenDiff, hrBackupManagerRefresh,
     hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit, hrRecentFile,
     hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
-    hrEnterDiffViewer, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
-    hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
-    hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
-    hrLspSelectionRange, hrLspDocumentLink, hrJumpList, hrLspLog,
+    hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
+    hrDecreaseWindowWidth, hrEqualizeWindows, hrEnterDiffViewer, hrLspGotoDefinition,
+    hrLspGotoDeclaration, hrLspFindReferences, hrLspCodeLensExecute,
+    hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing, hrLspTypeDefinition,
+    hrLspImplementation, hrLspHover, hrLspRename, hrLspSelectionRange,
+    hrLspDocumentLink, hrJumpList, hrLspLog,
   }
 
 proc hasError*(hrResult: HandlerResult): bool =

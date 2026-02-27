@@ -62,6 +62,11 @@ type
     nmrBufferDelete # Signal to handler_manager to delete current buffer
     nmrNextWindow # Signal to handler_manager to switch to next window
     nmrPrevWindow # Signal to handler_manager to switch to previous window
+    nmrIncreaseWindowHeight # Signal to handler_manager to increase window height
+    nmrDecreaseWindowHeight # Signal to handler_manager to decrease window height
+    nmrIncreaseWindowWidth # Signal to handler_manager to increase window width
+    nmrDecreaseWindowWidth # Signal to handler_manager to decrease window width
+    nmrEqualizeWindows # Signal to handler_manager to equalize all windows
 
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
     motionController*: MotionController
@@ -132,6 +137,9 @@ type
     of nmrNextWindow:
       discard
     of nmrPrevWindow:
+      discard
+    of nmrIncreaseWindowHeight, nmrDecreaseWindowHeight, nmrIncreaseWindowWidth,
+        nmrDecreaseWindowWidth, nmrEqualizeWindows:
       discard
 
 proc updateCursorToJumpPosition(
@@ -625,6 +633,16 @@ proc handleNormalModeKey*(
       return NormalModeResult(kind: nmrNextWindow)
     of "window.prev":
       return NormalModeResult(kind: nmrPrevWindow)
+    of "window.increase-height":
+      return NormalModeResult(kind: nmrIncreaseWindowHeight)
+    of "window.decrease-height":
+      return NormalModeResult(kind: nmrDecreaseWindowHeight)
+    of "window.increase-width":
+      return NormalModeResult(kind: nmrIncreaseWindowWidth)
+    of "window.decrease-width":
+      return NormalModeResult(kind: nmrDecreaseWindowWidth)
+    of "window.equalize":
+      return NormalModeResult(kind: nmrEqualizeWindows)
     of "macro.record":
       state.macroState.waitingForRegister = true
       state.macroState.commandType = "record"
