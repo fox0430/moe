@@ -55,6 +55,10 @@ type
     stHorizontal = "horizontal"
     stVertical = "vertical"
 
+  BufferBackendConfig* = enum
+    bbcGapBuffer = "gapBuffer"
+    bbcSqrtDecomp = "sqrtDecomp"
+
   # Standard settings
   StandardConfig* = object
     number*: bool
@@ -84,6 +88,7 @@ type
     mouse*: bool
     lineWrap*: bool
     timeoutlen*: int ## Key mapping timeout in ms (0 = no timeout)
+    bufferBackend*: BufferBackendConfig
 
   # Clipboard settings
   ClipboardConfig* = object
@@ -457,6 +462,7 @@ proc newEditorConfig*(): EditorConfig =
       mouse: false,
       lineWrap: true,
       timeoutlen: 1000,
+      bufferBackend: bbcGapBuffer,
     ),
     clipboard: ClipboardConfig(enable: true, tool: detectClipboardTool()),
     buildOnSave: BuildOnSaveConfig(

@@ -23,10 +23,11 @@ import std/[unicode, options, strutils, deques, os, times]
 
 import pkg/results
 
-import gap_buffer, unicode_utils, encoding, highlight, logger, search_utils, primitives
+import
+  gap_buffer, sqrt_decomp, unicode_utils, encoding, highlight, logger, search_utils,
+  primitives
 
-export CharacterEncoding, encodingToString, detectCharacterEncoding
-export BufferPosition
+export CharacterEncoding, encodingToString, detectCharacterEncoding, BufferPosition
 
 type
   SidebarItemKind* = enum
@@ -55,9 +56,9 @@ type
 
   BufferBackend* = enum
     GapBuffer # Best for small to medium files
+    SqrtDecomp # Sqrt decomposition - O(√n) random access, good for large files
 
-  # Undo/Redo system types
-  BufferChangeKind* = enum
+  BufferChangeKind* = enum ## Undo/Redo system types
     ckInsertText
     ckDeleteText
     ckInsertLine
@@ -87,8 +88,7 @@ type
       transactionChanges*: seq[BufferChange]
       transactionDescription*: string
 
-  # Transaction for grouping multiple changes
-  BufferTransaction* = object
+  BufferTransaction* = object ## Transaction for grouping multiple changes
     changes*: seq[BufferChange]
     description*: string
     startSeq*: int # changeSeq at the start of transaction
@@ -140,6 +140,8 @@ type
     case backendKind*: BufferBackend
     of GapBuffer:
       gapBuffer*: GapBuffer
+    of SqrtDecomp:
+      sqrtDecomp*: sqrt_decomp.SqrtDecomp
 
 var nextBufferId = 0
 
@@ -147,8 +149,13 @@ proc genBufferId(): int =
   result = nextBufferId
   inc nextBufferId
 
+var configuredBackend: BufferBackend = GapBuffer
+
+proc setConfiguredBackend*(backend: BufferBackend) =
+  configuredBackend = backend
+
 proc chooseBackend(): BufferBackend =
-  GapBuffer
+  configuredBackend
 
 # Forward declarations for fold state
 proc initFoldState*(): FoldState
@@ -164,10 +171,10 @@ proc markSaved*(b: TextBuffer) {.inline.} =
   b.savedSeq = b.changeSeq
 
 proc newTextBuffer*(
-    content: string = "", filePath: Option[string] = none(string)
+    content: string = "",
+    filePath: Option[string] = none(string),
+    backend: BufferBackend = chooseBackend(),
 ): TextBuffer =
-  let backend = chooseBackend()
-
   case backend
   of GapBuffer:
     let gb = newGapBuffer(content)
@@ -204,6 +211,37 @@ proc newTextBuffer*(
       # Initialize empty fold state
       foldState: initFoldState(),
     )
+  of SqrtDecomp:
+    let sd = newSqrtDecomp(content)
+    var runesBuffer: seq[Runes] = @[]
+    for i in 0 ..< sd.len:
+      runesBuffer.add(sd.getLine(i).toRunes())
+
+    TextBuffer(
+      id: genBufferId(),
+      backendKind: BufferBackend.SqrtDecomp,
+      backend: backend,
+      filePath: filePath,
+      readOnly: false,
+      lineEnding: LF,
+      encoding: utf8,
+      endOfLine: true,
+      sqrtDecomp: sd,
+      undoStack: initDeque[BufferChange](),
+      redoStack: initDeque[BufferChange](),
+      changeSeq: 0,
+      savedSeq: 0,
+      currentTransaction: none(BufferTransaction),
+      inTransaction: false,
+      lineMarkers: newSeq[Option[SidebarItemKind]](sd.len),
+      highlight: initHighlight(runesBuffer),
+      language: SourceLanguage.langNone,
+      highlightNeedsUpdate: false,
+      incrementalHighlight: nil,
+      lastChangedLines: 0,
+      cursorCache: CursorPosCache(line: -1, charPos: 0, bytePos: 0, changeSeq: -1),
+      foldState: initFoldState(),
+    )
 
 proc setReservedWords*(b: TextBuffer, words: seq[ReservedWord]) =
   ## Set reserved words for syntax highlighting (e.g., TODO, NOTE, FIXME)
@@ -222,11 +260,14 @@ proc getTextString*(b: TextBuffer): string =
   case b.backendKind
   of GapBuffer:
     $b.gapBuffer
+  of SqrtDecomp:
+    $b.sqrtDecomp
 
 proc len*(b: TextBuffer): int =
   ## Get number of lines in buffer
   case b.backendKind
   of GapBuffer: b.gapBuffer.len
+  of SqrtDecomp: b.sqrtDecomp.len
 
 proc charLen*(text: string): int =
   ## Get character length (not byte length)
@@ -236,6 +277,8 @@ proc getLine*(b: TextBuffer, lineIndex: int): string =
   case b.backendKind
   of GapBuffer:
     b.gapBuffer.getLine(lineIndex)
+  of SqrtDecomp:
+    b.sqrtDecomp.getLine(lineIndex)
 
 proc `[]`*(b: TextBuffer, lineIndex: int): string =
   ## Bracket operator for accessing lines by index
@@ -338,6 +381,55 @@ proc ensureMarkersSize(b: TextBuffer)
 # Forward declaration for text insertion with newlines
 proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string)
 
+# Backend dispatch helpers for internal use (no undo recording)
+proc backendInsertIntoLine(b: TextBuffer, line, col: int, text: string) =
+  case b.backendKind
+  of GapBuffer:
+    b.gapBuffer.insertIntoLine(line, col, text)
+  of SqrtDecomp:
+    b.sqrtDecomp.insertIntoLine(line, col, text)
+
+proc backendDeleteLine(b: TextBuffer, lineNumber: int) =
+  case b.backendKind
+  of GapBuffer:
+    b.gapBuffer.deleteLine(lineNumber)
+  of SqrtDecomp:
+    b.sqrtDecomp.deleteLine(lineNumber)
+
+proc backendInsertLine(b: TextBuffer, lineNumber: int, content: string) =
+  case b.backendKind
+  of GapBuffer:
+    b.gapBuffer.insertLine(lineNumber, content)
+  of SqrtDecomp:
+    b.sqrtDecomp.insertLine(lineNumber, content)
+
+proc backendReplaceLine(b: TextBuffer, lineNumber: int, content: string) =
+  case b.backendKind
+  of GapBuffer:
+    b.gapBuffer.replaceLine(lineNumber, content)
+  of SqrtDecomp:
+    b.sqrtDecomp.replaceLine(lineNumber, content)
+
+proc backendDeleteAtLineCol(b: TextBuffer, line, col, count: int) =
+  case b.backendKind
+  of GapBuffer:
+    b.gapBuffer.deleteAtLineCol(line, col, count)
+  of SqrtDecomp:
+    b.sqrtDecomp.deleteAtLineCol(line, col, count)
+
+# Public NoUndo procs for external code that bypasses undo recording
+proc replaceLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
+  ## Replace line content without recording undo. Used by substitute preview etc.
+  b.backendReplaceLine(lineNumber, content)
+
+proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
+  ## Delete a line without recording undo. Used by substitute preview etc.
+  b.backendDeleteLine(lineNumber)
+
+proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
+  ## Insert a line without recording undo. Used by substitute preview etc.
+  b.backendInsertLine(lineNumber, content)
+
 # Editing operations
 proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), string] =
   ## Insert text at the specified position
@@ -353,7 +445,7 @@ proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), s
     return err("Column position cannot be negative: " & $pos.column)
 
   case b.backendKind
-  of GapBuffer:
+  of GapBuffer, SqrtDecomp:
     try:
       # Use insertTextWithNewlines to handle newlines correctly
       b.insertTextWithNewlines(pos, text)
@@ -375,7 +467,7 @@ proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
     return err("Column position cannot be negative: " & $pos.column)
 
   case b.backendKind
-  of GapBuffer:
+  of GapBuffer, SqrtDecomp:
     let line = b.getLine(pos.line)
     if pos.column >= line.charLen:
       return err("Column position out of bounds: " & $pos.column)
@@ -389,7 +481,7 @@ proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
           charToBytePosCached(line, pos.column, b.cursorCache, pos.line, b.changeSeq)
 
       # Delete character at byte position
-      b.gapBuffer.deleteAtLineCol(pos.line, bytePos, charSize)
+      b.backendDeleteAtLineCol(pos.line, bytePos, charSize)
 
       # Record change for undo
       b.pushUndoChange(
@@ -407,9 +499,9 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
     return err("Line index out of valid range [0.." & $b.len & "]: " & $lineIndex)
 
   case b.backendKind
-  of GapBuffer:
+  of GapBuffer, SqrtDecomp:
     try:
-      b.gapBuffer.insertLine(lineIndex, content)
+      b.backendInsertLine(lineIndex, content)
     except IndexDefect as e:
       return err("Failed to insert line: " & e.msg)
 
@@ -439,9 +531,9 @@ proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
   let deletedContent = b.getLine(lineIndex)
 
   case b.backendKind
-  of GapBuffer:
+  of GapBuffer, SqrtDecomp:
     try:
-      b.gapBuffer.deleteLine(lineIndex)
+      b.backendDeleteLine(lineIndex)
     except IndexDefect as e:
       return err("Failed to delete line: " & e.msg)
 
@@ -538,9 +630,9 @@ proc deleteRangeSingleLine(
       let newLine = buildMergedLine(prefix, nextLine)
 
       # Delete current and next line, insert combined
-      b.gapBuffer.deleteLine(endPos.line + 1)
-      b.gapBuffer.deleteLine(startPos.line)
-      b.gapBuffer.insertLine(startPos.line, newLine)
+      b.backendDeleteLine(endPos.line + 1)
+      b.backendDeleteLine(startPos.line)
+      b.backendInsertLine(startPos.line, newLine)
     else:
       # Last line: just delete to end
       let newLine =
@@ -548,8 +640,8 @@ proc deleteRangeSingleLine(
           line.runeSubStr(0, startPos.column)
         else:
           ""
-      b.gapBuffer.deleteLine(startPos.line)
-      b.gapBuffer.insertLine(startPos.line, newLine)
+      b.backendDeleteLine(startPos.line)
+      b.backendInsertLine(startPos.line, newLine)
   elif startPos.column < lineLen and endPos.column < lineLen:
     # Normal single-line deletion within bounds
     # Build new line by concatenating prefix and suffix using Unicode-safe substring
@@ -557,10 +649,10 @@ proc deleteRangeSingleLine(
     let suffix = line.runeSubStr(endPos.column + 1)
     let newLine = buildMergedLine(prefix, suffix)
 
-    b.gapBuffer.deleteLine(startPos.line)
-    b.gapBuffer.insertLine(startPos.line, newLine)
+    b.backendDeleteLine(startPos.line)
+    b.backendInsertLine(startPos.line, newLine)
 
-  # Ensure lineMarkers stays in sync after direct gapBuffer operations
+  # Ensure lineMarkers stays in sync after backend operations
   b.ensureMarkersSize()
 
 proc deleteRangeMultiLine(b: TextBuffer, startPos, endPos: BufferPosition) =
@@ -591,18 +683,18 @@ proc deleteRangeMultiLine(b: TextBuffer, startPos, endPos: BufferPosition) =
 
   # Delete extra line if needed
   if extraLineToDelete >= 0:
-    b.gapBuffer.deleteLine(extraLineToDelete)
+    b.backendDeleteLine(extraLineToDelete)
 
   # Replace startPos.line with the merged line
-  b.gapBuffer.deleteLine(startPos.line)
-  b.gapBuffer.insertLine(startPos.line, buildMergedLine(prefix, suffix))
+  b.backendDeleteLine(startPos.line)
+  b.backendInsertLine(startPos.line, buildMergedLine(prefix, suffix))
 
   # Delete lines between startPos and endPos (if any)
   if endPos.line > startPos.line:
     for i in countdown(endPos.line, startPos.line + 1):
-      b.gapBuffer.deleteLine(i)
+      b.backendDeleteLine(i)
 
-  # Ensure lineMarkers stays in sync after direct gapBuffer operations
+  # Ensure lineMarkers stays in sync after backend operations
   b.ensureMarkersSize()
 
 proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), string] =
@@ -624,7 +716,7 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
   let deletedText = b.getTextInRange(startPos, endPos)
 
   case b.backendKind
-  of GapBuffer:
+  of GapBuffer, SqrtDecomp:
     try:
       if startPos.line == endPos.line:
         b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
@@ -862,7 +954,7 @@ proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string) =
     let line = b.getLine(pos.line)
     let bytePos =
       charToBytePosCached(line, pos.column, b.cursorCache, pos.line, b.changeSeq)
-    b.gapBuffer.insertIntoLine(pos.line, bytePos, text)
+    b.backendInsertIntoLine(pos.line, bytePos, text)
   else:
     # Complex case: text contains newlines, need to split current line and insert multiple lines
     let
@@ -903,15 +995,15 @@ proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string) =
       newLines.add(insertedLines[^1] & suffix)
 
     # Replace current line with new lines
-    b.gapBuffer.deleteLine(pos.line)
+    b.backendDeleteLine(pos.line)
     for i, newLine in newLines:
-      b.gapBuffer.insertLine(pos.line + i, newLine)
+      b.backendInsertLine(pos.line + i, newLine)
 
     # Adjust fold positions for newly inserted lines
     if newLines.len > 1:
       b.foldState.adjustFoldsAfterInsert(pos.line, newLines.len - 1)
 
-  # Ensure lineMarkers stays in sync after direct gapBuffer operations
+  # Ensure lineMarkers stays in sync after backend operations
   b.ensureMarkersSize()
 
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
@@ -921,44 +1013,30 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     case change.kind
     of ckInsertText:
       # Undo insert by deleting the inserted text (all bytes at once)
-      case b.backendKind
-      of GapBuffer:
-        let line = b.getLine(change.insertPos.line)
-        let bytePos = charToBytePosCached(
-          line, change.insertPos.column, b.cursorCache, change.insertPos.line,
-          b.changeSeq,
-        )
-        b.gapBuffer.deleteAtLineCol(
-          change.insertPos.line, bytePos, change.insertText.len
-        )
+      let line = b.getLine(change.insertPos.line)
+      let bytePos = charToBytePosCached(
+        line, change.insertPos.column, b.cursorCache, change.insertPos.line, b.changeSeq
+      )
+      b.backendDeleteAtLineCol(change.insertPos.line, bytePos, change.insertText.len)
     of ckDeleteText:
       # Undo delete by inserting the deleted text
-      case b.backendKind
-      of GapBuffer:
-        let line = b.getLine(change.deletePos.line)
-        let bytePos = charToBytePosCached(
-          line, change.deletePos.column, b.cursorCache, change.deletePos.line,
-          b.changeSeq,
-        )
-        b.gapBuffer.insertIntoLine(change.deletePos.line, bytePos, change.deletedText)
+      let line = b.getLine(change.deletePos.line)
+      let bytePos = charToBytePosCached(
+        line, change.deletePos.column, b.cursorCache, change.deletePos.line, b.changeSeq
+      )
+      b.backendInsertIntoLine(change.deletePos.line, bytePos, change.deletedText)
     of ckInsertLine:
       # Undo insert line by deleting it
-      case b.backendKind
-      of GapBuffer:
-        b.gapBuffer.deleteLine(change.insertLineIdx)
-        b.foldState.adjustFoldsAfterDelete(change.insertLineIdx, 1)
+      b.backendDeleteLine(change.insertLineIdx)
+      b.foldState.adjustFoldsAfterDelete(change.insertLineIdx, 1)
     of ckDeleteLine:
       # Undo delete line by inserting it
-      case b.backendKind
-      of GapBuffer:
-        b.gapBuffer.insertLine(change.deleteLineIdx, change.deletedLineText)
-        b.foldState.adjustFoldsAfterInsert(change.deleteLineIdx, 1)
+      b.backendInsertLine(change.deleteLineIdx, change.deletedLineText)
+      b.foldState.adjustFoldsAfterInsert(change.deleteLineIdx, 1)
     of ckDeleteRange:
       # Undo delete range by inserting the deleted text
       # Handle both single-line and multi-line deletions correctly
-      case b.backendKind
-      of GapBuffer:
-        b.insertTextWithNewlines(change.deleteStartPos, change.deletedRangeText)
+      b.insertTextWithNewlines(change.deleteStartPos, change.deletedRangeText)
     of ckTransaction:
       # Undo all changes in transaction in reverse order
       for i in countdown(change.transactionChanges.len - 1, 0):
@@ -1043,40 +1121,29 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       # Use insertTextWithNewlines to handle newlines correctly during redo
       b.insertTextWithNewlines(change.insertPos, change.insertText)
     of ckDeleteText:
-      case b.backendKind
-      of GapBuffer:
-        let line = b.getLine(change.deletePos.line)
-        let bytePos = charToBytePosCached(
-          line, change.deletePos.column, b.cursorCache, change.deletePos.line,
-          b.changeSeq,
-        )
-        b.gapBuffer.deleteAtLineCol(
-          change.deletePos.line, bytePos, change.deletedText.len
-        )
+      let line = b.getLine(change.deletePos.line)
+      let bytePos = charToBytePosCached(
+        line, change.deletePos.column, b.cursorCache, change.deletePos.line, b.changeSeq
+      )
+      b.backendDeleteAtLineCol(change.deletePos.line, bytePos, change.deletedText.len)
     of ckInsertLine:
-      case b.backendKind
-      of GapBuffer:
-        b.gapBuffer.insertLine(change.insertLineIdx, change.insertLineText)
-        b.foldState.adjustFoldsAfterInsert(change.insertLineIdx, 1)
+      b.backendInsertLine(change.insertLineIdx, change.insertLineText)
+      b.foldState.adjustFoldsAfterInsert(change.insertLineIdx, 1)
     of ckDeleteLine:
-      case b.backendKind
-      of GapBuffer:
-        b.gapBuffer.deleteLine(change.deleteLineIdx)
-        b.foldState.adjustFoldsAfterDelete(change.deleteLineIdx, 1)
+      b.backendDeleteLine(change.deleteLineIdx)
+      b.foldState.adjustFoldsAfterDelete(change.deleteLineIdx, 1)
     of ckDeleteRange:
       # Re-apply delete range using the same logic as the original deleteRange
       # Handle both single-line and multi-line deletions correctly
-      case b.backendKind
-      of GapBuffer:
-        let startPos = change.deleteStartPos
-        let endPos = change.deleteEndPos
+      let startPos = change.deleteStartPos
+      let endPos = change.deleteEndPos
 
-        if startPos.line == endPos.line:
-          b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
-        else:
-          b.deleteRangeMultiLine(startPos, endPos)
-          # Adjust fold positions for multi-line delete
-          b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
+      if startPos.line == endPos.line:
+        b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
+      else:
+        b.deleteRangeMultiLine(startPos, endPos)
+        # Adjust fold positions for multi-line delete
+        b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
     of ckTransaction:
       # Redo all changes in transaction in forward order
       for change in change.transactionChanges:
@@ -1197,6 +1264,8 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
     case b.backendKind
     of GapBuffer:
       b.gapBuffer = newGapBuffer(content)
+    of SqrtDecomp:
+      b.sqrtDecomp = newSqrtDecomp(content)
 
   b.detectLineEnding(content)
   b.encoding = detectCharacterEncoding(content)
@@ -1280,7 +1349,7 @@ proc getFileContent*(buffer: TextBuffer): string =
 
 proc saveFile*(buffer: TextBuffer, path: string): Result[(), string] =
   case buffer.backendKind
-  of GapBuffer:
+  of GapBuffer, SqrtDecomp:
     let content = buffer.getFileContent
 
     # Write to file
@@ -1342,6 +1411,8 @@ proc estimateMemoryUsage*(buffer: TextBuffer): int =
   case buffer.backendKind
   of GapBuffer:
     result += buffer.gapBuffer.estimateMemoryUsage()
+  of SqrtDecomp:
+    result += buffer.sqrtDecomp.estimateMemoryUsage()
 
 proc getPerformanceStats*(
     buffer: TextBuffer
@@ -1349,6 +1420,7 @@ proc getPerformanceStats*(
   let backendName =
     case buffer.backendKind
     of GapBuffer: "GapBuffer"
+    of SqrtDecomp: "SqrtDecomp"
 
   (backend: backendName, memoryUsage: buffer.estimateMemoryUsage(), length: buffer.len)
 

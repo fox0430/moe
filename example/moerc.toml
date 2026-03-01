@@ -1,5 +1,7 @@
 [Standard]
 
+bufferBackend = "gapBuffer"            # Buffer data structure. The default is gapBuffer: "gapBuffer", "sqrtDecomp"
+
 number = true                          # Line numbers
 
 statusLine = true                      # Show status line
