@@ -37,13 +37,15 @@ type
     cachedLineCount: int
     cachedCharLen: int # Total character count including newlines between lines
 
-# Forward declarations
-proc findBlock(sd: SqrtDecomp, lineNumber: int): tuple[blockIdx, localIdx: int]
-proc maybeSplit(sd: SqrtDecomp, blockIdx: int)
-proc maybeMerge(sd: SqrtDecomp, blockIdx: int)
-proc recalcCharLen(sd: SqrtDecomp)
-
-# ─── Constructors ────────────────────────────────────────────────────────────
+proc recalcCharLen(sd: SqrtDecomp) =
+  ## Recalculate total character length (including newlines between lines)
+  sd.cachedCharLen = 0
+  for b in sd.blocks:
+    for line in b.lines:
+      sd.cachedCharLen += line.len
+  # Add newlines between lines (lineCount - 1 newlines for lineCount lines)
+  if sd.cachedLineCount > 1:
+    sd.cachedCharLen += sd.cachedLineCount - 1
 
 proc newSqrtDecomp*(): SqrtDecomp =
   ## Create an empty SqrtDecomp buffer with a single empty line
@@ -83,8 +85,6 @@ proc newSqrtDecomp*(text: string): SqrtDecomp =
 
   result = SqrtDecomp(blocks: blocks, cachedLineCount: linesList.len, cachedCharLen: 0)
   result.recalcCharLen()
-
-# ─── Internal Helpers ────────────────────────────────────────────────────────
 
 proc findBlock(sd: SqrtDecomp, lineNumber: int): tuple[blockIdx, localIdx: int] =
   ## Find which block contains the given logical line number.
@@ -139,18 +139,6 @@ proc maybeMerge(sd: SqrtDecomp, blockIdx: int) =
       sd.blocks[blockIdx - 1].lines.add(sd.blocks[blockIdx].lines)
       sd.blocks.delete(blockIdx)
 
-proc recalcCharLen(sd: SqrtDecomp) =
-  ## Recalculate total character length (including newlines between lines)
-  sd.cachedCharLen = 0
-  for b in sd.blocks:
-    for line in b.lines:
-      sd.cachedCharLen += line.len
-  # Add newlines between lines (lineCount - 1 newlines for lineCount lines)
-  if sd.cachedLineCount > 1:
-    sd.cachedCharLen += sd.cachedLineCount - 1
-
-# ─── Query Operations ───────────────────────────────────────────────────────
-
 proc lineCount*(sd: SqrtDecomp): int {.inline.} =
   ## Count number of lines
   sd.cachedLineCount
@@ -186,8 +174,6 @@ proc findLineEnd*(sd: SqrtDecomp, lineNumber: int): int =
   let lineStart = sd.findLineStart(lineNumber)
   let (blockIdx, localIdx) = sd.findBlock(lineNumber)
   lineStart + sd.blocks[blockIdx].lines[localIdx].len - 1
-
-# ─── Line Access ─────────────────────────────────────────────────────────────
 
 proc getLine*(sd: SqrtDecomp, lineNumber: int): string =
   ## Get content of specific line (0-based, without newline)
@@ -235,8 +221,6 @@ proc modifyLineContent*(sd: SqrtDecomp, lineNumber: int, f: proc(s: var string))
   sd.blocks[blockIdx].lines[localIdx] = line
   sd.cachedCharLen += line.len - oldLen
 
-# ─── Character Access ────────────────────────────────────────────────────────
-
 proc charAtLineCol*(sd: SqrtDecomp, line: int, col: int): char =
   ## Get character at (line, column) position
   if line < 0 or line >= sd.cachedLineCount:
@@ -277,8 +261,6 @@ proc charAt*(sd: SqrtDecomp, index: int): char =
       inc lineNum
 
   raise newException(IndexDefect, "SqrtDecomp index out of bounds: " & $index)
-
-# ─── Index Conversion ────────────────────────────────────────────────────────
 
 proc indexToLineCol*(sd: SqrtDecomp, index: int): tuple[line: int, col: int] =
   ## Convert linear index to (line, column) position
@@ -373,8 +355,6 @@ proc `[]`*[T, U: Ordinal](sd: SqrtDecomp, x: HSlice[T, U]): string =
   let length = endIdx - start + 1
   sd.substring(start, length)
 
-# ─── Line Operations ─────────────────────────────────────────────────────────
-
 proc insertLine*(sd: SqrtDecomp, lineNumber: int, content: string) =
   ## Insert a new line at the specified line number
   ## Raises IndexDefect if lineNumber is out of valid range [0..len]
@@ -424,8 +404,6 @@ proc deleteLine*(sd: SqrtDecomp, lineNumber: int) =
     # else: keep the empty block so blocks is never empty
   else:
     sd.maybeMerge(blockIdx)
-
-# ─── Character-Level Operations ──────────────────────────────────────────────
 
 proc insertIntoLine*(sd: SqrtDecomp, line, col: int, text: string) =
   ## Insert text into an existing line at (line, column) position
@@ -553,8 +531,6 @@ proc deleteAtLineCol*(sd: SqrtDecomp, line: int, col: int, count: int = 1) =
     let (finalBi, _) = sd.findBlock(line)
     sd.maybeMerge(finalBi)
 
-# ─── Linear Index Operations ─────────────────────────────────────────────────
-
 proc insert*(sd: SqrtDecomp, index: int, text: string) =
   ## Insert text at linear index position
   ## Handles newlines by splitting into multiple lines
@@ -630,8 +606,6 @@ proc delete*(sd: SqrtDecomp, index: int, count: int = 1) =
     return
 
   sd.deleteAtLineCol(line, col, count)
-
-# ─── Utility ─────────────────────────────────────────────────────────────────
 
 proc clear*(sd: SqrtDecomp) =
   ## Clear all content and reset to single empty line

@@ -157,10 +157,51 @@ proc setConfiguredBackend*(backend: BufferBackend) =
 proc chooseBackend(): BufferBackend =
   configuredBackend
 
-# Forward declarations for fold state
-proc initFoldState*(): FoldState
-proc adjustFoldsAfterInsert*(state: var FoldState, insertLine: int, lineCount: int)
-proc adjustFoldsAfterDelete*(state: var FoldState, deleteLine: int, lineCount: int)
+proc initFoldState*(): FoldState =
+  ## Initialize an empty fold state
+  FoldState(folds: @[])
+
+proc adjustFoldsAfterInsert*(state: var FoldState, insertLine: int, lineCount: int) =
+  ## Adjust fold line numbers after lines are inserted
+  for i in 0 ..< state.folds.len:
+    if state.folds[i].startLine >= insertLine:
+      state.folds[i].startLine += lineCount
+      state.folds[i].endLine += lineCount
+    elif state.folds[i].endLine >= insertLine:
+      # Fold spans the insertion point - extend it
+      state.folds[i].endLine += lineCount
+
+proc adjustFoldsAfterDelete*(state: var FoldState, deleteLine: int, lineCount: int) =
+  ## Adjust fold line numbers after lines are deleted
+  var toRemove: seq[int] = @[]
+
+  for i in 0 ..< state.folds.len:
+    let deleteEnd = deleteLine + lineCount - 1
+
+    if state.folds[i].endLine < deleteLine:
+      # Fold entirely before deletion - no change
+      discard
+    elif state.folds[i].startLine > deleteEnd:
+      # Fold entirely after deletion - shift down
+      state.folds[i].startLine -= lineCount
+      state.folds[i].endLine -= lineCount
+    elif state.folds[i].startLine >= deleteLine and state.folds[i].endLine <= deleteEnd:
+      # Fold entirely within deletion - remove it
+      toRemove.add(i)
+    else:
+      # Fold partially overlaps - adjust
+      if state.folds[i].startLine < deleteLine:
+        # Fold starts before deletion
+        state.folds[i].endLine =
+          max(state.folds[i].startLine, state.folds[i].endLine - lineCount)
+      else:
+        # Fold starts within deletion range
+        state.folds[i].startLine = deleteLine
+        state.folds[i].endLine = max(deleteLine, state.folds[i].endLine - lineCount)
+
+  # Remove folds marked for deletion (in reverse order to preserve indices)
+  for i in countdown(toRemove.high, 0):
+    state.folds.delete(toRemove[i])
 
 proc isModified*(b: TextBuffer): bool {.inline.} =
   ## Check if buffer has unsaved changes
@@ -372,15 +413,6 @@ proc `[][]`*(b: TextBuffer, lineIndex, colIndex: int): char =
   ## Bracket operator for accessing character at (line, column)
   b[lineIndex][colIndex]
 
-# Forward declarations for undo system
-proc getChangePosition(change: BufferChange): BufferPosition
-proc pushUndoChange(b: TextBuffer, change: BufferChange)
-proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string]
-# Forward declaration for sidebar marker management
-proc ensureMarkersSize(b: TextBuffer)
-# Forward declaration for text insertion with newlines
-proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string)
-
 # Backend dispatch helpers for internal use (no undo recording)
 proc backendInsertIntoLine(b: TextBuffer, line, col: int, text: string) =
   case b.backendKind
@@ -429,6 +461,122 @@ proc deleteLineNoUndo*(b: TextBuffer, lineNumber: int) =
 proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Insert a line without recording undo. Used by substitute preview etc.
   b.backendInsertLine(lineNumber, content)
+
+proc getChangePosition(change: BufferChange): BufferPosition =
+  ## Get the starting position of a change
+  case change.kind
+  of ckInsertText:
+    return change.insertPos
+  of ckDeleteText:
+    return change.deletePos
+  of ckInsertLine:
+    return BufferPosition(line: change.insertLineIdx, column: 0)
+  of ckDeleteLine:
+    return BufferPosition(line: change.deleteLineIdx, column: 0)
+  of ckDeleteRange:
+    return change.deleteStartPos
+  of ckTransaction:
+    # For transactions, return the position of the first change
+    if change.transactionChanges.len > 0:
+      return getChangePosition(change.transactionChanges[0])
+    else:
+      return BufferPosition(line: 0, column: 0)
+
+proc ensureMarkersSize(b: TextBuffer) =
+  ## Ensure lineMarkers array matches buffer length
+  let bufferLen = b.len
+  if b.lineMarkers.len < bufferLen:
+    # Extend with none values
+    for i in b.lineMarkers.len ..< bufferLen:
+      b.lineMarkers.add(none(SidebarItemKind))
+  elif b.lineMarkers.len > bufferLen:
+    # Truncate
+    b.lineMarkers.setLen(bufferLen)
+
+proc pushUndoChange(b: TextBuffer, change: BufferChange) =
+  ## Add a change to the undo stack (or current transaction)
+  ## Always increments changeSeq to mark buffer as modified
+
+  # Clear redo stack when new change is made
+  b.redoStack.clear()
+
+  # Increment change sequence number (marks as modified)
+  b.changeSeq.inc
+
+  # Mark highlight as needing update and track changed range
+  b.highlightNeedsUpdate = true
+
+  # Track the first changed line for incremental highlighting
+  b.lastChangedLines = getChangePosition(change).line
+
+  if b.inTransaction and b.currentTransaction.isSome:
+    # Add to current transaction
+    var transaction = b.currentTransaction.get
+    transaction.changes.add(change)
+    b.currentTransaction = some(transaction)
+  else:
+    # Add directly to undo stack
+    b.undoStack.addLast(change)
+
+proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string) =
+  ## Insert text that may contain newlines, properly splitting into multiple lines
+  ## This is used internally for undo/redo operations
+  if '\n' notin text:
+    # Simple case: no newlines, just insert into current line
+    let line = b.getLine(pos.line)
+    let bytePos =
+      charToBytePosCached(line, pos.column, b.cursorCache, pos.line, b.changeSeq)
+    b.backendInsertIntoLine(pos.line, bytePos, text)
+  else:
+    # Complex case: text contains newlines, need to split current line and insert multiple lines
+    let
+      currentLine = b.getLine(pos.line)
+      currentLineLen = currentLine.charLen
+
+    # Split current line at insertion position
+    let
+      prefix =
+        if pos.column < currentLineLen:
+          currentLine.runeSubStr(0, pos.column)
+        else:
+          currentLine
+      suffix =
+        if pos.column < currentLineLen:
+          currentLine.runeSubStr(pos.column)
+        else:
+          ""
+
+    # Split text to insert by newlines
+    let insertedLines = text.split('\n')
+
+    # Build new lines
+    var newLines: seq[string] = @[]
+
+    if insertedLines.len == 1:
+      # Should not happen (we checked for \n above), but handle it
+      newLines.add(prefix & insertedLines[0] & suffix)
+    else:
+      # First line: prefix + first inserted line
+      newLines.add(prefix & insertedLines[0])
+
+      # Middle lines: just the inserted lines
+      for i in 1 ..< insertedLines.len - 1:
+        newLines.add(insertedLines[i])
+
+      # Last line: last inserted line + suffix
+      newLines.add(insertedLines[^1] & suffix)
+
+    # Replace current line with new lines
+    b.backendDeleteLine(pos.line)
+    for i, newLine in newLines:
+      b.backendInsertLine(pos.line + i, newLine)
+
+    # Adjust fold positions for newly inserted lines
+    if newLines.len > 1:
+      b.foldState.adjustFoldsAfterInsert(pos.line, newLines.len - 1)
+
+  # Ensure lineMarkers stays in sync after backend operations
+  b.ensureMarkersSize()
 
 # Editing operations
 proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), string] =
@@ -748,30 +896,50 @@ proc splitLine*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
 
 # Undo/Redo system
 
-proc pushUndoChange(b: TextBuffer, change: BufferChange) =
-  ## Add a change to the undo stack (or current transaction)
-  ## Always increments changeSeq to mark buffer as modified
+proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
+  ## Apply the inverse of a single change (internal helper)
+  ## Returns error if the operation fails
+  try:
+    case change.kind
+    of ckInsertText:
+      # Undo insert by deleting the inserted text (all bytes at once)
+      let line = b.getLine(change.insertPos.line)
+      let bytePos = charToBytePosCached(
+        line, change.insertPos.column, b.cursorCache, change.insertPos.line, b.changeSeq
+      )
+      b.backendDeleteAtLineCol(change.insertPos.line, bytePos, change.insertText.len)
+    of ckDeleteText:
+      # Undo delete by inserting the deleted text
+      let line = b.getLine(change.deletePos.line)
+      let bytePos = charToBytePosCached(
+        line, change.deletePos.column, b.cursorCache, change.deletePos.line, b.changeSeq
+      )
+      b.backendInsertIntoLine(change.deletePos.line, bytePos, change.deletedText)
+    of ckInsertLine:
+      # Undo insert line by deleting it
+      b.backendDeleteLine(change.insertLineIdx)
+      b.foldState.adjustFoldsAfterDelete(change.insertLineIdx, 1)
+    of ckDeleteLine:
+      # Undo delete line by inserting it
+      b.backendInsertLine(change.deleteLineIdx, change.deletedLineText)
+      b.foldState.adjustFoldsAfterInsert(change.deleteLineIdx, 1)
+    of ckDeleteRange:
+      # Undo delete range by inserting the deleted text
+      # Handle both single-line and multi-line deletions correctly
+      b.insertTextWithNewlines(change.deleteStartPos, change.deletedRangeText)
+    of ckTransaction:
+      # Undo all changes in transaction in reverse order
+      for i in countdown(change.transactionChanges.len - 1, 0):
+        let r = b.undoChange(change.transactionChanges[i])
+        if r.isErr:
+          return r
 
-  # Clear redo stack when new change is made
-  b.redoStack.clear()
-
-  # Increment change sequence number (marks as modified)
-  b.changeSeq.inc
-
-  # Mark highlight as needing update and track changed range
-  b.highlightNeedsUpdate = true
-
-  # Track the first changed line for incremental highlighting
-  b.lastChangedLines = getChangePosition(change).line
-
-  if b.inTransaction and b.currentTransaction.isSome:
-    # Add to current transaction
-    var transaction = b.currentTransaction.get
-    transaction.changes.add(change)
-    b.currentTransaction = some(transaction)
-  else:
-    # Add directly to undo stack
-    b.undoStack.addLast(change)
+    # Ensure lineMarkers stays in sync after undo operations
+    b.ensureMarkersSize()
+    return ok(())
+  except CatchableError as e:
+    logError("buffer", "Undo operation failed: " & e.msg)
+    return err("Failed to undo change: " & e.msg)
 
 proc beginTransaction*(b: TextBuffer, description: string = ""): Result[(), string] =
   ## Begin a transaction to group multiple changes
@@ -925,131 +1093,6 @@ proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), strin
     return err(commitResult.error)
 
   return ok(())
-
-proc getChangePosition(change: BufferChange): BufferPosition =
-  ## Get the starting position of a change
-  case change.kind
-  of ckInsertText:
-    return change.insertPos
-  of ckDeleteText:
-    return change.deletePos
-  of ckInsertLine:
-    return BufferPosition(line: change.insertLineIdx, column: 0)
-  of ckDeleteLine:
-    return BufferPosition(line: change.deleteLineIdx, column: 0)
-  of ckDeleteRange:
-    return change.deleteStartPos
-  of ckTransaction:
-    # For transactions, return the position of the first change
-    if change.transactionChanges.len > 0:
-      return getChangePosition(change.transactionChanges[0])
-    else:
-      return BufferPosition(line: 0, column: 0)
-
-proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string) =
-  ## Insert text that may contain newlines, properly splitting into multiple lines
-  ## This is used internally for undo/redo operations
-  if '\n' notin text:
-    # Simple case: no newlines, just insert into current line
-    let line = b.getLine(pos.line)
-    let bytePos =
-      charToBytePosCached(line, pos.column, b.cursorCache, pos.line, b.changeSeq)
-    b.backendInsertIntoLine(pos.line, bytePos, text)
-  else:
-    # Complex case: text contains newlines, need to split current line and insert multiple lines
-    let
-      currentLine = b.getLine(pos.line)
-      currentLineLen = currentLine.charLen
-
-    # Split current line at insertion position
-    let
-      prefix =
-        if pos.column < currentLineLen:
-          currentLine.runeSubStr(0, pos.column)
-        else:
-          currentLine
-      suffix =
-        if pos.column < currentLineLen:
-          currentLine.runeSubStr(pos.column)
-        else:
-          ""
-
-    # Split text to insert by newlines
-    let insertedLines = text.split('\n')
-
-    # Build new lines
-    var newLines: seq[string] = @[]
-
-    if insertedLines.len == 1:
-      # Should not happen (we checked for \n above), but handle it
-      newLines.add(prefix & insertedLines[0] & suffix)
-    else:
-      # First line: prefix + first inserted line
-      newLines.add(prefix & insertedLines[0])
-
-      # Middle lines: just the inserted lines
-      for i in 1 ..< insertedLines.len - 1:
-        newLines.add(insertedLines[i])
-
-      # Last line: last inserted line + suffix
-      newLines.add(insertedLines[^1] & suffix)
-
-    # Replace current line with new lines
-    b.backendDeleteLine(pos.line)
-    for i, newLine in newLines:
-      b.backendInsertLine(pos.line + i, newLine)
-
-    # Adjust fold positions for newly inserted lines
-    if newLines.len > 1:
-      b.foldState.adjustFoldsAfterInsert(pos.line, newLines.len - 1)
-
-  # Ensure lineMarkers stays in sync after backend operations
-  b.ensureMarkersSize()
-
-proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
-  ## Apply the inverse of a single change (internal helper)
-  ## Returns error if the operation fails
-  try:
-    case change.kind
-    of ckInsertText:
-      # Undo insert by deleting the inserted text (all bytes at once)
-      let line = b.getLine(change.insertPos.line)
-      let bytePos = charToBytePosCached(
-        line, change.insertPos.column, b.cursorCache, change.insertPos.line, b.changeSeq
-      )
-      b.backendDeleteAtLineCol(change.insertPos.line, bytePos, change.insertText.len)
-    of ckDeleteText:
-      # Undo delete by inserting the deleted text
-      let line = b.getLine(change.deletePos.line)
-      let bytePos = charToBytePosCached(
-        line, change.deletePos.column, b.cursorCache, change.deletePos.line, b.changeSeq
-      )
-      b.backendInsertIntoLine(change.deletePos.line, bytePos, change.deletedText)
-    of ckInsertLine:
-      # Undo insert line by deleting it
-      b.backendDeleteLine(change.insertLineIdx)
-      b.foldState.adjustFoldsAfterDelete(change.insertLineIdx, 1)
-    of ckDeleteLine:
-      # Undo delete line by inserting it
-      b.backendInsertLine(change.deleteLineIdx, change.deletedLineText)
-      b.foldState.adjustFoldsAfterInsert(change.deleteLineIdx, 1)
-    of ckDeleteRange:
-      # Undo delete range by inserting the deleted text
-      # Handle both single-line and multi-line deletions correctly
-      b.insertTextWithNewlines(change.deleteStartPos, change.deletedRangeText)
-    of ckTransaction:
-      # Undo all changes in transaction in reverse order
-      for i in countdown(change.transactionChanges.len - 1, 0):
-        let r = b.undoChange(change.transactionChanges[i])
-        if r.isErr:
-          return r
-
-    # Ensure lineMarkers stays in sync after undo operations
-    b.ensureMarkersSize()
-    return ok(())
-  except CatchableError as e:
-    logError("buffer", "Undo operation failed: " & e.msg)
-    return err("Failed to undo change: " & e.msg)
 
 proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   ## Undo the last 'count' changes (or all changes in a transaction group)
@@ -1425,17 +1468,6 @@ proc getPerformanceStats*(
   (backend: backendName, memoryUsage: buffer.estimateMemoryUsage(), length: buffer.len)
 
 # Sidebar marker management
-proc ensureMarkersSize(b: TextBuffer) =
-  ## Ensure lineMarkers array matches buffer length
-  let bufferLen = b.len
-  if b.lineMarkers.len < bufferLen:
-    # Extend with none values
-    for i in b.lineMarkers.len ..< bufferLen:
-      b.lineMarkers.add(none(SidebarItemKind))
-  elif b.lineMarkers.len > bufferLen:
-    # Truncate
-    b.lineMarkers.setLen(bufferLen)
-
 proc setLineMarker*(b: TextBuffer, line: int, kind: SidebarItemKind) =
   ## Set a sidebar marker for a specific line
   ## Automatically resizes the marker array if needed
@@ -1995,12 +2027,6 @@ proc findMatchingParenPosition*(
 
   return none(BufferPosition)
 
-# Line Folding Operations (vim-like manual folding)
-
-proc initFoldState*(): FoldState =
-  ## Initialize an empty fold state
-  FoldState(folds: @[])
-
 proc addFold*(
     state: var FoldState,
     startLine, endLine: int,
@@ -2130,48 +2156,6 @@ proc getPrevVisibleLine*(state: FoldState, line: int): int =
     if fold.collapsed and line > fold.startLine and line <= fold.endLine:
       return fold.startLine
   return line
-
-proc adjustFoldsAfterInsert*(state: var FoldState, insertLine: int, lineCount: int) =
-  ## Adjust fold line numbers after lines are inserted
-  for i in 0 ..< state.folds.len:
-    if state.folds[i].startLine >= insertLine:
-      state.folds[i].startLine += lineCount
-      state.folds[i].endLine += lineCount
-    elif state.folds[i].endLine >= insertLine:
-      # Fold spans the insertion point - extend it
-      state.folds[i].endLine += lineCount
-
-proc adjustFoldsAfterDelete*(state: var FoldState, deleteLine: int, lineCount: int) =
-  ## Adjust fold line numbers after lines are deleted
-  var toRemove: seq[int] = @[]
-
-  for i in 0 ..< state.folds.len:
-    let deleteEnd = deleteLine + lineCount - 1
-
-    if state.folds[i].endLine < deleteLine:
-      # Fold entirely before deletion - no change
-      discard
-    elif state.folds[i].startLine > deleteEnd:
-      # Fold entirely after deletion - shift down
-      state.folds[i].startLine -= lineCount
-      state.folds[i].endLine -= lineCount
-    elif state.folds[i].startLine >= deleteLine and state.folds[i].endLine <= deleteEnd:
-      # Fold entirely within deletion - remove it
-      toRemove.add(i)
-    else:
-      # Fold partially overlaps - adjust
-      if state.folds[i].startLine < deleteLine:
-        # Fold starts before deletion
-        state.folds[i].endLine =
-          max(state.folds[i].startLine, state.folds[i].endLine - lineCount)
-      else:
-        # Fold starts within deletion range
-        state.folds[i].startLine = deleteLine
-        state.folds[i].endLine = max(deleteLine, state.folds[i].endLine - lineCount)
-
-  # Remove folds marked for deletion (in reverse order to preserve indices)
-  for i in countdown(toRemove.high, 0):
-    state.folds.delete(toRemove[i])
 
 proc formatFoldText*(b: TextBuffer, fold: Fold): string =
   ## Format the display text for a collapsed fold (vim-style)
