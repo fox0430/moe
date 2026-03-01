@@ -127,6 +127,7 @@ type
     inStyle*: bool
     astroInFrontmatter*: bool
     astroFirstLine*: bool
+    yamlIsKey*: bool
 
   SourceLanguage* = enum
     langNone
@@ -199,6 +200,7 @@ proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.inStyle = false
   g.astroInFrontmatter = false
   g.astroFirstLine = true
+  g.yamlIsKey = false
   g.pos = 0
 
 proc generalNumber*(g: var GeneralTokenizer, position: int): int =

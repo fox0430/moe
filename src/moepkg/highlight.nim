@@ -63,6 +63,7 @@ type
     inStyle*: bool
     astroInFrontmatter*: bool
     astroFirstLine*: bool
+    yamlIsKey*: bool
 
   LineStateCache* = object ## Cache of tokenizer states for each line
     states*: seq[TokenizerState]
@@ -87,6 +88,7 @@ proc captureTokenizerState*(g: GeneralTokenizer): TokenizerState =
     inStyle: g.inStyle,
     astroInFrontmatter: g.astroInFrontmatter,
     astroFirstLine: g.astroFirstLine,
+    yamlIsKey: g.yamlIsKey,
   )
 
 proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
@@ -103,6 +105,7 @@ proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
   g.inStyle = state.inStyle
   g.astroInFrontmatter = state.astroInFrontmatter
   g.astroFirstLine = state.astroFirstLine
+  g.yamlIsKey = state.yamlIsKey
 
 # Default style for highlighting
 let defaultStyle* =
@@ -379,59 +382,31 @@ proc getEditorColorPair(
       else: EditorColorPairIndex.default
 
   case kind
-  of gtOperator:
-    EditorColorPairIndex.operator
-  of gtBuiltin:
-    EditorColorPairIndex.builtin
-  of gtKeyword:
-    EditorColorPairIndex.keyword
-  of gtBoolean:
-    EditorColorPairIndex.boolean
-  of gtSpecialVar:
-    EditorColorPairIndex.specialVar
-  of gtCharLit:
-    EditorColorPairIndex.charLit
-  of gtStringLit:
-    if language == SourceLanguage.langYaml:
-      EditorColorPairIndex.default
-    else:
-      EditorColorPairIndex.stringLit
-  of gtLongStringLit:
-    EditorColorPairIndex.stringLit
-  of gtBinNumber:
-    EditorColorPairIndex.binNumber
-  of gtDecNumber:
-    EditorColorPairIndex.decNumber
-  of gtFloatNumber:
-    EditorColorPairIndex.floatNumber
-  of gtHexNumber:
-    EditorColorPairIndex.hexNumber
-  of gtOctNumber:
-    EditorColorPairIndex.octNumber
-  of gtComment:
-    EditorColorPairIndex.comment
-  of gtLongComment:
-    EditorColorPairIndex.longComment
-  of gtPreprocessor:
-    EditorColorPairIndex.preprocessor
-  of gtFunctionName:
-    EditorColorPairIndex.functionName
-  of gtTypeName:
-    EditorColorPairIndex.typeName
-  of gtWhitespace:
-    EditorColorPairIndex.whitespace
-  of gtPragma:
-    EditorColorPairIndex.pragma
-  of gtIdentifier:
-    EditorColorPairIndex.identifier
-  of gtTable:
-    EditorColorPairIndex.table
-  of gtDate:
-    EditorColorPairIndex.date
-  of gtKey:
-    EditorColorPairIndex.property
-  else:
-    EditorColorPairIndex.default
+  of gtOperator: EditorColorPairIndex.operator
+  of gtBuiltin: EditorColorPairIndex.builtin
+  of gtKeyword: EditorColorPairIndex.keyword
+  of gtBoolean: EditorColorPairIndex.boolean
+  of gtSpecialVar: EditorColorPairIndex.specialVar
+  of gtCharLit: EditorColorPairIndex.charLit
+  of gtStringLit: EditorColorPairIndex.stringLit
+  of gtLongStringLit: EditorColorPairIndex.stringLit
+  of gtBinNumber: EditorColorPairIndex.binNumber
+  of gtDecNumber: EditorColorPairIndex.decNumber
+  of gtFloatNumber: EditorColorPairIndex.floatNumber
+  of gtHexNumber: EditorColorPairIndex.hexNumber
+  of gtOctNumber: EditorColorPairIndex.octNumber
+  of gtComment: EditorColorPairIndex.comment
+  of gtLongComment: EditorColorPairIndex.longComment
+  of gtPreprocessor: EditorColorPairIndex.preprocessor
+  of gtFunctionName: EditorColorPairIndex.functionName
+  of gtTypeName: EditorColorPairIndex.typeName
+  of gtWhitespace: EditorColorPairIndex.whitespace
+  of gtPragma: EditorColorPairIndex.pragma
+  of gtIdentifier: EditorColorPairIndex.identifier
+  of gtTable: EditorColorPairIndex.table
+  of gtDate: EditorColorPairIndex.date
+  of gtKey: EditorColorPairIndex.property
+  else: EditorColorPairIndex.default
 
 proc initHighlight*(
     buffer: seq[Runes] = @[], color = EditorColorPairIndex.default
