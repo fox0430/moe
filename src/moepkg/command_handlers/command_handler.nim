@@ -314,11 +314,12 @@ proc executeEdit*(
     handler: CommandModeHandler, buffer: TextBuffer, filename: string
 ): CommandModeResult =
   ## Execute edit command (:e filename)
+  let expanded = expandTilde(filename)
   # If path is a directory, open in Filer mode
-  if dirExists(filename):
-    return CommandModeResult(kind: cmrFiler, filerPath: some(absolutePath(filename)))
+  if dirExists(expanded):
+    return CommandModeResult(kind: cmrFiler, filerPath: some(absolutePath(expanded)))
   # Open the file in the current window
-  return CommandModeResult(kind: cmrEdit, editFilename: absolutePath(filename))
+  return CommandModeResult(kind: cmrEdit, editFilename: absolutePath(expanded))
 
 proc executeGotoLine*(
     handler: CommandModeHandler, buffer: TextBuffer, lineNumber: int

@@ -598,16 +598,21 @@ proc handleCommandModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
         e.processGotoLineResult(r, activeBuffer)
       of hrVSplit:
         # Handle vertical split
+        let expandedVsplit =
+          if r.vsplitFilename.isSome:
+            some(expandTilde(r.vsplitFilename.get))
+          else:
+            none(string)
         let filerPath =
-          if r.vsplitFilename.isSome and dirExists(r.vsplitFilename.get):
-            some(absolutePath(r.vsplitFilename.get))
+          if expandedVsplit.isSome and dirExists(expandedVsplit.get):
+            some(absolutePath(expandedVsplit.get))
           else:
             none(string)
         let splitFilename =
           if filerPath.isSome:
             none(string)
           else:
-            r.vsplitFilename
+            expandedVsplit
         let splitResult = e.vsplit(splitFilename)
         if splitResult.isErr:
           logError("handler", "Vertical split failed: " & splitResult.error)
@@ -616,16 +621,21 @@ proc handleCommandModeKeyCombo(e: Editor, keyCombo: KeyCombo): bool =
           e.enterFilerInActiveWindow(filerPath.get)
       of hrHSplit:
         # Handle horizontal split
+        let expandedHsplit =
+          if r.hsplitFilename.isSome:
+            some(expandTilde(r.hsplitFilename.get))
+          else:
+            none(string)
         let filerPath =
-          if r.hsplitFilename.isSome and dirExists(r.hsplitFilename.get):
-            some(absolutePath(r.hsplitFilename.get))
+          if expandedHsplit.isSome and dirExists(expandedHsplit.get):
+            some(absolutePath(expandedHsplit.get))
           else:
             none(string)
         let splitFilename =
           if filerPath.isSome:
             none(string)
           else:
-            r.hsplitFilename
+            expandedHsplit
         let splitResult = e.hsplit(splitFilename)
         if splitResult.isErr:
           logError("handler", "Horizontal split failed: " & splitResult.error)
