@@ -27,7 +27,7 @@
 
 import std/[options, strutils, os]
 
-import ../[buffer, gap_buffer, modes, command_line, command_config, command_registry]
+import ../[buffer, modes, command_line, command_config, command_registry]
 
 type
   BoolSettingOption* = enum
@@ -764,7 +764,7 @@ proc executeStripWhitespace*(
     let line = buffer.getLine(lineIdx)
     let trimmed = line.strip(leading = false, trailing = true)
     if trimmed != line:
-      buffer.gapBuffer.replaceLine(lineIdx, trimmed)
+      buffer.replaceLineNoUndo(lineIdx, trimmed)
       strippedCount.inc
   return CommandModeResult(kind: cmrStripWhitespace, strippedLineCount: strippedCount)
 
@@ -868,7 +868,7 @@ proc executeSubstitute*(
 
     # Update the line if modified
     if modified:
-      buffer.gapBuffer.replaceLine(lineIdx, newLine)
+      buffer.replaceLineNoUndo(lineIdx, newLine)
 
   # Mark highlight as needing update since we bypassed normal change tracking
   if replaceCount > 0:

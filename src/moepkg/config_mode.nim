@@ -391,6 +391,16 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
     intMin: 0,
     intMax: 10000,
   )
+  result.add ConfigItemDescriptor(
+    kind: cvkEnum,
+    displayName: "bufferBackend",
+    section: "Standard",
+    enumGet: proc(c: EditorConfig): string =
+      $c.standard.bufferBackend,
+    enumSet: proc(c: EditorConfig, v: string) =
+      c.standard.bufferBackend = parseEnum[BufferBackendConfig](v),
+    enumOptions: @["gapBuffer", "sqrtDecomp"],
+  )
 
   # Clipboard section
   result.add ConfigItemDescriptor(

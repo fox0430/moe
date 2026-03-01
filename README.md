@@ -15,7 +15,9 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Written in [Nim](https://nim-lang.org)
 
-- Adopt GapBuffer
+- Selectable buffer backend
+  - GapBuffer
+  - Sqrt Decomposition
 
 - UTF-8 and other encodings support (Incomplete)
 
@@ -137,8 +139,6 @@ This project's goals are easily customizable, high productivity, user friendly, 
 - Snippets
 
 - Spell checker
-
-- Select data structures
 
 - Edit files over ssh
 

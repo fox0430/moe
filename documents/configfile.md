@@ -65,6 +65,16 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | fileTypeIcon |
 
 
+### BufferBackend
+
+- type: string
+
+| Name | Description |
+|:-----------------------------|:-----------------------------|
+| gapBuffer | GapBuffer (default) |
+| sqrtDecomp | Sqrt Decomposition |
+
+
 ### ThemeKind
 
 - type: string
@@ -104,6 +114,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | colorMode | TerminalColorMode | 24bit | Terminal color mode |
 | mouse | bool | false | Enable mouse cursor movement |
 | timeoutlen | integer | 1000 | Key mapping timeout in milliseconds (0 = no timeout) |
+| bufferBackend | BufferBackend | gapBuffer | Buffer data structure |
 
 
 ### Clipboard table

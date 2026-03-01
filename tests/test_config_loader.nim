@@ -342,6 +342,34 @@ defaultCursor = "invalid"
     check "Standard.defaultCursor" in vr.errors[0].name
     check config.standard.defaultCursor == ctTerminalDefault # Default value
 
+  test "Valid bufferBackend gapBuffer":
+    let tomlStr = """
+[Standard]
+bufferBackend = "gapBuffer"
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.bufferBackend == bbcGapBuffer
+
+  test "Valid bufferBackend sqrtDecomp":
+    let tomlStr = """
+[Standard]
+bufferBackend = "sqrtDecomp"
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.bufferBackend == bbcSqrtDecomp
+
+  test "Invalid bufferBackend enum is detected":
+    let tomlStr = """
+[Standard]
+bufferBackend = "invalid"
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "Standard.bufferBackend" in vr.errors[0].name
+    check config.standard.bufferBackend == bbcGapBuffer # Default value
+
 suite "Config Validation - Clipboard section":
   test "Valid Clipboard config passes validation":
     let tomlStr = """
