@@ -27,7 +27,7 @@ import
 import
   status_line, render_utils, git_diff, logger, config_loader, keybind_config,
   search_utils, completion, signature_help, hover_popup, command_completion, motion,
-  color, gap_buffer, debug_viewer, message_log, unicode_utils
+  color, debug_viewer, message_log, unicode_utils
 import key_bindings except Command
 import command_handlers/insert_handler
 
@@ -566,6 +566,14 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Apply configuration to parser
   cmdConfig.applyToParser(cmdLineParser)
 
+  # Set buffer backend from configuration
+  case editorConfig.standard.bufferBackend
+  of bbcGapBuffer:
+    setConfiguredBackend(GapBuffer)
+  of bbcSqrtDecomp:
+    setConfiguredBackend(SqrtDecomp)
+  logDebug("editor", "Buffer backend: " & $editorConfig.standard.bufferBackend)
+
   # Initialize LSP integration with current working directory as workspace root
   let lspIntegration = newLspIntegration(getCurrentDir())
 
@@ -1025,13 +1033,13 @@ proc restoreFromPreview(e: Editor) =
   # Restore all lines from snapshot
   for i in 0 ..< e.state.substitutePreview.originalLines.len:
     if i < buffer.len:
-      buffer.gapBuffer.replaceLine(i, e.state.substitutePreview.originalLines[i])
+      buffer.replaceLineNoUndo(i, e.state.substitutePreview.originalLines[i])
 
   # Handle line count differences
   while buffer.len > e.state.substitutePreview.originalLines.len:
-    buffer.gapBuffer.deleteLine(buffer.len - 1)
+    buffer.deleteLineNoUndo(buffer.len - 1)
   while buffer.len < e.state.substitutePreview.originalLines.len:
-    buffer.gapBuffer.insertLine(
+    buffer.insertLineNoUndo(
       buffer.len, e.state.substitutePreview.originalLines[buffer.len]
     )
 
@@ -1105,7 +1113,7 @@ proc updateSubstitutePreview*(
         break
 
     if modified:
-      buffer.gapBuffer.replaceLine(lineIdx, newLine)
+      buffer.replaceLineNoUndo(lineIdx, newLine)
 
   buffer.highlightNeedsUpdate = true
   e.state.needsFullRedraw = true

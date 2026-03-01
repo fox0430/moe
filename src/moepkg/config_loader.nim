@@ -115,6 +115,12 @@ proc parseLspTraceLevel(s: string): LspTraceLevel =
   of "verbose": ltVerbose
   else: ltOff
 
+proc parseBufferBackend(s: string): BufferBackendConfig =
+  case s
+  of "gapBuffer": bbcGapBuffer
+  of "sqrtDecomp": bbcSqrtDecomp
+  else: bbcGapBuffer
+
 # Integrated load+validate helper functions
 # These functions validate and load in one step.
 # Invalid values are skipped (keeping defaults) and errors are collected.
@@ -333,6 +339,7 @@ const
   ValidClipboardTools* = ["xsel", "xclip", "wl-clipboard", "win32yank", "pbcopy"]
   ValidSplitTypes* = ["horizontal", "vertical"]
   ValidLspTraceLevels* = ["off", "messages", "verbose"]
+  ValidBufferBackends* = ["gapBuffer", "sqrtDecomp"]
 
 # Integrated load functions (validate + load in one step)
 
@@ -346,7 +353,7 @@ proc loadStandardConfig(
     "smartcase", "disableChangeCursor", "defaultCursor", "normalModeCursor",
     "insertModeCursor", "liveReloadOfConf", "incrementalSearch", "popupWindowInExmode",
     "autoDeleteParen", "liveReloadOfFile", "colorMode", "mouse", "lineWrap",
-    "timeoutlen",
+    "timeoutlen", "bufferBackend",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "number", config.number, vr, section)
@@ -386,6 +393,10 @@ proc loadStandardConfig(
   loadBool(table, "mouse", config.mouse, vr, section)
   loadBool(table, "lineWrap", config.lineWrap, vr, section)
   loadInt(table, "timeoutlen", config.timeoutlen, vr, section, minVal = 0)
+  loadEnum(
+    table, "bufferBackend", config.bufferBackend, vr, section, parseBufferBackend,
+    ValidBufferBackends,
+  )
 
 proc loadClipboardConfig(
     table: TomlTableRef, config: var ClipboardConfig, vr: var ValidationResult
@@ -1832,6 +1843,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "mouse = " & toTomlBool(config.standard.mouse)
   lines.add "lineWrap = " & toTomlBool(config.standard.lineWrap)
   lines.add "timeoutlen = " & $config.standard.timeoutlen
+  lines.add "bufferBackend = " & toTomlString($config.standard.bufferBackend)
   lines.add ""
 
   # Clipboard section
