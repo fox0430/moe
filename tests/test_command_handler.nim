@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, strutils, sets]
+import std/[unittest, options, strutils, sets, os]
 import pkg/results
 import ../src/moepkg/[buffer, command_line, command_config, command_registry, modes]
 import ../src/moepkg/command_handlers/command_handler
@@ -184,6 +184,25 @@ suite "CommandModeHandler - executeEdit":
     check result.kind == cmrFiler
     check result.filerPath.isSome
     check result.filerPath.get == "/tmp"
+
+  test "Edit with tilde expands to home directory":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.executeEdit(buffer, "~/test.nim")
+    check result.kind == cmrEdit
+    check result.editFilename == getHomeDir() / "test.nim"
+    check not result.editFilename.contains("~")
+
+  test "Edit directory with tilde opens filer":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    # Home directory always exists
+    let result = handler.executeEdit(buffer, "~")
+    check result.kind == cmrFiler
+    check result.filerPath.isSome
+    check result.filerPath.get == getHomeDir().absolutePath
 
 suite "CommandModeHandler - executeGotoLine":
   test "Goto valid line number":
