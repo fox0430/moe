@@ -221,6 +221,53 @@ suite "CrossBackend - Undo/Redo":
       discard b.redo()
       check b[0] == "Hello World!"
 
+suite "CrossBackend - replaceLine Undo/Redo":
+  for be in BufferBackend:
+    test "undo replaceLine [" & $be & "]":
+      let b = buf("hello\nworld", be)
+      discard b.replaceLine(0, "HELLO")
+      check b[0] == "HELLO"
+      discard b.undo()
+      check b[0] == "hello"
+
+    test "redo replaceLine [" & $be & "]":
+      let b = buf("hello\nworld", be)
+      discard b.replaceLine(0, "HELLO")
+      discard b.undo()
+      discard b.redo()
+      check b[0] == "HELLO"
+
+    test "replaceLine out of bounds [" & $be & "]":
+      let b = buf("hello", be)
+      check b.replaceLine(-1, "x").isErr
+      check b.replaceLine(1, "x").isErr
+      check b[0] == "hello"
+
+    test "replaceLine isModified [" & $be & "]":
+      let b = buf("hello", be)
+      check b.isModified == false
+      discard b.replaceLine(0, "HELLO")
+      check b.isModified == true
+      discard b.undo()
+      check b.isModified == false
+
+    test "transaction with replaceLine [" & $be & "]":
+      let b = buf("aaa\nbbb\nccc", be)
+      discard b.beginTransaction("test")
+      discard b.replaceLine(0, "AAA")
+      discard b.replaceLine(1, "BBB")
+      discard b.commitTransaction()
+      check b[0] == "AAA"
+      check b[1] == "BBB"
+
+      discard b.undo()
+      check b[0] == "aaa"
+      check b[1] == "bbb"
+
+      discard b.redo()
+      check b[0] == "AAA"
+      check b[1] == "BBB"
+
 suite "CrossBackend - Transaction":
   for be in BufferBackend:
     test "transaction undo [" & $be & "]":
