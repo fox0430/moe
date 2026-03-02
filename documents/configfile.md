@@ -73,6 +73,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 |:-----------------------------|:-----------------------------|
 | gapBuffer | GapBuffer (default) |
 | sqrtDecomp | Sqrt Decomposition |
+| rope | Rope (B-tree) |
 
 
 ### ThemeKind

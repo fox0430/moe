@@ -19,7 +19,7 @@
 
 import std/[unittest, strutils]
 
-import ../src/moepkg/gap_buffer {.all.}
+import ../src/moepkg/buffer_backends/gap_buffer {.all.}
 
 suite "GapBuffer - Basic Operations":
   test "newGapBuffer creates empty buffer":

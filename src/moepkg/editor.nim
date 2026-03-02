@@ -574,6 +574,8 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     setConfiguredBackend(GapBuffer)
   of bbcSqrtDecomp:
     setConfiguredBackend(SqrtDecomp)
+  of bbcRope:
+    setConfiguredBackend(Rope)
   logDebug("editor", "Buffer backend: " & $editorConfig.standard.bufferBackend)
 
   # Initialize LSP integration with current working directory as workspace root

@@ -119,6 +119,7 @@ proc parseBufferBackend(s: string): BufferBackendConfig =
   case s
   of "gapBuffer": bbcGapBuffer
   of "sqrtDecomp": bbcSqrtDecomp
+  of "rope": bbcRope
   else: bbcGapBuffer
 
 # Integrated load+validate helper functions
@@ -339,7 +340,7 @@ const
   ValidClipboardTools* = ["xsel", "xclip", "wl-clipboard", "win32yank", "pbcopy"]
   ValidSplitTypes* = ["horizontal", "vertical"]
   ValidLspTraceLevels* = ["off", "messages", "verbose"]
-  ValidBufferBackends* = ["gapBuffer", "sqrtDecomp"]
+  ValidBufferBackends* = ["gapBuffer", "sqrtDecomp", "rope"]
 
 # Integrated load functions (validate + load in one step)
 

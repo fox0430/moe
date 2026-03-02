@@ -360,6 +360,15 @@ bufferBackend = "sqrtDecomp"
     check not vr.hasErrors
     check config.standard.bufferBackend == bbcSqrtDecomp
 
+  test "Valid bufferBackend rope":
+    let tomlStr = """
+[Standard]
+bufferBackend = "rope"
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.bufferBackend == bbcRope
+
   test "Invalid bufferBackend enum is detected":
     let tomlStr = """
 [Standard]

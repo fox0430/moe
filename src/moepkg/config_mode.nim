@@ -399,7 +399,7 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
       $c.standard.bufferBackend,
     enumSet: proc(c: EditorConfig, v: string) =
       c.standard.bufferBackend = parseEnum[BufferBackendConfig](v),
-    enumOptions: @["gapBuffer", "sqrtDecomp"],
+    enumOptions: @["gapBuffer", "sqrtDecomp", "rope"],
   )
 
   # Clipboard section
