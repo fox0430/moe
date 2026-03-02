@@ -75,6 +75,95 @@ proc getClipboardCommand*(
     of write:
       return some(@["pbcopy"])
 
+proc getPrimarySelectionReadCommand*(tool: ClipboardTool): Option[seq[string]] =
+  ## Get the command to read from X11 PRIMARY selection (middle-click paste).
+  ## PRIMARY selection holds text selected by mouse highlighting.
+  case tool
+  of cbtXclip:
+    return some(@["xclip", "-selection", "primary", "-o"])
+  of cbtXsel:
+    # xsel reads from PRIMARY by default (no --clipboard flag)
+    return some(@["xsel", "--output"])
+  of cbtWlClipboard:
+    return some(@["wl-paste", "-n", "--primary"])
+  of cbtWin32yank, cbtPbcopy:
+    # Windows/macOS don't have PRIMARY selection; fall back to clipboard
+    return getClipboardCommand(tool, read)
+
+proc readFromPrimarySelectionSync*(tool: ClipboardTool): Result[string, string] =
+  ## Read text from X11 PRIMARY selection synchronously.
+  ## PRIMARY selection is what middle-click paste uses in X11.
+  let cmdOpt = getPrimarySelectionReadCommand(tool)
+  if cmdOpt.isNone:
+    return Result[string, string].err("Clipboard tool not available: " & $tool)
+
+  let cmd = cmdOpt.get()
+  try:
+    let process =
+      startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath, poStdErrToStdOut})
+    let output = process.outputStream.readAll()
+    let exitCode = process.waitForExit()
+    process.close()
+
+    if exitCode == 0:
+      return Result[string, string].ok(output)
+    else:
+      return Result[string, string].err(
+        "Failed to read from primary selection: exit code " & $exitCode
+      )
+  except CatchableError as e:
+    return Result[string, string].err("Failed to read from primary selection: " & e.msg)
+
+proc getPrimarySelectionWriteCommand*(tool: ClipboardTool): Option[seq[string]] =
+  ## Get the command to write to X11 PRIMARY selection.
+  case tool
+  of cbtXclip:
+    return some(@["xclip", "-selection", "primary", "-i"])
+  of cbtXsel:
+    # xsel writes to PRIMARY by default (no --clipboard flag)
+    return some(@["xsel", "--input"])
+  of cbtWlClipboard:
+    return some(@["wl-copy", "--primary"])
+  of cbtWin32yank, cbtPbcopy:
+    return getClipboardCommand(tool, write)
+
+proc writeToPrimarySelectionSync*(
+    tool: ClipboardTool, text: string
+): Result[void, string] =
+  ## Write text to X11 PRIMARY selection synchronously.
+  let cmdOpt = getPrimarySelectionWriteCommand(tool)
+  if cmdOpt.isNone:
+    return Result[void, string].err("Clipboard tool not available: " & $tool)
+
+  let cmd = cmdOpt.get()
+  try:
+    if tool == cbtWlClipboard:
+      var args = cmd[1 ..^ 1]
+      args.add(text)
+      let process = startProcess(cmd[0], args = args, options = {poUsePath})
+      let exitCode = process.waitForExit()
+      process.close()
+      if exitCode == 0:
+        return Result[void, string].ok()
+      else:
+        return Result[void, string].err(
+          "Failed to write to primary selection: exit code " & $exitCode
+        )
+    else:
+      let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
+      process.inputStream.write(text)
+      process.inputStream.close()
+      let exitCode = process.waitForExit()
+      process.close()
+      if exitCode == 0:
+        return Result[void, string].ok()
+      else:
+        return Result[void, string].err(
+          "Failed to write to primary selection: exit code " & $exitCode
+        )
+  except CatchableError as e:
+    return Result[void, string].err("Failed to write to primary selection: " & e.msg)
+
 proc readFromClipboardSync*(tool: ClipboardTool): Result[string, string] =
   ## Read text from system clipboard synchronously
   ## Returns the clipboard content as a string, or an error message

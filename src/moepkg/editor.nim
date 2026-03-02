@@ -27,7 +27,7 @@ import
 import
   status_line, render_utils, git_diff, logger, config_loader, keybind_config,
   search_utils, completion, signature_help, hover_popup, command_completion, motion,
-  color, gap_buffer, debug_viewer, message_log, unicode_utils, highlight
+  color, debug_viewer, message_log, unicode_utils, highlight
 
 import key_bindings except Command
 import command_handlers/insert_handler
