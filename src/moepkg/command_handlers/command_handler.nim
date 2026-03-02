@@ -873,11 +873,6 @@ proc executeSubstitute*(
     if modified:
       discard buffer.replaceLine(lineIdx, newLine)
 
-  # Mark highlight as needing update since we bypassed normal change tracking
-  if replaceCount > 0:
-    buffer.highlightNeedsUpdate = true
-    buffer.lastChangedLines = 0 # Mark from first line as changed
-
   discard buffer.commitTransaction()
 
   if replaceCount == 0:
