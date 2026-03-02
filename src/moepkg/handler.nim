@@ -27,7 +27,7 @@ import
   quick_run_utils, help_viewer, buffer_manager, backup_manager, backup, diff_viewer,
   command_completion, build, render_utils, debug_viewer, config_loader,
   documentsymbol_viewer, message_log, command_line, color, theme, tab_line,
-  terminal_mode
+  terminal_mode, clipboard
 import command_handlers/handler_manager
 
 proc adjustCursorAfterInsertExit*(cursor: var BufferPosition, lineCharLen: int) =
@@ -1938,6 +1938,60 @@ proc calculateLineNumOffsetForMouse(e: Editor, buffer: TextBuffer): int =
   ## Calculate line number offset (matching rendering calculation)
   calculateLineNumOffset(buffer, e.state.display.showLineNumbers)
 
+proc middleClickPaste(e: Editor) =
+  ## Paste clipboard content at current cursor position for middle-click.
+  if not e.config.clipboard.enable:
+    return
+
+  if e.state.mode == EditorMode.Normal:
+    e.setMode(EditorMode.Insert)
+    let activeBuffer = e.activeBuffer()
+    discard activeBuffer.beginTransaction("Insert mode edit")
+    e.state.statusMessage = "-- INSERT --"
+  elif e.state.mode != EditorMode.Insert:
+    return
+
+  # Middle-click uses X11 PRIMARY selection (text selected by mouse),
+  # not CLIPBOARD selection (Ctrl+C).
+  let readResult = readFromPrimarySelectionSync(e.config.clipboard.tool)
+  if readResult.isErr:
+    return
+
+  let pastedText = readResult.get()
+  if pastedText.len == 0:
+    return
+
+  let activeBuffer = e.activeBuffer()
+
+  # In Insert mode, a transaction is already active. Use it directly
+  # instead of starting a new one.
+  let ownTransaction = not activeBuffer.inTransaction
+  if ownTransaction:
+    let transactionResult = activeBuffer.beginTransaction("Middle-click paste")
+    if transactionResult.isErr:
+      e.state.statusMessage = "Paste failed: " & transactionResult.error
+      return
+
+  var pos = e.cursor
+  discard activeBuffer.insertText(pos, pastedText)
+
+  # Calculate new cursor position after paste
+  var newLine = pos.line
+  var newColumn = pos.column
+  for ch in pastedText:
+    if ch == '\n':
+      newLine += 1
+      newColumn = 0
+    else:
+      newColumn += 1
+
+  e.activeWindow.cursor.line = newLine
+  e.activeWindow.cursor.column = newColumn
+
+  if ownTransaction:
+    discard activeBuffer.commitTransaction()
+  e.state.needsFullRedraw = true
+
 proc handleMouseEvent(e: Editor, event: Event): bool =
   ## Handle mouse events for cursor movement
   ## Returns true if the event was handled, false otherwise
@@ -1948,10 +2002,10 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
 
   let mouse = event.mouse
 
-  # Only handle left button press and wheel events
+  # Only handle left button, middle button press and wheel events
   if mouse.button notin {
-    mouse_logic.MouseButton.Left, mouse_logic.MouseButton.WheelUp,
-    mouse_logic.MouseButton.WheelDown,
+    mouse_logic.MouseButton.Left, mouse_logic.MouseButton.Middle,
+    mouse_logic.MouseButton.WheelUp, mouse_logic.MouseButton.WheelDown,
   }:
     return false
   if mouse.kind != celina.MouseEventKind.Press:
@@ -2088,6 +2142,8 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
           # Update cursor (e.cursor= sets both state.cursor and activeWindow.cursor)
           # Note: After switching window index, e.activeWindow now refers to window i
           e.cursor = pos
+          if mouse.button == mouse_logic.MouseButton.Middle:
+            e.middleClickPaste()
           e.state.needsFullRedraw = true
           return true
 
@@ -2132,6 +2188,8 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
     let pos = posOpt.get
     # e.cursor= sets both state.cursor and activeWindow.cursor
     e.cursor = pos
+    if mouse.button == mouse_logic.MouseButton.Middle:
+      e.middleClickPaste()
     e.state.needsFullRedraw = true
     return true
 
@@ -2252,6 +2310,12 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   # Handle mouse events first
   if event.kind == EventKind.Mouse:
+    # Middle-click paste works regardless of mouse config since mouseCapture
+    # is always enabled and would otherwise block the terminal's native paste.
+    if event.mouse.button == mouse_logic.MouseButton.Middle and
+        event.mouse.kind == celina.MouseEventKind.Press:
+      e.middleClickPaste()
+      return true
     discard e.handleMouseEvent(event)
     return true # Always continue running after mouse events
 

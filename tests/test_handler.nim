@@ -23,7 +23,7 @@
 ## - Background process management
 ## - Search mode event handling helpers
 
-import std/[unittest, options, tables, os]
+import std/[unittest, options, tables, os, osproc]
 from std/strutils import contains
 
 import config_test_helper
@@ -41,6 +41,7 @@ import ../src/moepkg/filer {.all.}
 import ../src/moepkg/handler {.all.}
 import ../src/moepkg/config_loader {.all.}
 import ../src/moepkg/render_utils
+import ../src/moepkg/clipboard {.all.}
 
 proc createTestViewport(x, y, width, height, topLine, leftColumn: int): ViewPort =
   ViewPort(
@@ -2055,3 +2056,167 @@ suite "adjustCursorAfterInsertExit":
     var cursor = BufferPosition(line: 0, column: 0)
     adjustCursorAfterInsertExit(cursor, 1)
     check cursor.column == 0
+
+proc isClipboardToolAvailable(): bool =
+  try:
+    let (_, exitCode) = execCmdEx("which xsel")
+    if exitCode == 0 and existsEnv("DISPLAY"):
+      return true
+    let (_, exitCode2) = execCmdEx("which xclip")
+    if exitCode2 == 0 and existsEnv("DISPLAY"):
+      return true
+    let (_, exitCode3) = execCmdEx("which wl-copy")
+    if exitCode3 == 0 and existsEnv("WAYLAND_DISPLAY"):
+      return true
+  except CatchableError:
+    discard
+  return false
+
+proc getAvailableClipboardTool(): ClipboardTool =
+  if existsEnv("WAYLAND_DISPLAY"):
+    try:
+      let (_, exitCode) = execCmdEx("which wl-copy")
+      if exitCode == 0:
+        return cbtWlClipboard
+    except CatchableError:
+      discard
+  if existsEnv("DISPLAY"):
+    try:
+      let (_, exitCode) = execCmdEx("which xsel")
+      if exitCode == 0:
+        return cbtXsel
+    except CatchableError:
+      discard
+    try:
+      let (_, exitCode) = execCmdEx("which xclip")
+      if exitCode == 0:
+        return cbtXclip
+    except CatchableError:
+      discard
+  return cbtXsel # fallback
+
+proc createTestEditorForMiddleClick(content: string): Editor =
+  let config = newEditorConfig()
+  config.standard.mouse = true
+  config.clipboard.enable = true
+  config.clipboard.tool = getAvailableClipboardTool()
+  result = newEditor(config)
+  result.textBuffer = newTextBuffer(content)
+  result.windowManager.windows[0].buffer = result.textBuffer
+  result.windowManager.windows[0].bufferList = @[result.textBuffer]
+  result.viewport =
+    ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+  result.windowManager.windows[0].viewport = result.viewport
+  result.executer.motionController.viewportManager.viewport = result.viewport
+  result.state.mode = EditorMode.Normal
+
+proc makeMiddleClickEvent(x, y: int): Event =
+  Event(
+    kind: EventKind.Mouse,
+    mouse: MouseEvent(
+      kind: MouseEventKind.Press, button: mouse_logic.MouseButton.Middle, x: x, y: y
+    ),
+  )
+
+suite "middleClickPaste":
+  test "Clipboard disabled":
+    let e = createTestEditorForMiddleClick("hello")
+    e.config.clipboard.enable = false
+    e.state.mode = EditorMode.Insert
+    discard e.textBuffer.beginTransaction("test")
+
+    e.middleClickPaste()
+
+    # Buffer should be unchanged
+    check e.textBuffer.getLine(0) == "hello"
+
+  test "Unsupported mode (Visual)":
+    let e = createTestEditorForMiddleClick("hello")
+    e.state.mode = EditorMode.Visual
+
+    e.middleClickPaste()
+
+    check e.textBuffer.getLine(0) == "hello"
+
+  test "Insert mode - paste from clipboard":
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let tool = getAvailableClipboardTool()
+      let testText = "middle_click_test"
+      let writeResult = writeToPrimarySelectionSync(tool, testText)
+      check writeResult.isOk
+      sleep(100)
+
+      let e = createTestEditorForMiddleClick("hello")
+      e.state.mode = EditorMode.Insert
+      discard e.textBuffer.beginTransaction("Insert mode edit")
+      e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 5)
+
+      e.middleClickPaste()
+
+      let line = e.textBuffer.getLine(0)
+      check $line == "hello" & testText
+
+  test "Normal mode - auto enter Insert mode and paste":
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let tool = getAvailableClipboardTool()
+      let testText = "normal_paste"
+      let writeResult = writeToPrimarySelectionSync(tool, testText)
+      check writeResult.isOk
+      sleep(100)
+
+      let e = createTestEditorForMiddleClick("hello")
+      e.state.mode = EditorMode.Normal
+      e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+
+      e.middleClickPaste()
+
+      check e.state.mode == EditorMode.Insert
+      let line = e.textBuffer.getLine(0)
+      check $line == testText & "hello"
+
+  test "Insert mode - multiline paste":
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let tool = getAvailableClipboardTool()
+      let testText = "line1\nline2"
+      let writeResult = writeToPrimarySelectionSync(tool, testText)
+      check writeResult.isOk
+      sleep(100)
+
+      let e = createTestEditorForMiddleClick("")
+      e.state.mode = EditorMode.Insert
+      discard e.textBuffer.beginTransaction("Insert mode edit")
+
+      e.middleClickPaste()
+
+      check e.textBuffer.len >= 2
+      check $e.textBuffer.getLine(0) == "line1"
+      check $e.textBuffer.getLine(1) == "line2"
+      check e.windowManager.windows[0].cursor.line == 1
+      check e.windowManager.windows[0].cursor.column == 5
+
+  test "handleEvent dispatches middle-click even when mouse config disabled":
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let tool = getAvailableClipboardTool()
+      let testText = "event_test"
+      let writeResult = writeToPrimarySelectionSync(tool, testText)
+      check writeResult.isOk
+      sleep(100)
+
+      let e = createTestEditorForMiddleClick("hello")
+      e.config.standard.mouse = false # Mouse disabled
+      e.state.mode = EditorMode.Normal
+
+      let event = makeMiddleClickEvent(0, 0)
+      discard e.handleEvent(event)
+
+      check e.state.mode == EditorMode.Insert
+      let line = e.textBuffer.getLine(0)
+      check ($line).len > 5 # Text was inserted
