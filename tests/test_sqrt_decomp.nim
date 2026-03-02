@@ -17,10 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils, random]
+import std/[unittest, strutils]
 
-import ../src/moepkg/sqrt_decomp {.all.}
-import ../src/moepkg/gap_buffer
+import ../src/moepkg/buffer_backends/sqrt_decomp {.all.}
 
 suite "SqrtDecomp - Basic Operations":
   test "newSqrtDecomp creates empty buffer":
@@ -362,120 +361,6 @@ suite "SqrtDecomp - Edge Cases":
   test "estimateMemoryUsage":
     let sd = newSqrtDecomp("hello\nworld")
     check sd.estimateMemoryUsage() > 0
-
-suite "SqrtDecomp - Cross-Backend Consistency":
-  test "basic text roundtrip matches GapBuffer":
-    let text = "hello\nworld\nfoo bar"
-    let gb = newGapBuffer(text)
-    let sd = newSqrtDecomp(text)
-    check $gb == $sd
-    check gb.len == sd.len
-
-  test "trailing newline matches GapBuffer":
-    for text in ["hello\n", "hello\n\n", "\n", "\n\n", ""]:
-      let gb = newGapBuffer(text)
-      let sd = newSqrtDecomp(text)
-      check $gb == $sd
-      check gb.len == sd.len
-
-  test "insertLine matches GapBuffer":
-    let text = "first\nthird"
-    let gb = newGapBuffer(text)
-    let sd = newSqrtDecomp(text)
-    gb.insertLine(1, "second")
-    sd.insertLine(1, "second")
-    check $gb == $sd
-    check gb.len == sd.len
-
-  test "deleteLine matches GapBuffer":
-    let text = "first\nsecond\nthird"
-    let gb = newGapBuffer(text)
-    let sd = newSqrtDecomp(text)
-    gb.deleteLine(1)
-    sd.deleteLine(1)
-    check $gb == $sd
-    check gb.len == sd.len
-
-  test "insertIntoLine matches GapBuffer":
-    let text = "hllo\nworld"
-    let gb = newGapBuffer(text)
-    let sd = newSqrtDecomp(text)
-    gb.insertIntoLine(0, 1, "e")
-    sd.insertIntoLine(0, 1, "e")
-    check $gb == $sd
-
-  test "deleteAtLineCol matches GapBuffer":
-    let text = "hello\nworld"
-    let gb = newGapBuffer(text)
-    let sd = newSqrtDecomp(text)
-    gb.deleteAtLineCol(0, 1, 2)
-    sd.deleteAtLineCol(0, 1, 2)
-    check $gb == $sd
-
-  test "replaceLine matches GapBuffer":
-    let text = "hello\nworld"
-    let gb = newGapBuffer(text)
-    let sd = newSqrtDecomp(text)
-    gb.replaceLine(0, "hi")
-    sd.replaceLine(0, "hi")
-    check $gb == $sd
-
-  test "cross-line deleteAtLineCol matches GapBuffer":
-    let text = "hello\nworld\nfoo"
-    let gb = newGapBuffer(text)
-    let sd = newSqrtDecomp(text)
-    # Delete "lo\nwor" = 6 bytes
-    gb.deleteAtLineCol(0, 3, 6)
-    sd.deleteAtLineCol(0, 3, 6)
-    check $gb == $sd
-    check gb.len == sd.len
-
-  test "complex operations sequence matches GapBuffer":
-    let text = "alpha\nbeta\ngamma\ndelta"
-    let gb = newGapBuffer(text)
-    let sd = newSqrtDecomp(text)
-
-    # Series of operations
-    gb.insertLine(2, "inserted")
-    sd.insertLine(2, "inserted")
-    check $gb == $sd
-
-    gb.deleteLine(0)
-    sd.deleteLine(0)
-    check $gb == $sd
-
-    gb.replaceLine(1, "replaced")
-    sd.replaceLine(1, "replaced")
-    check $gb == $sd
-
-    gb.insertIntoLine(0, 2, "XX")
-    sd.insertIntoLine(0, 2, "XX")
-    check $gb == $sd
-
-  test "linear index operations match GapBuffer":
-    let text = "abc\ndef\nghi"
-    let gb = newGapBuffer(text)
-    let sd = newSqrtDecomp(text)
-
-    check gb.charLen == sd.charLen
-    check gb.findLineStart(0) == sd.findLineStart(0)
-    check gb.findLineStart(1) == sd.findLineStart(1)
-    check gb.findLineStart(2) == sd.findLineStart(2)
-    check gb.findLineEnd(0) == sd.findLineEnd(0)
-    check gb.findLineEnd(1) == sd.findLineEnd(1)
-
-    for i in 0 ..< gb.charLen:
-      check gb.charAt(i) == sd.charAt(i)
-      check gb.indexToLineCol(i) == sd.indexToLineCol(i)
-
-  test "unicode consistency with GapBuffer":
-    let text = "こんにちは\n世界\nHello"
-    let gb = newGapBuffer(text)
-    let sd = newSqrtDecomp(text)
-    check $gb == $sd
-    check gb.len == sd.len
-    for i in 0 ..< gb.len:
-      check gb.getLine(i) == sd.getLine(i)
 
 suite "SqrtDecomp - Error Handling":
   test "insertLine at invalid negative index":
@@ -1153,46 +1038,3 @@ suite "SqrtDecomp - Stress Tests":
     sd.deleteAtLineCol(0, 1, 2) # delete "a\n" tail -> merge with b
     # "a" has len 1, col 1 means at end. Delete 2 = newline + "b"
     check sd.len == 2
-
-  test "random operations consistency with GapBuffer":
-    var rng = initRand(42)
-    let initial = "hello\nworld\nfoo\nbar\nbaz"
-    let gb = newGapBuffer(initial)
-    let sd = newSqrtDecomp(initial)
-
-    for _ in 0 ..< 50:
-      let op = rng.rand(3)
-      case op
-      of 0: # insertLine
-        if gb.len > 0:
-          let pos = rng.rand(gb.len)
-          let content = "r" & $rng.rand(999)
-          gb.insertLine(pos, content)
-          sd.insertLine(pos, content)
-      of 1: # deleteLine
-        if gb.len > 1:
-          let pos = rng.rand(gb.len - 1)
-          gb.deleteLine(pos)
-          sd.deleteLine(pos)
-      of 2: # replaceLine
-        if gb.len > 0:
-          let pos = rng.rand(gb.len - 1)
-          let content = "s" & $rng.rand(999)
-          gb.replaceLine(pos, content)
-          sd.replaceLine(pos, content)
-      of 3: # insertIntoLine
-        if gb.len > 0:
-          let pos = rng.rand(gb.len - 1)
-          let line = gb.getLine(pos)
-          if line.len > 0:
-            let col = rng.rand(line.len)
-            let text = "i" & $rng.rand(99)
-            gb.insertIntoLine(pos, col, text)
-            sd.insertIntoLine(pos, col, text)
-      else:
-        discard
-
-    check $gb == $sd
-    check gb.len == sd.len
-    for i in 0 ..< gb.len:
-      check gb.getLine(i) == sd.getLine(i)

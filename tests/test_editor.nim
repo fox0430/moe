@@ -21,9 +21,8 @@
 
 import std/[unittest, os, options, strutils]
 import pkg/results
-import
-  ../src/moepkg/
-    [editor, buffer, config, config_loader, config_mode, gap_buffer, highlight]
+import ../src/moepkg/[editor, buffer, config, config_loader, config_mode, highlight]
+import ../src/moepkg/buffer_backends/gap_buffer
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing

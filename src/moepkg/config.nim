@@ -58,6 +58,7 @@ type
   BufferBackendConfig* = enum
     bbcGapBuffer = "gapBuffer"
     bbcSqrtDecomp = "sqrtDecomp"
+    bbcRope = "rope"
 
   # Standard settings
   StandardConfig* = object

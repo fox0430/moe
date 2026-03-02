@@ -1,6 +1,6 @@
 ## Integration test: verify newlines work in editor context
 import unittest
-import ../src/moepkg/gap_buffer
+import ../src/moepkg/buffer_backends/gap_buffer
 
 suite "Editor newline integration tests":
   test "Simulate typing in Insert mode":

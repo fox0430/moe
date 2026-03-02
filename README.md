@@ -18,6 +18,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
 - Selectable buffer backend
   - GapBuffer
   - Sqrt Decomposition
+  - Rope (B-tree)
 
 - UTF-8 and other encodings support (Incomplete)
 
