@@ -761,12 +761,14 @@ proc executeStripWhitespace*(
   ## Execute stripwhitespace command (:stripwhitespace, :stripws)
   ## Removes trailing whitespace from all lines
   var strippedCount = 0
+  discard buffer.beginTransaction("stripwhitespace")
   for lineIdx in 0 ..< buffer.len:
     let line = buffer.getLine(lineIdx)
     let trimmed = line.strip(leading = false, trailing = true)
     if trimmed != line:
-      buffer.replaceLineNoUndo(lineIdx, trimmed)
+      discard buffer.replaceLine(lineIdx, trimmed)
       strippedCount.inc
+  discard buffer.commitTransaction()
   return CommandModeResult(kind: cmrStripWhitespace, strippedLineCount: strippedCount)
 
 proc executeQuickRun*(handler: CommandModeHandler): CommandModeResult =
@@ -869,12 +871,7 @@ proc executeSubstitute*(
 
     # Update the line if modified
     if modified:
-      buffer.replaceLineNoUndo(lineIdx, newLine)
-
-  # Mark highlight as needing update since we bypassed normal change tracking
-  if replaceCount > 0:
-    buffer.highlightNeedsUpdate = true
-    buffer.lastChangedLines = 0 # Mark from first line as changed
+      discard buffer.replaceLine(lineIdx, newLine)
 
   discard buffer.commitTransaction()
 

@@ -64,6 +64,7 @@ type
     ckInsertLine
     ckDeleteLine
     ckDeleteRange
+    ckReplaceLine # Line content replaced
     ckTransaction # Transaction containing multiple changes
 
   BufferChange* = object
@@ -84,6 +85,10 @@ type
       deleteStartPos*: BufferPosition
       deleteEndPos*: BufferPosition
       deletedRangeText*: string
+    of ckReplaceLine:
+      replaceLineIdx*: int
+      replaceLineOldText*: string
+      replaceLineNewText*: string
     of ckTransaction:
       transactionChanges*: seq[BufferChange]
       transactionDescription*: string
@@ -523,6 +528,8 @@ proc getChangePosition(change: BufferChange): BufferPosition =
     return BufferPosition(line: change.deleteLineIdx, column: 0)
   of ckDeleteRange:
     return change.deleteStartPos
+  of ckReplaceLine:
+    return BufferPosition(line: change.replaceLineIdx, column: 0)
   of ckTransaction:
     # For transactions, return the position of the first change
     if change.transactionChanges.len > 0:
@@ -565,6 +572,22 @@ proc pushUndoChange(b: TextBuffer, change: BufferChange) =
   else:
     # Add directly to undo stack
     b.undoStack.addLast(change)
+
+proc replaceLine*(b: TextBuffer, lineNumber: int, content: string): Result[(), string] =
+  ## Replace line content with undo recording.
+  if lineNumber < 0 or lineNumber >= b.len:
+    return err("Line index out of bounds: " & $lineNumber)
+  let oldContent = b.getLine(lineNumber)
+  b.backendReplaceLine(lineNumber, content)
+  b.pushUndoChange(
+    BufferChange(
+      kind: ckReplaceLine,
+      replaceLineIdx: lineNumber,
+      replaceLineOldText: oldContent,
+      replaceLineNewText: content,
+    )
+  )
+  return ok(())
 
 proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string) =
   ## Insert text that may contain newlines, properly splitting into multiple lines
@@ -975,6 +998,8 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       # Undo delete range by inserting the deleted text
       # Handle both single-line and multi-line deletions correctly
       b.insertTextWithNewlines(change.deleteStartPos, change.deletedRangeText)
+    of ckReplaceLine:
+      b.backendReplaceLine(change.replaceLineIdx, change.replaceLineOldText)
     of ckTransaction:
       # Undo all changes in transaction in reverse order
       for i in countdown(change.transactionChanges.len - 1, 0):
@@ -1235,6 +1260,8 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
         b.deleteRangeMultiLine(startPos, endPos)
         # Adjust fold positions for multi-line delete
         b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
+    of ckReplaceLine:
+      b.backendReplaceLine(change.replaceLineIdx, change.replaceLineNewText)
     of ckTransaction:
       # Redo all changes in transaction in forward order
       for change in change.transactionChanges:
