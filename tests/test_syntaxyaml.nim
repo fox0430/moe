@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, sequtils]
 
 import ../src/moepkg/syntax/[tokenizer, syntaxyaml]
 
@@ -92,7 +92,7 @@ suite "syntaxyaml - yamlNextToken comments":
     check gtComment in tokens
 
 suite "syntaxyaml - yamlNextToken double quoted strings":
-  test "simple double quoted string":
+  test "simple double quoted string (value)":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"hello\"")
     g.state = gtOther
@@ -416,19 +416,19 @@ suite "syntaxyaml - yamlNextToken directives":
     check g.kind == gtDirective
 
 suite "syntaxyaml - yamlNextToken plain strings":
-  test "unquoted string":
+  test "unquoted string (value)":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("hello world")
     g.state = gtOther
     g.yamlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtIdentifier
 
-  test "unquoted string stops at colon with space":
+  test "unquoted string stops at colon with space (key)":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("key: value")
     g.state = gtOther
     g.yamlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtKey
     check g.length == 3 # "key"
 
 suite "syntaxyaml - yamlNextToken EOF":
@@ -460,7 +460,8 @@ suite "syntaxyaml - yamlNextToken complete YAML":
         break
       tokens.add(g.kind)
 
-    check gtStringLit in tokens # name, John
+    check gtKey in tokens # name
+    check gtIdentifier in tokens # John
     check gtPunctuation in tokens # :
     check gtWhitespace in tokens
 
@@ -476,7 +477,7 @@ suite "syntaxyaml - yamlNextToken complete YAML":
         break
       tokens.add(g.kind)
 
-    check gtStringLit in tokens
+    check gtKey in tokens
     check gtPunctuation in tokens
     check gtDecNumber in tokens # 30
 
@@ -493,7 +494,7 @@ suite "syntaxyaml - yamlNextToken complete YAML":
       tokens.add(g.kind)
 
     check gtPunctuation in tokens # -
-    check gtStringLit in tokens # items
+    check gtIdentifier in tokens # items
 
   test "flow sequence":
     var g: GeneralTokenizer
@@ -580,7 +581,7 @@ suite "syntaxyaml - yamlNextToken complete YAML":
       tokens.add(g.kind)
 
     check gtCommand in tokens # |
-    check gtStringLit in tokens # description
+    check gtKey in tokens # description
 
 suite "syntaxyaml - yamlNextToken edge cases":
   test "colon in unquoted string":
@@ -589,7 +590,7 @@ suite "syntaxyaml - yamlNextToken edge cases":
     g.state = gtOther
     g.yamlNextToken()
     # colon followed by non-space is part of string
-    check g.kind == gtStringLit
+    check g.kind == gtIdentifier
 
   test "dash not followed by space":
     var g: GeneralTokenizer
@@ -603,7 +604,7 @@ suite "syntaxyaml - yamlNextToken edge cases":
     g.initGeneralTokenizer("?unknown")
     g.state = gtOther
     g.yamlNextToken()
-    check g.kind == gtStringLit
+    check g.kind == gtIdentifier
 
   test "colon after flow indicator":
     var g: GeneralTokenizer
@@ -634,3 +635,823 @@ suite "syntaxyaml - yamlNextToken outside document":
     g.state = gtNone
     g.yamlNextToken()
     check g.kind == gtDirective
+
+suite "syntaxyaml - yamlNextToken key detection":
+  test "unquoted key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("name: value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+    check g.length == 4 # "name"
+
+  test "double-quoted key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"name\": value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+    check g.state == gtKey
+
+  test "single-quoted key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'name': value")
+    g.state = gtOther
+    g.yamlNextToken() # start '
+    check g.state == gtCharLit
+    g.yamlNextToken() # content 'name'
+    check g.kind == gtKey
+
+  test "number key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("42: value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+
+  test "flow mapping key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("{key: value}")
+    g.state = gtOther
+
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.yamlNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+
+    check gtKey in tokens
+    check gtIdentifier in tokens
+
+  test "value is not a key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: value")
+    g.state = gtOther
+
+    g.yamlNextToken() # key
+    check g.kind == gtKey
+    g.yamlNextToken() # :
+    check g.kind == gtPunctuation
+    g.yamlNextToken() # space
+    g.yamlNextToken() # value
+    check g.kind == gtIdentifier
+
+suite "syntaxyaml - yamlNextToken boolean values":
+  test "true":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: true")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # true
+    check g.kind == gtBoolean
+
+  test "false":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: false")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # false
+    check g.kind == gtBoolean
+
+  test "True":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: True")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # True
+    check g.kind == gtBoolean
+
+  test "yes":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: yes")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # yes
+    check g.kind == gtBoolean
+
+  test "no":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: no")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # no
+    check g.kind == gtBoolean
+
+  test "on":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: on")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # on
+    check g.kind == gtBoolean
+
+  test "off":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: off")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # off
+    check g.kind == gtBoolean
+
+  test "boolean as key becomes gtKey":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("true: value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+
+suite "syntaxyaml - yamlNextToken null values":
+  test "null":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: null")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # null
+    check g.kind == gtSpecialVar
+
+  test "Null":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: Null")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # Null
+    check g.kind == gtSpecialVar
+
+  test "NULL":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: NULL")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # NULL
+    check g.kind == gtSpecialVar
+
+  test "tilde as null":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: ~")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # ~
+    check g.kind == gtSpecialVar
+
+suite "syntaxyaml - yamlNextToken special floats":
+  test ".inf":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: .inf")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # .inf
+    check g.kind == gtFloatNumber
+
+  test ".nan":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: .nan")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # .nan
+    check g.kind == gtFloatNumber
+
+  test "-.inf":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: -.inf")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # -.inf
+    check g.kind == gtFloatNumber
+
+suite "syntaxyaml - yamlNextToken quoted values":
+  test "double-quoted value stays gtStringLit":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: \"value\"")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # "value"
+    check g.kind == gtStringLit
+
+  test "single-quoted value stays gtStringLit":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: 'value'")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # ' (start)
+    g.yamlNextToken() # value content
+    check g.kind == gtStringLit
+
+suite "syntaxyaml - false positive prevention":
+  test "truthy is not boolean":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: truthy")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # truthy
+    check g.kind == gtIdentifier
+
+  test "nullable is not null":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: nullable")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # nullable
+    check g.kind == gtIdentifier
+
+  test "nope is not boolean":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: nope")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # nope
+    check g.kind == gtIdentifier
+
+  test "long token is identifier":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: enabled")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # enabled (7 chars, > 6 limit)
+    check g.kind == gtIdentifier
+
+suite "syntaxyaml - boolean uppercase variants":
+  test "FALSE":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: FALSE")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # FALSE
+    check g.kind == gtBoolean
+
+  test "YES":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: YES")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # YES
+    check g.kind == gtBoolean
+
+  test "NO":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: NO")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # NO
+    check g.kind == gtBoolean
+
+  test "ON":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: ON")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # ON
+    check g.kind == gtBoolean
+
+  test "OFF":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: OFF")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # OFF
+    check g.kind == gtBoolean
+
+suite "syntaxyaml - key priority over special values":
+  test "null as key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("null: value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+
+  test "tilde as key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("~: value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+
+  test ".inf as key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(".inf: value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+
+  test "yes as key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("yes: value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+
+  test "float as key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("3.14: value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+
+  test "negative number as key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("-42: value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+
+suite "syntaxyaml - quoted key with escapes":
+  test "double-quoted key with backslash escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"k\\\"ey\": value")
+    g.state = gtOther
+    g.yamlNextToken() # "k
+    check g.kind == gtKey
+    check g.state == gtKey
+
+  test "single-quoted key with escaped quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'it''s': value")
+    g.state = gtOther
+    g.yamlNextToken() # start '
+    check g.state == gtCharLit
+    check g.yamlIsKey == true
+    g.yamlNextToken() # it
+    check g.kind == gtKey
+    g.yamlNextToken() # '' escape
+    check g.kind == gtEscapeSequence
+
+  test "empty double-quoted key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\": value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+
+  test "escape sequence inside double-quoted key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"na\\nme\": value")
+    g.state = gtOther
+    g.yamlNextToken() # "na
+    check g.kind == gtKey
+    check g.state == gtKey
+    g.yamlNextToken() # \n escape
+    check g.kind == gtEscapeSequence
+    g.yamlNextToken() # me"
+    check g.kind == gtKey
+
+suite "syntaxyaml - special values in flow context":
+  test "booleans in flow sequence":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[true, false]")
+    g.state = gtOther
+
+    var kinds: seq[TokenClass] = @[]
+    while true:
+      g.yamlNextToken()
+      if g.kind == gtEof:
+        break
+      kinds.add(g.kind)
+
+    # [, true, ,, space, false, ]
+    check kinds.count(gtBoolean) == 2
+
+  test "null in flow sequence":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[null, ~]")
+    g.state = gtOther
+
+    var kinds: seq[TokenClass] = @[]
+    while true:
+      g.yamlNextToken()
+      if g.kind == gtEof:
+        break
+      kinds.add(g.kind)
+
+    check kinds.count(gtSpecialVar) == 2
+
+  test "special float in flow sequence":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[.inf, .nan]")
+    g.state = gtOther
+
+    var kinds: seq[TokenClass] = @[]
+    while true:
+      g.yamlNextToken()
+      if g.kind == gtEof:
+        break
+      kinds.add(g.kind)
+
+    check kinds.count(gtFloatNumber) == 2
+
+  test "special values as flow mapping keys":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("{true: 1, null: 2}")
+    g.state = gtOther
+
+    var kinds: seq[TokenClass] = @[]
+    while true:
+      g.yamlNextToken()
+      if g.kind == gtEof:
+        break
+      kinds.add(g.kind)
+
+    check kinds.count(gtKey) == 2
+    check kinds.count(gtDecNumber) == 2
+
+suite "syntaxyaml - special values in list context":
+  test "boolean after list dash":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("- true")
+    g.state = gtOther
+    g.yamlNextToken() # -
+    check g.kind == gtPunctuation
+    g.yamlNextToken() # space
+    g.yamlNextToken() # true
+    check g.kind == gtBoolean
+
+  test "null after list dash":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("- null")
+    g.state = gtOther
+    g.yamlNextToken() # -
+    g.yamlNextToken() # space
+    g.yamlNextToken() # null
+    check g.kind == gtSpecialVar
+
+  test "special float after list dash":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("- .inf")
+    g.state = gtOther
+    g.yamlNextToken() # -
+    g.yamlNextToken() # space
+    g.yamlNextToken() # .inf
+    check g.kind == gtFloatNumber
+
+  test "key-value after list dash":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("- name: John")
+    g.state = gtOther
+    g.yamlNextToken() # -
+    check g.kind == gtPunctuation
+    g.yamlNextToken() # space
+    g.yamlNextToken() # name
+    check g.kind == gtKey
+    g.yamlNextToken() # :
+    check g.kind == gtPunctuation
+    g.yamlNextToken() # space
+    g.yamlNextToken() # John
+    check g.kind == gtIdentifier
+
+suite "syntaxyaml - special float additional paths":
+  test "+.inf via else branch":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: +.inf")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # +.inf
+    check g.kind == gtFloatNumber
+
+  test ".inf at start of line via dot branch":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(".inf")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtFloatNumber
+
+  test ".NaN case variant":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: .NaN")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # .NaN
+    check g.kind == gtFloatNumber
+
+  test ".INF case variant":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: .INF")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # .INF
+    check g.kind == gtFloatNumber
+
+suite "syntaxyaml - unquoted value with spaces":
+  test "multi-word value is single identifier token":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: hello world")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    check g.kind == gtKey
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # hello world
+    check g.kind == gtIdentifier
+    check g.length == 11 # "hello world"
+
+suite "syntaxyaml - yamlNextToken hex numbers":
+  test "0xFF":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0xFF")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtHexNumber
+    check g.length == 4
+
+  test "0X1A2B":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0X1A2B")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtHexNumber
+    check g.length == 6
+
+  test "0x0":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0x0")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtHexNumber
+    check g.length == 3
+
+  test "0xFF as key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0xFF: value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+
+  test "0x with no hex digits":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0x")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtIdentifier
+
+  test "hex in flow sequence":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[0xFF, 0xAB]")
+    g.state = gtOther
+
+    var kinds: seq[TokenClass] = @[]
+    while true:
+      g.yamlNextToken()
+      if g.kind == gtEof:
+        break
+      kinds.add(g.kind)
+
+    check kinds.count(gtHexNumber) == 2
+
+  test "signed -0xFF is not hex":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("-0xFF")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind != gtHexNumber
+
+  test "hex as value":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: 0xFF")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # 0xFF
+    check g.kind == gtHexNumber
+
+  test "hex in list context":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("- 0xFF")
+    g.state = gtOther
+    g.yamlNextToken() # -
+    check g.kind == gtPunctuation
+    g.yamlNextToken() # space
+    g.yamlNextToken() # 0xFF
+    check g.kind == gtHexNumber
+
+suite "syntaxyaml - yamlNextToken octal numbers":
+  test "0o755":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0o755")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtOctNumber
+    check g.length == 5
+
+  test "0O644":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0O644")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtOctNumber
+    check g.length == 5
+
+  test "0o0":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0o0")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtOctNumber
+    check g.length == 3
+
+  test "0o755 as key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0o755: value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+
+  test "0o with no octal digits":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0o")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtIdentifier
+
+  test "0o8 invalid octal digit":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0o8")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtIdentifier
+
+  test "signed -0o755 is not octal":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("-0o755")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind != gtOctNumber
+
+  test "octal as value":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: 0o755")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # 0o755
+    check g.kind == gtOctNumber
+
+  test "octal in list context":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("- 0o755")
+    g.state = gtOther
+    g.yamlNextToken() # -
+    check g.kind == gtPunctuation
+    g.yamlNextToken() # space
+    g.yamlNextToken() # 0o755
+    check g.kind == gtOctNumber
+
+suite "syntaxyaml - yamlNextToken timestamps":
+  test "2024-01-01":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("2024-01-01")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtDate
+    check g.length == 10
+
+  test "2024-01-01T12:00:00":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("2024-01-01T12:00:00")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtDate
+    check g.length == 19
+
+  test "2024-01-01T12:00:00Z":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("2024-01-01T12:00:00Z")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtDate
+    check g.length == 20
+
+  test "2024-01-01T12:00:00+09:00":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("2024-01-01T12:00:00+09:00")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtDate
+    check g.length == 25
+
+  test "date as key":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("2024-01-01: value")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtKey
+
+  test "date in flow sequence":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[2024-01-01, 2024-12-31]")
+    g.state = gtOther
+
+    var kinds: seq[TokenClass] = @[]
+    while true:
+      g.yamlNextToken()
+      if g.kind == gtEof:
+        break
+      kinds.add(g.kind)
+
+    check kinds.count(gtDate) == 2
+
+  test "date in list context":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("- 2024-01-01")
+    g.state = gtOther
+    g.yamlNextToken() # -
+    check g.kind == gtPunctuation
+    g.yamlNextToken() # space
+    g.yamlNextToken() # 2024-01-01
+    check g.kind == gtDate
+
+  test "two-digit year is not date":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("24-01-01")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtIdentifier
+
+  test "2024-hello is not date":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("2024-hello")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtIdentifier
+
+  test "lowercase t separator":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("2024-01-01t12:00:00")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtDate
+    check g.length == 19
+
+  test "timestamp as value":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: 2024-01-01")
+    g.state = gtOther
+    g.yamlNextToken() # key
+    g.yamlNextToken() # :
+    g.yamlNextToken() # space
+    g.yamlNextToken() # 2024-01-01
+    check g.kind == gtDate
+
+  test "signed -2024-01-01 becomes date (known limitation)":
+    # YAML 1.2 doesn't define negative dates, but the highlighter
+    # treats the digit portion after '-' as a 4-digit year.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("-2024-01-01")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtDate

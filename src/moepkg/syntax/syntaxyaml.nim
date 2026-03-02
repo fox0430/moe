@@ -24,6 +24,17 @@
 
 import flags, tokenizer, lexer
 
+const
+  YamlBooleans = [
+    "true", "True", "TRUE", "false", "False", "FALSE", "yes", "Yes", "YES", "no", "No",
+    "NO", "on", "On", "ON", "off", "Off", "OFF",
+  ]
+  YamlNulls = ["null", "Null", "NULL"]
+  YamlSpecialFloats = [
+    ".inf", ".Inf", ".INF", "-.inf", "-.Inf", "-.INF", "+.inf", "+.Inf", "+.INF",
+    ".nan", ".NaN", ".NAN",
+  ]
+
 proc yamlPlainStrLit(g: var GeneralTokenizer, pos: var int) =
   g.kind = gtStringLit
   while g.buf[pos] notin {'\0', '\t' .. '\r', ',', ']', '}'}:
@@ -33,18 +44,77 @@ proc yamlPlainStrLit(g: var GeneralTokenizer, pos: var int) =
       break
     inc(pos)
 
+proc yamlClassifyToken(g: var GeneralTokenizer, pos: int) =
+  ## Reclassify a gtStringLit token as key/boolean/null/identifier
+  if g.kind != gtStringLit:
+    return
+
+  # Key detection: next char is ':' + whitespace/EOF
+  if g.buf[pos] == ':' and g.buf[pos + 1] in {'\0', '\t' .. '\r', ' '}:
+    g.kind = gtKey
+    return
+
+  # Special value checks
+  let tokenLen = pos - g.start
+  if tokenLen >= 1 and tokenLen <= 6:
+    var token = newString(tokenLen)
+    for i in 0 ..< tokenLen:
+      token[i] = g.buf[g.start + i]
+    if token in YamlBooleans:
+      g.kind = gtBoolean
+    elif token in YamlNulls or token == "~":
+      g.kind = gtSpecialVar
+    elif token in YamlSpecialFloats:
+      g.kind = gtFloatNumber
+    else:
+      g.kind = gtIdentifier
+  else:
+    g.kind = gtIdentifier
+
 proc yamlPossibleNumber(g: var GeneralTokenizer, pos: var int) =
   g.kind = gtNone
+  var digitStart = pos
   if g.buf[pos] == '-':
     inc(pos)
+    digitStart = pos
   if g.buf[pos] == '0':
     inc(pos)
+    # Hex: 0x... (only without preceding sign, i.e. token starts with '0')
+    if pos == g.start + 1 and g.buf[pos] in {'x', 'X'}:
+      inc(pos)
+      if g.buf[pos] in {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}:
+        g.kind = gtHexNumber
+        while g.buf[pos] in {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}:
+          inc(pos)
+      else:
+        yamlPlainStrLit(g, pos)
+      return
+    # Octal: 0o... (only without preceding sign)
+    elif pos == g.start + 1 and g.buf[pos] in {'o', 'O'}:
+      inc(pos)
+      if g.buf[pos] in {'0' .. '7'}:
+        g.kind = gtOctNumber
+        while g.buf[pos] in {'0' .. '7'}:
+          inc(pos)
+      else:
+        yamlPlainStrLit(g, pos)
+      return
   elif g.buf[pos] in '1' .. '9':
     inc(pos)
     while g.buf[pos] in {'0' .. '9'}:
       inc(pos)
   else:
     yamlPlainStrLit(g, pos)
+  if g.kind == gtNone:
+    let digitCount = pos - digitStart
+    # Date: YYYY-MM-DD[Thh:mm:ss[.frac][Z|±hh:mm]]
+    if digitCount == 4 and g.buf[pos] == '-' and g.buf[pos + 1] in {'0' .. '9'}:
+      g.kind = gtDate
+      while g.buf[pos] in {'0' .. '9', 'T', 't', 'Z', 'z', '-', ':', '.', '+'}:
+        if g.buf[pos] == ':' and g.buf[pos + 1] in {'\0', '\t' .. '\r', ' '}:
+          break # YAML key indicator ': '
+        inc(pos)
+      return
   if g.kind == gtNone:
     if g.buf[pos] in {'\0', '\t' .. '\r', ' ', ',', ']', '}'}:
       g.kind = gtDecNumber
@@ -73,11 +143,16 @@ proc yamlPossibleNumber(g: var GeneralTokenizer, pos: var int) =
             yamlPlainStrLit(g, pos)
       else:
         yamlPlainStrLit(g, pos)
-  while g.buf[pos] notin {'\0', ',', ']', '}', '\n', '\r'}:
-    inc(pos)
-    if g.buf[pos] notin {'\t' .. '\r', ' ', ',', ']', '}'}:
-      yamlPlainStrLit(g, pos)
-      break
+  if g.buf[pos] == ':' and g.buf[pos + 1] in {'\0', '\t' .. '\r', ' '}:
+    discard # Let ':' be processed as a separate token
+  else:
+    while g.buf[pos] notin {'\0', ',', ']', '}', '\n', '\r'}:
+      inc(pos)
+      if g.buf[pos] == ':' and g.buf[pos + 1] in {'\0', '\t' .. '\r', ' '}:
+        break
+      if g.buf[pos] notin {'\t' .. '\r', ' ', ',', ']', '}'}:
+        yamlPlainStrLit(g, pos)
+        break
   # theoretically, we would need to parse indentation (like with block scalars)
   # because of possible multiline flow scalars that start with number-like
   # content, but that is far too troublesome. I think it is fine that the
@@ -87,8 +162,8 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
   const hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
   var pos = g.pos
   g.start = g.pos
-  if g.state == gtStringLit:
-    g.kind = gtStringLit
+  if g.state in {gtStringLit, gtKey}:
+    g.kind = g.state
     while true:
       case g.buf[pos]
       of '\\':
@@ -129,7 +204,7 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         inc(pos)
   elif g.state == gtCharLit:
     # abusing gtCharLit as single-quoted string lit
-    g.kind = gtStringLit
+    g.kind = if g.yamlIsKey: gtKey else: gtStringLit
     # Check if we're at an escape sequence ''
     if g.buf[pos] == '\'' and g.buf[pos + 1] == '\'':
       inc(pos, 2)
@@ -284,8 +359,18 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
           g.kind = gtKeyword
         else:
           yamlPossibleNumber(g, pos)
+          if g.kind in {gtDecNumber, gtFloatNumber, gtHexNumber, gtOctNumber, gtDate}:
+            if g.buf[pos] == ':' and g.buf[pos + 1] in {'\0', '\t' .. '\r', ' '}:
+              g.kind = gtKey
+          else:
+            yamlClassifyToken(g, pos)
       else:
         yamlPossibleNumber(g, pos)
+        if g.kind in {gtDecNumber, gtFloatNumber, gtHexNumber, gtOctNumber, gtDate}:
+          if g.buf[pos] == ':' and g.buf[pos + 1] in {'\0', '\t' .. '\r', ' '}:
+            g.kind = gtKey
+        else:
+          yamlClassifyToken(g, pos)
     of '.':
       if pos == 0 or g.buf[pos - 1] in {'\n', '\r'}:
         inc(pos)
@@ -298,14 +383,17 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
           g.state = gtNone
         else:
           yamlPlainStrLit(g, pos)
+          yamlClassifyToken(g, pos)
       else:
         yamlPlainStrLit(g, pos)
+        yamlClassifyToken(g, pos)
     of '?':
       inc(pos)
       if g.buf[pos] in {'\0', ' ', '\t' .. '\r'}:
         g.kind = gtPunctuation
       else:
         yamlPlainStrLit(g, pos)
+        yamlClassifyToken(g, pos)
     of ':':
       inc(pos)
       if g.buf[pos] in {'\0', '\t' .. '\r', ' ', '\'', '\"'} or
@@ -313,17 +401,52 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         g.kind = gtPunctuation
       else:
         yamlPlainStrLit(g, pos)
+        yamlClassifyToken(g, pos)
     of '[', ']', '{', '}', ',':
       inc(pos)
       g.kind = gtPunctuation
     of '\"':
       inc(pos)
-      g.state = gtStringLit
-      g.kind = gtStringLit
+      g.yamlIsKey = false
+      var tempPos = pos
+      while g.buf[tempPos] != '\0':
+        case g.buf[tempPos]
+        of '\"':
+          inc(tempPos)
+          while g.buf[tempPos] in {' ', '\t'}:
+            inc(tempPos)
+          if g.buf[tempPos] == ':' and g.buf[tempPos + 1] in {'\0', '\t' .. '\r', ' '}:
+            g.yamlIsKey = true
+          break
+        of '\\':
+          inc(tempPos, 2)
+        of '\n', '\r':
+          break
+        else:
+          inc(tempPos)
+      g.state = if g.yamlIsKey: gtKey else: gtStringLit
+      g.kind = if g.yamlIsKey: gtKey else: gtStringLit
       # Continue reading string content until escape or end quote
       while g.buf[pos] notin {'\0', '\\', '\"'}:
         inc(pos)
     of '\'':
+      g.yamlIsKey = false
+      var tempPos = pos + 1
+      while g.buf[tempPos] != '\0':
+        if g.buf[tempPos] == '\'':
+          if g.buf[tempPos + 1] == '\'':
+            inc(tempPos, 2) # '' escape
+          else:
+            inc(tempPos)
+            while g.buf[tempPos] in {' ', '\t'}:
+              inc(tempPos)
+            if g.buf[tempPos] == ':' and g.buf[tempPos + 1] in {'\0', '\t' .. '\r', ' '}:
+              g.yamlIsKey = true
+            break
+        elif g.buf[tempPos] in {'\n', '\r'}:
+          break
+        else:
+          inc(tempPos)
       g.state = gtCharLit
       g.kind = gtNone
     of '!':
@@ -369,10 +492,16 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         inc(pos)
     of '0' .. '9':
       yamlPossibleNumber(g, pos)
+      if g.kind in {gtDecNumber, gtFloatNumber, gtHexNumber, gtOctNumber, gtDate}:
+        if g.buf[pos] == ':' and g.buf[pos + 1] in {'\0', '\t' .. '\r', ' '}:
+          g.kind = gtKey
+      else:
+        yamlClassifyToken(g, pos)
     of '\0':
       g.kind = gtEof
     else:
       yamlPlainStrLit(g, pos)
+      yamlClassifyToken(g, pos)
   else:
     # outside document
     case g.buf[pos]
