@@ -48,6 +48,13 @@ type
   FoldState* = object ## Manages all folds in a buffer
     folds*: seq[Fold] # List of all folds (sorted by startLine)
 
+  BufferEditorConfig* = object
+    ## Per-buffer EditorConfig overrides (from .editorconfig files)
+    tabStop*: Option[int]
+    shiftWidth*: Option[int]
+    expandTab*: Option[bool]
+    trimTrailingWhitespace*: Option[bool]
+
   LineEnding* = enum
     LF
     CRLF
@@ -140,6 +147,9 @@ type
 
     # Line folding state (vim-like manual folding)
     foldState*: FoldState
+
+    # Per-buffer EditorConfig overrides
+    editorConfig*: Option[BufferEditorConfig]
 
     # Backend storage
     case backendKind*: BufferBackend
@@ -258,6 +268,7 @@ proc newTextBuffer*(
       cursorCache: CursorPosCache(line: -1, charPos: 0, bytePos: 0, changeSeq: -1),
       # Initialize empty fold state
       foldState: initFoldState(),
+      editorConfig: none(BufferEditorConfig),
     )
   of SqrtDecomp:
     let sd = newSqrtDecomp(content)
@@ -289,6 +300,7 @@ proc newTextBuffer*(
       lastChangedLines: 0,
       cursorCache: CursorPosCache(line: -1, charPos: 0, bytePos: 0, changeSeq: -1),
       foldState: initFoldState(),
+      editorConfig: none(BufferEditorConfig),
     )
   of Rope:
     let rp = newRope(content)
@@ -320,6 +332,7 @@ proc newTextBuffer*(
       lastChangedLines: 0,
       cursorCache: CursorPosCache(line: -1, charPos: 0, bytePos: 0, changeSeq: -1),
       foldState: initFoldState(),
+      editorConfig: none(BufferEditorConfig),
     )
 
 proc setReservedWords*(b: TextBuffer, words: seq[ReservedWord]) =

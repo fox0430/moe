@@ -23,7 +23,7 @@ import std/options
 
 import pkg/results
 
-import editor_types, logger, render_utils, sidebar
+import editor_types, logger, render_utils, sidebar, editorconfig_helper
 
 # Window state management procedures
 
@@ -47,6 +47,9 @@ proc syncActiveWindow*(e: Editor) =
   e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
   e.viewport = e.activeWindow.viewport
   e.state.needsFullRedraw = true
+
+  # Apply per-buffer EditorConfig overrides to display settings
+  applyBufferEditorConfig(e.state.display, e.activeWindow.buffer, e.config)
 
 proc calculateReservedLines*(e: Editor, isBottomWindow: bool = true): int =
   ## Calculate number of reserved lines based on status line configuration
@@ -284,6 +287,8 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
     e.buffers.add(newBuffer)
     # Set reserved words for syntax highlighting on new buffer
     newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
+    # Apply EditorConfig settings to the new buffer
+    applyEditorConfigToBuffer(newBuffer, e.config)
     logDebug("editor", "vsplit: buffer added, buffers.len: " & $e.buffers.len)
 
   # Note: New window's bufferList is initialized in window_manager.vsplit
@@ -364,6 +369,8 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
     e.buffers.add(newBuffer)
     # Set reserved words for syntax highlighting on new buffer
     newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
+    # Apply EditorConfig settings to the new buffer
+    applyEditorConfigToBuffer(newBuffer, e.config)
     logDebug("editor", "hsplit: buffer added, buffers.len: " & $e.buffers.len)
 
   # Sync active window state (buffer, viewport, cursor) with executor

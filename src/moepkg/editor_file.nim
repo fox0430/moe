@@ -23,7 +23,7 @@ import std/[options, strformat, os, monotimes, times]
 
 import pkg/results
 
-import editor_types, logger, git_diff, backup, search_utils
+import editor_types, logger, git_diff, backup, search_utils, editorconfig_helper
 
 proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
   ## Refresh git diff information for the active buffer
@@ -53,6 +53,10 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   # Set reserved words for syntax highlighting from config
   e.textBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
+
+  # Apply EditorConfig settings if enabled
+  applyEditorConfigToBuffer(e.textBuffer, e.config)
+  applyBufferEditorConfig(e.state.display, e.textBuffer, e.config)
 
   # Restore cursor position if persisted, otherwise reset to file start
   let absPath = absolutePath(path)
@@ -172,6 +176,14 @@ proc saveFile*(
   if not force and activeBuffer.isExternallyModified():
     logError("editor", "Save failed: File was modified externally: " & savePath)
     return err("File was modified externally. Use :w! to force save, or :e! to reload.")
+
+  # Trim trailing whitespace if EditorConfig says so
+  if shouldTrimTrailingWhitespace(activeBuffer):
+    for i in 0 ..< activeBuffer.len:
+      let line = activeBuffer.getLine(i)
+      let trimmed = line.strip(leading = false, trailing = true)
+      if trimmed.len != line.len:
+        discard activeBuffer.replaceLine(i, trimmed)
 
   # Save the file
   logDebug("editor", "Saving file: " & savePath)

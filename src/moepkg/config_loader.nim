@@ -459,6 +459,14 @@ proc loadSyntaxCheckerConfig(
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
 
+proc loadEditorConfigSettings(
+    table: TomlTableRef, config: var EditorConfigSettings, vr: var ValidationResult
+) =
+  const section = "EditorConfig"
+  const validKeys = ["enable"]
+  checkUnknownKeys(table, validKeys, section, vr)
+  loadBool(table, "enable", config.enable, vr, section)
+
 proc loadThemeConfig(
     table: TomlTableRef, config: var ThemeConfig, vr: var ValidationResult
 ) =
@@ -1190,8 +1198,8 @@ proc loadConfigFromToml*(
   const knownSections = [
     "Standard", "Clipboard", "BuildOnSave", "TabLine", "StatusLine", "Git",
     "SyntaxChecker", "Theme", "AutoSave", "Notification", "QuickRun", "AutoBackup",
-    "SmoothScroll", "Highlight", "Filer", "Autocomplete", "Persist", "StartUp", "Lsp",
-    "Debug", "KeyMapping",
+    "SmoothScroll", "Highlight", "Filer", "Autocomplete", "Persist", "StartUp",
+    "EditorConfig", "Lsp", "Debug", "KeyMapping",
   ]
   checkUnknownKeys(toml.getTable(), knownSections, "", vr)
 
@@ -1255,6 +1263,9 @@ proc loadConfigFromToml*(
       loadStartUpFileOpenConfig(
         startUpTable["FileOpen"].getTable(), config.startUpFileOpen, vr
       )
+
+  if toml.hasKey("EditorConfig"):
+    loadEditorConfigSettings(toml["EditorConfig"].getTable(), config.editorConfig, vr)
 
   if toml.hasKey("Lsp"):
     loadLspConfig(toml["Lsp"].getTable(), config.lsp, vr)
@@ -1995,6 +2006,11 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "[StartUp.FileOpen]"
   lines.add "autoSplit = " & toTomlBool(config.startUpFileOpen.autoSplit)
   lines.add "splitType = " & toTomlString($config.startUpFileOpen.splitType)
+  lines.add ""
+
+  # EditorConfig section
+  lines.add "[EditorConfig]"
+  lines.add "enable = " & toTomlBool(config.editorConfig.enable)
   lines.add ""
 
   # QuickRun section

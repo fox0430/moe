@@ -214,6 +214,10 @@ type
     friction*: float # Friction coefficient (velocity decay rate). Default: 80.0
     airDrag*: float # Air drag coefficient (velocity resistance). Default: 2.0
 
+  # EditorConfig settings
+  EditorConfigSettings* = object
+    enable*: bool
+
   # Startup file open settings
   StartUpFileOpenConfig* = object
     autoSplit*: bool
@@ -398,6 +402,7 @@ type
     syntaxChecker*: SyntaxCheckerConfig
     smoothScroll*: SmoothScrollConfig
     startUpFileOpen*: StartUpFileOpenConfig
+    editorConfig*: EditorConfigSettings
     debug*: DebugConfig
     theme*: ThemeConfig
     lsp*: LspConfig
@@ -550,6 +555,7 @@ proc newEditorConfig*(): EditorConfig =
     syntaxChecker: SyntaxCheckerConfig(enable: false),
     smoothScroll: SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
     startUpFileOpen: StartUpFileOpenConfig(autoSplit: true, splitType: stVertical),
+    editorConfig: EditorConfigSettings(enable: true),
     debug: DebugConfig(
       windowNode: DebugWindowNodeConfig(
         enable: true,

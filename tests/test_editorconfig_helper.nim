@@ -1,0 +1,357 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+import std/[unittest, options, tables]
+
+import ../src/moepkg/[buffer, config, types]
+
+import ../src/moepkg/editorconfig_helper {.all.}
+
+suite "EditorConfig Support":
+  test "getEditorConfigProperties with empty path returns none":
+    let result = getEditorConfigProperties("")
+    check result.isNone
+
+  test "getEditorConfigProperties with non-existent editorconfig returns none":
+    let result = getEditorConfigProperties("/tmp/nonexistent_dir_12345/test.nim")
+    check result.isNone
+
+  test "applyEditorConfig with indent_style space":
+    var props = initTable[string, string]()
+    props["indent_style"] = "space"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.expandTab == some(true)
+
+  test "applyEditorConfig with indent_style tab":
+    var props = initTable[string, string]()
+    props["indent_style"] = "tab"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.expandTab == some(false)
+
+  test "applyEditorConfig with tab_width":
+    var props = initTable[string, string]()
+    props["tab_width"] = "4"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.tabStop == some(4)
+
+  test "applyEditorConfig with indent_size":
+    var props = initTable[string, string]()
+    props["indent_size"] = "4"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.shiftWidth == some(4)
+    # indent_size also sets tabStop when tab_width is not set
+    check buf.editorConfig.get.tabStop == some(4)
+
+  test "applyEditorConfig with indent_size and tab_width":
+    var props = initTable[string, string]()
+    props["indent_size"] = "4"
+    props["tab_width"] = "8"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.shiftWidth == some(4)
+    check buf.editorConfig.get.tabStop == some(8)
+
+  test "applyEditorConfig with indent_size tab":
+    var props = initTable[string, string]()
+    props["indent_size"] = "tab"
+    props["tab_width"] = "8"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.shiftWidth == some(8)
+    check buf.editorConfig.get.tabStop == some(8)
+
+  test "applyEditorConfig with end_of_line lf":
+    var props = initTable[string, string]()
+    props["end_of_line"] = "lf"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.lineEnding == LF
+
+  test "applyEditorConfig with end_of_line crlf":
+    var props = initTable[string, string]()
+    props["end_of_line"] = "crlf"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.lineEnding == CRLF
+
+  test "applyEditorConfig with end_of_line cr":
+    var props = initTable[string, string]()
+    props["end_of_line"] = "cr"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.lineEnding == CR
+
+  test "applyEditorConfig with charset utf-8":
+    var props = initTable[string, string]()
+    props["charset"] = "utf-8"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.encoding == utf8
+
+  test "applyEditorConfig with insert_final_newline true":
+    var props = initTable[string, string]()
+    props["insert_final_newline"] = "true"
+    let buf = newTextBuffer()
+    buf.endOfLine = false
+    applyEditorConfig(buf, props)
+    check buf.endOfLine == true
+
+  test "applyEditorConfig with insert_final_newline false":
+    var props = initTable[string, string]()
+    props["insert_final_newline"] = "false"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.endOfLine == false
+
+  test "applyEditorConfig with trim_trailing_whitespace true":
+    var props = initTable[string, string]()
+    props["trim_trailing_whitespace"] = "true"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.trimTrailingWhitespace == some(true)
+
+  test "applyEditorConfig with trim_trailing_whitespace false":
+    var props = initTable[string, string]()
+    props["trim_trailing_whitespace"] = "false"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.trimTrailingWhitespace == some(false)
+
+  test "applyEditorConfig with all properties":
+    var props = initTable[string, string]()
+    props["indent_style"] = "space"
+    props["indent_size"] = "4"
+    props["tab_width"] = "4"
+    props["end_of_line"] = "lf"
+    props["charset"] = "utf-8"
+    props["trim_trailing_whitespace"] = "true"
+    props["insert_final_newline"] = "true"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    let ec = buf.editorConfig.get
+    check ec.expandTab == some(true)
+    check ec.shiftWidth == some(4)
+    check ec.tabStop == some(4)
+    check ec.trimTrailingWhitespace == some(true)
+    check buf.lineEnding == LF
+    check buf.encoding == utf8
+    check buf.endOfLine == true
+
+  test "applyBufferEditorConfig overrides display settings":
+    var display = DisplaySettings(tabStop: 2, shiftWidth: 0, expandTab: false)
+    let conf = newEditorConfig()
+    let buf = newTextBuffer()
+    var bufEc = BufferEditorConfig()
+    bufEc.tabStop = some(4)
+    bufEc.shiftWidth = some(4)
+    bufEc.expandTab = some(true)
+    buf.editorConfig = some(bufEc)
+    applyBufferEditorConfig(display, buf, conf)
+    check display.tabStop == 4
+    check display.shiftWidth == 4
+    check display.expandTab == true
+
+  test "applyBufferEditorConfig falls back to global config":
+    var display = DisplaySettings(tabStop: 8, shiftWidth: 4, expandTab: true)
+    let conf = newEditorConfig()
+    let buf = newTextBuffer()
+    # No editorConfig overrides
+    applyBufferEditorConfig(display, buf, conf)
+    # Should reset to global config values
+    check display.tabStop == conf.standard.tabStop
+    check display.shiftWidth == conf.standard.shiftWidth
+    check display.expandTab == conf.standard.expandTab
+
+  test "applyBufferEditorConfig partial overrides":
+    var display = DisplaySettings(tabStop: 2, shiftWidth: 0, expandTab: false)
+    let conf = newEditorConfig()
+    let buf = newTextBuffer()
+    var bufEc = BufferEditorConfig()
+    bufEc.tabStop = some(4)
+    # shiftWidth and expandTab not set
+    buf.editorConfig = some(bufEc)
+    applyBufferEditorConfig(display, buf, conf)
+    check display.tabStop == 4
+    check display.shiftWidth == conf.standard.shiftWidth
+    check display.expandTab == conf.standard.expandTab
+
+  test "shouldTrimTrailingWhitespace returns false with no editorConfig":
+    let buf = newTextBuffer()
+    check shouldTrimTrailingWhitespace(buf) == false
+
+  test "shouldTrimTrailingWhitespace returns true when set":
+    let buf = newTextBuffer()
+    var bufEc = BufferEditorConfig()
+    bufEc.trimTrailingWhitespace = some(true)
+    buf.editorConfig = some(bufEc)
+    check shouldTrimTrailingWhitespace(buf) == true
+
+  test "shouldTrimTrailingWhitespace returns false when explicitly false":
+    let buf = newTextBuffer()
+    var bufEc = BufferEditorConfig()
+    bufEc.trimTrailingWhitespace = some(false)
+    buf.editorConfig = some(bufEc)
+    check shouldTrimTrailingWhitespace(buf) == false
+
+  # applyEditorConfigToBuffer tests
+
+  test "applyEditorConfigToBuffer skips when disabled":
+    var conf = newEditorConfig()
+    conf.editorConfig.enable = false
+    let buf = newTextBuffer()
+    buf.filePath = some("/tmp/test.nim")
+    applyEditorConfigToBuffer(buf, conf)
+    check buf.editorConfig.isNone
+
+  test "applyEditorConfigToBuffer skips when filePath is none":
+    let conf = newEditorConfig()
+    let buf = newTextBuffer()
+    # filePath is none by default
+    applyEditorConfigToBuffer(buf, conf)
+    check buf.editorConfig.isNone
+
+  # Invalid / edge case inputs for applyEditorConfig
+
+  test "applyEditorConfig with empty props table":
+    let props = initTable[string, string]()
+    let buf = newTextBuffer()
+    let origLineEnding = buf.lineEnding
+    let origEncoding = buf.encoding
+    let origEndOfLine = buf.endOfLine
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    let ec = buf.editorConfig.get
+    check ec.expandTab.isNone
+    check ec.tabStop.isNone
+    check ec.shiftWidth.isNone
+    check ec.trimTrailingWhitespace.isNone
+    # Direct buffer fields should be unchanged
+    check buf.lineEnding == origLineEnding
+    check buf.encoding == origEncoding
+    check buf.endOfLine == origEndOfLine
+
+  test "applyEditorConfig with invalid indent_style":
+    var props = initTable[string, string]()
+    props["indent_style"] = "mixed"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.expandTab.isNone
+
+  test "applyEditorConfig with non-numeric tab_width":
+    var props = initTable[string, string]()
+    props["tab_width"] = "abc"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.tabStop.isNone
+
+  test "applyEditorConfig with tab_width zero":
+    var props = initTable[string, string]()
+    props["tab_width"] = "0"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.tabStop.isNone
+
+  test "applyEditorConfig with indent_size tab without tab_width":
+    var props = initTable[string, string]()
+    props["indent_size"] = "tab"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    # tab_width not set, so shiftWidth should be none
+    check buf.editorConfig.get.shiftWidth.isNone
+
+  test "applyEditorConfig with non-numeric indent_size":
+    var props = initTable[string, string]()
+    props["indent_size"] = "abc"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.shiftWidth.isNone
+    check buf.editorConfig.get.tabStop.isNone
+
+  test "applyEditorConfig with indent_size zero":
+    var props = initTable[string, string]()
+    props["indent_size"] = "0"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.shiftWidth.isNone
+
+  # charset variants
+
+  test "applyEditorConfig with charset utf-8-bom":
+    var props = initTable[string, string]()
+    props["charset"] = "utf-8-bom"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.encoding == utf8
+
+  test "applyEditorConfig with charset utf-16be":
+    var props = initTable[string, string]()
+    props["charset"] = "utf-16be"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.encoding == utf16Be
+
+  test "applyEditorConfig with charset utf-16le":
+    var props = initTable[string, string]()
+    props["charset"] = "utf-16le"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.encoding == utf16Le
+
+  test "applyEditorConfig with charset latin1 keeps default":
+    var props = initTable[string, string]()
+    props["charset"] = "latin1"
+    let buf = newTextBuffer()
+    let origEncoding = buf.encoding
+    applyEditorConfig(buf, props)
+    check buf.encoding == origEncoding
+
+  test "applyEditorConfig with unknown charset keeps default":
+    var props = initTable[string, string]()
+    props["charset"] = "windows-1252"
+    let buf = newTextBuffer()
+    let origEncoding = buf.encoding
+    applyEditorConfig(buf, props)
+    check buf.encoding == origEncoding
+
+  test "applyEditorConfig with invalid end_of_line keeps default":
+    var props = initTable[string, string]()
+    props["end_of_line"] = "unknown"
+    let buf = newTextBuffer()
+    let origLineEnding = buf.lineEnding
+    applyEditorConfig(buf, props)
+    check buf.lineEnding == origLineEnding
