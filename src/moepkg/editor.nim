@@ -27,7 +27,8 @@ import
 import
   status_line, render_utils, git_diff, logger, config_loader, keybind_config,
   search_utils, completion, signature_help, hover_popup, command_completion, motion,
-  color, debug_viewer, message_log, unicode_utils
+  color, gap_buffer, debug_viewer, message_log, unicode_utils, highlight
+
 import key_bindings except Command
 import command_handlers/insert_handler
 
@@ -411,6 +412,7 @@ proc editFile*(e: Editor, path: string): Result[(), string] =
   else:
     # New file: set the path for saving later
     newBuffer.filePath = some(path)
+    newBuffer.language = detectLanguage(path)
 
   # Add new buffer to the global buffer list
   e.buffers.add(newBuffer)

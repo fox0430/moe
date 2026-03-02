@@ -21,7 +21,9 @@
 
 import std/[unittest, os, options, strutils]
 import pkg/results
-import ../src/moepkg/[editor, buffer, config, config_loader, config_mode, gap_buffer]
+import
+  ../src/moepkg/
+    [editor, buffer, config, config_loader, config_mode, gap_buffer, highlight]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -361,6 +363,61 @@ suite "Editor - editFile":
     check e.buffers.len == 2
     check e.activeBuffer().filePath.isSome
     check e.activeBuffer().filePath.get == testFile
+
+  test "Edit new file detects language from extension":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_new_lang.nim"
+
+    if fileExists(testFile):
+      removeFile(testFile)
+
+    let result = e.editFile(testFile)
+    check result.isOk
+    check e.activeBuffer().language == SourceLanguage.langNim
+
+  test "Edit new file detects language for various extensions":
+    let e = createTestEditor()
+
+    let cases = [
+      ("/tmp/moe_test_new.py", SourceLanguage.langPython),
+      ("/tmp/moe_test_new.rs", SourceLanguage.langRust),
+      ("/tmp/moe_test_new.js", SourceLanguage.langJavaScript),
+      ("/tmp/moe_test_new.ts", SourceLanguage.langTypeScript),
+      ("/tmp/moe_test_new.c", SourceLanguage.langC),
+      ("/tmp/moe_test_new.cpp", SourceLanguage.langCpp),
+      ("/tmp/moe_test_new.md", SourceLanguage.langMarkdown),
+      ("/tmp/moe_test_new.sh", SourceLanguage.langShell),
+    ]
+
+    for (path, expectedLang) in cases:
+      if fileExists(path):
+        removeFile(path)
+      let r = e.editFile(path)
+      check r.isOk
+      check e.activeBuffer().language == expectedLang
+
+  test "Edit new file with unknown extension has langNone":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_new.xyz"
+
+    if fileExists(testFile):
+      removeFile(testFile)
+
+    let result = e.editFile(testFile)
+    check result.isOk
+    check e.activeBuffer().language == SourceLanguage.langNone
+
+  test "Edit existing file also detects language":
+    let e = createTestEditor()
+    let testFile = "/tmp/moe_test_existing_lang.nim"
+
+    writeFile(testFile, "echo \"hello\"")
+    defer:
+      removeFile(testFile)
+
+    let result = e.editFile(testFile)
+    check result.isOk
+    check e.activeBuffer().language == SourceLanguage.langNim
 
   test "Switch to existing buffer if already loaded":
     let e = createTestEditor()
