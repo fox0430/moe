@@ -342,6 +342,45 @@ suite "executeCommand - Operator + Motion":
     check buffer[0] == "world test"
     check ctx.cursor.column == 0
 
+  test "delete word (dw) on whitespace-only last line":
+    # Regression: dw on a line with only spaces at the last line of the buffer
+    # should delete all spaces, not leave one behind.
+    # See: moveWordForward "stuck at end" + exclusive adjustment bug.
+    let buffer = newTextBuffer("hello\n  echo \"ok\"\n  ")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 2, column: 0)
+    let registry = createTestRegistry()
+
+    # Set pending operator (d)
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    # Execute motion (w) which completes the operator
+    let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    # All spaces on the line should be deleted
+    check buffer[2] == ""
+    check ctx.cursor.column == 0
+
+  test "delete word (dw) on single word at last line":
+    # dw on a single word at the last line should delete the entire word
+    let buffer = newTextBuffer("first\nhello")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[1] == ""
+    check ctx.cursor.column == 0
+
   test "delete two words (d2w)":
     let buffer = newTextBuffer("hello world test end")
     let ctx = createTestContext(buffer)
