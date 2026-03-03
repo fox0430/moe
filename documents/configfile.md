@@ -364,6 +364,13 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | enable | bool | false | Syntax checker |
 
 
+### EditorConfig table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | [EditorConfig](https://editorconfig.org) support |
+
+
 ### SmoothScroll table
 
 | Name | Type | Default Value | Description |

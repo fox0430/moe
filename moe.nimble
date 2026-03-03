@@ -15,6 +15,7 @@ requires "celina#head"
 requires "parsetoml >= 0.7.1"
 requires "chronos >= 4.0.4"
 requires "stew >= 0.2.0"
+requires "editorconfig >= 0.1.0"
 
 task release, "Build for release":
   exec "nimble build -d:release"

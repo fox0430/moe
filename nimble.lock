@@ -98,6 +98,30 @@
         "sha1": "add14e711abc98b2203e7c5a35c860c7b86f15b5"
       }
     },
+    "regex": {
+      "version": "0.26.3",
+      "vcsRevision": "4593305ed1e49731fc75af1dc572dd2559aad19c",
+      "url": "https://github.com/nitely/nim-regex",
+      "downloadMethod": "git",
+      "dependencies": [
+        "unicodedb"
+      ],
+      "checksums": {
+        "sha1": "4d24e7d7441137cd202e16f2359a5807ddbdc31f"
+      }
+    },
+    "editorconfig": {
+      "version": "0.1.0",
+      "vcsRevision": "0ffc3057139ee0904026adbc0edb373f5cf17184",
+      "url": "https://github.com/fox0430/editorconfig-nim",
+      "downloadMethod": "git",
+      "dependencies": [
+        "regex"
+      ],
+      "checksums": {
+        "sha1": "4617c4ab6463c9fa416717be445645bf621b727c"
+      }
+    },
     "parsetoml": {
       "version": "0.7.2",
       "vcsRevision": "d297f5a81be2472905d367aa675dcbbca6e7a5d2",

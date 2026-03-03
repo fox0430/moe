@@ -93,6 +93,26 @@ Key notation supports regular keys (`a`, `j`), modifier keys (`C-s`, `M-x`), spe
 
 See [How to use - Runtime Key Mapping](howtouse.md#runtime-key-mapping) for full details.
 
+## EditorConfig
+
+moe supports [EditorConfig](https://editorconfig.org) for maintaining consistent coding styles across editors.
+
+When a file is opened, moe automatically looks for `.editorconfig` files and applies the settings to the buffer. EditorConfig is enabled by default and can be disabled in the configuration file.
+
+Supported properties:
+
+| Property | Description |
+|---|---|
+| `indent_style` | `space` or `tab` |
+| `indent_size` | Number of columns for indentation |
+| `tab_width` | Number of columns for tab character |
+| `end_of_line` | `lf`, `crlf`, or `cr` |
+| `charset` | `utf-8`, `utf-8-bom`, `utf-16be`, `utf-16le` |
+| `trim_trailing_whitespace` | `true` or `false` (applied on save) |
+| `insert_final_newline` | `true` or `false` |
+
+Per-buffer overrides are automatically applied when switching between windows, so different files can have different settings simultaneously.
+
 ## Terminal mode
 
 moe has a built-in terminal emulator. You can run a shell or any command inside the editor window.

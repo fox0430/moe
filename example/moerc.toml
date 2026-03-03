@@ -408,6 +408,10 @@ kind = "config"                        # Theme kind: "default", "config" - "vsco
 # Sample themes available in example/themes/: dark.toml, light.toml, vivid.toml
 path = "~/.config/moe/themes/dark.toml" # Theme file path
 
+[EditorConfig]
+
+enable = true                          # Enable .editorconfig support
+
 [Lsp]
 
 enable = false                         # Enable LSP support

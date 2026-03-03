@@ -87,6 +87,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
   - Nim
 
+- [EditorConfig](https://editorconfig.org) support
+
 - Macros
 
 - Terminal ( >= 0.5.0 )
@@ -132,8 +134,6 @@ This project's goals are easily customizable, high productivity, user friendly, 
 ## Planned features
 
 - Supports regular expression
-
-- Supports EditorConfig
 
 - Key bindings
 

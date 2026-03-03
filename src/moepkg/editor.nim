@@ -22,7 +22,8 @@ import std/[strutils, strformat, options, monotimes, times, os]
 import pkg/[results, chronos]
 
 import
-  editor_types, editor_window, editor_file, editor_lsp, editor_codelens, editor_render
+  editor_types, editor_window, editor_file, editor_lsp, editor_codelens, editor_render,
+  editorconfig_helper
 
 import
   status_line, render_utils, git_diff, logger, config_loader, keybind_config,
@@ -413,6 +414,9 @@ proc editFile*(e: Editor, path: string): Result[(), string] =
     # New file: set the path for saving later
     newBuffer.filePath = some(path)
     newBuffer.language = detectLanguage(path)
+
+  # Apply EditorConfig settings to the new buffer
+  applyEditorConfigToBuffer(newBuffer, e.config)
 
   # Add new buffer to the global buffer list
   e.buffers.add(newBuffer)
