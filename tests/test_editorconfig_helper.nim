@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, tables]
+import std/[unittest, options, tables, os]
 
 import ../src/moepkg/[buffer, config, types]
 
@@ -355,3 +355,128 @@ suite "EditorConfig Support":
     let origLineEnding = buf.lineEnding
     applyEditorConfig(buf, props)
     check buf.lineEnding == origLineEnding
+
+  # 1. shouldTrimTrailingWhitespace with editorConfig present but field unset
+
+  test "shouldTrimTrailingWhitespace returns false when editorConfig present but field unset":
+    let buf = newTextBuffer()
+    buf.editorConfig = some(BufferEditorConfig())
+    check shouldTrimTrailingWhitespace(buf) == false
+
+  # 2. Integration tests with actual .editorconfig files
+
+  test "getEditorConfigProperties reads actual editorconfig file":
+    let testDir = getTempDir() / "moe_ec_test_integration"
+    let testFile = testDir / "test.nim"
+    createDir(testDir)
+    defer:
+      removeDir(testDir)
+
+    writeFile(
+      testDir / ".editorconfig",
+      """
+root = true
+
+[*.nim]
+indent_style = space
+indent_size = 2
+tab_width = 4
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+""",
+    )
+    writeFile(testFile, "echo \"hello\"\n")
+
+    let props = getEditorConfigProperties(testFile)
+    check props.isSome
+    let p = props.get
+    check p["indent_style"] == "space"
+    check p["indent_size"] == "2"
+    check p["tab_width"] == "4"
+    check p["end_of_line"] == "lf"
+    check p["charset"] == "utf-8"
+    check p["trim_trailing_whitespace"] == "true"
+    check p["insert_final_newline"] == "true"
+
+  test "applyEditorConfigToBuffer with actual editorconfig file":
+    let testDir = getTempDir() / "moe_ec_test_apply"
+    let testFile = testDir / "main.py"
+    createDir(testDir)
+    defer:
+      removeDir(testDir)
+
+    writeFile(
+      testDir / ".editorconfig",
+      """
+root = true
+
+[*.py]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+trim_trailing_whitespace = true
+""",
+    )
+    writeFile(testFile, "print('hello')\n")
+
+    let conf = newEditorConfig()
+    let buf = newTextBuffer()
+    buf.filePath = some(testFile)
+    applyEditorConfigToBuffer(buf, conf)
+
+    check buf.editorConfig.isSome
+    let ec = buf.editorConfig.get
+    check ec.expandTab == some(true)
+    check ec.shiftWidth == some(4)
+    check ec.tabStop == some(4)
+    check ec.trimTrailingWhitespace == some(true)
+    check buf.lineEnding == LF
+
+  test "applyEditorConfigToBuffer with no matching editorconfig":
+    let testDir = getTempDir() / "moe_ec_test_nomatch"
+    let testFile = testDir / "test.txt"
+    createDir(testDir)
+    defer:
+      removeDir(testDir)
+
+    # .editorconfig with root=true but no matching section
+    writeFile(
+      testDir / ".editorconfig",
+      """
+root = true
+
+[*.nim]
+indent_size = 2
+""",
+    )
+    writeFile(testFile, "hello\n")
+
+    let conf = newEditorConfig()
+    let buf = newTextBuffer()
+    buf.filePath = some(testFile)
+    applyEditorConfigToBuffer(buf, conf)
+
+    # No properties matched for .txt, so editorConfig should remain none
+    check buf.editorConfig.isNone
+
+  # 3. Negative numeric values
+
+  test "applyEditorConfig with negative tab_width":
+    var props = initTable[string, string]()
+    props["tab_width"] = "-1"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.tabStop.isNone
+
+  test "applyEditorConfig with negative indent_size":
+    var props = initTable[string, string]()
+    props["indent_size"] = "-3"
+    let buf = newTextBuffer()
+    applyEditorConfig(buf, props)
+    check buf.editorConfig.isSome
+    check buf.editorConfig.get.shiftWidth.isNone
+    # Negative indent_size should not set tabStop either
+    check buf.editorConfig.get.tabStop.isNone
