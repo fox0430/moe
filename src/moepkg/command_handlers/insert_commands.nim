@@ -22,7 +22,7 @@
 ## This module provides Insert mode specific command implementations
 ## that are independent of CommandContext for better testability
 
-import std/[strutils, unicode]
+import std/[options, strutils, unicode]
 import ../[buffer, types, modes]
 
 proc getLineIndent*(line: string): string =
@@ -124,64 +124,70 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   state.cursor.line += 1
   state.cursor.column = indentLen
 
+  if indentLen > 0:
+    state.editState.autoIndentedLine =
+      some((line: state.cursor.line, indent: getLineIndent(currentLineText)))
+  else:
+    state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
+
 proc insertLineBelow*(buffer: TextBuffer, state: EditorState) =
   ## Handle 'o' command - insert line below and enter insert mode with auto-indent
   let currentLine = state.cursor.line
-  # Get current line content for indent detection
   let lineContent = buffer.getLine(currentLine)
 
-  # Move to end of current line
   state.cursor.column = lineContent.charLen
 
-  # Prepare the text to insert (newline + optional indent as single operation)
   var textToInsert = "\n"
   var indentLen = 0
 
-  # Apply auto-indent if enabled
   if state.display.autoIndent:
     let indent = getLineIndent(lineContent)
     if indent.len > 0:
       textToInsert = "\n" & indent
       indentLen = indent.len
 
-  # Insert newline (and indent if any) as a single undo-able operation
   discard buffer.insertText(state.cursor, textToInsert)
 
-  # Move cursor to new line (after indent if any)
   state.cursor.line = currentLine + 1
   state.cursor.column = indentLen
 
-  # Switch to insert mode
+  if indentLen > 0:
+    state.editState.autoIndentedLine =
+      some((line: currentLine + 1, indent: getLineIndent(lineContent)))
+  else:
+    state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
+
   state.mode = EditorMode.Insert
 
 proc insertLineAbove*(buffer: TextBuffer, state: EditorState) =
   ## Handle 'O' command - insert line above and enter insert mode with auto-indent
   let currentLine = state.cursor.line
-  # Get current line content for indent detection
   let lineContent = buffer.getLine(currentLine)
 
-  # Move to start of current line
   state.cursor.column = 0
 
-  # Prepare the text to insert (newline + optional indent as single operation)
+  # Use "indent\n" (not "\nindent") — inserting "\nindent" at column 0 would
+  # concatenate the indent with the original line content.
   var textToInsert = "\n"
   var indentLen = 0
 
-  # Apply auto-indent if enabled
   if state.display.autoIndent:
     let indent = getLineIndent(lineContent)
     if indent.len > 0:
-      textToInsert = "\n" & indent
+      textToInsert = indent & "\n"
       indentLen = indent.len
 
-  # Insert newline (and indent if any) as a single undo-able operation
   discard buffer.insertText(state.cursor, textToInsert)
 
-  # Move cursor to the new line (which is the current line, after indent if any)
   state.cursor.line = currentLine
   state.cursor.column = indentLen
 
-  # Switch to insert mode
+  if indentLen > 0:
+    state.editState.autoIndentedLine =
+      some((line: currentLine, indent: getLineIndent(lineContent)))
+  else:
+    state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
+
   state.mode = EditorMode.Insert
 
 proc insertAppend*(buffer: TextBuffer, state: EditorState) =
@@ -377,3 +383,16 @@ proc insertCharFromBelow*(buffer: TextBuffer, state: EditorState): bool =
   discard buffer.insertText(pos, ch)
   state.cursor.column += 1
   return true
+
+proc clearAutoIndentIfUnedited*(buffer: TextBuffer, state: EditorState) =
+  ## Remove auto-indent whitespace when leaving Insert mode without editing.
+  ## Uses replaceLine (not deleteText) so extractInsertedText ignores the change.
+  if state.editState.autoIndentedLine.isSome:
+    let (line, indent) = state.editState.autoIndentedLine.get
+    if line >= 0 and line < buffer.len:
+      let lineContent = buffer.getLine(line)
+      if lineContent == indent:
+        discard buffer.replaceLine(line, "")
+        if state.cursor.line == line:
+          state.cursor.column = 0
+    state.editState.autoIndentedLine = none(tuple[line: int, indent: string])

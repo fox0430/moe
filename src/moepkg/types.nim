@@ -153,6 +153,7 @@ type
     insertModeStartPos*: Option[BufferPosition] # Position where Insert mode started
     visualBlockInsertContext*: Option[VisualBlockInsertContext]
       # Context for visual block insert/append/change replication
+    autoIndentedLine*: Option[tuple[line: int, indent: string]]
 
   DisplaySettings* = object ## Display and UI settings grouped together
     showTabLine*: bool # Whether to show the tab line

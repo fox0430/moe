@@ -827,3 +827,155 @@ suite "HandlerManager - executeCommandDirect":
     check r.get.kind == hrHandled
     check r.get.overlayTransition.isSome
     check r.get.overlayTransition.get == okCommand
+
+suite "HandlerManager - o/O open line with auto-indent":
+  proc createAutoIndentState(): EditorState =
+    ## Create EditorState with autoIndent enabled
+    result = EditorState(
+      cursor: BufferPosition(line: 0, column: 0),
+      mode: EditorMode.Normal,
+      previousMode: EditorMode.Normal,
+      display: DisplaySettings(autoIndent: true, tabStop: 2, expandTab: true),
+    )
+    result.registers = initRegisters()
+
+  let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+  let oKey = KeyCombo(isSpecial: false, char: "o", modifiers: {})
+
+  test "o enters Insert mode with transaction and auto-indent":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    let state = createAutoIndentState()
+    let viewport = createTestViewport()
+
+    let result = manager.handleNormalMode(buffer, state, viewport, oKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Insert
+    check buffer.inTransaction
+    check buffer.len == 2
+    check buffer.getLine(1) == "  "
+    check state.cursor.line == 1
+    check state.cursor.column == 2
+
+  test "o Escape cleans auto-indent":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    let state = createAutoIndentState()
+    let viewport = createTestViewport()
+
+    discard manager.handleNormalMode(buffer, state, viewport, oKey)
+    state.mode = EditorMode.Insert
+    let exitResult = manager.handleInsertMode(buffer, state, escKey)
+
+    check exitResult.kind == hrHandled
+    check exitResult.modeTransition.get == EditorMode.Normal
+    check buffer.getLine(1) == ""
+    check not buffer.inTransaction
+
+  test "o Escape undo removes line in single step":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    let state = createAutoIndentState()
+    let viewport = createTestViewport()
+
+    discard manager.handleNormalMode(buffer, state, viewport, oKey)
+    state.mode = EditorMode.Insert
+    discard manager.handleInsertMode(buffer, state, escKey)
+
+    # Single undo should restore original buffer
+    discard buffer.undo()
+    check buffer.len == 1
+    check buffer.getLine(0) == "  hello"
+
+  test "o type text Escape preserves indent and text":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    let state = createAutoIndentState()
+    let viewport = createTestViewport()
+
+    discard manager.handleNormalMode(buffer, state, viewport, oKey)
+    state.mode = EditorMode.Insert
+
+    # Type 'x' in Insert mode
+    let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+    discard manager.handleInsertMode(buffer, state, xKey)
+    discard manager.handleInsertMode(buffer, state, escKey)
+
+    check buffer.getLine(1) == "  x"
+
+  test "o type text Escape undo removes everything in single step":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    let state = createAutoIndentState()
+    let viewport = createTestViewport()
+
+    discard manager.handleNormalMode(buffer, state, viewport, oKey)
+    state.mode = EditorMode.Insert
+    let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+    discard manager.handleInsertMode(buffer, state, xKey)
+    discard manager.handleInsertMode(buffer, state, escKey)
+
+    # Single undo should restore original buffer
+    discard buffer.undo()
+    check buffer.len == 1
+    check buffer.getLine(0) == "  hello"
+
+  test "O Escape cleans auto-indent and single undo removes line":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    let state = createAutoIndentState()
+    let viewport = createTestViewport()
+
+    # Press O
+    let bigOKey = KeyCombo(isSpecial: false, char: "O", modifiers: {})
+    discard manager.handleNormalMode(buffer, state, viewport, bigOKey)
+    state.mode = EditorMode.Insert
+    discard manager.handleInsertMode(buffer, state, escKey)
+
+    check buffer.getLine(0) == ""
+    check buffer.getLine(1) == "  hello"
+
+    discard buffer.undo()
+    check buffer.len == 1
+    check buffer.getLine(0) == "  hello"
+
+  test "i Escape without auto-indent tracking":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "  hello")
+    let state = createAutoIndentState()
+    let viewport = createTestViewport()
+
+    # Press i (simple insert, no line creation)
+    let iKey = KeyCombo(isSpecial: false, char: "i", modifiers: {})
+    discard manager.handleNormalMode(buffer, state, viewport, iKey)
+    state.mode = EditorMode.Insert
+    discard manager.handleInsertMode(buffer, state, escKey)
+
+    check buffer.len == 1
+    check buffer.getLine(0) == "  hello"
+
+  test "o on line without indent creates empty line":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createAutoIndentState()
+    let viewport = createTestViewport()
+
+    discard manager.handleNormalMode(buffer, state, viewport, oKey)
+    state.mode = EditorMode.Insert
+    discard manager.handleInsertMode(buffer, state, escKey)
+
+    check buffer.len == 2
+    check buffer.getLine(1) == ""
+
+    discard buffer.undo()
+    check buffer.len == 1
+    check buffer.getLine(0) == "hello"

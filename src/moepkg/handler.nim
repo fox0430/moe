@@ -27,7 +27,9 @@ import
   buffer_manager, backup_manager, backup, diff_viewer, command_completion, build,
   render_utils, config_loader, documentsymbol_viewer, message_log, tab_line,
   terminal_mode, clipboard
-import command_handlers/[handler_manager, command_mode_handler, search_mode_handler]
+import
+  command_handlers/
+    [handler_manager, command_mode_handler, search_mode_handler, insert_commands]
 export command_mode_handler, search_mode_handler
 
 proc adjustCursorAfterInsertExit*(cursor: var BufferPosition, lineCharLen: int) =
@@ -745,6 +747,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       # Commit transaction when leaving Insert or Replace mode
       if e.state.mode in {EditorMode.Insert, EditorMode.Replace}:
         if activeBuffer.inTransaction:
+          clearAutoIndentIfUnedited(activeBuffer, e.state)
           discard activeBuffer.commitTransaction()
         # Clear insert mode tracking state
         e.state.editState.insertModeStartPos = none(BufferPosition)
