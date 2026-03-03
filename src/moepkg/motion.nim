@@ -358,6 +358,23 @@ proc isSymbolChar(r: Rune): bool =
   ## Check if a character is a symbol (non-word, non-whitespace)
   return not isWordChar(r) and not isWhitespace(r)
 
+proc skipWordForward(runes: seq[Rune], startCol: int): int =
+  ## Skip current word/symbol sequence and trailing whitespace from startCol.
+  ## Returns the column position after skipping.
+  ## Used by both moveWordForward and calculateOperatorRange.
+  result = startCol
+  if result < runes.len:
+    let ch = runes[result]
+    if isWordChar(ch):
+      while result < runes.len and isWordChar(runes[result]):
+        result += 1
+    elif not isWhitespace(ch):
+      while result < runes.len and not isWordChar(runes[result]) and
+          not isWhitespace(runes[result]):
+        result += 1
+  while result < runes.len and isWhitespace(runes[result]):
+    result += 1
+
 proc moveWordForward(
     e: MotionExecutor, currentPos: CursorPosition, count: int
 ): CursorPosition =
@@ -384,24 +401,7 @@ proc moveWordForward(
       else:
         line
     let runes = lineContent.toRunes()
-    var pos = result.x
-
-    # Skip current word/symbol sequence
-    if pos < runes.len:
-      let firstCh = runes[pos]
-      if isWordChar(firstCh):
-        # Skip word characters
-        while pos < runes.len and isWordChar(runes[pos]):
-          pos += 1
-      elif not isWhitespace(firstCh):
-        # Skip symbol characters (non-word, non-whitespace)
-        while pos < runes.len and not isWordChar(runes[pos]) and
-            not isWhitespace(runes[pos]):
-          pos += 1
-
-    # Skip whitespace after the word/symbols
-    while pos < runes.len and isWhitespace(runes[pos]):
-      pos += 1
+    let pos = skipWordForward(runes, result.x)
 
     # If we reached end of line, move to next line
     if pos >= runes.len:
@@ -1348,8 +1348,28 @@ proc calculateOperatorRange*(
     # Only adjust if we're not at the start of the range
     elif range.endPos.line == range.start.line and
         range.endPos.column > range.start.column:
-      # Same line - just move column back
-      range.endPos.column -= 1
+      if motion == Motion.WordForward:
+        # Check if w motion from startPos would reach end of line
+        # (meaning w was "stuck" at last line of buffer).
+        # In that case, delete to end of line without exclusive adjustment.
+        let line = buffer.getLine(range.start.line)
+        let lineContent =
+          if line.len > 0 and line[^1] == '\n':
+            line[0 ..< ^1]
+          else:
+            line
+        let runes = lineContent.toRunes()
+        let testPos = skipWordForward(runes, range.start.column)
+        if testPos >= runes.len:
+          # w motion reached end of line - "stuck" at last line.
+          # Delete to end of line (inclusive of last char).
+          range.endPos.column = max(range.start.column, runes.len - 1)
+        else:
+          # w motion found a real next word - normal exclusive adjustment
+          range.endPos.column -= 1
+      else:
+        # Non-WordForward motions: simple exclusive adjustment
+        range.endPos.column -= 1
     elif range.endPos.line > range.start.line and range.endPos.column > 0:
       # Different line - move column back
       range.endPos.column -= 1
