@@ -113,6 +113,89 @@ Supported properties:
 
 Per-buffer overrides are automatically applied when switching between windows, so different files can have different settings simultaneously.
 
+## Buffer Backends
+
+moe supports multiple buffer backend implementations. Each backend offers different performance characteristics suited to different editing scenarios. You can configure the default backend in `moerc.toml`.
+
+### GapBuffer (Default)
+
+A line-oriented gap buffer. Lines are stored in a flat array with a logical gap at the current edit position. Edits near the gap are very fast; edits far from the gap require moving the gap first.
+
+Best for small to medium files with sequential/localized edits.
+
+| Operation | Time Complexity |
+|---|---|
+| Get line | O(1) |
+| Insert/Delete line | O(1) amortized |
+| Insert into line | O(L) (L = line length) |
+| Delete range | O(k) (k = lines spanned) |
+| Undo/Redo | O(operation cost) |
+
+### SqrtDecomp
+
+A block list (sqrt decomposition). Lines are partitioned into blocks of up to 1024 lines. Blocks split when they grow too large and merge when they shrink too small, keeping block sizes balanced at roughly sqrt(n).
+
+Best for large files with scattered (random-access) edit patterns.
+
+| Operation | Time Complexity |
+|---|---|
+| Get line | O(sqrt(n)) |
+| Insert/Delete line | O(sqrt(n)) |
+| Insert into line | O(sqrt(n) + L) |
+| Delete range | O(sqrt(n) * k) |
+| Line count / Char count | O(1) (cached) |
+| Undo/Redo | O(operation cost) |
+
+### Rope
+
+A B-tree rope where text is stored as raw bytes in leaf nodes. Internal nodes maintain subtree byte length and newline count metadata, enabling efficient tree walks. Tree height is O(log n) for all operations.
+
+Best for large files with arbitrary-position edits requiring consistent O(log n) performance.
+
+| Operation | Time Complexity |
+|---|---|
+| Get line | O(log n + L) |
+| Insert/Delete line | O(log n) |
+| Insert into line | O(log n + \|text\|) |
+| Delete range | O(log n) |
+| Find line start | O(log n) |
+| Undo/Redo | O(operation cost) |
+
+### PieceTable
+
+A persistent Red-Black tree of "pieces", each describing a span in one of two append-only text buffers (original and add). The tree uses path-copying (Okasaki-style functional updates) so that old tree roots remain valid even after mutations. This enables **O(1) snapshot-based undo/redo**.
+
+Best for any file size; particularly suited when undo/redo performance matters.
+
+| Operation | Time Complexity |
+|---|---|
+| Get line | O(log P + L) |
+| Insert/Delete line | O(log P) |
+| Insert into line | O(log P) |
+| Delete range | O(K log P) |
+| Find line start | O(log P) |
+| Take snapshot | **O(1)** |
+| Restore snapshot (Undo/Redo) | **O(1)** |
+
+(P = number of pieces in the tree. Coalescing keeps P bounded in practice.)
+
+### Undo/Redo
+
+- **GapBuffer, SqrtDecomp, Rope**: Operation-based undo/redo. Each edit records its inverse operation (e.g., insert ↔ delete). Undo replays the inverse; redo replays the original.
+- **PieceTable**: Snapshot-based undo/redo. Before each edit, an O(1) snapshot of the tree root is captured. Undo/redo simply swaps the current root with the saved snapshot. Transactions (multi-operation edits) are also covered by a single snapshot.
+
+### Comparison Summary
+
+| Feature | GapBuffer | SqrtDecomp | Rope | PieceTable |
+|---|---|---|---|---|
+| Line access | **O(1)** | O(sqrt n) | O(log n) | O(log P) |
+| Line insert/delete | O(1) amort | O(sqrt n) | O(log n) | O(log P) |
+| Char count | O(n) | **O(1)** | **O(1)** | **O(1)** |
+| Find line start | O(n) | O(n) | O(log n) | O(log P) |
+| Undo/Redo | O(op) | O(op) | O(op) | **O(1)** |
+| Structure | Mutable array | Mutable blocks | Mutable B-tree | Persistent RB-tree |
+| Ideal file size | Small–Medium | Large | Large | Any |
+
 ## Terminal mode
 
 moe has a built-in terminal emulator. You can run a shell or any command inside the editor window.

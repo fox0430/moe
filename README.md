@@ -15,10 +15,11 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Written in [Nim](https://nim-lang.org)
 
-- Selectable buffer backend
+- [Selectable buffer backend](https://github.com/fox0430/moe/blob/develop/documents/features.md#buffer-backends) ( >= 0.5.0 )
   - GapBuffer
   - Sqrt Decomposition
   - Rope (B-tree)
+  - Piece Table (RB-Tree)
 
 - UTF-8 and other encodings support (Incomplete)
 

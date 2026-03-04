@@ -21,7 +21,7 @@
 ## all BufferBackend variants. Tests iterate over backends with fixed
 ## expected values so adding a new backend automatically gets coverage.
 
-import std/[unittest, os, options, strutils]
+import std/[unittest, os, options, strutils, deques]
 
 import pkg/results
 
@@ -580,3 +580,185 @@ suite "setConfiguredBackend":
     check b.backendKind == SqrtDecomp
     # Reset
     setConfiguredBackend(GapBuffer)
+
+suite "PieceTable - Snapshot Undo/Redo Integration":
+  test "undo stack contains ckSnapshot entries":
+    let b = buf("Hello", PieceTable)
+    discard b.insertText(BufferPosition(line: 0, column: 5), " World")
+    check b.undoStack.len == 1
+    check b.undoStack.peekLast.kind == ckSnapshot
+
+  test "redo stack contains ckSnapshot entries after undo":
+    let b = buf("Hello", PieceTable)
+    discard b.insertText(BufferPosition(line: 0, column: 5), " World")
+    discard b.undo()
+    check b[0] == "Hello"
+    check b.redoStack.len == 1
+    check b.redoStack.peekLast.kind == ckSnapshot
+
+  test "undo stack restored after redo":
+    let b = buf("Hello", PieceTable)
+    discard b.insertText(BufferPosition(line: 0, column: 5), " World")
+    discard b.undo()
+    discard b.redo()
+    check b[0] == "Hello World"
+    check b.undoStack.len == 1
+    check b.undoStack.peekLast.kind == ckSnapshot
+
+  test "multiple edits each create separate ckSnapshot entries":
+    let b = buf("abc", PieceTable)
+    discard b.insertText(BufferPosition(line: 0, column: 3), "1")
+    discard b.insertText(BufferPosition(line: 0, column: 4), "2")
+    discard b.deleteChar(BufferPosition(line: 0, column: 0))
+    check b.undoStack.len == 3
+    for i in 0 ..< b.undoStack.len:
+      check b.undoStack[i].kind == ckSnapshot
+
+  test "non-PieceTable backends still use operation-based undo":
+    let b = buf("Hello", GapBuffer)
+    discard b.insertText(BufferPosition(line: 0, column: 5), " World")
+    check b.undoStack.len == 1
+    check b.undoStack.peekLast.kind == ckInsertText
+
+  test "lineMarkers preserved across undo/redo":
+    let b = buf("line0\nline1\nline2", PieceTable)
+    b.setLineMarker(1, SyntaxError)
+    check b.lineMarkers[1] == some(SyntaxError)
+
+    # Edit and record snapshot (captures markers with SyntaxError on line 1)
+    discard b.replaceLine(0, "CHANGED")
+    check b[0] == "CHANGED"
+
+    # Clear marker after edit
+    b.setLineMarker(1, Empty)
+    check b.lineMarkers[1] == some(Empty)
+
+    # Undo should restore the snapshot (which had SyntaxError on line 1)
+    discard b.undo()
+    check b[0] == "line0"
+    check b.lineMarkers[1] == some(SyntaxError)
+
+  test "foldState preserved across undo/redo":
+    let b = buf("line0\nline1\nline2\nline3", PieceTable)
+    b.foldState.folds.add(Fold(startLine: 0, endLine: 2, collapsed: true))
+    check b.foldState.folds.len == 1
+
+    # Edit captures snapshot with fold
+    discard b.replaceLine(0, "CHANGED")
+
+    # Remove fold after edit
+    b.foldState.folds = @[]
+    check b.foldState.folds.len == 0
+
+    # Undo should restore the snapshot (which had the fold)
+    discard b.undo()
+    check b[0] == "line0"
+    check b.foldState.folds.len == 1
+    check b.foldState.folds[0].startLine == 0
+    check b.foldState.folds[0].endLine == 2
+    check b.foldState.folds[0].collapsed == true
+
+  test "transaction creates single ckSnapshot entry":
+    let b = buf("aaa\nbbb\nccc", PieceTable)
+    discard b.beginTransaction("test")
+    discard b.replaceLine(0, "AAA")
+    discard b.replaceLine(1, "BBB")
+    discard b.replaceLine(2, "CCC")
+    discard b.commitTransaction()
+
+    # Should be a single snapshot entry, not a ckTransaction
+    check b.undoStack.len == 1
+    check b.undoStack.peekLast.kind == ckSnapshot
+
+    # Undo restores all three lines at once
+    discard b.undo()
+    check b[0] == "aaa"
+    check b[1] == "bbb"
+    check b[2] == "ccc"
+
+  test "transaction redo after undo":
+    let b = buf("aaa\nbbb", PieceTable)
+    discard b.beginTransaction("test")
+    discard b.replaceLine(0, "AAA")
+    discard b.replaceLine(1, "BBB")
+    discard b.commitTransaction()
+
+    discard b.undo()
+    check b[0] == "aaa"
+    check b[1] == "bbb"
+
+    discard b.redo()
+    check b[0] == "AAA"
+    check b[1] == "BBB"
+
+  test "rollback uses O(1) snapshot restore":
+    let b = buf("Hello\nWorld", PieceTable)
+    discard b.beginTransaction("test")
+    discard b.replaceLine(0, "HELLO")
+    discard b.replaceLine(1, "WORLD")
+    discard b.rollbackTransaction()
+
+    check b[0] == "Hello"
+    check b[1] == "World"
+    # Rollback should not push anything to undo stack
+    check b.undoStack.len == 0
+
+  test "rollback preserves lineMarkers":
+    let b = buf("line0\nline1", PieceTable)
+    b.setLineMarker(0, GitAdded)
+
+    discard b.beginTransaction("test")
+    discard b.replaceLine(0, "CHANGED")
+    b.setLineMarker(0, SyntaxError)
+    discard b.rollbackTransaction()
+
+    check b[0] == "line0"
+    check b.lineMarkers[0] == some(GitAdded)
+
+  test "snapshot cursorPos tracks change position":
+    let b = buf("Hello\nWorld", PieceTable)
+    discard b.insertText(BufferPosition(line: 1, column: 5), "!")
+    let entry = b.undoStack.peekLast
+    check entry.kind == ckSnapshot
+    check entry.snapshotCursorPos == BufferPosition(line: 1, column: 5)
+
+  test "undo/redo cycle preserves content across multiple rounds":
+    let b = buf("original", PieceTable)
+    discard b.replaceLine(0, "modified")
+    check b[0] == "modified"
+
+    # Round 1
+    discard b.undo()
+    check b[0] == "original"
+    discard b.redo()
+    check b[0] == "modified"
+
+    # Round 2
+    discard b.undo()
+    check b[0] == "original"
+    discard b.redo()
+    check b[0] == "modified"
+
+    # Round 3
+    discard b.undo()
+    check b[0] == "original"
+
+  test "new edit after undo clears redo stack":
+    let b = buf("abc", PieceTable)
+    discard b.insertText(BufferPosition(line: 0, column: 3), "1")
+    discard b.undo()
+    check b.redoStack.len == 1
+
+    discard b.insertText(BufferPosition(line: 0, column: 3), "2")
+    check b.redoStack.len == 0
+    check b[0] == "abc2"
+
+  test "pendingSnapshot cleared on error":
+    let b = buf("Hello", PieceTable)
+    # Attempt invalid operation
+    let r = b.deleteChar(BufferPosition(line: 0, column: 99))
+    check r.isErr
+    check b.pendingSnapshot.isNone
+    # Buffer should be unchanged
+    check b[0] == "Hello"
+    check b.undoStack.len == 0

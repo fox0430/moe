@@ -580,6 +580,8 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     setConfiguredBackend(SqrtDecomp)
   of bbcRope:
     setConfiguredBackend(Rope)
+  of bbcPieceTable:
+    setConfiguredBackend(PieceTable)
   logDebug("editor", "Buffer backend: " & $editorConfig.standard.bufferBackend)
 
   # Initialize LSP integration with current working directory as workspace root

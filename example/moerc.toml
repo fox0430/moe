@@ -1,6 +1,6 @@
 [Standard]
 
-bufferBackend = "gapBuffer"            # Buffer data structure. The default is gapBuffer: "gapBuffer", "sqrtDecomp", "rope"
+bufferBackend = "gapBuffer"            # Buffer data structure. The default is gapBuffer: "gapBuffer", "sqrtDecomp", "rope", "pieceTable"
 
 number = true                          # Line numbers
 

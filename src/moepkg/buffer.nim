@@ -24,7 +24,7 @@ import std/[unicode, options, strutils, deques, os, times]
 import pkg/results
 
 import unicode_utils, encoding, highlight, logger, search_utils, primitives
-import buffer_backends/[gap_buffer, sqrt_decomp, rope]
+import buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
 
 export CharacterEncoding, encodingToString, detectCharacterEncoding, BufferPosition
 
@@ -64,6 +64,7 @@ type
     GapBuffer # Best for small to medium files
     SqrtDecomp # Sqrt decomposition - O(√n) random access, good for large files
     Rope # B-tree rope - O(log n) operations
+    PieceTable # Piece tree (Red-Black Tree) - O(log n) operations
 
   BufferChangeKind* = enum ## Undo/Redo system types
     ckInsertText
@@ -73,6 +74,7 @@ type
     ckDeleteRange
     ckReplaceLine # Line content replaced
     ckTransaction # Transaction containing multiple changes
+    ckSnapshot # PieceTable O(1) snapshot undo/redo
 
   BufferChange* = object
     case kind*: BufferChangeKind
@@ -99,6 +101,11 @@ type
     of ckTransaction:
       transactionChanges*: seq[BufferChange]
       transactionDescription*: string
+    of ckSnapshot:
+      snapshotData*: PieceTableSnapshot
+      snapshotCursorPos*: BufferPosition
+      snapshotLineMarkers*: seq[Option[SidebarItemKind]]
+      snapshotFoldState*: FoldState
 
   BufferTransaction* = object ## Transaction for grouping multiple changes
     changes*: seq[BufferChange]
@@ -131,6 +138,11 @@ type
     currentTransaction*: Option[BufferTransaction]
     inTransaction*: bool
 
+    # PieceTable snapshot support for O(1) undo/redo
+    pendingSnapshot*: Option[PieceTableSnapshot]
+    pendingSnapshotMarkers*: seq[Option[SidebarItemKind]]
+    pendingSnapshotFolds*: FoldState
+
     # Sidebar markers (line-based markers for git diff, syntax errors, etc.)
     lineMarkers*: seq[Option[SidebarItemKind]] # Each line can have at most one marker
 
@@ -159,6 +171,8 @@ type
       sqrtDecomp*: sqrt_decomp.SqrtDecomp
     of Rope:
       rope*: rope.Rope
+    of PieceTable:
+      pieceTable*: piece_table.PieceTable
 
 var nextBufferId = 0
 
@@ -334,6 +348,38 @@ proc newTextBuffer*(
       foldState: initFoldState(),
       editorConfig: none(BufferEditorConfig),
     )
+  of PieceTable:
+    let pt = newPieceTable(content)
+    var runesBuffer: seq[Runes] = @[]
+    for i in 0 ..< pt.len:
+      runesBuffer.add(pt.getLine(i).toRunes())
+
+    TextBuffer(
+      id: genBufferId(),
+      backendKind: BufferBackend.PieceTable,
+      backend: backend,
+      filePath: filePath,
+      readOnly: false,
+      lineEnding: LF,
+      encoding: utf8,
+      endOfLine: true,
+      pieceTable: pt,
+      undoStack: initDeque[BufferChange](),
+      redoStack: initDeque[BufferChange](),
+      changeSeq: 0,
+      savedSeq: 0,
+      currentTransaction: none(BufferTransaction),
+      inTransaction: false,
+      lineMarkers: newSeq[Option[SidebarItemKind]](pt.len),
+      highlight: initHighlight(runesBuffer),
+      language: SourceLanguage.langNone,
+      highlightNeedsUpdate: false,
+      incrementalHighlight: nil,
+      lastChangedLines: 0,
+      cursorCache: CursorPosCache(line: -1, charPos: 0, bytePos: 0, changeSeq: -1),
+      foldState: initFoldState(),
+      editorConfig: none(BufferEditorConfig),
+    )
 
 proc setReservedWords*(b: TextBuffer, words: seq[ReservedWord]) =
   ## Set reserved words for syntax highlighting (e.g., TODO, NOTE, FIXME)
@@ -356,6 +402,8 @@ proc getTextString*(b: TextBuffer): string =
     $b.sqrtDecomp
   of Rope:
     $b.rope
+  of PieceTable:
+    $b.pieceTable
 
 proc len*(b: TextBuffer): int =
   ## Get number of lines in buffer
@@ -363,6 +411,7 @@ proc len*(b: TextBuffer): int =
   of GapBuffer: b.gapBuffer.len
   of SqrtDecomp: b.sqrtDecomp.len
   of Rope: b.rope.len
+  of PieceTable: b.pieceTable.len
 
 proc charLen*(text: string): int =
   ## Get character length (not byte length)
@@ -376,6 +425,8 @@ proc getLine*(b: TextBuffer, lineIndex: int): string =
     b.sqrtDecomp.getLine(lineIndex)
   of Rope:
     b.rope.getLine(lineIndex)
+  of PieceTable:
+    b.pieceTable.getLine(lineIndex)
 
 proc `[]`*(b: TextBuffer, lineIndex: int): string =
   ## Bracket operator for accessing lines by index
@@ -478,6 +529,8 @@ proc backendInsertIntoLine(b: TextBuffer, line, col: int, text: string) =
     b.sqrtDecomp.insertIntoLine(line, col, text)
   of Rope:
     b.rope.insertIntoLine(line, col, text)
+  of PieceTable:
+    b.pieceTable.insertIntoLine(line, col, text)
 
 proc backendDeleteLine(b: TextBuffer, lineNumber: int) =
   case b.backendKind
@@ -487,6 +540,8 @@ proc backendDeleteLine(b: TextBuffer, lineNumber: int) =
     b.sqrtDecomp.deleteLine(lineNumber)
   of Rope:
     b.rope.deleteLine(lineNumber)
+  of PieceTable:
+    b.pieceTable.deleteLine(lineNumber)
 
 proc backendInsertLine(b: TextBuffer, lineNumber: int, content: string) =
   case b.backendKind
@@ -496,6 +551,8 @@ proc backendInsertLine(b: TextBuffer, lineNumber: int, content: string) =
     b.sqrtDecomp.insertLine(lineNumber, content)
   of Rope:
     b.rope.insertLine(lineNumber, content)
+  of PieceTable:
+    b.pieceTable.insertLine(lineNumber, content)
 
 proc backendReplaceLine(b: TextBuffer, lineNumber: int, content: string) =
   case b.backendKind
@@ -505,6 +562,8 @@ proc backendReplaceLine(b: TextBuffer, lineNumber: int, content: string) =
     b.sqrtDecomp.replaceLine(lineNumber, content)
   of Rope:
     b.rope.replaceLine(lineNumber, content)
+  of PieceTable:
+    b.pieceTable.replaceLine(lineNumber, content)
 
 proc backendDeleteAtLineCol(b: TextBuffer, line, col, count: int) =
   case b.backendKind
@@ -514,6 +573,8 @@ proc backendDeleteAtLineCol(b: TextBuffer, line, col, count: int) =
     b.sqrtDecomp.deleteAtLineCol(line, col, count)
   of Rope:
     b.rope.deleteAtLineCol(line, col, count)
+  of PieceTable:
+    b.pieceTable.deleteAtLineCol(line, col, count)
 
 # Public NoUndo procs for external code that bypasses undo recording
 proc replaceLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
@@ -549,6 +610,8 @@ proc getChangePosition(change: BufferChange): BufferPosition =
       return getChangePosition(change.transactionChanges[0])
     else:
       return BufferPosition(line: 0, column: 0)
+  of ckSnapshot:
+    return change.snapshotCursorPos
 
 proc ensureMarkersSize(b: TextBuffer) =
   ## Ensure lineMarkers array matches buffer length
@@ -560,6 +623,14 @@ proc ensureMarkersSize(b: TextBuffer) =
   elif b.lineMarkers.len > bufferLen:
     # Truncate
     b.lineMarkers.setLen(bufferLen)
+
+proc captureSnapshotIfNeeded(b: TextBuffer) {.inline.} =
+  ## Capture a PieceTable snapshot before mutation for O(1) undo/redo.
+  ## Only captures once per undo entry (skips if pendingSnapshot already set).
+  if b.backendKind == PieceTable and b.pendingSnapshot.isNone:
+    b.pendingSnapshot = some(b.pieceTable.takeSnapshot())
+    b.pendingSnapshotMarkers = b.lineMarkers
+    b.pendingSnapshotFolds = b.foldState
 
 proc pushUndoChange(b: TextBuffer, change: BufferChange) =
   ## Add a change to the undo stack (or current transaction)
@@ -582,6 +653,18 @@ proc pushUndoChange(b: TextBuffer, change: BufferChange) =
     var transaction = b.currentTransaction.get
     transaction.changes.add(change)
     b.currentTransaction = some(transaction)
+  elif b.pendingSnapshot.isSome:
+    # PieceTable: convert to O(1) snapshot undo entry
+    b.undoStack.addLast(
+      BufferChange(
+        kind: ckSnapshot,
+        snapshotData: b.pendingSnapshot.get,
+        snapshotCursorPos: getChangePosition(change),
+        snapshotLineMarkers: b.pendingSnapshotMarkers,
+        snapshotFoldState: b.pendingSnapshotFolds,
+      )
+    )
+    b.pendingSnapshot = none(PieceTableSnapshot)
   else:
     # Add directly to undo stack
     b.undoStack.addLast(change)
@@ -591,6 +674,7 @@ proc replaceLine*(b: TextBuffer, lineNumber: int, content: string): Result[(), s
   if lineNumber < 0 or lineNumber >= b.len:
     return err("Line index out of bounds: " & $lineNumber)
   let oldContent = b.getLine(lineNumber)
+  b.captureSnapshotIfNeeded()
   b.backendReplaceLine(lineNumber, content)
   b.pushUndoChange(
     BufferChange(
@@ -676,12 +760,15 @@ proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), s
   if pos.column < 0:
     return err("Column position cannot be negative: " & $pos.column)
 
+  b.captureSnapshotIfNeeded()
+
   case b.backendKind
-  of GapBuffer, SqrtDecomp, Rope:
+  of GapBuffer, SqrtDecomp, Rope, PieceTable:
     try:
       # Use insertTextWithNewlines to handle newlines correctly
       b.insertTextWithNewlines(pos, text)
     except IndexDefect as e:
+      b.pendingSnapshot = none(PieceTableSnapshot)
       return err("Failed to insert text: " & e.msg)
 
   # Record change for undo
@@ -698,10 +785,13 @@ proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
   if pos.column < 0:
     return err("Column position cannot be negative: " & $pos.column)
 
+  b.captureSnapshotIfNeeded()
+
   case b.backendKind
-  of GapBuffer, SqrtDecomp, Rope:
+  of GapBuffer, SqrtDecomp, Rope, PieceTable:
     let line = b.getLine(pos.line)
     if pos.column >= line.charLen:
+      b.pendingSnapshot = none(PieceTableSnapshot)
       return err("Column position out of bounds: " & $pos.column)
 
     try:
@@ -720,6 +810,7 @@ proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
         BufferChange(kind: ckDeleteText, deletePos: pos, deletedText: $deletedChar)
       )
     except IndexDefect as e:
+      b.pendingSnapshot = none(PieceTableSnapshot)
       return err("Failed to delete character: " & e.msg)
 
   return ok(())
@@ -730,11 +821,14 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
   if lineIndex < 0 or lineIndex > b.len:
     return err("Line index out of valid range [0.." & $b.len & "]: " & $lineIndex)
 
+  b.captureSnapshotIfNeeded()
+
   case b.backendKind
-  of GapBuffer, SqrtDecomp, Rope:
+  of GapBuffer, SqrtDecomp, Rope, PieceTable:
     try:
       b.backendInsertLine(lineIndex, content)
     except IndexDefect as e:
+      b.pendingSnapshot = none(PieceTableSnapshot)
       return err("Failed to insert line: " & e.msg)
 
   # Insert marker entry (none by default)
@@ -762,11 +856,14 @@ proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
   # Save line content before deleting for undo
   let deletedContent = b.getLine(lineIndex)
 
+  b.captureSnapshotIfNeeded()
+
   case b.backendKind
-  of GapBuffer, SqrtDecomp, Rope:
+  of GapBuffer, SqrtDecomp, Rope, PieceTable:
     try:
       b.backendDeleteLine(lineIndex)
     except IndexDefect as e:
+      b.pendingSnapshot = none(PieceTableSnapshot)
       return err("Failed to delete line: " & e.msg)
 
   # Delete corresponding marker entry
@@ -947,14 +1044,17 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
   # Save deleted text for undo
   let deletedText = b.getTextInRange(startPos, endPos)
 
+  b.captureSnapshotIfNeeded()
+
   case b.backendKind
-  of GapBuffer, SqrtDecomp, Rope:
+  of GapBuffer, SqrtDecomp, Rope, PieceTable:
     try:
       if startPos.line == endPos.line:
         b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
       else:
         b.deleteRangeMultiLine(startPos, endPos)
     except IndexDefect as e:
+      b.pendingSnapshot = none(PieceTableSnapshot)
       return err("Failed to delete range: " & e.msg)
 
   # Record change for undo
@@ -1019,6 +1119,11 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
         let r = b.undoChange(change.transactionChanges[i])
         if r.isErr:
           return r
+    of ckSnapshot:
+      b.pieceTable.restoreSnapshot(change.snapshotData)
+      b.lineMarkers = change.snapshotLineMarkers
+      b.foldState = change.snapshotFoldState
+      b.lastChangedLines = 0
 
     # Ensure lineMarkers stays in sync after undo operations
     b.ensureMarkersSize()
@@ -1038,6 +1143,7 @@ proc beginTransaction*(b: TextBuffer, description: string = ""): Result[(), stri
         "(unknown)"
     return err("Transaction already in progress: " & currentDesc)
 
+  b.captureSnapshotIfNeeded()
   b.inTransaction = true
   b.currentTransaction = some(
     BufferTransaction(changes: @[], description: description, startSeq: b.changeSeq)
@@ -1056,12 +1162,25 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
 
   # Add transaction as a single undo entry if it has changes
   if transaction.changes.len > 0:
-    let transactionChange = BufferChange(
-      kind: ckTransaction,
-      transactionChanges: transaction.changes,
-      transactionDescription: transaction.description,
-    )
-    b.undoStack.addLast(transactionChange)
+    if b.pendingSnapshot.isSome:
+      # PieceTable: single O(1) snapshot undo entry for entire transaction
+      b.undoStack.addLast(
+        BufferChange(
+          kind: ckSnapshot,
+          snapshotData: b.pendingSnapshot.get,
+          snapshotCursorPos: getChangePosition(transaction.changes[0]),
+          snapshotLineMarkers: b.pendingSnapshotMarkers,
+          snapshotFoldState: b.pendingSnapshotFolds,
+        )
+      )
+      b.pendingSnapshot = none(PieceTableSnapshot)
+    else:
+      let transactionChange = BufferChange(
+        kind: ckTransaction,
+        transactionChanges: transaction.changes,
+        transactionDescription: transaction.description,
+      )
+      b.undoStack.addLast(transactionChange)
     # Note: changeSeq was already incremented by each change in pushUndoChange
     # Note: redoStack was already cleared by the first change in pushUndoChange
 
@@ -1085,13 +1204,21 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
 
   # Undo all changes in transaction in reverse order
   let transaction = b.currentTransaction.get
-  for i in countdown(transaction.changes.len - 1, 0):
-    let r = b.undoChange(transaction.changes[i])
-    if r.isErr:
-      # Clean up transaction state even if rollback partially fails
-      b.inTransaction = false
-      b.currentTransaction = none(BufferTransaction)
-      return err("Failed to rollback transaction: " & r.error)
+
+  if b.pendingSnapshot.isSome:
+    # PieceTable: O(1) restore from snapshot
+    b.pieceTable.restoreSnapshot(b.pendingSnapshot.get)
+    b.lineMarkers = b.pendingSnapshotMarkers
+    b.foldState = b.pendingSnapshotFolds
+    b.pendingSnapshot = none(PieceTableSnapshot)
+  else:
+    for i in countdown(transaction.changes.len - 1, 0):
+      let r = b.undoChange(transaction.changes[i])
+      if r.isErr:
+        # Clean up transaction state even if rollback partially fails
+        b.inTransaction = false
+        b.currentTransaction = none(BufferTransaction)
+        return err("Failed to rollback transaction: " & r.error)
 
   # Restore changeSeq to its value at transaction start
   b.changeSeq = transaction.startSeq
@@ -1195,6 +1322,20 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       break
 
     let change = b.undoStack.popLast()
+
+    # For snapshot undo: capture current state before restoring
+    let redoEntry =
+      if change.kind == ckSnapshot:
+        BufferChange(
+          kind: ckSnapshot,
+          snapshotData: b.pieceTable.takeSnapshot(),
+          snapshotCursorPos: change.snapshotCursorPos,
+          snapshotLineMarkers: b.lineMarkers,
+          snapshotFoldState: b.foldState,
+        )
+      else:
+        change
+
     let r = b.undoChange(change)
     if r.isErr:
       # Restore the change to undo stack if undo failed
@@ -1204,7 +1345,7 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
         b.undoStack.addLast(undoneChanges[j])
       return err("Undo failed: " & r.error)
 
-    undoneChanges.add(change)
+    undoneChanges.add(redoEntry)
 
     # Decrement change sequence for each undo
     b.changeSeq.dec
@@ -1281,6 +1422,11 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
         let r = b.redoChange(change)
         if r.isErr:
           return r
+    of ckSnapshot:
+      b.pieceTable.restoreSnapshot(change.snapshotData)
+      b.lineMarkers = change.snapshotLineMarkers
+      b.foldState = change.snapshotFoldState
+      b.lastChangedLines = 0
 
     # Ensure lineMarkers stays in sync after redo operations
     b.ensureMarkersSize()
@@ -1304,6 +1450,20 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       break
 
     let change = b.redoStack.popLast()
+
+    # For snapshot redo: capture current state before restoring
+    let undoEntry =
+      if change.kind == ckSnapshot:
+        BufferChange(
+          kind: ckSnapshot,
+          snapshotData: b.pieceTable.takeSnapshot(),
+          snapshotCursorPos: change.snapshotCursorPos,
+          snapshotLineMarkers: b.lineMarkers,
+          snapshotFoldState: b.foldState,
+        )
+      else:
+        change
+
     let r = b.redoChange(change)
     if r.isErr:
       # Restore the change to redo stack if redo failed
@@ -1313,7 +1473,7 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
         b.redoStack.addLast(redoneChanges[j])
       return err("Redo failed: " & r.error)
 
-    redoneChanges.add(change)
+    redoneChanges.add(undoEntry)
 
     # Increment change sequence for each redo
     b.changeSeq.inc
@@ -1399,6 +1559,8 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
       b.sqrtDecomp = newSqrtDecomp(content)
     of Rope:
       b.rope = newRope(content)
+    of PieceTable:
+      b.pieceTable = newPieceTable(content)
 
   b.detectLineEnding(content)
   b.encoding = detectCharacterEncoding(content)
@@ -1482,7 +1644,7 @@ proc getFileContent*(buffer: TextBuffer): string =
 
 proc saveFile*(buffer: TextBuffer, path: string): Result[(), string] =
   case buffer.backendKind
-  of GapBuffer, SqrtDecomp, Rope:
+  of GapBuffer, SqrtDecomp, Rope, PieceTable:
     let content = buffer.getFileContent
 
     # Write to file
@@ -1548,6 +1710,8 @@ proc estimateMemoryUsage*(buffer: TextBuffer): int =
     result += buffer.sqrtDecomp.estimateMemoryUsage()
   of Rope:
     result += buffer.rope.estimateMemoryUsage()
+  of PieceTable:
+    result += buffer.pieceTable.estimateMemoryUsage()
 
 proc getPerformanceStats*(
     buffer: TextBuffer
@@ -1557,6 +1721,7 @@ proc getPerformanceStats*(
     of GapBuffer: "GapBuffer"
     of SqrtDecomp: "SqrtDecomp"
     of Rope: "Rope"
+    of PieceTable: "PieceTable"
 
   (backend: backendName, memoryUsage: buffer.estimateMemoryUsage(), length: buffer.len)
 

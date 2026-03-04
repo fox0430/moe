@@ -481,6 +481,8 @@ proc extractInsertedText(transaction: buffer.BufferTransaction): string =
       sb.removeLast(change.deletedRangeText.len)
     of buffer.ckReplaceLine:
       discard # Line replacement doesn't contribute to inserted text tracking
+    of buffer.ckSnapshot:
+      discard # Snapshots don't contribute to inserted text tracking
     of buffer.ckTransaction:
       # Nested transaction - recursively extract text
       let nestedTransaction = buffer.BufferTransaction(
