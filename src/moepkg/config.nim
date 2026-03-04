@@ -59,6 +59,7 @@ type
     bbcGapBuffer = "gapBuffer"
     bbcSqrtDecomp = "sqrtDecomp"
     bbcRope = "rope"
+    bbcPieceTable = "pieceTable"
 
   # Standard settings
   StandardConfig* = object

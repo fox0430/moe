@@ -369,6 +369,15 @@ bufferBackend = "rope"
     check not vr.hasErrors
     check config.standard.bufferBackend == bbcRope
 
+  test "Valid bufferBackend pieceTable":
+    let tomlStr = """
+[Standard]
+bufferBackend = "pieceTable"
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.bufferBackend == bbcPieceTable
+
   test "Invalid bufferBackend enum is detected":
     let tomlStr = """
 [Standard]
