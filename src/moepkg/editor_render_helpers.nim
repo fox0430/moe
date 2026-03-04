@@ -165,7 +165,16 @@ proc getSelectionStyle*(
     pos.line == e.state.findCharMatchLine and pos.column in e.state.findCharMatches
 
   if hasSelection and e.state.visualSelection.isPositionInSelection(pos):
-    visualStyle()
+    # Keep original foreground color (syntax highlight), override only background
+    var style =
+      if e.hasSyntaxHighlight(buffer, windowMode):
+        buffer.updateHighlight()
+        let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
+        colorIndexToStyle(colorPair)
+      else:
+        normalStyle()
+    style.bg = visualStyle().bg
+    style
   elif isMatchingParen:
     # Highlight matching paren with special style
     parenPairStyle()
