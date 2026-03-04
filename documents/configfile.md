@@ -961,6 +961,8 @@ And, `termDefault` can be used for both foreground and background to use the ter
 | table | Syntax highlighting color |
 | date | Syntax highlighting color |
 | operator | Syntax highlighting color |
+| markdownCodeBlock | Markdown code block text color |
+| markdownCodeBlockBg | Markdown code block background color |
 | namespace | Syntax highlighting color (LSP Semantic Tokens) |
 | className | Syntax highlighting color (LSP Semantic Tokens) |
 | enumName | Syntax highlighting color (LSP Semantic Tokens) |

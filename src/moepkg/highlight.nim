@@ -64,6 +64,7 @@ type
     astroInFrontmatter*: bool
     astroFirstLine*: bool
     yamlIsKey*: bool
+    mdInCodeBlock*: bool
 
   LineStateCache* = object ## Cache of tokenizer states for each line
     states*: seq[TokenizerState]
@@ -89,6 +90,7 @@ proc captureTokenizerState*(g: GeneralTokenizer): TokenizerState =
     astroInFrontmatter: g.astroInFrontmatter,
     astroFirstLine: g.astroFirstLine,
     yamlIsKey: g.yamlIsKey,
+    mdInCodeBlock: g.mdInCodeBlock,
   )
 
 proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
@@ -106,6 +108,7 @@ proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
   g.astroInFrontmatter = state.astroInFrontmatter
   g.astroFirstLine = state.astroFirstLine
   g.yamlIsKey = state.yamlIsKey
+  g.mdInCodeBlock = state.mdInCodeBlock
 
 # Default style for highlighting
 let defaultStyle* =
@@ -371,6 +374,14 @@ iterator parseReservedWord(
 proc getEditorColorPair(
     kind: TokenClass, language: SourceLanguage
 ): EditorColorPairIndex =
+  # Markdown language uses dedicated color pair for code blocks
+  if language == langMarkdown:
+    case kind
+    of gtLongStringLit:
+      return EditorColorPairIndex.markdownCodeBlock
+    else:
+      discard # Fall through to default mapping
+
   # Diff language uses dedicated color pairs
   if language == langDiff:
     return

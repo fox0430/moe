@@ -191,6 +191,9 @@ type
     operator
     property
 
+    # Syntax highlighting - Markdown
+    markdownCodeBlock
+
     # Syntax highlighting - Extended (LSP semantic tokens)
     namespace
     className

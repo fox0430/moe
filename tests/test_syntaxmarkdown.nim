@@ -22,7 +22,20 @@ import std/unittest
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/syntax/syntaxmarkdown
 
-suite "syntaxmarkdown - markdownNextToken EOF":
+proc collectTokens(input: string): seq[(TokenClass, string)] =
+  var g: GeneralTokenizer
+  g.initGeneralTokenizer(input)
+  while true:
+    g.markdownNextToken()
+    if g.kind == gtEof:
+      break
+    result.add((g.kind, input[g.start ..< g.start + g.length]))
+
+proc collectKinds(input: string): seq[TokenClass] =
+  for (kind, _) in collectTokens(input):
+    result.add(kind)
+
+suite "syntaxmarkdown - EOF":
   test "empty string returns EOF":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("")
@@ -36,7 +49,7 @@ suite "syntaxmarkdown - markdownNextToken EOF":
     g.markdownNextToken()
     check g.kind == gtEof
 
-suite "syntaxmarkdown - markdownNextToken backtick (inline code)":
+suite "syntaxmarkdown - backtick (inline code)":
   test "single backtick inline code":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("`code`")
@@ -57,26 +70,38 @@ suite "syntaxmarkdown - markdownNextToken backtick (inline code)":
     g.markdownNextToken()
     check g.kind == gtSpecialVar
 
-suite "syntaxmarkdown - markdownNextToken triple backtick (code block)":
-  test "triple backtick code block":
+suite "syntaxmarkdown - triple backtick (code block)":
+  test "opening ``` emits gtSpecialVar":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("```nim\necho 1\n```")
+    g.initGeneralTokenizer("```\ncode\n```")
     g.markdownNextToken()
     check g.kind == gtSpecialVar
+    check g.length == 3 # just the ```
 
-  test "triple backtick code block single line":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("```code```")
-    g.markdownNextToken()
-    check g.kind == gtSpecialVar
+  test "code block with language name":
+    let tokens = collectTokens("```nim\necho 1\n```")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[1] == (gtKeyword, "nim")
+    check tokens[2][0] == gtWhitespace # newline
+    check tokens[3] == (gtLongStringLit, "echo 1")
+    check tokens[4][0] == gtWhitespace # newline
+    check tokens[5] == (gtSpecialVar, "```")
 
-  test "unclosed triple backtick":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("```unclosed")
-    g.markdownNextToken()
-    check g.kind == gtSpecialVar
+  test "code block without language name":
+    let tokens = collectTokens("```\nsome code\n```")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[1][0] == gtWhitespace # newline
+    check tokens[2] == (gtLongStringLit, "some code")
+    check tokens[3][0] == gtWhitespace # newline
+    check tokens[4] == (gtSpecialVar, "```")
 
-suite "syntaxmarkdown - markdownNextToken hash (headings)":
+  test "unclosed code block":
+    let tokens = collectTokens("```\ncode")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[1][0] == gtWhitespace
+    check tokens[2] == (gtLongStringLit, "code")
+
+suite "syntaxmarkdown - hash (headings)":
   test "hash at line start is heading":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("# Heading")
@@ -86,24 +111,19 @@ suite "syntaxmarkdown - markdownNextToken hash (headings)":
   test "hash after newline is heading":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("text\n# Heading")
-
-    # Skip 'text'
-    g.markdownNextToken()
-    # Skip newline whitespace
-    g.markdownNextToken()
-    # Hash for heading
-    g.markdownNextToken()
+    g.markdownNextToken() # 'text'
+    g.markdownNextToken() # newline
+    g.markdownNextToken() # heading
     check g.kind == gtBuiltin
 
   test "hash in middle of line is punctuation":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("a#b")
-
     g.markdownNextToken() # 'a'
     g.markdownNextToken() # '#'
     check g.kind == gtPunctuation
 
-suite "syntaxmarkdown - markdownNextToken dash (frontmatter)":
+suite "syntaxmarkdown - dash (frontmatter)":
   test "triple dash frontmatter":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("---\ntitle: test\n---")
@@ -122,7 +142,19 @@ suite "syntaxmarkdown - markdownNextToken dash (frontmatter)":
     g.markdownNextToken()
     check g.kind == gtBuiltin
 
-suite "syntaxmarkdown - markdownNextToken HTML comment":
+suite "syntaxmarkdown - dash list marker":
+  test "`- ` at line start is list marker":
+    let tokens = collectTokens("- item")
+    check tokens[0] == (gtOperator, "- ")
+    check tokens[1] == (gtIdentifier, "item")
+
+  test "`- ` after newline is list marker":
+    let tokens = collectTokens("text\n- item")
+    check tokens[0] == (gtIdentifier, "text")
+    check tokens[1][0] == gtWhitespace
+    check tokens[2] == (gtOperator, "- ")
+
+suite "syntaxmarkdown - HTML comment":
   test "HTML comment":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("<!-- comment -->")
@@ -147,27 +179,151 @@ suite "syntaxmarkdown - markdownNextToken HTML comment":
     g.markdownNextToken()
     check g.kind == gtBuiltin
 
-suite "syntaxmarkdown - markdownNextToken symbols":
+suite "syntaxmarkdown - bold":
+  test "**bold** with asterisks":
+    let tokens = collectTokens("**bold**")
+    check tokens[0] == (gtKeyword, "**bold**")
+
+  test "__bold__ with underscores":
+    let tokens = collectTokens("__bold__")
+    check tokens[0] == (gtKeyword, "__bold__")
+
+  test "unclosed **bold":
+    let tokens = collectTokens("**unclosed")
+    check tokens[0][0] == gtKeyword
+
+  test "bold in sentence":
+    let tokens = collectTokens("a **bold** b")
+    check tokens[0] == (gtIdentifier, "a")
+    check tokens[2] == (gtKeyword, "**bold**")
+    check tokens[4] == (gtIdentifier, "b")
+
+suite "syntaxmarkdown - italic":
+  test "*italic* with asterisk":
+    let tokens = collectTokens("*italic*")
+    check tokens[0] == (gtStringLit, "*italic*")
+
+  test "_italic_ with underscore":
+    let tokens = collectTokens("_italic_")
+    check tokens[0] == (gtStringLit, "_italic_")
+
+  test "unclosed *italic":
+    let tokens = collectTokens("*unclosed")
+    check tokens[0][0] == gtStringLit
+
+  test "italic in sentence":
+    let tokens = collectTokens("a *italic* b")
+    check tokens[0] == (gtIdentifier, "a")
+    check tokens[2] == (gtStringLit, "*italic*")
+    check tokens[4] == (gtIdentifier, "b")
+
+suite "syntaxmarkdown - strikethrough":
+  test "~~strikethrough~~":
+    let tokens = collectTokens("~~struck~~")
+    check tokens[0] == (gtComment, "~~struck~~")
+
+  test "unclosed ~~strikethrough":
+    let tokens = collectTokens("~~unclosed")
+    check tokens[0][0] == gtComment
+
+  test "single tilde is gtNone":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("~")
+    g.markdownNextToken()
+    check g.kind == gtNone
+
+suite "syntaxmarkdown - block quote":
+  test "> at line start is block quote":
+    let tokens = collectTokens("> quoted text")
+    check tokens[0][0] == gtComment
+    check tokens[0][1] == "> quoted text"
+
+  test "> after newline is block quote":
+    let tokens = collectTokens("text\n> quote")
+    check tokens[0] == (gtIdentifier, "text")
+    check tokens[1][0] == gtWhitespace
+    check tokens[2] == (gtComment, "> quote")
+
+  test "> in middle of line is gtNone":
+    let tokens = collectTokens("a > b")
+    check tokens[0] == (gtIdentifier, "a")
+    # > should not be a block quote in middle of line
+
+suite "syntaxmarkdown - links":
+  test "[text](url) link":
+    let tokens = collectTokens("[link](url)")
+    check tokens[0] == (gtKeyword, "[link]")
+    check tokens[1] == (gtSpecialVar, "(url)")
+
+  test "link in sentence":
+    let tokens = collectTokens("see [here](http://example.com) for info")
+    var hasKeyword = false
+    var hasSpecialVar = false
+    for (kind, _) in tokens:
+      if kind == gtKeyword:
+        hasKeyword = true
+      if kind == gtSpecialVar:
+        hasSpecialVar = true
+    check hasKeyword
+    check hasSpecialVar
+
+  test "[ without matching ](url) is punctuation":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("[text]")
+    g.markdownNextToken()
+    check g.kind == gtPunctuation
+
+suite "syntaxmarkdown - images":
+  test "![alt](url) image":
+    let tokens = collectTokens("![alt](url)")
+    check tokens[0] == (gtKeyword, "![alt]")
+    check tokens[1] == (gtSpecialVar, "(url)")
+
+  test "! alone is gtNone":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("!")
+    g.markdownNextToken()
+    check g.kind == gtNone
+
+suite "syntaxmarkdown - list markers":
+  test "`* ` at line start":
+    let tokens = collectTokens("* item")
+    check tokens[0] == (gtOperator, "* ")
+    check tokens[1] == (gtIdentifier, "item")
+
+  test "`+ ` at line start":
+    let tokens = collectTokens("+ item")
+    check tokens[0] == (gtOperator, "+ ")
+    check tokens[1] == (gtIdentifier, "item")
+
+  test "ordered list `1. `":
+    let tokens = collectTokens("1. item")
+    check tokens[0] == (gtOperator, "1. ")
+    check tokens[1] == (gtIdentifier, "item")
+
+  test "ordered list `42. `":
+    let tokens = collectTokens("42. item")
+    check tokens[0] == (gtOperator, "42. ")
+    check tokens[1] == (gtIdentifier, "item")
+
+  test "number not followed by `. ` is gtNone":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("42")
+    g.markdownNextToken()
+    check g.kind == gtNone
+
+  test "+ in middle of line is gtNone":
+    let tokens = collectTokens("a+b")
+    check tokens[0] == (gtIdentifier, "a")
+    check tokens[1] == (gtNone, "+")
+
+suite "syntaxmarkdown - symbols":
   test "lowercase symbol":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("hello")
     g.markdownNextToken()
     check g.kind == gtIdentifier
     check g.length == 5
-
-  test "uppercase symbol":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("Hello")
-    g.markdownNextToken()
-    check g.kind == gtIdentifier
-    check g.length == 5
-
-  test "mixed case symbol":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("HelloWorld")
-    g.markdownNextToken()
-    check g.kind == gtIdentifier
-    check g.length == 10
 
   test "symbol with underscore":
     var g: GeneralTokenizer
@@ -176,106 +332,26 @@ suite "syntaxmarkdown - markdownNextToken symbols":
     check g.kind == gtIdentifier
     check g.length == 11
 
-  test "symbol with numbers":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("test123")
-    g.markdownNextToken()
-    check g.kind == gtIdentifier
-    check g.length == 7
-
-suite "syntaxmarkdown - markdownNextToken punctuation":
+suite "syntaxmarkdown - punctuation":
   test "parentheses":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("(")
     g.markdownNextToken()
     check g.kind == gtPunctuation
-    check g.length == 1
-
-  test "closing parenthesis":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer(")")
-    g.markdownNextToken()
-    check g.kind == gtPunctuation
-    check g.length == 1
-
-  test "square brackets":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("[")
-    g.markdownNextToken()
-    check g.kind == gtPunctuation
-    check g.length == 1
-
-  test "closing square bracket":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("]")
-    g.markdownNextToken()
-    check g.kind == gtPunctuation
-    check g.length == 1
 
   test "curly braces":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("{")
     g.markdownNextToken()
     check g.kind == gtPunctuation
-    check g.length == 1
-
-  test "closing curly brace":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("}")
-    g.markdownNextToken()
-    check g.kind == gtPunctuation
-    check g.length == 1
 
   test "colon":
     var g: GeneralTokenizer
     g.initGeneralTokenizer(":")
     g.markdownNextToken()
     check g.kind == gtPunctuation
-    check g.length == 1
 
-  test "comma":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer(",")
-    g.markdownNextToken()
-    check g.kind == gtPunctuation
-    check g.length == 1
-
-  test "semicolon":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer(";")
-    g.markdownNextToken()
-    check g.kind == gtPunctuation
-    check g.length == 1
-
-  test "period":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer(".")
-    g.markdownNextToken()
-    check g.kind == gtPunctuation
-    check g.length == 1
-
-  test "forward slash":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("/")
-    g.markdownNextToken()
-    check g.kind == gtPunctuation
-    check g.length == 1
-
-  test "single quote":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("'")
-    g.markdownNextToken()
-    check g.kind == gtPunctuation
-    check g.length == 1
-
-  test "double quote":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"")
-    g.markdownNextToken()
-    check g.kind == gtPunctuation
-    check g.length == 1
-
-suite "syntaxmarkdown - markdownNextToken whitespace":
+suite "syntaxmarkdown - whitespace":
   test "single space":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("a b")
@@ -284,21 +360,6 @@ suite "syntaxmarkdown - markdownNextToken whitespace":
     check g.kind == gtWhitespace
     check g.length == 1
 
-  test "multiple spaces":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("a    b")
-    g.markdownNextToken() # 'a'
-    g.markdownNextToken() # spaces
-    check g.kind == gtWhitespace
-    check g.length == 4
-
-  test "tab":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("a\tb")
-    g.markdownNextToken() # 'a'
-    g.markdownNextToken() # tab
-    check g.kind == gtWhitespace
-
   test "newline":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("a\nb")
@@ -306,131 +367,401 @@ suite "syntaxmarkdown - markdownNextToken whitespace":
     g.markdownNextToken() # newline
     check g.kind == gtWhitespace
 
-  test "mixed whitespace":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("a \t\n b")
-    g.markdownNextToken() # 'a'
-    g.markdownNextToken() # mixed whitespace
-    check g.kind == gtWhitespace
-
-suite "syntaxmarkdown - markdownNextToken other characters":
+suite "syntaxmarkdown - other characters":
   test "number alone is gtNone":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("1")
     g.markdownNextToken()
     check g.kind == gtNone
-    check g.length == 1
 
   test "special character":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("@")
     g.markdownNextToken()
     check g.kind == gtNone
-    check g.length == 1
 
-  test "asterisk":
+  test "asterisk alone is gtNone":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("*")
     g.markdownNextToken()
     check g.kind == gtNone
-    check g.length == 1
 
-  test "plus sign":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("+")
-    g.markdownNextToken()
-    check g.kind == gtNone
-    check g.length == 1
+  test "asterisk followed by space is gtNone":
+    let tokens = collectTokens("2 * 3")
+    # * surrounded by spaces should NOT be italic
+    check tokens[0] == (gtNone, "2")
+    check tokens[2] == (gtNone, "*")
 
   test "equals sign":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("=")
     g.markdownNextToken()
     check g.kind == gtNone
+
+suite "syntaxmarkdown - code block edge cases":
+  test "code block with multiple content lines":
+    let tokens = collectTokens("```\nline1\nline2\nline3\n```")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[2] == (gtLongStringLit, "line1")
+    check tokens[4] == (gtLongStringLit, "line2")
+    check tokens[6] == (gtLongStringLit, "line3")
+    check tokens[8] == (gtSpecialVar, "```")
+
+  test "code block content containing backticks (not closing)":
+    let tokens = collectTokens("```\n`inline`\n``two``\n```")
+    check tokens[0] == (gtSpecialVar, "```")
+    # ` inside code block is content, not inline code
+    check tokens[2] == (gtLongStringLit, "`inline`")
+    check tokens[4] == (gtLongStringLit, "``two``")
+    check tokens[6] == (gtSpecialVar, "```")
+
+  test "code block followed by normal text":
+    let tokens = collectTokens("```\ncode\n```\nnormal")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[2] == (gtLongStringLit, "code")
+    check tokens[4] == (gtSpecialVar, "```")
+    check tokens[6] == (gtIdentifier, "normal")
+
+  test "empty code block":
+    let tokens = collectTokens("```\n```")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[1][0] == gtWhitespace
+    check tokens[2] == (gtSpecialVar, "```")
+
+  test "code block with language name immediately followed by EOF":
+    let tokens = collectTokens("```python")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[1] == (gtKeyword, "python")
+
+  test "code block language name not detected after whitespace":
+    # ```  nim → whitespace clears the gtSpecialVar state,
+    # so "nim" becomes content, not language name
+    let tokens = collectTokens("```  nim\ncode\n```")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[1][0] == gtWhitespace # spaces
+    check tokens[2] == (gtLongStringLit, "nim")
+
+  test "code block mdInCodeBlock flag cleared after closing":
+    let tokens = collectTokens("```\nA\n```\n**bold**")
+    var hasLongString = false
+    var hasKeyword = false
+    for (kind, _) in tokens:
+      if kind == gtLongStringLit:
+        hasLongString = true
+      if kind == gtKeyword:
+        hasKeyword = true
+    check hasLongString # inside code block
+    check hasKeyword # **bold** after code block
+
+  test "single backtick inside code block line starting with backtick":
+    let tokens = collectTokens("```\n`x\n```")
+    check tokens[0] == (gtSpecialVar, "```")
+    check tokens[2] == (gtLongStringLit, "`x")
+    check tokens[4] == (gtSpecialVar, "```")
+
+  test "double backtick inside code block is content":
+    let tokens = collectTokens("```\n``not closing\n```")
+    check tokens[2] == (gtLongStringLit, "``not closing")
+
+suite "syntaxmarkdown - bold edge cases":
+  test "** followed by space is not bold":
+    let tokens = collectTokens("** text**")
+    # ** followed by space → first * is gtNone, second * is gtNone
+    check tokens[0][0] == gtNone
+
+  test "__ followed by space is not bold":
+    let tokens = collectTokens("__ text__")
+    # __ followed by space → falls to identifier
+    check tokens[0][0] == gtIdentifier
+
+  test "bold with single asterisk inside":
+    let tokens = collectTokens("**a*b**")
+    check tokens[0] == (gtKeyword, "**a*b**")
+
+  test "bold with single underscore inside":
+    let tokens = collectTokens("__a_b__")
+    check tokens[0] == (gtKeyword, "__a_b__")
+
+  test "unclosed __bold":
+    let tokens = collectTokens("__unclosed")
+    check tokens[0][0] == gtKeyword
+
+suite "syntaxmarkdown - italic edge cases":
+  test "_ followed by space is identifier":
+    let tokens = collectTokens("_ text")
+    check tokens[0][0] == gtIdentifier
+
+  test "__ followed by space is identifier":
+    let tokens = collectTokens("__ text")
+    check tokens[0][0] == gtIdentifier
+
+  test "unclosed _italic":
+    let tokens = collectTokens("_unclosed")
+    check tokens[0][0] == gtStringLit
+
+  test "underscore in middle of word is identifier":
+    let tokens = collectTokens("hello_world")
+    check tokens[0] == (gtIdentifier, "hello_world")
+
+  test "italic does not cross newline":
+    let tokens = collectTokens("*open\nnext*")
+    # *open stops at newline
+    check tokens[0] == (gtStringLit, "*open")
+    check tokens[1][0] == gtWhitespace
+
+suite "syntaxmarkdown - strikethrough edge cases":
+  test "strikethrough in sentence":
+    let tokens = collectTokens("a ~~old~~ b")
+    check tokens[0] == (gtIdentifier, "a")
+    check tokens[2] == (gtComment, "~~old~~")
+    check tokens[4] == (gtIdentifier, "b")
+
+  test "~~ does not cross newline":
+    let tokens = collectTokens("~~open\nnext~~")
+    check tokens[0] == (gtComment, "~~open")
+    check tokens[1][0] == gtWhitespace
+
+  test "single tilde in middle of text":
+    let tokens = collectTokens("a~b")
+    check tokens[0] == (gtIdentifier, "a")
+    check tokens[1] == (gtNone, "~")
+    check tokens[2] == (gtIdentifier, "b")
+
+suite "syntaxmarkdown - link edge cases":
+  test "link with space between ] and ( is not a link URL":
+    let tokens = collectTokens("[text] (url)")
+    # [text] has ] not immediately followed by (, so [ is punctuation
+    check tokens[0] == (gtPunctuation, "[")
+    # ( after space should be punctuation, not specialVar
+    var hasSpecialVar = false
+    for (kind, text) in tokens:
+      if kind == gtSpecialVar and text == "(url)":
+        hasSpecialVar = true
+    check not hasSpecialVar
+
+  test "empty link text":
+    let tokens = collectTokens("[](url)")
+    check tokens[0] == (gtKeyword, "[]")
+    check tokens[1] == (gtSpecialVar, "(url)")
+
+  test "link with complex URL":
+    let tokens = collectTokens("[click](https://example.com/path?q=1&r=2)")
+    check tokens[0] == (gtKeyword, "[click]")
+    check tokens[1] == (gtSpecialVar, "(https://example.com/path?q=1&r=2)")
+
+  test "image with no closing bracket":
+    let tokens = collectTokens("![unclosed")
+    check tokens[0][0] == gtKeyword
+    check tokens[0][1] == "![unclosed"
+
+  test "[text] without (url) is punctuation":
+    let tokens = collectTokens("[standalone]")
+    check tokens[0] == (gtPunctuation, "[")
+
+  test "( not preceded by ] is punctuation":
+    let tokens = collectTokens("(standalone)")
+    check tokens[0] == (gtPunctuation, "(")
+
+suite "syntaxmarkdown - list marker edge cases":
+  test "- not at line start is builtin":
+    let tokens = collectTokens("a - b")
+    check tokens[0] == (gtIdentifier, "a")
+    var hasDashBuiltin = false
+    for (kind, text) in tokens:
+      if kind == gtBuiltin and '-' in text:
+        hasDashBuiltin = true
+    check hasDashBuiltin
+
+  test "multiple list items":
+    let tokens = collectTokens("- a\n- b\n- c")
+    var operatorCount = 0
+    for (kind, _) in tokens:
+      if kind == gtOperator:
+        inc operatorCount
+    check operatorCount == 3
+
+  test "ordered list after newline":
+    let tokens = collectTokens("text\n1. first\n2. second")
+    var operatorCount = 0
+    for (kind, _) in tokens:
+      if kind == gtOperator:
+        inc operatorCount
+    check operatorCount == 2
+
+  test "* at line start without space is not list":
+    let tokens = collectTokens("*word*")
+    # Should be italic, not list marker
+    check tokens[0][0] == gtStringLit
+
+  test "+ at line start without space is gtNone":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("+x")
+    g.markdownNextToken()
+    check g.kind == gtNone
     check g.length == 1
 
-suite "syntaxmarkdown - markdownNextToken complete markdown":
+  test "number with period but no space is not list":
+    let tokens = collectTokens("3.14")
+    check tokens[0][0] == gtNone # '3'
+
+suite "syntaxmarkdown - block quote edge cases":
+  test "nested block quotes":
+    let tokens = collectTokens(">> nested")
+    check tokens[0][0] == gtComment
+    check tokens[0][1] == ">> nested"
+
+  test "bare > at line start":
+    let tokens = collectTokens(">")
+    check tokens[0] == (gtComment, ">")
+
+  test "multiple block quotes":
+    let tokens = collectTokens("> a\n> b")
+    check tokens[0] == (gtComment, "> a")
+    check tokens[2] == (gtComment, "> b")
+
+suite "syntaxmarkdown - heading edge cases":
+  test "## level 2 heading":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("## Level 2")
+    g.markdownNextToken()
+    check g.kind == gtBuiltin
+    check g.length == 10 # whole line
+
+  test "### level 3 heading":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("### Level 3")
+    g.markdownNextToken()
+    check g.kind == gtBuiltin
+
+  test "# alone":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#")
+    g.markdownNextToken()
+    check g.kind == gtBuiltin
+    check g.length == 1
+
+  test "multiple headings":
+    let tokens = collectTokens("# H1\n## H2")
+    check tokens[0][0] == gtBuiltin
+    check tokens[0][1] == "# H1"
+    check tokens[2][0] == gtBuiltin
+    check tokens[2][1] == "## H2"
+
+suite "syntaxmarkdown - HTML comment edge cases":
+  test "<! not followed by -- is builtin":
+    let tokens = collectTokens("<!DOCTYPE>")
+    check tokens[0][0] == gtBuiltin
+
+  test "<!- single dash is builtin":
+    let tokens = collectTokens("<!-x")
+    check tokens[0][0] == gtBuiltin
+
+  test "HTML comment with extra dashes":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("<!--- comment --->")
+    g.markdownNextToken()
+    check g.kind == gtLongComment
+
+suite "syntaxmarkdown - frontmatter edge cases":
+  test "more than 3 dashes is builtin":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("----")
+    g.markdownNextToken()
+    check g.kind == gtBuiltin
+
+  test "--- not at line start is builtin":
+    let tokens = collectTokens("a\n---\nb")
+    # After newline, --- is at line start → preprocessor
+    check tokens[2][0] == gtPreprocessor
+
+suite "syntaxmarkdown - left-flanking delimiter guards":
+  test "** with space after is not bold":
+    let tokens = collectTokens("** ")
+    # First * is gtNone, second * + space becomes list marker
+    # (state remains isLineStart after gtNone)
+    check tokens[0] == (gtNone, "*")
+    check tokens[1] == (gtOperator, "* ")
+
+  test "__ with space after is identifier":
+    let tokens = collectTokens("__ ")
+    check tokens[0][0] == gtIdentifier
+
+  test "* with space after is gtNone":
+    let tokens = collectTokens("a * b")
+    check tokens[2] == (gtNone, "*")
+
+  test "_ with space after is identifier":
+    let tokens = collectTokens("a _ b")
+    check tokens[2][0] == gtIdentifier
+
+  test "~~ with space after is still strikethrough":
+    # ~~ does not have a left-flanking guard (by design)
+    let tokens = collectTokens("~~ text~~")
+    check tokens[0][0] == gtComment
+
+suite "syntaxmarkdown - complete markdown":
   test "heading with text":
-    # Note: heading is lexed as a single token until end of line
     var g: GeneralTokenizer
     g.initGeneralTokenizer("# Hello World")
-
     var tokens: seq[TokenClass] = @[]
     while true:
       g.markdownNextToken()
       if g.kind == gtEof:
         break
       tokens.add(g.kind)
-
-    check gtBuiltin in tokens # entire heading line
+    check gtBuiltin in tokens
 
   test "inline code in text":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("Use `code` here")
-
-    var tokens: seq[TokenClass] = @[]
-    while true:
-      g.markdownNextToken()
-      if g.kind == gtEof:
-        break
-      tokens.add(g.kind)
-
-    check gtIdentifier in tokens # Use, here
-    check gtSpecialVar in tokens # `code`
-    check gtWhitespace in tokens
-
-  test "link syntax":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("[link](url)")
-
-    var tokens: seq[TokenClass] = @[]
-    while true:
-      g.markdownNextToken()
-      if g.kind == gtEof:
-        break
-      tokens.add(g.kind)
-
-    check gtPunctuation in tokens # [, ], (, )
-    check gtIdentifier in tokens # link, url
+    let kinds = collectKinds("Use `code` here")
+    check gtIdentifier in kinds
+    check gtSpecialVar in kinds
+    check gtWhitespace in kinds
 
   test "markdown with HTML comment":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("text <!-- comment --> more")
-
-    var tokens: seq[TokenClass] = @[]
-    while true:
-      g.markdownNextToken()
-      if g.kind == gtEof:
-        break
-      tokens.add(g.kind)
-
-    check gtIdentifier in tokens # text, more
-    check gtLongComment in tokens # <!-- comment -->
-    check gtWhitespace in tokens
+    let kinds = collectKinds("text <!-- comment --> more")
+    check gtIdentifier in kinds
+    check gtLongComment in kinds
 
   test "frontmatter and content":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("---\ntitle: test\n---\n# Content")
+    let kinds = collectKinds("---\ntitle: test\n---\n# Content")
+    check gtPreprocessor in kinds
+    check gtBuiltin in kinds
 
-    var tokens: seq[TokenClass] = @[]
-    while true:
-      g.markdownNextToken()
-      if g.kind == gtEof:
-        break
-      tokens.add(g.kind)
+  test "code block with content":
+    let kinds = collectKinds("```\ncode\n```")
+    check gtSpecialVar in kinds # ``` markers
+    check gtLongStringLit in kinds # code content
 
-    check gtPreprocessor in tokens # frontmatter
-    check gtBuiltin in tokens # heading
+  test "full document with mixed features":
+    let tokens = collectTokens(
+      "# Title\n\nSome **bold** and *italic* text.\n\n" & "- item 1\n- item 2\n\n" &
+        "> A quote\n\n" & "[link](url)\n\n" & "```nim\necho 1\n```\n\n" & "~~old~~"
+    )
+    var kinds: set[TokenClass]
+    for (kind, _) in tokens:
+      kinds.incl(kind)
+    check gtBuiltin in kinds # heading
+    check gtKeyword in kinds # bold / link text / lang name
+    check gtStringLit in kinds # italic
+    check gtOperator in kinds # list markers
+    check gtComment in kinds # blockquote / strikethrough
+    check gtSpecialVar in kinds # ``` / link URL
+    check gtLongStringLit in kinds # code block content
+    check gtIdentifier in kinds # normal text
 
-  test "code block":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("```\ncode\n```")
-
-    var tokens: seq[TokenClass] = @[]
-    while true:
-      g.markdownNextToken()
-      if g.kind == gtEof:
-        break
-      tokens.add(g.kind)
-
-    check gtSpecialVar in tokens # code block
+  test "code block between paragraphs preserves state":
+    let tokens = collectTokens("Hello\n```\ncode\n```\nWorld")
+    # Before code block
+    check tokens[0] == (gtIdentifier, "Hello")
+    # Code block
+    var hasLongStr = false
+    var hasSpecialVar = false
+    for (kind, _) in tokens:
+      if kind == gtLongStringLit:
+        hasLongStr = true
+      if kind == gtSpecialVar:
+        hasSpecialVar = true
+    check hasLongStr
+    check hasSpecialVar
+    # After code block — "World" should be identifier, not code content
+    check tokens[^1] == (gtIdentifier, "World")

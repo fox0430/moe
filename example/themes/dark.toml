@@ -107,6 +107,9 @@ date = "#0090a8"
 operator = "#89ddff"
 property = "#61afef"
 
+markdownCodeBlock = "#dde1e8"
+markdownCodeBlockBg = "#1a1a2e"
+
 namespace = "#2ac3de"
 className = "#2ac3de"
 enumName = "#2ac3de"
