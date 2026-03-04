@@ -24,9 +24,9 @@ import std/[unittest, options, tables, unicode]
 import pkg/celina
 
 import
-  ../src/moepkg/
-    [editor, buffer, config, config_loader, modes, types, color, render_utils,
-     highlight]
+  ../src/moepkg/[
+    editor, buffer, config, config_loader, modes, types, color, render_utils, highlight
+  ]
 import ../src/moepkg/editor_render_helpers as renderHelpers
 
 proc createTestEditor(): Editor =
@@ -430,14 +430,10 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
 
     # Set up buffer with highlight
-    discard e.textBuffer.insertText(
-      BufferPosition(line: 0, column: 0), "let x = 42")
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
     e.textBuffer.language = SourceLanguage.langNim
-    e.textBuffer.highlight = initHighlight(
-      @["let x = 42".toRunes],
-      @[],
-      SourceLanguage.langNim,
-    )
+    e.textBuffer.highlight =
+      initHighlight(@["let x = 42".toRunes], @[], SourceLanguage.langNim)
 
     let style = e.getSelectionStyle(
       e.textBuffer,
@@ -450,8 +446,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     # Background must be visual selection color
     check style.bg == visualStyle().bg
     # Foreground should come from syntax highlight, not visual selection
-    let expectedFg = colorIndexToStyle(
-      e.textBuffer.highlight.getColorPair(0, 0)).fg
+    let expectedFg = colorIndexToStyle(e.textBuffer.highlight.getColorPair(0, 0)).fg
     check style.fg == expectedFg
 
   test "VisualLine selection preserves syntax highlight fg":
@@ -463,14 +458,10 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
     e.state.visualSelection.current = BufferPosition(line: 0, column: 0)
 
-    discard e.textBuffer.insertText(
-      BufferPosition(line: 0, column: 0), "let x = 42")
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
     e.textBuffer.language = SourceLanguage.langNim
-    e.textBuffer.highlight = initHighlight(
-      @["let x = 42".toRunes],
-      @[],
-      SourceLanguage.langNim,
-    )
+    e.textBuffer.highlight =
+      initHighlight(@["let x = 42".toRunes], @[], SourceLanguage.langNim)
 
     let style = e.getSelectionStyle(
       e.textBuffer,
@@ -481,8 +472,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
       windowMode = EditorMode.VisualLine,
     )
     check style.bg == visualStyle().bg
-    let expectedFg = colorIndexToStyle(
-      e.textBuffer.highlight.getColorPair(0, 0)).fg
+    let expectedFg = colorIndexToStyle(e.textBuffer.highlight.getColorPair(0, 0)).fg
     check style.fg == expectedFg
 
   test "Selection without syntax uses normal fg":
@@ -493,8 +483,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     e.state.visualSelection.kind = VisualSelectionKind.vskChar
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
     e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
-    discard e.textBuffer.insertText(
-      BufferPosition(line: 0, column: 0), "hello world")
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let style = e.getSelectionStyle(
       e.textBuffer,
