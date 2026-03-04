@@ -34,18 +34,18 @@ import
   ]
 import ../lsp/protocol/types as lspTypes
 import
-  normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
-  filer_handler, log_viewer_handler, help_handler, buffer_manager_handler,
-  backup_manager_handler, diff_viewer_handler, recent_file_mode_handler, debug_handler,
-  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler,
-  terminal_handler
+  normal_handler, insert_handler, insert_commands, command_handler, visual_handler,
+  replace_handler, filer_handler, log_viewer_handler, help_handler,
+  buffer_manager_handler, backup_manager_handler, diff_viewer_handler,
+  recent_file_mode_handler, debug_handler, config_handler, references_handler,
+  documentsymbol_handler, callhierarchy_handler, terminal_handler
 
 export
-  normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
-  filer_handler, log_viewer_handler, help_handler, buffer_manager_handler,
-  backup_manager_handler, diff_viewer_handler, recent_file_mode_handler, debug_handler,
-  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler,
-  terminal_handler
+  normal_handler, insert_handler, insert_commands, command_handler, visual_handler,
+  replace_handler, filer_handler, log_viewer_handler, help_handler,
+  buffer_manager_handler, backup_manager_handler, diff_viewer_handler,
+  recent_file_mode_handler, debug_handler, config_handler, references_handler,
+  documentsymbol_handler, callhierarchy_handler, terminal_handler
 
 type
   HandlerResultKind* = enum
@@ -525,14 +525,13 @@ proc handleNormalMode*(
     if r.modeTransition.isSome:
       let targetMode = r.modeTransition.get
       if targetMode == EditorMode.Insert:
-        # Begin a transaction when entering Insert mode
-        let transactionResult = buffer.beginTransaction("Insert mode edit")
-        if transactionResult.isErr:
-          # This should not happen in normal operation, but handle it gracefully
-          return HandlerResult(
-            kind: hrError,
-            errorMessage: "Failed to begin transaction: " & transactionResult.error,
-          )
+        if not buffer.inTransaction:
+          let transactionResult = buffer.beginTransaction("Insert mode edit")
+          if transactionResult.isErr:
+            return HandlerResult(
+              kind: hrError,
+              errorMessage: "Failed to begin transaction: " & transactionResult.error,
+            )
         # Record insert start position for text tracking
         state.editState.insertModeStartPos = some(state.cursor)
       elif targetMode == EditorMode.Replace:
@@ -659,6 +658,8 @@ proc handleInsertMode*(
   of imrHandled:
     # Check if we're leaving Insert mode
     if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Insert:
+      clearAutoIndentIfUnedited(buffer, state)
+
       # Extract inserted text before committing transaction
       if buffer.currentTransaction.isSome and state.editState.insertModeStartPos.isSome:
         let transaction = buffer.currentTransaction.get

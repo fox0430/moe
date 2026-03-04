@@ -366,13 +366,15 @@ proc handleInsertModeEntry*(
     let lineContent = buffer.getLine(state.cursor.line)
     state.cursor.column = lineContent.charLen
   of "open-below":
-    # Insert new line below and position cursor with auto-indent
+    let txResult = buffer.beginTransaction("Insert mode edit")
+    if txResult.isErr:
+      return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
     insertLineBelow(buffer, state)
-    # Note: insertLineBelow already switches to Insert mode, but we override below
   of "open-above":
-    # Insert new line above and position cursor with auto-indent
+    let txResult = buffer.beginTransaction("Insert mode edit")
+    if txResult.isErr:
+      return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
     insertLineAbove(buffer, state)
-    # Note: insertLineAbove already switches to Insert mode, but we override below
   else:
     return NormalModeResult(
       kind: nmrError, errorMessage: "Unknown insert type: " & insertType

@@ -674,3 +674,161 @@ suite "Insert Commands - insertCharFromBelow":
 
     check result == false
     check buf.getLine(0) == "hello"
+
+suite "Insert Commands - clearAutoIndentIfUnedited":
+  test "o with auto-indent, unedited exit removes indent":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertLineBelow(buf, state)
+
+    # New line should have auto-indent
+    check buf.getLine(1) == "    "
+    check state.cursor.line == 1
+    check state.cursor.column == 4
+    check state.editState.autoIndentedLine.isSome
+
+    # Simulate exiting Insert mode without editing
+    clearAutoIndentIfUnedited(buf, state)
+
+    check buf.getLine(1) == ""
+    check state.cursor.column == 0
+    check state.editState.autoIndentedLine.isNone
+
+  test "o with auto-indent, edited line preserves content":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertLineBelow(buf, state)
+
+    # Simulate user typing on the new line
+    insertChar(buf, state, 'x')
+
+    check buf.getLine(1) == "    x"
+
+    # Exiting Insert mode should NOT remove indent since line was edited
+    clearAutoIndentIfUnedited(buf, state)
+
+    check buf.getLine(1) == "    x"
+    check state.editState.autoIndentedLine.isNone
+
+  test "O with auto-indent, unedited exit removes indent":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertLineAbove(buf, state)
+
+    # New line (line 0) should have auto-indent
+    check buf.getLine(0) == "    "
+    check state.cursor.line == 0
+    check state.cursor.column == 4
+    check state.editState.autoIndentedLine.isSome
+
+    # Simulate exiting Insert mode without editing
+    clearAutoIndentIfUnedited(buf, state)
+
+    check buf.getLine(0) == ""
+    check state.cursor.column == 0
+
+  test "Enter with auto-indent, unedited exit removes indent":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.cursor = BufferPosition(line: 0, column: 9)
+
+    insertNewline(buf, state)
+
+    # New line (line 1) should have auto-indent
+    check buf.getLine(1) == "    "
+    check state.cursor.line == 1
+    check state.cursor.column == 4
+    check state.editState.autoIndentedLine.isSome
+
+    # Simulate exiting Insert mode without editing
+    clearAutoIndentIfUnedited(buf, state)
+
+    check buf.getLine(1) == ""
+    check state.cursor.column == 0
+
+  test "Auto-indent disabled, no tracking":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    let state = createTestState()
+    state.display.autoIndent = false
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertLineBelow(buf, state)
+
+    check state.editState.autoIndentedLine.isNone
+
+  test "No indentation on source line, no tracking":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertLineBelow(buf, state)
+
+    check state.editState.autoIndentedLine.isNone
+
+  test "o unedited exit uses replaceLine to remove indent in transaction":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    # Start transaction (as normal_handler would do for o/O)
+    discard buf.beginTransaction("Insert mode edit")
+    insertLineBelow(buf, state)
+
+    # New line should have auto-indent
+    check buf.getLine(1) == "    "
+
+    # clearAutoIndentIfUnedited clears indent via replaceLine (in transaction)
+    clearAutoIndentIfUnedited(buf, state)
+
+    check buf.getLine(1) == ""
+    check state.cursor.column == 0
+
+    # Commit and undo should restore original buffer in a single step
+    discard buf.commitTransaction()
+    discard buf.undo()
+    check buf.len == 1
+    check buf.getLine(0) == "    hello"
+
+  test "O unedited exit uses replaceLine to remove indent in transaction":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    hello")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    # Start transaction (as normal_handler would do for o/O)
+    discard buf.beginTransaction("Insert mode edit")
+    insertLineAbove(buf, state)
+
+    # New line (line 0) should have auto-indent
+    check buf.getLine(0) == "    "
+
+    clearAutoIndentIfUnedited(buf, state)
+
+    check buf.getLine(0) == ""
+    check state.cursor.column == 0
+
+    # Commit and undo should restore original in a single step
+    discard buf.commitTransaction()
+    discard buf.undo()
+    check buf.len == 1
+    check buf.getLine(0) == "    hello"
