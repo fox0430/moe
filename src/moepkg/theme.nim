@@ -115,6 +115,9 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.operator: makeColorPairDefaultBg("#89ddff"),
   EditorColorPairIndex.property: makeColorPairDefaultBg("#61afef"),
 
+  # Syntax highlighting - Markdown
+  EditorColorPairIndex.markdownCodeBlock: makeColorPair("#dde1e8", "#1a1a2e"),
+
   # Syntax highlighting - Extended (LSP semantic tokens)
   EditorColorPairIndex.namespace: makeColorPairDefaultBg("#2ac3de"),
   EditorColorPairIndex.className: makeColorPairDefaultBg("#2ac3de"),

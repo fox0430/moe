@@ -106,6 +106,9 @@ table = "#ffff00"
 date = "#ffff00"
 operator = "#ffd700"
 
+markdownCodeBlock = "#f8f5e3"
+markdownCodeBlockBg = "#1a1a2e"
+
 namespace = "#ffd700"
 className = "#ffd700"
 enumName = "#ffd700"
