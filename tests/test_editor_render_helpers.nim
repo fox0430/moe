@@ -19,13 +19,14 @@
 
 ## Tests for editor_render_helpers.nim
 
-import std/[unittest, options, tables]
+import std/[unittest, options, tables, unicode]
 
 import pkg/celina
 
 import
-  ../src/moepkg/
-    [editor, buffer, config, config_loader, modes, types, color, render_utils]
+  ../src/moepkg/[
+    editor, buffer, config, config_loader, modes, types, color, render_utils, highlight
+  ]
 import ../src/moepkg/editor_render_helpers as renderHelpers
 
 proc createTestEditor(): Editor =
@@ -395,16 +396,17 @@ suite "getSelectionStyle - Basic":
     )
     check true
 
-  test "Returns visual style when in selection":
+  test "Returns visual selection bg with normal fg when in selection (no syntax)":
     let e = createTestEditor()
     e.state.mode = EditorMode.Visual
+    e.state.display.showSyntax = false
     e.state.visualSelection.active = true
     e.state.visualSelection.kind = VisualSelectionKind.vskChar
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
     e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    discard e.getSelectionStyle(
+    let style = e.getSelectionStyle(
       e.textBuffer,
       hasSelection = true,
       pos = BufferPosition(line: 0, column: 5),
@@ -412,7 +414,87 @@ suite "getSelectionStyle - Basic":
       cursorCol = 10,
       windowMode = EditorMode.Visual,
     )
-    check true
+    # Background should be visual selection color
+    check style.bg == visualStyle().bg
+    # Foreground should be normal (no syntax highlight)
+    check style.fg == normalStyle().fg
+
+suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
+  test "Selection uses visual bg with syntax highlight fg":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.Visual
+    e.state.display.showSyntax = true
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
+
+    # Set up buffer with highlight
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
+    e.textBuffer.language = SourceLanguage.langNim
+    e.textBuffer.highlight =
+      initHighlight(@["let x = 42".toRunes], @[], SourceLanguage.langNim)
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = true,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 0,
+      cursorCol = 10,
+      windowMode = EditorMode.Visual,
+    )
+    # Background must be visual selection color
+    check style.bg == visualStyle().bg
+    # Foreground should come from syntax highlight, not visual selection
+    let expectedFg = colorIndexToStyle(e.textBuffer.highlight.getColorPair(0, 0)).fg
+    check style.fg == expectedFg
+
+  test "VisualLine selection preserves syntax highlight fg":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.VisualLine
+    e.state.display.showSyntax = true
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskLine
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 0)
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
+    e.textBuffer.language = SourceLanguage.langNim
+    e.textBuffer.highlight =
+      initHighlight(@["let x = 42".toRunes], @[], SourceLanguage.langNim)
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = true,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 0,
+      cursorCol = 0,
+      windowMode = EditorMode.VisualLine,
+    )
+    check style.bg == visualStyle().bg
+    let expectedFg = colorIndexToStyle(e.textBuffer.highlight.getColorPair(0, 0)).fg
+    check style.fg == expectedFg
+
+  test "Selection without syntax uses normal fg":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.Visual
+    e.state.display.showSyntax = false
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = true,
+      pos = BufferPosition(line: 0, column: 5),
+      cursorLine = 0,
+      cursorCol = 10,
+      windowMode = EditorMode.Visual,
+    )
+    check style.bg == visualStyle().bg
+    check style.fg == normalStyle().fg
 
 suite "getSelectionStyle - Matching paren":
   test "Returns paren pair style for matching paren":
@@ -507,6 +589,7 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
   test "Visual selection takes priority over findCharMatch":
     let e = createTestEditor()
     e.state.mode = EditorMode.Visual
+    e.state.display.showSyntax = false
     e.state.visualSelection.active = true
     e.state.visualSelection.kind = VisualSelectionKind.vskChar
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
@@ -523,7 +606,9 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
       cursorCol = 6,
       windowMode = EditorMode.Visual,
     )
-    check style == visualStyle()
+    # Should have visual selection background, not findCharMatch style
+    check style.bg == visualStyle().bg
+    check style != findCharMatchStyle()
 
   test "Matching paren takes priority over findCharMatch":
     let e = createTestEditor()
