@@ -250,3 +250,21 @@ proc writeToClipboardAsync*(tool: ClipboardTool, text: string) =
   ## Write text to clipboard in the background (fire-and-forget)
   ## This does not block and errors are silently ignored
   asyncSpawn writeToClipboardInternal(tool, text)
+
+proc writeToPrimarySelection*(
+    tool: ClipboardTool, text: string
+): Future[Result[void, string]] {.async: (raises: []).} =
+  ## Write text to X11 PRIMARY selection (async wrapper)
+  return writeToPrimarySelectionSync(tool, text)
+
+# Internal async wrapper that discards the result
+proc writeToPrimarySelectionInternal(
+    tool: ClipboardTool, text: string
+): Future[void] {.async: (raises: []).} =
+  discard await writeToPrimarySelection(tool, text)
+
+# Fire-and-forget wrapper for primary selection write
+proc writeToPrimarySelectionAsync*(tool: ClipboardTool, text: string) =
+  ## Write text to X11 PRIMARY selection in the background (fire-and-forget)
+  ## This does not block and errors are silently ignored
+  asyncSpawn writeToPrimarySelectionInternal(tool, text)
