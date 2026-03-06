@@ -308,38 +308,42 @@ vs filename - Open in a vertical split window
 sp          - Horizontal split window
 sp filename - Open in a horizontal split window
 
-livereload on or livereload off - Change setting of live reload of configuration file
 theme themeName - Change color theme; for example theme dark
-multistatusline on or multistatusline off - Change setting to show status line for each window
-syntax on or syntax off - Change setting to syntax highlighting
-tabstop number - Change setting to tabStop; for example tabstop 2
-shiftwidth number - Change indent width; 0 = use tabstop; for example shiftwidth 4
-softtabstop number - Change Tab/Backspace width in insert mode; 0 = use tabstop; for example softtabstop 4
-paren on or paren off - Change setting to auto close paren
-autoindent on or autoindent off - Change setting to auto indent
-number on or number off - Change setting to display line number
-statusLine on or statusLine off - Change setting to display status bar
-incsearch on or incsearch off - Change setting to incremental search
-deleteparen on or deleteparen off - Change setting to auto delete paren
-smoothscroll on or smoothscroll off - Change setting to smooth scroll
-scrollfriction number - Set smooth scroll friction; for example scrollfriction 10
-scrollairdrag number - Set smooth scroll air drag; for example scrollairdrag 10
-highlightcurrentword on or highlightcurrentword off - Change setting to highlight other uses of the current word
-highlightfindchar on or highlightfindchar off - Change setting to highlight f/F/t/T matches
-clipboard on or clipboard off - Change setting to system clipboard
-highlightfullspace on or highlightfullspace off - Change setting to highlight full width space
-buildonsave on or buildonsave off - Change setting to build on save
-indentationlines on  or indentationlines off - Change setting to indentation lines
-showGitInactive on or showGitInactive off - Change status line setting to show/hide git branch name in inactive window
-noh - Turn off search highlights
-hlsearch on or hlsearch off - Change setting to highlight search results
-highlightparen on or highlightparen off - Change setting to highlight matching parentheses
-icon - Setting show/hidden icons in filer mode
+noh            - Turn off search highlights
 stripwhitespace - Delete trailing spaces
-ignorecase - Change setting to ignorecase
-smartcase - Change setting to smartcase
-cursorline on or cursorline off - Change the highlight setting of the current line
-cursorcolumn on or cursorcolumn off - Change the highlight setting of the current column
+
+set number / set nonumber (nu/nonu)                         - Show/hide line numbers
+set cursorline / set nocursorline (cul/nocul)               - Highlight the current line
+set cursorcolumn / set nocursorcolumn (cuc/nocuc)           - Highlight the current column
+set statusline / set nostatusline (stl/nostl)               - Show/hide status line
+set syntax / set nosyntax (syn/nosyn)                       - Enable/disable syntax highlighting
+set indentationlines / set noindentationlines (indl/noindl) - Enable/disable indentation guide lines
+set autoindent / set noautoindent (ai/noai)                 - Enable/disable auto indent
+set autocloseparen / set noautocloseparen (acp/noacp)       - Enable/disable auto close paren
+set autodeleteparen / set noautodeleteparen (adp/noadp)     - Enable/disable auto delete paren
+set clipboard / set noclipboard (cb/nocb)                   - Enable/disable system clipboard
+set smoothscroll / set nosmoothscroll (sms/nosms)           - Enable/disable smooth scroll
+set livereload / set nolivereload (lr/nolr)                 - Enable/disable live reload of config
+set icon / set noicon (icons/noicons)                       - Show/hide icons in filer mode
+set highlightcurrentline / set nohighlightcurrentline (hcl/nohcl) - Highlight the current line
+set highlightcurrentword / set nohighlightcurrentword (hcw/nohcw) - Highlight other uses of the current word
+set highlightfullspace / set nohighlightfullspace (hfs/nohfs)     - Highlight full width space
+set highlightparen / set nohighlightparen (hp/nohp)         - Highlight matching paren
+set highlightfindchar / set nohighlightfindchar (hfc/nohfc) - Highlight f/F/t/T matches
+set multistatusline / set nomultistatusline (msl/nomsl)     - Enable/disable multiple status line
+set ignorecase / set noignorecase (ic/noic)                 - Enable/disable ignorecase
+set smartcase / set nosmartcase (scs/noscs)                 - Enable/disable smartcase
+set incsearch / set noincsearch (is/nois)                   - Enable/disable incremental search
+set hlsearch / set nohlsearch (hls/nohls)                   - Enable/disable search highlighting
+set buildonsave / set nobuildonsave (bos/nobos)             - Enable/disable build on save
+set showgitinactive / set noshowgitinactive (sgi/nosgi)     - Show/hide git branch in inactive window
+set wrap / set nowrap                                       - Enable/disable line wrap
+set expandtab / set noexpandtab (et/noet)                   - Enable/disable expand tab to spaces
+set tabstop=number (ts)          - Change tab stop width; e.g. set tabstop=2
+set shiftwidth=number (sw)       - Change indent width; e.g. set shiftwidth=2
+set softtabstop=number (sts)     - Change soft tab stop width; e.g. set softtabstop=4
+set scrollfriction=number (sfr)  - Change smooth scroll friction; e.g. set scrollfriction=80.0
+set scrollairdrag=number (sad)   - Change smooth scroll air drag; e.g. set scrollairdrag=2.0
 build - Build the current buffer
 lspfold - LSP Folding Range
 lspformat - LSP Document Formatting

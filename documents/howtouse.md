@@ -378,32 +378,41 @@ All keystrokes are forwarded to the running shell/command.
 | `vs filename` | Open in vertical split window |
 | `sp` | Horizontal split window |
 | `sp filename` | Open in horizontal split window |
-| `livereload on` or `livereload off` | Change setting of live reload of configuration file |
 | `theme themeName` | Change color theme : Example `theme dark` |
-| `tab on` or `tab off` | Change setting to tab line |
-| `syntax on` or `syntax off` | Change setting to syntax highlighting |
-| `tabstop number` | Change setting to tabStop : Example `tabstop 2`  |
-| `paren on` or `paren off` | Change setting to auto close paren |
-| `indent on` or `indent off` | Change sestting to auto indent |
-| `linenum on` or `linenum off` | Change setting to display line number |
-| `statusLine on` or `statusLine off` | Change setting to display status line|
-| `realtimesearch on` or `realtimesearch off` | Change setting to real-time search |
-| `deleteparen on` or `deleteparen off` | Change setting to auto delete paren |
-| `smoothscroll on` or `smoothscroll off` | Change setting to smooth scroll |
-| `highlightcurrentword on` or `highlightcurrentword off` | Change setting to highlight other uses of the current word |
-| `highlightfindchar on` or `highlightfindchar off` | Change setting to highlight f/F/t/T matches |
-| `clipboard on` or `clipboard off` | Change setting to system clipboard |
-| `highlightfullspace on` or `highlightfullspace off` | Change setting to highlight full width space |
-| `buildonsave on` or `buildonsave off` | Change setting to build on save |
-| `indentationlines on`  or `indentationlines off` | Change setting to indentation lines |
-| `showGitInactive on` or `showGitInactive off` | Change status line setting to show/hide git branch name in inactive window |
-| `noh` | Turn off highlights |
-| `icon` | Setting show/hidden icons in filer mode |
+| `noh` | Turn off search highlights |
 | `stripwhitespace` | Delete trailing spaces |
-| `ignorecase` | Change setting to ignorecase |
-| `smartcase` | Change setting to smartcase |
-| `cursorline on` or `cursorline off` | Change the highlight setting of the current line |
-| `cursorcolumn on` or `cursorcolumn off` | Change the highlight setting of the current column |
+| `set number` or `set nonumber` | Show/hide line numbers (alias: `nu`, `nonu`) |
+| `set cursorline` or `set nocursorline` | Highlight the current line (alias: `cul`, `nocul`) |
+| `set cursorcolumn` or `set nocursorcolumn` | Highlight the current column (alias: `cuc`, `nocuc`) |
+| `set statusline` or `set nostatusline` | Show/hide status line (alias: `stl`, `nostl`) |
+| `set syntax` or `set nosyntax` | Enable/disable syntax highlighting (alias: `syn`, `nosyn`) |
+| `set indentationlines` or `set noindentationlines` | Enable/disable indentation guide lines (alias: `indl`, `noindl`) |
+| `set autoindent` or `set noautoindent` | Enable/disable auto indent (alias: `ai`, `noai`) |
+| `set autocloseparen` or `set noautocloseparen` | Enable/disable auto close paren (alias: `acp`, `noacp`) |
+| `set autodeleteparen` or `set noautodeleteparen` | Enable/disable auto delete paren (alias: `adp`, `noadp`) |
+| `set clipboard` or `set noclipboard` | Enable/disable system clipboard (alias: `cb`, `nocb`) |
+| `set smoothscroll` or `set nosmoothscroll` | Enable/disable smooth scroll (alias: `sms`, `nosms`) |
+| `set livereload` or `set nolivereload` | Enable/disable live reload of configuration file (alias: `lr`, `nolr`) |
+| `set icon` or `set noicon` | Show/hide icons in filer mode (alias: `icons`, `noicons`) |
+| `set highlightcurrentline` or `set nohighlightcurrentline` | Highlight the current line (alias: `hcl`, `nohcl`) |
+| `set highlightcurrentword` or `set nohighlightcurrentword` | Highlight other uses of the current word (alias: `hcw`, `nohcw`) |
+| `set highlightfullspace` or `set nohighlightfullspace` | Highlight full width space (alias: `hfs`, `nohfs`) |
+| `set highlightparen` or `set nohighlightparen` | Highlight matching paren (alias: `hp`, `nohp`) |
+| `set highlightfindchar` or `set nohighlightfindchar` | Highlight f/F/t/T matches (alias: `hfc`, `nohfc`) |
+| `set multistatusline` or `set nomultistatusline` | Enable/disable multiple status line (alias: `msl`, `nomsl`) |
+| `set ignorecase` or `set noignorecase` | Enable/disable ignorecase (alias: `ic`, `noic`) |
+| `set smartcase` or `set nosmartcase` | Enable/disable smartcase (alias: `scs`, `noscs`) |
+| `set incsearch` or `set noincsearch` | Enable/disable incremental search (alias: `is`, `nois`) |
+| `set hlsearch` or `set nohlsearch` | Enable/disable search highlighting (alias: `hls`, `nohls`) |
+| `set buildonsave` or `set nobuildonsave` | Enable/disable build on save (alias: `bos`, `nobos`) |
+| `set showgitinactive` or `set noshowgitinactive` | Show/hide git branch name in inactive window status line (alias: `sgi`, `nosgi`) |
+| `set wrap` or `set nowrap` | Enable/disable line wrap |
+| `set expandtab` or `set noexpandtab` | Enable/disable expand tab to spaces (alias: `et`, `noet`) |
+| `set tabstop=number` | Change tab stop width : Example `set tabstop=2` (alias: `ts`) |
+| `set shiftwidth=number` | Change indent width : Example `set shiftwidth=2` (alias: `sw`) |
+| `set softtabstop=number` | Change soft tab stop width (alias: `sts`) |
+| `set scrollfriction=number` | Change smooth scroll friction (alias: `sfr`) |
+| `set scrollairdrag=number` | Change smooth scroll air drag (alias: `sad`) |
 | `build` | Build the current buffer |
 | `lspfold` | LSP Folding Range |
 | `lspformat` | LSP Document Formatting |
