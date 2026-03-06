@@ -779,6 +779,8 @@ proc updateHighlightIncremental*(
 proc detectLanguage*(filename: string): SourceLanguage =
   # Check basename for special files (no extension)
   case filename.extractFilename
+  of "COMMIT_EDITMSG":
+    return SourceLanguage.langCommitEditMsg
   of "git-rebase-todo":
     return SourceLanguage.langGitRebaseTodo
   else:

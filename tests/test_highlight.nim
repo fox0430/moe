@@ -762,6 +762,12 @@ suite "Highlight - detectLanguage":
   test "detectLanguage for no extension":
     check detectLanguage("README") == SourceLanguage.langNone
 
+  test "detectLanguage for COMMIT_EDITMSG":
+    check detectLanguage("COMMIT_EDITMSG") == SourceLanguage.langCommitEditMsg
+
+  test "detectLanguage for COMMIT_EDITMSG with path":
+    check detectLanguage("/repo/.git/COMMIT_EDITMSG") == SourceLanguage.langCommitEditMsg
+
   test "detectLanguage for git-rebase-todo":
     check detectLanguage("git-rebase-todo") == SourceLanguage.langGitRebaseTodo
 
