@@ -777,6 +777,13 @@ proc updateHighlightIncremental*(
   incrHighlight.lineStates.version = bufferChangeSeq
 
 proc detectLanguage*(filename: string): SourceLanguage =
+  # Check basename for special files (no extension)
+  case filename.extractFilename
+  of "git-rebase-todo":
+    return SourceLanguage.langGitRebaseTodo
+  else:
+    discard
+
   # TODO: use settings file
   case filename.splitFile.ext
   of ".astro":
