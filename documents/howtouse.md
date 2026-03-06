@@ -218,6 +218,7 @@
 | <kbd>**d**</kbd> OR <kbd>**x**</kbd><br> | Delete characters |
 | <kbd>**y**</kbd><br> | Copy characters |
 | <kbd>**r**</kbd><br> | Replace character |
+| <kbd>**S**</kbd><br> | Surround selection with character |
 | <kbd>**J**</kbd><br> | Join lines |
 | <kbd>**u**</kbd><br> | Convert to Lowercase |
 | <kbd>**U**</kbd><br> | Convert to Uppercase |

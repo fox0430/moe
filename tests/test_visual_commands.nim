@@ -1507,3 +1507,317 @@ suite "Visual Commands - Cursor clamping after delete":
       check state.cursor.column < line.charLen
     else:
       check state.cursor.column == 0
+
+suite "Visual Commands - visualSurround":
+  test "Surround char selection with parentheses":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '(')
+
+    check buf.getLine(0) == "(hello) world"
+    check state.visualSelection.active == false
+    check state.cursor == BufferPosition(line: 0, column: 0)
+
+  test "Surround char selection with close bracket":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, ')')
+
+    check buf.getLine(0) == "(hello) world"
+
+  test "Surround char selection with square brackets":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '[')
+
+    check buf.getLine(0) == "[hello] world"
+
+  test "Surround char selection with curly braces":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '{')
+
+    check buf.getLine(0) == "{hello} world"
+
+  test "Surround char selection with angle brackets":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '<')
+
+    check buf.getLine(0) == "<hello> world"
+
+  test "Surround char selection with double quotes":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '"')
+
+    check buf.getLine(0) == "\"hello\" world"
+
+  test "Surround char selection with single quotes":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '\'')
+
+    check buf.getLine(0) == "'hello' world"
+
+  test "Surround char selection with backticks":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '`')
+
+    check buf.getLine(0) == "`hello` world"
+
+  test "Surround line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualSurround(buf, state, '(')
+
+    check buf.getLine(0) == "(hello)"
+    check buf.getLine(1) == "(world)"
+    check state.visualSelection.active == false
+
+  test "Surround block selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nfoo bar")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualSurround(buf, state, '[')
+
+    check buf.getLine(0) == "[hel]lo world"
+    check buf.getLine(1) == "[foo] bar"
+
+  test "Surround inactive selection (no-op)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.visualSelection.active = false
+
+    visualSurround(buf, state, '(')
+
+    check buf.getLine(0) == "hello"
+
+  test "Surround middle of line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world foo")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 6),
+      current: BufferPosition(line: 0, column: 10),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '"')
+
+    check buf.getLine(0) == "hello \"world\" foo"
+    check state.cursor == BufferPosition(line: 0, column: 6)
+
+  test "Surround char selection spanning multiple lines":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 2),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '(')
+
+    check buf.getLine(0) == "he(llo"
+    check buf.getLine(1) == "wor)ld"
+    check state.cursor == BufferPosition(line: 0, column: 2)
+
+  test "Surround block selection with short line":
+    # Second line is shorter than the block selection columns
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nhi")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 4),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualSurround(buf, state, '{')
+
+    # Line 0: columns 0-4 surrounded
+    check buf.getLine(0) == "{hello} world"
+    # Line 1: only 2 chars (0-1), so actualEndCol=1
+    check buf.getLine(1) == "{hi}"
+
+  test "Surround line selection with multibyte characters":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "あいう")
+    discard buf.insertText(BufferPosition(line: 0, column: 3), "\nかきく")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualSurround(buf, state, '[')
+
+    check buf.getLine(0) == "[あいう]"
+    check buf.getLine(1) == "[かきく]"
+
+  test "Surround char selection at end of line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 4),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '(')
+
+    check buf.getLine(0) == "(hello)"
+
+  test "Surround empty line in line selection":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\n")
+    discard buf.insertText(BufferPosition(line: 1, column: 0), "\nworld")
+    let state = createTestState()
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 2, column: 2),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualSurround(buf, state, '(')
+
+    check buf.getLine(0) == "(hello)"
+    check buf.getLine(1) == "()"
+    check buf.getLine(2) == "(world)"
+
+  test "Surround with reverse selection (current before start)":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    # current (col 2) is before start (col 8) — reverse direction
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 8),
+      current: BufferPosition(line: 0, column: 2),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualSurround(buf, state, '(')
+
+    check buf.getLine(0) == "he(llo wor)ld"
+    # cursor should be at normalized start (column 2)
+    check state.cursor == BufferPosition(line: 0, column: 2)
+
+  test "Surround block selection with multibyte characters":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "あいう world")
+    discard buf.insertText(BufferPosition(line: 0, column: 9), "\nかきく bar")
+    let state = createTestState()
+    state.mode = EditorMode.VisualBlock
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 1, column: 2),
+      active: true,
+      kind: vskBlock,
+    )
+
+    visualSurround(buf, state, '[')
+
+    check buf.getLine(0) == "[あいう] world"
+    check buf.getLine(1) == "[かきく] bar"

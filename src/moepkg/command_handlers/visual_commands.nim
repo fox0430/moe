@@ -1114,3 +1114,78 @@ proc visualPaste*(buffer: TextBuffer, state: EditorState) =
     state.needsFullRedraw = true
     state.statusMessage = ""
     state.mode = state.previousMode
+
+proc getSurroundPair(ch: char): tuple[open, close: char] =
+  ## Get the open/close pair for a surround character.
+  const
+    openBrackets = ['(', '[', '{', '<']
+    closeBrackets = [')', ']', '}', '>']
+  let openIdx = openBrackets.find(ch)
+  if openIdx >= 0:
+    return (openBrackets[openIdx], closeBrackets[openIdx])
+  let closeIdx = closeBrackets.find(ch)
+  if closeIdx >= 0:
+    return (openBrackets[closeIdx], closeBrackets[closeIdx])
+  # Quotes and other characters: same for open and close
+  return (ch, ch)
+
+proc visualSurround*(buffer: TextBuffer, state: EditorState, ch: char) =
+  ## Surround visual selection with the specified character pair.
+  if state.visualSelection.active:
+    let transactionResult = buffer.beginTransaction("Visual surround")
+    if transactionResult.isErr:
+      state.visualSelection.active = false
+      state.mode = state.previousMode
+      return
+
+    let (openChar, closeChar) = getSurroundPair(ch)
+    let (selStart, selEnd) = state.visualSelection.getSelectionRange()
+
+    case state.visualSelection.kind
+    of vskChar:
+      # Insert close char after selection end, then open char before start
+      # (reverse order to avoid position shift)
+      let afterEnd = BufferPosition(line: selEnd.line, column: selEnd.column + 1)
+      discard buffer.insertText(afterEnd, $closeChar)
+      discard buffer.insertText(selStart, $openChar)
+    of vskLine:
+      let
+        startLine =
+          min(state.visualSelection.start.line, state.visualSelection.current.line)
+        endLine =
+          max(state.visualSelection.start.line, state.visualSelection.current.line)
+      # Process lines in reverse to avoid position shift
+      for lineNum in countdown(endLine, startLine):
+        let lineLen = buffer.getLine(lineNum).charLen
+        let lineEnd = BufferPosition(line: lineNum, column: lineLen)
+        discard buffer.insertText(lineEnd, $closeChar)
+        let lineStart = BufferPosition(line: lineNum, column: 0)
+        discard buffer.insertText(lineStart, $openChar)
+    of vskBlock:
+      let
+        startLine =
+          min(state.visualSelection.start.line, state.visualSelection.current.line)
+        endLine =
+          max(state.visualSelection.start.line, state.visualSelection.current.line)
+        startCol =
+          min(state.visualSelection.start.column, state.visualSelection.current.column)
+        endCol =
+          max(state.visualSelection.start.column, state.visualSelection.current.column)
+      # Process lines in reverse to avoid position shift
+      for lineNum in countdown(endLine, startLine):
+        let lineLen = buffer.getLine(lineNum).charLen
+        if startCol < lineLen:
+          let actualEndCol = min(endCol, lineLen - 1)
+          let afterEnd = BufferPosition(line: lineNum, column: actualEndCol + 1)
+          discard buffer.insertText(afterEnd, $closeChar)
+          let colStart = BufferPosition(line: lineNum, column: startCol)
+          discard buffer.insertText(colStart, $openChar)
+
+    state.cursor = selStart
+
+    discard buffer.commitTransaction()
+
+    state.visualSelection.active = false
+    state.needsFullRedraw = true
+    state.statusMessage = ""
+    state.mode = state.previousMode

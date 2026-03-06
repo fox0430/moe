@@ -205,6 +205,7 @@ Ctrl-i     - Jump Forward (Jumplist)
 d or x  - Delete text
 y       - Copy text
 r       - Replace character
+S       - Surround selection with character
 J       - Join lines
 u       - Convert to lowercase
 U       - Convert to uppercase
