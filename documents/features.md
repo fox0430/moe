@@ -117,7 +117,11 @@ Per-buffer overrides are automatically applied when switching between windows, s
 
 moe supports multiple buffer backend implementations. Each backend offers different performance characteristics suited to different editing scenarios. You can configure the default backend in `moerc.toml`.
 
-### GapBuffer (Default)
+### Auto (Default)
+
+Automatically selects the optimal backend based on file size. Files smaller than 10 MB use GapBuffer, and files 10 MB or larger use PieceTable.
+
+### GapBuffer
 
 A line-oriented gap buffer. Lines are stored in a flat array with a logical gap at the current edit position. Edits near the gap are very fast; edits far from the gap require moving the gap first.
 

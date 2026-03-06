@@ -574,13 +574,20 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
 
   # Set buffer backend from configuration
   case editorConfig.standard.bufferBackend
+  of bbcAuto:
+    setAutoBackendMode(true)
+    setConfiguredBackend(GapBuffer)
   of bbcGapBuffer:
+    setAutoBackendMode(false)
     setConfiguredBackend(GapBuffer)
   of bbcSqrtDecomp:
+    setAutoBackendMode(false)
     setConfiguredBackend(SqrtDecomp)
   of bbcRope:
+    setAutoBackendMode(false)
     setConfiguredBackend(Rope)
   of bbcPieceTable:
+    setAutoBackendMode(false)
     setConfiguredBackend(PieceTable)
   logDebug("editor", "Buffer backend: " & $editorConfig.standard.bufferBackend)
 
