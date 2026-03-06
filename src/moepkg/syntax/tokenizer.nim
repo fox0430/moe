@@ -134,6 +134,7 @@ type
     langNone
     langAstro
     langC
+    langCommitEditMsg
     langCpp
     langCsharp
     langDiff
@@ -174,9 +175,9 @@ const
   wsChars*: set[char] = {'\t' .. '\r', ' '}
 
   sourceLanguageToStr*: array[SourceLanguage, string] = [
-    "none", "Astro", "C", "C++", "C#", "Diff", "git-rebase-todo", "Haskell", "HTML",
-    "Java", "JavaScript", "JavaScriptReact", "Markdown", "Nim", "Python", "Rust",
-    "Shell", "Toml", "Yaml", "Json", "TypeScript", "TypeScriptReact",
+    "none", "Astro", "C", "COMMIT_EDITMSG", "C++", "C#", "Diff", "git-rebase-todo",
+    "Haskell", "HTML", "Java", "JavaScript", "JavaScriptReact", "Markdown", "Nim",
+    "Python", "Rust", "Shell", "Toml", "Yaml", "Json", "TypeScript", "TypeScriptReact",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
@@ -266,15 +267,16 @@ proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
 
 import
-  syntaxastro, syntaxc, syntaxcpp, syntaxcsharp, syntaxdiff, syntaxgitrebasetodo,
-  syntaxhaskell, syntaxhtml, syntaxjava, syntaxjavascript, syntaxmarkdown, syntaxnim,
-  syntaxpython, syntaxrust, syntaxshell, syntaxyaml, syntaxtoml, syntaxjson,
-  syntaxtypescript
+  syntaxastro, syntaxc, syntaxcommiteditmsg, syntaxcpp, syntaxcsharp, syntaxdiff,
+  syntaxgitrebasetodo, syntaxhaskell, syntaxhtml, syntaxjava, syntaxjavascript,
+  syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust, syntaxshell, syntaxyaml,
+  syntaxtoml, syntaxjson, syntaxtypescript
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
   of langAstro: g.astroNextToken
   of langC: g.cNextToken
+  of langCommitEditMsg: g.commitEditMsgNextToken
   of langCpp: g.cppNextToken
   of langCsharp: g.csharpNextToken
   of langDiff: g.diffNextToken
