@@ -615,6 +615,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         showLinePercentage: true,
         showEncoding: true,
         showLineNumbers: editorConfig.standard.number,
+        relativeLineNumbers: editorConfig.standard.relativeNumber,
         showCursorLine: editorConfig.highlight.currentLine,
         showCursorColumn: editorConfig.highlight.currentColumn,
         showSyntax: editorConfig.standard.syntax,
@@ -888,6 +889,7 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   e.state.display.showStatusLine = newConfig.standard.statusLine
   e.state.display.multiStatusLine = newConfig.statusLine.multipleStatusLine
   e.state.display.showLineNumbers = newConfig.standard.number
+  e.state.display.relativeLineNumbers = newConfig.standard.relativeNumber
   e.state.display.showCursorLine = newConfig.highlight.currentLine
   e.state.display.showCursorColumn = newConfig.highlight.currentColumn
   e.state.display.showSyntax = newConfig.standard.syntax

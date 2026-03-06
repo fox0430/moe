@@ -299,7 +299,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       let isFile = mgr.mode == cmFilePath and not isDir
       # Check if it's an action that should execute immediately
       let shouldExecuteNow =
-        isFile or (
+        isFile or mgr.mode == cmSetOption or (
           mgr.mode == cmCommand and
           e.commandLineParser.isNoArgumentAction(mgr.getSelectedCommand())
         )
@@ -468,6 +468,10 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.config.standard.number = val
           e.state.display.showLineNumbers = val
           e.state.statusMessage = "number = " & $val
+        of bsoRelativeNumber:
+          e.config.standard.relativeNumber = val
+          e.state.display.relativeLineNumbers = val
+          e.state.statusMessage = "relativenumber = " & $val
         of bsoCursorLine:
           e.config.highlight.currentLine = val
           e.state.display.showCursorLine = val

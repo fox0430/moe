@@ -351,15 +351,16 @@ proc loadStandardConfig(
 ) =
   const section = "Standard"
   const validKeys = [
-    "number", "statusLine", "syntax", "indentationLines", "tabStop", "shiftWidth",
-    "softTabStop", "expandTab", "sidebar", "autoCloseParen", "autoIndent", "ignorecase",
-    "smartcase", "disableChangeCursor", "defaultCursor", "normalModeCursor",
-    "insertModeCursor", "liveReloadOfConf", "incrementalSearch", "popupWindowInExmode",
-    "autoDeleteParen", "liveReloadOfFile", "colorMode", "mouse", "lineWrap",
-    "timeoutlen", "bufferBackend",
+    "number", "relativeNumber", "statusLine", "syntax", "indentationLines", "tabStop",
+    "shiftWidth", "softTabStop", "expandTab", "sidebar", "autoCloseParen", "autoIndent",
+    "ignorecase", "smartcase", "disableChangeCursor", "defaultCursor",
+    "normalModeCursor", "insertModeCursor", "liveReloadOfConf", "incrementalSearch",
+    "popupWindowInExmode", "autoDeleteParen", "liveReloadOfFile", "colorMode", "mouse",
+    "lineWrap", "timeoutlen", "bufferBackend",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "number", config.number, vr, section)
+  loadBool(table, "relativeNumber", config.relativeNumber, vr, section)
   loadBool(table, "statusLine", config.statusLine, vr, section)
   loadBool(table, "syntax", config.syntax, vr, section)
   loadBool(table, "indentationLines", config.indentationLines, vr, section)
@@ -1832,6 +1833,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   # Standard section
   lines.add "[Standard]"
   lines.add "number = " & toTomlBool(config.standard.number)
+  lines.add "relativeNumber = " & toTomlBool(config.standard.relativeNumber)
   lines.add "statusLine = " & toTomlBool(config.standard.statusLine)
   lines.add "syntax = " & toTomlBool(config.standard.syntax)
   lines.add "indentationLines = " & toTomlBool(config.standard.indentationLines)

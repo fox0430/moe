@@ -313,6 +313,7 @@ noh            - Turn off search highlights
 stripwhitespace - Delete trailing spaces
 
 set number / set nonumber (nu/nonu)                         - Show/hide line numbers
+set relativenumber / set norelativenumber (rnu/nornu)       - Show/hide relative line numbers
 set cursorline / set nocursorline (cul/nocul)               - Highlight the current line
 set cursorcolumn / set nocursorcolumn (cuc/nocuc)           - Highlight the current column
 set statusline / set nostatusline (stl/nostl)               - Show/hide status line

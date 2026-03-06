@@ -135,6 +135,15 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
   )
   result.add ConfigItemDescriptor(
     kind: cvkBool,
+    displayName: "relativeNumber",
+    section: "Standard",
+    boolGet: proc(c: EditorConfig): bool =
+      c.standard.relativeNumber,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.standard.relativeNumber = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
     displayName: "currentLine",
     section: "Highlight",
     boolGet: proc(c: EditorConfig): bool =

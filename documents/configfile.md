@@ -92,6 +92,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | number | bool | true | Display line numbers |
+| relativeNumber | bool | false | Display relative line numbers |
 | statusLine | bool | true | Display status lines |
 | syntax | bool | true | Enable syntax highlighting |
 | indentationLines | bool | true | Enable indentation lines |

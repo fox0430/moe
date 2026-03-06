@@ -251,6 +251,34 @@ suite "CommandModeHandler - executeSet Boolean Options":
     check result.boolOption == bsoNumber
     check result.boolValue == true
 
+  test "Set relativenumber on":
+    let handler = setupHandler()
+    let result = handler.executeSet("relativenumber", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoRelativeNumber
+    check result.boolValue == true
+
+  test "Set relativenumber off (norelativenumber)":
+    let handler = setupHandler()
+    let result = handler.executeSet("norelativenumber", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoRelativeNumber
+    check result.boolValue == false
+
+  test "Set relativenumber with abbreviation (rnu)":
+    let handler = setupHandler()
+    let result = handler.executeSet("rnu", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoRelativeNumber
+    check result.boolValue == true
+
+  test "Set relativenumber off with abbreviation (nornu)":
+    let handler = setupHandler()
+    let result = handler.executeSet("nornu", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoRelativeNumber
+    check result.boolValue == false
+
   test "Set cursorline on":
     let handler = setupHandler()
     let result = handler.executeSet("cursorline", none(string))
@@ -1206,6 +1234,24 @@ suite "CommandModeHandler - handleCommandModeInput":
     check result.boolOption == bsoNumber
     check result.boolValue == true
 
+  test "Handle :set relativenumber":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":set relativenumber")
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoRelativeNumber
+    check result.boolValue == true
+
+  test "Handle :set nornu":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":set nornu")
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoRelativeNumber
+    check result.boolValue == false
+
   test "Handle :help command":
     let handler = setupHandler()
     let buffer = setupBuffer()
@@ -1705,6 +1751,7 @@ suite "CommandModeHandler - executeSet enum coverage":
     # Map from primary option name to the enum value it produces.
     const boolOptions: seq[(string, BoolSettingOption)] = @[
       ("number", bsoNumber),
+      ("relativenumber", bsoRelativeNumber),
       ("cursorline", bsoCursorLine),
       ("cursorcolumn", bsoCursorColumn),
       ("statusline", bsoStatusLine),

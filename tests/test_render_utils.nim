@@ -45,6 +45,33 @@ suite "formatLineNumber":
   test "edge case - zero index":
     check formatLineNumber(0, 2) == "1 " # align("1", 1) = "1", then add " "
 
+suite "formatRelativeLineNumber":
+  test "current line shows absolute number":
+    # Cursor on line index 5 (displayed as 6), width 3
+    check formatRelativeLineNumber(5, 5, 3) == " 6 "
+
+  test "lines above cursor show relative distance":
+    # Cursor on line 10, checking line 7 -> distance 3
+    check formatRelativeLineNumber(7, 10, 3) == " 3 "
+
+  test "lines below cursor show relative distance":
+    # Cursor on line 5, checking line 8 -> distance 3
+    check formatRelativeLineNumber(8, 5, 3) == " 3 "
+
+  test "adjacent lines show 1":
+    check formatRelativeLineNumber(4, 5, 3) == " 1 "
+    check formatRelativeLineNumber(6, 5, 3) == " 1 "
+
+  test "larger width alignment":
+    # Cursor on line 50, checking line 45 -> distance 5, width 5
+    check formatRelativeLineNumber(45, 50, 5) == "   5 "
+    # Current line shows absolute: 51
+    check formatRelativeLineNumber(50, 50, 5) == "  51 "
+
+  test "first line with cursor far away":
+    # Cursor on line 99, checking line 0 -> distance 99
+    check formatRelativeLineNumber(0, 99, 5) == "  99 "
+
 suite "calculateWrapCount":
   test "empty line":
     check calculateWrapCount("", 80, 4) == 1

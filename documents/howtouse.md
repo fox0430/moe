@@ -382,6 +382,7 @@ All keystrokes are forwarded to the running shell/command.
 | `noh` | Turn off search highlights |
 | `stripwhitespace` | Delete trailing spaces |
 | `set number` or `set nonumber` | Show/hide line numbers (alias: `nu`, `nonu`) |
+| `set relativenumber` or `set norelativenumber` | Show/hide relative line numbers (alias: `rnu`, `nornu`) |
 | `set cursorline` or `set nocursorline` | Highlight the current line (alias: `cul`, `nocul`) |
 | `set cursorcolumn` or `set nocursorcolumn` | Highlight the current column (alias: `cuc`, `nocuc`) |
 | `set statusline` or `set nostatusline` | Show/hide status line (alias: `stl`, `nostl`) |

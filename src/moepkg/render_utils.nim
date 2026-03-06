@@ -151,6 +151,15 @@ proc formatLineNumber*(lineIndex: int, width: int): string =
   ## Format a line number string with proper alignment
   align($(lineIndex + LineNumberBase), width - LineNumberPadding) & " "
 
+proc formatRelativeLineNumber*(lineIndex: int, cursorLine: int, width: int): string =
+  ## Format a relative line number string. Current line shows absolute number.
+  let num =
+    if lineIndex == cursorLine:
+      lineIndex + LineNumberBase
+    else:
+      abs(lineIndex - cursorLine)
+  align($num, width - LineNumberPadding) & " "
+
 proc displayWidthSubstrWithTabs*(
     text: string, startChar: int, maxWidth: int, tabStop: int
 ): (int, int) =
