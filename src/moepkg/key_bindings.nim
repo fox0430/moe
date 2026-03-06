@@ -2715,6 +2715,16 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.registerCommand(
     Command(
+      name: "visual-surround-char",
+      description: "Surround visual selection with character",
+      kind: ctOperatorPending,
+      operatorType: "visual-surround",
+      reverse: false,
+      targetChar: "", # Will be filled when user presses a key
+    )
+  )
+  registry.registerCommand(
+    Command(
       name: "visual-joinlines",
       description: "Join lines in visual selection",
       kind: ctAction,
@@ -2885,6 +2895,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Visual, "U", "visual-uppercase")
   registry.bindKey(EditorMode.Visual, "~", "visual-toggle-case")
   registry.bindKey(EditorMode.Visual, "r", "visual-replace-char")
+  registry.bindKey(EditorMode.Visual, "S", "visual-surround-char")
   registry.bindKey(EditorMode.Visual, "J", "visual-joinlines")
   registry.bindKey(EditorMode.Visual, "c", "visual-change")
   registry.bindKey(EditorMode.Visual, "o", "visual-swap-selection")
@@ -2940,6 +2951,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualBlock, "U", "visual-uppercase")
   registry.bindKey(EditorMode.VisualBlock, "~", "visual-toggle-case")
   registry.bindKey(EditorMode.VisualBlock, "r", "visual-replace-char")
+  registry.bindKey(EditorMode.VisualBlock, "S", "visual-surround-char")
   registry.bindKey(EditorMode.VisualBlock, "J", "visual-joinlines")
   registry.bindKey(EditorMode.VisualBlock, "c", "visual-change")
   registry.bindKey(EditorMode.VisualBlock, "o", "visual-swap-selection")
@@ -2991,6 +3003,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualLine, "U", "visual-uppercase")
   registry.bindKey(EditorMode.VisualLine, "~", "visual-toggle-case")
   registry.bindKey(EditorMode.VisualLine, "r", "visual-replace-char")
+  registry.bindKey(EditorMode.VisualLine, "S", "visual-surround-char")
   registry.bindKey(EditorMode.VisualLine, "J", "visual-joinlines")
   registry.bindKey(EditorMode.VisualLine, "c", "visual-change")
   registry.bindKey(EditorMode.VisualLine, "o", "visual-swap-selection")

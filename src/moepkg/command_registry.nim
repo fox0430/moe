@@ -1051,6 +1051,21 @@ proc executeCommand*(
         ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
 
       return ok(())
+    of "visual-surround":
+      # Execute visual surround action (S command in visual mode)
+      if cmd.targetChar.len == 0:
+        return err("No character specified for surround")
+
+      if not ctx.state.visualSelection.active:
+        return err("No visual selection active")
+
+      visualSurround(ctx.buffer, ctx.state, cmd.targetChar[0])
+
+      if ctx.keyBindingRegistry != nil:
+        ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
+        ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
+
+      return ok(())
     else:
       return Result[(), string].err "Unknown operator type: " & cmd.operatorType
   of ctAction, ctTextObject, ctOperator, ctCustom:
