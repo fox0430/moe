@@ -1032,6 +1032,38 @@ suite "KeyBindingRegistry - processKey additional cases":
     check registry.sequenceState.hasNumericPrefix == false
     check registry.sequenceState.numericPrefix == ""
 
+  test "Digits do not accumulate numeric prefix in Insert mode":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    # In Insert mode, digit keys should NOT be treated as numeric prefix
+    let result = registry.processKey(EditorMode.Insert, toKeyCombo('8'))
+    # processKey returns none (no binding for '8' in Insert mode) but
+    # numeric prefix must NOT be set
+    check registry.sequenceState.hasNumericPrefix == false
+    check registry.sequenceState.numericPrefix == ""
+
+  test "Digits do not accumulate numeric prefix in Replace mode":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    let result = registry.processKey(EditorMode.Replace, toKeyCombo('5'))
+    check registry.sequenceState.hasNumericPrefix == false
+    check registry.sequenceState.numericPrefix == ""
+
+  test "Escape after digit in Insert mode triggers switch-to-normal":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    # Type a digit in Insert mode - should not set numeric prefix
+    discard registry.processKey(EditorMode.Insert, toKeyCombo('8'))
+    registry.clearSequence()
+
+    # ESC should find the switch-to-normal binding, not be consumed by prefix cancel
+    let result = registry.processKey(EditorMode.Insert, toSpecialKeyCombo(skEscape))
+    check result.isSome
+    check result.get.name == "switch-to-normal"
+
   test "Operator pending with special key cancels":
     let registry = newKeyBindingRegistry()
     let cmd = Command(
