@@ -826,7 +826,9 @@ proc processKey*(
       return none(Command)
 
   # Handle numeric prefix input (only when no keys are in sequence and not waiting for char)
-  if registry.sequenceState.keys.len == 0 and not registry.sequenceState.waitingForChar and
+  # Skip numeric prefix accumulation in Insert/Replace modes where digits are text input
+  if mode notin {EditorMode.Insert, EditorMode.Replace} and
+      registry.sequenceState.keys.len == 0 and not registry.sequenceState.waitingForChar and
       isDigitKey(combo):
     # Special case: ignore leading zero unless it's standalone
     if combo.char == "0" and registry.sequenceState.numericPrefix.len == 0:
