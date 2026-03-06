@@ -65,6 +65,7 @@ type
   # Standard settings
   StandardConfig* = object
     number*: bool
+    relativeNumber*: bool
     statusLine*: bool
     syntax*: bool
     indentationLines*: bool
@@ -445,6 +446,7 @@ proc newEditorConfig*(): EditorConfig =
   EditorConfig(
     standard: StandardConfig(
       number: true,
+      relativeNumber: false,
       statusLine: true,
       syntax: true,
       indentationLines: true,

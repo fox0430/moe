@@ -164,6 +164,7 @@ type
     showLinePercentage*: bool # Whether to show line percentage in status line
     showEncoding*: bool # Whether to show file encoding in status line
     showLineNumbers*: bool # Whether to show line numbers
+    relativeLineNumbers*: bool # Whether to show relative line numbers
     showCurrentLineNumber*: bool # Whether to highlight current line number
     showCursorLine*: bool # Whether to highlight the cursor line
     showCursorColumn*: bool # Whether to highlight the cursor column

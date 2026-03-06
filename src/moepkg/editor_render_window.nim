@@ -25,6 +25,12 @@ import pkg/celina
 
 import editor_types, editor_window, editor_render_helpers, render_utils, sidebar
 
+proc fmtLineNum(e: Editor, lineIndex: int, cursorLine: int, width: int): string =
+  if e.state.display.relativeLineNumbers:
+    formatRelativeLineNumber(lineIndex, cursorLine, width)
+  else:
+    formatLineNumber(lineIndex, width)
+
 proc renderWindowLineWrapped*(
     e: Editor,
     buffer: var Buffer,
@@ -59,7 +65,7 @@ proc renderWindowLineWrapped*(
       return
     # Empty line - just render line number (if enabled)
     if lineNumOffset > 0:
-      let lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
+      let lineNumStr = e.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
       if lineNumScreenX + lineNumStr.len <= buffer.area.width:
         buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
     # Fill with cursor line/column highlight if on cursor line/column
@@ -102,7 +108,7 @@ proc renderWindowLineWrapped*(
     # Render line number for first wrap, empty space for others (if enabled)
     if lineNumOffset > 0:
       if wrapLineCount == 0:
-        let lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
+        let lineNumStr = e.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
         if lineNumScreenX + lineNumStr.len <= buffer.area.width:
           buffer.setString(lineNumScreenX, currentActualScreenY, lineNumStr, lineStyle)
       else:
@@ -163,7 +169,7 @@ proc renderWindowLineNoWrap*(
 
   # Render line number (if enabled)
   if lineNumOffset > 0:
-    let lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
+    let lineNumStr = e.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
     if lineNumScreenX + lineNumStr.len <= buffer.area.width:
       buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
 
@@ -243,7 +249,7 @@ proc renderFoldLine*(
 
   # Render line number (if enabled)
   if lineNumOffset > 0:
-    let lineNumStr = formatLineNumber(fold.startLine, lineNumOffset)
+    let lineNumStr = e.fmtLineNum(fold.startLine, window.cursor.line, lineNumOffset)
     if lineNumScreenX + lineNumStr.len <= buffer.area.width:
       buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineNumStyle())
 

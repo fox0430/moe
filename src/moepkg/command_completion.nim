@@ -181,6 +181,8 @@ const SetOptions* = {
   # Line numbers
   "number": "Show line numbers",
   "nonumber": "Hide line numbers",
+  "relativenumber": "Show relative line numbers",
+  "norelativenumber": "Hide relative line numbers",
   # Cursor line/column
   "cursorline": "Highlight cursor line",
   "nocursorline": "Disable cursor line highlight",

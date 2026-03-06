@@ -970,6 +970,8 @@ suite "CommandCompletion - SetOptions and executeSet sync":
       # Boolean options
       "number",
       "nonumber",
+      "relativenumber",
+      "norelativenumber",
       "cursorline",
       "nocursorline",
       "cursorcolumn",
@@ -1038,12 +1040,12 @@ suite "CommandCompletion - SetOptions and executeSet sync":
     ## option that executeSet handles. Update executeSetPrimaryOptions
     ## above if this test fails after adding a new option.
     const executeSetPrimaryOptions = [
-      "number", "nonumber", "cursorline", "nocursorline", "cursorcolumn",
-      "nocursorcolumn", "statusline", "nostatusline", "syntax", "nosyntax",
-      "indentationlines", "noindentationlines", "autoindent", "noautoindent",
-      "autocloseparen", "noautocloseparen", "autodeleteparen", "noautodeleteparen",
-      "clipboard", "noclipboard", "smoothscroll", "nosmoothscroll", "livereload",
-      "nolivereload", "icon", "noicon", "highlightcurrentline",
+      "number", "nonumber", "relativenumber", "norelativenumber", "cursorline",
+      "nocursorline", "cursorcolumn", "nocursorcolumn", "statusline", "nostatusline",
+      "syntax", "nosyntax", "indentationlines", "noindentationlines", "autoindent",
+      "noautoindent", "autocloseparen", "noautocloseparen", "autodeleteparen",
+      "noautodeleteparen", "clipboard", "noclipboard", "smoothscroll", "nosmoothscroll",
+      "livereload", "nolivereload", "icon", "noicon", "highlightcurrentline",
       "nohighlightcurrentline", "highlightcurrentword", "nohighlightcurrentword",
       "highlightfullspace", "nohighlightfullspace", "highlightparen",
       "nohighlightparen", "highlightfindchar", "nohighlightfindchar", "multistatusline",

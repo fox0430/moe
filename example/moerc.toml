@@ -4,6 +4,8 @@ bufferBackend = "auto"                 # Buffer data structure. The default is a
 
 number = true                          # Line numbers
 
+relativeNumber = false                 # Relative line numbers
+
 statusLine = true                      # Show status line
 
 syntax = true                          # Syntax highlighting

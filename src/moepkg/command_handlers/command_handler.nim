@@ -33,6 +33,7 @@ type
   BoolSettingOption* = enum
     ## Boolean setting options that can be toggled via :set command
     bsoNumber # line numbers
+    bsoRelativeNumber # relative line numbers
     bsoCursorLine # cursor line highlight
     bsoCursorColumn # cursor column highlight
     bsoStatusLine # status line
@@ -351,6 +352,15 @@ proc executeSet*(
   of "nonumber", "nonu":
     return
       CommandModeResult(kind: cmrSetBoolOption, boolOption: bsoNumber, boolValue: false)
+  # Relative line numbers
+  of "relativenumber", "rnu":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoRelativeNumber, boolValue: true
+    )
+  of "norelativenumber", "nornu":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoRelativeNumber, boolValue: false
+    )
   # Cursor line
   of "cursorline", "cul":
     return CommandModeResult(
