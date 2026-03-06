@@ -3563,3 +3563,148 @@ suite "Handler - Text Object Count (d2iw, d2aw)":
     check registry.execute(ctx, custom("textobject.quote.double")).isOk
     # Only "hello" inside quotes should be deleted (count ignored)
     check buffer[0] == "say \"\" world"
+
+suite "pendingRegister dispatch for clipboard registers":
+  test "yy with pendingRegister '*' stores in primary selection register":
+    let buffer = newTextBuffer("hello primary")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    # Set pending register to '*'
+    ctx.state.pendingRegister = some('*')
+
+    # Execute yy (yank line)
+    check registry.execute(ctx, custom("yank.line")).isOk
+
+    # Should be stored in '*' register (primary selection)
+    let primaryReg = ctx.state.registers.getClipboardRegister('*')
+    check primaryReg.getContent().contains("hello primary")
+    check primaryReg.isLine
+
+    # '+' register should remain empty
+    let clipboardReg = ctx.state.registers.getClipboardRegister('+')
+    check clipboardReg.isEmpty
+
+  test "yy with pendingRegister '+' stores in clipboard selection register":
+    let buffer = newTextBuffer("hello clipboard")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingRegister = some('+')
+
+    check registry.execute(ctx, custom("yank.line")).isOk
+
+    let clipboardReg = ctx.state.registers.getClipboardRegister('+')
+    check clipboardReg.getContent().contains("hello clipboard")
+    check clipboardReg.isLine
+
+    let primaryReg = ctx.state.registers.getClipboardRegister('*')
+    check primaryReg.isEmpty
+
+  test "dd with pendingRegister '*' stores in primary selection register":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingRegister = some('*')
+
+    check registry.execute(ctx, custom("delete.line")).isOk
+
+    let primaryReg = ctx.state.registers.getClipboardRegister('*')
+    check primaryReg.getContent().contains("line1")
+    check primaryReg.isLine
+
+    let clipboardReg = ctx.state.registers.getClipboardRegister('+')
+    check clipboardReg.isEmpty
+
+  test "x with pendingRegister '+' stores in clipboard selection register":
+    let buffer = newTextBuffer("abcdef")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingRegister = some('+')
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+
+    let clipboardReg = ctx.state.registers.getClipboardRegister('+')
+    check clipboardReg.getContent() == "a"
+
+    let primaryReg = ctx.state.registers.getClipboardRegister('*')
+    check primaryReg.isEmpty
+
+  test "yy without pendingRegister stores in yank register (default)":
+    let buffer = newTextBuffer("default yank")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("yank.line")).isOk
+
+    # Should be in register 0 (yank) and unnamed
+    check ctx.state.registers.getNumberRegister(0).getContent().contains("default yank")
+    check ctx.state.registers.getNoNamedRegister().getContent().contains("default yank")
+
+    # Clipboard registers should be empty
+    let primaryReg = ctx.state.registers.getClipboardRegister('*')
+    check primaryReg.isEmpty
+    let clipboardReg = ctx.state.registers.getClipboardRegister('+')
+    check clipboardReg.isEmpty
+
+  test "pendingRegister is cleared after use":
+    let buffer = newTextBuffer("test clearing")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingRegister = some('*')
+    check registry.execute(ctx, custom("yank.line")).isOk
+
+    # pendingRegister should be cleared
+    check ctx.state.pendingRegister.isNone
+
+  test "yy with pendingRegister named register 'a' stores in named register":
+    let buffer = newTextBuffer("named content")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingRegister = some('a')
+    check registry.execute(ctx, custom("yank.line")).isOk
+
+    let namedReg = ctx.state.registers.getNamedRegister('a')
+    check namedReg.getContent().contains("named content")
+
+    # Clipboard registers should be empty
+    check ctx.state.registers.getClipboardRegister('*').isEmpty
+    check ctx.state.registers.getClipboardRegister('+').isEmpty
+
+  test "operator yank (y + motion) with pendingRegister '*'":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingRegister = some('*')
+
+    # First y sets pending operator
+    check registry.execute(ctx, custom("operator.yank")).isOk
+    # Second y executes line yank
+    check registry.execute(ctx, custom("operator.yank")).isOk
+
+    let primaryReg = ctx.state.registers.getClipboardRegister('*')
+    check primaryReg.getContent().contains("hello world")
+
+    check ctx.state.registers.getClipboardRegister('+').isEmpty
+
+  test "operator delete (d + motion) with pendingRegister '+'":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    let registry = createTestRegistry()
+
+    ctx.state.pendingRegister = some('+')
+
+    # First d sets pending operator
+    check registry.execute(ctx, custom("operator.delete")).isOk
+    # Second d executes line delete
+    check registry.execute(ctx, custom("operator.delete")).isOk
+
+    let clipboardReg = ctx.state.registers.getClipboardRegister('+')
+    check clipboardReg.getContent().contains("line1")
+
+    check ctx.state.registers.getClipboardRegister('*').isEmpty

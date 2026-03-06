@@ -53,7 +53,8 @@ type
       ## Named registers (a-z)
       ## Lowercase overwrites, uppercase appends
 
-    clipboard: Register ## Clipboard register (*, +) - system clipboard content
+    primarySelection: Register ## Primary selection register (*) - X11 PRIMARY
+    clipboardSelection: Register ## Clipboard selection register (+, ~) - CLIPBOARD
 
 proc initRegisters*(): Registers =
   ## Initialize a new register set
@@ -61,7 +62,8 @@ proc initRegisters*(): Registers =
     noNamed: Register(isLine: false, buffer: @[]),
     smallDelete: Register(isLine: false, buffer: @[]),
     named: initTable[char, Register](),
-    clipboard: Register(isLine: false, buffer: @[]),
+    primarySelection: Register(isLine: false, buffer: @[]),
+    clipboardSelection: Register(isLine: false, buffer: @[]),
   )
 
   # Initialize number registers
@@ -88,10 +90,17 @@ proc isSmallDeleteRegisterName*(c: char): bool =
   ## Check if character is the small delete register name (-)
   c == '-'
 
+proc isPrimarySelectionRegisterName*(c: char): bool =
+  ## Check if character is the primary selection register name (*)
+  c == '*'
+
+proc isClipboardSelectionRegisterName*(c: char): bool =
+  ## Check if character is the clipboard selection register name (+, ~)
+  c in {'+', '~'}
+
 proc isClipboardRegisterName*(c: char): bool =
-  ## Check if character is a clipboard register name (*, +, ~)
-  ## Note: All three registers point to the same system clipboard
-  c in {'*', '+', '~'}
+  ## Check if character is any clipboard register name (*, +, ~)
+  c.isPrimarySelectionRegisterName or c.isClipboardSelectionRegisterName
 
 proc isValidRegisterName*(c: char): bool =
   ## Check if character is any valid register name
@@ -147,15 +156,26 @@ proc appendRegister(r: var Register, content: string, isLine: bool) =
 # Clipboard integration (uses async clipboard module)
 
 proc sendToClipboard(r: Registers, content: string) =
-  ## Send content to system clipboard if available (fire-and-forget)
+  ## Send content to system CLIPBOARD selection if available (fire-and-forget)
   if r.clipboardTool.isSome:
     writeToClipboardAsync(r.clipboardTool.get, content)
 
+proc sendToPrimarySelection(r: Registers, content: string) =
+  ## Send content to X11 PRIMARY selection if available (fire-and-forget)
+  if r.clipboardTool.isSome:
+    writeToPrimarySelectionAsync(r.clipboardTool.get, content)
+
 proc getFromClipboard(r: Registers): Result[string, string] =
-  ## Get content from system clipboard if available
+  ## Get content from system CLIPBOARD selection if available
   if r.clipboardTool.isNone:
     return err("No clipboard tool configured")
   return readFromClipboardSync(r.clipboardTool.get)
+
+proc getFromPrimarySelection(r: Registers): Result[string, string] =
+  ## Get content from X11 PRIMARY selection if available
+  if r.clipboardTool.isNone:
+    return err("No clipboard tool configured")
+  return readFromPrimarySelectionSync(r.clipboardTool.get)
 
 # Public API for setting registers
 
@@ -239,10 +259,20 @@ proc setNamedRegister*(
   r.setNoNamedRegister(lines, isLine)
   ok(())
 
+proc setClipboardRegister*(r: Registers, name: char, content: string, isLine: bool) =
+  ## Set clipboard register by name and sync to the appropriate system selection
+  ## '*' -> PRIMARY selection, '+' or '~' -> CLIPBOARD selection
+  if name.isPrimarySelectionRegisterName:
+    r.primarySelection.setRegister(content, isLine)
+    r.sendToPrimarySelection(content)
+  else:
+    r.clipboardSelection.setRegister(content, isLine)
+    r.sendToClipboard(content)
+  r.noNamed.setRegister(content, isLine)
+
 proc setClipboardRegister*(r: Registers, content: string, isLine: bool) =
-  ## Set clipboard register and sync to system clipboard
-  r.clipboard.setRegister(content, isLine)
-  r.setNoNamedRegister(content, isLine)
+  ## Set clipboard register (defaults to CLIPBOARD selection '+')
+  r.setClipboardRegister('+', content, isLine)
 
 proc setRegister*(
     r: Registers, name: char, content: string, isLine: bool
@@ -268,25 +298,34 @@ proc setRegister*(
     r.setNoNamedRegister(content, false)
     ok(())
   elif name.isClipboardRegisterName:
-    r.setClipboardRegister(content, isLine)
+    r.setClipboardRegister(name, content, isLine)
     ok(())
   else:
     err("Invalid register name: " & $name)
 
 # Public API for getting registers
 
-proc tryUpdateClipboardRegister(r: Registers) =
-  ## Try to update clipboard register from system clipboard
+proc tryUpdateClipboardSelectionRegister(r: Registers) =
+  ## Try to update clipboard selection register from system CLIPBOARD
   let clipResult = r.getFromClipboard()
   if clipResult.isOk:
     let content = clipResult.get
-    if content.len > 0 and content != r.clipboard.getContent:
+    if content.len > 0 and content != r.clipboardSelection.getContent:
       let hasNewline = content.contains('\n')
-      r.clipboard.setRegister(content, hasNewline)
+      r.clipboardSelection.setRegister(content, hasNewline)
+
+proc tryUpdatePrimarySelectionRegister(r: Registers) =
+  ## Try to update primary selection register from system PRIMARY selection
+  let clipResult = r.getFromPrimarySelection()
+  if clipResult.isOk:
+    let content = clipResult.get
+    if content.len > 0 and content != r.primarySelection.getContent:
+      let hasNewline = content.contains('\n')
+      r.primarySelection.setRegister(content, hasNewline)
 
 proc getNoNamedRegister*(r: Registers): Register =
   ## Get the unnamed register, updating from clipboard if available
-  r.tryUpdateClipboardRegister()
+  r.tryUpdateClipboardSelectionRegister()
   r.noNamed
 
 proc getSmallDeleteRegister*(r: Registers): Register =
@@ -315,10 +354,19 @@ proc getNamedRegister*(r: Registers, name: char): Register =
   else:
     Register(isLine: false, buffer: @[])
 
+proc getClipboardRegister*(r: Registers, name: char): Register =
+  ## Get clipboard register by name, updating from the appropriate system selection
+  ## '*' -> PRIMARY selection, '+' or '~' -> CLIPBOARD selection
+  if name.isPrimarySelectionRegisterName:
+    r.tryUpdatePrimarySelectionRegister()
+    r.primarySelection
+  else:
+    r.tryUpdateClipboardSelectionRegister()
+    r.clipboardSelection
+
 proc getClipboardRegister*(r: Registers): Register =
-  ## Get clipboard register, updating from system clipboard first
-  r.tryUpdateClipboardRegister()
-  r.clipboard
+  ## Get clipboard register (defaults to CLIPBOARD selection '+')
+  r.getClipboardRegister('+')
 
 proc getRegister*(r: Registers, name: char): Register =
   ## Get any register by name
@@ -331,7 +379,7 @@ proc getRegister*(r: Registers, name: char): Register =
   elif name.isSmallDeleteRegisterName:
     r.getSmallDeleteRegister()
   elif name.isClipboardRegisterName:
-    r.getClipboardRegister()
+    r.getClipboardRegister(name)
   else:
     Register(isLine: false, buffer: @[])
 

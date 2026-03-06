@@ -327,6 +327,10 @@ proc execute*(
 
   return command.handler(ctx, args)
 
+# Forward declarations for register dispatch helpers
+proc storeYankedText(ctx: CommandContext, text: string, isLine: bool)
+proc storeDeletedText(ctx: CommandContext, text: string, isLine: bool)
+
 proc executeOperatorOnRange(
     ctx: CommandContext,
     operatorType: OperatorType,
@@ -347,22 +351,8 @@ proc executeOperatorOnRange(
     # Yank (copy) the range
     let text = extractRangeText(ctx.buffer, range)
 
-    # Store in register system
-    if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
-      let regName = ctx.state.pendingRegister.get
-      if regName.isNamedRegisterName:
-        discard ctx.state.registers.setNamedRegister(regName, text, range.isLinewise)
-      elif regName.isClipboardRegisterName:
-        ctx.state.registers.setClipboardRegister(text, range.isLinewise)
-      else:
-        ctx.state.registers.setYankedRegister(text, range.isLinewise)
-      ctx.state.pendingRegister = none(char)
-    else:
-      ctx.state.registers.setYankedRegister(text, range.isLinewise)
-
-    # Also update legacy register for backward compatibility
-    ctx.state.yankRegister = text
-    ctx.state.yankIsLine = range.isLinewise
+    # Store in register system (respects pendingRegister)
+    storeYankedText(ctx, text, range.isLinewise)
 
     let lineCount =
       if range.isLinewise:
@@ -381,22 +371,8 @@ proc executeOperatorOnRange(
     # Delete the range (and yank it)
     let text = extractRangeText(ctx.buffer, range)
 
-    # Store in register system
-    if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
-      let regName = ctx.state.pendingRegister.get
-      if regName.isNamedRegisterName:
-        discard ctx.state.registers.setNamedRegister(regName, text, range.isLinewise)
-      elif regName.isClipboardRegisterName:
-        ctx.state.registers.setClipboardRegister(text, range.isLinewise)
-      else:
-        ctx.state.registers.setDeletedRegister(text, range.isLinewise)
-      ctx.state.pendingRegister = none(char)
-    else:
-      ctx.state.registers.setDeletedRegister(text, range.isLinewise)
-
-    # Also update legacy register for backward compatibility
-    ctx.state.yankRegister = text
-    ctx.state.yankIsLine = range.isLinewise
+    # Store in register system (respects pendingRegister)
+    storeDeletedText(ctx, text, range.isLinewise)
 
     # Delete the text
     let delResult = deleteRange(ctx.buffer, range)
@@ -440,22 +416,8 @@ proc executeOperatorOnRange(
     # Change the range (delete and enter insert mode)
     let text = extractRangeText(ctx.buffer, range)
 
-    # Store in register system (change also yanks before deleting)
-    if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
-      let regName = ctx.state.pendingRegister.get
-      if regName.isNamedRegisterName:
-        discard ctx.state.registers.setNamedRegister(regName, text, range.isLinewise)
-      elif regName.isClipboardRegisterName:
-        ctx.state.registers.setClipboardRegister(text, range.isLinewise)
-      else:
-        ctx.state.registers.setDeletedRegister(text, range.isLinewise)
-      ctx.state.pendingRegister = none(char)
-    else:
-      ctx.state.registers.setDeletedRegister(text, range.isLinewise)
-
-    # Also update legacy register for backward compatibility
-    ctx.state.yankRegister = text
-    ctx.state.yankIsLine = range.isLinewise
+    # Store in register system (respects pendingRegister)
+    storeDeletedText(ctx, text, range.isLinewise)
 
     # Begin transaction for all change operations (delete + insert mode input)
     let transactionResult = ctx.buffer.beginTransaction("Change operation")
@@ -1463,6 +1425,51 @@ proc handleVisualPaste(ctx: CommandContext): Result[(), string] =
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
+## Helper for register dispatch
+## These helpers check pendingRegister and route content to the correct register.
+
+proc storeYankedText(ctx: CommandContext, text: string, isLine: bool) =
+  ## Store yanked text in the appropriate register, respecting pendingRegister.
+  ## Also writes to the system clipboard when appropriate.
+  ctx.state.yankRegister = text
+  ctx.state.yankIsLine = isLine
+
+  if ctx.state.registers.isNil:
+    return
+
+  if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
+    let regName = ctx.state.pendingRegister.get
+    if regName.isNamedRegisterName:
+      discard ctx.state.registers.setNamedRegister(regName, text, isLine)
+    elif regName.isClipboardRegisterName:
+      ctx.state.registers.setClipboardRegister(regName, text, isLine)
+    else:
+      ctx.state.registers.setYankedRegister(text, isLine)
+    ctx.state.pendingRegister = none(char)
+  else:
+    ctx.state.registers.setYankedRegister(text, isLine)
+
+proc storeDeletedText(ctx: CommandContext, text: string, isLine: bool) =
+  ## Store deleted text in the appropriate register, respecting pendingRegister.
+  ## Also writes to the system clipboard when appropriate.
+  ctx.state.yankRegister = text
+  ctx.state.yankIsLine = isLine
+
+  if ctx.state.registers.isNil:
+    return
+
+  if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
+    let regName = ctx.state.pendingRegister.get
+    if regName.isNamedRegisterName:
+      discard ctx.state.registers.setNamedRegister(regName, text, isLine)
+    elif regName.isClipboardRegisterName:
+      ctx.state.registers.setClipboardRegister(regName, text, isLine)
+    else:
+      ctx.state.registers.setDeletedRegister(text, isLine)
+    ctx.state.pendingRegister = none(char)
+  else:
+    ctx.state.registers.setDeletedRegister(text, isLine)
+
 ## Helper for clipboard operations
 
 proc getSelectedText(state: EditorState, buffer: TextBuffer): string =
@@ -1801,9 +1808,8 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
         if commitResult.isErr:
           return err(commitResult.error)
 
-        # Store in yank register
-        ctx.state.yankRegister = $charAtCursorRune
-        ctx.state.yankIsLine = false
+        # Store in register system (respects pendingRegister)
+        storeDeletedText(ctx, $charAtCursorRune, false)
 
         # Adjust cursor: if we deleted a closing bracket, opening was before it
         if isCloseBracket(charAtCursorRune):
@@ -1835,9 +1841,8 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
     if runeIdx < runes.len:
       deletedText.add($runes[runeIdx])
 
-  # Store in yank register before deleting
-  ctx.state.yankRegister = deletedText
-  ctx.state.yankIsLine = false
+  # Store in register system (respects pendingRegister)
+  storeDeletedText(ctx, deletedText, false)
 
   # Begin transaction if deleting multiple characters
   if charsToDelete > 1:
@@ -1861,10 +1866,6 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
     let txnResult = ctx.buffer.commitTransaction()
     if txnResult.isErr:
       return err(txnResult.error)
-
-  # Also write to system clipboard if enabled
-  if ctx.clipboardConfig.enable:
-    writeToClipboardAsync(ctx.clipboardConfig.tool, deletedText)
 
   # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand = some(
@@ -1938,9 +1939,8 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
         if commitResult.isErr:
           return err(commitResult.error)
 
-        # Store in yank register
-        ctx.state.yankRegister = $charBeforeCursorRune
-        ctx.state.yankIsLine = false
+        # Store in register system (respects pendingRegister)
+        storeDeletedText(ctx, $charBeforeCursorRune, false)
 
         # Cursor adjustment: one bracket was at cursorCol-1, always shift back by 1
         ctx.cursor.column = cursorCol - 1
@@ -1971,9 +1971,8 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
     if runeIdx < runes.len:
       deletedText.add($runes[runeIdx])
 
-  # Store in yank register before deleting
-  ctx.state.yankRegister = deletedText
-  ctx.state.yankIsLine = false
+  # Store in register system (respects pendingRegister)
+  storeDeletedText(ctx, deletedText, false)
 
   # Begin transaction if deleting multiple characters
   if charsToDelete > 1:
@@ -2001,10 +2000,6 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
 
   # Move cursor to the position where deletion started
   ctx.cursor.column = startColumn
-
-  # Also write to system clipboard if enabled
-  if ctx.clipboardConfig.enable:
-    writeToClipboardAsync(ctx.clipboardConfig.tool, deletedText)
 
   # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand = some(
@@ -2047,13 +2042,8 @@ proc handleSubstituteChar(ctx: CommandContext, count: int = 1): Result[(), strin
     if runeIdx < runes.len:
       deletedText.add($runes[runeIdx])
 
-  # Store in yank register before deleting
-  ctx.state.yankRegister = deletedText
-  ctx.state.yankIsLine = false
-
-  # Also write to system clipboard if enabled
-  if ctx.clipboardConfig.enable:
-    writeToClipboardAsync(ctx.clipboardConfig.tool, deletedText)
+  # Store in register system (respects pendingRegister)
+  storeDeletedText(ctx, deletedText, false)
 
   # Begin transaction for delete + insert mode (all in one undo unit)
   let txnResult =
@@ -2099,12 +2089,8 @@ proc handleSubstituteLine(ctx: CommandContext, count: int = 1): Result[(), strin
       if lineContent.len == 0 or lineContent[^1] != '\n':
         text.add("\n")
 
-  ctx.state.yankRegister = text
-  ctx.state.yankIsLine = true
-
-  # Also write to system clipboard if enabled
-  if ctx.clipboardConfig.enable:
-    writeToClipboardAsync(ctx.clipboardConfig.tool, text)
+  # Store in register system (respects pendingRegister)
+  storeDeletedText(ctx, text, true)
 
   # Get indent from first line (for auto-indent)
   let firstLine = ctx.buffer.getLine(startLine)
@@ -2258,9 +2244,8 @@ proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
       if lineIdx < endLine or (lineContent.len > 0 and lineContent[^1] != '\n'):
         deletedText.add("\n")
 
-  # Store in yank register before deleting
-  ctx.state.yankRegister = deletedText
-  ctx.state.yankIsLine = true
+  # Store in register system (respects pendingRegister)
+  storeDeletedText(ctx, deletedText, true)
 
   # Begin transaction for line deletions
   let transactionResult =
@@ -2306,10 +2291,6 @@ proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
     ctx.cursor.column = min(ctx.cursor.column, newLine.charLen - 1)
   else:
     ctx.cursor.column = 0
-
-  # Also write to system clipboard if enabled
-  if ctx.clipboardConfig.enable:
-    writeToClipboardAsync(ctx.clipboardConfig.tool, deletedText)
 
   # Record this command for repeat (.)
   ctx.state.editState.lastEditCommand =
@@ -2372,22 +2353,14 @@ proc handleYankLine(ctx: CommandContext, count: int = 1): Result[(), string] =
   if yankText.len == 0:
     return err("No text to yank")
 
-  # Store in internal yank register
-  ctx.state.yankRegister = yankText
-  ctx.state.yankIsLine = true
-
-  # Also update the register system so paste commands find the yanked content
-  ctx.state.registers.setYankedRegister(yankText, true)
+  # Store in register system (respects pendingRegister)
+  storeYankedText(ctx, yankText, true)
 
   logDebug(
     "yank",
     "Stored in register: '" & ctx.state.yankRegister & "', isLine=" &
       $ctx.state.yankIsLine,
   )
-
-  # Also write to system clipboard if enabled (fire-and-forget)
-  if ctx.clipboardConfig.enable:
-    writeToClipboardAsync(ctx.clipboardConfig.tool, yankText)
 
   # Yank screen notification (controlled by config)
   if ctx.notificationConfig.screenNotifications and
@@ -2489,11 +2462,8 @@ proc handleOperatorYank(ctx: CommandContext, count: int = 1): Result[(), string]
         if lineContent.len == 0 or lineContent[^1] != '\n':
           text.add("\n")
 
-    ctx.state.yankRegister = text
-    ctx.state.yankIsLine = true
-
-    # Also update the register system so paste commands find the yanked content
-    ctx.state.registers.setYankedRegister(text, true)
+    # Store in register system (respects pendingRegister)
+    storeYankedText(ctx, text, true)
 
     # Clear operator state
     ctx.state.editState.pendingOperator = none(PendingOperator)
@@ -2539,8 +2509,8 @@ proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), strin
         if lineContent.len == 0 or lineContent[^1] != '\n':
           text.add("\n")
 
-    ctx.state.yankRegister = text
-    ctx.state.yankIsLine = true
+    # Store in register system (respects pendingRegister)
+    storeDeletedText(ctx, text, true)
 
     # Delete lines (keep at least one line in the buffer)
     var brokeEarly = false

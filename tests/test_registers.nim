@@ -140,6 +140,16 @@ suite "Registers":
     check not isSmallDeleteRegisterName('a')
     check not isSmallDeleteRegisterName('0')
 
+  test "isPrimarySelectionRegisterName":
+    check isPrimarySelectionRegisterName('*')
+    check not isPrimarySelectionRegisterName('+')
+    check not isPrimarySelectionRegisterName('~')
+
+  test "isClipboardSelectionRegisterName":
+    check isClipboardSelectionRegisterName('+')
+    check isClipboardSelectionRegisterName('~')
+    check not isClipboardSelectionRegisterName('*')
+
   test "isClipboardRegisterName":
     check isClipboardRegisterName('*')
     check isClipboardRegisterName('+')
@@ -239,19 +249,49 @@ suite "Registers":
     check result.isErr
     check "Invalid register name" in result.error
 
-  test "setClipboardRegister":
+  test "setClipboardRegister with + register":
     let r = initRegisters()
-    r.setClipboardRegister("clipboard content", false)
+    r.setClipboardRegister('+', "clipboard content", false)
 
-    check r.getClipboardRegister().getContent() == "clipboard content"
+    check r.getClipboardRegister('+').getContent() == "clipboard content"
     check r.getNoNamedRegister().getContent() == "clipboard content"
+
+  test "setClipboardRegister with * register":
+    let r = initRegisters()
+    r.setClipboardRegister('*', "primary content", false)
+
+    check r.getClipboardRegister('*').getContent() == "primary content"
+    check r.getNoNamedRegister().getContent() == "primary content"
 
   test "setClipboardRegister linewise":
     let r = initRegisters()
-    r.setClipboardRegister("line1\nline2", true)
+    r.setClipboardRegister('+', "line1\nline2", true)
 
-    check r.getClipboardRegister().getContent() == "line1\nline2"
-    check r.getClipboardRegister().isLine
+    check r.getClipboardRegister('+').getContent() == "line1\nline2"
+    check r.getClipboardRegister('+').isLine
+
+  test "* and + registers are independent":
+    let r = initRegisters()
+    r.setClipboardRegister('*', "primary text", false)
+    r.setClipboardRegister('+', "clipboard text", false)
+
+    check r.getClipboardRegister('*').getContent() == "primary text"
+    check r.getClipboardRegister('+').getContent() == "clipboard text"
+
+  test "~ register behaves same as +":
+    let r = initRegisters()
+    r.setClipboardRegister('~', "tilde content", false)
+
+    check r.getClipboardRegister('~').getContent() == "tilde content"
+    check r.getClipboardRegister('+').getContent() == "tilde content"
+
+  test "setting * does not affect +":
+    let r = initRegisters()
+    r.setClipboardRegister('+', "plus content", false)
+    r.setClipboardRegister('*', "star content", false)
+
+    check r.getClipboardRegister('+').getContent() == "plus content"
+    check r.getClipboardRegister('*').getContent() == "star content"
 
   test "setNoNamedRegister string":
     let r = initRegisters()
@@ -267,13 +307,15 @@ suite "Registers":
     check r.getNoNamedRegister().getLines() == @["line1", "line2"]
     check r.getNoNamedRegister().isLine
 
-  test "setRegister clipboard registers":
+  test "setRegister clipboard registers are separate":
     let r = initRegisters()
     discard r.setRegister('*', "star content", false)
-    check r.getClipboardRegister().getContent() == "star content"
+    check r.getClipboardRegister('*').getContent() == "star content"
+    check r.getClipboardRegister('+').getContent() == "" # + unaffected
 
     discard r.setRegister('+', "plus content", false)
-    check r.getClipboardRegister().getContent() == "plus content"
+    check r.getClipboardRegister('+').getContent() == "plus content"
+    check r.getClipboardRegister('*').getContent() == "star content" # * unaffected
 
   test "setRegister invalid name returns error":
     let r = initRegisters()

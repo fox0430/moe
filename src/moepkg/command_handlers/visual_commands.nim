@@ -145,7 +145,7 @@ proc visualYank*(buffer: TextBuffer, state: EditorState) =
       if regName.isNamedRegisterName:
         discard state.registers.setNamedRegister(regName, selectedText, isLine)
       elif regName.isClipboardRegisterName:
-        state.registers.setClipboardRegister(selectedText, isLine)
+        state.registers.setClipboardRegister(regName, selectedText, isLine)
       else:
         # For other registers (including "), use yank register
         state.registers.setYankedRegister(selectedText, isLine)
@@ -187,7 +187,7 @@ proc deleteBlockSelection(buffer: TextBuffer, state: EditorState) =
     if regName.isNamedRegisterName:
       discard state.registers.setNamedRegister(regName, deletedText, false)
     elif regName.isClipboardRegisterName:
-      state.registers.setClipboardRegister(deletedText, false)
+      state.registers.setClipboardRegister(regName, deletedText, false)
     else:
       state.registers.setDeletedRegister(deletedText, false)
   else:
@@ -234,7 +234,7 @@ proc deleteLineSelection(buffer: TextBuffer, state: EditorState) =
     if regName.isNamedRegisterName:
       discard state.registers.setNamedRegister(regName, deletedText, true)
     elif regName.isClipboardRegisterName:
-      state.registers.setClipboardRegister(deletedText, true)
+      state.registers.setClipboardRegister(regName, deletedText, true)
     else:
       state.registers.setDeletedRegister(deletedText, true)
   else:
@@ -286,7 +286,7 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
         if regName.isNamedRegisterName:
           discard state.registers.setNamedRegister(regName, selectedText, false)
         elif regName.isClipboardRegisterName:
-          state.registers.setClipboardRegister(selectedText, false)
+          state.registers.setClipboardRegister(regName, selectedText, false)
         else:
           state.registers.setDeletedRegister(selectedText, isMultiLine)
       else:
