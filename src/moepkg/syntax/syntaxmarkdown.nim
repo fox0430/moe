@@ -146,10 +146,8 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
         if lexer.buf[position] == '-':
           inc position
     else:
-      lexer.kind = gtBuiltin
+      lexer.kind = gtNone
       inc position
-      if lexer.buf[position] == '-':
-        inc position
   of '<':
     if lexer.buf[position + 1] == '!':
       inc position, 2
@@ -384,6 +382,12 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
   else:
     lexer.kind = gtNone
     inc position
+
+  if lexer.kind notin {gtWhitespace, gtEof}:
+    # Update state for non-whitespace tokens so that isLineStart works correctly.
+    # Without this, tokens like punctuation (`"`, `)`, etc.) leave state unchanged,
+    # causing a subsequent `-` to be incorrectly treated as a line-start list marker.
+    lexer.state = lexer.kind
 
   lexer.length = position - lexer.pos
 
