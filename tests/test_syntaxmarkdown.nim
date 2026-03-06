@@ -563,14 +563,32 @@ suite "syntaxmarkdown - link edge cases":
     check tokens[0] == (gtPunctuation, "(")
 
 suite "syntaxmarkdown - list marker edge cases":
-  test "- not at line start is builtin":
+  test "- not at line start is gtNone":
     let tokens = collectTokens("a - b")
     check tokens[0] == (gtIdentifier, "a")
-    var hasDashBuiltin = false
+    var hasDashNone = false
     for (kind, text) in tokens:
-      if kind == gtBuiltin and '-' in text:
-        hasDashBuiltin = true
-    check hasDashBuiltin
+      if kind == gtNone and text == "-":
+        hasDashNone = true
+    check hasDashNone
+
+  test "hyphen in quoted string is not a list marker":
+    # "utf-8" — the `-` after `"utf` should not be treated as line-start
+    let tokens = collectTokens("\"utf-8\"")
+    var hasOperator = false
+    for (kind, _) in tokens:
+      if kind == gtOperator:
+        hasOperator = true
+    check not hasOperator
+
+  test "hyphen after quote at line start is not a list marker":
+    # "-x" — the `-` immediately after `"` at line start
+    let tokens = collectTokens("\"-x\"")
+    var hasOperator = false
+    for (kind, _) in tokens:
+      if kind == gtOperator:
+        hasOperator = true
+    check not hasOperator
 
   test "multiple list items":
     let tokens = collectTokens("- a\n- b\n- c")
@@ -677,10 +695,9 @@ suite "syntaxmarkdown - frontmatter edge cases":
 suite "syntaxmarkdown - left-flanking delimiter guards":
   test "** with space after is not bold":
     let tokens = collectTokens("** ")
-    # First * is gtNone, second * + space becomes list marker
-    # (state remains isLineStart after gtNone)
+    # First * is gtNone, second * is also gtNone (not a list marker)
     check tokens[0] == (gtNone, "*")
-    check tokens[1] == (gtOperator, "* ")
+    check tokens[1] == (gtNone, "*")
 
   test "__ with space after is identifier":
     let tokens = collectTokens("__ ")
