@@ -318,6 +318,7 @@ softtabstop number - Change Tab/Backspace width in insert mode; 0 = use tabstop;
 paren on or paren off - Change setting to auto close paren
 autoindent on or autoindent off - Change setting to auto indent
 number on or number off - Change setting to display line number
+relativenumber on or relativenumber off - Change setting to display relative line numbers
 statusLine on or statusLine off - Change setting to display status bar
 incsearch on or incsearch off - Change setting to incremental search
 deleteparen on or deleteparen off - Change setting to auto delete paren

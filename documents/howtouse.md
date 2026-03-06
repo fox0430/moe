@@ -386,6 +386,7 @@ All keystrokes are forwarded to the running shell/command.
 | `paren on` or `paren off` | Change setting to auto close paren |
 | `indent on` or `indent off` | Change sestting to auto indent |
 | `linenum on` or `linenum off` | Change setting to display line number |
+| `relativenumber on` or `relativenumber off` | Change setting to display relative line numbers |
 | `statusLine on` or `statusLine off` | Change setting to display status line|
 | `realtimesearch on` or `realtimesearch off` | Change setting to real-time search |
 | `deleteparen on` or `deleteparen off` | Change setting to auto delete paren |
