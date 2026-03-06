@@ -56,6 +56,7 @@ type
     stVertical = "vertical"
 
   BufferBackendConfig* = enum
+    bbcAuto = "auto"
     bbcGapBuffer = "gapBuffer"
     bbcSqrtDecomp = "sqrtDecomp"
     bbcRope = "rope"
@@ -469,7 +470,7 @@ proc newEditorConfig*(): EditorConfig =
       mouse: false,
       lineWrap: true,
       timeoutlen: 1000,
-      bufferBackend: bbcGapBuffer,
+      bufferBackend: bbcAuto,
     ),
     clipboard: ClipboardConfig(enable: true, tool: detectClipboardTool()),
     buildOnSave: BuildOnSaveConfig(

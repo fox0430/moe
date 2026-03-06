@@ -181,9 +181,13 @@ proc genBufferId(): int =
   inc nextBufferId
 
 var configuredBackend: BufferBackend = GapBuffer
+var autoBackendMode: bool = false
 
 proc setConfiguredBackend*(backend: BufferBackend) =
   configuredBackend = backend
+
+proc setAutoBackendMode*(enabled: bool) =
+  autoBackendMode = enabled
 
 proc chooseBackend(): BufferBackend =
   configuredBackend
@@ -1510,9 +1514,14 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     return ok(BufferPosition(line: 0, column: 0))
 
 # File operations
-proc chooseBackendForFile(): BufferBackend =
-  # TODO: Choose appropriate backend based on file size
-  chooseBackend()
+
+const AutoBackendLargeFileThreshold* = 10 * 1024 * 1024 # 10 MB
+
+proc chooseBackendForFile(fileSize: int64 = 0): BufferBackend =
+  if autoBackendMode:
+    if fileSize >= AutoBackendLargeFileThreshold: PieceTable else: GapBuffer
+  else:
+    chooseBackend()
 
 template detectLineEnding(b: TextBuffer, content: lent string) =
   ## Detect line ending and trailing newline
@@ -1531,13 +1540,14 @@ template detectLineEnding(b: TextBuffer, content: lent string) =
   # else: keep the default endOfLine value (true for new files)
 
 proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
-  let newBackend = chooseBackendForFile()
   var content: string
+  var fileSize: int64 = 0
 
   # Check if file exists; if not, start with empty content
   if fileExists(path):
     # File exists, read its content
     try:
+      fileSize = getFileSize(path)
       content = readFile(path)
     except IOError as e:
       logError("buffer", "Failed to read file " & path & ": " & e.msg)
@@ -1547,9 +1557,11 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
     logDebug("buffer", "File does not exist, creating new: " & path)
     content = ""
 
+  let newBackend = chooseBackendForFile(fileSize)
+
   # Reinitialize with new backend if needed
   if b.backendKind != newBackend:
-    let newBuffer = newTextBuffer(content, some(path))
+    let newBuffer = newTextBuffer(content, some(path), backend = newBackend)
     b[] = newBuffer[]
   else:
     case b.backendKind

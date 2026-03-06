@@ -117,11 +117,12 @@ proc parseLspTraceLevel(s: string): LspTraceLevel =
 
 proc parseBufferBackend(s: string): BufferBackendConfig =
   case s
+  of "auto": bbcAuto
   of "gapBuffer": bbcGapBuffer
   of "sqrtDecomp": bbcSqrtDecomp
   of "rope": bbcRope
   of "pieceTable": bbcPieceTable
-  else: bbcGapBuffer
+  else: bbcAuto
 
 # Integrated load+validate helper functions
 # These functions validate and load in one step.
@@ -341,7 +342,7 @@ const
   ValidClipboardTools* = ["xsel", "xclip", "wl-clipboard", "win32yank", "pbcopy"]
   ValidSplitTypes* = ["horizontal", "vertical"]
   ValidLspTraceLevels* = ["off", "messages", "verbose"]
-  ValidBufferBackends* = ["gapBuffer", "sqrtDecomp", "rope", "pieceTable"]
+  ValidBufferBackends* = ["auto", "gapBuffer", "sqrtDecomp", "rope", "pieceTable"]
 
 # Integrated load functions (validate + load in one step)
 

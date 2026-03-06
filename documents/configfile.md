@@ -116,7 +116,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | colorMode | TerminalColorMode | 24bit | Terminal color mode |
 | mouse | bool | false | Enable mouse cursor movement |
 | timeoutlen | integer | 1000 | Key mapping timeout in milliseconds (0 = no timeout) |
-| bufferBackend | BufferBackend | gapBuffer | Buffer data structure |
+| bufferBackend | BufferBackend | auto | Buffer data structure. "auto" selects backend based on file size |
 
 
 ### Clipboard table
