@@ -761,3 +761,10 @@ suite "Highlight - detectLanguage":
 
   test "detectLanguage for no extension":
     check detectLanguage("README") == SourceLanguage.langNone
+
+  test "detectLanguage for git-rebase-todo":
+    check detectLanguage("git-rebase-todo") == SourceLanguage.langGitRebaseTodo
+
+  test "detectLanguage for git-rebase-todo with path":
+    check detectLanguage("/repo/.git/rebase-merge/git-rebase-todo") ==
+      SourceLanguage.langGitRebaseTodo
