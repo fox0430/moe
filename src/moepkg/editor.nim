@@ -879,6 +879,22 @@ proc maybeReloadExternallyModifiedFile*(e: Editor) =
   else:
     e.state.statusMessage = "Failed to reload file: " & reloadResult.error
 
+proc reloadCurrentFile*(e: Editor): Result[void, string] =
+  ## Reload the current buffer from disk (for :e! command)
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    return err("No file name")
+
+  let filePath = activeBuffer.filePath.get
+  let reloadResult = activeBuffer.reloadFile()
+  if reloadResult.isErr:
+    return err(reloadResult.error)
+
+  e.state.statusMessage = "File reloaded: " & filePath
+  e.state.needsFullRedraw = true
+  e.refreshGitDiff(useBuffer = false)
+  return ok()
+
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## Apply configuration settings to the editor
   ## Updates display settings, search settings, and other runtime state

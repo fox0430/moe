@@ -295,6 +295,9 @@ bg              - Pause the editor and show the recent terminal output
 man arguments   - Show the given UNIX manual page, if available; e.g. :man man
 
 e filename - Open file
+e          - Reload current file (error if unsaved changes)
+e!         - Force reload current file (discard unsaved changes)
+e! filename - Open file (discard unsaved changes)
 ene        - Create a new empty buffer
 new        - Create a new empty buffer in a horizontally split window
 vnew       - Create a new empty buffer in a vertically split window

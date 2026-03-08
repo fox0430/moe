@@ -203,7 +203,8 @@ type
     of hrEnew:
       discard
     of hrEdit:
-      editFilename*: string
+      editFilename*: Option[string]
+      forceEdit*: bool
     of hrSetBoolOption:
       boolOption*: BoolSettingOption
       boolValue*: bool
@@ -794,7 +795,8 @@ proc handleCommandMode*(
   of cmrEnew:
     return HandlerResult(kind: hrEnew)
   of cmrEdit:
-    return HandlerResult(kind: hrEdit, editFilename: r.editFilename)
+    return
+      HandlerResult(kind: hrEdit, editFilename: r.editFilename, forceEdit: r.forceEdit)
   of cmrSetBoolOption:
     return HandlerResult(
       kind: hrSetBoolOption, boolOption: r.boolOption, boolValue: r.boolValue

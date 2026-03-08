@@ -172,15 +172,15 @@ suite "CommandModeHandler - executeEdit":
     let handler = setupHandler()
     let buffer = setupBuffer()
 
-    let result = handler.executeEdit(buffer, "test.nim")
+    let result = handler.executeEdit(buffer, some("test.nim"), false)
     check result.kind == cmrEdit
-    check result.editFilename.endsWith("test.nim")
+    check result.editFilename.get.endsWith("test.nim")
 
   test "Edit directory opens filer":
     let handler = setupHandler()
     let buffer = setupBuffer()
 
-    let result = handler.executeEdit(buffer, "/tmp")
+    let result = handler.executeEdit(buffer, some("/tmp"), false)
     check result.kind == cmrFiler
     check result.filerPath.isSome
     check result.filerPath.get == "/tmp"
@@ -189,20 +189,47 @@ suite "CommandModeHandler - executeEdit":
     let handler = setupHandler()
     let buffer = setupBuffer()
 
-    let result = handler.executeEdit(buffer, "~/test.nim")
+    let result = handler.executeEdit(buffer, some("~/test.nim"), false)
     check result.kind == cmrEdit
-    check result.editFilename == getHomeDir() / "test.nim"
-    check not result.editFilename.contains("~")
+    check result.editFilename.get == getHomeDir() / "test.nim"
+    check not result.editFilename.get.contains("~")
 
   test "Edit directory with tilde opens filer":
     let handler = setupHandler()
     let buffer = setupBuffer()
 
     # Home directory always exists
-    let result = handler.executeEdit(buffer, "~")
+    let result = handler.executeEdit(buffer, some("~"), false)
     check result.kind == cmrFiler
     check result.filerPath.isSome
     check result.filerPath.get == getHomeDir().absolutePath
+
+  test "Edit without filename and no unsaved changes reloads":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.executeEdit(buffer, none(string), false)
+    check result.kind == cmrEdit
+    check result.editFilename.isNone
+
+  test "Edit without filename and unsaved changes returns error":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+    discard buffer.insert(0, "change")
+
+    let result = handler.executeEdit(buffer, none(string), false)
+    check result.kind == cmrError
+    check "No write since last change" in result.errorMessage
+
+  test "Force edit without filename ignores unsaved changes":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+    discard buffer.insert(0, "change")
+
+    let result = handler.executeEdit(buffer, none(string), true)
+    check result.kind == cmrEdit
+    check result.editFilename.isNone
+    check result.forceEdit == true
 
 suite "CommandModeHandler - executeGotoLine":
   test "Goto valid line number":
@@ -1455,7 +1482,7 @@ suite "CommandModeHandler - handleCommandModeInput":
 
     let result = handler.handleCommandModeInput(buffer, ":e test.nim")
     check result.kind == cmrEdit
-    check result.editFilename.endsWith("test.nim")
+    check result.editFilename.get.endsWith("test.nim")
 
   test "Handle :b buffer number command":
     let handler = setupHandler()

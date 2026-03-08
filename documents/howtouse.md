@@ -368,6 +368,9 @@ All keystrokes are forwarded to the running shell/command.
 | `bg`              | Pause the editor and show the recent terminal output |
 | `man arguments`   | Show the given UNIX manual page, if available; e.g. `:man man` |
 | `e filename` | Open file |
+| `e` | Reload current file (error if unsaved changes) |
+| `e!` | Force reload current file (discard unsaved changes) |
+| `e! filename` | Open file (discard unsaved changes) |
 | `ene` | Create new empty buffer |
 | `new` | Create new empty buffer in split window horizontally |
 | `vnew` | Create new empty buffer in split window vertically |

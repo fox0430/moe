@@ -123,7 +123,8 @@ type
     of claSaveAllAndQuit:
       forceSaveAllAndQuit*: bool # true for :wqa!
     of claEdit:
-      editFilename*: string
+      editFilename*: Option[string]
+      forceEdit*: bool # true for :e!
     of claEnew:
       discard
     of claGoto:
@@ -630,10 +631,15 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       kind: claSaveAllAndQuit, forceSaveAllAndQuit: "force" in cmd.flags
     )
   of claEdit:
-    if cmd.args.len > 0:
-      return CommandLineResult(kind: claEdit, editFilename: cmd.args[0])
-    else:
-      return CommandLineResult(kind: claUnknown, errorMessage: "E32: No file name")
+    return CommandLineResult(
+      kind: claEdit,
+      editFilename:
+        if cmd.args.len > 0:
+          some(cmd.args[0])
+        else:
+          none(string),
+      forceEdit: "force" in cmd.flags,
+    )
   of claEnew:
     return CommandLineResult(kind: claEnew)
   of claGoto:
