@@ -125,23 +125,56 @@ suite "syntaxlatex - escape sequences":
 suite "syntaxlatex - inline math mode":
   test "inline math on single line":
     let tokens = collectTokens("$x+y$")
-    check tokens.len == 1
-    check tokens[0] == (gtStringLit, "$x+y$")
+    check tokens[0] == (gtStringLit, "$")
+    check tokens[^1] == (gtStringLit, "$")
 
   test "inline math with surrounding text":
     let tokens = collectTokens("the formula $E=mc^2$ is famous")
-    # "the" identifier, space, "formula" identifier, space, "$E=mc^2$", space, ...
-    var foundMath = false
+    var hasMathOpen = false
+    var hasMathClose = false
     for t in tokens:
-      if t[0] == gtStringLit and t[1] == "$E=mc^2$":
-        foundMath = true
-    check foundMath
+      if t == (gtStringLit, "$"):
+        if not hasMathOpen:
+          hasMathOpen = true
+        else:
+          hasMathClose = true
+    check hasMathOpen
+    check hasMathClose
+
+  test "inline math with LaTeX command":
+    let tokens = collectTokens("$\\alpha + \\beta$")
+    check tokens[0] == (gtStringLit, "$")
+    var foundAlpha = false
+    for t in tokens:
+      if t[0] == gtBuiltin and t[1] == "\\alpha":
+        foundAlpha = true
+    check foundAlpha
+    check tokens[^1] == (gtStringLit, "$")
+
+  test "inline math with keyword command":
+    let tokens = collectTokens("$\\frac{a}{b}$")
+    check tokens[0] == (gtStringLit, "$")
+    var foundFrac = false
+    for t in tokens:
+      if t[0] == gtKeyword and t[1] == "\\frac":
+        foundFrac = true
+    check foundFrac
 
 suite "syntaxlatex - display math mode":
   test "display math on single line":
     let tokens = collectTokens("$$E=mc^2$$")
-    check tokens.len == 1
-    check tokens[0] == (gtLongStringLit, "$$E=mc^2$$")
+    check tokens[0] == (gtLongStringLit, "$$")
+    check tokens[^1] == (gtLongStringLit, "$$")
+
+  test "display math with LaTeX command":
+    let tokens = collectTokens("$$\\int_0^1 f(x) dx$$")
+    check tokens[0] == (gtLongStringLit, "$$")
+    var foundBuiltin = false
+    for t in tokens:
+      if t[0] == gtBuiltin and t[1] == "\\int":
+        foundBuiltin = true
+    check foundBuiltin
+    check tokens[^1] == (gtLongStringLit, "$$")
 
 suite "syntaxlatex - brackets and punctuation":
   test "curly braces":
@@ -212,7 +245,6 @@ suite "syntaxlatex - line break and math delimiters":
 suite "syntaxlatex - multi-line math mode":
   test "inline math across lines":
     let tokens = collectTokens("$x+\ny$")
-    # Should start math mode, then continue on next line
     var hasStringLit = false
     for t in tokens:
       if t[0] == gtStringLit:
@@ -227,12 +259,18 @@ suite "syntaxlatex - multi-line math mode":
         hasLongStringLit = true
     check hasLongStringLit
 
+  test "multi-line display math with commands":
+    let tokens = collectTokens("$$\n\\sum_{i=1}^n\n$$")
+    var foundSum = false
+    for t in tokens:
+      if t[0] == gtBuiltin and t[1] == "\\sum":
+        foundSum = true
+    check foundSum
+
 suite "syntaxlatex - complete document":
   test "simple LaTeX document":
     let code =
       "\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\nHello $x$ world\n\\end{document}"
     let tokens = collectTokens(code)
-    # Should parse without errors and produce tokens
     check tokens.len > 0
-    # First token should be \documentclass (keyword)
     check tokens[0] == (gtKeyword, "\\documentclass")

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import tokenizer
+import tokenizer, syntaxlatex
 
 template isLineStart(lexer: GeneralTokenizer): bool =
   lexer.state in {gtWhitespace, low(TokenClass)}
@@ -27,10 +27,116 @@ proc endLine(lexer: GeneralTokenizer, position: int): int =
   while lexer.buf[result] notin eolChars:
     inc result
 
+proc mathNextToken(lexer: var GeneralTokenizer, position: var int, doubleClose: bool) =
+  ## Parse a single token inside math mode.
+  ## doubleClose distinguishes $$...$$ from $...$.
+  const symCharsLocal = {'A' .. 'Z', 'a' .. 'z'}
+
+  case lexer.buf[position]
+  of '\0':
+    lexer.kind = gtEof
+  of ' ', '\t' .. '\r':
+    lexer.kind = gtWhitespace
+    while lexer.buf[position] in wsChars:
+      inc position
+  of '$':
+    if doubleClose:
+      if lexer.buf[position + 1] == '$':
+        # Closing $$
+        lexer.kind = gtLongStringLit
+        inc position, 2
+        lexer.mdInDisplayMath = false
+      else:
+        # Single $ inside display math is just content
+        lexer.kind = gtNone
+        inc position
+    else:
+      # Closing $
+      lexer.kind = gtStringLit
+      inc position
+      lexer.mdInMathMode = false
+  of '\\':
+    inc position
+    case lexer.buf[position]
+    of '\0':
+      lexer.kind = gtBuiltin
+    of '\\':
+      inc position
+      lexer.kind = gtBuiltin
+    of '[', ']', '(', ')':
+      inc position
+      lexer.kind = gtBuiltin
+    of '%', '$', '&', '#', '_', '~', '^', '{', '}':
+      inc position
+      lexer.kind = gtEscapeSequence
+    of 'A' .. 'Z', 'a' .. 'z':
+      var id = ""
+      while lexer.buf[position] in symCharsLocal:
+        id.add lexer.buf[position]
+        inc position
+      if isKeyword(latexKeywords, id) >= 0:
+        lexer.kind = gtKeyword
+      else:
+        lexer.kind = gtBuiltin
+    else:
+      inc position
+      lexer.kind = gtBuiltin
+  of '{', '}', '[', ']':
+    lexer.kind = gtPunctuation
+    inc position
+  of '&', '~', '^', '_', '#':
+    lexer.kind = gtOperator
+    inc position
+  of '0' .. '9':
+    position = generalNumber(lexer, position)
+  else:
+    lexer.kind = gtNone
+    while lexer.buf[position] notin {
+      '\0',
+      '\n',
+      '\r',
+      '$',
+      '\\',
+      '{',
+      '}',
+      '[',
+      ']',
+      '&',
+      '~',
+      '^',
+      '_',
+      '#',
+      '0' .. '9',
+      ' ',
+      '\t' .. '\r',
+    }
+    :
+      inc position
+
 proc markdownNextToken*(lexer: var GeneralTokenizer) =
   ## The lexing logic for Markdown.
   var position = lexer.pos
   lexer.start = lexer.pos
+
+  # Inside display math mode ($$...$$)
+  if lexer.mdInDisplayMath:
+    lexer.mathNextToken(position, doubleClose = true)
+
+    lexer.length = position - lexer.pos
+    if lexer.kind != gtEof and lexer.length <= 0:
+      assert false, "markdownNextToken: produced an empty token (display math)"
+    lexer.pos = position
+    return
+
+  # Inside inline math mode ($...$)
+  if lexer.mdInMathMode:
+    lexer.mathNextToken(position, doubleClose = false)
+
+    lexer.length = position - lexer.pos
+    if lexer.kind != gtEof and lexer.length <= 0:
+      assert false, "markdownNextToken: produced an empty token (inline math)"
+    lexer.pos = position
+    return
 
   # Inside a code block: handle language name, content lines, and closing ```
   if lexer.mdInCodeBlock:
@@ -376,6 +482,17 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
       else:
         lexer.state = gtNone
       inc position
+  of '$':
+    if lexer.buf[position + 1] == '$':
+      # Opening $$ - emit just the delimiter
+      lexer.kind = gtLongStringLit
+      inc position, 2
+      lexer.mdInDisplayMath = true
+    else:
+      # Opening $ - emit just the delimiter
+      lexer.kind = gtStringLit
+      inc position
+      lexer.mdInMathMode = true
   of ')', ']', '{', '}', ':', ',', ';', '.', '/', '\'', '\"':
     lexer.kind = gtPunctuation
     inc position
