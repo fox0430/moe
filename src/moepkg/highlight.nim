@@ -65,6 +65,8 @@ type
     astroFirstLine*: bool
     yamlIsKey*: bool
     mdInCodeBlock*: bool
+    latexInMathMode*: bool
+    latexInDisplayMath*: bool
 
   LineStateCache* = object ## Cache of tokenizer states for each line
     states*: seq[TokenizerState]
@@ -91,6 +93,8 @@ proc captureTokenizerState*(g: GeneralTokenizer): TokenizerState =
     astroFirstLine: g.astroFirstLine,
     yamlIsKey: g.yamlIsKey,
     mdInCodeBlock: g.mdInCodeBlock,
+    latexInMathMode: g.latexInMathMode,
+    latexInDisplayMath: g.latexInDisplayMath,
   )
 
 proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
@@ -109,6 +113,8 @@ proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
   g.astroFirstLine = state.astroFirstLine
   g.yamlIsKey = state.yamlIsKey
   g.mdInCodeBlock = state.mdInCodeBlock
+  g.latexInMathMode = state.latexInMathMode
+  g.latexInDisplayMath = state.latexInDisplayMath
 
 # Default style for highlighting
 let defaultStyle* =
@@ -827,6 +833,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langYaml
   of ".json":
     return SourceLanguage.langJson
+  of ".tex", ".sty", ".cls", ".ltx", ".dtx":
+    return SourceLanguage.langLatex
   else:
     return SourceLanguage.langNone
 
