@@ -4622,6 +4622,69 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     0,
   )
 
+  # Git change navigation commands
+  registry.register(
+    custom("navigate.git.next"),
+    "Next Git Change",
+    "Jump to next git change hunk",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let nextLine = ctx.buffer.findNextGitChange(ctx.cursor.line)
+      if nextLine.isSome:
+        recordJump(ctx.state)
+        ctx.cursor = BufferPosition(line: nextLine.get, column: 0)
+        let lineNumOffset = calculateViewportOffset(
+          ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar
+        )
+        ctx.motionController.viewportManager.updateViewport(
+          CursorPosition(x: 0, y: nextLine.get),
+          ctx.buffer.len,
+          ctx.state.display.showStatusLine,
+          ctx.state.viewportReservedLines,
+          ctx.state.display.lineWrap,
+          ctx.buffer,
+          lineNumOffset,
+          ctx.state.display.tabStop,
+        )
+        ctx.state.needsFullRedraw = true
+        return Result[(), string].ok ()
+      else:
+        ctx.state.statusMessage = "No more git changes"
+        return err("No more git changes"),
+    0,
+    0,
+  )
+
+  registry.register(
+    custom("navigate.git.prev"),
+    "Previous Git Change",
+    "Jump to previous git change hunk",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let prevLine = ctx.buffer.findPrevGitChange(ctx.cursor.line)
+      if prevLine.isSome:
+        recordJump(ctx.state)
+        ctx.cursor = BufferPosition(line: prevLine.get, column: 0)
+        let lineNumOffset = calculateViewportOffset(
+          ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar
+        )
+        ctx.motionController.viewportManager.updateViewport(
+          CursorPosition(x: 0, y: prevLine.get),
+          ctx.buffer.len,
+          ctx.state.display.showStatusLine,
+          ctx.state.viewportReservedLines,
+          ctx.state.display.lineWrap,
+          ctx.buffer,
+          lineNumOffset,
+          ctx.state.display.tabStop,
+        )
+        ctx.state.needsFullRedraw = true
+        return Result[(), string].ok ()
+      else:
+        ctx.state.statusMessage = "No more git changes"
+        return err("No more git changes"),
+    0,
+    0,
+  )
+
   # Helper proc to get the word under cursor
   # Helper type for word bounds
   type WordInfo = object

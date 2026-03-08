@@ -806,3 +806,101 @@ suite "Buffer - externalModWarned":
     buf.externalModWarned = true
     discard buf.saveFile(path)
     check buf.externalModWarned == false
+
+suite "Git Change Navigation - findNextGitChange":
+  test "No markers at all":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line1\nline2\nline3\n")
+    check buf.findNextGitChange(0).isNone
+
+  test "Find next change from unmarked line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\ne\n")
+    buf.setLineMarker(2, GitAdded)
+    buf.setLineMarker(3, GitAdded)
+    let result = buf.findNextGitChange(0)
+    check result.isSome
+    check result.get == 2
+
+  test "Skip current change block":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\ne\nf\ng\n")
+    buf.setLineMarker(1, GitChanged)
+    buf.setLineMarker(2, GitChanged)
+    buf.setLineMarker(5, GitAdded)
+    let result = buf.findNextGitChange(1)
+    check result.isSome
+    check result.get == 5
+
+  test "No more changes after current block":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
+    buf.setLineMarker(1, GitAdded)
+    buf.setLineMarker(2, GitAdded)
+    check buf.findNextGitChange(1).isNone
+
+  test "Mixed marker types":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\ne\n")
+    buf.setLineMarker(0, GitDeleted)
+    buf.setLineMarker(3, GitChangedAndDeleted)
+    let result = buf.findNextGitChange(0)
+    check result.isSome
+    check result.get == 3
+
+  test "Non-git markers are ignored":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
+    buf.setLineMarker(1, SyntaxError)
+    buf.setLineMarker(3, GitAdded)
+    let result = buf.findNextGitChange(0)
+    check result.isSome
+    check result.get == 3
+
+suite "Git Change Navigation - findPrevGitChange":
+  test "No markers at all":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "line1\nline2\nline3\n")
+    check buf.findPrevGitChange(2).isNone
+
+  test "Find previous change block":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\ne\n")
+    buf.setLineMarker(1, GitAdded)
+    buf.setLineMarker(2, GitAdded)
+    let result = buf.findPrevGitChange(4)
+    check result.isSome
+    check result.get == 1
+
+  test "Jump to start of previous block":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\ne\nf\ng\n")
+    buf.setLineMarker(1, GitChanged)
+    buf.setLineMarker(2, GitChanged)
+    buf.setLineMarker(3, GitChanged)
+    buf.setLineMarker(5, GitAdded)
+    let result = buf.findPrevGitChange(5)
+    check result.isSome
+    check result.get == 1
+
+  test "No previous change":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\n")
+    buf.setLineMarker(2, GitAdded)
+    check buf.findPrevGitChange(2).isNone
+
+  test "Skip current block backwards":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\ne\nf\n")
+    buf.setLineMarker(0, GitDeleted)
+    buf.setLineMarker(3, GitChanged)
+    buf.setLineMarker(4, GitChanged)
+    let result = buf.findPrevGitChange(3)
+    check result.isSome
+    check result.get == 0
+
+  test "From line 0 returns none":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\n")
+    buf.setLineMarker(0, GitAdded)
+    check buf.findPrevGitChange(0).isNone

@@ -111,6 +111,8 @@
 | <kbd>**N**</kbd><br> | Search backwards |
 | <kbd> * </kbd><br> | Search forwards for the word under cursor |
 | <kbd>**#**</kbd><br> | Search backwards for the word under cursor |
+| <kbd>**]**</kbd> <kbd>**c**</kbd><br> | Jump to next git change hunk |
+| <kbd>**[**</kbd> <kbd>**c**</kbd><br> | Jump to previous git change hunk |
 | <kbd>**f**</kbd><br> | Jump to next occurrence |
 | <kbd>**F**</kbd><br> |Jump to previous occurrence |
 | <kbd>**z**</kbd> <kbd>**t**</kbd><br> | Scroll the screen so the cursor is at the top |

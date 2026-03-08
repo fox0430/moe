@@ -1758,6 +1758,50 @@ proc getLineMarker*(b: TextBuffer, line: int): Option[SidebarItemKind] =
   else:
     return none(SidebarItemKind)
 
+proc isGitChangeMarker*(kind: SidebarItemKind): bool =
+  kind in {GitAdded, GitChanged, GitDeleted, GitChangedAndDeleted}
+
+proc findNextGitChange*(b: TextBuffer, startLine: int): Option[int] =
+  ## Skip the current change block, then return the first line of the next
+  ## change block.
+  var i = startLine
+  # Skip current marker block
+  while i < b.lineMarkers.len:
+    let m = b.getLineMarker(i)
+    if m.isNone or not m.get.isGitChangeMarker:
+      break
+    inc i
+  # Find the next marker
+  while i < b.lineMarkers.len:
+    let m = b.getLineMarker(i)
+    if m.isSome and m.get.isGitChangeMarker:
+      return some(i)
+    inc i
+  return none(int)
+
+proc findPrevGitChange*(b: TextBuffer, startLine: int): Option[int] =
+  ## Return the first line of the previous change block.
+  var i = startLine - 1
+  # Skip current marker block (backwards)
+  while i >= 0:
+    let m = b.getLineMarker(i)
+    if m.isNone or not m.get.isGitChangeMarker:
+      break
+    dec i
+  # Find the previous marker
+  while i >= 0:
+    let m = b.getLineMarker(i)
+    if m.isSome and m.get.isGitChangeMarker:
+      # Walk back to the start of this block
+      while i > 0:
+        let prev = b.getLineMarker(i - 1)
+        if prev.isNone or not prev.get.isGitChangeMarker:
+          break
+        dec i
+      return some(i)
+    dec i
+  return none(int)
+
 proc clearAllMarkers*(b: TextBuffer) =
   ## Clear all sidebar markers
   for i in 0 ..< b.lineMarkers.len:

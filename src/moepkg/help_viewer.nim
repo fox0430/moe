@@ -80,6 +80,8 @@ yl         - Yank a character
 yt any     - Yank characters to a any character
 p          - Paste the clipboard
 n          - Search forwards
+]c         - Jump to next git change hunk
+[c         - Jump to previous git change hunk
 :          - Start command mode
 u          - Undo
 Ctrl-r     - Redo
