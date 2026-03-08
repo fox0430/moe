@@ -270,6 +270,86 @@ suite "Editor - saveBufferCursorPosition":
     # No new cursor position should be added
     check e.cursorPositions.len == initialCount
 
+  test "Do not save cursor position for COMMIT_EDITMSG":
+    var config = newEditorConfig()
+    config.persist.cursorPosition = true
+    let e = createTestEditorWithConfig(config)
+    let testFile = "/tmp/moe_test_COMMIT_EDITMSG/COMMIT_EDITMSG"
+
+    createDir("/tmp/moe_test_COMMIT_EDITMSG")
+    writeFile(testFile, "commit message")
+    defer:
+      removeDir("/tmp/moe_test_COMMIT_EDITMSG")
+
+    discard e.loadFile(testFile)
+    e.cursor = BufferPosition(line: 0, column: 3)
+
+    e.saveBufferCursorPosition(e.textBuffer)
+
+    let absPath = absolutePath(testFile)
+    check not e.cursorPositions.hasKey(absPath)
+
+  test "Do not save cursor position for git-rebase-todo":
+    var config = newEditorConfig()
+    config.persist.cursorPosition = true
+    let e = createTestEditorWithConfig(config)
+    let testFile = "/tmp/moe_test_rebase/git-rebase-todo"
+
+    createDir("/tmp/moe_test_rebase")
+    writeFile(testFile, "pick abc123 some commit")
+    defer:
+      removeDir("/tmp/moe_test_rebase")
+
+    discard e.loadFile(testFile)
+    e.cursor = BufferPosition(line: 0, column: 5)
+
+    e.saveBufferCursorPosition(e.textBuffer)
+
+    let absPath = absolutePath(testFile)
+    check not e.cursorPositions.hasKey(absPath)
+
+  test "Do not restore cursor position for COMMIT_EDITMSG":
+    var config = newEditorConfig()
+    config.persist.cursorPosition = true
+    let e = createTestEditorWithConfig(config)
+    let testFile = "/tmp/moe_test_COMMIT_EDITMSG2/COMMIT_EDITMSG"
+
+    createDir("/tmp/moe_test_COMMIT_EDITMSG2")
+    writeFile(testFile, "commit message content")
+    defer:
+      removeDir("/tmp/moe_test_COMMIT_EDITMSG2")
+
+    # Pre-populate cursor positions with a saved position for this file
+    let absPath = absolutePath(testFile)
+    e.cursorPositions[absPath] = CursorPositionEntry(line: 0, column: 10)
+
+    discard e.loadFile(testFile)
+
+    # Cursor should be at start, not restored to saved position
+    check e.cursor.line == 0
+    check e.cursor.column == 0
+
+  test "Do not restore cursor position for git-rebase-todo":
+    var config = newEditorConfig()
+    config.persist.cursorPosition = true
+    let e = createTestEditorWithConfig(config)
+    let testFile = "/tmp/moe_test_rebase2/git-rebase-todo"
+
+    createDir("/tmp/moe_test_rebase2")
+    writeFile(testFile, "pick abc123 some commit")
+    defer:
+      removeDir("/tmp/moe_test_rebase2")
+
+    # Pre-populate cursor positions with a saved position for this file
+    let absPath = absolutePath(testFile)
+    e.cursorPositions[absPath] = CursorPositionEntry(line: 0, column: 10)
+
+    discard e.loadFile(testFile)
+
+    # Cursor should be at start, not restored to saved position
+    check e.cursor.line == 0
+    check e.cursor.column == 0
+
 suite "Editor - addCommandToHistory":
   test "Add command to history":
     var config = newEditorConfig()

@@ -23,7 +23,8 @@ import std/[options, strformat, os, monotimes, times]
 
 import pkg/results
 
-import editor_types, logger, git_diff, backup, search_utils, editorconfig_helper
+import
+  editor_types, logger, git_diff, backup, search_utils, editorconfig_helper, highlight
 
 proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
   ## Refresh git diff information for the active buffer
@@ -40,6 +41,9 @@ proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
       e.state.timing.lastGitDiffUpdate = getMonoTime()
       e.state.timing.lastGitDiffChangeSeq = activeBuffer.changeSeq
       e.state.needsFullRedraw = true
+
+template isPersistCursorPositionFile(lang: SourceLanguage): bool =
+  lang notin {SourceLanguage.langGitRebaseTodo, SourceLanguage.langCommitEditMsg}
 
 proc loadFile*(e: Editor, path: string): Result[(), string] =
   ## Load text file
@@ -59,8 +63,11 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   applyBufferEditorConfig(e.state.display, e.textBuffer, e.config)
 
   # Restore cursor position if persisted, otherwise reset to file start
+  # Don't restore for temporary git files
   let absPath = absolutePath(path)
-  if e.config.persist.cursorPosition and e.cursorPositions.hasKey(absPath):
+  if e.config.persist.cursorPosition and
+      isPersistCursorPositionFile(e.textBuffer.language) and
+      e.cursorPositions.hasKey(absPath):
     let savedPos = e.cursorPositions[absPath]
     # Ensure cursor position is within buffer bounds
     let line = min(savedPos.line, max(0, e.textBuffer.len - 1))
@@ -105,6 +112,8 @@ proc saveBufferCursorPosition*(e: Editor, buffer: TextBuffer) =
   if not e.config.persist.cursorPosition:
     return
   if buffer.filePath.isNone:
+    return
+  if isPersistCursorPositionFile(buffer.language):
     return
   let absPath = absolutePath(buffer.filePath.get)
   e.cursorPositions[absPath] =
