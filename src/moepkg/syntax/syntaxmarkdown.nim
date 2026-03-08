@@ -138,6 +138,24 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     lexer.pos = position
     return
 
+  # Inside an indented code block (4+ spaces at line start)
+  if lexer.mdInIndentedCode:
+    case lexer.buf[position]
+    of '\0':
+      lexer.kind = gtEof
+      lexer.mdInIndentedCode = false
+    else:
+      lexer.kind = gtLongStringLit
+      while lexer.buf[position] notin eolChars:
+        inc position
+      lexer.mdInIndentedCode = false
+
+    lexer.length = position - lexer.pos
+    if lexer.kind != gtEof and lexer.length <= 0:
+      assert false, "markdownNextToken: produced an empty token (indented code)"
+    lexer.pos = position
+    return
+
   # Inside a code block: handle language name, content lines, and closing ```
   if lexer.mdInCodeBlock:
     case lexer.buf[position]
@@ -482,6 +500,21 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
       else:
         lexer.state = gtNone
       inc position
+    # Detect indented code block: 4+ spaces or tab at line start
+    if not lexer.mdInCodeBlock and lexer.buf[position] notin eolChars:
+      # Count leading spaces/tabs after the last newline in the consumed whitespace
+      var i = position - 1
+      var spaceCount = 0
+      while i >= lexer.start and lexer.buf[i] in {' ', '\t'}:
+        if lexer.buf[i] == '\t':
+          spaceCount = 4 # Tab counts as 4 spaces
+          dec i
+          break
+        inc spaceCount
+        dec i
+      # Check that the indent follows a newline (or is at buffer start)
+      if spaceCount >= 4 and (i < lexer.start or lexer.buf[i] == '\n'):
+        lexer.mdInIndentedCode = true
   of '$':
     if lexer.buf[position + 1] == '$':
       # Opening $$ - emit just the delimiter
