@@ -774,3 +774,18 @@ suite "Highlight - detectLanguage":
   test "detectLanguage for git-rebase-todo with path":
     check detectLanguage("/repo/.git/rebase-merge/git-rebase-todo") ==
       SourceLanguage.langGitRebaseTodo
+
+  test "detectLanguage for LaTeX .tex":
+    check detectLanguage("main.tex") == SourceLanguage.langLatex
+
+  test "detectLanguage for LaTeX .sty":
+    check detectLanguage("custom.sty") == SourceLanguage.langLatex
+
+  test "detectLanguage for LaTeX .cls":
+    check detectLanguage("myclass.cls") == SourceLanguage.langLatex
+
+  test "detectLanguage for LaTeX .ltx":
+    check detectLanguage("file.ltx") == SourceLanguage.langLatex
+
+  test "detectLanguage for LaTeX .dtx":
+    check detectLanguage("package.dtx") == SourceLanguage.langLatex
