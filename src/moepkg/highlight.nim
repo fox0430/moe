@@ -65,6 +65,7 @@ type
     astroFirstLine*: bool
     yamlIsKey*: bool
     mdInCodeBlock*: bool
+    mdInIndentedCode*: bool
     mdInMathMode*: bool
     mdInDisplayMath*: bool
     latexInMathMode*: bool
@@ -95,6 +96,7 @@ proc captureTokenizerState*(g: GeneralTokenizer): TokenizerState =
     astroFirstLine: g.astroFirstLine,
     yamlIsKey: g.yamlIsKey,
     mdInCodeBlock: g.mdInCodeBlock,
+    mdInIndentedCode: g.mdInIndentedCode,
     mdInMathMode: g.mdInMathMode,
     mdInDisplayMath: g.mdInDisplayMath,
     latexInMathMode: g.latexInMathMode,
@@ -117,6 +119,7 @@ proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
   g.astroFirstLine = state.astroFirstLine
   g.yamlIsKey = state.yamlIsKey
   g.mdInCodeBlock = state.mdInCodeBlock
+  g.mdInIndentedCode = state.mdInIndentedCode
   g.mdInMathMode = state.mdInMathMode
   g.mdInDisplayMath = state.mdInDisplayMath
   g.latexInMathMode = state.latexInMathMode

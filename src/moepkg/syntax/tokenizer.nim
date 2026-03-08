@@ -129,6 +129,7 @@ type
     astroFirstLine*: bool
     yamlIsKey*: bool
     mdInCodeBlock*: bool
+    mdInIndentedCode*: bool
     mdInMathMode*: bool
     mdInDisplayMath*: bool
     latexInMathMode*: bool
@@ -211,6 +212,7 @@ proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.astroFirstLine = true
   g.yamlIsKey = false
   g.mdInCodeBlock = false
+  g.mdInIndentedCode = false
   g.mdInMathMode = false
   g.mdInDisplayMath = false
   g.latexInMathMode = false

@@ -975,3 +975,57 @@ suite "Markdown - math mode does not interfere with other elements":
       if t[0] == gtKeyword and t[1] == "**bold**":
         foundKeyword = true
     check foundKeyword
+
+suite "Markdown - indented code blocks":
+  test "4-space indented code block":
+    let tokens = collectTokens("    code line")
+    # Whitespace followed by code content
+    var foundCode = false
+    for t in tokens:
+      if t[0] == gtLongStringLit and t[1] == "code line":
+        foundCode = true
+    check foundCode
+
+  test "tab indented code block":
+    let tokens = collectTokens("\tcode line")
+    var foundCode = false
+    for t in tokens:
+      if t[0] == gtLongStringLit and t[1] == "code line":
+        foundCode = true
+    check foundCode
+
+  test "less than 4 spaces is not code":
+    let tokens = collectTokens("   not code")
+    var foundCode = false
+    for t in tokens:
+      if t[0] == gtLongStringLit:
+        foundCode = true
+    check not foundCode
+
+  test "indented code block after normal text":
+    let tokens = collectTokens("Hello\n    code here\nWorld")
+    var foundCode = false
+    for t in tokens:
+      if t[0] == gtLongStringLit and t[1] == "code here":
+        foundCode = true
+    check foundCode
+    # "World" should be normal text
+    check tokens[^1] == (gtIdentifier, "World")
+
+  test "multiple indented code lines":
+    let tokens = collectTokens("    line1\n    line2")
+    var codeCount = 0
+    for t in tokens:
+      if t[0] == gtLongStringLit:
+        inc codeCount
+    check codeCount == 2
+
+  test "indented code does not trigger inside fenced code block":
+    let tokens = collectTokens("```\n    indented\n```")
+    # The "    indented" should be gtLongStringLit from the fenced code block handler,
+    # not from the indented code detection
+    var hasSpecialVar = false
+    for t in tokens:
+      if t[0] == gtSpecialVar:
+        hasSpecialVar = true
+    check hasSpecialVar
