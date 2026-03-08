@@ -2293,6 +2293,29 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "[", "textobject-bracket")
   registry.bindKey(EditorMode.Normal, "]", "textobject-bracket")
 
+  # Git change navigation
+  registry.registerCommand(
+    Command(
+      name: "navigate-git-next",
+      description: "Next git change",
+      kind: ctCustom,
+      commandId: "navigate.git.next",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "] c", "navigate-git-next")
+
+  registry.registerCommand(
+    Command(
+      name: "navigate-git-prev",
+      description: "Previous git change",
+      kind: ctCustom,
+      commandId: "navigate.git.prev",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "[ c", "navigate-git-prev")
+
   registry.registerCommand(
     Command(
       name: "textobject-brace",
