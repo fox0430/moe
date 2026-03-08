@@ -979,3 +979,69 @@ suite "HandlerManager - o/O open line with auto-indent":
     discard buffer.undo()
     check buffer.len == 1
     check buffer.getLine(0) == "hello"
+
+suite "HandlerManager - Repeat last Command mode command (@:)":
+  test "@: returns hrExecCommand with command text":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    # Set up command history (":set number" was the last command)
+    state.commandState.history = @["set number"]
+
+    # Simulate @: via keybinding registry: @ builds sequence, : completes it
+    let atKey = KeyCombo(isSpecial: false, char: "@", modifiers: {})
+    let atResult = manager.handleNormalMode(buffer, state, viewport, atKey)
+    # @ is building a sequence in the keybinding registry (waiting for target char)
+    check atResult.kind == hrHandled
+
+    let colonKey = KeyCombo(isSpecial: false, char: ":", modifiers: {})
+    let colonResult = manager.handleNormalMode(buffer, state, viewport, colonKey)
+
+    # hrExecCommand is returned for handler.nim to execute with full Editor context
+    check colonResult.kind == hrExecCommand
+    check colonResult.execCommandText == "set number"
+    check colonResult.execCommandCount == 1
+
+  test "@: with no command history shows error":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    state.commandState.history = @[]
+
+    let atKey = KeyCombo(isSpecial: false, char: "@", modifiers: {})
+    discard manager.handleNormalMode(buffer, state, viewport, atKey)
+
+    let colonKey = KeyCombo(isSpecial: false, char: ":", modifiers: {})
+    let colonResult = manager.handleNormalMode(buffer, state, viewport, colonKey)
+
+    check colonResult.kind == hrHandled
+    check state.statusMessage == "No previous Command mode command"
+
+  test "@: with count passes count in result":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    state.commandState.history = @["set number"]
+
+    # Type "3@:" (count 3, then @:)
+    let threeKey = KeyCombo(isSpecial: false, char: "3", modifiers: {})
+    discard manager.handleNormalMode(buffer, state, viewport, threeKey)
+
+    let atKey = KeyCombo(isSpecial: false, char: "@", modifiers: {})
+    discard manager.handleNormalMode(buffer, state, viewport, atKey)
+
+    let colonKey = KeyCombo(isSpecial: false, char: ":", modifiers: {})
+    let result = manager.handleNormalMode(buffer, state, viewport, colonKey)
+
+    check result.kind == hrExecCommand
+    check result.execCommandText == "set number"
+    check result.execCommandCount == 3

@@ -57,6 +57,7 @@ type
     nmrJumpToBuffer # Signal to handler_manager to jump to buffer and position
     nmrBufferNext # Signal to handler_manager to switch to next buffer
     nmrBufferPrev # Signal to handler_manager to switch to previous buffer
+    nmrExecCommand # Signal to handler_manager to execute a Command mode command
     nmrNewFile # Signal to handler_manager to create new empty buffer
     nmrEnterFiler # Signal to handler_manager to enter filer mode
     nmrBufferDelete # Signal to handler_manager to delete current buffer
@@ -96,6 +97,9 @@ type
     of nmrPlaybackMacro:
       macroKeys*: seq[string] # Keys to playback
       macroCount*: int # Number of times to playback (default 1)
+    of nmrExecCommand:
+      execCommandText*: string # Command text to execute (without leading ":")
+      execCommandCount*: int # Number of times to execute (default 1)
     of nmrLspGotoDefinition:
       discard
     of nmrLspGotoDeclaration:
@@ -385,15 +389,6 @@ proc handleInsertModeEntry*(
 # All text manipulation (delete, yank, change) is now handled by the
 # operator+motion system in command_registry.nim
 
-# Forward declaration for recursive call in playbackMacro
-proc handleNormalModeKey*(
-  handler: NormalModeHandler,
-  buffer: TextBuffer,
-  state: EditorState,
-  viewport: ViewPort,
-  keyCombo: KeyCombo,
-): NormalModeResult
-
 proc requestMacroPlayback(keys: seq[string], count: int = 1): NormalModeResult =
   ## Request macro playback - actual playback is done by handler_manager
   ## This returns the keys to be played back, and handler_manager will
@@ -458,6 +453,18 @@ proc handleNormalModeKey*(
             state.macroState.waitingForRegister = false
             state.macroState.commandType = ""
             return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+        elif registerChar == ':':
+          # @: - repeat last Command mode command
+          state.macroState.waitingForRegister = false
+          state.macroState.commandType = ""
+          if state.commandState.history.len > 0:
+            let lastCmd = state.commandState.history[0]
+            return NormalModeResult(
+              kind: nmrExecCommand, execCommandText: lastCmd, execCommandCount: count
+            )
+          else:
+            state.statusMessage = "No previous Command mode command"
+            return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
         elif registerChar >= 'a' and registerChar <= 'z':
           if state.macroState.registers.hasKey(registerChar):
             state.macroState.lastRegister = some(registerChar)
@@ -471,7 +478,7 @@ proc handleNormalModeKey*(
             state.macroState.commandType = ""
             return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
         else:
-          state.statusMessage = "Invalid register (use a-z or @)"
+          state.statusMessage = "Invalid register (use a-z, @, or :)"
           state.macroState.waitingForRegister = false
           state.macroState.commandType = ""
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
@@ -756,6 +763,16 @@ proc handleNormalModeKey*(
         else:
           state.statusMessage = "No previous macro"
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      elif registerChar == ':':
+        # @: - repeat last Command mode command
+        if state.commandState.history.len > 0:
+          let lastCmd = state.commandState.history[0]
+          return NormalModeResult(
+            kind: nmrExecCommand, execCommandText: lastCmd, execCommandCount: count
+          )
+        else:
+          state.statusMessage = "No previous Command mode command"
+          return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       elif registerChar >= 'a' and registerChar <= 'z':
         if state.macroState.registers.hasKey(registerChar):
           state.macroState.lastRegister = some(registerChar)
@@ -765,7 +782,7 @@ proc handleNormalModeKey*(
           state.statusMessage = "Register @" & $registerChar & " is empty"
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
-        state.statusMessage = "Invalid register (use a-z or @)"
+        state.statusMessage = "Invalid register (use a-z, @, or :)"
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     of "register-select":
       let registerChar =
