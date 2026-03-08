@@ -113,7 +113,7 @@ proc saveBufferCursorPosition*(e: Editor, buffer: TextBuffer) =
     return
   if buffer.filePath.isNone:
     return
-  if isPersistCursorPositionFile(buffer.language):
+  if not isPersistCursorPositionFile(buffer.language):
     return
   let absPath = absolutePath(buffer.filePath.get)
   e.cursorPositions[absPath] =
