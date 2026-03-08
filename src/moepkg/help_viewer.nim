@@ -158,6 +158,7 @@ ga         - Show current character info
 q any      - Start recording operations for Macros
 q          - Stop recoding operations
 @ any      - Exec a macro
+@:         - Repeat the last command mode command
 K          - Hover (LSP)
 gc         - Goto Declaration (LSP)
 gd         - Goto Definition (LSP)

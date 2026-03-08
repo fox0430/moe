@@ -155,6 +155,7 @@
 | <kbd>**q**</kbd> <kbd>**Any key**</kbd></br> | Start recording operations for Macros |
 | <kbd>**q**</kbd></br> | Stop recording operations |
 | <kbd>**@**</kbd> <kbd>**Any key**</kbd></br> | Execute a macro |
+| <kbd>**@**</kbd> <kbd>:</kbd></br> | Repeat the last command mode command |
 | <kbd>**c**</kbd> <kbd>**t**</kbd> <kbd>**Any Key**</kbd></br> | Delete characters until the any key and enter Insert mode |
 | <kbd>**d**</kbd> <kbd>**t**</kbd> <kbd>**Any Key**</kbd></br> | Delete characters until the any key |
 | <kbd>**.**</kbd></br> | Repeat the last normal mode command |
