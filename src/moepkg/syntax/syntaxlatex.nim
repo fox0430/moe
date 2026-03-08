@@ -27,6 +27,89 @@ const latexKeywords* = [
   "textit", "texttt", "title", "underline", "url", "usepackage",
 ]
 
+proc latexMathNextToken(g: var GeneralTokenizer, pos: var int, doubleClose: bool) =
+  ## Parse a single token inside math mode.
+  ## doubleClose distinguishes $$...$$ from $...$.
+  const symCharsLocal = {'A' .. 'Z', 'a' .. 'z'}
+
+  case g.buf[pos]
+  of '\0':
+    g.kind = gtEof
+  of ' ', '\t' .. '\r':
+    g.kind = gtWhitespace
+    while g.buf[pos] in {' ', '\t' .. '\r'}:
+      inc pos
+  of '$':
+    if doubleClose:
+      if g.buf[pos + 1] == '$':
+        g.kind = gtLongStringLit
+        inc pos, 2
+        g.latexInDisplayMath = false
+      else:
+        g.kind = gtNone
+        inc pos
+    else:
+      g.kind = gtStringLit
+      inc pos
+      g.latexInMathMode = false
+  of '\\':
+    inc pos
+    case g.buf[pos]
+    of '\0':
+      g.kind = gtBuiltin
+    of '\\':
+      inc pos
+      g.kind = gtBuiltin
+    of '[', ']', '(', ')':
+      inc pos
+      g.kind = gtBuiltin
+    of '%', '$', '&', '#', '_', '~', '^', '{', '}':
+      inc pos
+      g.kind = gtEscapeSequence
+    of 'A' .. 'Z', 'a' .. 'z':
+      var id = ""
+      while g.buf[pos] in symCharsLocal:
+        id.add g.buf[pos]
+        inc pos
+      if isKeyword(latexKeywords, id) >= 0:
+        g.kind = gtKeyword
+      else:
+        g.kind = gtBuiltin
+    else:
+      inc pos
+      g.kind = gtBuiltin
+  of '{', '}', '[', ']':
+    g.kind = gtPunctuation
+    inc pos
+  of '&', '~', '^', '_', '#':
+    g.kind = gtOperator
+    inc pos
+  of '0' .. '9':
+    pos = generalNumber(g, pos)
+  else:
+    g.kind = gtNone
+    while g.buf[pos] notin {
+      '\0',
+      '\n',
+      '\r',
+      '$',
+      '\\',
+      '{',
+      '}',
+      '[',
+      ']',
+      '&',
+      '~',
+      '^',
+      '_',
+      '#',
+      '0' .. '9',
+      ' ',
+      '\t' .. '\r',
+    }
+    :
+      inc pos
+
 proc latexNextToken*(g: var GeneralTokenizer) =
   const symCharsLocal = {'A' .. 'Z', 'a' .. 'z'}
 
@@ -35,26 +118,7 @@ proc latexNextToken*(g: var GeneralTokenizer) =
 
   # Handle continued display math mode ($$...$$)
   if g.latexInDisplayMath:
-    case g.buf[pos]
-    of '\0':
-      g.kind = gtEof
-    of ' ', '\t' .. '\r':
-      g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\t' .. '\r'}:
-        inc pos
-    of '$':
-      if g.buf[pos + 1] == '$':
-        # Closing $$
-        g.kind = gtLongStringLit
-        inc pos, 2
-        g.latexInDisplayMath = false
-      else:
-        g.kind = gtLongStringLit
-        inc pos
-    else:
-      g.kind = gtLongStringLit
-      while g.buf[pos] notin {'\0', '\n', '\r', '$'}:
-        inc pos
+    g.latexMathNextToken(pos, doubleClose = true)
 
     g.length = pos - g.pos
     if g.kind != gtEof and g.length <= 0:
@@ -64,22 +128,7 @@ proc latexNextToken*(g: var GeneralTokenizer) =
 
   # Handle continued inline math mode ($...$)
   if g.latexInMathMode:
-    case g.buf[pos]
-    of '\0':
-      g.kind = gtEof
-    of ' ', '\t' .. '\r':
-      g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\t' .. '\r'}:
-        inc pos
-    of '$':
-      # Closing $
-      g.kind = gtStringLit
-      inc pos
-      g.latexInMathMode = false
-    else:
-      g.kind = gtStringLit
-      while g.buf[pos] notin {'\0', '\n', '\r', '$'}:
-        inc pos
+    g.latexMathNextToken(pos, doubleClose = false)
 
     g.length = pos - g.pos
     if g.kind != gtEof and g.length <= 0:
@@ -134,29 +183,15 @@ proc latexNextToken*(g: var GeneralTokenizer) =
       g.kind = gtBuiltin
   of '$':
     if g.buf[pos + 1] == '$':
-      # Display math mode: $$...$$
+      # Opening $$ - emit just the delimiter
       g.kind = gtLongStringLit
       inc pos, 2
       g.latexInDisplayMath = true
-      # Consume content until $$ or end of line
-      while g.buf[pos] notin {'\0', '\n', '\r', '$'}:
-        inc pos
-      # Check for closing $$ on same line
-      if g.buf[pos] == '$' and g.buf[pos + 1] == '$':
-        inc pos, 2
-        g.latexInDisplayMath = false
     else:
-      # Inline math mode: $...$
+      # Opening $ - emit just the delimiter
       g.kind = gtStringLit
       inc pos
       g.latexInMathMode = true
-      # Consume content until $ or end of line
-      while g.buf[pos] notin {'\0', '\n', '\r', '$'}:
-        inc pos
-      # Check for closing $ on same line
-      if g.buf[pos] == '$':
-        inc pos
-        g.latexInMathMode = false
   of '{', '}', '[', ']':
     g.kind = gtPunctuation
     inc pos

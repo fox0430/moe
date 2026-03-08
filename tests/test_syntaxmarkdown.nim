@@ -782,3 +782,196 @@ suite "syntaxmarkdown - complete markdown":
     check hasSpecialVar
     # After code block — "World" should be identifier, not code content
     check tokens[^1] == (gtIdentifier, "World")
+
+suite "Markdown - inline math mode":
+  test "inline math $x+y$":
+    let tokens = collectTokens("$x+y$")
+    # Opening $, content, closing $
+    check tokens[0] == (gtStringLit, "$")
+    check tokens[^1] == (gtStringLit, "$")
+
+  test "inline math with LaTeX command":
+    let tokens = collectTokens("$\\alpha + \\beta$")
+    check tokens[0] == (gtStringLit, "$")
+    var foundKeyword = false
+    for t in tokens:
+      if t[0] == gtBuiltin and t[1] == "\\alpha":
+        foundKeyword = true
+    check foundKeyword
+    check tokens[^1] == (gtStringLit, "$")
+
+  test "inline math with keyword command":
+    let tokens = collectTokens("$\\frac{a}{b}$")
+    check tokens[0] == (gtStringLit, "$")
+    var foundFrac = false
+    for t in tokens:
+      if t[0] == gtKeyword and t[1] == "\\frac":
+        foundFrac = true
+    check foundFrac
+
+  test "inline math with surrounding text":
+    let tokens = collectTokens("the formula $E=mc^2$ is famous")
+    var hasMathOpen = false
+    var hasMathClose = false
+    for i, t in tokens:
+      if t == (gtStringLit, "$"):
+        if not hasMathOpen:
+          hasMathOpen = true
+        else:
+          hasMathClose = true
+    check hasMathOpen
+    check hasMathClose
+
+  test "inline math across lines":
+    let tokens = collectTokens("$x+\ny$")
+    var hasStringLit = false
+    for t in tokens:
+      if t[0] == gtStringLit:
+        hasStringLit = true
+    check hasStringLit
+
+suite "Markdown - display math mode":
+  test "display math $$E=mc^2$$":
+    let tokens = collectTokens("$$E=mc^2$$")
+    check tokens[0] == (gtLongStringLit, "$$")
+    check tokens[^1] == (gtLongStringLit, "$$")
+
+  test "display math with LaTeX command":
+    let tokens = collectTokens("$$\\int_0^1 f(x) dx$$")
+    check tokens[0] == (gtLongStringLit, "$$")
+    var foundBuiltin = false
+    for t in tokens:
+      if t[0] == gtBuiltin and t[1] == "\\int":
+        foundBuiltin = true
+    check foundBuiltin
+    check tokens[^1] == (gtLongStringLit, "$$")
+
+  test "display math across lines":
+    let tokens = collectTokens("$$\n\\sum_{i=1}^n\n$$")
+    var hasKeyword = false
+    for t in tokens:
+      if t[0] == gtBuiltin and t[1] == "\\sum":
+        hasKeyword = true
+    check hasKeyword
+
+  test "display math with surrounding text":
+    let tokens = collectTokens("before $$x$$ after")
+    var openCount = 0
+    for t in tokens:
+      if t == (gtLongStringLit, "$$"):
+        inc openCount
+    check openCount == 2
+
+suite "Markdown - math mode LaTeX tokens":
+  test "braces in math":
+    let tokens = collectTokens("${a}$")
+    var foundPunct = false
+    for t in tokens:
+      if t == (gtPunctuation, "{"):
+        foundPunct = true
+    check foundPunct
+
+  test "operators in math":
+    let tokens = collectTokens("$x^2_n$")
+    var foundCaret = false
+    var foundUnderscore = false
+    for t in tokens:
+      if t == (gtOperator, "^"):
+        foundCaret = true
+      if t == (gtOperator, "_"):
+        foundUnderscore = true
+    check foundCaret
+    check foundUnderscore
+
+  test "escape sequence in math":
+    let tokens = collectTokens("$\\$$")
+    # $ opens, \$ is escape, $ closes
+    check tokens[0] == (gtStringLit, "$")
+    check tokens[1] == (gtEscapeSequence, "\\$")
+    check tokens[2] == (gtStringLit, "$")
+
+  test "numbers in math":
+    let tokens = collectTokens("$3.14$")
+    var foundFloat = false
+    for t in tokens:
+      if t[0] == gtFloatNumber and t[1] == "3.14":
+        foundFloat = true
+    check foundFloat
+
+  test "double backslash in math":
+    let tokens = collectTokens("$a \\\\ b$")
+    var foundLineBreak = false
+    for t in tokens:
+      if t[0] == gtBuiltin and t[1] == "\\\\":
+        foundLineBreak = true
+    check foundLineBreak
+
+  test "math delimiters \\[ \\] \\( \\) in math":
+    let tokens = collectTokens("$\\[$")
+    check tokens[1] == (gtBuiltin, "\\[")
+
+  test "single dollar inside display math is not closing":
+    let tokens = collectTokens("$$a$b$$")
+    # $ inside $$ should be gtNone, not close display math
+    check tokens[0] == (gtLongStringLit, "$$")
+    var foundNoneDollar = false
+    for t in tokens:
+      if t == (gtNone, "$"):
+        foundNoneDollar = true
+    check foundNoneDollar
+    check tokens[^1] == (gtLongStringLit, "$$")
+
+  test "empty display math $$$$":
+    let tokens = collectTokens("$$$$")
+    check tokens.len == 2
+    check tokens[0] == (gtLongStringLit, "$$")
+    check tokens[1] == (gtLongStringLit, "$$")
+
+  test "unclosed inline math at EOF":
+    let tokens = collectTokens("$x+y")
+    check tokens[0] == (gtStringLit, "$")
+    # Content is parsed but no closing $
+    check tokens.len >= 2
+    for t in tokens:
+      check t[0] != gtEof
+
+  test "unclosed display math at EOF":
+    let tokens = collectTokens("$$x+y")
+    check tokens[0] == (gtLongStringLit, "$$")
+    check tokens.len >= 2
+    for t in tokens:
+      check t[0] != gtEof
+
+suite "Markdown - math mode does not interfere with other elements":
+  test "dollar inside code block is not math":
+    let tokens = collectTokens("```\n$100\n```")
+    var hasMathDelim = false
+    for t in tokens:
+      if t == (gtStringLit, "$"):
+        hasMathDelim = true
+    check not hasMathDelim
+
+  test "dollar inside inline code is not math":
+    let tokens = collectTokens("`$x$`")
+    check tokens.len == 1
+    check tokens[0][0] == gtSpecialVar
+
+  test "markdown heading after math":
+    let tokens = collectTokens("$x$\n# Heading")
+    check tokens[^1][0] == gtBuiltin # heading
+
+  test "list after display math":
+    let tokens = collectTokens("$$x$$\n- item")
+    var foundListMarker = false
+    for t in tokens:
+      if t[0] == gtOperator and t[1] == "- ":
+        foundListMarker = true
+    check foundListMarker
+
+  test "bold after inline math":
+    let tokens = collectTokens("$x$ **bold**")
+    var foundKeyword = false
+    for t in tokens:
+      if t[0] == gtKeyword and t[1] == "**bold**":
+        foundKeyword = true
+    check foundKeyword
