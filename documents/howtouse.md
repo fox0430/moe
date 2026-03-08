@@ -382,6 +382,7 @@ All keystrokes are forwarded to the running shell/command.
 | `vs filename` | Open in vertical split window |
 | `sp` | Horizontal split window |
 | `sp filename` | Open in horizontal split window |
+| `only` | Close all other windows |
 | `theme themeName` | Change color theme : Example `theme dark` |
 | `noh` | Turn off search highlights |
 | `stripwhitespace` | Delete trailing spaces |

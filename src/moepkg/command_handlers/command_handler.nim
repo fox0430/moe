@@ -126,6 +126,7 @@ type
     cmrMapRemove # Remove runtime key mapping (:unmap, :nunmap, etc.)
     cmrMapClear # Clear runtime key mappings (:mapclear, :nmapclear, etc.)
     cmrMapList # List runtime key mappings (:map, :nmap, etc. with no args)
+    cmrOnlyWindow # Close all other windows (:only)
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -247,6 +248,8 @@ type
       mapClearModes*: seq[EditorMode]
     of cmrMapList:
       mapListModes*: seq[EditorMode]
+    of cmrOnlyWindow:
+      discard
     of cmrError:
       errorMessage*: string
 
@@ -1097,6 +1100,8 @@ proc handleCommandModeInput*(
           EditorMode.VisualBlock, EditorMode.VisualLine, EditorMode.Replace,
         ]
     return CommandModeResult(kind: cmrMapClear, mapClearModes: modes)
+  of claOnlyWindow:
+    return CommandModeResult(kind: cmrOnlyWindow)
   of claUnknown:
     return CommandModeResult(kind: cmrError, errorMessage: cmdResult.errorMessage)
 

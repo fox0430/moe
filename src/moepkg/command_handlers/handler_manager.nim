@@ -152,6 +152,7 @@ type
     hrEnterTerminal # Enter terminal mode
     hrTerminalQuit # Close terminal and return to previous mode
     hrExecCommand # Execute a Command mode command directly (@:)
+    hrOnlyWindow # Close all other windows (:only)
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -385,6 +386,8 @@ type
     of hrExecCommand:
       execCommandText*: string # Command text (without leading ":")
       execCommandCount*: int # Number of times to execute
+    of hrOnlyWindow:
+      discard
     of hrUnhandled:
       discard
     of hrError:
@@ -943,6 +946,8 @@ proc handleCommandMode*(
     return HandlerResult(
       kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
     )
+  of cmrOnlyWindow:
+    return HandlerResult(kind: hrOnlyWindow)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -2059,7 +2064,7 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrLspGotoDeclaration, hrLspFindReferences, hrLspCodeLensExecute,
     hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing, hrLspTypeDefinition,
     hrLspImplementation, hrLspHover, hrLspRename, hrLspSelectionRange,
-    hrLspDocumentLink, hrJumpList, hrLspLog,
+    hrLspDocumentLink, hrJumpList, hrLspLog, hrOnlyWindow,
   }
 
 proc hasError*(hrResult: HandlerResult): bool =

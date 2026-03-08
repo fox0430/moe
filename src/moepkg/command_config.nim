@@ -190,6 +190,9 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("runmap", claRunmap)
   config.addAlias("cunmap", claCunmap)
 
+  # Only window (close all other windows)
+  config.addAlias("only", claOnlyWindow)
+
   # Key mapping clear commands
   config.addAlias("mapclear", claMapclear)
   config.addAlias("nmapclear", claNmapclear)

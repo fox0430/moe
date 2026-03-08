@@ -311,6 +311,7 @@ vs          - Vertical split window
 vs filename - Open in a vertical split window
 sp          - Horizontal split window
 sp filename - Open in a horizontal split window
+only        - Close all other windows
 
 theme themeName - Change color theme; for example theme dark
 noh            - Turn off search highlights

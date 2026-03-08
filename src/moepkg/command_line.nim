@@ -93,6 +93,7 @@ type
     claVmapclear # :vmapclear (visual modes)
     claRmapclear # :rmapclear (replace mode)
     claCmapclear # :cmapclear (command-line mode)
+    claOnlyWindow # :only (close all other windows)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -211,6 +212,8 @@ type
     of claUnmap, claNunmap, claIunmap, claVunmap, claRunmap, claCunmap:
       unmapLhs*: string
     of claMapclear, claNmapclear, claImapclear, claVmapclear, claRmapclear, claCmapclear:
+      discard
+    of claOnlyWindow:
       discard
     of claUnknown:
       errorMessage*: string
@@ -899,6 +902,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claRmapclear)
   of claCmapclear:
     return CommandLineResult(kind: claCmapclear)
+  of claOnlyWindow:
+    return CommandLineResult(kind: claOnlyWindow)
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

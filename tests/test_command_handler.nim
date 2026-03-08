@@ -1287,6 +1287,13 @@ suite "CommandModeHandler - handleCommandModeInput":
     let result = handler.handleCommandModeInput(buffer, ":vnew")
     check result.kind == cmrVnew
 
+  test "Handle :only command":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":only")
+    check result.kind == cmrOnlyWindow
+
   test "Handle :bn command":
     let handler = setupHandler()
     let buffer = setupBuffer()
