@@ -209,7 +209,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       hrDocumentSymbolQuit, hrDocumentSymbolJumpTo, hrEnterDocumentSymbol,
       hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
       hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrEnterTerminal,
-      hrTerminalQuit:
+      hrTerminalQuit, hrExecCommand:
     discard # Not expected from RecentFile mode handler
 
   # Handle overlay transitions (e.g., entering Command mode with :)
@@ -1641,6 +1641,18 @@ proc handleEvent*(e: Editor, event: Event): bool =
       if enewResult.isErr:
         logError("handler", "Enew failed after buffer delete: " & enewResult.error)
         e.state.statusMessage = "Error: " & enewResult.error
+  of hrExecCommand:
+    # @: - repeat last Command mode command
+    # Execute via handleCommandModeKeyCombo which has full result processing
+    let count = r.execCommandCount
+    let commandText = ":" & r.execCommandText
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    for i in 0 ..< count:
+      e.state.commandText = commandText
+      e.state.commandCursor = commandText.len
+      let continueRunning = e.handleCommandModeKeyCombo(enterKey)
+      if not continueRunning:
+        return false
   of hrVSplit, hrHSplit, hrNew, hrVnew, hrEdit, hrSetBoolOption, hrSetIntOption,
       hrSetFloatOption, hrClearSearchHighlight, hrSave, hrStripWhitespace,
       hrShellCommand, hrBackground, hrMan, hrSubstitute, hrQuickRun, hrBuild, hrDebug,

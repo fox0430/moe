@@ -151,6 +151,7 @@ type
     hrEnterCallHierarchy # Enter call hierarchy viewer mode
     hrEnterTerminal # Enter terminal mode
     hrTerminalQuit # Close terminal and return to previous mode
+    hrExecCommand # Execute a Command mode command directly (@:)
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -381,6 +382,9 @@ type
       enterTerminalCommand*: string # Optional command (empty = default shell)
     of hrTerminalQuit:
       discard
+    of hrExecCommand:
+      execCommandText*: string # Command text (without leading ":")
+      execCommandCount*: int # Number of times to execute
     of hrUnhandled:
       discard
     of hrError:
@@ -494,6 +498,14 @@ proc extractInsertedText(transaction: buffer.BufferTransaction): string =
   return sb.toString()
 
 # Forward declarations
+proc handleCommandMode*(
+  manager: HandlerManager,
+  buffer: TextBuffer,
+  commandText: string,
+  isSharedBuffer: bool = false,
+  currentLine: int = 0,
+): HandlerResult
+
 proc playbackMacro*(
   manager: HandlerManager,
   buffer: TextBuffer,
@@ -581,6 +593,14 @@ proc handleNormalMode*(
         return playbackResult
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of nmrExecCommand:
+    # @: - repeat last Command mode command
+    # Pass through to handler.nim which has access to Editor for full result processing
+    return HandlerResult(
+      kind: hrExecCommand,
+      execCommandText: r.execCommandText,
+      execCommandCount: if r.execCommandCount > 0: r.execCommandCount else: 1,
     )
   of nmrLspGotoDefinition:
     # Signal to editor to execute LSP goto definition

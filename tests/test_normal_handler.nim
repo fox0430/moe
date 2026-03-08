@@ -1491,10 +1491,9 @@ suite "NormalModeHandler - Macro Edge Cases":
     let keyCombo = KeyCombo(isSpecial: false, char: ":", modifiers: {})
     let result = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
-    check result.kind == nmrPlaybackMacro
-    check result.macroKeys ==
-      @[":", "s", "e", "t", " ", "n", "u", "m", "b", "e", "r", "Enter"]
-    check result.macroCount == 1
+    check result.kind == nmrExecCommand
+    check result.execCommandText == "set number"
+    check result.execCommandCount == 1
     check state.macroState.waitingForRegister == false
 
   test "Repeat last Command mode command @: with no history":
