@@ -157,7 +157,8 @@ type
     of cmrEnew:
       discard
     of cmrEdit:
-      editFilename*: string
+      editFilename*: Option[string]
+      forceEdit*: bool
     of cmrSetBoolOption:
       boolOption*: BoolSettingOption
       boolValue*: bool
@@ -315,15 +316,29 @@ proc executeQuitAll*(
   return CommandModeResult(kind: cmrQuit, forceQuit: force)
 
 proc executeEdit*(
-    handler: CommandModeHandler, buffer: TextBuffer, filename: string
+    handler: CommandModeHandler,
+    buffer: TextBuffer,
+    filename: Option[string],
+    force: bool,
 ): CommandModeResult =
-  ## Execute edit command (:e filename)
-  let expanded = expandTilde(filename)
-  # If path is a directory, open in Filer mode
-  if dirExists(expanded):
-    return CommandModeResult(kind: cmrFiler, filerPath: some(absolutePath(expanded)))
-  # Open the file in the current window
-  return CommandModeResult(kind: cmrEdit, editFilename: absolutePath(expanded))
+  ## Execute edit command (:e/:e! with optional filename)
+  if filename.isSome:
+    let expanded = expandTilde(filename.get)
+    # If path is a directory, open in Filer mode
+    if dirExists(expanded):
+      return CommandModeResult(kind: cmrFiler, filerPath: some(absolutePath(expanded)))
+    # Open the file in the current window
+    return CommandModeResult(
+      kind: cmrEdit, editFilename: some(absolutePath(expanded)), forceEdit: force
+    )
+  else:
+    # No filename: reload current buffer
+    if not force and buffer.isModified:
+      return CommandModeResult(
+        kind: cmrError, errorMessage: "No write since last change (add ! to override)"
+      )
+    return
+      CommandModeResult(kind: cmrEdit, editFilename: none(string), forceEdit: force)
 
 proc executeGotoLine*(
     handler: CommandModeHandler, buffer: TextBuffer, lineNumber: int
@@ -936,7 +951,7 @@ proc handleCommandModeInput*(
     return
       handler.executeSaveAndQuit(buffer, none(string), cmdResult.forceSaveAllAndQuit)
   of claEdit:
-    return handler.executeEdit(buffer, cmdResult.editFilename)
+    return handler.executeEdit(buffer, cmdResult.editFilename, cmdResult.forceEdit)
   of claEnew:
     return handler.executeEnew()
   of claGoto:

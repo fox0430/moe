@@ -411,12 +411,26 @@ suite "CommandLine - execute":
   test "Execute :e with filename":
     let result = parser.parseAndExecute(":e test.nim")
     check result.kind == claEdit
-    check result.editFilename == "test.nim"
+    check result.editFilename == some("test.nim")
+    check result.forceEdit == false
 
-  test "Execute :e without filename returns error":
+  test "Execute :e without filename":
     let result = parser.parseAndExecute(":e")
-    check result.kind == claUnknown
-    check "No file name" in result.errorMessage
+    check result.kind == claEdit
+    check result.editFilename.isNone
+    check result.forceEdit == false
+
+  test "Execute :e! without filename":
+    let result = parser.parseAndExecute(":e!")
+    check result.kind == claEdit
+    check result.editFilename.isNone
+    check result.forceEdit == true
+
+  test "Execute :e! with filename":
+    let result = parser.parseAndExecute(":e! test.nim")
+    check result.kind == claEdit
+    check result.editFilename == some("test.nim")
+    check result.forceEdit == true
 
   test "Execute :enew":
     let result = parser.parseAndExecute(":enew")
@@ -561,7 +575,8 @@ suite "CommandLine - isQuitCommand and isSaveCommand":
 
   test "isQuitCommand returns false for non-quit commands":
     check isQuitCommand(CommandLineResult(kind: claSave)) == false
-    check isQuitCommand(CommandLineResult(kind: claEdit, editFilename: "test")) == false
+    check isQuitCommand(CommandLineResult(kind: claEdit, editFilename: some("test"))) ==
+      false
 
   test "isSaveCommand returns true for save commands":
     check isSaveCommand(CommandLineResult(kind: claSave)) == true
@@ -571,7 +586,8 @@ suite "CommandLine - isQuitCommand and isSaveCommand":
 
   test "isSaveCommand returns false for non-save commands":
     check isSaveCommand(CommandLineResult(kind: claQuit)) == false
-    check isSaveCommand(CommandLineResult(kind: claEdit, editFilename: "test")) == false
+    check isSaveCommand(CommandLineResult(kind: claEdit, editFilename: some("test"))) ==
+      false
 
 suite "CommandLine - isNoArgumentAction":
   setup:

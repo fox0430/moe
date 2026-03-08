@@ -452,13 +452,20 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           logError("handler", "Vnew failed: " & vnewResult.error)
           e.state.statusMessage = "Error: " & vnewResult.error
       of hrEdit:
-        # Handle edit (open file in current window)
-        let editResult = e.editFile(r.editFilename)
-        if editResult.isErr:
-          logError("handler", "Edit failed: " & editResult.error)
-          e.state.statusMessage = "Error: " & editResult.error
+        if r.editFilename.isSome:
+          # Handle edit with filename (open file in current window)
+          let editResult = e.editFile(r.editFilename.get)
+          if editResult.isErr:
+            logError("handler", "Edit failed: " & editResult.error)
+            e.state.statusMessage = "Error: " & editResult.error
+          else:
+            e.state.statusMessage = "Opened: " & r.editFilename.get
         else:
-          e.state.statusMessage = "Opened: " & r.editFilename
+          # Handle reload current file (:e or :e!)
+          let reloadResult = e.reloadCurrentFile()
+          if reloadResult.isErr:
+            logError("handler", "Reload failed: " & reloadResult.error)
+            e.state.statusMessage = "Error: " & reloadResult.error
       of hrSetBoolOption:
         # Handle boolean option setting
         let opt = r.boolOption
