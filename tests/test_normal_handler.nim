@@ -1472,7 +1472,49 @@ suite "NormalModeHandler - Macro Edge Cases":
     let result = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check result.kind == nmrHandled
-    check state.statusMessage == "Invalid register (use a-z or @)"
+    check state.statusMessage == "Invalid register (use a-z, @, or :)"
+
+  test "Repeat last Command mode command @:":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    # Set up command history with a previous Command mode command
+    state.commandState.history = @["set number"]
+
+    state.macroState.waitingForRegister = true
+    state.macroState.commandType = "playback"
+    state.macroState.pendingCount = 1
+
+    # Press ':' to trigger @:
+    let keyCombo = KeyCombo(isSpecial: false, char: ":", modifiers: {})
+    let result = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
+
+    check result.kind == nmrPlaybackMacro
+    check result.macroKeys ==
+      @[":", "s", "e", "t", " ", "n", "u", "m", "b", "e", "r", "Enter"]
+    check result.macroCount == 1
+    check state.macroState.waitingForRegister == false
+
+  test "Repeat last Command mode command @: with no history":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    state.commandState.history = @[]
+
+    state.macroState.waitingForRegister = true
+    state.macroState.commandType = "playback"
+    state.macroState.pendingCount = 1
+
+    # Press ':' to trigger @:
+    let keyCombo = KeyCombo(isSpecial: false, char: ":", modifiers: {})
+    let result = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
+
+    check result.kind == nmrHandled
+    check state.statusMessage == "No previous Command mode command"
 
 suite "NormalModeHandler - updateCursorToJumpPosition":
   test "Jump to buffer with single empty line":

@@ -458,6 +458,20 @@ proc handleNormalModeKey*(
             state.macroState.waitingForRegister = false
             state.macroState.commandType = ""
             return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+        elif registerChar == ':':
+          # @: - repeat last Command mode command
+          state.macroState.waitingForRegister = false
+          state.macroState.commandType = ""
+          if state.commandState.history.len > 0:
+            let lastCmd = state.commandState.history[0]
+            var keys: seq[string] = @[":"]
+            for ch in lastCmd:
+              keys.add($ch)
+            keys.add("Enter")
+            return requestMacroPlayback(keys, count)
+          else:
+            state.statusMessage = "No previous Command mode command"
+            return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
         elif registerChar >= 'a' and registerChar <= 'z':
           if state.macroState.registers.hasKey(registerChar):
             state.macroState.lastRegister = some(registerChar)
@@ -471,7 +485,7 @@ proc handleNormalModeKey*(
             state.macroState.commandType = ""
             return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
         else:
-          state.statusMessage = "Invalid register (use a-z or @)"
+          state.statusMessage = "Invalid register (use a-z, @, or :)"
           state.macroState.waitingForRegister = false
           state.macroState.commandType = ""
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
@@ -756,6 +770,18 @@ proc handleNormalModeKey*(
         else:
           state.statusMessage = "No previous macro"
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      elif registerChar == ':':
+        # @: - repeat last Command mode command
+        if state.commandState.history.len > 0:
+          let lastCmd = state.commandState.history[0]
+          var keys: seq[string] = @[":"]
+          for ch in lastCmd:
+            keys.add($ch)
+          keys.add("Enter")
+          return requestMacroPlayback(keys, count)
+        else:
+          state.statusMessage = "No previous Command mode command"
+          return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       elif registerChar >= 'a' and registerChar <= 'z':
         if state.macroState.registers.hasKey(registerChar):
           state.macroState.lastRegister = some(registerChar)
@@ -765,7 +791,7 @@ proc handleNormalModeKey*(
           state.statusMessage = "Register @" & $registerChar & " is empty"
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
-        state.statusMessage = "Invalid register (use a-z or @)"
+        state.statusMessage = "Invalid register (use a-z, @, or :)"
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     of "register-select":
       let registerChar =
