@@ -209,7 +209,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       hrDocumentSymbolQuit, hrDocumentSymbolJumpTo, hrEnterDocumentSymbol,
       hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
       hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrEnterTerminal,
-      hrTerminalQuit, hrExecCommand:
+      hrTerminalQuit, hrExecCommand, hrOnlyWindow:
     discard # Not expected from RecentFile mode handler
 
   # Handle overlay transitions (e.g., entering Command mode with :)
@@ -1659,7 +1659,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList, hrRecentFile,
       hrRecentFileOpenFile, hrRecentFileQuit, hrEnterLogViewer, hrEnterHelpViewer,
       hrEnterBufferManager, hrEnterBackupManager, hrEnterDiffViewer, hrEnterReferences,
-      hrEnterDocumentSymbol, hrEnterCallHierarchy, hrEnterTerminal:
+      hrEnterDocumentSymbol, hrEnterCallHierarchy, hrEnterTerminal, hrOnlyWindow:
     discard # Handled by handleCommandModeEvent or other code paths
 
   # Handle overlay transitions

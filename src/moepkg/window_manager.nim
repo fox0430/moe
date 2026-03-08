@@ -408,6 +408,25 @@ proc closeWindow*(wm: EditorWindowManager, multiStatusLine: bool): bool =
 
   return false # Not the last window, don't quit
 
+proc onlyWindow*(wm: EditorWindowManager, screenWidth: int, screenHeight: int) =
+  ## Close all windows except the active one and resize it to fill the screen.
+
+  if wm.windows.len <= 1:
+    return
+
+  let activeWin = wm.windows[wm.activeWindowIndex]
+
+  # Keep only the active window
+  wm.windows = @[activeWin]
+  wm.activeWindowIndex = 0
+  wm.activateWindow(0)
+
+  # Resize viewport to fill the full screen
+  activeWin.viewport.x = 0
+  activeWin.viewport.y = 0
+  activeWin.viewport.width = screenWidth
+  activeWin.viewport.height = screenHeight - CommandLineHeight
+
 proc vsplit*(
     wm: EditorWindowManager,
     currentBuffer: TextBuffer,

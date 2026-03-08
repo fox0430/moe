@@ -1136,6 +1136,12 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
         discard e.requestLspCallHierarchyOutgoing()
+      of hrOnlyWindow:
+        # Close all windows except the active one
+        e.windowManager.onlyWindow(e.screenSize.width, e.screenSize.height)
+        e.syncActiveWindow()
+        if e.windowManager.windows.len > 0:
+          e.setActiveWindowScreenCursor(e.activeWindow)
       of hrJumpToBuffer, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,
           hrFilerDeleteFile, hrFilerShowInfo, hrFilerQuit, hrLogViewerRefresh,
           hrHelpViewerQuit, hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences,

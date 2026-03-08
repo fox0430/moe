@@ -1123,6 +1123,86 @@ suite "EditorWindowManager - Window Resize":
     check wm.windows[1].viewport.width >= 39
     check wm.windows[1].viewport.width <= 40
 
+suite "EditorWindowManager - Only Window":
+  test "onlyWindow with single window does nothing":
+    let wm = createSingleWindowManager(80, 24)
+    wm.onlyWindow(80, 24)
+
+    check wm.windows.len == 1
+    check wm.activeWindowIndex == 0
+    check wm.windows[0].viewport.width == 80
+    check wm.windows[0].viewport.height == 24
+
+  test "onlyWindow closes all other windows after vsplit":
+    let wm = createSingleWindowManager(80, 24)
+    discard wm.vsplit(
+      wm.windows[0].buffer, wm.windows[0].viewport, BufferPosition(line: 0, column: 0)
+    )
+    check wm.windows.len == 2
+
+    wm.onlyWindow(80, 24)
+
+    check wm.windows.len == 1
+    check wm.activeWindowIndex == 0
+    check wm.windows[0].active == true
+    check wm.windows[0].viewport.x == 0
+    check wm.windows[0].viewport.y == 0
+    check wm.windows[0].viewport.width == 80
+    check wm.windows[0].viewport.height == 23 # screenHeight - CommandLineHeight
+
+  test "onlyWindow closes all other windows after hsplit":
+    let wm = createSingleWindowManager(80, 24)
+    discard wm.hsplit(
+      wm.windows[0].buffer,
+      wm.windows[0].viewport,
+      BufferPosition(line: 0, column: 0),
+      multiStatusLine = false,
+    )
+    check wm.windows.len == 2
+
+    wm.onlyWindow(80, 24)
+
+    check wm.windows.len == 1
+    check wm.activeWindowIndex == 0
+    check wm.windows[0].viewport.width == 80
+    check wm.windows[0].viewport.height == 23 # screenHeight - CommandLineHeight
+
+  test "onlyWindow keeps the active window":
+    let wm = createSingleWindowManager(80, 24)
+    let origBuffer = wm.windows[0].buffer
+
+    # Create a second window with a different buffer
+    discard
+      wm.vsplit(origBuffer, wm.windows[0].viewport, BufferPosition(line: 0, column: 0))
+
+    # Switch to the second window (right side, index 1)
+    wm.activateWindow(1)
+    wm.activeWindowIndex = 1
+    let activeBuffer = wm.windows[1].buffer
+
+    wm.onlyWindow(80, 24)
+
+    check wm.windows.len == 1
+    check wm.windows[0].buffer == activeBuffer
+
+  test "onlyWindow with multiple splits":
+    let wm = createSingleWindowManager(80, 24)
+    discard wm.vsplit(
+      wm.windows[0].buffer, wm.windows[0].viewport, BufferPosition(line: 0, column: 0)
+    )
+    discard wm.vsplit(
+      wm.windows[0].buffer, wm.windows[0].viewport, BufferPosition(line: 0, column: 0)
+    )
+    check wm.windows.len == 3
+
+    wm.onlyWindow(80, 24)
+
+    check wm.windows.len == 1
+    check wm.windows[0].viewport.x == 0
+    check wm.windows[0].viewport.y == 0
+    check wm.windows[0].viewport.width == 80
+    check wm.windows[0].viewport.height == 23 # screenHeight - CommandLineHeight
+
   test "equalizeAllWindows with single window does nothing":
     let wm = createSingleWindowManager(80, 24)
     let origWidth = wm.windows[0].viewport.width
