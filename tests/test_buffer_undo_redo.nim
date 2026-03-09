@@ -704,3 +704,89 @@ suite "Buffer - joinLines Undo/Redo":
     check r.isErr
     # No undo entry should be created
     check b.undo().isErr
+
+suite "Buffer - Change List":
+  test "changeList is empty on new buffer":
+    let b = newTextBuffer("hello")
+    check b.changeList.len == 0
+    check b.changeListIndex == 0
+
+  test "insertText records position in changeList":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    check b.changeList.len == 1
+    check b.changeList[0].line == 0
+    check b.changeList[0].column == 5
+    check b.changeListIndex == 0
+
+  test "multiple changes grow changeList":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "A")
+    discard b.insertText(BufferPosition(line: 0, column: 3), "B")
+    discard b.insertText(BufferPosition(line: 0, column: 6), "C")
+    check b.changeList.len == 3
+    check b.changeListIndex == 2
+
+  test "deleteLine records position in changeList":
+    let b = newTextBuffer("")
+    discard b.insert(1, "line2")
+    let initialLen = b.changeList.len
+    discard b.deleteLine(1)
+    check b.changeList.len == initialLen + 1
+    check b.changeList[^1].line == 1
+
+  test "transaction records single entry in changeList":
+    let b = newTextBuffer("hello world")
+    discard b.beginTransaction("test")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "A")
+    discard b.insertText(BufferPosition(line: 0, column: 2), "B")
+    discard b.commitTransaction()
+    # Transaction should add one entry (not one per sub-change)
+    check b.changeList.len == 1
+    check b.changeList[0].line == 0
+    check b.changeList[0].column == 0
+
+  test "undo decrements changeListIndex":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "?")
+    check b.changeListIndex == 1
+
+    discard b.undo()
+    check b.changeListIndex == 0
+    check b.changeList.len == 2 # List itself doesn't shrink
+
+  test "redo increments changeListIndex":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "?")
+    discard b.undo()
+    check b.changeListIndex == 0
+
+    discard b.redo()
+    check b.changeListIndex == 1
+
+  test "changeListIndex does not go below 0 on undo":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    check b.changeListIndex == 0
+
+    discard b.undo()
+    check b.changeListIndex == 0
+
+  test "changeListIndex does not exceed len-1 on redo":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    check b.changeListIndex == 0
+
+    # Already at the end, redo should fail but index stays in bounds
+    let r = b.redo()
+    check r.isErr
+    check b.changeListIndex == 0
+
+  test "changeList limited to 100 entries":
+    let b = newTextBuffer("hello")
+    for i in 0 ..< 110:
+      discard b.insertText(BufferPosition(line: 0, column: 0), "x")
+    check b.changeList.len == 100
+    check b.changeListIndex == 99

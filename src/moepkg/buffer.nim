@@ -157,6 +157,10 @@ type
     # Performance optimization
     cursorCache*: CursorPosCache # Cache for character-to-byte position conversions
 
+    # Change list (tracks positions where changes were made, like Vim's changelist)
+    changeList*: seq[BufferPosition]
+    changeListIndex*: int
+
     # Line folding state (vim-like manual folding)
     foldState*: FoldState
 
@@ -593,7 +597,7 @@ proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
   ## Insert a line without recording undo. Used by substitute preview etc.
   b.backendInsertLine(lineNumber, content)
 
-proc getChangePosition(change: BufferChange): BufferPosition =
+proc getChangePosition*(change: BufferChange): BufferPosition =
   ## Get the starting position of a change
   case change.kind
   of ckInsertText:
@@ -616,6 +620,16 @@ proc getChangePosition(change: BufferChange): BufferPosition =
       return BufferPosition(line: 0, column: 0)
   of ckSnapshot:
     return change.snapshotCursorPos
+
+proc recordChangePosition(b: TextBuffer, pos: BufferPosition) =
+  ## Add a position to the changelist, keeping it within the max limit.
+  b.changeList.add(pos)
+  b.changeListIndex = b.changeList.len - 1
+
+  const ChangeListMaxLen = 100
+  if b.changeList.len > ChangeListMaxLen:
+    b.changeList.delete(0)
+    b.changeListIndex = b.changeList.len - 1
 
 proc ensureMarkersSize(b: TextBuffer) =
   ## Ensure lineMarkers array matches buffer length
@@ -650,7 +664,12 @@ proc pushUndoChange(b: TextBuffer, change: BufferChange) =
   b.highlightNeedsUpdate = true
 
   # Track the first changed line for incremental highlighting
-  b.lastChangedLines = getChangePosition(change).line
+  let changePos = getChangePosition(change)
+  b.lastChangedLines = changePos.line
+
+  # Record change position in changelist
+  if not b.inTransaction:
+    b.recordChangePosition(changePos)
 
   if b.inTransaction and b.currentTransaction.isSome:
     # Add to current transaction
@@ -1188,6 +1207,9 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
     # Note: changeSeq was already incremented by each change in pushUndoChange
     # Note: redoStack was already cleared by the first change in pushUndoChange
 
+    # Record transaction position in changelist
+    b.recordChangePosition(getChangePosition(transaction.changes[0]))
+
     # Recompute lastChangedLines as the minimum across all changes.
     # Each individual change in pushUndoChange overwrites lastChangedLines,
     # so after the transaction only the last change's line remains.
@@ -1354,6 +1376,10 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     # Decrement change sequence for each undo
     b.changeSeq.dec
 
+    # Adjust changelist index
+    if b.changeListIndex > 0:
+      b.changeListIndex.dec
+
   # Add all undone changes to redo stack in the order they were undone
   # This ensures redo applies them in the correct reverse order
   for change in undoneChanges:
@@ -1481,6 +1507,10 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     # Increment change sequence for each redo
     b.changeSeq.inc
+
+    # Adjust changelist index
+    if b.changeListIndex < b.changeList.len - 1:
+      b.changeListIndex.inc
 
   # Add redone changes back to undo stack in reverse order
   # This restores the original undo stack order after redo

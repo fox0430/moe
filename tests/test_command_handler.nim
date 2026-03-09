@@ -1413,6 +1413,13 @@ suite "CommandModeHandler - handleCommandModeInput":
     let result = handler.handleCommandModeInput(buffer, ":jump")
     check result.kind == cmrJumpList
 
+  test "Handle :changes command":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":changes")
+    check result.kind == cmrChanges
+
   test "Handle :man command":
     let handler = setupHandler()
     let buffer = setupBuffer()

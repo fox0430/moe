@@ -1033,6 +1033,45 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         # Return to Normal mode (not to previous Command mode) - exit overlay first
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
+      of hrChanges:
+        overlayHandled = true
+        # Handle change list command (:changes)
+        let buf = e.activeBuffer()
+        if buf.changeList.len == 0:
+          e.state.statusMessage = "No changes"
+        else:
+          e.state.tempMessages = @[]
+          e.state.tempMessages.add("change  line  col  text")
+          for i in 0 ..< buf.changeList.len:
+            let pos = buf.changeList[i]
+            let lineNum = pos.line + 1
+            let colNum = pos.column + 1
+            let marker = if i == buf.changeListIndex + 1: ">" else: " "
+            let text =
+              if pos.line < buf.len:
+                let line = buf.getLine(pos.line)
+                if line.runeLen > 40:
+                  line.runeSubStr(0, 40) & "..."
+                else:
+                  line
+              else:
+                ""
+            let changeNum = buf.changeList.len - i
+            e.state.tempMessages.add(
+              marker & ($changeNum).align(4) & " " & ($lineNum).align(5) & " " &
+                ($colNum).align(4) & "  " & text
+            )
+          # Current position row (show > only when at the end of changelist)
+          let w = e.activeWindow
+          let curMarker =
+            if buf.changeListIndex == buf.changeList.len - 1: ">" else: " "
+          e.state.tempMessages.add(
+            curMarker & "0".align(4) & " " & ($(w.cursor.line + 1)).align(5) & " " &
+              ($(w.cursor.column + 1)).align(4) & "  "
+          )
+          e.state.needsFullRedraw = true
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
       of hrTheme:
         overlayHandled = true
         # Handle theme change command
