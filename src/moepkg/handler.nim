@@ -401,7 +401,9 @@ proc middleClickPaste(e: Editor) =
   if e.state.mode == EditorMode.Normal:
     e.setMode(EditorMode.Insert)
     let activeBuffer = e.activeBuffer()
-    discard activeBuffer.beginTransaction("Insert mode edit")
+    discard activeBuffer.beginTransaction(
+      "Insert mode edit", cursorPos = some(e.activeWindow.cursor)
+    )
     e.state.statusMessage = "-- INSERT --"
   elif e.state.mode != EditorMode.Insert:
     return

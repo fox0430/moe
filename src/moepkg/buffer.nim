@@ -110,6 +110,7 @@ type
     of ckTransaction:
       transactionChanges*: seq[BufferChange]
       transactionDescription*: string
+      transactionCursorPos*: Option[BufferPosition]
     of ckSnapshot:
       snapshotData*: PieceTableSnapshot
       snapshotCursorPos*: BufferPosition
@@ -121,6 +122,7 @@ type
     changes*: seq[BufferChange]
     description*: string
     startSeq*: int # changeSeq at the start of transaction
+    cursorPos*: Option[BufferPosition] # Cursor position before the transaction
 
   TextBuffer* = ref object
     id*: int # Unique buffer identifier
@@ -638,8 +640,11 @@ proc getChangePosition*(change: BufferChange): BufferPosition =
   of ckReplaceLine:
     return BufferPosition(line: change.replaceLineIdx, column: 0)
   of ckTransaction:
-    # For transactions, return the position of the first change
-    if change.transactionChanges.len > 0:
+    # For transactions, return the saved cursor position if available,
+    # otherwise fall back to the position of the first change
+    if change.transactionCursorPos.isSome:
+      return change.transactionCursorPos.get
+    elif change.transactionChanges.len > 0:
       return getChangePosition(change.transactionChanges[0])
     else:
       return BufferPosition(line: 0, column: 0)
@@ -1244,8 +1249,13 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     logError("buffer", "Undo operation failed: " & e.msg)
     return err("Failed to undo change: " & e.msg)
 
-proc beginTransaction*(b: TextBuffer, description: string = ""): Result[(), string] =
+proc beginTransaction*(
+    b: TextBuffer,
+    description: string = "",
+    cursorPos: Option[BufferPosition] = none(BufferPosition),
+): Result[(), string] =
   ## Begin a transaction to group multiple changes
+  ## If cursorPos is provided, it will be used as the cursor position when undoing
   ## Returns error if a transaction is already in progress
   if b.inTransaction:
     let currentDesc =
@@ -1258,7 +1268,12 @@ proc beginTransaction*(b: TextBuffer, description: string = ""): Result[(), stri
   b.captureSnapshotIfNeeded()
   b.inTransaction = true
   b.currentTransaction = some(
-    BufferTransaction(changes: @[], description: description, startSeq: b.changeSeq)
+    BufferTransaction(
+      changes: @[],
+      description: description,
+      startSeq: b.changeSeq,
+      cursorPos: cursorPos,
+    )
   )
   return ok(())
 
@@ -1280,7 +1295,11 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
         BufferChange(
           kind: ckSnapshot,
           snapshotData: b.pendingSnapshot.get,
-          snapshotCursorPos: getChangePosition(transaction.changes[0]),
+          snapshotCursorPos:
+            if transaction.cursorPos.isSome:
+              transaction.cursorPos.get
+            else:
+              getChangePosition(transaction.changes[0]),
           snapshotLineMarkers: b.pendingSnapshotMarkers,
           snapshotModifiedLines: b.pendingSnapshotModifiedLines,
           snapshotFoldState: b.pendingSnapshotFolds,
@@ -1293,6 +1312,7 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
         kind: ckTransaction,
         transactionChanges: transaction.changes,
         transactionDescription: transaction.description,
+        transactionCursorPos: transaction.cursorPos,
       )
       b.undoStack.addLast(transactionChange)
     # Note: changeSeq was already incremented by each change in pushUndoChange

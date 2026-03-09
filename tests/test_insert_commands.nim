@@ -21,6 +21,8 @@
 
 import std/[unittest, options, tables]
 
+import pkg/results
+
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/types {.all.}
 import ../src/moepkg/modes {.all.}
@@ -832,3 +834,152 @@ suite "Insert Commands - clearAutoIndentIfUnedited":
     discard buf.undo()
     check buf.len == 1
     check buf.getLine(0) == "    hello"
+
+suite "Insert Commands - Undo Cursor Position":
+  test "undo after o returns original cursor position":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.display.autoIndent = false
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    # Simulate 'o' command: save cursor pos, begin transaction, insert line below
+    let originalCursor = state.cursor
+    discard buf.beginTransaction("Insert mode edit", cursorPos = some(originalCursor))
+    insertLineBelow(buf, state)
+
+    check buf.len == 2
+    check state.cursor.line == 1
+    check state.cursor.column == 0
+
+    # Commit transaction (simulates ESC from insert mode)
+    discard buf.commitTransaction()
+
+    # Undo should return original cursor position, not end of line
+    let r = buf.undo()
+    check r.isOk
+    check buf.len == 1
+    check r.value.line == 0
+    check r.value.column == 5 # Original cursor, NOT lineContent.charLen (11)
+
+  test "undo after O returns original cursor position":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.display.autoIndent = false
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    let originalCursor = state.cursor
+    discard buf.beginTransaction("Insert mode edit", cursorPos = some(originalCursor))
+    insertLineAbove(buf, state)
+
+    check buf.len == 2
+    check state.cursor.line == 0
+    check state.cursor.column == 0
+
+    discard buf.commitTransaction()
+
+    let r = buf.undo()
+    check r.isOk
+    check buf.len == 1
+    check r.value.line == 0
+    check r.value.column == 3 # Original cursor position
+
+  test "undo after o with auto-indent returns original cursor position":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    indented")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.cursor = BufferPosition(line: 0, column: 6)
+
+    let originalCursor = state.cursor
+    discard buf.beginTransaction("Insert mode edit", cursorPos = some(originalCursor))
+    insertLineBelow(buf, state)
+
+    check buf.len == 2
+    check buf.getLine(1) == "    " # auto-indented new line
+
+    discard buf.commitTransaction()
+
+    let r = buf.undo()
+    check r.isOk
+    check buf.len == 1
+    check buf.getLine(0) == "    indented"
+    check r.value.line == 0
+    check r.value.column == 6 # Original cursor, not end of line
+
+  test "undo after o with text typed returns original cursor position":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.display.autoIndent = false
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    let originalCursor = state.cursor
+    discard buf.beginTransaction("Insert mode edit", cursorPos = some(originalCursor))
+    insertLineBelow(buf, state)
+
+    # Simulate typing "new text" in insert mode
+    discard buf.insertText(state.cursor, "new text")
+    state.cursor.column += 8
+
+    check buf.len == 2
+    check buf.getLine(1) == "new text"
+
+    discard buf.commitTransaction()
+
+    let r = buf.undo()
+    check r.isOk
+    check buf.len == 1
+    check buf.getLine(0) == "hello world"
+    check r.value.line == 0
+    check r.value.column == 5 # Original cursor, not end of line or typed text pos
+
+  test "undo after O with text typed returns original cursor position":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    state.display.autoIndent = false
+    state.cursor = BufferPosition(line: 0, column: 7)
+
+    let originalCursor = state.cursor
+    discard buf.beginTransaction("Insert mode edit", cursorPos = some(originalCursor))
+    insertLineAbove(buf, state)
+
+    # Simulate typing "above" in insert mode on line 0
+    discard buf.insertText(state.cursor, "above")
+    state.cursor.column += 5
+
+    check buf.len == 2
+    check buf.getLine(0) == "above"
+
+    discard buf.commitTransaction()
+
+    let r = buf.undo()
+    check r.isOk
+    check buf.len == 1
+    check buf.getLine(0) == "hello world"
+    check r.value.line == 0
+    check r.value.column == 7 # Original cursor position
+
+  test "redo after undo of o restores cursor position":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.display.autoIndent = false
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    let originalCursor = state.cursor
+    discard buf.beginTransaction("Insert mode edit", cursorPos = some(originalCursor))
+    insertLineBelow(buf, state)
+    discard buf.commitTransaction()
+
+    discard buf.undo()
+    check buf.len == 1
+
+    let r = buf.redo()
+    check r.isOk
+    check buf.len == 2
+    # Redo returns the saved cursor position
+    check r.value.line == 0
+    check r.value.column == 2
