@@ -955,8 +955,9 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           debugLines, e.state.display.showStatusLine, e.state.display.multiStatusLine,
           e.state.display.showLineNumbers, e.state.display.showCursorLine,
           e.state.display.showSyntax, e.state.display.showIndentationLines,
-          e.state.display.showSidebar, e.state.display.lineWrap,
-          e.state.display.tabStop, debugConfig.editorView.enable,
+          e.state.display.showSidebar, e.state.display.showModifiedLines,
+          e.state.display.lineWrap, e.state.display.tabStop,
+          debugConfig.editorView.enable,
         )
         generateMacroInfo(
           debugLines, e.state.macroState.isRecording, e.state.macroState.register,

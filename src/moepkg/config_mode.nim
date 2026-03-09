@@ -240,6 +240,15 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
   )
   result.add ConfigItemDescriptor(
     kind: cvkBool,
+    displayName: "showModifiedLines",
+    section: "Standard",
+    boolGet: proc(c: EditorConfig): bool =
+      c.standard.showModifiedLines,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.standard.showModifiedLines = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
     displayName: "autoCloseParen",
     section: "Standard",
     boolGet: proc(c: EditorConfig): bool =

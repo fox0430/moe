@@ -36,6 +36,8 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.default: makeColorPair("#dde1e8", "#000000"),
   EditorColorPairIndex.lineNum: makeColorPair("#636d83", "#000000"),
   EditorColorPairIndex.currentLineNum: makeColorPair("#56b6c2", "#000000"),
+  EditorColorPairIndex.sidebarSessionModifiedSign: makeColorPair("#e5c07b", "#000000"),
+  EditorColorPairIndex.sidebarSessionInsertedSign: makeColorPair("#98c379", "#000000"),
 
   # Status line - Normal mode
   EditorColorPairIndex.statusLineNormalMode: makeColorPair("#ffffff", "#61afef"),

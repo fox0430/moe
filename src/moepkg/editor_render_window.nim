@@ -284,7 +284,13 @@ proc renderWindow*(
   let maybeSidebar =
     if e.state.display.showSidebar:
       some(
-        generateSidebarFromBuffer(window.buffer, window.viewport.topLine, visibleHeight)
+        generateSidebarFromBuffer(
+          window.buffer,
+          window.viewport.topLine,
+          visibleHeight,
+          modifiedLines = window.buffer.modifiedLines,
+          showModifiedLines = e.state.display.showModifiedLines,
+        )
       )
     else:
       none(Sidebar)

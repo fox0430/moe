@@ -75,6 +75,7 @@ type
       ## Tab/Backspace width in insert mode, 0 = use tabStop (Vim compatible)
     expandTab*: bool
     sidebar*: bool
+    showModifiedLines*: bool
     autoCloseParen*: bool
     autoIndent*: bool
     ignorecase*: bool
@@ -455,6 +456,7 @@ proc newEditorConfig*(): EditorConfig =
       softTabStop: 0, # 0 = use tabStop (Vim compatible)
       expandTab: false, # Match example/moerc.toml default
       sidebar: true,
+      showModifiedLines: true,
       autoCloseParen: true,
       autoIndent: true,
       ignorecase: true,

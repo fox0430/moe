@@ -41,6 +41,8 @@ type SidebarMarkerConfig* = object ## Configuration for sidebar marker display s
   gitChangedAndDeleted*: string
   syntaxError*: string
   syntaxWarning*: string
+  sessionModified*: string
+  sessionInserted*: string
 
 # Default marker values
 const
@@ -50,6 +52,8 @@ const
   DefaultGitChangedAndDeletedMarker = "~_"
   DefaultSyntaxErrorMarker = ">>"
   DefaultSyntaxWarningMarker = "⚠ "
+  DefaultSessionModifiedMarker = "~ "
+  DefaultSessionInsertedMarker = "+ "
 
 # Global marker configuration (can be customized via settings in the future)
 var globalMarkerConfig* = SidebarMarkerConfig(
@@ -59,6 +63,8 @@ var globalMarkerConfig* = SidebarMarkerConfig(
   gitChangedAndDeleted: DefaultGitChangedAndDeletedMarker,
   syntaxError: DefaultSyntaxErrorMarker,
   syntaxWarning: DefaultSyntaxWarningMarker,
+  sessionModified: DefaultSessionModifiedMarker,
+  sessionInserted: DefaultSessionInsertedMarker,
 )
 
 # Helper to get theme background color
@@ -102,6 +108,20 @@ proc syntaxWarningStyle*(): Style =
     modifiers: {},
   )
 
+proc sessionModifiedStyle*(): Style =
+  Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
+    bg: themeBackground(),
+    modifiers: {},
+  )
+
+proc sessionInsertedStyle*(): Style =
+  Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.Green),
+    bg: themeBackground(),
+    modifiers: {},
+  )
+
 proc emptyStyle*(): Style =
   Style(fg: ColorValue(kind: Default), bg: themeBackground(), modifiers: {})
 
@@ -120,6 +140,10 @@ proc getStyleForKind(kind: SidebarItemKind): Style =
     syntaxErrorStyle()
   of SyntaxWarning:
     syntaxWarningStyle()
+  of SessionModified:
+    sessionModifiedStyle()
+  of SessionInserted:
+    sessionInsertedStyle()
   of Empty:
     emptyStyle()
 
@@ -221,9 +245,16 @@ proc updateSidebarForSyntaxWarning*(sidebar: var Sidebar, lineNumber: int) =
   setSidebarLine(sidebar, lineNumber, globalMarkerConfig.syntaxWarning, SyntaxWarning)
 
 proc generateSidebarFromBuffer*(
-    b: TextBuffer, topLine: int, height: int, width: int = DefaultSidebarWidth
+    b: TextBuffer,
+    topLine: int,
+    height: int,
+    width: int = DefaultSidebarWidth,
+    modifiedLines: seq[LineModificationKind] = @[],
+    showModifiedLines: bool = false,
 ): Sidebar =
-  ## Generate a sidebar view from buffer markers for the visible range
+  ## Generate a sidebar view from buffer markers for the visible range.
+  ## If showModifiedLines is true, lines with no other marker but modified/inserted in
+  ## the current session will show a SessionModified/SessionInserted indicator as fallback.
   result = initSidebar(height, width)
 
   # Map buffer markers to sidebar for visible range
@@ -242,5 +273,20 @@ proc generateSidebarFromBuffer*(
           of GitChangedAndDeleted: globalMarkerConfig.gitChangedAndDeleted
           of SyntaxError: globalMarkerConfig.syntaxError
           of SyntaxWarning: globalMarkerConfig.syntaxWarning
+          of SessionModified: globalMarkerConfig.sessionModified
+          of SessionInserted: globalMarkerConfig.sessionInserted
           of Empty: " "
         setSidebarLine(result, screenLine, text, kind)
+      elif showModifiedLines and bufferLine < modifiedLines.len:
+        # Fallback: show session marker when no other marker exists
+        case modifiedLines[bufferLine]
+        of lmkModified:
+          setSidebarLine(
+            result, screenLine, globalMarkerConfig.sessionModified, SessionModified
+          )
+        of lmkInserted:
+          setSidebarLine(
+            result, screenLine, globalMarkerConfig.sessionInserted, SessionInserted
+          )
+        of lmkUnmodified:
+          discard
