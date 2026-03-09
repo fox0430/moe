@@ -383,6 +383,8 @@ jump - Open Jump list viewer
 terminal         - Open terminal emulator (default shell)
 terminal command - Run command in terminal emulator
 
+changes - Show Change list
+
 ## Runtime Key Mapping
 
 nmap {lhs} {rhs}  - Map keys in Normal mode
