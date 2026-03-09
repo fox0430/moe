@@ -139,6 +139,9 @@ proc loadDefaultConfig*(config: CommandConfig) =
   # Jump list
   config.addAlias("jump", claJumpList)
 
+  # Change list
+  config.addAlias("changes", claChanges)
+
   # Build
   config.addAlias("build", claBuild)
 

@@ -123,6 +123,7 @@ type
     hrShellCommand # Execute shell command
     hrBackground # Pause editor and show terminal (:bg)
     hrJumpList # Show jump list (:ju, :jump)
+    hrChanges # Show change list (:changes)
     hrBuild # Build current buffer (:build)
     hrDebug # Open debug mode (:debug)
     hrDebugViewerQuit # Close debug viewer
@@ -321,6 +322,8 @@ type
     of hrBackground:
       discard
     of hrJumpList:
+      discard
+    of hrChanges:
       discard
     of hrBuild:
       discard
@@ -857,6 +860,8 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrRecentFile)
   of cmrJumpList:
     return HandlerResult(kind: hrJumpList)
+  of cmrChanges:
+    return HandlerResult(kind: hrChanges)
   of cmrBuild:
     return HandlerResult(kind: hrBuild)
   of cmrDebug:
@@ -2066,7 +2071,7 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrLspGotoDeclaration, hrLspFindReferences, hrLspCodeLensExecute,
     hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing, hrLspTypeDefinition,
     hrLspImplementation, hrLspHover, hrLspRename, hrLspSelectionRange,
-    hrLspDocumentLink, hrJumpList, hrLspLog, hrOnlyWindow,
+    hrLspDocumentLink, hrJumpList, hrChanges, hrLspLog, hrOnlyWindow,
   }
 
 proc hasError*(hrResult: HandlerResult): bool =

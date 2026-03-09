@@ -202,14 +202,14 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       hrLspGotoDeclaration, hrLspFindReferences, hrLspCodeLensExecute,
       hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing, hrLspTypeDefinition,
       hrLspImplementation, hrLspHover, hrLspRename, hrLspSelectionRange,
-      hrLspDocumentLink, hrShellCommand, hrBackground, hrJumpList, hrBuild, hrDebug,
-      hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig, hrPutConfigFile,
-      hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold, hrLspExecuteCommand,
-      hrSubstitute, hrMan, hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences,
-      hrDocumentSymbolQuit, hrDocumentSymbolJumpTo, hrEnterDocumentSymbol,
-      hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
-      hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrEnterTerminal,
-      hrTerminalQuit, hrExecCommand, hrOnlyWindow:
+      hrLspDocumentLink, hrShellCommand, hrBackground, hrJumpList, hrChanges, hrBuild,
+      hrDebug, hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig,
+      hrPutConfigFile, hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold,
+      hrLspExecuteCommand, hrSubstitute, hrMan, hrReferencesQuit, hrReferencesJumpTo,
+      hrEnterReferences, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
+      hrEnterDocumentSymbol, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
+      hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
+      hrEnterCallHierarchy, hrEnterTerminal, hrTerminalQuit, hrExecCommand, hrOnlyWindow:
     discard # Not expected from RecentFile mode handler
 
   # Handle overlay transitions (e.g., entering Command mode with :)
@@ -1656,10 +1656,11 @@ proc handleEvent*(e: Editor, event: Event): bool =
   of hrVSplit, hrHSplit, hrNew, hrVnew, hrEdit, hrSetBoolOption, hrSetIntOption,
       hrSetFloatOption, hrClearSearchHighlight, hrSave, hrStripWhitespace,
       hrShellCommand, hrBackground, hrMan, hrSubstitute, hrQuickRun, hrBuild, hrDebug,
-      hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList, hrRecentFile,
-      hrRecentFileOpenFile, hrRecentFileQuit, hrEnterLogViewer, hrEnterHelpViewer,
-      hrEnterBufferManager, hrEnterBackupManager, hrEnterDiffViewer, hrEnterReferences,
-      hrEnterDocumentSymbol, hrEnterCallHierarchy, hrEnterTerminal, hrOnlyWindow:
+      hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList, hrChanges,
+      hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterLogViewer,
+      hrEnterHelpViewer, hrEnterBufferManager, hrEnterBackupManager, hrEnterDiffViewer,
+      hrEnterReferences, hrEnterDocumentSymbol, hrEnterCallHierarchy, hrEnterTerminal,
+      hrOnlyWindow:
     discard # Handled by handleCommandModeEvent or other code paths
 
   # Handle overlay transitions

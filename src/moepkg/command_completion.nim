@@ -125,6 +125,8 @@ const CommandDescriptions = {
   "bg": "Suspend editor",
   # Jump list
   "jump": "Show jump list",
+  # Change list
+  "changes": "Show change list",
   # Build
   "build": "Build project",
   # Debug mode

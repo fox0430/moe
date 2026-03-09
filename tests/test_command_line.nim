@@ -645,6 +645,7 @@ suite "CommandLine - execute additional commands":
     parser.addAlias("bg", claBackground)
     parser.addAlias("ju", claJumpList)
     parser.addAlias("jump", claJumpList)
+    parser.addAlias("changes", claChanges)
     parser.addAlias("build", claBuild)
     parser.addAlias("debug", claDebug)
     parser.addAlias("conf", claConfig)
@@ -771,6 +772,10 @@ suite "CommandLine - execute additional commands":
   test "Execute :jump":
     let result = parser.parseAndExecute(":jump")
     check result.kind == claJumpList
+
+  test "Execute :changes":
+    let result = parser.parseAndExecute(":changes")
+    check result.kind == claChanges
 
   test "Execute :build":
     let result = parser.parseAndExecute(":build")
