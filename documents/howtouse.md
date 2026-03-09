@@ -60,6 +60,8 @@
 | <kbd>**Page Down**</kbd><br> | Page Down :arrow_down: |
 | <kbd>**g**</kbd> <kbd>**g**</kbd><br> | Go to the first line :arrow_up: |
 | <kbd>**g**</kbd> <kbd>**_**</kbd><br> | Go to the last non-blank character of the line :arrow_right: |
+| <kbd>**g**</kbd> <kbd>**;**</kbd><br> | Go to the previous change position |
+| <kbd>**g**</kbd> <kbd>**,**</kbd><br> | Go to the next change position |
 | <kbd>**G**</kbd><br> |Go to the last line :arrow_down: |
 | <kbd>**0**</kbd><br> | Go to the beginning of the line :arrow_left: |
 | <kbd>**$**</kbd><br> | Go to the end of the line :arrow_right: |

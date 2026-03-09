@@ -79,6 +79,9 @@ type
     # Jump list operations
     bcJumpBack = "jump.back" # Ctrl-o
     bcJumpForward = "jump.forward" # Ctrl-i
+    # Change list operations
+    bcChangeListPrev = "changelist.prev" # g;
+    bcChangeListNext = "changelist.next" # g,
     # Insert mode operations
     bcInsertChar = "insert.char"
     bcInsertBackspace = "insert.backspace"

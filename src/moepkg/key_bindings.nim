@@ -1241,6 +1241,27 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  # Register change list navigation commands
+  registry.registerCommand(
+    Command(
+      name: "changelist-prev",
+      description: "Jump to previous change position",
+      kind: ctAction,
+      commandId: "changelist.prev",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "changelist-next",
+      description: "Jump to next change position",
+      kind: ctAction,
+      commandId: "changelist.next",
+      args: @[],
+    )
+  )
+
   # Register search navigation commands
   registry.registerCommand(
     Command(
@@ -1309,6 +1330,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "C-o", "jump-back")
   registry.bindKey(EditorMode.Normal, "C-i", "jump-forward")
   registry.bindKey(EditorMode.Normal, "Tab", "jump-forward") # Tab = Ctrl-I in terminal
+  registry.bindKey(EditorMode.Normal, "g ;", "changelist-prev")
+  registry.bindKey(EditorMode.Normal, "g ,", "changelist-next")
   registry.bindKey(EditorMode.Normal, "n", "search-next")
   registry.bindKey(EditorMode.Normal, "N", "search-prev")
   registry.bindKey(EditorMode.Normal, "*", "search-word-forward")

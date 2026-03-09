@@ -60,6 +60,8 @@ Page Up    - Page Up
 Page Down  - Page Down
 gg         - Go to the first line
 g_         - Go to the last non-blank character of the line
+g;         - Go to the previous chnage position
+g,         - Go to the next chnage position
 G          - Go to the last line
 0          - Go to the first character of the line
 $          - Go to the end of the line
