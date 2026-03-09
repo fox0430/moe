@@ -171,6 +171,7 @@ type
     showSyntax*: bool # Whether to apply syntax highlighting
     showIndentationLines*: bool # Whether to show indentation guide lines
     showSidebar*: bool # Whether to show the sidebar
+    showModifiedLines*: bool # Whether to highlight modified line numbers
     showGitDiff*: bool # Whether to show git diff indicators in sidebar
     showSyntaxChecker*: bool # Whether to show syntax checker results in sidebar
     showCodeLens*: bool # Whether to show CodeLens

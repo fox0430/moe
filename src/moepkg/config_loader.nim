@@ -352,11 +352,11 @@ proc loadStandardConfig(
   const section = "Standard"
   const validKeys = [
     "number", "relativeNumber", "statusLine", "syntax", "indentationLines", "tabStop",
-    "shiftWidth", "softTabStop", "expandTab", "sidebar", "autoCloseParen", "autoIndent",
-    "ignorecase", "smartcase", "disableChangeCursor", "defaultCursor",
-    "normalModeCursor", "insertModeCursor", "liveReloadOfConf", "incrementalSearch",
-    "popupWindowInExmode", "autoDeleteParen", "liveReloadOfFile", "colorMode", "mouse",
-    "lineWrap", "timeoutlen", "bufferBackend",
+    "shiftWidth", "softTabStop", "expandTab", "sidebar", "showModifiedLines",
+    "autoCloseParen", "autoIndent", "ignorecase", "smartcase", "disableChangeCursor",
+    "defaultCursor", "normalModeCursor", "insertModeCursor", "liveReloadOfConf",
+    "incrementalSearch", "popupWindowInExmode", "autoDeleteParen", "liveReloadOfFile",
+    "colorMode", "mouse", "lineWrap", "timeoutlen", "bufferBackend",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "number", config.number, vr, section)
@@ -369,6 +369,7 @@ proc loadStandardConfig(
   loadInt(table, "softTabStop", config.softTabStop, vr, section, minVal = 0)
   loadBool(table, "expandTab", config.expandTab, vr, section)
   loadBool(table, "sidebar", config.sidebar, vr, section)
+  loadBool(table, "showModifiedLines", config.showModifiedLines, vr, section)
   loadBool(table, "autoCloseParen", config.autoCloseParen, vr, section)
   loadBool(table, "autoIndent", config.autoIndent, vr, section)
   loadBool(table, "ignorecase", config.ignorecase, vr, section)
@@ -1575,6 +1576,10 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.currentLineBg)
   of "currentColumnBg":
     return some(EditorColorPairIndex.currentColumnBg)
+  of "sidebarSessionModifiedSign":
+    return some(EditorColorPairIndex.sidebarSessionModifiedSign)
+  of "sidebarSessionInsertedSign":
+    return some(EditorColorPairIndex.sidebarSessionInsertedSign)
   of "foldingLine":
     return some(EditorColorPairIndex.foldingLine)
   of "sidebarGitAddedSign":
@@ -1842,6 +1847,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "softTabStop = " & $config.standard.softTabStop
   lines.add "expandTab = " & toTomlBool(config.standard.expandTab)
   lines.add "sidebar = " & toTomlBool(config.standard.sidebar)
+  lines.add "showModifiedLines = " & toTomlBool(config.standard.showModifiedLines)
   lines.add "autoCloseParen = " & toTomlBool(config.standard.autoCloseParen)
   lines.add "autoIndent = " & toTomlBool(config.standard.autoIndent)
   lines.add "ignorecase = " & toTomlBool(config.standard.ignorecase)

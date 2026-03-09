@@ -112,6 +112,8 @@ type
     default
     lineNum
     currentLineNum
+    sidebarSessionModifiedSign
+    sidebarSessionInsertedSign
 
     # Status line - Normal mode
     statusLineNormalMode

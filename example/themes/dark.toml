@@ -243,6 +243,10 @@ sidebarSyntaxCheckWarnSign = "#e5c07b"
 sidebarSyntaxCheckWarnSignBg = "#000000"
 sidebarSyntaxCheckErrSign = "#e06c75"
 sidebarSyntaxCheckErrSignBg = "#000000"
+sidebarSessionModifiedSign = "#e5c07b"
+sidebarSessionModifiedSignBg = "#000000"
+sidebarSessionInsertedSign = "#98c379"
+sidebarSessionInsertedSignBg = "#000000"
 
 # Viewer common colors
 viewerHeader = "#ffd700"

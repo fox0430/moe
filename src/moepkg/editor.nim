@@ -621,6 +621,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         showSyntax: editorConfig.standard.syntax,
         showIndentationLines: editorConfig.standard.indentationLines,
         showSidebar: editorConfig.standard.sidebar,
+        showModifiedLines: editorConfig.standard.showModifiedLines,
         showGitDiff: editorConfig.git.showChangedLine,
         showSyntaxChecker: editorConfig.syntaxChecker.enable,
         showCodeLens: true,
@@ -911,6 +912,7 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   e.state.display.showSyntax = newConfig.standard.syntax
   e.state.display.showIndentationLines = newConfig.standard.indentationLines
   e.state.display.showSidebar = newConfig.standard.sidebar
+  e.state.display.showModifiedLines = newConfig.standard.showModifiedLines
   e.state.display.showGitDiff = newConfig.git.showChangedLine
   e.state.display.showSyntaxChecker = newConfig.syntaxChecker.enable
   e.state.display.tabStop = newConfig.standard.tabStop
@@ -1241,8 +1243,8 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     debugLines, e.state.display.showStatusLine, e.state.display.multiStatusLine,
     e.state.display.showLineNumbers, e.state.display.showCursorLine,
     e.state.display.showSyntax, e.state.display.showIndentationLines,
-    e.state.display.showSidebar, e.state.display.lineWrap, e.state.display.tabStop,
-    debugConfig.editorView.enable,
+    e.state.display.showSidebar, e.state.display.showModifiedLines,
+    e.state.display.lineWrap, e.state.display.tabStop, debugConfig.editorView.enable,
   )
 
   generateMacroInfo(

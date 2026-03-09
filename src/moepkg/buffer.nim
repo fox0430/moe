@@ -37,7 +37,14 @@ type
     GitChangedAndDeleted ## Line was changed and deleted in git diff
     SyntaxError ## Syntax error indicator
     SyntaxWarning ## Syntax warning indicator
+    SessionModified ## Line was modified in current session (cleared on save)
+    SessionInserted ## Line was inserted in current session (cleared on save)
     Empty ## Empty sidebar cell
+
+  LineModificationKind* = enum
+    lmkUnmodified ## Line has not been modified since last save
+    lmkModified ## Line content was changed since last save
+    lmkInserted ## Line was inserted since last save
 
   Fold* = object ## Represents a foldable region of text (vim-like manual folding)
     startLine*: int # Fold start line (0-based, inclusive)
@@ -77,6 +84,8 @@ type
     ckSnapshot # PieceTable O(1) snapshot undo/redo
 
   BufferChange* = object
+    savedModifiedLines*: seq[LineModificationKind]
+      ## Pre-mutation modifiedLines snapshot for undo/redo (1 byte per line)
     case kind*: BufferChangeKind
     of ckInsertText:
       insertPos*: BufferPosition
@@ -105,6 +114,7 @@ type
       snapshotData*: PieceTableSnapshot
       snapshotCursorPos*: BufferPosition
       snapshotLineMarkers*: seq[Option[SidebarItemKind]]
+      snapshotModifiedLines*: seq[LineModificationKind]
       snapshotFoldState*: FoldState
 
   BufferTransaction* = object ## Transaction for grouping multiple changes
@@ -130,6 +140,10 @@ type
     undoStack*: Deque[BufferChange]
     redoStack*: Deque[BufferChange]
 
+    # Pre-mutation modifiedLines snapshot (for non-PieceTable undo/redo)
+    pendingModifiedLinesSnapshot*: seq[LineModificationKind]
+    hasPendingModifiedLinesSnapshot*: bool
+
     # Change sequence tracking for modified flag
     changeSeq*: int # Current change sequence number
     savedSeq*: int # Sequence number when file was last saved
@@ -141,10 +155,15 @@ type
     # PieceTable snapshot support for O(1) undo/redo
     pendingSnapshot*: Option[PieceTableSnapshot]
     pendingSnapshotMarkers*: seq[Option[SidebarItemKind]]
+    pendingSnapshotModifiedLines*: seq[LineModificationKind]
     pendingSnapshotFolds*: FoldState
 
     # Sidebar markers (line-based markers for git diff, syntax errors, etc.)
     lineMarkers*: seq[Option[SidebarItemKind]] # Each line can have at most one marker
+
+    # Modified line tracking (session-based, cleared on save)
+    modifiedLines*: seq[LineModificationKind]
+      # How each line was modified since last save
 
     # Syntax highlighting
     highlight*: Highlight # Syntax highlighting for this buffer
@@ -249,6 +268,8 @@ proc isModified*(b: TextBuffer): bool {.inline.} =
 proc markSaved*(b: TextBuffer) {.inline.} =
   ## Mark the buffer as unmodified by syncing savedSeq to changeSeq.
   b.savedSeq = b.changeSeq
+  for i in 0 ..< b.modifiedLines.len:
+    b.modifiedLines[i] = lmkUnmodified
 
 proc newTextBuffer*(
     content: string = "",
@@ -280,6 +301,7 @@ proc newTextBuffer*(
       currentTransaction: none(BufferTransaction),
       inTransaction: false,
       lineMarkers: newSeq[Option[SidebarItemKind]](gb.len),
+      modifiedLines: newSeq[LineModificationKind](gb.len),
       # Initialize with plain text highlighting (no language)
       highlight: initHighlight(runesBuffer),
       language: SourceLanguage.langNone,
@@ -315,6 +337,7 @@ proc newTextBuffer*(
       currentTransaction: none(BufferTransaction),
       inTransaction: false,
       lineMarkers: newSeq[Option[SidebarItemKind]](sd.len),
+      modifiedLines: newSeq[LineModificationKind](sd.len),
       highlight: initHighlight(runesBuffer),
       language: SourceLanguage.langNone,
       highlightNeedsUpdate: false,
@@ -347,6 +370,7 @@ proc newTextBuffer*(
       currentTransaction: none(BufferTransaction),
       inTransaction: false,
       lineMarkers: newSeq[Option[SidebarItemKind]](rp.len),
+      modifiedLines: newSeq[LineModificationKind](rp.len),
       highlight: initHighlight(runesBuffer),
       language: SourceLanguage.langNone,
       highlightNeedsUpdate: false,
@@ -379,6 +403,7 @@ proc newTextBuffer*(
       currentTransaction: none(BufferTransaction),
       inTransaction: false,
       lineMarkers: newSeq[Option[SidebarItemKind]](pt.len),
+      modifiedLines: newSeq[LineModificationKind](pt.len),
       highlight: initHighlight(runesBuffer),
       language: SourceLanguage.langNone,
       highlightNeedsUpdate: false,
@@ -643,13 +668,29 @@ proc ensureMarkersSize(b: TextBuffer) =
     # Truncate
     b.lineMarkers.setLen(bufferLen)
 
+proc ensureModifiedLinesSize(b: TextBuffer) =
+  ## Ensure modifiedLines array matches buffer length
+  let bufferLen = b.len
+  if b.modifiedLines.len < bufferLen:
+    for i in b.modifiedLines.len ..< bufferLen:
+      b.modifiedLines.add(lmkUnmodified)
+  elif b.modifiedLines.len > bufferLen:
+    b.modifiedLines.setLen(bufferLen)
+
 proc captureSnapshotIfNeeded(b: TextBuffer) {.inline.} =
-  ## Capture a PieceTable snapshot before mutation for O(1) undo/redo.
-  ## Only captures once per undo entry (skips if pendingSnapshot already set).
+  ## Capture snapshots before mutation for undo/redo.
+  ## For PieceTable: captures full snapshot for O(1) undo/redo.
+  ## For all backends: captures modifiedLines once per undo entry.
   if b.backendKind == PieceTable and b.pendingSnapshot.isNone:
     b.pendingSnapshot = some(b.pieceTable.takeSnapshot())
     b.pendingSnapshotMarkers = b.lineMarkers
+    b.pendingSnapshotModifiedLines = b.modifiedLines
     b.pendingSnapshotFolds = b.foldState
+  # Capture modifiedLines snapshot for non-PieceTable backends (once per undo entry)
+  # PieceTable uses snapshotModifiedLines in ckSnapshot instead
+  if b.backendKind != PieceTable and not b.hasPendingModifiedLinesSnapshot:
+    b.pendingModifiedLinesSnapshot = b.modifiedLines
+    b.hasPendingModifiedLinesSnapshot = true
 
 proc pushUndoChange(b: TextBuffer, change: BufferChange) =
   ## Add a change to the undo stack (or current transaction)
@@ -668,14 +709,27 @@ proc pushUndoChange(b: TextBuffer, change: BufferChange) =
   let changePos = getChangePosition(change)
   b.lastChangedLines = changePos.line
 
+  # Mark the changed line as modified
+  b.ensureModifiedLinesSize()
+  if changePos.line >= 0 and changePos.line < b.modifiedLines.len:
+    # Only upgrade to lmkModified if not already marked as inserted
+    if b.modifiedLines[changePos.line] != lmkInserted:
+      b.modifiedLines[changePos.line] = lmkModified
+
   # Record change position in changelist
   if not b.inTransaction:
     b.recordChangePosition(changePos)
 
+  # Attach pre-mutation modifiedLines snapshot to the change
+  var changeWithSnapshot = change
+  if b.hasPendingModifiedLinesSnapshot:
+    changeWithSnapshot.savedModifiedLines = b.pendingModifiedLinesSnapshot
+    b.hasPendingModifiedLinesSnapshot = false
+
   if b.inTransaction and b.currentTransaction.isSome:
     # Add to current transaction
     var transaction = b.currentTransaction.get
-    transaction.changes.add(change)
+    transaction.changes.add(changeWithSnapshot)
     b.currentTransaction = some(transaction)
   elif b.pendingSnapshot.isSome:
     # PieceTable: convert to O(1) snapshot undo entry
@@ -685,13 +739,15 @@ proc pushUndoChange(b: TextBuffer, change: BufferChange) =
         snapshotData: b.pendingSnapshot.get,
         snapshotCursorPos: getChangePosition(change),
         snapshotLineMarkers: b.pendingSnapshotMarkers,
+        snapshotModifiedLines: b.pendingSnapshotModifiedLines,
         snapshotFoldState: b.pendingSnapshotFolds,
       )
     )
     b.pendingSnapshot = none(PieceTableSnapshot)
+    b.hasPendingModifiedLinesSnapshot = false
   else:
     # Add directly to undo stack
-    b.undoStack.addLast(change)
+    b.undoStack.addLast(changeWithSnapshot)
 
 proc replaceLine*(b: TextBuffer, lineNumber: int, content: string): Result[(), string] =
   ## Replace line content with undo recording.
@@ -767,8 +823,22 @@ proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string) =
     if newLines.len > 1:
       b.foldState.adjustFoldsAfterInsert(pos.line, newLines.len - 1)
 
-  # Ensure lineMarkers stays in sync after backend operations
+  # Ensure lineMarkers and modifiedLines stay in sync after backend operations
   b.ensureMarkersSize()
+  b.ensureModifiedLinesSize()
+
+  # Mark affected lines: original line as modified, new lines as inserted
+  if '\n' in text:
+    let insertedLineCount = text.count('\n')
+    # Original line was modified (split)
+    if pos.line < b.modifiedLines.len:
+      if b.modifiedLines[pos.line] != lmkInserted:
+        b.modifiedLines[pos.line] = lmkModified
+    # New lines were inserted
+    for i in 1 .. insertedLineCount:
+      let line = pos.line + i
+      if line < b.modifiedLines.len:
+        b.modifiedLines[line] = lmkInserted
 
 # Editing operations
 proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), string] =
@@ -861,6 +931,12 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
   elif lineIndex == b.lineMarkers.len:
     b.lineMarkers.add(none(SidebarItemKind))
 
+  # Insert modifiedLines entry (inserted for new lines)
+  if lineIndex < b.modifiedLines.len:
+    b.modifiedLines.insert(lmkInserted, lineIndex)
+  elif lineIndex == b.modifiedLines.len:
+    b.modifiedLines.add(lmkInserted)
+
   # Record change for undo
   b.pushUndoChange(
     BufferChange(kind: ckInsertLine, insertLineIdx: lineIndex, insertLineText: content)
@@ -893,6 +969,10 @@ proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
   # Delete corresponding marker entry
   if lineIndex < b.lineMarkers.len:
     b.lineMarkers.delete(lineIndex)
+
+  # Delete corresponding modifiedLines entry
+  if lineIndex < b.modifiedLines.len:
+    b.modifiedLines.delete(lineIndex)
 
   # Record change for undo
   b.pushUndoChange(
@@ -1005,8 +1085,9 @@ proc deleteRangeSingleLine(
     b.backendDeleteLine(startPos.line)
     b.backendInsertLine(startPos.line, newLine)
 
-  # Ensure lineMarkers stays in sync after backend operations
+  # Ensure lineMarkers and modifiedLines stay in sync after backend operations
   b.ensureMarkersSize()
+  b.ensureModifiedLinesSize()
 
 proc deleteRangeMultiLine(b: TextBuffer, startPos, endPos: BufferPosition) =
   ## Handle multi-line deletion
@@ -1047,8 +1128,9 @@ proc deleteRangeMultiLine(b: TextBuffer, startPos, endPos: BufferPosition) =
     for i in countdown(endPos.line, startPos.line + 1):
       b.backendDeleteLine(i)
 
-  # Ensure lineMarkers stays in sync after backend operations
+  # Ensure lineMarkers and modifiedLines stay in sync after backend operations
   b.ensureMarkersSize()
+  b.ensureModifiedLinesSize()
 
 proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), string] =
   ## Delete text from startPos to endPos (inclusive)
@@ -1146,11 +1228,17 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckSnapshot:
       b.pieceTable.restoreSnapshot(change.snapshotData)
       b.lineMarkers = change.snapshotLineMarkers
+      b.modifiedLines = change.snapshotModifiedLines
       b.foldState = change.snapshotFoldState
       b.lastChangedLines = 0
 
-    # Ensure lineMarkers stays in sync after undo operations
+    # For non-snapshot: restore modifiedLines from pre-mutation snapshot
+    if change.kind != ckSnapshot and change.savedModifiedLines.len > 0:
+      b.modifiedLines = change.savedModifiedLines
+
+    # Ensure lineMarkers and modifiedLines stay in sync after undo operations
     b.ensureMarkersSize()
+    b.ensureModifiedLinesSize()
     return ok(())
   except CatchableError as e:
     logError("buffer", "Undo operation failed: " & e.msg)
@@ -1194,10 +1282,12 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
           snapshotData: b.pendingSnapshot.get,
           snapshotCursorPos: getChangePosition(transaction.changes[0]),
           snapshotLineMarkers: b.pendingSnapshotMarkers,
+          snapshotModifiedLines: b.pendingSnapshotModifiedLines,
           snapshotFoldState: b.pendingSnapshotFolds,
         )
       )
       b.pendingSnapshot = none(PieceTableSnapshot)
+      b.hasPendingModifiedLinesSnapshot = false
     else:
       let transactionChange = BufferChange(
         kind: ckTransaction,
@@ -1350,18 +1440,25 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     let change = b.undoStack.popLast()
 
+    # Capture current modifiedLines before undo (for redo to restore)
+    let currentModifiedLines = b.modifiedLines
+
     # For snapshot undo: capture current state before restoring
-    let redoEntry =
+    var redoEntry =
       if change.kind == ckSnapshot:
         BufferChange(
           kind: ckSnapshot,
           snapshotData: b.pieceTable.takeSnapshot(),
           snapshotCursorPos: change.snapshotCursorPos,
           snapshotLineMarkers: b.lineMarkers,
+          snapshotModifiedLines: currentModifiedLines,
           snapshotFoldState: b.foldState,
         )
       else:
         change
+    # For non-snapshot: save current modifiedLines so redo can undo back
+    if change.kind != ckSnapshot:
+      redoEntry.savedModifiedLines = currentModifiedLines
 
     let r = b.undoChange(change)
     if r.isErr:
@@ -1406,6 +1503,11 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     if minLine != int.high:
       b.lastChangedLines = minLine
+
+  # If undo brought us back to saved state, clear all modification markers
+  if b.changeSeq == b.savedSeq:
+    for i in 0 ..< b.modifiedLines.len:
+      b.modifiedLines[i] = lmkUnmodified
 
   # Return suggested cursor position for the last undone change (Vim behavior)
   if undoneChanges.len > 0:
@@ -1456,11 +1558,17 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckSnapshot:
       b.pieceTable.restoreSnapshot(change.snapshotData)
       b.lineMarkers = change.snapshotLineMarkers
+      b.modifiedLines = change.snapshotModifiedLines
       b.foldState = change.snapshotFoldState
       b.lastChangedLines = 0
 
-    # Ensure lineMarkers stays in sync after redo operations
+    # For non-snapshot: restore modifiedLines from pre-mutation snapshot
+    if change.kind != ckSnapshot and change.savedModifiedLines.len > 0:
+      b.modifiedLines = change.savedModifiedLines
+
+    # Ensure lineMarkers and modifiedLines stay in sync after redo operations
     b.ensureMarkersSize()
+    b.ensureModifiedLinesSize()
     return ok(())
   except CatchableError as e:
     logError("buffer", "Redo operation failed: " & e.msg)
@@ -1482,18 +1590,25 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     let change = b.redoStack.popLast()
 
+    # Capture current modifiedLines before redo (for undo to restore)
+    let currentModifiedLines = b.modifiedLines
+
     # For snapshot redo: capture current state before restoring
-    let undoEntry =
+    var undoEntry =
       if change.kind == ckSnapshot:
         BufferChange(
           kind: ckSnapshot,
           snapshotData: b.pieceTable.takeSnapshot(),
           snapshotCursorPos: change.snapshotCursorPos,
           snapshotLineMarkers: b.lineMarkers,
+          snapshotModifiedLines: currentModifiedLines,
           snapshotFoldState: b.foldState,
         )
       else:
         change
+    # For non-snapshot: save current modifiedLines so undo can restore
+    if change.kind != ckSnapshot:
+      undoEntry.savedModifiedLines = currentModifiedLines
 
     let r = b.redoChange(change)
     if r.isErr:
@@ -1701,6 +1816,10 @@ proc saveFile*(buffer: TextBuffer, path: string): Result[(), string] =
     # Mark buffer as saved at current sequence
     buffer.savedSeq = buffer.changeSeq
     buffer.filePath = some(path)
+
+    # Clear modified line indicators
+    for i in 0 ..< buffer.modifiedLines.len:
+      buffer.modifiedLines[i] = lmkUnmodified
 
     # Update file modification time after saving
     try:

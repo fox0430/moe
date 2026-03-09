@@ -101,6 +101,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | softTabStop | integer | 0 | Tab/Backspace width in insert mode (0 = use tabStop) |
 | expandTab | bool | false | Expand tabs to spaces |
 | sidebar | bool | true | Enable Sidebars for editor views |
+| showModifiedLines | bool | true | Show modified/inserted line indicators in sidebars |
 | ignorecase | bool | true | Enable ignorecase when searching |
 | smartcase | bool | true | Enable smartcase when searching |
 | autoCloseParen | bool | true | Automatic closing brackets |
@@ -1074,3 +1075,7 @@ And, `termDefault` can be used for both foreground and background to use the ter
 | sidebarSyntaxCheckWarnSignBg | A warning color of syntax checker results in sidebars |
 | sidebarSyntaxCheckErrSign | An error color of syntax checker results in sidebars |
 | sidebarSyntaxCheckErrSignBg | An error color of syntax checker results in sidebars |
+| sidebarSessionModifiedSign | A modified line sign color in sidebars |
+| sidebarSessionModifiedSignBg | A modified line sign background color in sidebars |
+| sidebarSessionInsertedSign | An inserted line sign color in sidebars |
+| sidebarSessionInsertedSignBg | An inserted line sign background color in sidebars |

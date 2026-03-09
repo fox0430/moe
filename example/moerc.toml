@@ -22,6 +22,8 @@ expandTab = false                      # Insert spaces instead of tab
 
 sidebar = true                         # Show sidebar
 
+showModifiedLines = true               # Highlight modified line numbers
+
 autoCloseParen = true                  # Auto-close parentheses
 
 autoIndent = true                      # Auto-indent
