@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils]
+import std/[unittest, strutils, options]
 
 import pkg/results
 
@@ -671,6 +671,111 @@ suite "Buffer - Cursor Position Details":
     # Returns position of first change in transaction
     check r.value.line == 0
     check r.value.column == 0
+
+  test "undo transaction with cursorPos returns saved cursor position":
+    let b = newTextBuffer("hello world")
+    let savedCursor = BufferPosition(line: 0, column: 3)
+    discard b.beginTransaction("with cursor", cursorPos = some(savedCursor))
+    # Insert at end of line (simulating 'o' command behavior)
+    discard b.insertText(BufferPosition(line: 0, column: 11), "\n")
+    discard b.commitTransaction()
+
+    check b.len == 2
+
+    let r = b.undo()
+    check r.isOk
+    check b.len == 1
+    # Should return saved cursor position, not the insertion point (end of line)
+    check r.value.line == 0
+    check r.value.column == 3
+
+  test "undo transaction without cursorPos falls back to first change":
+    let b = newTextBuffer("hello")
+    discard b.beginTransaction("no cursor")
+    discard b.insertText(BufferPosition(line: 0, column: 2), "X")
+    discard b.commitTransaction()
+
+    let r = b.undo()
+    check r.isOk
+    # Falls back to first change position
+    check r.value.line == 0
+    check r.value.column == 2
+
+  test "redo transaction with cursorPos returns saved cursor position":
+    let b = newTextBuffer("hello world")
+    let savedCursor = BufferPosition(line: 0, column: 5)
+    discard b.beginTransaction("with cursor", cursorPos = some(savedCursor))
+    discard b.insertText(BufferPosition(line: 0, column: 11), "!")
+    discard b.commitTransaction()
+
+    discard b.undo()
+    let r = b.redo()
+    check r.isOk
+    # Redo should also use the saved cursor position
+    check r.value.line == 0
+    check r.value.column == 5
+
+  test "undo transaction with cursorPos clamps to valid range after line deletion":
+    let b = newTextBuffer("line1\nline2\nline3")
+    # Save cursor on line 2, but the undo will remove lines
+    let savedCursor = BufferPosition(line: 2, column: 3)
+    discard b.beginTransaction("delete lines", cursorPos = some(savedCursor))
+    discard b.deleteLine(2)
+    discard b.deleteLine(1)
+    discard b.commitTransaction()
+    check b.len == 1
+
+    # Undo restores lines
+    let r = b.undo()
+    check r.isOk
+    check b.len == 3
+    # cursorPos is returned as-is (clamping is done by the handler)
+    check r.value.line == 2
+    check r.value.column == 3
+
+  test "undo multiple transactions returns each transaction cursorPos":
+    let b = newTextBuffer("hello")
+    # First transaction with cursorPos
+    discard
+      b.beginTransaction("tx1", cursorPos = some(BufferPosition(line: 0, column: 1)))
+    discard b.insertText(BufferPosition(line: 0, column: 5), " world")
+    discard b.commitTransaction()
+    # Second transaction with cursorPos
+    discard
+      b.beginTransaction("tx2", cursorPos = some(BufferPosition(line: 0, column: 3)))
+    discard b.insertText(BufferPosition(line: 0, column: 11), "!")
+    discard b.commitTransaction()
+
+    # Undo second transaction
+    let r1 = b.undo()
+    check r1.isOk
+    check r1.value.column == 3
+
+    # Undo first transaction
+    let r2 = b.undo()
+    check r2.isOk
+    check r2.value.column == 1
+
+  test "empty transaction with cursorPos does not push to undo stack":
+    let b = newTextBuffer("hello")
+    discard
+      b.beginTransaction("empty", cursorPos = some(BufferPosition(line: 0, column: 2)))
+    # No changes made
+    discard b.commitTransaction()
+
+    let r = b.undo()
+    check r.isErr # Nothing to undo
+
+  test "changeList records change position not cursorPos for transaction":
+    let b = newTextBuffer("hello world")
+    let savedCursor = BufferPosition(line: 0, column: 2)
+    discard b.beginTransaction("with cursor", cursorPos = some(savedCursor))
+    discard b.insertText(BufferPosition(line: 0, column: 11), "!")
+    discard b.commitTransaction()
+
+    # changeList should record the actual change position, not the saved cursor
+    check b.changeList.len == 1
+    check b.changeList[0].column == 11 # insert position, not savedCursor.column
 
 suite "Buffer - joinLines Undo/Redo":
   test "undo joinLines":

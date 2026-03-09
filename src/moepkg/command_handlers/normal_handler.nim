@@ -370,12 +370,14 @@ proc handleInsertModeEntry*(
     let lineContent = buffer.getLine(state.cursor.line)
     state.cursor.column = lineContent.charLen
   of "open-below":
-    let txResult = buffer.beginTransaction("Insert mode edit")
+    let txResult =
+      buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
     if txResult.isErr:
       return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
     insertLineBelow(buffer, state)
   of "open-above":
-    let txResult = buffer.beginTransaction("Insert mode edit")
+    let txResult =
+      buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
     if txResult.isErr:
       return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
     insertLineAbove(buffer, state)
@@ -613,6 +615,16 @@ proc handleNormalModeKey*(
       let r = buffer.undo()
       if r.isOk:
         state.cursor = r.value
+        # Clamp cursor to valid buffer range
+        if buffer.len > 0:
+          if state.cursor.line >= buffer.len:
+            state.cursor.line = buffer.len - 1
+          let line = buffer.getLine(state.cursor.line)
+          let maxCol = max(0, line.charLen - 1)
+          if state.cursor.column > maxCol:
+            state.cursor.column = maxCol
+        else:
+          state.cursor = BufferPosition(line: 0, column: 0)
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
@@ -620,6 +632,16 @@ proc handleNormalModeKey*(
       let r = buffer.redo()
       if r.isOk:
         state.cursor = r.value
+        # Clamp cursor to valid buffer range
+        if buffer.len > 0:
+          if state.cursor.line >= buffer.len:
+            state.cursor.line = buffer.len - 1
+          let line = buffer.getLine(state.cursor.line)
+          let maxCol = max(0, line.charLen - 1)
+          if state.cursor.column > maxCol:
+            state.cursor.column = maxCol
+        else:
+          state.cursor = BufferPosition(line: 0, column: 0)
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)

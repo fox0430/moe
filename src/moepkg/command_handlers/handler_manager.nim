@@ -547,7 +547,8 @@ proc handleNormalMode*(
       let targetMode = r.modeTransition.get
       if targetMode == EditorMode.Insert:
         if not buffer.inTransaction:
-          let transactionResult = buffer.beginTransaction("Insert mode edit")
+          let transactionResult =
+            buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
           if transactionResult.isErr:
             return HandlerResult(
               kind: hrError,
@@ -557,7 +558,8 @@ proc handleNormalMode*(
         state.editState.insertModeStartPos = some(state.cursor)
       elif targetMode == EditorMode.Replace:
         # Begin a transaction when entering Replace mode
-        let transactionResult = buffer.beginTransaction("Replace mode edit")
+        let transactionResult =
+          buffer.beginTransaction("Replace mode edit", cursorPos = some(state.cursor))
         if transactionResult.isErr:
           # This should not happen in normal operation, but handle it gracefully
           return HandlerResult(
@@ -1114,7 +1116,9 @@ proc handleVisualMode*(
       # Begin a transaction so commitTransaction() succeeds when leaving Insert mode
       # Guard: visualChange already commits its delete transaction, so don't double-begin
       if not buffer.inTransaction:
-        let transactionResult = buffer.beginTransaction("Visual to insert mode")
+        let transactionResult = buffer.beginTransaction(
+          "Visual to insert mode", cursorPos = some(state.cursor)
+        )
         if transactionResult.isErr:
           return HandlerResult(
             kind: hrError,

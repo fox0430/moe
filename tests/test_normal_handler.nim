@@ -1106,6 +1106,60 @@ suite "NormalModeHandler - Undo/Redo":
     # Either succeeds or returns error (both are valid outcomes)
     check result.kind == nmrHandled or result.kind == nmrError
 
+  test "Undo clamps cursor to valid buffer range":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "short")
+    # Record a change at a position beyond the current line length
+    # by inserting text that makes the line longer, then undoing it
+    discard buf.insertText(BufferPosition(line: 0, column: 5), " extra text here")
+    check buf.getLine(0) == "short extra text here"
+
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 0, column: 15)
+
+    let result = handler.executeCommand(buf, state, viewport, "edit.undo")
+    check result.kind == nmrHandled
+    check buf.getLine(0) == "short"
+    # Cursor should be clamped to max valid column (4 = charLen - 1)
+    check state.cursor.column <= 4
+
+  test "Undo with transaction cursorPos returns original position":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    # Simulate 'o' command: begin transaction with cursor at column 5
+    discard buf.beginTransaction(
+      "Insert mode edit", cursorPos = some(BufferPosition(line: 0, column: 5))
+    )
+    discard buf.insertText(BufferPosition(line: 0, column: 11), "\nnew line")
+    discard buf.commitTransaction()
+
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor = BufferPosition(line: 1, column: 8)
+
+    let result = handler.executeCommand(buf, state, viewport, "edit.undo")
+    check result.kind == nmrHandled
+    check state.cursor.line == 0
+    check state.cursor.column == 5 # Original cursor position from transaction
+
+  test "Undo on empty buffer sets cursor to 0,0":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "text")
+
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    let result = handler.executeCommand(buf, state, viewport, "edit.undo")
+    check result.kind == nmrHandled
+    check buf.getLine(0) == ""
+    check state.cursor.line == 0
+    check state.cursor.column == 0
+
 suite "NormalModeHandler - Text Object Handling":
   test "Text object word (w) with pending operator":
     let buf = newTextBuffer()
