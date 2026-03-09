@@ -668,6 +668,36 @@ proc handleNormalModeKey*(
       return NormalModeResult(kind: nmrBufferNext)
     of "buffer.prev.tab":
       return NormalModeResult(kind: nmrBufferPrev)
+    of "changelist.prev":
+      # g; - Jump to older change position
+      if buffer.changeList.len == 0:
+        return NormalModeResult(kind: nmrError, errorMessage: "Change list is empty")
+
+      if buffer.changeListIndex < 0:
+        return
+          NormalModeResult(kind: nmrError, errorMessage: "Already at oldest change")
+
+      let pos = buffer.changeList[buffer.changeListIndex]
+      buffer.changeListIndex = max(0, buffer.changeListIndex - 1)
+      let jumpPos = JumpPosition(
+        bufferIndex: state.currentBufferIndex, line: pos.line, column: pos.column
+      )
+      return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
+    of "changelist.next":
+      # g, - Jump to newer change position
+      if buffer.changeList.len == 0:
+        return NormalModeResult(kind: nmrError, errorMessage: "Change list is empty")
+
+      if buffer.changeListIndex >= buffer.changeList.len - 1:
+        return
+          NormalModeResult(kind: nmrError, errorMessage: "Already at newest change")
+
+      buffer.changeListIndex += 1
+      let pos = buffer.changeList[buffer.changeListIndex]
+      let jumpPos = JumpPosition(
+        bufferIndex: state.currentBufferIndex, line: pos.line, column: pos.column
+      )
+      return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
     of "jump.back":
       # Ctrl-o - Jump to previous position in jump list
       if state.jumpList.len == 0:

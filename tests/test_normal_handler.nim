@@ -1844,3 +1844,159 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let r2 = handler.handleNormalModeKey(buf, state, viewport, atKey)
     check r2.kind == nmrPlaybackMacro
     check r2.macroKeys == @["j", "k"]
+
+suite "NormalModeHandler - Change List Navigation":
+  proc pressGSemicolon(
+      handler: NormalModeHandler,
+      buf: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ): NormalModeResult =
+    ## Simulate g; key sequence
+    let gKey = KeyCombo(isSpecial: false, char: "g")
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
+    let semiKey = KeyCombo(isSpecial: false, char: ";")
+    handler.handleNormalModeKey(buf, state, viewport, semiKey)
+
+  proc pressGComma(
+      handler: NormalModeHandler,
+      buf: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ): NormalModeResult =
+    ## Simulate g, key sequence
+    let gKey = KeyCombo(isSpecial: false, char: "g")
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
+    let commaKey = KeyCombo(isSpecial: false, char: ",")
+    handler.handleNormalModeKey(buf, state, viewport, commaKey)
+
+  test "g; with empty change list returns error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+    buf.changeList = @[]
+    buf.changeListIndex = 0
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    let result = pressGSemicolon(handler, buf, state, viewport)
+    check result.kind == nmrError
+    check result.errorMessage == "Change list is empty"
+
+  test "g, with empty change list returns error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
+    buf.changeList = @[]
+    buf.changeListIndex = 0
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    let result = pressGComma(handler, buf, state, viewport)
+    check result.kind == nmrError
+    check result.errorMessage == "Change list is empty"
+
+  test "g; jumps to current change position and decrements index":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.currentBufferIndex = 0
+
+    buf.changeList = @[
+      BufferPosition(line: 0, column: 3),
+      BufferPosition(line: 1, column: 5),
+      BufferPosition(line: 2, column: 1),
+    ]
+    buf.changeListIndex = 2
+
+    let result = pressGSemicolon(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check state.cursor.line == 2
+    check state.cursor.column == 1
+    check buf.changeListIndex == 1
+
+  test "g; at index 0 jumps and stays at 0":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.currentBufferIndex = 0
+
+    buf.changeList =
+      @[BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 2)]
+    buf.changeListIndex = 0
+
+    let result = pressGSemicolon(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check state.cursor.line == 0
+    check state.cursor.column == 3
+    check buf.changeListIndex == 0
+
+  test "g, at newest change returns error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.currentBufferIndex = 0
+
+    buf.changeList =
+      @[BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 2)]
+    buf.changeListIndex = 1
+
+    let result = pressGComma(handler, buf, state, viewport)
+    check result.kind == nmrError
+    check result.errorMessage == "Already at newest change"
+
+  test "g; then g, navigates back and forth":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.currentBufferIndex = 0
+
+    buf.changeList = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 1, column: 3),
+      BufferPosition(line: 2, column: 5),
+    ]
+    buf.changeListIndex = 2
+
+    # g; - jump to index 2 position, index becomes 1
+    let r1 = pressGSemicolon(handler, buf, state, viewport)
+    check r1.kind == nmrHandled
+    check state.cursor.line == 2
+    check buf.changeListIndex == 1
+
+    # g; - jump to index 1 position, index becomes 0
+    let r2 = pressGSemicolon(handler, buf, state, viewport)
+    check r2.kind == nmrHandled
+    check state.cursor.line == 1
+    check buf.changeListIndex == 0
+
+    # g, - index becomes 1, jump to index 1 position
+    let r3 = pressGComma(handler, buf, state, viewport)
+    check r3.kind == nmrHandled
+    check state.cursor.line == 1
+    check state.cursor.column == 3
+    check buf.changeListIndex == 1
+
+  test "g; with single change jumps to that position":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.currentBufferIndex = 0
+
+    buf.changeList = @[BufferPosition(line: 0, column: 5)]
+    buf.changeListIndex = 0
+
+    let result = pressGSemicolon(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check state.cursor.line == 0
+    check state.cursor.column == 5

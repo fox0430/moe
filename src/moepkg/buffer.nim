@@ -621,12 +621,13 @@ proc getChangePosition*(change: BufferChange): BufferPosition =
   of ckSnapshot:
     return change.snapshotCursorPos
 
+const ChangeListMaxLen* = 100
+
 proc recordChangePosition(b: TextBuffer, pos: BufferPosition) =
   ## Add a position to the changelist, keeping it within the max limit.
   b.changeList.add(pos)
   b.changeListIndex = b.changeList.len - 1
 
-  const ChangeListMaxLen = 100
   if b.changeList.len > ChangeListMaxLen:
     b.changeList.delete(0)
     b.changeListIndex = b.changeList.len - 1
