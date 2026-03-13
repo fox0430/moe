@@ -60,8 +60,8 @@ Page Up    - Page Up
 Page Down  - Page Down
 gg         - Go to the first line
 g_         - Go to the last non-blank character of the line
-g;         - Go to the previous chnage position
-g,         - Go to the next chnage position
+g;         - Go to the previous change position
+g,         - Go to the next change position
 G          - Go to the last line
 0          - Go to the first character of the line
 $          - Go to the end of the line
@@ -181,6 +181,10 @@ gt         - Switch to the next buffer
 gT         - Switch to the previous buffer
 Ctrl-o     - Jump Back (Jumplist)
 Ctrl-i     - Jump Forward (Jumplist)
+mm         - Toggle bookmark on current line
+mn         - Jump to next bookmark
+mp         - Jump to previous bookmark
+mc         - Clear all bookmarks in current buffer
 
 # Register
 
@@ -387,6 +391,8 @@ terminal         - Open terminal emulator (default shell)
 terminal command - Run command in terminal emulator
 
 changes - Show Change list
+
+bookmarks - Show bookmark list
 
 ## Runtime Key Mapping
 

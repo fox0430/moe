@@ -82,6 +82,11 @@ type
     # Change list operations
     bcChangeListPrev = "changelist.prev" # g;
     bcChangeListNext = "changelist.next" # g,
+    # Bookmark operations
+    bcBookmarkToggle = "bookmark.toggle"
+    bcBookmarkNext = "bookmark.next"
+    bcBookmarkPrev = "bookmark.prev"
+    bcBookmarkClear = "bookmark.clear"
     # Insert mode operations
     bcInsertChar = "insert.char"
     bcInsertBackspace = "insert.backspace"

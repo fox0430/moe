@@ -524,3 +524,107 @@ suite "Sidebar - generateSidebarFromBuffer edge cases":
     check sidebar.buffer[3][0].kind == GitChangedAndDeleted
     check sidebar.buffer[4][0].kind == SyntaxError
     check sidebar.buffer[5][0].kind == SyntaxWarning
+
+suite "Sidebar - Bookmark display":
+  test "bookmarkStyle has cyan foreground and bold":
+    let style = bookmarkStyle()
+    check style.fg.kind == Indexed
+    check style.fg.indexed == Color.Cyan
+    check StyleModifier.Bold in style.modifiers
+
+  test "Bookmark shown on line with no marker":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
+    buf.toggleBookmark(1)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 3, bookmarks = buf.bookmarks)
+
+    check sidebar.buffer[0][0].kind == Empty
+    check sidebar.buffer[1][0].kind == Bookmark
+    check sidebar.buffer[2][0].kind == Empty
+
+  test "Bookmark overrides git marker":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
+    buf.setLineMarker(1, GitAdded)
+    buf.toggleBookmark(1)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 3, bookmarks = buf.bookmarks)
+
+    check sidebar.buffer[1][0].kind == Bookmark
+
+  test "SyntaxError overrides bookmark":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3")
+    buf.setLineMarker(1, SyntaxError)
+    buf.toggleBookmark(1)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 3, bookmarks = buf.bookmarks)
+
+    check sidebar.buffer[1][0].kind == SyntaxError
+
+  test "SyntaxWarning overrides bookmark":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+    buf.setLineMarker(0, SyntaxWarning)
+    buf.toggleBookmark(0)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 2, bookmarks = buf.bookmarks)
+
+    check sidebar.buffer[0][0].kind == SyntaxWarning
+
+  test "Multiple bookmarks displayed correctly":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\ne")
+    buf.toggleBookmark(0)
+    buf.toggleBookmark(2)
+    buf.toggleBookmark(4)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 5, bookmarks = buf.bookmarks)
+
+    check sidebar.buffer[0][0].kind == Bookmark
+    check sidebar.buffer[1][0].kind == Empty
+    check sidebar.buffer[2][0].kind == Bookmark
+    check sidebar.buffer[3][0].kind == Empty
+    check sidebar.buffer[4][0].kind == Bookmark
+
+  test "Bookmark with topLine offset":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\ne")
+    buf.toggleBookmark(3)
+
+    let sidebar = generateSidebarFromBuffer(buf, 2, 3, bookmarks = buf.bookmarks)
+
+    # Screen line 0 = buffer line 2 (no bookmark)
+    check sidebar.buffer[0][0].kind == Empty
+    # Screen line 1 = buffer line 3 (bookmarked)
+    check sidebar.buffer[1][0].kind == Bookmark
+    # Screen line 2 = buffer line 4 (no bookmark)
+    check sidebar.buffer[2][0].kind == Empty
+
+  test "Bookmark uses default marker text":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1")
+    buf.toggleBookmark(0)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 1, bookmarks = buf.bookmarks)
+
+    # Default bookmark marker is "♥ " (multi-byte, first char is ♥)
+    check sidebar.buffer[0][0].kind == Bookmark
+
+  test "setBookmarkMarker changes marker text":
+    # Use ASCII marker to avoid multi-byte splitting issues in sidebar cells
+    setBookmarkMarker("B ")
+
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "Line 1")
+    buf.toggleBookmark(0)
+
+    let sidebar = generateSidebarFromBuffer(buf, 0, 1, bookmarks = buf.bookmarks)
+
+    check sidebar.buffer[0][0].kind == Bookmark
+    check sidebar.buffer[0][0].text == "B"
+    check sidebar.buffer[0][1].text == " "
+
+    # Restore default
+    setBookmarkMarker("♥ ")

@@ -44,14 +44,10 @@ proc getCurrentTabStyle(): Style =
   ## Get the current (active) tab style from theme
   getThemeStyle(EditorColorPairIndex.currentTab)
 
-proc buildTabText(buf: TextBuffer, mode: EditorMode, isActive: bool): string =
+proc buildTabText(buf: TextBuffer): string =
   ## Build the display text for a single tab
   ## Format: " filename[+] " where [+] indicates modified
-  ## For special modes (non-file-edit modes), show mode label
-
-  # For special modes, always show mode label instead of filename
-  if not mode.isFileEditMode:
-    return " " & modeLabel(mode) & " "
+  ## Always shows the buffer's filename regardless of editor mode.
 
   let
     name = if buf.filePath.isSome: buf.filePath.get.extractFilename else: "No Name"
@@ -96,14 +92,9 @@ proc renderTabLine*(
   # First, render all tabs (visible content)
   for buf in buffers:
     let
-      # For special modes (non-file-edit modes), use isActiveWindow to determine highlight
-      isActive =
-        if mode.isFileEditMode:
-          buf.id == activeBuffer.id
-        else:
-          isActiveWindow
+      isActive = buf.id == activeBuffer.id
       style = if isActive: currentTabStyle else: tabStyle
-      tabText = buildTabText(buf, mode, isActive)
+      tabText = buildTabText(buf)
       tabWidth = displayWidth(tabText)
 
     # Stop if we would exceed the tab line width
@@ -131,7 +122,7 @@ proc hitTestTabLine*(
   var currentX = tabLineX
   for i, buf in buffers:
     let
-      tabText = buildTabText(buf, mode, false)
+      tabText = buildTabText(buf)
       tabWidth = displayWidth(tabText)
     if currentX + tabWidth > tabLineX + tabLineWidth:
       break

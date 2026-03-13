@@ -239,6 +239,15 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
       c.standard.sidebar = v,
   )
   result.add ConfigItemDescriptor(
+    kind: cvkString,
+    displayName: "bookmarkMarker",
+    section: "Standard",
+    stringGet: proc(c: EditorConfig): string =
+      c.standard.bookmarkMarker,
+    stringSetter: proc(c: EditorConfig, v: string) =
+      c.standard.bookmarkMarker = v,
+  )
+  result.add ConfigItemDescriptor(
     kind: cvkBool,
     displayName: "showModifiedLines",
     section: "Standard",

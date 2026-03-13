@@ -40,6 +40,7 @@ type
     LogViewer
     Help
     BufferManager
+    BookmarkManager
     BackupManager
     DiffViewer
     RecentFile
@@ -89,6 +90,8 @@ proc modeLabel*(m: EditorMode, insertNormal: bool = false): string =
     "HELP"
   of EditorMode.BufferManager:
     "BUFFERS"
+  of EditorMode.BookmarkManager:
+    "BOOKMARKS"
   of EditorMode.BackupManager:
     "BACKUPS"
   of EditorMode.DiffViewer:

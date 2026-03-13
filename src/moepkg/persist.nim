@@ -219,3 +219,83 @@ proc setCursorPosition*(
   ## Set cursor position for a specific file
   let absPath = absolutePath(filePath)
   positions[absPath] = CursorPositionEntry(line: line, column: column)
+
+# Bookmark Persistence
+
+proc getBookmarksPath*(): Result[Path, string] =
+  ## Get the path to the bookmarks file
+  ## Returns: ~/$XDG_CACHE_HOME/moe/bookmarks.json
+  let cacheDir = appdirs.getCacheDir()
+  if len(cacheDir.string) == 0:
+    return Result[Path, string].err "Failed to get cache directory"
+
+  var p = cacheDir
+  p.add Path("moe")
+  p.add Path("bookmarks.json")
+
+  return Result[Path, string].ok p
+
+proc loadBookmarks*(): Table[string, seq[int]] =
+  ## Load bookmarks from disk
+  ## Returns: table mapping absolute file paths to sorted bookmark line numbers
+  result = initTable[string, seq[int]]()
+
+  let bmPath = getBookmarksPath()
+  if bmPath.isErr:
+    logError("persist", bmPath.error)
+    return
+
+  let bmPathStr = bmPath.get.string
+
+  if not fileExists(bmPathStr):
+    logDebug("persist", fmt"bookmarks file not found: {bmPathStr}")
+    return
+
+  try:
+    let content = readFile(bmPathStr)
+    let jsonNode = parseJson(content)
+
+    if jsonNode.kind == JObject:
+      for path, lines in jsonNode.pairs:
+        if lines.kind == JArray:
+          var bookmarks: seq[int] = @[]
+          for lineNode in lines:
+            if lineNode.kind == JInt:
+              let lineNum = lineNode.getInt()
+              if lineNum >= 0:
+                bookmarks.add(lineNum)
+          if bookmarks.len > 0:
+            result[path] = bookmarks
+  except CatchableError as e:
+    logError("persist", fmt"Failed to load bookmarks: {e.msg}")
+    return initTable[string, seq[int]]()
+
+proc saveBookmarks*(bookmarks: Table[string, seq[int]]): Result[void, string] =
+  ## Save bookmarks to disk as JSON
+
+  let bmPath = getBookmarksPath()
+  if bmPath.isErr:
+    return err(bmPath.error)
+
+  let
+    pathSplited = bmPath.get.splitPath
+    pathHeadStr = pathSplited.head.string
+
+  if not dirExists(pathHeadStr):
+    try:
+      createDir(pathHeadStr)
+    except CatchableError as e:
+      return err(fmt"Failed to create dir: {e.msg}: {pathHeadStr}")
+
+  let bmPathStr = bmPath.get.string
+
+  try:
+    var jsonObj = newJObject()
+    for path, lines in bookmarks.pairs:
+      if lines.len > 0:
+        jsonObj[path] = %lines
+
+    writeFile(bmPathStr, $jsonObj)
+    return ok()
+  except CatchableError as e:
+    return err(fmt"Failed to save bookmarks: {e.msg}")

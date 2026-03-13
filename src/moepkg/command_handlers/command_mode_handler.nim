@@ -29,9 +29,9 @@ import pkg/[celina, results, chronos]
 import
   ../[
     editor, key_bindings, modes, buffer, logger, types, motion, filer, quick_run_utils,
-    help_viewer, buffer_manager, backup_manager, backup, debug_viewer, config_loader,
-    message_log, command_line, color, theme, terminal_mode, command_completion,
-    render_utils, config_mode, log_viewer, syntax_checker,
+    help_viewer, buffer_manager, bookmark_manager, backup_manager, backup, debug_viewer,
+    config_loader, message_log, command_line, color, theme, terminal_mode,
+    command_completion, render_utils, config_mode, log_viewer, syntax_checker,
   ]
 import handler_manager
 
@@ -1077,6 +1077,23 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.state.needsFullRedraw = true
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
+      of hrEnterBookmarkManager:
+        overlayHandled = true
+        let baseModeBeforeOverlay = e.state.baseMode
+        e.state.exitOverlay()
+        e.state.previousMode = baseModeBeforeOverlay
+        e.setMode(EditorMode.BookmarkManager)
+        let bkmState = newBookmarkManagerState()
+        bkmState.updateEntries(e.buffers)
+        bkmState.previousWindowIndex = e.windowManager.activeWindowIndex
+        let activeWin = e.activeWindow
+        activeWin.mode = EditorMode.BookmarkManager
+        bkmState.originalBuffer = activeWin.buffer
+        activeWin.buffer = bkmState.createBookmarkManagerTextBuffer()
+        activeWin.cursor = BufferPosition(line: 0, column: 0)
+        activeWin.viewport.topLine = 0
+        activeWin.viewport.leftColumn = 0
+        activeWin.bookmarkManagerState = some(bkmState)
       of hrTheme:
         overlayHandled = true
         # Handle theme change command
@@ -1200,6 +1217,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           hrCallHierarchyQuit, hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
           hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy,
           hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer, hrBufferManagerQuit,
+          hrBookmarkManagerJump, hrBookmarkManagerDelete, hrBookmarkManagerQuit,
           hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
           hrBackupManagerRefresh, hrBackupManagerQuit, hrDiffViewerQuit,
           hrEnterDiffViewer, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow,

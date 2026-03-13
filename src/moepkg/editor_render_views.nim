@@ -178,6 +178,14 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
+    of EditorMode.BookmarkManager:
+      # Sync bookmark manager selection to window cursor (header at line 0)
+      if window.bookmarkManagerState.isSome:
+        window.cursor.line = window.bookmarkManagerState.get.selectedIndex + 1
+        window.cursor.column = 0
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
     of EditorMode.BackupManager:
       # Sync backup manager selection to window cursor (header at line 0)
       if window.backupManagerState.isSome:
@@ -280,14 +288,16 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     # Normal modes need cursor visible
     case e.activeWindow.mode
     of EditorMode.Filer:
-      e.state.cursorVisible = false
+      e.state.cursorVisible = e.state.hasOverlay
     of EditorMode.Config:
       # Config mode sets cursorVisible in renderWindowConfig based on edit state
       discard
-    of EditorMode.BufferManager, EditorMode.Help, EditorMode.BackupManager,
-        EditorMode.DiffViewer, EditorMode.Debug, EditorMode.References,
-        EditorMode.DocumentSymbol, EditorMode.CallHierarchy, EditorMode.RecentFile:
-      e.state.cursorVisible = false
+    of EditorMode.BufferManager, EditorMode.BookmarkManager, EditorMode.Help,
+        EditorMode.BackupManager, EditorMode.DiffViewer, EditorMode.Debug,
+        EditorMode.References, EditorMode.DocumentSymbol, EditorMode.CallHierarchy,
+        EditorMode.RecentFile:
+      # Show cursor when an overlay (command/search/rename) is active
+      e.state.cursorVisible = e.state.hasOverlay
     of EditorMode.Terminal:
       # Terminal mode sets cursorVisible in renderTerminal
       discard

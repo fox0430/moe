@@ -62,6 +62,7 @@ type
     claBackground # :bg (pause editor and show terminal)
     claJumpList # :jump (show jump list)
     claChanges # :changes (show change list)
+    claBookmarks # :bookmarks (show bookmark list)
     claBuild # :build (build current buffer)
     claDebug # :debug (open debug mode)
     claConfig # :config (open configuration mode)
@@ -180,6 +181,8 @@ type
     of claJumpList:
       discard
     of claChanges:
+      discard
+    of claBookmarks:
       discard
     of claBuild:
       discard
@@ -775,6 +778,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claJumpList)
   of claChanges:
     return CommandLineResult(kind: claChanges)
+  of claBookmarks:
+    return CommandLineResult(kind: claBookmarks)
   of claBuild:
     return CommandLineResult(kind: claBuild)
   of claDebug:

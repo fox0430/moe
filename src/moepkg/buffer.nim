@@ -19,7 +19,7 @@
 
 ## Main buffer interface
 
-import std/[unicode, options, strutils, deques, os, times]
+import std/[algorithm, unicode, options, strutils, deques, os, times]
 
 import pkg/results
 
@@ -39,6 +39,7 @@ type
     SyntaxWarning ## Syntax warning indicator
     SessionModified ## Line was modified in current session (cleared on save)
     SessionInserted ## Line was inserted in current session (cleared on save)
+    Bookmark ## Line has a bookmark
     Empty ## Empty sidebar cell
 
   LineModificationKind* = enum
@@ -185,6 +186,9 @@ type
     # Line folding state (vim-like manual folding)
     foldState*: FoldState
 
+    # Bookmarks (sorted list of bookmarked line numbers)
+    bookmarks*: seq[int]
+
     # Per-buffer EditorConfig overrides
     editorConfig*: Option[BufferEditorConfig]
 
@@ -262,6 +266,63 @@ proc adjustFoldsAfterDelete*(state: var FoldState, deleteLine: int, lineCount: i
   # Remove folds marked for deletion (in reverse order to preserve indices)
   for i in countdown(toRemove.high, 0):
     state.folds.delete(toRemove[i])
+
+proc toggleBookmark*(b: TextBuffer, line: int) =
+  ## Toggle a bookmark on the given line
+  let idx = b.bookmarks.binarySearch(line)
+  if idx >= 0:
+    b.bookmarks.delete(idx)
+  else:
+    let insertIdx = b.bookmarks.lowerBound(line)
+    b.bookmarks.insert(line, insertIdx)
+
+proc hasBookmark*(b: TextBuffer, line: int): bool =
+  ## Check if a line has a bookmark
+  b.bookmarks.binarySearch(line) >= 0
+
+proc clearBookmarks*(b: TextBuffer) =
+  ## Clear all bookmarks in this buffer
+  b.bookmarks.setLen(0)
+
+proc findNextBookmark*(b: TextBuffer, currentLine: int): Option[int] =
+  ## Find the next bookmark after currentLine (wraps around)
+  if b.bookmarks.len == 0:
+    return none(int)
+  # Find the first bookmark after currentLine
+  let idx = b.bookmarks.lowerBound(currentLine + 1)
+  if idx < b.bookmarks.len:
+    return some(b.bookmarks[idx])
+  # Wrap around to the first bookmark
+  return some(b.bookmarks[0])
+
+proc findPrevBookmark*(b: TextBuffer, currentLine: int): Option[int] =
+  ## Find the previous bookmark before currentLine (wraps around)
+  if b.bookmarks.len == 0:
+    return none(int)
+  # Find the last bookmark before currentLine
+  let idx = b.bookmarks.lowerBound(currentLine)
+  if idx > 0:
+    return some(b.bookmarks[idx - 1])
+  # Wrap around to the last bookmark
+  return some(b.bookmarks[^1])
+
+proc adjustBookmarksForInsert*(b: TextBuffer, line: int, count: int = 1) =
+  ## Adjust bookmark line numbers after lines are inserted at `line`
+  for i in 0 ..< b.bookmarks.len:
+    if b.bookmarks[i] >= line:
+      b.bookmarks[i] += count
+
+proc adjustBookmarksForDelete*(b: TextBuffer, line: int, count: int = 1) =
+  ## Adjust bookmark line numbers after `count` lines are deleted starting at `line`
+  var toRemove: seq[int] = @[]
+  let deleteEnd = line + count - 1
+  for i in 0 ..< b.bookmarks.len:
+    if b.bookmarks[i] >= line and b.bookmarks[i] <= deleteEnd:
+      toRemove.add(i)
+    elif b.bookmarks[i] > deleteEnd:
+      b.bookmarks[i] -= count
+  for i in countdown(toRemove.high, 0):
+    b.bookmarks.delete(toRemove[i])
 
 proc isModified*(b: TextBuffer): bool {.inline.} =
   ## Check if buffer has unsaved changes
@@ -824,9 +885,10 @@ proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string) =
     for i, newLine in newLines:
       b.backendInsertLine(pos.line + i, newLine)
 
-    # Adjust fold positions for newly inserted lines
+    # Adjust fold and bookmark positions for newly inserted lines
     if newLines.len > 1:
       b.foldState.adjustFoldsAfterInsert(pos.line, newLines.len - 1)
+      b.adjustBookmarksForInsert(pos.line, newLines.len - 1)
 
   # Ensure lineMarkers and modifiedLines stay in sync after backend operations
   b.ensureMarkersSize()
@@ -947,8 +1009,9 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
     BufferChange(kind: ckInsertLine, insertLineIdx: lineIndex, insertLineText: content)
   )
 
-  # Adjust fold positions
+  # Adjust fold and bookmark positions
   b.foldState.adjustFoldsAfterInsert(lineIndex, 1)
+  b.adjustBookmarksForInsert(lineIndex)
 
   return ok(())
 
@@ -986,8 +1049,9 @@ proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
     )
   )
 
-  # Adjust fold positions
+  # Adjust fold and bookmark positions
   b.foldState.adjustFoldsAfterDelete(lineIndex, 1)
+  b.adjustBookmarksForDelete(lineIndex)
 
   return ok(())
 
@@ -1178,9 +1242,10 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
     )
   )
 
-  # Adjust fold positions if multiple lines were deleted
+  # Adjust fold and bookmark positions if multiple lines were deleted
   if endPos.line > startPos.line:
     b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
+    b.adjustBookmarksForDelete(startPos.line, endPos.line - startPos.line)
 
   return ok(())
 
@@ -1214,10 +1279,12 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       # Undo insert line by deleting it
       b.backendDeleteLine(change.insertLineIdx)
       b.foldState.adjustFoldsAfterDelete(change.insertLineIdx, 1)
+      b.adjustBookmarksForDelete(change.insertLineIdx)
     of ckDeleteLine:
       # Undo delete line by inserting it
       b.backendInsertLine(change.deleteLineIdx, change.deletedLineText)
       b.foldState.adjustFoldsAfterInsert(change.deleteLineIdx, 1)
+      b.adjustBookmarksForInsert(change.deleteLineIdx)
     of ckDeleteRange:
       # Undo delete range by inserting the deleted text
       # Handle both single-line and multi-line deletions correctly
@@ -1552,9 +1619,11 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckInsertLine:
       b.backendInsertLine(change.insertLineIdx, change.insertLineText)
       b.foldState.adjustFoldsAfterInsert(change.insertLineIdx, 1)
+      b.adjustBookmarksForInsert(change.insertLineIdx)
     of ckDeleteLine:
       b.backendDeleteLine(change.deleteLineIdx)
       b.foldState.adjustFoldsAfterDelete(change.deleteLineIdx, 1)
+      b.adjustBookmarksForDelete(change.deleteLineIdx)
     of ckDeleteRange:
       # Re-apply delete range using the same logic as the original deleteRange
       # Handle both single-line and multi-line deletions correctly
@@ -1565,8 +1634,9 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
         b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
       else:
         b.deleteRangeMultiLine(startPos, endPos)
-        # Adjust fold positions for multi-line delete
+        # Adjust fold and bookmark positions for multi-line delete
         b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
+        b.adjustBookmarksForDelete(startPos.line, endPos.line - startPos.line)
     of ckReplaceLine:
       b.backendReplaceLine(change.replaceLineIdx, change.replaceLineNewText)
     of ckTransaction:

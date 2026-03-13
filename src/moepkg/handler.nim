@@ -24,9 +24,9 @@ from pkg/celina/core/mouse_logic import MouseButton
 
 import
   editor, key_bindings, modes, buffer, logger, types, motion, filer, quick_run_utils,
-  buffer_manager, backup_manager, backup, diff_viewer, command_completion, build,
-  render_utils, config_loader, documentsymbol_viewer, message_log, tab_line,
-  terminal_mode, clipboard
+  buffer_manager, bookmark_manager, backup_manager, backup, diff_viewer,
+  command_completion, build, render_utils, config_loader, documentsymbol_viewer,
+  message_log, tab_line, terminal_mode, clipboard
 import
   command_handlers/
     [handler_manager, command_mode_handler, search_mode_handler, insert_commands]
@@ -194,22 +194,24 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrLogViewerRefresh, hrEnterLogViewer,
       hrHelpViewerQuit, hrEnterHelpViewer, hrQuickRun, hrBufferManagerSelectBuffer,
       hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrEnterBufferManager,
-      hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
-      hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager,
-      hrDiffViewerQuit, hrEnterDiffViewer, hrRecentFile, hrNextWindow, hrPrevWindow,
-      hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
-      hrDecreaseWindowWidth, hrEqualizeWindows, hrLspGotoDefinition,
-      hrLspGotoDeclaration, hrLspFindReferences, hrLspCodeLensExecute,
-      hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing, hrLspTypeDefinition,
-      hrLspImplementation, hrLspHover, hrLspRename, hrLspSelectionRange,
-      hrLspDocumentLink, hrShellCommand, hrBackground, hrJumpList, hrChanges, hrBuild,
-      hrDebug, hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig,
-      hrPutConfigFile, hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold,
-      hrLspExecuteCommand, hrSubstitute, hrMan, hrReferencesQuit, hrReferencesJumpTo,
-      hrEnterReferences, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
-      hrEnterDocumentSymbol, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
-      hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
-      hrEnterCallHierarchy, hrEnterTerminal, hrTerminalQuit, hrExecCommand, hrOnlyWindow:
+      hrBookmarkManagerJump, hrBookmarkManagerDelete, hrBookmarkManagerQuit,
+      hrEnterBookmarkManager, hrBackupManagerRestore, hrBackupManagerDelete,
+      hrBackupManagerOpenDiff, hrBackupManagerRefresh, hrBackupManagerQuit,
+      hrEnterBackupManager, hrDiffViewerQuit, hrEnterDiffViewer, hrRecentFile,
+      hrNextWindow, hrPrevWindow, hrIncreaseWindowHeight, hrDecreaseWindowHeight,
+      hrIncreaseWindowWidth, hrDecreaseWindowWidth, hrEqualizeWindows,
+      hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
+      hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
+      hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
+      hrLspSelectionRange, hrLspDocumentLink, hrShellCommand, hrBackground, hrJumpList,
+      hrChanges, hrBuild, hrDebug, hrDebugViewerQuit, hrConfig, hrConfigQuit,
+      hrConfigSaveConfig, hrPutConfigFile, hrTheme, hrLspLog, hrLspFormat, hrLspRestart,
+      hrLspFold, hrLspExecuteCommand, hrSubstitute, hrMan, hrReferencesQuit,
+      hrReferencesJumpTo, hrEnterReferences, hrDocumentSymbolQuit,
+      hrDocumentSymbolJumpTo, hrEnterDocumentSymbol, hrCallHierarchyQuit,
+      hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
+      hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrEnterTerminal,
+      hrTerminalQuit, hrExecCommand, hrOnlyWindow:
     discard # Not expected from RecentFile mode handler
 
   # Handle overlay transitions (e.g., entering Command mode with :)
@@ -1383,6 +1385,38 @@ proc handleEvent*(e: Editor, event: Event): bool =
       # Cannot delete the only buffer
       e.state.statusMessage = "Cannot delete the last buffer"
     return true
+  of hrBookmarkManagerQuit:
+    # Close bookmark manager and return to Normal mode
+    e.activeWindow.clearModeState(EditorMode.BookmarkManager)
+    e.activeWindow.mode = EditorMode.Normal
+    e.setMode(EditorMode.Normal)
+    return true
+  of hrBookmarkManagerJump:
+    # Jump to the selected bookmark (buffer + line)
+    let bufferIndex = r.bookmarkJumpBufferIndex
+    let jumpLine = r.bookmarkJumpLine
+    let activeWin = e.activeWindow
+    activeWin.restoreOriginalBuffer(EditorMode.BookmarkManager)
+    if bufferIndex >= 0 and bufferIndex < e.buffers.len:
+      e.switchToBufferByIndex(bufferIndex)
+      let buf = e.activeBuffer()
+      let clampedLine = min(jumpLine, max(0, buf.len - 1))
+      e.activeWindow.cursor = BufferPosition(line: clampedLine, column: 0)
+      e.activeWindow.viewport.topLine = max(0, clampedLine - 5)
+    activeWin.bookmarkManagerState = none(BookmarkManagerState)
+    activeWin.mode = EditorMode.Normal
+    e.setMode(EditorMode.Normal)
+    return true
+  of hrBookmarkManagerDelete:
+    # Delete the bookmark and refresh
+    let activeWin = e.activeWindow
+    if activeWin.bookmarkManagerState.isSome:
+      let bmState = activeWin.bookmarkManagerState.get
+      bmState.deleteSelectedBookmark(e.buffers)
+      activeWin.buffer = bmState.createBookmarkManagerTextBuffer()
+      activeWin.cursor.line = min(bmState.selectedIndex + 1, activeWin.buffer.len - 1)
+      activeWin.cursor.column = 0
+    return true
   of hrBackupManagerQuit:
     # Close backup manager and return to Normal mode
     let activeWin = e.activeWindow
@@ -1689,9 +1723,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
       hrShellCommand, hrBackground, hrMan, hrSubstitute, hrQuickRun, hrBuild, hrDebug,
       hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList, hrChanges,
       hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterLogViewer,
-      hrEnterHelpViewer, hrEnterBufferManager, hrEnterBackupManager, hrEnterDiffViewer,
-      hrEnterReferences, hrEnterDocumentSymbol, hrEnterCallHierarchy, hrEnterTerminal,
-      hrOnlyWindow:
+      hrEnterHelpViewer, hrEnterBufferManager, hrEnterBookmarkManager,
+      hrEnterBackupManager, hrEnterDiffViewer, hrEnterReferences, hrEnterDocumentSymbol,
+      hrEnterCallHierarchy, hrEnterTerminal, hrOnlyWindow:
     discard # Handled by handleCommandModeEvent or other code paths
 
   # Handle overlay transitions
@@ -1742,6 +1776,18 @@ proc handleEvent*(e: Editor, event: Event): bool =
       bmState.previousWindowIndex = e.windowManager.activeWindowIndex
       activeWin.bufferManagerState = some(bmState)
       activeWin.mode = EditorMode.BufferManager
+
+    # Initialize bookmark manager state when entering BookmarkManager mode
+    if newMode == EditorMode.BookmarkManager:
+      let bkmState = newBookmarkManagerState()
+      bkmState.updateEntries(e.buffers)
+      bkmState.previousWindowIndex = e.windowManager.activeWindowIndex
+      bkmState.originalBuffer = activeWin.buffer
+      activeWin.bookmarkManagerState = some(bkmState)
+      activeWin.buffer = bkmState.createBookmarkManagerTextBuffer()
+      activeWin.cursor = BufferPosition(line: 0, column: 0)
+      activeWin.viewport.topLine = 0
+      activeWin.mode = EditorMode.BookmarkManager
 
     # Adjust cursor when transitioning from Insert to Normal mode
     # Skip cursor adjustment for insert-normal mode (Ctrl-o) since we'll return to Insert

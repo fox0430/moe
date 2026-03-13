@@ -23,15 +23,16 @@ import pkg/celina
 
 import
   modes, buffer, registers, filer, log_viewer, help_viewer, command_completion,
-  message_log, logger, buffer_manager, backup_manager, diff_viewer, debug_viewer,
-  config_mode, references_viewer, documentsymbol_viewer, callhierarchy_viewer,
-  hover_popup, primitives, syntax_checker, recent_file_mode, terminal_mode
+  message_log, logger, buffer_manager, bookmark_manager, backup_manager, diff_viewer,
+  debug_viewer, config_mode, references_viewer, documentsymbol_viewer,
+  callhierarchy_viewer, hover_popup, primitives, syntax_checker, recent_file_mode,
+  terminal_mode
 
 export
   buffer.SidebarItemKind, registers, command_completion, filer, log_viewer, help_viewer,
-  buffer_manager, backup_manager, diff_viewer, debug_viewer, config_mode,
-  references_viewer, documentsymbol_viewer, callhierarchy_viewer, hover_popup,
-  primitives, syntax_checker, recent_file_mode, terminal_mode
+  buffer_manager, bookmark_manager, backup_manager, diff_viewer, debug_viewer,
+  config_mode, references_viewer, documentsymbol_viewer, callhierarchy_viewer,
+  hover_popup, primitives, syntax_checker, recent_file_mode, terminal_mode
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -78,6 +79,7 @@ type
     logViewerState*: Option[LogViewerState] # Log viewer state
     helpViewerState*: Option[HelpViewerState] # Help viewer state
     bufferManagerState*: Option[BufferManagerState] # Buffer manager state
+    bookmarkManagerState*: Option[BookmarkManagerState] # Bookmark manager state
     backupManagerState*: Option[BackupManagerState] # Backup manager state
     diffViewerState*: Option[DiffViewerState] # Diff viewer state
     debugViewerState*: Option[DebugViewerState] # Debug viewer state

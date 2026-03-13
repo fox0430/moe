@@ -904,3 +904,222 @@ suite "Git Change Navigation - findPrevGitChange":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\n")
     buf.setLineMarker(0, GitAdded)
     check buf.findPrevGitChange(0).isNone
+
+suite "Buffer - Bookmarks - toggleBookmark":
+  test "Toggle on empty buffer adds bookmark":
+    let buf = newTextBuffer("Line1\nLine2\nLine3")
+    buf.toggleBookmark(1)
+    check buf.bookmarks == @[1]
+
+  test "Toggle same line twice removes bookmark":
+    let buf = newTextBuffer("Line1\nLine2\nLine3")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(1)
+    check buf.bookmarks.len == 0
+
+  test "Multiple bookmarks are sorted":
+    let buf = newTextBuffer("a\nb\nc\nd\ne")
+    buf.toggleBookmark(3)
+    buf.toggleBookmark(0)
+    buf.toggleBookmark(4)
+    buf.toggleBookmark(1)
+    check buf.bookmarks == @[0, 1, 3, 4]
+
+  test "Toggle middle bookmark removes only that one":
+    let buf = newTextBuffer("a\nb\nc\nd\ne")
+    buf.toggleBookmark(0)
+    buf.toggleBookmark(2)
+    buf.toggleBookmark(4)
+    buf.toggleBookmark(2)
+    check buf.bookmarks == @[0, 4]
+
+suite "Buffer - Bookmarks - hasBookmark":
+  test "hasBookmark returns true for bookmarked line":
+    let buf = newTextBuffer("a\nb\nc")
+    buf.toggleBookmark(1)
+    check buf.hasBookmark(1) == true
+
+  test "hasBookmark returns false for non-bookmarked line":
+    let buf = newTextBuffer("a\nb\nc")
+    buf.toggleBookmark(1)
+    check buf.hasBookmark(0) == false
+    check buf.hasBookmark(2) == false
+
+  test "hasBookmark returns false on empty bookmarks":
+    let buf = newTextBuffer("a\nb\nc")
+    check buf.hasBookmark(0) == false
+
+suite "Buffer - Bookmarks - clearBookmarks":
+  test "clearBookmarks removes all bookmarks":
+    let buf = newTextBuffer("a\nb\nc\nd")
+    buf.toggleBookmark(0)
+    buf.toggleBookmark(2)
+    buf.toggleBookmark(3)
+    buf.clearBookmarks()
+    check buf.bookmarks.len == 0
+
+  test "clearBookmarks on empty is no-op":
+    let buf = newTextBuffer("a\nb")
+    buf.clearBookmarks()
+    check buf.bookmarks.len == 0
+
+suite "Buffer - Bookmarks - findNextBookmark":
+  test "Find next bookmark after current line":
+    let buf = newTextBuffer("a\nb\nc\nd\ne")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(3)
+    check buf.findNextBookmark(0) == some(1)
+    check buf.findNextBookmark(1) == some(3)
+    check buf.findNextBookmark(2) == some(3)
+
+  test "Wraps around to first bookmark":
+    let buf = newTextBuffer("a\nb\nc\nd\ne")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(3)
+    check buf.findNextBookmark(3) == some(1)
+    check buf.findNextBookmark(4) == some(1)
+
+  test "Single bookmark always returns it":
+    let buf = newTextBuffer("a\nb\nc")
+    buf.toggleBookmark(1)
+    check buf.findNextBookmark(0) == some(1)
+    check buf.findNextBookmark(1) == some(1) # wraps to self
+    check buf.findNextBookmark(2) == some(1)
+
+  test "No bookmarks returns none":
+    let buf = newTextBuffer("a\nb\nc")
+    check buf.findNextBookmark(0).isNone
+
+suite "Buffer - Bookmarks - findPrevBookmark":
+  test "Find prev bookmark before current line":
+    let buf = newTextBuffer("a\nb\nc\nd\ne")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(3)
+    check buf.findPrevBookmark(4) == some(3)
+    check buf.findPrevBookmark(3) == some(1)
+    check buf.findPrevBookmark(2) == some(1)
+
+  test "Wraps around to last bookmark":
+    let buf = newTextBuffer("a\nb\nc\nd\ne")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(3)
+    check buf.findPrevBookmark(1) == some(3)
+    check buf.findPrevBookmark(0) == some(3)
+
+  test "Single bookmark always returns it":
+    let buf = newTextBuffer("a\nb\nc")
+    buf.toggleBookmark(1)
+    check buf.findPrevBookmark(2) == some(1)
+    check buf.findPrevBookmark(1) == some(1) # wraps to self
+    check buf.findPrevBookmark(0) == some(1)
+
+  test "No bookmarks returns none":
+    let buf = newTextBuffer("a\nb\nc")
+    check buf.findPrevBookmark(0).isNone
+
+suite "Buffer - Bookmarks - adjustBookmarksForInsert":
+  test "Insert before bookmarks shifts them":
+    let buf = newTextBuffer("a\nb\nc\nd")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(3)
+    buf.adjustBookmarksForInsert(0)
+    check buf.bookmarks == @[2, 4]
+
+  test "Insert at bookmark line shifts it":
+    let buf = newTextBuffer("a\nb\nc")
+    buf.toggleBookmark(1)
+    buf.adjustBookmarksForInsert(1)
+    check buf.bookmarks == @[2]
+
+  test "Insert after bookmarks does not shift":
+    let buf = newTextBuffer("a\nb\nc\nd")
+    buf.toggleBookmark(0)
+    buf.toggleBookmark(1)
+    buf.adjustBookmarksForInsert(3)
+    check buf.bookmarks == @[0, 1]
+
+  test "Insert multiple lines":
+    let buf = newTextBuffer("a\nb\nc\nd")
+    buf.toggleBookmark(2)
+    buf.adjustBookmarksForInsert(1, 3)
+    check buf.bookmarks == @[5]
+
+suite "Buffer - Bookmarks - adjustBookmarksForDelete":
+  test "Delete before bookmarks shifts them down":
+    let buf = newTextBuffer("a\nb\nc\nd")
+    buf.toggleBookmark(2)
+    buf.toggleBookmark(3)
+    buf.adjustBookmarksForDelete(0)
+    check buf.bookmarks == @[1, 2]
+
+  test "Delete bookmarked line removes it":
+    let buf = newTextBuffer("a\nb\nc\nd")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(3)
+    buf.adjustBookmarksForDelete(1)
+    check buf.bookmarks == @[2]
+
+  test "Delete after bookmarks does not shift":
+    let buf = newTextBuffer("a\nb\nc\nd")
+    buf.toggleBookmark(0)
+    buf.toggleBookmark(1)
+    buf.adjustBookmarksForDelete(3)
+    check buf.bookmarks == @[0, 1]
+
+  test "Delete range removes bookmarks within range":
+    let buf = newTextBuffer("a\nb\nc\nd\ne")
+    buf.toggleBookmark(0)
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(2)
+    buf.toggleBookmark(3)
+    buf.toggleBookmark(4)
+    buf.adjustBookmarksForDelete(1, 3)
+    check buf.bookmarks == @[0, 1] # 0 unchanged, 4 shifted to 1
+
+  test "Delete all bookmarked lines clears bookmarks":
+    let buf = newTextBuffer("a\nb\nc")
+    buf.toggleBookmark(0)
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(2)
+    buf.adjustBookmarksForDelete(0, 3)
+    check buf.bookmarks.len == 0
+
+suite "Buffer - Bookmarks - line insert/delete integration":
+  test "Inserting a line adjusts bookmarks":
+    let buf = newTextBuffer("a\nb\nc")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(2)
+    discard buf.insert(0, "new")
+    check buf.bookmarks == @[2, 3]
+
+  test "Deleting a line adjusts bookmarks":
+    let buf = newTextBuffer("a\nb\nc\nd")
+    buf.toggleBookmark(2)
+    buf.toggleBookmark(3)
+    discard buf.deleteLine(0)
+    check buf.bookmarks == @[1, 2]
+
+  test "Deleting a bookmarked line removes it":
+    let buf = newTextBuffer("a\nb\nc\nd")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(3)
+    discard buf.deleteLine(1)
+    check buf.bookmarks == @[2]
+
+  test "Undo insert restores bookmarks":
+    let buf = newTextBuffer("a\nb\nc")
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(2)
+    discard buf.insert(0, "new")
+    check buf.bookmarks == @[2, 3]
+    discard buf.undo()
+    check buf.bookmarks == @[1, 2]
+
+  test "Undo delete restores bookmarks":
+    let buf = newTextBuffer("a\nb\nc\nd")
+    buf.toggleBookmark(2)
+    buf.toggleBookmark(3)
+    discard buf.deleteLine(0)
+    check buf.bookmarks == @[1, 2]
+    discard buf.undo()
+    check buf.bookmarks == @[2, 3]

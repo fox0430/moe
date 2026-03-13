@@ -1220,10 +1220,10 @@ suite "All mapping commands are valid":
     # These require editor-level context (buffer switching, LSP client, etc.)
     # and are intentionally not registered in CommandRegistry.
     const dispatchedByHandler = [
-      bcJumpBack, bcJumpForward, bcChangeListPrev, bcChangeListNext, bcFileSave,
-      bcFileOpen, bcFileNew, bcFileClose, bcFiler, bcLspGotoDefinition,
-      bcLspFindReferences, bcLspCodeLensExecute, bcLspCallHierarchyIncoming,
-      bcLspCallHierarchyOutgoing,
+      bcJumpBack, bcJumpForward, bcChangeListPrev, bcChangeListNext, bcBookmarkToggle,
+      bcBookmarkNext, bcBookmarkPrev, bcBookmarkClear, bcFileSave, bcFileOpen,
+      bcFileNew, bcFileClose, bcFiler, bcLspGotoDefinition, bcLspFindReferences,
+      bcLspCodeLensExecute, bcLspCallHierarchyIncoming, bcLspCallHierarchyOutgoing,
     ]
 
     let cmdRegistry = newCommandRegistry()

@@ -290,6 +290,7 @@ proc renderWindow*(
           visibleHeight,
           modifiedLines = window.buffer.modifiedLines,
           showModifiedLines = e.state.display.showModifiedLines,
+          bookmarks = window.buffer.bookmarks,
         )
       )
     else:

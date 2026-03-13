@@ -28,7 +28,7 @@ import
 import
   status_line, render_utils, git_diff, logger, config_loader, keybind_config,
   search_utils, completion, signature_help, hover_popup, command_completion, motion,
-  color, debug_viewer, message_log, unicode_utils, highlight
+  color, debug_viewer, message_log, unicode_utils, highlight, sidebar
 
 import key_bindings except Command
 import command_handlers/insert_handler
@@ -746,7 +746,15 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         loadCursorPositions()
       else:
         initTable[string, CursorPositionEntry](),
+    savedBookmarks:
+      if editorConfig.persist.bookmarks:
+        loadBookmarks()
+      else:
+        initTable[string, seq[int]](),
   )
+
+  # Apply sidebar bookmark marker from config
+  setBookmarkMarker(editorConfig.standard.bookmarkMarker)
 
   # Add initial buffer to buffer list
   result.buffers.add(result.textBuffer)
@@ -952,6 +960,9 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
 
   # Reload theme if configured
   initTheme(newConfig)
+
+  # Update sidebar bookmark marker
+  setBookmarkMarker(newConfig.standard.bookmarkMarker)
 
   # Update LSP enable/disable
   e.lsp.setEnabled(newConfig.lsp.enable)

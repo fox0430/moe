@@ -75,6 +75,7 @@ type
       ## Tab/Backspace width in insert mode, 0 = use tabStop (Vim compatible)
     expandTab*: bool
     sidebar*: bool
+    bookmarkMarker*: string
     showModifiedLines*: bool
     autoCloseParen*: bool
     autoIndent*: bool
@@ -202,6 +203,7 @@ type
     search*: bool
     searchHistoryLimit*: int
     cursorPosition*: bool
+    bookmarks*: bool
 
   # Git settings
   GitConfig* = object
@@ -456,6 +458,7 @@ proc newEditorConfig*(): EditorConfig =
       softTabStop: 0, # 0 = use tabStop (Vim compatible)
       expandTab: false, # Match example/moerc.toml default
       sidebar: true,
+      bookmarkMarker: "♥ ",
       showModifiedLines: true,
       autoCloseParen: true,
       autoIndent: true,
@@ -556,6 +559,7 @@ proc newEditorConfig*(): EditorConfig =
       search: true,
       searchHistoryLimit: 1000,
       cursorPosition: true,
+      bookmarks: true,
     ),
     git: GitConfig(showChangedLine: true, updateInterval: 1000),
     syntaxChecker: SyntaxCheckerConfig(enable: false),

@@ -127,6 +127,8 @@ const CommandDescriptions = {
   "jump": "Show jump list",
   # Change list
   "changes": "Show change list",
+  # Bookmarks
+  "bookmarks": "Show bookmark list",
   # Build
   "build": "Build project",
   # Debug mode

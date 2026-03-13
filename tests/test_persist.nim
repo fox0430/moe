@@ -337,6 +337,177 @@ suite "persist - cursor positions integration":
     check loaded["/home/ユーザー/ファイル.txt"].line == 1
     check loaded["/home/用户/文件.txt"].line == 2
 
+suite "persist - getBookmarksPath":
+  test "Returns a valid path":
+    let result = getBookmarksPath()
+    check result.isOk
+    check result.get().string.len > 0
+    check result.get().string.endsWith("bookmarks.json")
+
+suite "persist - saveBookmarks and loadBookmarks":
+  setup:
+    cleanupTestDir()
+    createDir(TestPersistDir)
+
+  teardown:
+    cleanupTestDir()
+
+  test "Save and load bookmarks roundtrip":
+    let bmPath = TestPersistDir / "bookmarks.json"
+
+    var bookmarks = initTable[string, seq[int]]()
+    bookmarks["/home/user/file1.nim"] = @[5, 10, 25]
+    bookmarks["/home/user/file2.nim"] = @[0, 100]
+
+    var jsonObj = newJObject()
+    for path, lines in bookmarks.pairs:
+      jsonObj[path] = %lines
+
+    writeFile(bmPath, $jsonObj)
+
+    let content = readFile(bmPath)
+    let jsonNode = parseJson(content)
+
+    var loaded = initTable[string, seq[int]]()
+    for path, lines in jsonNode.pairs:
+      var bm: seq[int] = @[]
+      for lineNode in lines:
+        bm.add(lineNode.getInt())
+      loaded[path] = bm
+
+    check loaded.len == 2
+    check loaded["/home/user/file1.nim"] == @[5, 10, 25]
+    check loaded["/home/user/file2.nim"] == @[0, 100]
+
+  test "Load bookmarks from non-existent file returns empty":
+    let loaded = loadBookmarks()
+    check loaded.len >= 0
+
+  test "Save empty bookmarks":
+    let bmPath = TestPersistDir / "bookmarks_empty.json"
+
+    let bookmarks = initTable[string, seq[int]]()
+
+    var jsonObj = newJObject()
+    for path, lines in bookmarks.pairs:
+      jsonObj[path] = %lines
+
+    writeFile(bmPath, $jsonObj)
+
+    let content = readFile(bmPath)
+    let jsonNode = parseJson(content)
+
+    check jsonNode.kind == JObject
+    check jsonNode.len == 0
+
+  test "Bookmarks JSON format is correct":
+    let bmPath = TestPersistDir / "bookmarks_format.json"
+
+    var bookmarks = initTable[string, seq[int]]()
+    bookmarks["/path/to/file.nim"] = @[1, 5, 10]
+
+    var jsonObj = newJObject()
+    for path, lines in bookmarks.pairs:
+      jsonObj[path] = %lines
+
+    writeFile(bmPath, $jsonObj)
+
+    let content = readFile(bmPath)
+    let jsonNode = parseJson(content)
+
+    check jsonNode.kind == JObject
+    check jsonNode.hasKey("/path/to/file.nim")
+    check jsonNode["/path/to/file.nim"].kind == JArray
+    check jsonNode["/path/to/file.nim"].len == 3
+    check jsonNode["/path/to/file.nim"][0].getInt() == 1
+    check jsonNode["/path/to/file.nim"][1].getInt() == 5
+    check jsonNode["/path/to/file.nim"][2].getInt() == 10
+
+suite "persist - saveBookmarks and loadBookmarks (actual functions)":
+  test "saveBookmarks and loadBookmarks roundtrip":
+    var bookmarks = initTable[string, seq[int]]()
+    bookmarks["/home/user/file1.nim"] = @[5, 10, 25]
+    bookmarks["/home/user/file2.nim"] = @[0, 100]
+
+    let r = saveBookmarks(bookmarks)
+    check r.isOk
+
+    let loaded = loadBookmarks()
+    check loaded.len == 2
+    check loaded["/home/user/file1.nim"] == @[5, 10, 25]
+    check loaded["/home/user/file2.nim"] == @[0, 100]
+
+  test "saveBookmarks overwrites previous data":
+    var bookmarks1 = initTable[string, seq[int]]()
+    bookmarks1["/file.nim"] = @[1, 2, 3]
+    check saveBookmarks(bookmarks1).isOk
+
+    var bookmarks2 = initTable[string, seq[int]]()
+    bookmarks2["/other.nim"] = @[10]
+    check saveBookmarks(bookmarks2).isOk
+
+    let loaded = loadBookmarks()
+    check loaded.len == 1
+    check loaded.hasKey("/other.nim")
+    check not loaded.hasKey("/file.nim")
+
+  test "saveBookmarks skips entries with empty bookmark list":
+    var bookmarks = initTable[string, seq[int]]()
+    bookmarks["/file1.nim"] = @[1]
+    bookmarks["/file2.nim"] = @[]
+    check saveBookmarks(bookmarks).isOk
+
+    let loaded = loadBookmarks()
+    check loaded.len == 1
+    check loaded.hasKey("/file1.nim")
+    check not loaded.hasKey("/file2.nim")
+
+  test "loadBookmarks ignores negative line numbers":
+    let bmPath = getBookmarksPath()
+    check bmPath.isOk
+    let jsonStr = """{"file.nim": [5, -1, 10, -100, 0]}"""
+    writeFile(bmPath.get.string, jsonStr)
+
+    let loaded = loadBookmarks()
+    check loaded.len == 1
+    check loaded["file.nim"] == @[5, 10, 0]
+
+  test "loadBookmarks handles corrupt JSON gracefully":
+    let bmPath = getBookmarksPath()
+    check bmPath.isOk
+    writeFile(bmPath.get.string, "not valid json {{{")
+
+    let loaded = loadBookmarks()
+    check loaded.len == 0
+
+  test "loadBookmarks handles wrong JSON types gracefully":
+    let bmPath = getBookmarksPath()
+    check bmPath.isOk
+    let jsonStr = """{"file.nim": "not an array", "file2.nim": [1, "str", 3]}"""
+    writeFile(bmPath.get.string, jsonStr)
+
+    let loaded = loadBookmarks()
+    # "file.nim" skipped (not an array)
+    # "file2.nim" has [1, 3] (non-int "str" skipped)
+    check loaded.len == 1
+    check loaded["file2.nim"] == @[1, 3]
+
+  test "loadBookmarks handles empty JSON object":
+    let bmPath = getBookmarksPath()
+    check bmPath.isOk
+    writeFile(bmPath.get.string, "{}")
+
+    let loaded = loadBookmarks()
+    check loaded.len == 0
+
+  test "loadBookmarks handles JSON array at top level":
+    let bmPath = getBookmarksPath()
+    check bmPath.isOk
+    writeFile(bmPath.get.string, "[1, 2, 3]")
+
+    let loaded = loadBookmarks()
+    check loaded.len == 0
+
 suite "persist - default limits":
   test "DefaultCommandHistoryLimit is reasonable":
     check DefaultCommandHistoryLimit == 1000

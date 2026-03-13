@@ -2054,3 +2054,147 @@ suite "NormalModeHandler - Change List Navigation":
     check result.kind == nmrHandled
     check state.cursor.line == 0
     check state.cursor.column == 5
+
+suite "NormalModeHandler - Bookmark Navigation":
+  proc pressMM(
+      handler: NormalModeHandler,
+      buf: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ): NormalModeResult =
+    ## Simulate m m key sequence (bookmark toggle)
+    let mKey = KeyCombo(isSpecial: false, char: "m")
+    discard handler.handleNormalModeKey(buf, state, viewport, mKey)
+    handler.handleNormalModeKey(buf, state, viewport, mKey)
+
+  proc pressMN(
+      handler: NormalModeHandler,
+      buf: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ): NormalModeResult =
+    ## Simulate m n key sequence (bookmark next)
+    let mKey = KeyCombo(isSpecial: false, char: "m")
+    discard handler.handleNormalModeKey(buf, state, viewport, mKey)
+    let nKey = KeyCombo(isSpecial: false, char: "n")
+    handler.handleNormalModeKey(buf, state, viewport, nKey)
+
+  proc pressMP(
+      handler: NormalModeHandler,
+      buf: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ): NormalModeResult =
+    ## Simulate m p key sequence (bookmark prev)
+    let mKey = KeyCombo(isSpecial: false, char: "m")
+    discard handler.handleNormalModeKey(buf, state, viewport, mKey)
+    let pKey = KeyCombo(isSpecial: false, char: "p")
+    handler.handleNormalModeKey(buf, state, viewport, pKey)
+
+  proc pressMC(
+      handler: NormalModeHandler,
+      buf: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ): NormalModeResult =
+    ## Simulate m c key sequence (bookmark clear)
+    let mKey = KeyCombo(isSpecial: false, char: "m")
+    discard handler.handleNormalModeKey(buf, state, viewport, mKey)
+    let cKey = KeyCombo(isSpecial: false, char: "c")
+    handler.handleNormalModeKey(buf, state, viewport, cKey)
+
+  test "mm toggles bookmark on current line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor.line = 1
+
+    let result = pressMM(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check buf.hasBookmark(1) == true
+
+  test "mm toggles off existing bookmark":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.cursor.line = 1
+
+    buf.toggleBookmark(1)
+    check buf.hasBookmark(1) == true
+
+    let result = pressMM(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check buf.hasBookmark(1) == false
+
+  test "mn with no bookmarks returns error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    let result = pressMN(handler, buf, state, viewport)
+    check result.kind == nmrError
+    check result.errorMessage == "No bookmarks"
+
+  test "mn jumps to next bookmark":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\ne")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.currentBufferIndex = 0
+
+    buf.toggleBookmark(2)
+    buf.toggleBookmark(4)
+
+    let result = pressMN(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check state.cursor.line == 2
+
+  test "mp with no bookmarks returns error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    let result = pressMP(handler, buf, state, viewport)
+    check result.kind == nmrError
+    check result.errorMessage == "No bookmarks"
+
+  test "mp jumps to previous bookmark":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd\ne")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.currentBufferIndex = 0
+    state.cursor.line = 4
+
+    buf.toggleBookmark(1)
+    buf.toggleBookmark(3)
+
+    let result = pressMP(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check state.cursor.line == 3
+
+  test "mc clears all bookmarks":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\nb\nc\nd")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    buf.toggleBookmark(0)
+    buf.toggleBookmark(2)
+    buf.toggleBookmark(3)
+    check buf.bookmarks.len == 3
+
+    let result = pressMC(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check buf.bookmarks.len == 0
