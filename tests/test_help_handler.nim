@@ -380,6 +380,88 @@ suite "help_handler: handleHelpViewerModeKey - Scroll adjustment":
     check helpState.topLine <= helpState.selectedIndex
     check helpState.topLine + TestViewportHeight > helpState.selectedIndex
 
+suite "help_handler: handleHelpViewerModeKey - Double-Escape clears search highlight":
+  test "First Escape returns handled and marks lastKeyWasEscape":
+    let
+      handler = newHelpViewerHandler()
+      helpState = newHelpViewerState()
+
+    let result = handler.handleHelpViewerModeKey(
+      helpState, TestViewportHeight, specialKey(skEscape)
+    )
+
+    check result.kind == hvrHandled
+    check handler.lastKeyWasEscape == true
+
+  test "Second Escape returns clearSearchHighlight":
+    let
+      handler = newHelpViewerHandler()
+      helpState = newHelpViewerState()
+    helpState.setSearchQuery("Visual")
+
+    # First Escape
+    discard handler.handleHelpViewerModeKey(
+      helpState, TestViewportHeight, specialKey(skEscape)
+    )
+
+    # Second Escape
+    let result = handler.handleHelpViewerModeKey(
+      helpState, TestViewportHeight, specialKey(skEscape)
+    )
+
+    check result.kind == hvrClearSearchHighlight
+    check handler.lastKeyWasEscape == false
+    check helpState.searchQuery == ""
+
+  test "Escape followed by non-Escape resets lastKeyWasEscape":
+    let
+      handler = newHelpViewerHandler()
+      helpState = newHelpViewerState()
+
+    # First Escape
+    discard handler.handleHelpViewerModeKey(
+      helpState, TestViewportHeight, specialKey(skEscape)
+    )
+    check handler.lastKeyWasEscape == true
+
+    # Non-Escape key
+    discard handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("j"))
+    check handler.lastKeyWasEscape == false
+
+  test "Double-Escape clears search query":
+    let
+      handler = newHelpViewerHandler()
+      helpState = newHelpViewerState()
+    helpState.setSearchQuery("Insert")
+    check helpState.hasSearchQuery == true
+
+    # Double Escape
+    discard handler.handleHelpViewerModeKey(
+      helpState, TestViewportHeight, specialKey(skEscape)
+    )
+    let result = handler.handleHelpViewerModeKey(
+      helpState, TestViewportHeight, specialKey(skEscape)
+    )
+
+    check result.kind == hvrClearSearchHighlight
+    check helpState.hasSearchQuery == false
+
+  test "Double-Escape without active search still returns clearSearchHighlight":
+    let
+      handler = newHelpViewerHandler()
+      helpState = newHelpViewerState()
+    check helpState.hasSearchQuery == false
+
+    # Double Escape
+    discard handler.handleHelpViewerModeKey(
+      helpState, TestViewportHeight, specialKey(skEscape)
+    )
+    let result = handler.handleHelpViewerModeKey(
+      helpState, TestViewportHeight, specialKey(skEscape)
+    )
+
+    check result.kind == hvrClearSearchHighlight
+
 suite "help_handler: handleHelpViewerModeKey - Unhandled keys":
   test "Unbound key returns unhandled":
     let

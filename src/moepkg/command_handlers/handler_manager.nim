@@ -1434,6 +1434,13 @@ proc handleHelpViewerMode*(
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
     )
+  of hvrClearSearchHighlight:
+    # Double-Escape: clear search highlight in help viewer
+    state.search.hlsearchTempDisabled = true
+    state.needsFullRedraw = true
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
   of hvrQuit:
     return HandlerResult(kind: hrHelpViewerQuit)
   of hvrUnhandled:

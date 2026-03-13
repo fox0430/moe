@@ -30,6 +30,7 @@ type
     hvrEnterCommand # Enter command mode
     hvrEnterSearch # Enter search mode (forward)
     hvrEnterSearchBackward # Enter search mode (backward)
+    hvrClearSearchHighlight # Clear search highlight (double-Escape)
     hvrQuit # Close help viewer and return to previous mode
     hvrUnhandled # Command was not handled
     hvrError # Error occurred
@@ -43,10 +44,11 @@ type
 
   HelpViewerHandler* = ref object ## Handler for Help Viewer mode specific commands
     waitingForG*: bool # Waiting for second 'g' for 'gg' command
+    lastKeyWasEscape*: bool # Waiting for second Escape for highlight clear
 
 proc newHelpViewerHandler*(): HelpViewerHandler =
   ## Create a new Help Viewer mode handler
-  HelpViewerHandler(waitingForG: false)
+  HelpViewerHandler(waitingForG: false, lastKeyWasEscape: false)
 
 proc handleHelpViewerModeKey*(
     handler: HelpViewerHandler,
@@ -67,6 +69,21 @@ proc handleHelpViewerModeKey*(
     else:
       # If not 'g', cancel and discard this input to avoid double processing
       return HelpViewerResult(kind: hvrUnhandled)
+
+  # Handle Escape key for double-Escape search highlight clear
+  if keyCombo.isSpecial and keyCombo.special == skEscape:
+    if handler.lastKeyWasEscape:
+      # Second Escape press - clear search highlight
+      handler.lastKeyWasEscape = false
+      helpState.clearSearch()
+      return HelpViewerResult(kind: hvrClearSearchHighlight)
+    else:
+      # First Escape press - just mark it
+      handler.lastKeyWasEscape = true
+      return HelpViewerResult(kind: hvrHandled)
+
+  # Any non-Escape key resets the Escape counter
+  handler.lastKeyWasEscape = false
 
   # Check for special keys first
   if keyCombo.isSpecial:
