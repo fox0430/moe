@@ -39,6 +39,7 @@ import ../src/moepkg/editor {.all.}
 import ../src/moepkg/config {.all.}
 import ../src/moepkg/filer {.all.}
 import ../src/moepkg/handler {.all.}
+import ../src/moepkg/key_bindings {.all.}
 import ../src/moepkg/config_loader {.all.}
 import ../src/moepkg/render_utils
 import ../src/moepkg/clipboard {.all.}
@@ -2155,3 +2156,158 @@ suite "middleClickPaste":
       check e.state.mode == EditorMode.Insert
       let line = e.textBuffer.getLine(0)
       check ($line).len > 5 # Text was inserted
+
+suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
+  let quitEvent = Event(kind: EventKind.Quit)
+
+  proc createTestEditorForInsertNormal(content: string): Editor =
+    let config = newEditorConfig()
+    config.standard.mouse = true
+    result = newEditor(config)
+    result.textBuffer = newTextBuffer(content)
+    result.windowManager.windows[0].buffer = result.textBuffer
+    result.windowManager.windows[0].bufferList = @[result.textBuffer]
+    result.viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.windowManager.windows[0].viewport = result.viewport
+    result.executer.motionController.viewportManager.viewport = result.viewport
+    result.state.mode = EditorMode.Normal
+
+  test "Ctrl-C in Normal mode with insertNormalMode clears flag and commits":
+    let e = createTestEditorForInsertNormal("hello")
+    e.state.mode = EditorMode.Normal
+    e.state.insertNormalMode = true
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 3)
+    e.state.cursor = BufferPosition(line: 0, column: 3)
+    discard e.textBuffer.beginTransaction("Insert mode edit")
+    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+
+    discard e.handleEvent(quitEvent)
+
+    check not e.state.insertNormalMode
+    check e.state.mode == EditorMode.Normal
+    check not e.textBuffer.inTransaction
+    check e.state.editState.insertModeStartPos.isNone
+
+  test "Ctrl-C in Normal mode with insertNormalMode at column 0 stays at 0":
+    let e = createTestEditorForInsertNormal("hello")
+    e.state.mode = EditorMode.Normal
+    e.state.insertNormalMode = true
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+    discard e.textBuffer.beginTransaction("Insert mode edit")
+    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+
+    discard e.handleEvent(quitEvent)
+
+    check not e.state.insertNormalMode
+    check e.windowManager.windows[0].cursor.column == 0
+
+  test "Ctrl-C in Normal mode without insertNormalMode shows exit message":
+    let e = createTestEditorForInsertNormal("hello")
+    e.state.mode = EditorMode.Normal
+    e.state.insertNormalMode = false
+
+    discard e.handleEvent(quitEvent)
+
+    check e.state.mode == EditorMode.Normal
+    check "qa" in e.state.statusMessage
+
+  test "Ctrl-C in search overlay with insertNormalMode returns to Insert":
+    let e = createTestEditorForInsertNormal("hello world")
+    e.state.mode = EditorMode.Normal
+    e.state.insertNormalMode = true
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.text = "world"
+
+    discard e.handleEvent(quitEvent)
+
+    check e.state.mode == EditorMode.Insert
+    check not e.state.insertNormalMode
+    check not e.state.isSearchOverlay
+
+  test "Ctrl-C in command overlay with insertNormalMode returns to Insert":
+    let e = createTestEditorForInsertNormal("hello")
+    e.state.mode = EditorMode.Normal
+    e.state.insertNormalMode = true
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":w"
+
+    discard e.handleEvent(quitEvent)
+
+    check e.state.mode == EditorMode.Insert
+    check not e.state.insertNormalMode
+    check not e.state.isCommandOverlay
+
+suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
+  let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+  let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+
+  proc createEditorForCmdOverlay(content: string): Editor =
+    let config = newEditorConfig()
+    config.standard.mouse = true
+    result = newEditor(config)
+    result.textBuffer = newTextBuffer(content)
+    result.windowManager.windows[0].buffer = result.textBuffer
+    result.windowManager.windows[0].bufferList = @[result.textBuffer]
+    result.viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.windowManager.windows[0].viewport = result.viewport
+    result.executer.motionController.viewportManager.viewport = result.viewport
+    result.state.mode = EditorMode.Normal
+
+  proc setupInsertNormalCommandOverlay(e: Editor) =
+    ## Set up: Insert → Ctrl-O → Normal → ':' (command overlay)
+    e.state.mode = EditorMode.Normal
+    e.state.insertNormalMode = true
+    discard e.textBuffer.beginTransaction("Insert mode edit")
+    e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+    e.state.enterCommandOverlay()
+    e.state.commandText = ""
+    e.state.commandCursor = 0
+
+  test "Escape in command overlay returns to Insert when insertNormalMode":
+    let e = createEditorForCmdOverlay("hello")
+    e.setupInsertNormalCommandOverlay()
+    e.state.commandText = ":partial"
+
+    discard e.handleCommandModeKeyCombo(escKey)
+
+    check e.state.mode == EditorMode.Insert
+    check not e.state.insertNormalMode
+    check not e.state.isCommandOverlay
+
+  test "Escape in command overlay stays Normal when insertNormalMode is false":
+    let e = createEditorForCmdOverlay("hello")
+    e.state.mode = EditorMode.Normal
+    e.state.insertNormalMode = false
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":partial"
+
+    discard e.handleCommandModeKeyCombo(escKey)
+
+    check e.state.mode == EditorMode.Normal
+    check not e.state.isCommandOverlay
+
+  test "Empty Enter in command overlay returns to Insert when insertNormalMode":
+    let e = createEditorForCmdOverlay("hello")
+    e.setupInsertNormalCommandOverlay()
+    e.state.commandText = ""
+
+    discard e.handleCommandModeKeyCombo(enterKey)
+
+    check e.state.mode == EditorMode.Insert
+    check not e.state.insertNormalMode
+    check not e.state.isCommandOverlay
+
+  test "Enter with Normal-staying command returns to Insert when insertNormalMode":
+    let e = createEditorForCmdOverlay("hello")
+    e.setupInsertNormalCommandOverlay()
+    # :noh is a simple command that stays in Normal mode
+    e.state.commandText = ":noh"
+
+    discard e.handleCommandModeKeyCombo(enterKey)
+
+    check e.state.mode == EditorMode.Insert
+    check not e.state.insertNormalMode
+    check not e.state.isCommandOverlay

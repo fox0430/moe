@@ -264,15 +264,15 @@ proc loadStringArray(
       vr.addError(fullKey(section, key), $val, "array of strings")
     else:
       var valid = true
-      var result: seq[string] = @[]
+      var r: seq[string] = @[]
       for i, item in val.getElems:
         if item.kind != TomlValueKind.String:
           vr.addError(fullKey(section, key) & "[" & $i & "]", $item, "string")
           valid = false
         else:
-          result.add(item.getStr())
+          r.add(item.getStr())
       if valid:
-        target = result
+        target = r
 
 proc loadFilePath(
     table: TomlTableRef,

@@ -370,16 +370,18 @@ proc handleInsertModeEntry*(
     let lineContent = buffer.getLine(state.cursor.line)
     state.cursor.column = lineContent.charLen
   of "open-below":
-    let txResult =
-      buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
-    if txResult.isErr:
-      return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
+    if not buffer.inTransaction:
+      let txResult =
+        buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
+      if txResult.isErr:
+        return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
     insertLineBelow(buffer, state)
   of "open-above":
-    let txResult =
-      buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
-    if txResult.isErr:
-      return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
+    if not buffer.inTransaction:
+      let txResult =
+        buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
+      if txResult.isErr:
+        return NormalModeResult(kind: nmrError, errorMessage: txResult.error)
     insertLineAbove(buffer, state)
   else:
     return NormalModeResult(

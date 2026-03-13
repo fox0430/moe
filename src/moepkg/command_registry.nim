@@ -2688,10 +2688,11 @@ proc handleTextObjectInner(ctx: CommandContext): Result[(), string] =
   else:
     # No pending operator - enter Insert mode
     ctx.state.mode = EditorMode.Insert
-    # Begin transaction for insert mode edit
-    let transactionResult = ctx.buffer.beginTransaction("Insert mode edit")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
+    # Begin transaction for insert mode edit (guard for insert-normal mode)
+    if not ctx.buffer.inTransaction:
+      let transactionResult = ctx.buffer.beginTransaction("Insert mode edit")
+      if transactionResult.isErr:
+        return err("Failed to begin transaction: " & transactionResult.error)
     ctx.state.statusMessage = "-- INSERT --"
     return ok(())
 
@@ -2722,10 +2723,11 @@ proc handleTextObjectAround(ctx: CommandContext): Result[(), string] =
         ctx.cursor.column += 1
     # Enter Insert mode
     ctx.state.mode = EditorMode.Insert
-    # Begin transaction for insert mode edit
-    let transactionResult = ctx.buffer.beginTransaction("Append mode edit")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
+    # Begin transaction for insert mode edit (guard for insert-normal mode)
+    if not ctx.buffer.inTransaction:
+      let transactionResult = ctx.buffer.beginTransaction("Append mode edit")
+      if transactionResult.isErr:
+        return err("Failed to begin transaction: " & transactionResult.error)
     ctx.state.statusMessage = "-- INSERT --"
     return ok(())
 

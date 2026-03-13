@@ -473,6 +473,11 @@ proc isCtrlR(keyCombo: KeyCombo): bool =
   not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
     keyCombo.char.toLowerAscii == "r"
 
+proc isCtrlO(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+O (one-shot normal mode)
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+    keyCombo.char.toLowerAscii == "o"
+
 proc isCtrlI(keyCombo: KeyCombo): bool =
   ## Check if key is Ctrl+I (insert tab)
   not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
@@ -649,6 +654,13 @@ proc handleInsertModeKey*(
       if reqResult.isOk:
         state.lspCache.pendingSignatureHelpRequestId = reqResult.get
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  # Ctrl+O - execute one Normal mode command then return to Insert mode
+  if keyCombo.isCtrlO:
+    handler.completionManager.cancelCompletion()
+    handler.signatureHelpManager.hide()
+    state.insertNormalMode = true
+    return InsertModeResult(kind: imrHandled, modeTransition: some(EditorMode.Normal))
 
   # Ctrl+I - insert tab
   if keyCombo.isCtrlI:
