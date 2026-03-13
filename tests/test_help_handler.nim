@@ -425,9 +425,7 @@ suite "help_handler: handleHelpViewerModeKey - Double-Escape clears search highl
     check handler.lastKeyWasEscape == true
 
     # Non-Escape key
-    discard handler.handleHelpViewerModeKey(
-      helpState, TestViewportHeight, charKey("j")
-    )
+    discard handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("j"))
     check handler.lastKeyWasEscape == false
 
   test "Double-Escape clears search query":
