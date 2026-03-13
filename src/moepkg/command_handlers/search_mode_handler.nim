@@ -26,7 +26,7 @@ import std/[options, unicode]
 
 import pkg/celina
 
-import ../[editor, key_bindings, modes, buffer, search_utils, types]
+import ../[editor, key_bindings, modes, buffer, search_utils, types, help_viewer]
 import command_mode_handler
 
 ## NOTE: While in Search Mode:
@@ -34,6 +34,14 @@ import command_mode_handler
 ## - Backspace: Remove from searchText, trigger performIncrementalSearch (if enabled)
 ## - Enter: Save search, execute if needed, return to Normal mode
 ## - Escape: Cancel search, restore cursor if incsearch, return to previous mode
+
+proc syncHelpViewerIndex(e: Editor, line: int) =
+  ## Sync help viewer selectedIndex with the given line position.
+  ## No-op if not in Help mode or helpViewerState is not set.
+  if e.state.mode == EditorMode.Help:
+    let window = e.activeWindow
+    if window.helpViewerState.isSome:
+      window.helpViewerState.get.selectedIndex = line
 
 proc executeSearchFromCurrentPosition(e: Editor): bool =
   ## Execute search from current position (used when incsearch is disabled)
@@ -113,13 +121,12 @@ proc finalizeSearch(e: Editor) =
       # If incsearch is disabled, perform search now
       discard e.executeSearchFromCurrentPosition()
 
-    # Sync search query to help viewer state if in Help mode
+    # Sync search query and position to help viewer state if in Help mode
     if e.state.mode == EditorMode.Help:
       let window = e.activeWindow
       if window.helpViewerState.isSome:
-        let helpState = window.helpViewerState.get
-        helpState.setSearchQuery(e.state.search.text)
-        discard helpState.searchFirst()
+        window.helpViewerState.get.setSearchQuery(e.state.search.text)
+    e.syncHelpViewerIndex(e.cursor.line)
 
   # Exit overlay and return to base mode
   # The base mode (Normal, LogViewer, Filer, etc.) is preserved
@@ -143,6 +150,7 @@ proc cancelSearch(e: Editor) =
   ## - Does NOT save to lastSearchText (search was cancelled)
   if e.state.search.incsearch:
     e.cursor = e.state.search.startPos
+    e.syncHelpViewerIndex(e.state.search.startPos.line)
   # Exit overlay and restore base mode
   e.state.exitOverlay()
   e.setMode(e.state.mode) # Sync window mode
@@ -191,6 +199,7 @@ proc performIncrementalSearch(e: Editor) =
   if searchResult.isSome:
     let pos = searchResult.get
     e.cursor = pos
+    e.syncHelpViewerIndex(pos.line)
 
     # Update viewport to follow cursor
     e.updateViewportForCursor(pos)
@@ -200,6 +209,8 @@ proc performIncrementalSearch(e: Editor) =
   else:
     # No match found, restore to start position
     e.cursor = e.state.search.startPos
+    e.syncHelpViewerIndex(e.state.search.startPos.line)
+
     e.state.statusMessage = "Pattern not found: " & e.state.search.text
 
 proc handleSearchCharacterInput(e: Editor, ch: string) =
@@ -299,6 +310,7 @@ proc handleSearchModeEvent*(e: Editor, event: Event): bool =
         # Restore cursor to start position if incsearch is enabled
         if e.state.search.incsearch:
           e.cursor = e.state.search.startPos
+          e.syncHelpViewerIndex(e.state.search.startPos.line)
     return true
 
   # Backspace: Remove last character and re-search
