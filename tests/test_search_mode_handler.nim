@@ -19,13 +19,14 @@
 
 ## Tests for command_handlers/search_mode_handler.nim
 
-import std/unittest
+import std/[unittest, options]
 
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/types {.all.}
 import ../src/moepkg/modes {.all.}
 import ../src/moepkg/editor {.all.}
 import ../src/moepkg/config {.all.}
+import ../src/moepkg/help_viewer {.all.}
 import ../src/moepkg/command_handlers/search_mode_handler {.all.}
 
 proc createTestEditorWithBuffer(content: string): Editor =
@@ -40,6 +41,18 @@ proc createTestEditorWithBuffer(content: string): Editor =
   result.windowManager.windows[0].viewport = result.viewport
   result.executer.motionController.viewportManager.viewport = result.viewport
   result.state.mode = EditorMode.Normal
+
+proc createTestEditorInHelpMode(): Editor =
+  ## Create an editor in Help mode with helpViewerState set up.
+  ## Uses help viewer content as the buffer.
+  let helpState = newHelpViewerState()
+  let helpBuffer = helpState.createHelpTextBuffer()
+  result = createTestEditorWithBuffer("")
+  result.textBuffer = helpBuffer
+  result.windowManager.windows[0].buffer = helpBuffer
+  result.windowManager.windows[0].bufferList = @[helpBuffer]
+  result.windowManager.windows[0].helpViewerState = some(helpState)
+  result.state.mode = EditorMode.Help
 
 suite "handleSearchBackspace":
   test "Remove last ASCII character":
@@ -182,3 +195,119 @@ suite "Search mode - Insert-Normal mode (Ctrl-O)":
     check e.state.mode == EditorMode.Insert
     check not e.state.insertNormalMode
     check not e.state.isSearchOverlay
+
+suite "Search mode - Help mode incremental search sync":
+  test "performIncrementalSearch syncs selectedIndex on match":
+    let e = createTestEditorInHelpMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    e.state.search.startPos = BufferPosition(line: 0, column: 0)
+    e.state.search.text = "Visual"
+
+    performIncrementalSearch(e)
+
+    let helpState = e.activeWindow.helpViewerState.get
+    # selectedIndex should be updated to the matched line
+    check helpState.selectedIndex == e.cursor.line
+    check helpState.selectedIndex > 0
+
+  test "performIncrementalSearch syncs selectedIndex to startPos on no match":
+    let e = createTestEditorInHelpMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    e.state.search.startPos = BufferPosition(line: 5, column: 0)
+    e.state.search.text = "zzzzNonExistentPattern"
+
+    performIncrementalSearch(e)
+
+    let helpState = e.activeWindow.helpViewerState.get
+    # selectedIndex should be restored to startPos line
+    check helpState.selectedIndex == 5
+
+  test "handleSearchCharacterInput syncs selectedIndex during typing":
+    let e = createTestEditorInHelpMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    e.state.search.startPos = BufferPosition(line: 0, column: 0)
+
+    # Type "Replace" character by character
+    for ch in "Replace":
+      handleSearchCharacterInput(e, $ch)
+
+    let helpState = e.activeWindow.helpViewerState.get
+    # selectedIndex should match cursor
+    check helpState.selectedIndex == e.cursor.line
+    check helpState.selectedIndex > 0
+
+  test "finalizeSearch syncs selectedIndex from cursor position":
+    let e = createTestEditorInHelpMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    e.state.search.startPos = BufferPosition(line: 0, column: 0)
+    e.state.search.text = "Visual"
+
+    # Perform incremental search first to move cursor
+    performIncrementalSearch(e)
+    let cursorLineAfterSearch = e.cursor.line
+
+    finalizeSearch(e)
+
+    let helpState = e.activeWindow.helpViewerState.get
+    # selectedIndex should match cursor position, not reset to first match
+    check helpState.selectedIndex == cursorLineAfterSearch
+    check helpState.searchQuery == "Visual"
+
+  test "finalizeSearch without incsearch syncs selectedIndex":
+    let e = createTestEditorInHelpMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = false
+    e.state.search.startPos = BufferPosition(line: 0, column: 0)
+    e.state.search.text = "Insert"
+
+    finalizeSearch(e)
+
+    let helpState = e.activeWindow.helpViewerState.get
+    check helpState.selectedIndex == e.cursor.line
+    check helpState.searchQuery == "Insert"
+
+  test "handleSearchBackspace syncs selectedIndex":
+    let e = createTestEditorInHelpMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    e.state.search.startPos = BufferPosition(line: 0, column: 0)
+    e.state.search.text = "Visual"
+
+    # First search to set position
+    performIncrementalSearch(e)
+    let firstMatchLine = e.cursor.line
+
+    # Add more characters to narrow search
+    handleSearchCharacterInput(e, " ")
+    handleSearchCharacterInput(e, "m")
+
+    let narrowedLine = e.cursor.line
+
+    # Backspace to widen search again
+    handleSearchBackspace(e)
+    handleSearchBackspace(e)
+
+    let helpState = e.activeWindow.helpViewerState.get
+    # Should be back to same position as first match
+    check helpState.selectedIndex == firstMatchLine
+
+  test "cancelSearch restores selectedIndex to startPos":
+    let e = createTestEditorInHelpMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    e.state.search.startPos = BufferPosition(line: 10, column: 0)
+    e.cursor = BufferPosition(line: 10, column: 0)
+    e.state.search.text = "Visual"
+
+    # Move selectedIndex away from startPos via incremental search
+    performIncrementalSearch(e)
+    let helpState = e.activeWindow.helpViewerState.get
+    check helpState.selectedIndex != 10
+
+    # Cancel should restore selectedIndex to startPos
+    cancelSearch(e)
+    check helpState.selectedIndex == 10
