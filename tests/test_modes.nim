@@ -89,6 +89,15 @@ suite "Modes - modeLabel":
   test "CallHierarchy mode":
     check modeLabel(EditorMode.CallHierarchy) == "CALL HIERARCHY"
 
+  test "Normal mode with insertNormal":
+    check modeLabel(EditorMode.Normal, true) == "(insert) NORMAL"
+
+  test "Normal mode with insertNormal=false":
+    check modeLabel(EditorMode.Normal, false) == "NORMAL"
+
+  test "Insert mode ignores insertNormal":
+    check modeLabel(EditorMode.Insert, true) == "INSERT"
+
 suite "Modes - isFileEditMode":
   test "Normal is file edit mode":
     check isFileEditMode(EditorMode.Normal) == true

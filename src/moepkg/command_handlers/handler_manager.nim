@@ -555,17 +555,20 @@ proc handleNormalMode*(
               errorMessage: "Failed to begin transaction: " & transactionResult.error,
             )
         # Record insert start position for text tracking
-        state.editState.insertModeStartPos = some(state.cursor)
+        # Don't reset if transaction is already active (e.g. returning from insert-normal)
+        if state.editState.insertModeStartPos.isNone:
+          state.editState.insertModeStartPos = some(state.cursor)
       elif targetMode == EditorMode.Replace:
         # Begin a transaction when entering Replace mode
-        let transactionResult =
-          buffer.beginTransaction("Replace mode edit", cursorPos = some(state.cursor))
-        if transactionResult.isErr:
-          # This should not happen in normal operation, but handle it gracefully
-          return HandlerResult(
-            kind: hrError,
-            errorMessage: "Failed to begin transaction: " & transactionResult.error,
-          )
+        # Guard: during insert-normal mode a transaction is already open
+        if not buffer.inTransaction:
+          let transactionResult =
+            buffer.beginTransaction("Replace mode edit", cursorPos = some(state.cursor))
+          if transactionResult.isErr:
+            return HandlerResult(
+              kind: hrError,
+              errorMessage: "Failed to begin transaction: " & transactionResult.error,
+            )
         # Clear replace history when entering Replace mode
         state.editState.replaceHistory = @[]
     return HandlerResult(
@@ -689,6 +692,13 @@ proc handleInsertMode*(
   of imrHandled:
     # Check if we're leaving Insert mode
     if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Insert:
+      # Ctrl-o (insert-normal mode): skip transaction commit/cleanup,
+      # keep insert state intact so we can resume after one Normal command
+      if state.insertNormalMode:
+        return HandlerResult(
+          kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
+        )
+
       clearAutoIndentIfUnedited(buffer, state)
 
       # Extract inserted text before committing transaction
@@ -1864,7 +1874,59 @@ proc handleKeyCombo*(
   # Delegate to appropriate mode handler
   case state.mode
   of EditorMode.Normal:
-    return manager.handleNormalMode(buffer, state, viewport, keyCombo)
+    let normalResult = manager.handleNormalMode(buffer, state, viewport, keyCombo)
+    # Insert-Normal mode (Ctrl-o): return to Insert after one complete Normal command
+    if state.insertNormalMode and normalResult.kind == hrHandled:
+      # Don't return to Insert while an overlay (command/search) is opening
+      let hasOverlay = normalResult.overlayTransition.isSome
+      # Check if the command is complete (no pending operator/text object/sequence)
+      let hasPending =
+        state.editState.pendingOperator.isSome or
+        state.editState.pendingTextObject.isSome or state.pendingCommand != PendingNone or
+        state.pendingRegister.isSome or state.macroState.waitingForRegister or
+        manager.keyBindingRegistry.hasActiveSequence()
+      if not hasPending and not hasOverlay:
+        # If the normal command triggered a mode transition to Insert (e.g. pressing 'i'),
+        # just clear insertNormalMode and let it proceed normally
+        if normalResult.modeTransition.isSome and
+            normalResult.modeTransition.get == EditorMode.Insert:
+          state.insertNormalMode = false
+          return normalResult
+        elif normalResult.modeTransition.isNone or
+            normalResult.modeTransition.get == EditorMode.Normal:
+          # Return to Insert mode after the normal command
+          state.insertNormalMode = false
+          return HandlerResult(
+            kind: hrHandled,
+            modeTransition: some(EditorMode.Insert),
+            statusMessage: normalResult.statusMessage,
+          )
+        else:
+          # Mode changed to something other than Normal/Insert (e.g., Visual, Replace)
+          # This consumes the insert-normal command
+          state.insertNormalMode = false
+          # Commit the Insert mode transaction and clean up
+          if buffer.inTransaction:
+            clearAutoIndentIfUnedited(buffer, state)
+            discard buffer.commitTransaction()
+          state.editState.insertModeStartPos = none(BufferPosition)
+          state.editState.substituteContext = none(types.SubstituteContext)
+          # If the new mode needs a transaction (Replace), start one
+          let newMode = normalResult.modeTransition.get
+          if newMode == EditorMode.Replace:
+            discard buffer.beginTransaction("Replace mode edit")
+          return normalResult
+    # Non-hrHandled results (hrQuit, hrJumpToBuffer, hrBufferNext, etc.)
+    # during insert-normal: clean up insert-normal state before proceeding
+    if state.insertNormalMode and
+        normalResult.kind notin {hrHandled, hrUnhandled, hrError}:
+      state.insertNormalMode = false
+      if buffer.inTransaction:
+        clearAutoIndentIfUnedited(buffer, state)
+        discard buffer.commitTransaction()
+      state.editState.insertModeStartPos = none(BufferPosition)
+      state.editState.substituteContext = none(types.SubstituteContext)
+    return normalResult
   of EditorMode.Insert:
     return manager.handleInsertMode(buffer, state, keyCombo)
   of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:

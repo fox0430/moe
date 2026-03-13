@@ -1891,3 +1891,37 @@ suite "InsertModeHandler - imap action commands":
     check buf.len == 2
     check buf.getLine(0) == "Hel"
     check buf.getLine(1) == "lo"
+
+suite "InsertModeHandler - Ctrl+O (Insert-Normal mode)":
+  test "Ctrl+O switches to Normal mode and sets insertNormalMode":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    let ctrlO = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
+    let result = handler.handleInsertModeKey(buf, state, ctrlO)
+
+    check result.kind == imrHandled
+    check result.modeTransition.isSome
+    check result.modeTransition.get == EditorMode.Normal
+    check state.insertNormalMode == true
+
+  test "Ctrl+O cancels completion":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    # Trigger completion first
+    handler.completionManager.triggerCompletion(buf, 0, 5, SourceLanguage.langNone)
+
+    let ctrlO = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
+    let result = handler.handleInsertModeKey(buf, state, ctrlO)
+
+    check result.kind == imrHandled
+    check result.modeTransition.get == EditorMode.Normal
+    check state.insertNormalMode == true
+    check not handler.completionManager.isActive()

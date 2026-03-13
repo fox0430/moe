@@ -63,29 +63,50 @@ proc isFileEditMode*(m: EditorMode): bool =
     EditorMode.VisualLine, EditorMode.Replace,
   }
 
-proc modeLabel*(m: EditorMode): string =
+proc modeLabel*(m: EditorMode, insertNormal: bool = false): string =
   case m
-  of EditorMode.Normal: "NORMAL"
-  of EditorMode.Insert: "INSERT"
-  of EditorMode.Visual: "VISUAL"
-  of EditorMode.VisualBlock: "VISUAL BLOCK"
-  of EditorMode.VisualLine: "VISUAL LINE"
-  of EditorMode.Replace: "REPLACE"
-  of EditorMode.Command: "COMMAND"
-  of EditorMode.Filer: "FILER"
-  of EditorMode.QuickRun: "QUICKRUN"
-  of EditorMode.LogViewer: "LOG"
-  of EditorMode.Help: "HELP"
-  of EditorMode.BufferManager: "BUFFERS"
-  of EditorMode.BackupManager: "BACKUPS"
-  of EditorMode.DiffViewer: "DIFF"
-  of EditorMode.RecentFile: "RECENT"
-  of EditorMode.Debug: "DEBUG"
-  of EditorMode.Config: "CONFIG"
-  of EditorMode.References: "REFERENCES"
-  of EditorMode.DocumentSymbol: "SYMBOLS"
-  of EditorMode.CallHierarchy: "CALL HIERARCHY"
-  of EditorMode.Terminal: "TERMINAL"
+  of EditorMode.Normal:
+    if insertNormal: "(insert) NORMAL" else: "NORMAL"
+  of EditorMode.Insert:
+    "INSERT"
+  of EditorMode.Visual:
+    "VISUAL"
+  of EditorMode.VisualBlock:
+    "VISUAL BLOCK"
+  of EditorMode.VisualLine:
+    "VISUAL LINE"
+  of EditorMode.Replace:
+    "REPLACE"
+  of EditorMode.Command:
+    "COMMAND"
+  of EditorMode.Filer:
+    "FILER"
+  of EditorMode.QuickRun:
+    "QUICKRUN"
+  of EditorMode.LogViewer:
+    "LOG"
+  of EditorMode.Help:
+    "HELP"
+  of EditorMode.BufferManager:
+    "BUFFERS"
+  of EditorMode.BackupManager:
+    "BACKUPS"
+  of EditorMode.DiffViewer:
+    "DIFF"
+  of EditorMode.RecentFile:
+    "RECENT"
+  of EditorMode.Debug:
+    "DEBUG"
+  of EditorMode.Config:
+    "CONFIG"
+  of EditorMode.References:
+    "REFERENCES"
+  of EditorMode.DocumentSymbol:
+    "SYMBOLS"
+  of EditorMode.CallHierarchy:
+    "CALL HIERARCHY"
+  of EditorMode.Terminal:
+    "TERMINAL"
 
 proc isVisualAllMode*(mode: EditorMode): bool =
   ## Check if the mode is any visual mode variant

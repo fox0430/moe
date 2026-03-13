@@ -229,6 +229,10 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     # Exit overlay and restore base mode
     e.state.exitOverlay()
     e.setMode(e.state.mode) # Sync window mode
+    # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
+    if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
+      e.state.insertNormalMode = false
+      e.setMode(EditorMode.Insert)
     return true
 
   # Handle Tab key for command completion
@@ -1224,6 +1228,24 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     # Clear command text and cursor (already done by exitOverlay, but ensure consistency)
     e.state.commandText = ""
     e.state.commandCursor = 0
+
+    # Insert-Normal mode (Ctrl-o): handle mode after the command completes
+    if e.state.insertNormalMode:
+      if e.state.mode == EditorMode.Normal:
+        # Normal commands (e.g., :w, :set): return to Insert mode
+        e.state.insertNormalMode = false
+        e.setMode(EditorMode.Insert)
+      elif e.state.mode != EditorMode.Insert:
+        # Mode changed to something other than Normal/Insert (e.g., Help, Filer)
+        # Clear insert-normal and commit the Insert mode transaction
+        e.state.insertNormalMode = false
+        let activeBuffer = e.activeBuffer()
+        if activeBuffer.inTransaction:
+          clearAutoIndentIfUnedited(activeBuffer, e.state)
+          discard activeBuffer.commitTransaction()
+        e.state.editState.insertModeStartPos = none(BufferPosition)
+        e.state.editState.substituteContext = none(types.SubstituteContext)
+
     return true
 
   # Handle Left arrow - move cursor left

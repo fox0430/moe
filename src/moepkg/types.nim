@@ -620,6 +620,8 @@ type
     # f/F/t/T command match highlight
     findCharMatches*: seq[int] # Matched column positions on cursor line
     findCharMatchLine*: int # Line number of the matches
+    # Insert-Normal mode (Ctrl-o): execute one Normal command then return to Insert
+    insertNormalMode*: bool
 
 proc `==`*(a, b: ViewPort): bool =
   ## Structural equality for ViewPort (ref object defaults to pointer comparison)

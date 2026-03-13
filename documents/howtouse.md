@@ -267,6 +267,7 @@
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd><br> | Delete the word before the cursor |
 | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd><br> | Delete characters before the cursor |
 | <kbd>**Ctrl**</kbd> <kbd>**r**</kbd><br> | Signature Help (LSP) |
+| <kbd>**Ctrl**</kbd> <kbd>**o**</kbd><br> | Execute one Normal mode command and return to Insert mode |
 
 </details>
 

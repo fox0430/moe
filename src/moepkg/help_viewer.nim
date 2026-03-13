@@ -240,6 +240,7 @@ Ctrl-d              - Remove an indent in current line
 Ctrl-w              - Delete the word before the cursor
 Ctrl-u              - Delete all characters before the cursor in the current line
 Ctrl-r              - Signature Help (LSP)
+Ctrl-o              - Execute one Normal mode command and return to Insert mode
 Esc                 - Go to Normal mode
 
 # Backup mode

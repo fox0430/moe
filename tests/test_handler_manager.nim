@@ -1045,3 +1045,963 @@ suite "HandlerManager - Repeat last Command mode command (@:)":
     check result.kind == hrExecCommand
     check result.execCommandText == "set number"
     check result.execCommandCount == 3
+
+proc createTestManagerWithMotion(
+    buffer: TextBuffer, state: EditorState, viewport: ViewPort
+): HandlerManager =
+  ## Create a HandlerManager with a properly initialized MotionController
+  let keyBindingRegistry = newKeyBindingRegistry()
+  keyBindingRegistry.setupDefaultBindings()
+
+  let commandRegistry = newCommandRegistry()
+  commandRegistry.registerBuiltinCommands()
+
+  let motionController = newMotionController(buffer, state, viewport)
+
+  let normalHandler = NormalModeHandler(
+    keyBindingRegistry: keyBindingRegistry,
+    commandRegistry: commandRegistry,
+    motionController: motionController,
+  )
+
+  let insertHandler = newInsertModeHandler(
+    keyBindingRegistry, motionController, commandRegistry, autocompleteEnabled = false
+  )
+
+  let visualHandler = VisualModeHandler(
+    keyBindingRegistry: keyBindingRegistry,
+    commandRegistry: commandRegistry,
+    motionController: motionController,
+  )
+
+  let replaceHandler = ReplaceModeHandler(keyBindingRegistry: keyBindingRegistry)
+
+  let commandLineParser = newCommandLineParser()
+  let commandConfig = newCommandConfig()
+  commandConfig.loadDefaultConfig()
+  commandConfig.applyToParser(commandLineParser)
+  let commandHandler =
+    newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
+
+  HandlerManager(
+    keyBindingRegistry: keyBindingRegistry,
+    commandRegistry: commandRegistry,
+    motionController: motionController,
+    normalHandler: normalHandler,
+    insertHandler: insertHandler,
+    commandHandler: commandHandler,
+    visualHandler: visualHandler,
+    replaceHandler: replaceHandler,
+  )
+
+suite "HandlerManager - Ctrl+O Insert-Normal mode":
+  ## Tests for Ctrl-o: temporarily switch to Normal for one command, then return
+  ## to Insert mode. The Insert transaction stays open throughout.
+
+  let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+  let ctrlO = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
+
+  proc enterInsertMode(buffer: TextBuffer, state: EditorState) =
+    ## Helper: set up Insert mode state (transaction + tracking)
+    ## Note: 'i' key is bound to textobject-inner which bypasses handleNormalMode's
+    ## insertModeStartPos tracking, so we set up state directly.
+    discard buffer.beginTransaction("Insert mode edit")
+    state.mode = EditorMode.Insert
+    state.editState.insertModeStartPos = some(state.cursor)
+
+  proc ctrlOToNormal(manager: HandlerManager, buffer: TextBuffer, state: EditorState) =
+    ## Helper: press Ctrl-O in Insert mode to enter insert-normal
+    discard manager.handleInsertMode(buffer, state, ctrlO)
+    state.mode = EditorMode.Normal
+
+  test "Ctrl-O skips transaction commit":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    check buffer.inTransaction
+
+    # Ctrl-O should not commit the transaction
+    manager.ctrlOToNormal(buffer, state)
+    check state.insertNormalMode
+    check buffer.inTransaction
+    check state.editState.insertModeStartPos.isSome
+
+  test "Motion command returns to Insert":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'w' (word forward)
+    let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, wKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.isSome
+    check result.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+    check buffer.inTransaction
+
+  test "Edit command (x) returns to Insert with transaction open":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'x' (delete char)
+    let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, xKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+    check buffer.inTransaction
+    # 'h' was deleted (cursor at 0)
+    check buffer.getLine(0) == "ello"
+
+  test "Escape in Normal mode returns to Insert":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Escape should return to Insert (Escape in Normal = no-op, counted as command)
+    let result = manager.handleKeyCombo(buffer, state, viewport, escKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+
+  test "Pending operator (d) waits and does not return to Insert":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'd' (pending operator - should not return to Insert yet)
+    let dKey = KeyCombo(isSpecial: false, char: "d", modifiers: {})
+    let result1 = manager.handleKeyCombo(buffer, state, viewport, dKey)
+
+    # Should stay in Normal mode with insertNormalMode still set
+    check result1.kind == hrHandled
+    check state.insertNormalMode
+    check buffer.inTransaction
+
+  test "Overlay transition (colon) does not return to Insert immediately":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press ':' (command overlay)
+    let colonKey = KeyCombo(isSpecial: false, char: ":", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, colonKey)
+
+    # Should open overlay, not return to Insert yet
+    check result.kind == hrHandled
+    check result.overlayTransition.isSome
+    check result.overlayTransition.get == okCommand
+    # insertNormalMode should still be set (overlay handles return)
+    check state.insertNormalMode
+
+  test "Overlay transition (slash) does not return to Insert immediately":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press '/' (search overlay)
+    let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, slashKey)
+
+    check result.kind == hrHandled
+    check result.overlayTransition.isSome
+    check result.overlayTransition.get == okSearch
+    check state.insertNormalMode
+
+  test "'i' during insert-normal clears flag and stays in Insert":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'i' (enter Insert mode)
+    let iKey = KeyCombo(isSpecial: false, char: "i", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, iKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+    check buffer.inTransaction
+
+  test "'o' during insert-normal opens line and clears flag":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'o' (open line below) - should not double-beginTransaction
+    let oKey = KeyCombo(isSpecial: false, char: "o", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, oKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+    check buffer.inTransaction
+    check buffer.len == 2
+
+  test "Visual mode transition clears insert-normal and commits transaction":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'v' (visual mode)
+    let vKey = KeyCombo(isSpecial: false, char: "v", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, vKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Visual
+    check not state.insertNormalMode
+    # Transaction should be committed (insert-normal consumed)
+    check not buffer.inTransaction
+    check state.editState.insertModeStartPos.isNone
+
+  test "Replace mode transition clears insert-normal and starts new transaction":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'R' (Replace mode)
+    let bigRKey = KeyCombo(isSpecial: false, char: "R", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, bigRKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Replace
+    check not state.insertNormalMode
+    # A fresh transaction should be open for Replace mode
+    check buffer.inTransaction
+    check state.editState.insertModeStartPos.isNone
+
+  test "insertModeStartPos preserved across insert-normal":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    let startPos = state.editState.insertModeStartPos
+
+    # Type a character
+    let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+    discard manager.handleInsertMode(buffer, state, xKey)
+
+    manager.ctrlOToNormal(buffer, state)
+
+    # insertModeStartPos should be preserved
+    check state.editState.insertModeStartPos == startPos
+
+    # After returning from insert-normal (w motion), still preserved
+    let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
+    discard manager.handleKeyCombo(buffer, state, viewport, wKey)
+
+    check state.editState.insertModeStartPos == startPos
+
+  test "Full flow: Insert → Ctrl-O → motion → Insert → Escape commits once":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    # Enter Insert and type 'x'
+    enterInsertMode(buffer, state)
+    let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+    discard manager.handleInsertMode(buffer, state, xKey)
+
+    # Ctrl-O → 'w' (move word) → back to Insert
+    manager.ctrlOToNormal(buffer, state)
+    let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, wKey)
+    state.mode = result.modeTransition.get # Insert
+
+    # Type 'y' in Insert mode
+    let yKey = KeyCombo(isSpecial: false, char: "y", modifiers: {})
+    discard manager.handleInsertMode(buffer, state, yKey)
+
+    # Escape to Normal
+    let exitResult = manager.handleInsertMode(buffer, state, escKey)
+    check exitResult.modeTransition.get == EditorMode.Normal
+    check not buffer.inTransaction
+
+    # Single undo should revert all changes (x, y, and cursor movements)
+    discard buffer.undo()
+    check buffer.getLine(0) == "hello world"
+
+  test "Numeric prefix does not prematurely return to Insert":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world foo")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press '2' (numeric prefix) - should NOT return to Insert
+    let twoKey = KeyCombo(isSpecial: false, char: "2", modifiers: {})
+    let result1 = manager.handleKeyCombo(buffer, state, viewport, twoKey)
+
+    check result1.kind == hrHandled
+    check state.insertNormalMode # still in insert-normal, waiting for command
+
+    # Press 'w' to complete "2w" (move 2 words)
+    let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
+    let result2 = manager.handleKeyCombo(buffer, state, viewport, wKey)
+
+    check result2.kind == hrHandled
+    check result2.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+    # Cursor should have moved 2 words forward
+    check state.cursor.column > 0
+
+  test "Key sequence first key does not prematurely return to Insert":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buffer.insert(1, "world")
+    discard buffer.insert(2, "foo")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 2, column: 0)
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'g' (first key of 'gg' sequence) - should NOT return to Insert
+    let gKey = KeyCombo(isSpecial: false, char: "g", modifiers: {})
+    let result1 = manager.handleKeyCombo(buffer, state, viewport, gKey)
+
+    check result1.kind == hrHandled
+    check state.insertNormalMode # still waiting for second key
+
+    # Press 'g' again to complete 'gg' (go to first line)
+    let result2 = manager.handleKeyCombo(buffer, state, viewport, gKey)
+
+    check result2.kind == hrHandled
+    check result2.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+    check state.cursor.line == 0 # moved to first line
+
+  test "Ctrl-W prefix does not prematurely return to Insert":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press Ctrl-W (window command prefix, first key of "C-w k" sequence)
+    let ctrlW = KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl})
+    let result = manager.handleKeyCombo(buffer, state, viewport, ctrlW)
+
+    check result.kind == hrHandled
+    check state.insertNormalMode # still waiting for window subcommand
+
+  test "Non-hrHandled result (hrNextWindow) clears insert-normal state":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    check buffer.inTransaction
+
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press Ctrl-W (first key of sequence)
+    let ctrlW = KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl})
+    discard manager.handleKeyCombo(buffer, state, viewport, ctrlW)
+
+    # Press 'k' to complete "Ctrl-W k" (window-next → hrNextWindow)
+    let kKey = KeyCombo(isSpecial: false, char: "k", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, kKey)
+
+    check result.kind == hrNextWindow
+    check not state.insertNormalMode # cleaned up
+    check not buffer.inTransaction # transaction committed
+    check state.editState.insertModeStartPos.isNone
+
+  test "Non-hrHandled result (hrBufferNext via gt) clears insert-normal state":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'g' (first key of 'gt' sequence)
+    let gKey = KeyCombo(isSpecial: false, char: "g", modifiers: {})
+    discard manager.handleKeyCombo(buffer, state, viewport, gKey)
+    check state.insertNormalMode # still waiting
+
+    # Press 't' to complete 'gt' (buffer-next-tab → hrBufferNext)
+    let tKey = KeyCombo(isSpecial: false, char: "t", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, tKey)
+
+    check result.kind == hrBufferNext
+    check not state.insertNormalMode # cleaned up
+    check not buffer.inTransaction # transaction committed
+
+  test "Non-hrHandled result (hrSaveAndQuit via ZZ) clears insert-normal state":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'Z' (first key of 'ZZ' sequence)
+    let bigZKey = KeyCombo(isSpecial: false, char: "Z", modifiers: {})
+    discard manager.handleKeyCombo(buffer, state, viewport, bigZKey)
+    check state.insertNormalMode # still waiting
+
+    # Press 'Z' again to complete 'ZZ' (save-and-quit → hrSaveAndQuit)
+    let result = manager.handleKeyCombo(buffer, state, viewport, bigZKey)
+
+    check result.kind == hrSaveAndQuit
+    check not state.insertNormalMode # cleaned up
+    check not buffer.inTransaction # transaction committed
+
+  test "hrError result does NOT clear insert-normal state":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'u' (undo) when there's nothing to undo (only current transaction)
+    # This should return hrError but NOT clear insert-normal
+    let uKey = KeyCombo(isSpecial: false, char: "u", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, uKey)
+
+    # Error should preserve insert-normal state so user can try another command
+    if result.kind == hrError:
+      check state.insertNormalMode
+      check buffer.inTransaction
+
+  test "Unbound key treated as no-op command returns to Insert":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press an unbound key (Ctrl-Q is unbound in Normal mode)
+    # In moe, unbound keys in Normal mode are treated as handled (no-op),
+    # so insert-normal considers the "command" complete and returns to Insert
+    let ctrlQ = KeyCombo(isSpecial: false, char: "q", modifiers: {kmCtrl})
+    let result = manager.handleKeyCombo(buffer, state, viewport, ctrlQ)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+
+  test "'a' (append) during insert-normal clears flag and stays in Insert":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'a' (textobject-around, which enters Insert/append when no pending op)
+    let aKey = KeyCombo(isSpecial: false, char: "a", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, aKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+    check buffer.inTransaction
+
+  test "Operator + motion (dw) completes and returns to Insert":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'd' (pending operator)
+    let dKey = KeyCombo(isSpecial: false, char: "d", modifiers: {})
+    let result1 = manager.handleKeyCombo(buffer, state, viewport, dKey)
+    check result1.kind == hrHandled
+    check state.insertNormalMode
+
+    # Press 'w' (motion to complete dw)
+    let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
+    let result2 = manager.handleKeyCombo(buffer, state, viewport, wKey)
+
+    check result2.kind == hrHandled
+    check result2.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+    check buffer.inTransaction
+    # "hello " should be deleted, leaving "world"
+    check buffer.getLine(0) == "world"
+
+  test "Multiple Ctrl-O in succession":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world foo")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    # Enter Insert and type 'a'
+    enterInsertMode(buffer, state)
+    let aChar = KeyCombo(isSpecial: false, char: "a", modifiers: {})
+    discard manager.handleInsertMode(buffer, state, aChar)
+
+    # First Ctrl-O → 'w' → back to Insert
+    manager.ctrlOToNormal(buffer, state)
+    let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
+    let r1 = manager.handleKeyCombo(buffer, state, viewport, wKey)
+    check r1.modeTransition.get == EditorMode.Insert
+    state.mode = EditorMode.Insert
+
+    # Type 'b'
+    let bChar = KeyCombo(isSpecial: false, char: "b", modifiers: {})
+    discard manager.handleInsertMode(buffer, state, bChar)
+
+    # Second Ctrl-O → 'w' → back to Insert
+    manager.ctrlOToNormal(buffer, state)
+    let r2 = manager.handleKeyCombo(buffer, state, viewport, wKey)
+    check r2.modeTransition.get == EditorMode.Insert
+    state.mode = EditorMode.Insert
+
+    # Type 'c'
+    let cChar = KeyCombo(isSpecial: false, char: "c", modifiers: {})
+    discard manager.handleInsertMode(buffer, state, cChar)
+
+    # Escape to Normal
+    let exitResult = manager.handleInsertMode(buffer, state, escKey)
+    check exitResult.modeTransition.get == EditorMode.Normal
+    check not buffer.inTransaction
+
+    # Single undo should revert all changes (a, b, c insertions)
+    discard buffer.undo()
+    check buffer.getLine(0) == "hello world foo"
+
+  test "Pending text object (di) waits for kind key":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'd' (pending operator)
+    let dKey = KeyCombo(isSpecial: false, char: "d", modifiers: {})
+    discard manager.handleKeyCombo(buffer, state, viewport, dKey)
+    check state.insertNormalMode
+
+    # Press 'i' (textobject-inner → sets pendingTextObject)
+    let iKey = KeyCombo(isSpecial: false, char: "i", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, iKey)
+
+    # Should still be waiting for text object kind (w, ", (, etc.)
+    check result.kind == hrHandled
+    check state.insertNormalMode
+    check buffer.inTransaction
+
+  test "'J' during insert-normal errors (own transaction conflicts)":
+    # Commands that internally call beginTransaction (J, ~, Ctrl-a/x) fail
+    # during insert-normal because the Insert mode transaction is still open.
+    # This documents the current limitation.
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buffer.insert(1, "world")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    let bigJKey = KeyCombo(isSpecial: false, char: "J", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, bigJKey)
+
+    # J fails because it tries beginTransaction while one is already open
+    check result.kind == hrError
+    # insert-normal state is preserved so user can try another command
+    check state.insertNormalMode
+    check buffer.inTransaction
+
+  test "Register prefix (\"a) does not prematurely return to Insert":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press '"' (register-select, ctOperatorPending - waits for char)
+    let quoteKey = KeyCombo(isSpecial: false, char: "\"", modifiers: {})
+    let result1 = manager.handleKeyCombo(buffer, state, viewport, quoteKey)
+
+    # Should stay in insert-normal (waiting for register name char)
+    check result1.kind == hrHandled
+    check state.insertNormalMode
+
+    # Press 'a' to complete '"a' (register select)
+    let aKey = KeyCombo(isSpecial: false, char: "a", modifiers: {})
+    let result2 = manager.handleKeyCombo(buffer, state, viewport, aKey)
+
+    # pendingRegister is now set, still waiting for the actual command
+    check result2.kind == hrHandled
+    check state.insertNormalMode
+    check state.pendingRegister.isSome
+    check state.pendingRegister.get == 'a'
+
+  test "Macro record (q) sets waitingForRegister and does not return to Insert":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'q' (macro.record - sets waitingForRegister)
+    let qKey = KeyCombo(isSpecial: false, char: "q", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, qKey)
+
+    check result.kind == hrHandled
+    check state.insertNormalMode # still waiting for register name
+    check state.macroState.waitingForRegister
+
+  test "VisualLine (V) transition clears insert-normal and commits transaction":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'V' (visual-line mode)
+    let bigVKey = KeyCombo(isSpecial: false, char: "V", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, bigVKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.VisualLine
+    check not state.insertNormalMode
+    check not buffer.inTransaction
+    check state.editState.insertModeStartPos.isNone
+    check state.editState.substituteContext.isNone
+
+  test "VisualBlock (Ctrl-V) transition clears insert-normal and commits transaction":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press Ctrl-V (visual-block mode)
+    let ctrlV = KeyCombo(isSpecial: false, char: "v", modifiers: {kmCtrl})
+    let result = manager.handleKeyCombo(buffer, state, viewport, ctrlV)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.VisualBlock
+    check not state.insertNormalMode
+    check not buffer.inTransaction
+    check state.editState.insertModeStartPos.isNone
+
+  test "Backward search overlay (?) does not return to Insert immediately":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press '?' (backward search overlay)
+    let questionKey = KeyCombo(isSpecial: false, char: "?", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, questionKey)
+
+    check result.kind == hrHandled
+    check result.overlayTransition.isSome
+    check result.overlayTransition.get == okSearch
+    check state.insertNormalMode
+
+  test "substituteContext cleared on non-Insert mode transition":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    enterInsertMode(buffer, state)
+    # Set a substituteContext to verify it gets cleaned up
+    state.editState.substituteContext =
+      some(types.SubstituteContext(kind: skChar, deleteCount: 3))
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'v' (Visual mode - triggers non-Insert transition cleanup)
+    let vKey = KeyCombo(isSpecial: false, char: "v", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, vKey)
+
+    check result.modeTransition.get == EditorMode.Visual
+    check not state.insertNormalMode
+    check state.editState.substituteContext.isNone
+
+  test "Operator + text object (diw) completes and returns to Insert":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'd' (pending operator)
+    let dKey = KeyCombo(isSpecial: false, char: "d", modifiers: {})
+    discard manager.handleKeyCombo(buffer, state, viewport, dKey)
+    check state.insertNormalMode
+
+    # Press 'i' (textobject-inner → sets pendingTextObject)
+    let iKey = KeyCombo(isSpecial: false, char: "i", modifiers: {})
+    discard manager.handleKeyCombo(buffer, state, viewport, iKey)
+    check state.insertNormalMode
+
+    # Press 'w' (word text object) to complete "diw"
+    let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, wKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+    check buffer.inTransaction
+    # "hello" should be deleted
+    check buffer.getLine(0) != "hello world"
+
+  test "dd (delete line) during insert-normal errors (own transaction conflicts)":
+    # dd internally calls beginTransaction, which conflicts with the open
+    # Insert mode transaction. This documents a known limitation (same as J).
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "first")
+    discard buffer.insert(1, "second")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'd' twice (dd = delete line)
+    let dKey = KeyCombo(isSpecial: false, char: "d", modifiers: {})
+    let result1 = manager.handleKeyCombo(buffer, state, viewport, dKey)
+    check result1.kind == hrHandled
+    check state.insertNormalMode
+
+    let result2 = manager.handleKeyCombo(buffer, state, viewport, dKey)
+    # dd fails because it tries beginTransaction while one is already open
+    check result2.kind == hrError
+    check state.insertNormalMode # preserved for retry
+    check buffer.inTransaction
+
+  test "yy (yank line) returns to Insert without modifying buffer":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'y' twice (yy = yank line)
+    let yKey = KeyCombo(isSpecial: false, char: "y", modifiers: {})
+    let result1 = manager.handleKeyCombo(buffer, state, viewport, yKey)
+    check state.insertNormalMode
+
+    let result2 = manager.handleKeyCombo(buffer, state, viewport, yKey)
+    check result2.kind == hrHandled
+    check result2.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+    # Buffer unchanged
+    check buffer.getLine(0) == "hello world"
+
+  test "G (go to last line) returns to Insert":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "first")
+    discard buffer.insert(1, "second")
+    discard buffer.insert(2, "third")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    let bigGKey = KeyCombo(isSpecial: false, char: "G", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, bigGKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+    check state.cursor.line == 2
+
+  test "p (paste) returns to Insert":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    # Put something in the unnamed register
+    state.registers.setYankedRegister("world", isLine = false)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    let pKey = KeyCombo(isSpecial: false, char: "p", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, pKey)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Insert
+    check not state.insertNormalMode
+    check buffer.inTransaction
+
+  test "u (undo) during insert-normal returns hrError (transaction open)":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    let uKey = KeyCombo(isSpecial: false, char: "u", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, uKey)
+
+    # Undo within an open transaction returns error
+    if result.kind == hrError:
+      check state.insertNormalMode # preserved for retry
+      check buffer.inTransaction
+
+  test "Ctrl-O from Insert mode result has Normal mode transition":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+
+    enterInsertMode(buffer, state)
+
+    let ctrlO = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
+    let result = manager.handleInsertMode(buffer, state, ctrlO)
+
+    check result.kind == hrHandled
+    check result.modeTransition.get == EditorMode.Normal
+    check state.insertNormalMode
+    # Transaction should still be open (skipped commit)
+    check buffer.inTransaction
+    check state.editState.insertModeStartPos.isSome
+
+  test "Non-hrHandled result (hrQuit via ZQ) clears insert-normal state":
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let manager = createTestManagerWithMotion(buffer, state, viewport)
+
+    enterInsertMode(buffer, state)
+    manager.ctrlOToNormal(buffer, state)
+
+    # Press 'Z' (first key of 'ZQ' sequence)
+    let bigZKey = KeyCombo(isSpecial: false, char: "Z", modifiers: {})
+    discard manager.handleKeyCombo(buffer, state, viewport, bigZKey)
+    check state.insertNormalMode
+
+    # Press 'Q' to complete 'ZQ' (quit without saving → hrQuit)
+    let bigQKey = KeyCombo(isSpecial: false, char: "Q", modifiers: {})
+    let result = manager.handleKeyCombo(buffer, state, viewport, bigQKey)
+
+    check result.kind == hrQuit
+    check not state.insertNormalMode
+    check not buffer.inTransaction

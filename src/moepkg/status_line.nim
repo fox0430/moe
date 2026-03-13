@@ -218,7 +218,7 @@ proc parseSetupText(
       if state.overlay.isSome:
         overlayLabel(state.overlay.get().kind)
       else:
-        modeLabel(state.mode)
+        modeLabel(state.mode, state.insertNormalMode)
     filePath =
       if textBuffer.filePath.isSome:
         textBuffer.filePath.get()
@@ -343,7 +343,7 @@ proc renderStatusLine*(
       let lineStyle = getStatusLineModeStyle(state.mode)
       let labelText =
         if config.mode:
-          fmt" {modeLabel(state.mode)} "
+          fmt" {modeLabel(state.mode, state.insertNormalMode)} "
         else:
           ""
       (labelStyle, lineStyle, labelText)
@@ -440,7 +440,7 @@ proc renderWindowStatusLine*(
       let lineStyle = getStatusLineModeStyle(state.mode)
       let labelText =
         if showMode:
-          fmt" {modeLabel(state.mode)} "
+          fmt" {modeLabel(state.mode, state.insertNormalMode)} "
         else:
           ""
       (labelStyle, lineStyle, labelText)

@@ -126,6 +126,11 @@ proc finalizeSearch(e: Editor) =
   e.state.exitOverlay()
   e.setMode(e.state.mode) # Sync window mode
 
+  # Insert-Normal mode (Ctrl-o): return to Insert after the search completes
+  if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
+    e.state.insertNormalMode = false
+    e.setMode(EditorMode.Insert)
+
 proc cancelSearch(e: Editor) =
   ## Cancel search and return to base mode
   ##
@@ -141,6 +146,11 @@ proc cancelSearch(e: Editor) =
   # Exit overlay and restore base mode
   e.state.exitOverlay()
   e.setMode(e.state.mode) # Sync window mode
+
+  # Insert-Normal mode (Ctrl-o): return to Insert after the search is cancelled
+  if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
+    e.state.insertNormalMode = false
+    e.setMode(EditorMode.Insert)
 
 proc performIncrementalSearch(e: Editor) =
   ## Perform incremental search and update cursor position dynamically

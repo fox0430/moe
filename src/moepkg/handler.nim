@@ -731,15 +731,44 @@ proc handleEvent*(e: Editor, event: Event): bool =
           termState.feedInput("\x03")
           return true
 
+    # Search overlay: cancel search and exit overlay
+    if e.state.isSearchOverlay:
+      if e.state.search.incsearch:
+        e.cursor = e.state.search.startPos
+      e.state.exitOverlay()
+      e.setMode(e.state.mode)
+      # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
+      if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
+        e.state.insertNormalMode = false
+        e.setMode(EditorMode.Insert)
+      return true
+
     # Command overlay: clear command line and exit overlay
     if e.state.isCommandOverlay:
       e.state.commandCompletionManager.cancelCompletion()
       e.cancelSubstitutePreview()
       e.state.exitOverlay()
       e.setMode(e.state.mode)
+      # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
+      if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
+        e.state.insertNormalMode = false
+        e.setMode(EditorMode.Insert)
       return true
 
     if e.state.mode == EditorMode.Normal:
+      # Insert-Normal mode (Ctrl-o): Ctrl-C cancels and stays in Normal mode
+      if e.state.insertNormalMode:
+        e.state.insertNormalMode = false
+        let activeBuffer = e.activeBuffer()
+        if activeBuffer.inTransaction:
+          clearAutoIndentIfUnedited(activeBuffer, e.state)
+          discard activeBuffer.commitTransaction()
+        e.state.editState.insertModeStartPos = none(BufferPosition)
+        e.state.editState.substituteContext = none(types.SubstituteContext)
+        let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
+        adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+        e.syncStateToWindow()
+        return true
       # Normal mode: show exit message like Vim
       e.state.statusMessage = "Type :qa and press <Enter> to exit"
     elif e.state.mode.isFileEditMode:
@@ -1715,7 +1744,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
       activeWin.mode = EditorMode.BufferManager
 
     # Adjust cursor when transitioning from Insert to Normal mode
-    if oldMode == EditorMode.Insert and newMode == EditorMode.Normal:
+    # Skip cursor adjustment for insert-normal mode (Ctrl-o) since we'll return to Insert
+    if oldMode == EditorMode.Insert and newMode == EditorMode.Normal and
+        not e.state.insertNormalMode:
       let
         lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
         oldColumn = e.activeWindow.cursor.column
