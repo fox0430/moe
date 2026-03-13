@@ -58,6 +58,7 @@ type
     lastLspChangeSeq*: int
     app*: AsyncApp
     cursorPositions*: Table[string, CursorPositionEntry]
+    savedBookmarks*: Table[string, seq[int]]
     runningBackgroundProcesses*: seq[BackgroundProcess]
 
   RenderContext* = object

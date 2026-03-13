@@ -91,7 +91,7 @@ suite "KeybindConfig - parseModes":
 
   test "parse all meta mode":
     let modes = parseModes("all")
-    check modes.len == 20 # All except CommandLine
+    check modes.len == 21 # All except CommandLine
     check EditorMode.Command notin modes
     check EditorMode.Normal in modes
     check EditorMode.Insert in modes
@@ -110,7 +110,7 @@ suite "KeybindConfig - parseModes":
     check parseModes("NORMAL") == @[EditorMode.Normal]
     check parseModes("Normal") == @[EditorMode.Normal]
     check parseModes("INSERT") == @[EditorMode.Insert]
-    check parseModes("ALL").len == 20
+    check parseModes("ALL").len == 21
     check parseModes("VisualAll").len == 3
 
   test "parse unknown mode returns empty seq":

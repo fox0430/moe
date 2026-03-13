@@ -24,7 +24,7 @@
 ## - Git diff indicators (added, changed, deleted lines)
 ## - Syntax checker results (errors, warnings)
 
-import std/options
+import std/[options, unicode]
 
 import pkg/celina
 
@@ -43,6 +43,7 @@ type SidebarMarkerConfig* = object ## Configuration for sidebar marker display s
   syntaxWarning*: string
   sessionModified*: string
   sessionInserted*: string
+  bookmark*: string
 
 # Default marker values
 const
@@ -54,6 +55,7 @@ const
   DefaultSyntaxWarningMarker = "⚠ "
   DefaultSessionModifiedMarker = "~ "
   DefaultSessionInsertedMarker = "+ "
+  DefaultBookmarkMarker = "♥ "
 
 # Global marker configuration (can be customized via settings in the future)
 var globalMarkerConfig* = SidebarMarkerConfig(
@@ -65,7 +67,12 @@ var globalMarkerConfig* = SidebarMarkerConfig(
   syntaxWarning: DefaultSyntaxWarningMarker,
   sessionModified: DefaultSessionModifiedMarker,
   sessionInserted: DefaultSessionInsertedMarker,
+  bookmark: DefaultBookmarkMarker,
 )
+
+proc setBookmarkMarker*(marker: string) =
+  ## Set the bookmark marker display string
+  globalMarkerConfig.bookmark = marker
 
 # Helper to get theme background color
 proc themeBackground(): ColorValue =
@@ -122,6 +129,13 @@ proc sessionInsertedStyle*(): Style =
     modifiers: {},
   )
 
+proc bookmarkStyle*(): Style =
+  Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.Cyan),
+    bg: themeBackground(),
+    modifiers: {StyleModifier.Bold},
+  )
+
 proc emptyStyle*(): Style =
   Style(fg: ColorValue(kind: Default), bg: themeBackground(), modifiers: {})
 
@@ -144,6 +158,8 @@ proc getStyleForKind(kind: SidebarItemKind): Style =
     sessionModifiedStyle()
   of SessionInserted:
     sessionInsertedStyle()
+  of Bookmark:
+    bookmarkStyle()
   of Empty:
     emptyStyle()
 
@@ -196,12 +212,12 @@ proc setSidebarLine*(
   if line >= 0 and line < sidebar.buffer.len:
     let
       style = getStyleForKind(kind)
-      textLen = text.len
+      runes = text.toRunes()
 
     for col in 0 ..< sidebar.width:
       let char =
-        if col < textLen:
-          $text[col]
+        if col < runes.len:
+          $runes[col]
         else:
           " "
       sidebar.buffer[line][col] = SidebarItem(text: char, kind: kind, style: style)
@@ -251,10 +267,12 @@ proc generateSidebarFromBuffer*(
     width: int = DefaultSidebarWidth,
     modifiedLines: seq[LineModificationKind] = @[],
     showModifiedLines: bool = false,
+    bookmarks: seq[int] = @[],
 ): Sidebar =
   ## Generate a sidebar view from buffer markers for the visible range.
   ## If showModifiedLines is true, lines with no other marker but modified/inserted in
   ## the current session will show a SessionModified/SessionInserted indicator as fallback.
+  ## Bookmarks are shown when no SyntaxError/SyntaxWarning marker is present.
   result = initSidebar(height, width)
 
   # Map buffer markers to sidebar for visible range
@@ -264,19 +282,35 @@ proc generateSidebarFromBuffer*(
       let marker = b.getLineMarker(bufferLine)
       if marker.isSome:
         let kind = marker.get
-        # Generate appropriate text for this marker kind from configuration
-        let text =
-          case kind
-          of GitAdded: globalMarkerConfig.gitAdded
-          of GitChanged: globalMarkerConfig.gitChanged
-          of GitDeleted: globalMarkerConfig.gitDeleted
-          of GitChangedAndDeleted: globalMarkerConfig.gitChangedAndDeleted
-          of SyntaxError: globalMarkerConfig.syntaxError
-          of SyntaxWarning: globalMarkerConfig.syntaxWarning
-          of SessionModified: globalMarkerConfig.sessionModified
-          of SessionInserted: globalMarkerConfig.sessionInserted
-          of Empty: " "
-        setSidebarLine(result, screenLine, text, kind)
+        if kind in {SyntaxError, SyntaxWarning}:
+          # SyntaxError/Warning take highest priority
+          let text =
+            case kind
+            of SyntaxError: globalMarkerConfig.syntaxError
+            of SyntaxWarning: globalMarkerConfig.syntaxWarning
+            else: " "
+          setSidebarLine(result, screenLine, text, kind)
+        elif b.hasBookmark(bufferLine):
+          # Bookmark overrides git/session markers
+          setSidebarLine(result, screenLine, globalMarkerConfig.bookmark, Bookmark)
+        else:
+          # Generate appropriate text for this marker kind from configuration
+          let text =
+            case kind
+            of GitAdded: globalMarkerConfig.gitAdded
+            of GitChanged: globalMarkerConfig.gitChanged
+            of GitDeleted: globalMarkerConfig.gitDeleted
+            of GitChangedAndDeleted: globalMarkerConfig.gitChangedAndDeleted
+            of SyntaxError: globalMarkerConfig.syntaxError
+            of SyntaxWarning: globalMarkerConfig.syntaxWarning
+            of SessionModified: globalMarkerConfig.sessionModified
+            of SessionInserted: globalMarkerConfig.sessionInserted
+            of Bookmark: globalMarkerConfig.bookmark
+            of Empty: " "
+          setSidebarLine(result, screenLine, text, kind)
+      elif b.hasBookmark(bufferLine):
+        # No marker but has bookmark
+        setSidebarLine(result, screenLine, globalMarkerConfig.bookmark, Bookmark)
       elif showModifiedLines and bufferLine < modifiedLines.len:
         # Fallback: show session marker when no other marker exists
         case modifiedLines[bufferLine]

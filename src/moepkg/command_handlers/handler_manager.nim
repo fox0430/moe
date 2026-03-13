@@ -36,16 +36,16 @@ import ../lsp/protocol/types as lspTypes
 import
   normal_handler, insert_handler, insert_commands, command_handler, visual_handler,
   replace_handler, filer_handler, log_viewer_handler, help_handler,
-  buffer_manager_handler, backup_manager_handler, diff_viewer_handler,
-  recent_file_mode_handler, debug_handler, config_handler, references_handler,
-  documentsymbol_handler, callhierarchy_handler, terminal_handler
+  buffer_manager_handler, bookmark_manager_handler, backup_manager_handler,
+  diff_viewer_handler, recent_file_mode_handler, debug_handler, config_handler,
+  references_handler, documentsymbol_handler, callhierarchy_handler, terminal_handler
 
 export
   normal_handler, insert_handler, insert_commands, command_handler, visual_handler,
   replace_handler, filer_handler, log_viewer_handler, help_handler,
-  buffer_manager_handler, backup_manager_handler, diff_viewer_handler,
-  recent_file_mode_handler, debug_handler, config_handler, references_handler,
-  documentsymbol_handler, callhierarchy_handler, terminal_handler
+  buffer_manager_handler, bookmark_manager_handler, backup_manager_handler,
+  diff_viewer_handler, recent_file_mode_handler, debug_handler, config_handler,
+  references_handler, documentsymbol_handler, callhierarchy_handler, terminal_handler
 
 type
   HandlerResultKind* = enum
@@ -90,6 +90,10 @@ type
     hrBufferManagerDeleteBuffer # Delete a buffer
     hrBufferManagerQuit # Close buffer manager and return to previous mode
     hrEnterBufferManager # Enter buffer manager mode
+    hrBookmarkManagerJump # Jump to selected bookmark
+    hrBookmarkManagerDelete # Delete selected bookmark
+    hrBookmarkManagerQuit # Close bookmark manager and return to previous mode
+    hrEnterBookmarkManager # Enter bookmark manager mode
     hrBackupManagerRestore # Restore a backup file
     hrBackupManagerDelete # Delete a backup file
     hrBackupManagerOpenDiff # Open diff viewer for a backup
@@ -167,6 +171,7 @@ type
     logViewerHandler*: LogViewerHandler
     helpViewerHandler*: HelpViewerHandler
     bufferManagerHandler*: BufferManagerHandler
+    bookmarkManagerHandler*: BookmarkManagerHandler
     backupManagerHandler*: BackupManagerHandler
     diffViewerHandler*: DiffViewerHandler
     recentFileModeHandler*: RecentFileModeHandler
@@ -264,6 +269,15 @@ type
     of hrBufferManagerQuit:
       discard
     of hrEnterBufferManager:
+      discard
+    of hrBookmarkManagerJump:
+      bookmarkJumpBufferIndex*: int
+      bookmarkJumpLine*: int
+    of hrBookmarkManagerDelete:
+      bookmarkDeleteEntryIndex*: int
+    of hrBookmarkManagerQuit:
+      discard
+    of hrEnterBookmarkManager:
       discard
     of hrBackupManagerRestore:
       restoreBackupIndex*: int
@@ -431,6 +445,7 @@ proc newHandlerManager*(
   let logViewerHandler = newLogViewerHandler()
   let helpViewerHandler = newHelpViewerHandler()
   let bufferManagerHandler = newBufferManagerHandler()
+  let bookmarkManagerHandler = newBookmarkManagerHandler()
   let backupManagerHandler = newBackupManagerHandler()
   let diffViewerHandler = newDiffViewerHandler()
   let recentFileModeHandler = newRecentFileModeHandler()
@@ -450,6 +465,7 @@ proc newHandlerManager*(
     logViewerHandler: logViewerHandler,
     helpViewerHandler: helpViewerHandler,
     bufferManagerHandler: bufferManagerHandler,
+    bookmarkManagerHandler: bookmarkManagerHandler,
     backupManagerHandler: backupManagerHandler,
     diffViewerHandler: diffViewerHandler,
     recentFileModeHandler: recentFileModeHandler,
@@ -874,6 +890,8 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrJumpList)
   of cmrChanges:
     return HandlerResult(kind: hrChanges)
+  of cmrBookmarks:
+    return HandlerResult(kind: hrEnterBookmarkManager)
   of cmrBuild:
     return HandlerResult(kind: hrBuild)
   of cmrDebug:
@@ -1460,6 +1478,45 @@ proc handleBufferManagerMode*(
   of bmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleBookmarkManagerMode*(
+    manager: HandlerManager,
+    bmState: BookmarkManagerState,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
+): HandlerResult =
+  ## Handle Bookmark Manager mode input
+  let r = manager.bookmarkManagerHandler.handleBookmarkManagerModeKey(
+    bmState, viewportHeight, keyCombo
+  )
+  case r.kind
+  of bkmrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of bkmrJumpToBookmark:
+    return HandlerResult(
+      kind: hrBookmarkManagerJump,
+      bookmarkJumpBufferIndex: r.jumpBufferIndex,
+      bookmarkJumpLine: r.jumpLine,
+    )
+  of bkmrDeleteBookmark:
+    return HandlerResult(
+      kind: hrBookmarkManagerDelete, bookmarkDeleteEntryIndex: r.deleteEntryIndex
+    )
+  of bkmrEnterCommand:
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
+    )
+  of bkmrQuit:
+    return HandlerResult(kind: hrBookmarkManagerQuit)
+  of bkmrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of bkmrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
 proc handleBackupManagerMode*(
     manager: HandlerManager,
     bkState: BackupManagerState,
@@ -1959,6 +2016,15 @@ proc handleKeyCombo*(
       return HandlerResult(
         kind: hrError, errorMessage: "Buffer manager state not initialized"
       )
+  of EditorMode.BookmarkManager:
+    if window.isSome and window.get.bookmarkManagerState.isSome:
+      return manager.handleBookmarkManagerMode(
+        window.get.bookmarkManagerState.get, state, viewport.height, keyCombo
+      )
+    else:
+      return HandlerResult(
+        kind: hrError, errorMessage: "Bookmark manager state not initialized"
+      )
   of EditorMode.BackupManager:
     if window.isSome and window.get.backupManagerState.isSome:
       return manager.handleBackupManagerMode(
@@ -2128,10 +2194,11 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrEnterDocumentSymbol, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
     hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
     hrEnterCallHierarchy, hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer,
-    hrBufferManagerQuit, hrEnterBufferManager, hrBackupManagerRestore,
-    hrBackupManagerDelete, hrBackupManagerOpenDiff, hrBackupManagerRefresh,
-    hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit, hrRecentFile,
-    hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
+    hrBufferManagerQuit, hrEnterBufferManager, hrBookmarkManagerJump,
+    hrBookmarkManagerDelete, hrBookmarkManagerQuit, hrEnterBookmarkManager,
+    hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
+    hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit,
+    hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
     hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
     hrDecreaseWindowWidth, hrEqualizeWindows, hrEnterDiffViewer, hrLspGotoDefinition,
     hrLspGotoDeclaration, hrLspFindReferences, hrLspCodeLensExecute,

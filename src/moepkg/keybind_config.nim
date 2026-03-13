@@ -37,12 +37,12 @@ type KeybindingConfig* = object ## Structure for keybinding configuration
 const allModeChoices* =
   "one of: normal, insert, visual, visualline, visualblock, replace, " &
   "command, filer, quickrun, logviewer, help, buffermanager, " &
-  "backupmanager, diffviewer, recentfile, debug, config, references, " &
-  "documentsymbol, callhierarchy, terminal, all, visualall"
+  "bookmarkmanager, backupmanager, diffviewer, recentfile, debug, config, " &
+  "references, documentsymbol, callhierarchy, terminal, all, visualall"
 
 proc parseModes(s: string): seq[EditorMode] =
   ## Parse mode string to seq of EditorMode enums.
-  ## Supports all 21 editor modes plus meta modes:
+  ## Supports all 22 editor modes plus meta modes:
   ## - "all": all modes except CommandLine
   ## - "visualall": Visual, VisualLine, VisualBlock
   ## Returns empty seq for unknown modes.
@@ -71,6 +71,8 @@ proc parseModes(s: string): seq[EditorMode] =
     @[EditorMode.Help]
   of "buffermanager":
     @[EditorMode.BufferManager]
+  of "bookmarkmanager":
+    @[EditorMode.BookmarkManager]
   of "backupmanager":
     @[EditorMode.BackupManager]
   of "diffviewer":

@@ -309,6 +309,10 @@ proc handleModeSwitch*(
   of EditorMode.BufferManager:
     return
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.BufferManager))
+  of EditorMode.BookmarkManager:
+    return NormalModeResult(
+      kind: nmrHandled, modeTransition: some(EditorMode.BookmarkManager)
+    )
   of EditorMode.BackupManager:
     return
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.BackupManager))
@@ -722,6 +726,26 @@ proc handleNormalModeKey*(
         bufferIndex: state.currentBufferIndex, line: pos.line, column: pos.column
       )
       return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
+    of "bookmark.toggle":
+      buffer.toggleBookmark(state.cursor.line)
+      return NormalModeResult(kind: nmrHandled)
+    of "bookmark.next":
+      let next = buffer.findNextBookmark(state.cursor.line)
+      if next.isNone:
+        return NormalModeResult(kind: nmrError, errorMessage: "No bookmarks")
+      let jumpPos =
+        JumpPosition(bufferIndex: state.currentBufferIndex, line: next.get, column: 0)
+      return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
+    of "bookmark.prev":
+      let prev = buffer.findPrevBookmark(state.cursor.line)
+      if prev.isNone:
+        return NormalModeResult(kind: nmrError, errorMessage: "No bookmarks")
+      let jumpPos =
+        JumpPosition(bufferIndex: state.currentBufferIndex, line: prev.get, column: 0)
+      return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
+    of "bookmark.clear":
+      buffer.clearBookmarks()
+      return NormalModeResult(kind: nmrHandled)
     of "jump.back":
       # Ctrl-o - Jump to previous position in jump list
       if state.jumpList.len == 0:

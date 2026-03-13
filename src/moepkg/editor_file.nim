@@ -19,7 +19,7 @@
 
 ## File operation procedures (load, save, auto-save, auto-backup)
 
-import std/[options, strformat, os, monotimes, times]
+import std/[options, strformat, os, monotimes, times, tables]
 
 import pkg/results
 
@@ -81,6 +81,10 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   else:
     e.cursor = BufferPosition(line: 0, column: 0)
 
+  # Restore bookmarks if persisted
+  if e.config.persist.bookmarks and e.savedBookmarks.hasKey(absPath):
+    e.textBuffer.bookmarks = e.savedBookmarks[absPath]
+
   # Reset viewport to start (will be adjusted by motion controller)
   e.viewport.topLine = 0
   e.viewport.leftColumn = 0
@@ -138,23 +142,23 @@ proc savePersistData*(e: Editor) =
   ## Save all persist data (search history, command history, cursor positions)
   ## Called on shutdown
 
-  # Save search history
   if e.config.persist.search:
+    # Save search history
     let r =
       saveSearchHistory(e.state.search.history, e.config.persist.searchHistoryLimit)
     if r.isErr:
       logError("editor", "Failed to save search history: " & r.error)
 
-  # Save command history
   if e.config.persist.exCommand:
+    # Save command history
     let r = saveCommandHistory(
       e.state.commandState.history, e.config.persist.exCommandHistoryLimit
     )
     if r.isErr:
       logError("editor", "Failed to save command history: " & r.error)
 
-  # Save cursor positions
   if e.config.persist.cursorPosition:
+    # Save cursor positions
     # Save current buffer's cursor position first
     let activeBuffer = e.activeBuffer()
     e.saveBufferCursorPosition(activeBuffer)
@@ -162,6 +166,26 @@ proc savePersistData*(e: Editor) =
     let r = saveCursorPositions(e.cursorPositions)
     if r.isErr:
       logError("editor", "Failed to save cursor positions: " & r.error)
+
+  if e.config.persist.bookmarks:
+    # Save bookmarks
+    var allBookmarks = initTable[string, seq[int]]()
+    for buf in e.buffers:
+      if buf.filePath.isSome and buf.bookmarks.len > 0:
+        let absPath = absolutePath(buf.filePath.get)
+        allBookmarks[absPath] = buf.bookmarks
+    if allBookmarks.len > 0:
+      let r = saveBookmarks(allBookmarks)
+      if r.isErr:
+        logError("editor", "Failed to save bookmarks: " & r.error)
+    else:
+      # Remove the file if no bookmarks exist
+      let bmPath = getBookmarksPath()
+      if bmPath.isOk and fileExists(bmPath.get.string):
+        try:
+          removeFile(bmPath.get.string)
+        except CatchableError as ex:
+          logError("editor", "Failed to remove empty bookmark file: " & ex.msg)
 
 proc saveFile*(
     e: Editor, path: Option[string] = none(string), force: bool = false

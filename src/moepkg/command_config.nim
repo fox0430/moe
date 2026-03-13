@@ -142,6 +142,9 @@ proc loadDefaultConfig*(config: CommandConfig) =
   # Change list
   config.addAlias("changes", claChanges)
 
+  # Bookmarks
+  config.addAlias("bookmarks", claBookmarks)
+
   # Build
   config.addAlias("build", claBuild)
 

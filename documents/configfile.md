@@ -101,6 +101,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | softTabStop | integer | 0 | Tab/Backspace width in insert mode (0 = use tabStop) |
 | expandTab | bool | false | Expand tabs to spaces |
 | sidebar | bool | true | Enable Sidebars for editor views |
+| bookmarkMarker | string | "♥ " | Bookmark indicator symbol in sidebars |
 | showModifiedLines | bool | true | Show modified/inserted line indicators in sidebars |
 | ignorecase | bool | true | Enable ignorecase when searching |
 | smartcase | bool | true | Enable smartcase when searching |
@@ -262,6 +263,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | search | bool | true | Saving search history |
 | searchHistoryLimit | integer | 1000 | The maximum entries of search history to save |
 | cursorPosition | bool | true | Saving last cursor position |
+| bookmarks | bool | true | Saving bookmarks |
 
 
 ### Debug.WindowNode table

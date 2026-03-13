@@ -172,6 +172,10 @@ proc restoreOriginalBuffer*(win: EditorWindow, mode: EditorMode) =
   of EditorMode.BufferManager:
     if win.bufferManagerState.isSome and win.bufferManagerState.get.originalBuffer != nil:
       win.buffer = win.bufferManagerState.get.originalBuffer
+  of EditorMode.BookmarkManager:
+    if win.bookmarkManagerState.isSome and
+        win.bookmarkManagerState.get.originalBuffer != nil:
+      win.buffer = win.bookmarkManagerState.get.originalBuffer
   of EditorMode.DiffViewer:
     if win.diffViewerState.isSome and win.diffViewerState.get.originalBuffer != nil:
       win.buffer = win.diffViewerState.get.originalBuffer
@@ -206,6 +210,8 @@ proc clearModeState*(win: EditorWindow, mode: EditorMode) =
     win.helpViewerState = none(HelpViewerState)
   of EditorMode.BufferManager:
     win.bufferManagerState = none(BufferManagerState)
+  of EditorMode.BookmarkManager:
+    win.bookmarkManagerState = none(BookmarkManagerState)
   of EditorMode.BackupManager:
     win.backupManagerState = none(BackupManagerState)
   of EditorMode.DiffViewer:

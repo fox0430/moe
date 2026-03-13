@@ -22,6 +22,8 @@ expandTab = false                      # Insert spaces instead of tab
 
 sidebar = true                         # Show sidebar
 
+bookmarkMarker = "♥ "                  # Bookmark indicator in sidebar
+
 showModifiedLines = true               # Highlight modified line numbers
 
 autoCloseParen = true                  # Auto-close parentheses
@@ -241,6 +243,8 @@ search = true                          # Persist search history
 searchHistoryLimit = 1000              # Search history limit
 
 cursorPosition = true                  # Persist cursor position per file
+
+bookmarks = true                       # Persist bookmarks
 
 [Git]
 

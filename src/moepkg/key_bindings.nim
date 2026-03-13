@@ -1262,6 +1262,47 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  # Register bookmark commands
+  registry.registerCommand(
+    Command(
+      name: "bookmark-toggle",
+      description: "Toggle bookmark on current line",
+      kind: ctAction,
+      commandId: "bookmark.toggle",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "bookmark-next",
+      description: "Jump to next bookmark",
+      kind: ctAction,
+      commandId: "bookmark.next",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "bookmark-prev",
+      description: "Jump to previous bookmark",
+      kind: ctAction,
+      commandId: "bookmark.prev",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "bookmark-clear",
+      description: "Clear all bookmarks in current buffer",
+      kind: ctAction,
+      commandId: "bookmark.clear",
+      args: @[],
+    )
+  )
+
   # Register search navigation commands
   registry.registerCommand(
     Command(
@@ -1332,6 +1373,10 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "Tab", "jump-forward") # Tab = Ctrl-I in terminal
   registry.bindKey(EditorMode.Normal, "g ;", "changelist-prev")
   registry.bindKey(EditorMode.Normal, "g ,", "changelist-next")
+  registry.bindKey(EditorMode.Normal, "m m", "bookmark-toggle")
+  registry.bindKey(EditorMode.Normal, "m n", "bookmark-next")
+  registry.bindKey(EditorMode.Normal, "m p", "bookmark-prev")
+  registry.bindKey(EditorMode.Normal, "m c", "bookmark-clear")
   registry.bindKey(EditorMode.Normal, "n", "search-next")
   registry.bindKey(EditorMode.Normal, "N", "search-prev")
   registry.bindKey(EditorMode.Normal, "*", "search-word-forward")

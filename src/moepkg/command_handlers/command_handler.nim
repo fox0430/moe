@@ -108,6 +108,7 @@ type
     cmrBackground # Pause editor and show terminal (:bg)
     cmrJumpList # Show jump list (:ju, :jump)
     cmrChanges # Show change list (:changes)
+    cmrBookmarks # Show bookmark list (:bookmarks)
     cmrBuild # Build current buffer (:build)
     cmrDebug # Open debug mode (:debug)
     cmrConfig # Open configuration mode (:conf)
@@ -206,6 +207,8 @@ type
     of cmrJumpList:
       discard
     of cmrChanges:
+      discard
+    of cmrBookmarks:
       discard
     of cmrBuild:
       discard
@@ -1013,6 +1016,8 @@ proc handleCommandModeInput*(
     return CommandModeResult(kind: cmrJumpList)
   of claChanges:
     return CommandModeResult(kind: cmrChanges)
+  of claBookmarks:
+    return CommandModeResult(kind: cmrBookmarks)
   of claBuild:
     return CommandModeResult(kind: cmrBuild)
   of claDebug:

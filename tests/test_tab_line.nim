@@ -152,27 +152,27 @@ suite "TabLine - setTabLineVisible":
 suite "TabLine - buildTabText":
   test "Build tab text for unnamed buffer":
     let buf = createTestTextBuffer()
-    let text = buildTabText(buf, EditorMode.Normal, isActive = false)
+    let text = buildTabText(buf)
     check text == " No Name "
 
   test "Build tab text for named buffer":
     let buf = createTestTextBuffer("/path/to/file.nim")
-    let text = buildTabText(buf, EditorMode.Normal, isActive = false)
+    let text = buildTabText(buf)
     check text == " file.nim "
 
   test "Build tab text for modified unnamed buffer":
     let buf = createTestTextBuffer("", modified = true)
-    let text = buildTabText(buf, EditorMode.Normal, isActive = false)
+    let text = buildTabText(buf)
     check text == " No Name[+] "
 
   test "Build tab text for modified named buffer":
     let buf = createTestTextBuffer("/path/to/file.nim", modified = true)
-    let text = buildTabText(buf, EditorMode.Normal, isActive = false)
+    let text = buildTabText(buf)
     check text == " file.nim[+] "
 
   test "Build tab text extracts filename only":
     let buf = createTestTextBuffer("/very/long/path/to/some/deep/directory/file.txt")
-    let text = buildTabText(buf, EditorMode.Normal, isActive = false)
+    let text = buildTabText(buf)
     check text == " file.txt "
 
 suite "TabLine - renderTabLine":
@@ -333,7 +333,7 @@ suite "TabLine - hitTestTabLine":
     let buf1 = createTestTextBuffer("/path/file1.nim")
     let buffers = @[buf1]
     # " file1.nim " = 11 chars, so clicking at 11 should miss
-    let tabText = buildTabText(buf1, EditorMode.Normal, false)
+    let tabText = buildTabText(buf1)
     let tabWidth = displayWidth(tabText)
     let idx = hitTestTabLine(buffers, EditorMode.Normal, 0, 80, tabWidth)
     check idx == -1
@@ -344,8 +344,8 @@ suite "TabLine - hitTestTabLine":
     let buf3 = createTestTextBuffer("/path/c.nim")
     let buffers = @[buf1, buf2, buf3]
     # " a.nim " = 7 chars, " b.nim " = 7 chars, " c.nim " = 7 chars
-    let w1 = displayWidth(buildTabText(buf1, EditorMode.Normal, false))
-    let w2 = displayWidth(buildTabText(buf2, EditorMode.Normal, false))
+    let w1 = displayWidth(buildTabText(buf1))
+    let w2 = displayWidth(buildTabText(buf2))
 
     # Click in first tab
     check hitTestTabLine(buffers, EditorMode.Normal, 0, 80, 0) == 0
@@ -357,7 +357,7 @@ suite "TabLine - hitTestTabLine":
   test "Click beyond all tabs returns -1":
     let buf1 = createTestTextBuffer("/path/a.nim")
     let buffers = @[buf1]
-    let w = displayWidth(buildTabText(buf1, EditorMode.Normal, false))
+    let w = displayWidth(buildTabText(buf1))
     let idx = hitTestTabLine(buffers, EditorMode.Normal, 0, 80, w + 10)
     check idx == -1
 
@@ -365,7 +365,7 @@ suite "TabLine - hitTestTabLine":
     let buf1 = createTestTextBuffer("/path/verylongfilename1.nim")
     let buf2 = createTestTextBuffer("/path/verylongfilename2.nim")
     let buffers = @[buf1, buf2]
-    let w1 = displayWidth(buildTabText(buf1, EditorMode.Normal, false))
+    let w1 = displayWidth(buildTabText(buf1))
     # Use narrow width that only fits the first tab
     let idx = hitTestTabLine(buffers, EditorMode.Normal, 0, w1, w1 + 2)
     check idx == -1
@@ -373,10 +373,43 @@ suite "TabLine - hitTestTabLine":
   test "With tabLineX offset":
     let buf1 = createTestTextBuffer("/path/file.nim")
     let buffers = @[buf1]
-    let w = displayWidth(buildTabText(buf1, EditorMode.Normal, false))
+    let w = displayWidth(buildTabText(buf1))
     # Tab starts at X=10, so clicking at X=10 should hit tab 0
     check hitTestTabLine(buffers, EditorMode.Normal, 10, 80, 10) == 0
     # Clicking at X=9 (before offset) should miss
     check hitTestTabLine(buffers, EditorMode.Normal, 10, 80, 9) == -1
     # Clicking at X=10+w should miss (past end of tab)
     check hitTestTabLine(buffers, EditorMode.Normal, 10, 80, 10 + w) == -1
+
+suite "TabLine - Special mode tab display":
+  test "BookmarkManager mode: tabs show filenames, not mode label":
+    ## Special modes should not override tab display.
+    ## Tabs always show buffer filenames; mode is shown in the status line.
+    var displayBuffer = createTestBuffer()
+    let buf1 = createTestTextBuffer("/path/file1.nim")
+    let buf2 = createTestTextBuffer("/path/file2.nim")
+    let buffers = @[buf1, buf2]
+
+    renderWindowTabLine(
+      buffers, buf1, EditorMode.BookmarkManager, displayBuffer, 0, 0, 80, true, true
+    )
+
+    let line = getBufferLine(displayBuffer, 0)
+    check " file1.nim " in line
+    check " file2.nim " in line
+    check " BOOKMARKS " notin line
+
+  test "BufferManager mode: tabs show filenames, not mode label":
+    var displayBuffer = createTestBuffer()
+    let buf1 = createTestTextBuffer("/path/file1.nim")
+    let buf2 = createTestTextBuffer("/path/file2.nim")
+    let buffers = @[buf1, buf2]
+
+    renderWindowTabLine(
+      buffers, buf1, EditorMode.BufferManager, displayBuffer, 0, 0, 80, true, true
+    )
+
+    let line = getBufferLine(displayBuffer, 0)
+    check " file1.nim " in line
+    check " file2.nim " in line
+    check " BUFFERS " notin line

@@ -180,6 +180,10 @@
 | <kbd>**g**</kbd> <kbd>**T**</kbd></br> | Switch to the previous buffer |
 | <kbd>**Ctrl**</kbd> <kbd>**o**</kbd></br> | Jump Back (Jumplist) |
 | <kbd>**Ctrl**</kbd> <kbd>**i**</kbd></br> | Jump Forward (Jumplist) |
+| <kbd>**m**</kbd> <kbd>**m**</kbd></br> | Toggle bookmark on current line |
+| <kbd>**m**</kbd> <kbd>**n**</kbd></br> | Jump to next bookmark |
+| <kbd>**m**</kbd> <kbd>**p**</kbd></br> | Jump to previous bookmark |
+| <kbd>**m**</kbd> <kbd>**c**</kbd></br> | Clear all bookmarks in current buffer |
 
 </details>
 
@@ -442,6 +446,7 @@ All keystrokes are forwarded to the running shell/command.
 | `terminal` | Open terminal emulator (default shell) |
 | `terminal command` | Run command in terminal emulator |
 | `changes` | Show Change list |
+| `bookmarks` | Show bookmark list |
 
 </details>
 

@@ -74,6 +74,39 @@ moe can use Vim-like registers.
 
 Stores the value of the last used register.
 
+## Bookmarks
+
+moe supports line bookmarks inspired by vim-bookmarks. Bookmarks are per-buffer, displayed in the sidebar with a `♥` indicator, and persisted across sessions in `~/.cache/moe/bookmarks.json`.
+
+| Keys | Description |
+|---|---|
+| `mm` | Toggle bookmark on current line |
+| `mn` | Jump to next bookmark |
+| `mp` | Jump to previous bookmark |
+| `mc` | Clear all bookmarks in current buffer |
+| `:bookmarks` | Open Bookmark Manager |
+
+Bookmarks automatically adjust their positions when lines are inserted or deleted. They are saved on exit and restored when files are reopened.
+
+In the sidebar, bookmark markers take priority over git/session change indicators but are overridden by syntax error/warning markers. The bookmark marker symbol can be customized via `Standard.bookmarkMarker` in the configuration file.
+
+### Bookmark Manager
+
+`:bookmarks` opens an interactive Bookmark Manager mode that lists all bookmarks across all open buffers.
+
+| Keys | Description |
+|---|---|
+| `j` / `Down` | Move selection down |
+| `k` / `Up` | Move selection up |
+| `Enter` | Jump to selected bookmark |
+| `D` | Delete selected bookmark |
+| `gg` | Move to first entry |
+| `G` | Move to last entry |
+| `Ctrl+d` | Half page down |
+| `Ctrl+u` | Half page up |
+| `q` / `Escape` | Close Bookmark Manager |
+| `:` | Enter command mode |
+
 ## Runtime Key Mapping
 
 moe supports Vim-like runtime key mapping commands. You can remap keys during an editing session using Command mode commands.
