@@ -415,6 +415,7 @@ All keystrokes are forwarded to the running shell/command.
 | `set highlightfullspace` or `set nohighlightfullspace` | Highlight full width space (alias: `hfs`, `nohfs`) |
 | `set highlightparen` or `set nohighlightparen` | Highlight matching paren (alias: `hp`, `nohp`) |
 | `set highlightfindchar` or `set nohighlightfindchar` | Highlight f/F/t/T matches (alias: `hfc`, `nohfc`) |
+| `set highlightcolorcode` or `set nohighlightcolorcode` | Highlight inline color codes (#RRGGBB, #RGB) with their actual color (alias: `hcc`, `nohcc`) |
 | `set multistatusline` or `set nomultistatusline` | Enable/disable multiple status line (alias: `msl`, `nomsl`) |
 | `set ignorecase` or `set noignorecase` | Enable/disable ignorecase (alias: `ic`, `noic`) |
 | `set smartcase` or `set nosmartcase` | Enable/disable smartcase (alias: `scs`, `noscs`) |

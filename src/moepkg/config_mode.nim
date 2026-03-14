@@ -644,6 +644,15 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
     boolSet: proc(c: EditorConfig, v: bool) =
       c.highlight.findCharHighlight = v,
   )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "colorCodeHighlight",
+    section: "Highlight",
+    boolGet: proc(c: EditorConfig): bool =
+      c.highlight.colorCodeHighlight,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.highlight.colorCodeHighlight = v,
+  )
 
   # AutoBackup section
   result.add ConfigItemDescriptor(

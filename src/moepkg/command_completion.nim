@@ -235,6 +235,8 @@ const SetOptions* = {
   "nohighlightparen": "Disable matching parentheses highlight",
   "highlightfindchar": "Highlight f/F/t/T matches",
   "nohighlightfindchar": "Disable f/F/t/T match highlight",
+  "highlightcolorcode": "Highlight inline color codes",
+  "nohighlightcolorcode": "Disable inline color code highlight",
   # Search
   "ignorecase": "Case insensitive search",
   "noignorecase": "Case sensitive search",

@@ -509,6 +509,33 @@ reservedWord = "TODO"
     check vr.hasErrors
     check "Highlight.reservedWord" in vr.errors[0].name
 
+  test "colorCodeHighlight loads true from TOML":
+    let tomlStr = """
+[Highlight]
+colorCodeHighlight = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.highlight.colorCodeHighlight == true
+
+  test "colorCodeHighlight loads false from TOML":
+    let tomlStr = """
+[Highlight]
+colorCodeHighlight = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.highlight.colorCodeHighlight == false
+
+  test "colorCodeHighlight defaults to true":
+    let tomlStr = """
+[Highlight]
+currentLine = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.highlight.colorCodeHighlight == true
+
 suite "Config Validation - LSP section":
   test "Valid LSP config passes validation":
     let tomlStr = """
@@ -1619,6 +1646,20 @@ tabStp = 4
     var found = false
     for e in vr.errors:
       if e.kind == iikUnknownKey and e.name == "Standard.tabStp":
+        found = true
+    check found
+
+  test "Unknown key in Highlight section is detected":
+    let tomlStr = """
+[Highlight]
+currentLine = true
+colorCodse = true
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    var found = false
+    for e in vr.errors:
+      if e.kind == iikUnknownKey and e.name == "Highlight.colorCodse":
         found = true
     check found
 

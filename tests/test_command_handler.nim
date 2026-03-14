@@ -460,6 +460,34 @@ suite "CommandModeHandler - executeSet Boolean Options":
     check result.boolOption == bsoHighlightFindChar
     check result.boolValue == false
 
+  test "Set highlightcolorcode on":
+    let handler = setupHandler()
+    let result = handler.executeSet("highlightcolorcode", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoHighlightColorCode
+    check result.boolValue == true
+
+  test "Set hcc on (abbreviation)":
+    let handler = setupHandler()
+    let result = handler.executeSet("hcc", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoHighlightColorCode
+    check result.boolValue == true
+
+  test "Set nohighlightcolorcode off":
+    let handler = setupHandler()
+    let result = handler.executeSet("nohighlightcolorcode", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoHighlightColorCode
+    check result.boolValue == false
+
+  test "Set nohcc off (abbreviation)":
+    let handler = setupHandler()
+    let result = handler.executeSet("nohcc", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoHighlightColorCode
+    check result.boolValue == false
+
   test "Set multistatusline on":
     let handler = setupHandler()
     let result = handler.executeSet("multistatusline", none(string))
@@ -1857,6 +1885,7 @@ suite "CommandModeHandler - executeSet enum coverage":
       ("highlightfullspace", bsoHighlightFullWidthSpace),
       ("highlightparen", bsoHighlightPairOfParen),
       ("highlightfindchar", bsoHighlightFindChar),
+      ("highlightcolorcode", bsoHighlightColorCode),
       ("multistatusline", bsoMultipleStatusLine),
       ("ignorecase", bsoIgnoreCase),
       ("smartcase", bsoSmartCase),
