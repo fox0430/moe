@@ -199,7 +199,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       hrBackupManagerOpenDiff, hrBackupManagerRefresh, hrBackupManagerQuit,
       hrEnterBackupManager, hrDiffViewerQuit, hrEnterDiffViewer, hrRecentFile,
       hrNextWindow, hrPrevWindow, hrIncreaseWindowHeight, hrDecreaseWindowHeight,
-      hrIncreaseWindowWidth, hrDecreaseWindowWidth, hrEqualizeWindows,
+      hrIncreaseWindowWidth, hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow,
       hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
       hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
       hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
@@ -1690,6 +1690,8 @@ proc handleEvent*(e: Editor, event: Event): bool =
     e.decreaseWindowWidth()
   of hrEqualizeWindows:
     e.equalizeWindowSizes()
+  of hrSwapWindow:
+    e.swapWindow()
   of hrEnew:
     let enewResult = e.enew()
     if enewResult.isErr:

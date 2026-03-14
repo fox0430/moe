@@ -1044,6 +1044,42 @@ proc decreaseWindowHeight*(wm: EditorWindowManager, delta: int = 1) =
     # Neighbor is above, shift active down
     wm.windows[activeIdx].viewport.y += delta
 
+proc swapWindows*(wm: EditorWindowManager) =
+  ## Swap the active window with the next window (Ctrl-w x)
+  ## Swaps viewport positions while keeping buffer/cursor state with each window.
+  if wm.windows.len <= 1:
+    return
+
+  let
+    activeIdx = wm.activeWindowIndex
+    nextIdx = (activeIdx + 1) mod wm.windows.len
+
+  # Swap viewports between the two windows
+  let tempViewport = ViewPort(
+    x: wm.windows[activeIdx].viewport.x,
+    y: wm.windows[activeIdx].viewport.y,
+    width: wm.windows[activeIdx].viewport.width,
+    height: wm.windows[activeIdx].viewport.height,
+    topLine: wm.windows[activeIdx].viewport.topLine,
+    leftColumn: wm.windows[activeIdx].viewport.leftColumn,
+  )
+
+  wm.windows[activeIdx].viewport.x = wm.windows[nextIdx].viewport.x
+  wm.windows[activeIdx].viewport.y = wm.windows[nextIdx].viewport.y
+  wm.windows[activeIdx].viewport.width = wm.windows[nextIdx].viewport.width
+  wm.windows[activeIdx].viewport.height = wm.windows[nextIdx].viewport.height
+
+  wm.windows[nextIdx].viewport.x = tempViewport.x
+  wm.windows[nextIdx].viewport.y = tempViewport.y
+  wm.windows[nextIdx].viewport.width = tempViewport.width
+  wm.windows[nextIdx].viewport.height = tempViewport.height
+
+  # Swap positions in the sequence so index order matches screen order
+  swap(wm.windows[activeIdx], wm.windows[nextIdx])
+
+  # Update active index to follow the active window
+  wm.activeWindowIndex = nextIdx
+
 proc equalizeAllWindows*(wm: EditorWindowManager, multiStatusLine: bool) =
   ## Equalize all window sizes
   if wm.windows.len <= 1:

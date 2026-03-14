@@ -1864,6 +1864,18 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.bindKey(EditorMode.Normal, "C-w =", "window-equalize")
 
+  # Ctrl-W x - Swap window with next
+  registry.registerCommand(
+    Command(
+      name: "window-swap",
+      description: "Swap window with next window",
+      kind: ctAction,
+      commandId: "window.swap",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "C-w x", "window-swap")
+
   # q - Macro record (toggle)
   registry.registerCommand(
     Command(

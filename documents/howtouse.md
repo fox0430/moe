@@ -130,6 +130,7 @@
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**>**</kbd><br> | Increase window width |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**<**</kbd><br> | Decrease window width |
 | <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**=**</kbd><br> | Equalize window sizes |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd> <kbd>**x**</kbd><br> | Swap window with next window |
 | <kbd>**?**</kbd><br> |`keyword` Search backwards |
 | <kbd>**/**</kbd><br> |`keyword` Search forwards |
 | <kbd>**\\**</kbd> <kbd>**r**</kbd><br> | Quick Run |

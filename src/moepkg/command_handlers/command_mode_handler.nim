@@ -1231,7 +1231,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           hrBackupManagerRefresh, hrBackupManagerQuit, hrDiffViewerQuit,
           hrEnterDiffViewer, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow,
           hrPrevWindow, hrIncreaseWindowHeight, hrDecreaseWindowHeight,
-          hrIncreaseWindowWidth, hrDecreaseWindowWidth, hrEqualizeWindows,
+          hrIncreaseWindowWidth, hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow,
           hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
           hrLspCodeLensExecute, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
           hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit,
