@@ -112,6 +112,7 @@ type
     hrIncreaseWindowWidth # Increase active window width
     hrDecreaseWindowWidth # Decrease active window width
     hrEqualizeWindows # Equalize all window sizes
+    hrSwapWindow # Swap active window with next
     hrLspGotoDefinition # Execute LSP goto definition
     hrLspGotoDeclaration # Execute LSP goto declaration
     hrLspFindReferences # Execute LSP find references
@@ -305,7 +306,7 @@ type
     of hrNextWindow, hrPrevWindow:
       discard
     of hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
-        hrDecreaseWindowWidth, hrEqualizeWindows:
+        hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow:
       discard
     of hrLspGotoDefinition:
       discard
@@ -698,6 +699,8 @@ proc handleNormalMode*(
     return HandlerResult(kind: hrDecreaseWindowWidth)
   of nmrEqualizeWindows:
     return HandlerResult(kind: hrEqualizeWindows)
+  of nmrSwapWindow:
+    return HandlerResult(kind: hrSwapWindow)
 
 proc handleInsertMode*(
     manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
@@ -1721,6 +1724,8 @@ proc executeCommandDirect*(
       return some(HandlerResult(kind: hrDecreaseWindowWidth))
     of "window.equalize":
       return some(HandlerResult(kind: hrEqualizeWindows))
+    of "window.swap":
+      return some(HandlerResult(kind: hrSwapWindow))
     of "window.close":
       return some(HandlerResult(kind: hrCloseWindow, forceClose: false))
     of "file.save":
@@ -2207,11 +2212,12 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit,
     hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
     hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
-    hrDecreaseWindowWidth, hrEqualizeWindows, hrEnterDiffViewer, hrLspGotoDefinition,
-    hrLspGotoDeclaration, hrLspFindReferences, hrLspCodeLensExecute,
-    hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing, hrLspTypeDefinition,
-    hrLspImplementation, hrLspHover, hrLspRename, hrLspSelectionRange,
-    hrLspDocumentLink, hrJumpList, hrChanges, hrLspLog, hrOnlyWindow,
+    hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow, hrEnterDiffViewer,
+    hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
+    hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
+    hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
+    hrLspSelectionRange, hrLspDocumentLink, hrJumpList, hrChanges, hrLspLog,
+    hrOnlyWindow,
   }
 
 proc hasError*(hrResult: HandlerResult): bool =

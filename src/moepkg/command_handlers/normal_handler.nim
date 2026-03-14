@@ -68,6 +68,7 @@ type
     nmrIncreaseWindowWidth # Signal to handler_manager to increase window width
     nmrDecreaseWindowWidth # Signal to handler_manager to decrease window width
     nmrEqualizeWindows # Signal to handler_manager to equalize all windows
+    nmrSwapWindow # Signal to handler_manager to swap window with next
 
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
     motionController*: MotionController
@@ -143,7 +144,7 @@ type
     of nmrPrevWindow:
       discard
     of nmrIncreaseWindowHeight, nmrDecreaseWindowHeight, nmrIncreaseWindowWidth,
-        nmrDecreaseWindowWidth, nmrEqualizeWindows:
+        nmrDecreaseWindowWidth, nmrEqualizeWindows, nmrSwapWindow:
       discard
 
 proc updateCursorToJumpPosition(
@@ -681,6 +682,8 @@ proc handleNormalModeKey*(
       return NormalModeResult(kind: nmrDecreaseWindowWidth)
     of "window.equalize":
       return NormalModeResult(kind: nmrEqualizeWindows)
+    of "window.swap":
+      return NormalModeResult(kind: nmrSwapWindow)
     of "macro.record":
       state.macroState.waitingForRegister = true
       state.macroState.commandType = "record"

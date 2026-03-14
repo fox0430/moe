@@ -554,6 +554,11 @@ proc equalizeWindowSizes*(e: Editor) =
   e.windowManager.equalizeAllWindows(e.state.display.multiStatusLine)
   e.syncActiveWindow()
 
+proc swapWindow*(e: Editor) =
+  ## Swap the active window with the next window
+  e.windowManager.swapWindows()
+  e.syncActiveWindow()
+
 proc closeWindow*(e: Editor): bool =
   ## Close the active window
   ## Returns true if editor should quit (last window closed)

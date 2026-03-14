@@ -154,6 +154,7 @@ Ctrl-w -   - Decrease window height
 Ctrl-w >   - Increase window width
 Ctrl-w <   - Decrease window width
 Ctrl-w =   - Equalize window sizes
+Ctrl-w x   - Swap window with next window
 /          - Search forwards
 ?          - Search backwards
 \r         - QuickRun

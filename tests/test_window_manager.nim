@@ -1210,3 +1210,230 @@ suite "EditorWindowManager - Only Window":
     wm.equalizeAllWindows(multiStatusLine = false)
     check wm.windows[0].viewport.width == origWidth
     check wm.windows[0].viewport.height == origHeight
+
+suite "EditorWindowManager - swapWindows":
+  test "swapWindows with single window does nothing":
+    let wm = createSingleWindowManager(80, 24)
+    let origBuffer = wm.windows[0].buffer
+
+    wm.swapWindows()
+
+    check wm.windows.len == 1
+    check wm.activeWindowIndex == 0
+    check wm.windows[0].buffer == origBuffer
+
+  test "swapWindows swaps two vsplit windows":
+    let wm = newEditorWindowManager()
+    let buf0 = newTextBuffer()
+    discard buf0.insertText(BufferPosition(line: 0, column: 0), "Buffer 0")
+    let buf1 = newTextBuffer()
+    discard buf1.insertText(BufferPosition(line: 0, column: 0), "Buffer 1")
+
+    wm.windows.add(
+      EditorWindow(
+        buffer: buf0,
+        bufferList: @[buf0],
+        viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 3),
+        active: true,
+      )
+    )
+    wm.windows.add(
+      EditorWindow(
+        buffer: buf1,
+        bufferList: @[buf1],
+        viewport:
+          ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 5),
+        active: false,
+      )
+    )
+    wm.activeWindowIndex = 0
+
+    wm.swapWindows()
+
+    # Active window (buf0) should now be at index 1 with the right viewport position
+    check wm.activeWindowIndex == 1
+    check wm.windows[1].buffer == buf0
+    check wm.windows[1].viewport.x == 40
+    check wm.windows[1].viewport.width == 40
+    check wm.windows[1].cursor.column == 3
+
+    # The other window (buf1) should be at index 0 with the left viewport position
+    check wm.windows[0].buffer == buf1
+    check wm.windows[0].viewport.x == 0
+    check wm.windows[0].viewport.width == 39
+    check wm.windows[0].cursor.column == 5
+
+  test "swapWindows swaps two hsplit windows":
+    let wm = newEditorWindowManager()
+    let buf0 = newTextBuffer()
+    discard buf0.insertText(BufferPosition(line: 0, column: 0), "Top buffer")
+    let buf1 = newTextBuffer()
+    discard buf1.insertText(BufferPosition(line: 0, column: 0), "Bottom buffer")
+
+    wm.windows.add(
+      EditorWindow(
+        buffer: buf0,
+        bufferList: @[buf0],
+        viewport: ViewPort(x: 0, y: 0, width: 80, height: 11, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 0),
+        active: true,
+      )
+    )
+    wm.windows.add(
+      EditorWindow(
+        buffer: buf1,
+        bufferList: @[buf1],
+        viewport:
+          ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 0),
+        active: false,
+      )
+    )
+    wm.activeWindowIndex = 0
+
+    wm.swapWindows()
+
+    # buf0 moved to bottom position (index 1)
+    check wm.activeWindowIndex == 1
+    check wm.windows[1].buffer == buf0
+    check wm.windows[1].viewport.y == 12
+    check wm.windows[1].viewport.height == 12
+
+    # buf1 moved to top position (index 0)
+    check wm.windows[0].buffer == buf1
+    check wm.windows[0].viewport.y == 0
+    check wm.windows[0].viewport.height == 11
+
+  test "swapWindows wraps around from last window":
+    let wm = newEditorWindowManager()
+    let buf0 = newTextBuffer()
+    let buf1 = newTextBuffer()
+    let buf2 = newTextBuffer()
+
+    wm.windows.add(
+      EditorWindow(
+        buffer: buf0,
+        bufferList: @[buf0],
+        viewport: ViewPort(x: 0, y: 0, width: 26, height: 24, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 0),
+        active: false,
+      )
+    )
+    wm.windows.add(
+      EditorWindow(
+        buffer: buf1,
+        bufferList: @[buf1],
+        viewport:
+          ViewPort(x: 27, y: 0, width: 26, height: 24, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 0),
+        active: false,
+      )
+    )
+    wm.windows.add(
+      EditorWindow(
+        buffer: buf2,
+        bufferList: @[buf2],
+        viewport:
+          ViewPort(x: 54, y: 0, width: 26, height: 24, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 0),
+        active: true,
+      )
+    )
+    wm.activeWindowIndex = 2
+
+    wm.swapWindows()
+
+    # Last window (buf2) swaps with first window (buf0)
+    check wm.activeWindowIndex == 0
+    check wm.windows[0].buffer == buf2
+    check wm.windows[0].viewport.x == 0
+    check wm.windows[0].viewport.width == 26
+
+    check wm.windows[2].buffer == buf0
+    check wm.windows[2].viewport.x == 54
+    check wm.windows[2].viewport.width == 26
+
+    # Middle window unchanged
+    check wm.windows[1].buffer == buf1
+
+  test "swapWindows preserves cursor and scroll state":
+    let wm = newEditorWindowManager()
+    let buf0 = newTextBuffer()
+    discard buf0.insertText(BufferPosition(line: 0, column: 0), "line1\nline2\nline3")
+    let buf1 = newTextBuffer()
+    discard buf1.insertText(BufferPosition(line: 0, column: 0), "other content")
+
+    wm.windows.add(
+      EditorWindow(
+        buffer: buf0,
+        bufferList: @[buf0],
+        viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 2, leftColumn: 3),
+        cursor: BufferPosition(line: 2, column: 4),
+        active: true,
+      )
+    )
+    wm.windows.add(
+      EditorWindow(
+        buffer: buf1,
+        bufferList: @[buf1],
+        viewport:
+          ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 7),
+        active: false,
+      )
+    )
+    wm.activeWindowIndex = 0
+
+    wm.swapWindows()
+
+    # buf0's cursor/scroll state should be preserved
+    check wm.windows[1].buffer == buf0
+    check wm.windows[1].cursor.line == 2
+    check wm.windows[1].cursor.column == 4
+    check wm.windows[1].viewport.topLine == 2
+    check wm.windows[1].viewport.leftColumn == 3
+
+    # buf1's cursor/scroll state should be preserved
+    check wm.windows[0].buffer == buf1
+    check wm.windows[0].cursor.line == 0
+    check wm.windows[0].cursor.column == 7
+
+  test "swapWindows twice returns to original layout":
+    let wm = newEditorWindowManager()
+    let buf0 = newTextBuffer()
+    let buf1 = newTextBuffer()
+
+    wm.windows.add(
+      EditorWindow(
+        buffer: buf0,
+        bufferList: @[buf0],
+        viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 0),
+        active: true,
+      )
+    )
+    wm.windows.add(
+      EditorWindow(
+        buffer: buf1,
+        bufferList: @[buf1],
+        viewport:
+          ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
+        cursor: BufferPosition(line: 0, column: 0),
+        active: false,
+      )
+    )
+    wm.activeWindowIndex = 0
+
+    wm.swapWindows()
+    wm.swapWindows()
+
+    # Should be back to original: buf0 at index 0 (left), buf1 at index 1 (right)
+    check wm.windows[0].buffer == buf0
+    check wm.windows[0].viewport.x == 0
+    check wm.windows[0].viewport.width == 39
+    check wm.windows[1].buffer == buf1
+    check wm.windows[1].viewport.x == 40
+    check wm.windows[1].viewport.width == 40
+    check wm.activeWindowIndex == 0
