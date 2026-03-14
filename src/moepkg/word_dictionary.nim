@@ -30,7 +30,8 @@ import pkg/unicodedb/properties
 import
   syntax/[
     tokenizer, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxjava,
-    syntaxjavascript, syntaxnim, syntaxpython, syntaxrust, syntaxshell, syntaxtypescript,
+    syntaxjavascript, syntaxlisp, syntaxnim, syntaxpython, syntaxrust, syntaxshell,
+    syntaxtypescript,
   ]
 
 type WordDictionary* = CritBitTree[int]
@@ -86,6 +87,10 @@ proc getHaskellKeywords(): seq[string] {.compileTime.} =
   for s in haskellKeywords:
     result.add s
 
+proc getLispKeywords(): seq[string] {.compileTime.} =
+  for s in lispKeywords:
+    result.add s
+
 proc getJavaKeywords(): seq[string] {.compileTime.} =
   for s in javaKeywords:
     result.add s
@@ -132,6 +137,7 @@ const
   CppKeywordList = getCppKeywords()
   CsharpKeywordList = getCsharpKeywords()
   HaskellKeywordList = getHaskellKeywords()
+  LispKeywordList = getLispKeywords()
   JavaKeywordList = getJavaKeywords()
   JavaScriptKeywordList = getJavaScriptKeywords()
   NimKeywordList = getNimKeywords()
@@ -152,6 +158,8 @@ proc getLanguageKeywords*(lang: SourceLanguage): seq[string] =
     @CsharpKeywordList
   of langHaskell:
     @HaskellKeywordList
+  of langLisp:
+    @LispKeywordList
   of langJava:
     @JavaKeywordList
   of langJavaScript, langJsx:

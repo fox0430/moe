@@ -150,6 +150,7 @@ type
     langJavaScript
     langJsx
     langLatex
+    langLisp
     langMarkdown
     langNim
     langPython
@@ -182,8 +183,8 @@ const
 
   sourceLanguageToStr*: array[SourceLanguage, string] = [
     "none", "Astro", "C", "COMMIT_EDITMSG", "C++", "C#", "Diff", "git-rebase-todo",
-    "Haskell", "HTML", "Java", "JavaScript", "JavaScriptReact", "LaTeX", "Markdown",
-    "Nim", "Python", "Rust", "Shell", "Toml", "Yaml", "Json", "TypeScript",
+    "Haskell", "HTML", "Java", "JavaScript", "JavaScriptReact", "LaTeX", "Lisp",
+    "Markdown", "Nim", "Python", "Rust", "Shell", "Toml", "Yaml", "Json", "TypeScript",
     "TypeScriptReact",
   ]
 
@@ -281,8 +282,8 @@ proc isKeyword*(x: openArray[string], y: string): int =
 import
   syntaxastro, syntaxc, syntaxcommiteditmsg, syntaxcpp, syntaxcsharp, syntaxdiff,
   syntaxgitrebasetodo, syntaxhaskell, syntaxhtml, syntaxjava, syntaxjavascript,
-  syntaxlatex, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust, syntaxshell,
-  syntaxyaml, syntaxtoml, syntaxjson, syntaxtypescript
+  syntaxlatex, syntaxlisp, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust,
+  syntaxshell, syntaxyaml, syntaxtoml, syntaxjson, syntaxtypescript
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -298,6 +299,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langJava: g.javaNextToken
   of langJavaScript, langJsx: g.javaScriptNextToken
   of langLatex: g.latexNextToken
+  of langLisp: g.lispNextToken
   of langMarkdown: g.markdownNextToken
   of langNim: g.nimNextToken
   of langPython: g.pythonNextToken

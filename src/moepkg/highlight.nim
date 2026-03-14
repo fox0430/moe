@@ -844,6 +844,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langJson
   of ".tex", ".sty", ".cls", ".ltx", ".dtx":
     return SourceLanguage.langLatex
+  of ".lisp", ".lsp", ".cl", ".el", ".scm", ".ss", ".rkt", ".asd", ".fasl":
+    return SourceLanguage.langLisp
   else:
     return SourceLanguage.langNone
 
