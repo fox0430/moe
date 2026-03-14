@@ -45,6 +45,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
   - TOML
   - YAML
   - JSON
+  - Lisp
 
 - Auto-completion
 
