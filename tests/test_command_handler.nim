@@ -793,6 +793,53 @@ suite "CommandModeHandler - executeSet softTabStop":
     let result = handler.executeSet("sts", some("-1"))
     check result.kind == cmrError
 
+suite "CommandModeHandler - executeSet Scrollbar":
+  test "Set scrollbar on":
+    let handler = setupHandler()
+    let result = handler.executeSet("scrollbar", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoScrollbar
+    check result.boolValue == true
+
+  test "Set noscrollbar off":
+    let handler = setupHandler()
+    let result = handler.executeSet("noscrollbar", none(string))
+    check result.kind == cmrSetBoolOption
+    check result.boolOption == bsoScrollbar
+    check result.boolValue == false
+
+  test "Set scrollbarwidth":
+    let handler = setupHandler()
+    let result = handler.executeSet("scrollbarwidth", some("2"))
+    check result.kind == cmrSetIntOption
+    check result.intOption == isoScrollbarWidth
+    check result.intValue == 2
+
+  test "Set scrollbarwidth to 0":
+    let handler = setupHandler()
+    let result = handler.executeSet("scrollbarwidth", some("0"))
+    check result.kind == cmrSetIntOption
+    check result.intOption == isoScrollbarWidth
+    check result.intValue == 0
+
+  test "Set scrollbarwidth without value returns error":
+    let handler = setupHandler()
+    let result = handler.executeSet("scrollbarwidth", none(string))
+    check result.kind == cmrError
+    check "requires a value" in result.errorMessage
+
+  test "Set scrollbarwidth with invalid value returns error":
+    let handler = setupHandler()
+    let result = handler.executeSet("scrollbarwidth", some("abc"))
+    check result.kind == cmrError
+    check "Invalid value" in result.errorMessage
+
+  test "Set scrollbarwidth with negative value returns error":
+    let handler = setupHandler()
+    let result = handler.executeSet("scrollbarwidth", some("-1"))
+    check result.kind == cmrError
+    check "must be >= 0" in result.errorMessage
+
 suite "CommandModeHandler - executeSet Float Options":
   test "Set scrollfriction":
     let handler = setupHandler()
@@ -1819,6 +1866,7 @@ suite "CommandModeHandler - executeSet enum coverage":
       ("showgitinactive", bsoShowGitInactive),
       ("wrap", bsoLineWrap),
       ("expandtab", bsoExpandTab),
+      ("scrollbar", bsoScrollbar),
     ]
 
     # Verify each option returns the expected enum value
@@ -1840,6 +1888,7 @@ suite "CommandModeHandler - executeSet enum coverage":
       ("tabstop", isoTabStop),
       ("shiftwidth", isoShiftWidth),
       ("softtabstop", isoSoftTabStop),
+      ("scrollbarwidth", isoScrollbarWidth),
     ]
 
     var coveredValues: HashSet[IntSettingOption]

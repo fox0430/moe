@@ -65,7 +65,8 @@ proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
     lineCount = activeBuffer.len
     cursorPos = CursorPosition(x: pos.column, y: pos.line)
     lineNumOffset = calculateViewportOffset(
-      activeBuffer, e.state.display.showLineNumbers, e.state.display.showSidebar
+      activeBuffer, e.state.display.showLineNumbers, e.state.display.showSidebar,
+      e.state.display.scrollbar, e.state.display.scrollbarWidth,
     )
 
   e.handlerManager.motionController.viewportManager.updateViewport(
@@ -571,6 +572,10 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.config.standard.expandTab = val
           e.state.display.expandTab = val
           e.state.statusMessage = "expandtab = " & $val
+        of bsoScrollbar:
+          e.config.standard.scrollbar = val
+          e.state.display.scrollbar = val
+          e.state.statusMessage = "scrollbar = " & $val
         e.state.needsFullRedraw = true
       of hrSetIntOption:
         # Handle integer option setting
@@ -589,6 +594,10 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.config.standard.softTabStop = val
           e.state.display.softTabStop = val
           e.state.statusMessage = "softtabstop = " & $val
+        of isoScrollbarWidth:
+          e.config.standard.scrollbarWidth = val
+          e.state.display.scrollbarWidth = val
+          e.state.statusMessage = "scrollbarwidth = " & $val
         e.state.needsFullRedraw = true
       of hrSetFloatOption:
         # Handle float option setting
@@ -959,9 +968,9 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           debugLines, e.state.display.showStatusLine, e.state.display.multiStatusLine,
           e.state.display.showLineNumbers, e.state.display.showCursorLine,
           e.state.display.showSyntax, e.state.display.showIndentationLines,
-          e.state.display.showSidebar, e.state.display.showModifiedLines,
-          e.state.display.lineWrap, e.state.display.tabStop,
-          debugConfig.editorView.enable,
+          e.state.display.showSidebar, e.state.display.scrollbarWidth,
+          e.state.display.showModifiedLines, e.state.display.lineWrap,
+          e.state.display.tabStop, debugConfig.editorView.enable,
         )
         generateMacroInfo(
           debugLines, e.state.macroState.isRecording, e.state.macroState.register,

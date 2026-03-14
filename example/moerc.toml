@@ -20,7 +20,11 @@ softTabStop = 0                        # Tab/Backspace width in insert mode (0 =
 
 expandTab = false                      # Insert spaces instead of tab
 
-sidebar = true                         # Show sidebar
+sidebar =  false                       # Show sidebar
+
+scrollbar = true                       # Show scrollbar
+
+scrollbarWidth = 1                     # Scrollbar width (0 = hidden)
 
 bookmarkMarker = "♥ "                  # Bookmark indicator in sidebar
 

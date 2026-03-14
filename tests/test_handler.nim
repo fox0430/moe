@@ -563,6 +563,230 @@ suite "screenToBufferPosition - Line Wrap Mode":
     check result.get.line == 1
     check result.get.column == 1
 
+suite "screenToBufferPosition - Scrollbar":
+  test "Click with scrollbar reduces text area width":
+    # viewport width=12, sidebarWidth=0, scrollbarWidth=1, lineNumOffset=0
+    # maxWidth = 12 - 0 - 1 - 0 = 11
+    # Line: "abcdefghijklmno" (15 chars)
+    # Segment 0 (row 0): chars 0-10 (11 cols)
+    # Segment 1 (row 1): chars 11-14 (4 cols)
+    let
+      vp = createTestViewport(0, 0, 12, 24, 0, 0)
+      buffer = newTextBuffer("abcdefghijklmno")
+      lineNumOffset = 0
+      reservedLines = StatusAndCommandReserve
+
+    # Click on row 1, col 0 => char 11 ('l')
+    let result = screenToBufferPosition(
+      vp,
+      buffer,
+      0,
+      1,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = true,
+      scrollbarWidth = 1,
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 11
+
+  test "Click with scrollbar and sidebar":
+    # viewport width=20, sidebarWidth=2, scrollbarWidth=1, lineNumOffset=5
+    # maxWidth = 20 - 2 - 1 - 5 = 12
+    # Line: "abcdefghijklmnopqrst" (20 chars)
+    # Segment 0 (row 0): chars 0-11 (12 cols)
+    # Segment 1 (row 1): chars 12-19 (8 cols)
+    let
+      vp = createTestViewport(0, 0, 20, 24, 0, 0)
+      buffer = newTextBuffer("abcdefghijklmnopqrst")
+      lineNumOffset = 5
+      sidebarWidth = 2
+      reservedLines = StatusAndCommandReserve
+
+    # Click at x=8 on row 1 => screenX = 8-2-5=1, segment 1, char 13 ('n')
+    let result = screenToBufferPosition(
+      vp,
+      buffer,
+      8,
+      1,
+      lineNumOffset,
+      sidebarWidth,
+      reservedLines,
+      lineWrap = true,
+      scrollbarWidth = 1,
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 13
+
+  test "Click without scrollbar has wider text area":
+    # Same setup as above but without scrollbar
+    # maxWidth = 20 - 2 - 0 - 5 = 13
+    # Segment 0 (row 0): chars 0-12 (13 cols)
+    # Segment 1 (row 1): chars 13-19 (7 cols)
+    let
+      vp = createTestViewport(0, 0, 20, 24, 0, 0)
+      buffer = newTextBuffer("abcdefghijklmnopqrst")
+      lineNumOffset = 5
+      sidebarWidth = 2
+      reservedLines = StatusAndCommandReserve
+
+    # Click at x=8 on row 1 => screenX = 8-2-5=1, segment 1, char 14 ('o')
+    let result = screenToBufferPosition(
+      vp,
+      buffer,
+      8,
+      1,
+      lineNumOffset,
+      sidebarWidth,
+      reservedLines,
+      lineWrap = true,
+      scrollbarWidth = 0,
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 14
+
+  test "No-wrap mode ignores scrollbar for column calculation":
+    let
+      vp = createTestViewport(0, 0, 80, 24, 0, 0)
+      buffer = newTextBuffer("Hello World")
+      lineNumOffset = 0
+      reservedLines = StatusAndCommandReserve
+
+    let result = screenToBufferPosition(
+      vp,
+      buffer,
+      5,
+      0,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = false,
+      scrollbarWidth = 1,
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 5
+
+  test "Click with scrollbar width 2":
+    # viewport width=14, scrollbarWidth=2, lineNumOffset=0
+    # maxWidth = 14 - 0 - 2 - 0 = 12
+    # Line: "abcdefghijklmnop" (16 chars)
+    # Segment 0 (row 0): chars 0-11 (12 cols)
+    # Segment 1 (row 1): chars 12-15 (4 cols)
+    let
+      vp = createTestViewport(0, 0, 14, 24, 0, 0)
+      buffer = newTextBuffer("abcdefghijklmnop")
+      lineNumOffset = 0
+      reservedLines = StatusAndCommandReserve
+
+    # Click on row 1, col 1 => char 13 ('n')
+    let result = screenToBufferPosition(
+      vp,
+      buffer,
+      1,
+      1,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = true,
+      scrollbarWidth = 2,
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 13
+
+  test "Click with scrollbar width 0 defaults to no scrollbar":
+    # scrollbarWidth=0 should behave same as no scrollbar
+    # viewport width=10, maxWidth = 10
+    let
+      vp = createTestViewport(0, 0, 10, 24, 0, 0)
+      buffer = newTextBuffer("abcdefghijklmno")
+      lineNumOffset = 0
+      reservedLines = StatusAndCommandReserve
+
+    # 15 chars at maxWidth=10: segment 0 = 0-9, segment 1 = 10-14
+    # Click on row 1, col 0 => char 10 ('k')
+    let result = screenToBufferPosition(
+      vp,
+      buffer,
+      0,
+      1,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = true,
+      scrollbarWidth = 0,
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 10
+
+  test "Click with scrollbar on multiline buffer":
+    # viewport width=12, scrollbarWidth=1, lineNumOffset=0
+    # maxWidth = 12 - 1 = 11
+    # Line 0: "abcdefghijk" (11 chars) => 1 row
+    # Line 1: "lmnop" (5 chars) => 1 row
+    let
+      vp = createTestViewport(0, 0, 12, 24, 0, 0)
+      buffer = newTextBuffer("abcdefghijk\nlmnop")
+      lineNumOffset = 0
+      reservedLines = StatusAndCommandReserve
+
+    # Click on row 1, col 2 => line 1, char 2 ('n')
+    let result = screenToBufferPosition(
+      vp,
+      buffer,
+      2,
+      1,
+      lineNumOffset,
+      sidebarWidth = 0,
+      reservedLines,
+      lineWrap = true,
+      scrollbarWidth = 1,
+    )
+
+    check result.isSome
+    check result.get.line == 1
+    check result.get.column == 2
+
+  test "Click with scrollbar, sidebar, and line numbers":
+    # viewport width=25, sidebarWidth=2, scrollbarWidth=2, lineNumOffset=4
+    # maxWidth = 25 - 2 - 2 - 4 = 17
+    # Line: 20 chars => segment 0 = chars 0-16 (17 cols), segment 1 = chars 17-19
+    let
+      vp = createTestViewport(0, 0, 25, 24, 0, 0)
+      buffer = newTextBuffer("abcdefghijklmnopqrst")
+      lineNumOffset = 4
+      sidebarWidth = 2
+      reservedLines = StatusAndCommandReserve
+
+    # Click at x=7 on row 1 => screenX = 7-2-4 = 1, segment 1, char 18 ('s')
+    let result = screenToBufferPosition(
+      vp,
+      buffer,
+      7,
+      1,
+      lineNumOffset,
+      sidebarWidth,
+      reservedLines,
+      lineWrap = true,
+      scrollbarWidth = 2,
+    )
+
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 18
+
 suite "Background Process Management":
   test "addRunningProcess adds process to list":
     let config = newEditorConfig()

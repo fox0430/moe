@@ -118,7 +118,9 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       reservedLines = e.calculateReservedLines(isBottomWindow)
       visibleHeight = max(1, window.viewport.height - reservedLines - tabLineOffset)
       sidebarWidth = e.calculateSidebarWidth(window.mode)
-      textAreaWidth = max(0, window.viewport.width - sidebarWidth - lineNumOffset)
+      scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+      textAreaWidth =
+        max(0, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
 
     # Adjust viewport to keep cursor visible
     adjustViewportForCursor(

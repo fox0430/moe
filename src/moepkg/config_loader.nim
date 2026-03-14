@@ -352,11 +352,12 @@ proc loadStandardConfig(
   const section = "Standard"
   const validKeys = [
     "number", "relativeNumber", "statusLine", "syntax", "indentationLines", "tabStop",
-    "shiftWidth", "softTabStop", "expandTab", "sidebar", "bookmarkMarker",
-    "showModifiedLines", "autoCloseParen", "autoIndent", "ignorecase", "smartcase",
-    "disableChangeCursor", "defaultCursor", "normalModeCursor", "insertModeCursor",
-    "liveReloadOfConf", "incrementalSearch", "popupWindowInExmode", "autoDeleteParen",
-    "liveReloadOfFile", "colorMode", "mouse", "lineWrap", "timeoutlen", "bufferBackend",
+    "shiftWidth", "softTabStop", "expandTab", "sidebar", "scrollbar", "scrollbarWidth",
+    "bookmarkMarker", "showModifiedLines", "autoCloseParen", "autoIndent", "ignorecase",
+    "smartcase", "disableChangeCursor", "defaultCursor", "normalModeCursor",
+    "insertModeCursor", "liveReloadOfConf", "incrementalSearch", "popupWindowInExmode",
+    "autoDeleteParen", "liveReloadOfFile", "colorMode", "mouse", "lineWrap",
+    "timeoutlen", "bufferBackend",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "number", config.number, vr, section)
@@ -369,6 +370,8 @@ proc loadStandardConfig(
   loadInt(table, "softTabStop", config.softTabStop, vr, section, minVal = 0)
   loadBool(table, "expandTab", config.expandTab, vr, section)
   loadBool(table, "sidebar", config.sidebar, vr, section)
+  loadBool(table, "scrollbar", config.scrollbar, vr, section)
+  loadInt(table, "scrollbarWidth", config.scrollbarWidth, vr, section, minVal = 0)
   loadString(table, "bookmarkMarker", config.bookmarkMarker, vr, section)
   loadBool(table, "showModifiedLines", config.showModifiedLines, vr, section)
   loadBool(table, "autoCloseParen", config.autoCloseParen, vr, section)
@@ -1849,6 +1852,8 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "softTabStop = " & $config.standard.softTabStop
   lines.add "expandTab = " & toTomlBool(config.standard.expandTab)
   lines.add "sidebar = " & toTomlBool(config.standard.sidebar)
+  lines.add "scrollbar = " & toTomlBool(config.standard.scrollbar)
+  lines.add "scrollbarWidth = " & $config.standard.scrollbarWidth
   lines.add "bookmarkMarker = \"" & config.standard.bookmarkMarker & "\""
   lines.add "showModifiedLines = " & toTomlBool(config.standard.showModifiedLines)
   lines.add "autoCloseParen = " & toTomlBool(config.standard.autoCloseParen)

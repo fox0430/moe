@@ -321,6 +321,7 @@ proc screenToBufferPosition(
     lineNumOffset, sidebarWidth, reservedLines: int,
     lineWrap: bool,
     tabStop: int = 4,
+    scrollbarWidth: int = 0,
 ): Option[BufferPosition] =
   ## Convert screen coordinates to buffer position.
   ## Returns none if click is outside the text area.
@@ -328,6 +329,7 @@ proc screenToBufferPosition(
   ##
   ## lineNumOffset: line number area width (from calculateLineNumOffset)
   ## sidebarWidth: sidebar area width (from calculateSidebarWidth)
+  ## scrollbarWidth: scrollbar area width (from calculateScrollbarWidth)
   ## These are separate parameters to match the rendering calculation exactly.
   let
     totalOffset = sidebarWidth + lineNumOffset
@@ -341,8 +343,8 @@ proc screenToBufferPosition(
     return none(BufferPosition)
 
   if lineWrap:
-    # Must match renderWindowLineWrapped: maxWidth = viewport.width - sidebarWidth - lineNumOffset
-    let maxWidth = max(1, vp.width - sidebarWidth - lineNumOffset)
+    # Must match renderWindowLineWrapped: maxWidth = viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
+    let maxWidth = max(1, vp.width - sidebarWidth - scrollbarWidth - lineNumOffset)
     # Walk through buffer lines, accumulating screen rows for each wrapped line
     var currentScreenY = 0
     var bufferLine = vp.topLine
@@ -580,11 +582,13 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
           let
             lineNumOffset = e.calculateLineNumOffsetForMouse(window.buffer)
             sidebarWidth = e.calculateSidebarWidth(window.mode)
+            scrollbarWidth = e.calculateScrollbarWidth(window.mode)
             # Each window has its own status line
             reservedLines = if e.state.display.showStatusLine: 1 else: 0
             posOpt = screenToBufferPosition(
               vp, window.buffer, mouse.x, mouse.y, lineNumOffset, sidebarWidth,
               reservedLines, e.state.display.lineWrap, e.state.display.tabStop,
+              scrollbarWidth,
             )
 
           if posOpt.isNone:
@@ -627,6 +631,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       activeBuffer = e.activeBuffer()
       lineNumOffset = e.calculateLineNumOffsetForMouse(activeBuffer)
       sidebarWidth = e.calculateSidebarWidth(e.activeWindow.mode)
+      scrollbarWidth = e.calculateScrollbarWidth(e.activeWindow.mode)
       # Status line + command line (shared row)
       reservedLines =
         if e.state.display.showStatusLine:
@@ -638,7 +643,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       adjustedMouseY = mouse.y - tabLineOffset
       posOpt = screenToBufferPosition(
         e.viewport, activeBuffer, mouse.x, adjustedMouseY, lineNumOffset, sidebarWidth,
-        reservedLines, e.state.display.lineWrap, e.state.display.tabStop,
+        reservedLines, e.state.display.lineWrap, e.state.display.tabStop, scrollbarWidth,
       )
 
     if posOpt.isNone:
