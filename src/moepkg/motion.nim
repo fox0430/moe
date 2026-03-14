@@ -1262,6 +1262,8 @@ proc executeMotion*(
         controller.executor.buffer,
         controller.cursorManager.state.display.showLineNumbers,
         controller.cursorManager.state.display.showSidebar,
+        controller.cursorManager.state.display.scrollbar,
+        controller.cursorManager.state.display.scrollbarWidth,
       )
 
     controller.viewportManager.updateViewport(

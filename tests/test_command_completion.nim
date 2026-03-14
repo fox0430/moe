@@ -1024,10 +1024,14 @@ suite "CommandCompletion - SetOptions and executeSet sync":
       "nowrap",
       "expandtab",
       "noexpandtab",
+      # Scrollbar
+      "scrollbar",
+      "noscrollbar",
       # Integer options
       "tabstop",
       "shiftwidth",
       "softtabstop",
+      "scrollbarwidth",
       # Float options
       "scrollfriction",
       "scrollairdrag",
@@ -1052,8 +1056,8 @@ suite "CommandCompletion - SetOptions and executeSet sync":
       "nomultistatusline", "ignorecase", "noignorecase", "smartcase", "nosmartcase",
       "incsearch", "noincsearch", "hlsearch", "nohlsearch", "buildonsave",
       "nobuildonsave", "showgitinactive", "noshowgitinactive", "wrap", "nowrap",
-      "expandtab", "noexpandtab", "tabstop", "shiftwidth", "softtabstop",
-      "scrollfriction", "scrollairdrag",
+      "expandtab", "noexpandtab", "scrollbar", "noscrollbar", "tabstop", "shiftwidth",
+      "softtabstop", "scrollbarwidth", "scrollfriction", "scrollairdrag",
     ]
     for key in SetOptions.keys:
       check key in executeSetPrimaryOptions

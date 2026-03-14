@@ -355,6 +355,8 @@ set buildonsave / set nobuildonsave (bos/nobos)             - Enable/disable bui
 set showgitinactive / set noshowgitinactive (sgi/nosgi)     - Show/hide git branch in inactive window
 set wrap / set nowrap                                       - Enable/disable line wrap
 set expandtab / set noexpandtab (et/noet)                   - Enable/disable expand tab to spaces
+set scrollbar / set noscrollbar                             - Enable/disable scrollbar
+set scrollbarwidth=number        - Change scrollbar width; e.g. set scrollbarwidth=2
 set tabstop=number (ts)          - Change tab stop width; e.g. set tabstop=2
 set shiftwidth=number (sw)       - Change indent width; e.g. set shiftwidth=2
 set softtabstop=number (sts)     - Change soft tab stop width; e.g. set softtabstop=4

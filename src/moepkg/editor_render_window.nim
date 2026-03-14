@@ -48,7 +48,8 @@ proc renderWindowLineWrapped*(
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
     sidebarWidth = e.calculateSidebarWidth(window.mode)
-    maxWidth = window.viewport.width - sidebarWidth - lineNumOffset
+    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+    maxWidth = window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
     lineCharLen = line.charLen
     isCurrentLine = (lineIndex == window.cursor.line)
     # Apply currentNumber setting: highlight current line number only if enabled
@@ -158,6 +159,7 @@ proc renderWindowLineNoWrap*(
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
     sidebarWidth = e.calculateSidebarWidth(window.mode)
+    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
     isCurrentLine = (lineIndex == window.cursor.line)
     # Apply currentNumber setting: highlight current line number only if enabled
     lineStyle =
@@ -184,7 +186,10 @@ proc renderWindowLineNoWrap*(
     textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
 
   if displayLine.len > 0 and textScreenX < buffer.area.width:
-    let maxWidth = min(displayLine.len, window.viewport.width - lineNumOffset)
+    let maxWidth = min(
+      displayLine.len,
+      window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset,
+    )
     if maxWidth > 0:
       # Render with selection highlighting if in visual mode
       e.renderLineSegmentWithSelection(
@@ -243,9 +248,11 @@ proc renderFoldLine*(
   let
     actualScreenY = window.viewport.y + screenY
     sidebarWidth = e.calculateSidebarWidth(window.mode)
+    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
     lineNumScreenX = window.viewport.x + sidebarWidth
     textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
     foldText = window.buffer.formatFoldText(fold)
+    windowRightEdge = window.viewport.x + window.viewport.width - scrollbarWidth
 
   # Render line number (if enabled)
   if lineNumOffset > 0:
@@ -255,13 +262,55 @@ proc renderFoldLine*(
 
   # Render fold text
   if textScreenX < buffer.area.width:
-    let maxWidth = buffer.area.width - textScreenX
+    let maxWidth = windowRightEdge - textScreenX
     let displayText =
       if foldText.len > maxWidth:
         foldText[0 ..< maxWidth]
       else:
         foldText
     buffer.setString(textScreenX, actualScreenY, displayText, foldStyle())
+
+proc renderScrollbar*(
+    e: Editor,
+    buffer: var Buffer,
+    window: EditorWindow,
+    visibleHeight: int,
+    tabLineOffset: int,
+) =
+  ## Render a scrollbar on the right edge of the window.
+  ## The scrollbar shows the current viewport position within the buffer.
+  let
+    totalLines = window.buffer.len
+    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
+    scrollbarStartX = window.viewport.x + window.viewport.width - scrollbarWidth
+
+  if totalLines <= visibleHeight or visibleHeight <= 0 or scrollbarWidth <= 0:
+    return
+
+  # Calculate thumb size and position
+  let
+    thumbSize = max(1, (visibleHeight * visibleHeight) div totalLines)
+    maxTopLine = totalLines - visibleHeight
+    thumbPos =
+      if maxTopLine > 0:
+        (window.viewport.topLine * (visibleHeight - thumbSize)) div maxTopLine
+      else:
+        0
+
+  for y in 0 ..< visibleHeight:
+    let
+      screenY = window.viewport.y + tabLineOffset + y
+      isThumb = y >= thumbPos and y < thumbPos + thumbSize
+      style =
+        if isThumb:
+          scrollbarThumbStyle()
+        else:
+          scrollbarTrackStyle()
+
+    for col in 0 ..< scrollbarWidth:
+      let screenX = scrollbarStartX + col
+      if screenX < buffer.area.width and screenY < buffer.area.height:
+        buffer.setString(screenX, screenY, " ", style)
 
 proc renderWindow*(
     e: Editor,
@@ -363,6 +412,10 @@ proc renderWindow*(
       e.renderWindowLineNoWrap(buffer, window, lineNumOffset, ctx, screenY, lineIndex)
       inc screenY
       inc lineIndex
+
+  # Render scrollbar on the right edge if enabled (file editing modes only)
+  if e.calculateScrollbarWidth(window.mode) > 0:
+    e.renderScrollbar(buffer, window, visibleHeight, tabLineOffset)
 
 proc renderWindowSeparator*(
     e: Editor,

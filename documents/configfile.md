@@ -101,6 +101,8 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | softTabStop | integer | 0 | Tab/Backspace width in insert mode (0 = use tabStop) |
 | expandTab | bool | false | Expand tabs to spaces |
 | sidebar | bool | true | Enable Sidebars for editor views |
+| scrollbar | bool | false | Enable scrollbar on the right edge of windows |
+| scrollbarWidth | integer | 1 | Scrollbar width in characters (0 = hidden) |
 | bookmarkMarker | string | "♥ " | Bookmark indicator symbol in sidebars |
 | showModifiedLines | bool | true | Show modified/inserted line indicators in sidebars |
 | ignorecase | bool | true | Enable ignorecase when searching |

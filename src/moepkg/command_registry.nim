@@ -4577,7 +4577,8 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         lineCount = ctx.buffer.len
         cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
         lineNumOffset = calculateViewportOffset(
-          ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar
+          ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar,
+          ctx.state.display.scrollbar, ctx.state.display.scrollbarWidth,
         )
 
       ctx.motionController.viewportManager.updateViewport(
@@ -4643,7 +4644,8 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         recordJump(ctx.state)
         ctx.cursor = BufferPosition(line: nextLine.get, column: 0)
         let lineNumOffset = calculateViewportOffset(
-          ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar
+          ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar,
+          ctx.state.display.scrollbar, ctx.state.display.scrollbarWidth,
         )
         ctx.motionController.viewportManager.updateViewport(
           CursorPosition(x: 0, y: nextLine.get),
@@ -4674,7 +4676,8 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         recordJump(ctx.state)
         ctx.cursor = BufferPosition(line: prevLine.get, column: 0)
         let lineNumOffset = calculateViewportOffset(
-          ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar
+          ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar,
+          ctx.state.display.scrollbar, ctx.state.display.scrollbarWidth,
         )
         ctx.motionController.viewportManager.updateViewport(
           CursorPosition(x: 0, y: prevLine.get),

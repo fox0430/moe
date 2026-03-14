@@ -1106,6 +1106,54 @@ tabStop = "four"
     check vr.hasErrors
     check "Standard.tabStop" in vr.errors[0].name
 
+suite "Config Validation - scrollbarWidth":
+  test "Valid scrollbarWidth 0":
+    let tomlStr = """
+[Standard]
+scrollbarWidth = 0
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.scrollbarWidth == 0
+
+  test "Valid scrollbarWidth 1":
+    let tomlStr = """
+[Standard]
+scrollbarWidth = 1
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.scrollbarWidth == 1
+
+  test "Valid scrollbarWidth 3":
+    let tomlStr = """
+[Standard]
+scrollbarWidth = 3
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.standard.scrollbarWidth == 3
+
+  test "Invalid scrollbarWidth negative":
+    let tomlStr = """
+[Standard]
+scrollbarWidth = -1
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+
+  test "Invalid scrollbarWidth string type":
+    let tomlStr = """
+[Standard]
+scrollbarWidth = "wide"
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+
+  test "Default scrollbarWidth is 1":
+    let config = newEditorConfig()
+    check config.standard.scrollbarWidth == 1
+
 suite "Config - getConfigPath":
   test "Path ends with moerc.toml":
     let path = getConfigPath()

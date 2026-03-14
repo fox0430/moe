@@ -256,6 +256,11 @@ const SetOptions* = {
   # Tab / indent
   "expandtab": "Use spaces instead of tabs",
   "noexpandtab": "Use tab characters",
+  # Scrollbar
+  "scrollbar": "Enable scrollbar",
+  "noscrollbar": "Disable scrollbar",
+  "scrollbarwidth": "Scrollbar width (e.g., scrollbarwidth=2)",
+  # Tab / indent
   "tabstop": "Tab width (e.g., tabstop=4)",
   "shiftwidth": "Indent width for >>/<<  (e.g., shiftwidth=4, 0=use tabstop)",
   "softtabstop":

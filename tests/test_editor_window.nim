@@ -169,6 +169,147 @@ suite "calculateSidebarWidth":
     let width = e.calculateSidebarWidth(EditorMode.RecentFile)
     check width == 0
 
+suite "calculateScrollbarWidth":
+  test "scrollbar width 1 in file edit mode":
+    let e = createTestEditor()
+    e.state.display.scrollbar = true
+    e.state.display.scrollbarWidth = 1
+    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    check width == 1
+
+  test "scrollbar width 2 in file edit mode":
+    let e = createTestEditor()
+    e.state.display.scrollbar = true
+    e.state.display.scrollbarWidth = 2
+    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    check width == 2
+
+  test "scrollbar disabled (width 0)":
+    let e = createTestEditor()
+    e.state.display.scrollbar = true
+    e.state.display.scrollbarWidth = 0
+    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    check width == 0
+
+  test "scrollbar bool disabled":
+    let e = createTestEditor()
+    e.state.display.scrollbar = false
+    e.state.display.scrollbarWidth = 2
+    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    check width == 0
+
+  test "scrollbar disabled for non-file-edit mode":
+    let e = createTestEditor()
+    e.state.display.scrollbar = true
+    e.state.display.scrollbarWidth = 1
+    let width = e.calculateScrollbarWidth(EditorMode.RecentFile)
+    check width == 0
+
+  test "scrollbar disabled for Filer mode":
+    let e = createTestEditor()
+    e.state.display.scrollbar = true
+    e.state.display.scrollbarWidth = 1
+    let width = e.calculateScrollbarWidth(EditorMode.Filer)
+    check width == 0
+
+  test "scrollbar enabled in Insert mode":
+    let e = createTestEditor()
+    e.state.display.scrollbar = true
+    e.state.display.scrollbarWidth = 1
+    let width = e.calculateScrollbarWidth(EditorMode.Insert)
+    check width == 1
+
+  test "scrollbar enabled in Visual mode":
+    let e = createTestEditor()
+    e.state.display.scrollbar = true
+    e.state.display.scrollbarWidth = 1
+    let width = e.calculateScrollbarWidth(EditorMode.Visual)
+    check width == 1
+
+  test "scrollbar width 3 in Normal mode":
+    let e = createTestEditor()
+    e.state.display.scrollbar = true
+    e.state.display.scrollbarWidth = 3
+    let width = e.calculateScrollbarWidth(EditorMode.Normal)
+    check width == 3
+
+  test "scrollbar disabled for Help mode":
+    let e = createTestEditor()
+    e.state.display.scrollbar = true
+    e.state.display.scrollbarWidth = 1
+    let width = e.calculateScrollbarWidth(EditorMode.Help)
+    check width == 0
+
+  test "scrollbar disabled for BufferManager mode":
+    let e = createTestEditor()
+    e.state.display.scrollbar = true
+    e.state.display.scrollbarWidth = 1
+    let width = e.calculateScrollbarWidth(EditorMode.BufferManager)
+    check width == 0
+
+  test "scrollbar enabled in Replace mode":
+    let e = createTestEditor()
+    e.state.display.scrollbar = true
+    e.state.display.scrollbarWidth = 2
+    let width = e.calculateScrollbarWidth(EditorMode.Replace)
+    check width == 2
+
+suite "calculateViewportOffset":
+  test "with sidebar and scrollbar width 1":
+    let buffer = newTextBuffer("Hello")
+    let offset = calculateViewportOffset(
+      buffer,
+      showLineNumbers = true,
+      showSidebar = true,
+      scrollbar = true,
+      scrollbarWidth = 1,
+    )
+    check offset == 2 + 2 + 1 # lineNum + sidebar + scrollbar
+
+  test "with sidebar and scrollbar width 2":
+    let buffer = newTextBuffer("Hello")
+    let offset = calculateViewportOffset(
+      buffer,
+      showLineNumbers = true,
+      showSidebar = true,
+      scrollbar = true,
+      scrollbarWidth = 2,
+    )
+    check offset == 2 + 2 + 2 # lineNum + sidebar + scrollbar
+
+  test "without scrollbar (scrollbar=false)":
+    let buffer = newTextBuffer("Hello")
+    let offset = calculateViewportOffset(
+      buffer,
+      showLineNumbers = true,
+      showSidebar = true,
+      scrollbar = false,
+      scrollbarWidth = 2,
+    )
+    check offset == 2 + 2 # lineNum + sidebar only
+
+  test "scrollbar width 0":
+    let buffer = newTextBuffer("Hello")
+    let offset = calculateViewportOffset(
+      buffer,
+      showLineNumbers = true,
+      showSidebar = true,
+      scrollbar = true,
+      scrollbarWidth = 0,
+    )
+    check offset == 2 + 2 # lineNum + sidebar only
+
+  test "scrollbar only":
+    let buffer = newTextBuffer("Hello")
+    let offset = calculateViewportOffset(
+      buffer,
+      showLineNumbers = false,
+      showSidebar = false,
+      scrollbar = true,
+      scrollbarWidth = 1,
+    )
+    check offset == 0 + 0 + 1 # scrollbar only
+
 suite "calculateWindowCursor":
   test "cursor at buffer start, no wrap":
     let e = createTestEditor()
@@ -295,6 +436,139 @@ suite "calculateWindowCursor":
     )
     check pos.x == 4
     check pos.y == 0
+
+  test "cursor with scrollbar, wrap mode":
+    let e = createTestEditor()
+    e.state.display.lineWrap = true
+    # 20 chars wrapping at maxWidth = 10 - 0 - 1 = 9
+    let buffer = newTextBuffer("abcdefghijklmnopqrst")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, width: 10, height: 24, x: 0, y: 0)
+    # Cursor at char 10 => wrap segment 1 (9 chars per segment), col 1
+    let cursor = BufferPosition(line: 0, column: 10)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 0,
+      reservedLines = StatusAndCommandReserve,
+      scrollbarWidth = 1,
+    )
+    # maxWidth = 10 - 0 - 1 = 9
+    # char 10 is on wrap segment 1, display col 1
+    check pos.x == 1
+    check pos.y == 1
+
+  test "cursor with scrollbar, no wrap":
+    let e = createTestEditor()
+    e.state.display.lineWrap = false
+    let buffer = newTextBuffer("Hello world")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let cursor = BufferPosition(line: 0, column: 5)
+
+    # scrollbarWidth doesn't affect no-wrap cursor X position
+    # (it affects textAreaWidth for horizontal scroll, not cursor offset)
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
+      scrollbarWidth = 1,
+    )
+    check pos.x == 9 # lineNumOffset + 5
+    check pos.y == 0
+
+  test "cursor with scrollbar width 2, wrap mode":
+    let e = createTestEditor()
+    e.state.display.lineWrap = true
+    # 20 chars, maxWidth = 10 - 0 - 2 = 8
+    let buffer = newTextBuffer("abcdefghijklmnopqrst")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, width: 10, height: 24, x: 0, y: 0)
+    # Cursor at char 9 => wrap segment 1 (8 chars per segment), col 1
+    let cursor = BufferPosition(line: 0, column: 9)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 0,
+      reservedLines = StatusAndCommandReserve,
+      scrollbarWidth = 2,
+    )
+    # maxWidth = 10 - 0 - 2 = 8
+    # char 9 is on segment 1, display col 1
+    check pos.x == 1
+    check pos.y == 1
+
+  test "cursor with scrollbar width 0, wrap mode (no scrollbar)":
+    let e = createTestEditor()
+    e.state.display.lineWrap = true
+    # 20 chars, maxWidth = 10 - 0 - 0 = 10
+    let buffer = newTextBuffer("abcdefghijklmnopqrst")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, width: 10, height: 24, x: 0, y: 0)
+    # Cursor at char 10 => wrap segment 1 (10 chars per segment), col 0
+    let cursor = BufferPosition(line: 0, column: 10)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 0,
+      reservedLines = StatusAndCommandReserve,
+      scrollbarWidth = 0,
+    )
+    check pos.x == 0
+    check pos.y == 1
+
+  test "cursor with scrollbar and lineNumOffset, wrap mode":
+    let e = createTestEditor()
+    e.state.display.lineWrap = true
+    # maxWidth = 20 - 4 - 1 = 15
+    let buffer = newTextBuffer("abcdefghijklmnopqrstuvwxyz0123456789")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, width: 20, height: 24, x: 0, y: 0)
+    # Cursor at char 16 => segment 1 (15 chars per segment), display col 1
+    let cursor = BufferPosition(line: 0, column: 16)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = StatusAndCommandReserve,
+      scrollbarWidth = 1,
+    )
+    # segment 1, display col = 1, x = viewport.x + lineNumOffset + 1 = 0 + 4 + 1
+    check pos.x == 5
+    check pos.y == 1
+
+  test "cursor with scrollbar on multiline buffer, wrap mode":
+    let e = createTestEditor()
+    e.state.display.lineWrap = true
+    # maxWidth = 10 - 0 - 1 = 9
+    # Line 0: "abcdefghij" (10 chars) => 2 screen rows (9+1)
+    # Line 1: "klm" => 1 screen row
+    let buffer = newTextBuffer("abcdefghij\nklm")
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, width: 10, height: 24, x: 0, y: 0)
+    # Cursor at line 1, col 2 => screen row 2
+    let cursor = BufferPosition(line: 1, column: 2)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 0,
+      reservedLines = StatusAndCommandReserve,
+      scrollbarWidth = 1,
+    )
+    check pos.x == 2
+    check pos.y == 2 # row 0: "abcdefghi", row 1: "j", row 2: "klm"
 
 suite "vsplit":
   test "vertical split creates two windows":

@@ -99,6 +99,23 @@ proc foldStyle*(): Style =
   ## Get folding line style from theme
   getThemeStyle(EditorColorPairIndex.foldingLine)
 
+proc scrollbarThumbStyle*(): Style =
+  ## Get scrollbar thumb (handle) style — solid block via background color
+  Style(
+    fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 120, g: 120, b: 120)),
+    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 120, g: 120, b: 120)),
+    modifiers: {},
+  )
+
+proc scrollbarTrackStyle*(): Style =
+  ## Get scrollbar track (background) style — subtle via background color
+  let colorPair = getThemeColor(EditorColorPairIndex.default)
+  Style(
+    fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
+    bg: colorPair.background.rgb.toColorValue,
+    modifiers: {},
+  )
+
 proc fullWidthSpaceStyle*(): Style =
   ## Get full-width space highlight style from theme
   getThemeStyle(EditorColorPairIndex.highlightFullWidthSpace)
@@ -307,12 +324,16 @@ proc calculateLineNumOffset*(buffer: TextBuffer, showLineNumber: bool = true): i
     0
 
 proc calculateViewportOffset*(
-    buffer: TextBuffer, showLineNumbers, showSidebar: bool
+    buffer: TextBuffer,
+    showLineNumbers, showSidebar: bool,
+    scrollbar: bool = false,
+    scrollbarWidth: int = 0,
 ): int =
-  ## Calculate the total line number + sidebar offset for viewport width calculations.
-  ## Matches the rendering layout: sidebarWidth + lineNumOffset.
-  calculateLineNumOffset(buffer, showLineNumbers) + (if showSidebar: 2 else: 0)
+  ## Calculate the total line number + sidebar + scrollbar offset for viewport width calculations.
+  ## Matches the rendering layout: sidebarWidth + lineNumOffset + scrollbarWidth.
+  calculateLineNumOffset(buffer, showLineNumbers) + (if showSidebar: 2 else: 0) +
     # DefaultSidebarWidth = 2
+  (if scrollbar: scrollbarWidth else: 0)
 
 proc findMaxBottomY*(windows: seq[EditorWindow]): int =
   ## Find the maximum bottom Y coordinate among all windows

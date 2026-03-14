@@ -98,6 +98,7 @@ proc calculateWindowCursor*(
     cursor: BufferPosition,
     lineNumOffset: int,
     reservedLines: int,
+    scrollbarWidth: int = 0,
 ): CursorPosition =
   ## Calculate screen cursor position for a window
   ## Returns the absolute screen coordinates
@@ -112,7 +113,7 @@ proc calculateWindowCursor*(
 
   if e.state.display.lineWrap:
     # WRAP MODE: Calculate cursor position considering line wrapping
-    let maxWidth = max(1, viewport.width - lineNumOffset)
+    let maxWidth = max(1, viewport.width - lineNumOffset - scrollbarWidth)
 
     var screenY = 0
     let maxVisibleLine = min(cursor.line, viewport.topLine + viewport.height)
@@ -162,6 +163,12 @@ proc calculateWindowCursor*(
 proc calculateSidebarWidth*(e: Editor, mode: EditorMode): int =
   ## Calculate the width occupied by the sidebar (0 if disabled)
   if mode.isFileEditMode and e.state.display.showSidebar: DefaultSidebarWidth else: 0
+
+proc calculateScrollbarWidth*(e: Editor, mode: EditorMode): int =
+  ## Calculate the width occupied by the scrollbar (0 if disabled or non-edit mode)
+  ## Only shown in file editing modes (same as sidebar).
+  if mode.isFileEditMode and e.state.display.scrollbar and
+      e.state.display.scrollbarWidth > 0: e.state.display.scrollbarWidth else: 0
 
 proc restoreOriginalBuffer*(win: EditorWindow, mode: EditorMode) =
   ## Restore the original buffer for modes that replace the window buffer.
@@ -252,6 +259,7 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
     windowBottomY = window.viewport.y + window.viewport.height
     isBottomWindow = (windowBottomY == maxBottomY)
     sidebarWidth = e.calculateSidebarWidth(window.mode)
+    scrollbarWidth = e.calculateScrollbarWidth(window.mode)
     lineNumOffset =
       calculateLineNumOffset(window.buffer, e.state.display.showLineNumbers) +
       sidebarWidth
@@ -263,6 +271,7 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
     window.cursor,
     lineNumOffset,
     reservedLines + tabLineOffset,
+    scrollbarWidth,
   )
   # Adjust cursor Y for tab line offset
   cursorPos.y += tabLineOffset

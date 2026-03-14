@@ -75,6 +75,8 @@ type
       ## Tab/Backspace width in insert mode, 0 = use tabStop (Vim compatible)
     expandTab*: bool
     sidebar*: bool
+    scrollbar*: bool
+    scrollbarWidth*: int
     bookmarkMarker*: string
     showModifiedLines*: bool
     autoCloseParen*: bool
@@ -458,6 +460,8 @@ proc newEditorConfig*(): EditorConfig =
       softTabStop: 0, # 0 = use tabStop (Vim compatible)
       expandTab: false, # Match example/moerc.toml default
       sidebar: true,
+      scrollbar: false,
+      scrollbarWidth: 1,
       bookmarkMarker: "♥ ",
       showModifiedLines: true,
       autoCloseParen: true,

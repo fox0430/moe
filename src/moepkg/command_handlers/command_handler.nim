@@ -60,12 +60,14 @@ type
     bsoShowGitInactive # show git branch in inactive window
     bsoLineWrap # line wrapping
     bsoExpandTab # expand tab to spaces
+    bsoScrollbar # scrollbar
 
   IntSettingOption* = enum
     ## Integer setting options that can be set via :set command
     isoTabStop # tab stop width
     isoShiftWidth # indent width
     isoSoftTabStop # tab/backspace width in insert mode
+    isoScrollbarWidth # scrollbar width (0 = hidden)
 
   FloatSettingOption* = enum
     ## Float setting options that can be set via :set command
@@ -617,6 +619,37 @@ proc executeSet*(
     return CommandModeResult(
       kind: cmrSetBoolOption, boolOption: bsoExpandTab, boolValue: false
     )
+  # Scrollbar
+  of "scrollbar":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoScrollbar, boolValue: true
+    )
+  of "noscrollbar":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoScrollbar, boolValue: false
+    )
+  # Scrollbar width (integer option)
+  of "scrollbarwidth":
+    if value.isSome:
+      try:
+        let intVal = parseInt(value.get)
+        if intVal >= 0:
+          return CommandModeResult(
+            kind: cmrSetIntOption, intOption: isoScrollbarWidth, intValue: intVal
+          )
+        else:
+          return CommandModeResult(
+            kind: cmrError, errorMessage: "scrollbarwidth must be >= 0"
+          )
+      except ValueError:
+        return CommandModeResult(
+          kind: cmrError, errorMessage: "Invalid value for scrollbarwidth"
+        )
+    else:
+      return CommandModeResult(
+        kind: cmrError,
+        errorMessage: "scrollbarwidth requires a value (e.g., scrollbarwidth=1)",
+      )
   # Tab stop (integer option)
   of "tabstop", "ts":
     if value.isSome:

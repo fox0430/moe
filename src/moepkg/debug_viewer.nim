@@ -326,6 +326,7 @@ proc generateDisplayInfo*(
     showSyntax: bool,
     showIndentationLines: bool,
     showSidebar: bool,
+    scrollbarWidth: int,
     showModifiedLines: bool,
     lineWrap: bool,
     tabStop: int,
@@ -342,6 +343,7 @@ proc generateDisplayInfo*(
   lines.addField("showSyntax", formatBool(showSyntax))
   lines.addField("showIndentationLines", formatBool(showIndentationLines))
   lines.addField("showSidebar", formatBool(showSidebar))
+  lines.addField("scrollbarWidth", $scrollbarWidth)
   lines.addField("showModifiedLines", formatBool(showModifiedLines))
   lines.addField("lineWrap", formatBool(lineWrap))
   lines.addField("tabStop", $tabStop)

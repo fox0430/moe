@@ -239,6 +239,26 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
       c.standard.sidebar = v,
   )
   result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "scrollbar",
+    section: "Standard",
+    boolGet: proc(c: EditorConfig): bool =
+      c.standard.scrollbar,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.standard.scrollbar = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkInt,
+    displayName: "scrollbarWidth",
+    section: "Standard",
+    intGet: proc(c: EditorConfig): int =
+      c.standard.scrollbarWidth,
+    intSet: proc(c: EditorConfig, v: int) =
+      c.standard.scrollbarWidth = v,
+    intMin: 0,
+    intMax: 5,
+  )
+  result.add ConfigItemDescriptor(
     kind: cvkString,
     displayName: "bookmarkMarker",
     section: "Standard",

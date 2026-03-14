@@ -424,6 +424,8 @@ All keystrokes are forwarded to the running shell/command.
 | `set showgitinactive` or `set noshowgitinactive` | Show/hide git branch name in inactive window status line (alias: `sgi`, `nosgi`) |
 | `set wrap` or `set nowrap` | Enable/disable line wrap |
 | `set expandtab` or `set noexpandtab` | Enable/disable expand tab to spaces (alias: `et`, `noet`) |
+| `set scrollbar` or `set noscrollbar` | Enable/disable scrollbar |
+| `set scrollbarwidth=number` | Change scrollbar width (0 = hidden) : Example `set scrollbarwidth=2` |
 | `set tabstop=number` | Change tab stop width : Example `set tabstop=2` (alias: `ts`) |
 | `set shiftwidth=number` | Change indent width : Example `set shiftwidth=2` (alias: `sw`) |
 | `set softtabstop=number` | Change soft tab stop width (alias: `sts`) |
