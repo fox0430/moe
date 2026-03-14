@@ -544,6 +544,9 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         of bsoHighlightFindChar:
           e.config.highlight.findCharHighlight = val
           e.state.statusMessage = "highlightfindchar = " & $val
+        of bsoHighlightColorCode:
+          e.config.highlight.colorCodeHighlight = val
+          e.state.statusMessage = "highlightcolorcode = " & $val
         of bsoMultipleStatusLine:
           e.setMultiStatusLine(val)
         of bsoIgnoreCase:

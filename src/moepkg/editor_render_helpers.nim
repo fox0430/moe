@@ -23,7 +23,9 @@ import std/[options, strutils, unicode, tables]
 
 import pkg/celina
 
-import editor_types, color, render_utils, unicode_utils, search_utils, highlight, modes
+import
+  editor_types, color, render_utils, unicode_utils, search_utils, highlight, modes,
+  colorcode
 
 proc colorIndexToStyle*(colorIdx: EditorColorPairIndex): Style =
   ## Convert EditorColorPairIndex to Celina Style using theme colors
@@ -346,6 +348,13 @@ proc renderLineSegmentWithSelection*(
   # Find where trailing spaces start (for highlighting)
   let trailingSpaceStart = findTrailingSpaceStart(fullLine)
 
+  # Scan for inline color codes if enabled
+  let colorCodeMatches =
+    if e.config.highlight.colorCodeHighlight and ctx.windowMode.isFileEditMode:
+      scanLineForColorCodes(fullLine)
+    else:
+      @[]
+
   # Always render character by character to apply syntax highlighting
   var displayX = 0
 
@@ -393,6 +402,12 @@ proc renderLineSegmentWithSelection*(
           ctx.windowMode.isFileEditMode:
         if rune == ' '.Rune or rune == TAB_CHAR or rune == FULLWIDTH_SPACE:
           renderStyle = trailingSpacesStyle()
+
+      # Highlight inline color codes if enabled
+      for ccm in colorCodeMatches:
+        if col >= ccm.startCol and col <= ccm.endCol:
+          renderStyle = ccm.style
+          break
 
       if screenX + displayX < ctx.windowRightEdge:
         buffer.setString(screenX + displayX, screenY, charStr, renderStyle)

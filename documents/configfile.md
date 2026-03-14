@@ -177,6 +177,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | trailingSpaces | bool | true | Highlight trailing spaces |
 | currentWord | bool | true | Highlight other uses of the current word under the cursor |
 | findCharHighlight | bool | true | Highlight f/F/t/T matches |
+| colorCodeHighlight | bool | true | Highlight inline color codes (#RRGGBB, #RGB) with their actual color |
 
 
 ### AutoBackup table

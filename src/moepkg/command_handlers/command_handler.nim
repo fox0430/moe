@@ -51,6 +51,7 @@ type
     bsoHighlightFullWidthSpace # highlight full-width space
     bsoHighlightPairOfParen # highlight pair of parentheses
     bsoHighlightFindChar # highlight f/F/t/T matches
+    bsoHighlightColorCode # highlight inline color codes
     bsoMultipleStatusLine # multiple status line
     bsoIgnoreCase # ignore case in search
     bsoSmartCase # smart case in search
@@ -537,6 +538,15 @@ proc executeSet*(
   of "nohighlightfindchar", "nohfc":
     return CommandModeResult(
       kind: cmrSetBoolOption, boolOption: bsoHighlightFindChar, boolValue: false
+    )
+  # Highlight color code
+  of "highlightcolorcode", "hcc":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightColorCode, boolValue: true
+    )
+  of "nohighlightcolorcode", "nohcc":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightColorCode, boolValue: false
     )
   # Multiple status line
   of "multistatusline", "msl":

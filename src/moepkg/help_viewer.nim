@@ -346,6 +346,7 @@ set highlightcurrentword / set nohighlightcurrentword (hcw/nohcw) - Highlight ot
 set highlightfullspace / set nohighlightfullspace (hfs/nohfs)     - Highlight full width space
 set highlightparen / set nohighlightparen (hp/nohp)         - Highlight matching paren
 set highlightfindchar / set nohighlightfindchar (hfc/nohfc) - Highlight f/F/t/T matches
+set highlightcolorcode / set nohighlightcolorcode (hcc/nohcc) - Highlight inline color codes
 set multistatusline / set nomultistatusline (msl/nomsl)     - Enable/disable multiple status line
 set ignorecase / set noignorecase (ic/noic)                 - Enable/disable ignorecase
 set smartcase / set nosmartcase (scs/noscs)                 - Enable/disable smartcase

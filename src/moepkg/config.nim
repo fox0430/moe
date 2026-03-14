@@ -138,6 +138,7 @@ type
     currentWord*: bool
     currentColumn*: bool
     findCharHighlight*: bool
+    colorCodeHighlight*: bool
 
   # Auto backup settings
   AutoBackupConfig* = object
@@ -511,6 +512,7 @@ proc newEditorConfig*(): EditorConfig =
       trailingSpaces: true,
       currentWord: true,
       findCharHighlight: true,
+      colorCodeHighlight: true,
     ),
     autoBackup: AutoBackupConfig(
       enable: false,

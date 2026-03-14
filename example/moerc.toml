@@ -139,6 +139,8 @@ currentWord = true                     # Highlight current word - highlights all
 
 findCharHighlight = true               # Highlight f/F/t/T matches
 
+colorCodeHighlight = true               # Highlight inline color codes (#RRGGBB, #RGB) with their actual color
+
 [AutoBackup]
 
 enable = false                         # Auto-backup feature

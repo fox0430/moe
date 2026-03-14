@@ -565,6 +565,7 @@ proc loadHighlightConfig(
   const validKeys = [
     "currentLine", "currentColumn", "reservedWord", "replaceText", "pairOfParen",
     "fullWidthSpace", "trailingSpaces", "currentWord", "findCharHighlight",
+    "colorCodeHighlight",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "currentLine", config.currentLine, vr, section)
@@ -576,6 +577,7 @@ proc loadHighlightConfig(
   loadBool(table, "trailingSpaces", config.trailingSpaces, vr, section)
   loadBool(table, "currentWord", config.currentWord, vr, section)
   loadBool(table, "findCharHighlight", config.findCharHighlight, vr, section)
+  loadBool(table, "colorCodeHighlight", config.colorCodeHighlight, vr, section)
 
 proc loadFilerConfig(
     table: TomlTableRef, config: var FilerConfig, vr: var ValidationResult
@@ -1929,6 +1931,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "trailingSpaces = " & toTomlBool(config.highlight.trailingSpaces)
   lines.add "currentWord = " & toTomlBool(config.highlight.currentWord)
   lines.add "findCharHighlight = " & toTomlBool(config.highlight.findCharHighlight)
+  lines.add "colorCodeHighlight = " & toTomlBool(config.highlight.colorCodeHighlight)
   lines.add ""
 
   # AutoBackup section
