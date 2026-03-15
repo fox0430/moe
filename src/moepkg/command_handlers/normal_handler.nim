@@ -293,6 +293,94 @@ proc searchMatchAndSelect(
   state.needsFullRedraw = true
   return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Visual))
 
+proc searchMatchAndOperate(
+    buffer: TextBuffer, state: EditorState, forward: bool, op: PendingOperator
+): NormalModeResult =
+  ## Find a search match and apply an operator (delete/change/yank) to it.
+  if state.search.lastText.len == 0:
+    return NormalModeResult(kind: nmrError, errorMessage: "No previous search")
+  let searchText = state.search.lastText
+  let ignoreCase =
+    shouldIgnoreCase(searchText, state.search.ignorecase, state.search.smartcase)
+  state.search.hlsearchTempDisabled = false
+
+  var matchStart =
+    findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase)
+  if matchStart.isNone:
+    matchStart =
+      if forward:
+        findNext(buffer, searchText, state.cursor, ignoreCase)
+      else:
+        findPrev(buffer, searchText, state.cursor, ignoreCase)
+  if matchStart.isNone:
+    return
+      NormalModeResult(kind: nmrError, errorMessage: "Pattern not found: " & searchText)
+
+  let pos = matchStart.get
+  let matchEnd =
+    BufferPosition(line: pos.line, column: pos.column + searchText.charLen - 1)
+  recordJump(state)
+
+  # Get text in the match range
+  let selectedText = buffer.getTextInRange(pos, matchEnd)
+  let isMultiLine = pos.line != matchEnd.line
+
+  # Store in register
+  if state.pendingRegister.isSome and state.pendingRegister.get != '\0':
+    let regName = state.pendingRegister.get
+    if regName.isNamedRegisterName:
+      discard state.registers.setNamedRegister(regName, selectedText, false)
+    elif regName.isClipboardRegisterName:
+      state.registers.setClipboardRegister(regName, selectedText, false)
+    else:
+      state.registers.setDeletedRegister(selectedText, isMultiLine)
+  else:
+    state.registers.setDeletedRegister(selectedText, isMultiLine)
+  state.yankRegister = selectedText
+  state.yankIsLine = false
+  state.pendingRegister = none(char)
+
+  case op.operatorType
+  of OpDelete, OpChange:
+    let transactionName =
+      if op.operatorType == OpDelete: "Delete search match" else: "Change search match"
+    let transactionResult = buffer.beginTransaction(transactionName)
+    if transactionResult.isErr:
+      return
+        NormalModeResult(kind: nmrError, errorMessage: "Failed to begin transaction")
+
+    let deleteResult = buffer.deleteRange(pos, matchEnd)
+    if deleteResult.isErr:
+      discard buffer.rollbackTransaction()
+      return NormalModeResult(kind: nmrError, errorMessage: "Failed to delete match")
+
+    discard buffer.commitTransaction()
+
+    # Move cursor to start of deleted range and clamp
+    state.cursor = pos
+    if state.cursor.line >= buffer.len:
+      state.cursor.line = max(0, buffer.len - 1)
+    if buffer.len > 0:
+      let line = buffer.getLine(state.cursor.line)
+      if line.charLen > 0:
+        state.cursor.column = min(state.cursor.column, line.charLen - 1)
+      else:
+        state.cursor.column = 0
+
+    state.needsFullRedraw = true
+
+    if op.operatorType == OpChange:
+      return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
+    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+  of OpYank:
+    # Yank only - no deletion, move cursor to match start
+    state.cursor = pos
+    state.needsFullRedraw = true
+    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+  else:
+    # Unsupported operator for search match
+    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+
 proc handleModeSwitchToOverlay*(
     handler: NormalModeHandler,
     overlay: OverlayKind,
@@ -856,8 +944,16 @@ proc handleNormalModeKey*(
       # Same buffer - update cursor position
       return handler.updateCursorToJumpPosition(buffer, state, pos)
     of "search.next.select":
+      if state.editState.pendingOperator.isSome:
+        let op = state.editState.pendingOperator.get
+        state.editState.pendingOperator = none(PendingOperator)
+        return searchMatchAndOperate(buffer, state, forward = true, op)
       return searchMatchAndSelect(buffer, state, forward = true)
     of "search.prev.select":
+      if state.editState.pendingOperator.isSome:
+        let op = state.editState.pendingOperator.get
+        state.editState.pendingOperator = none(PendingOperator)
+        return searchMatchAndOperate(buffer, state, forward = false, op)
       return searchMatchAndSelect(buffer, state, forward = false)
     else:
       # Try to execute using command registry for other actions

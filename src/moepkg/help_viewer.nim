@@ -84,6 +84,8 @@ p          - Paste the clipboard
 n          - Search forwards
 gn         - Go to next search match and select it visually
 gN         - Go to previous search match and select it visually
+dgn        - Delete next search match
+dgN        - Delete previous search match
 ]c         - Jump to next git change hunk
 [c         - Jump to previous git change hunk
 :          - Start command mode
