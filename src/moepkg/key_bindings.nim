@@ -1345,6 +1345,26 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  registry.registerCommand(
+    Command(
+      name: "search-next-select",
+      description: "Select next search match (gn)",
+      kind: ctAction,
+      commandId: "search.next.select",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "search-prev-select",
+      description: "Select previous search match (gN)",
+      kind: ctAction,
+      commandId: "search.prev.select",
+      args: @[],
+    )
+  )
+
   # Register bracket matching command
   registry.registerCommand(
     Command(
@@ -2502,6 +2522,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.bindKey(EditorMode.Normal, "g t", "buffer-next-tab")
   registry.bindKey(EditorMode.Normal, "g T", "buffer-prev-tab")
+  registry.bindKey(EditorMode.Normal, "g n", "search-next-select")
+  registry.bindKey(EditorMode.Normal, "g N", "search-prev-select")
 
   # Sequence bindings - Vim-style
   registry.bindKey(EditorMode.Normal, "g g", "goto-first-line") # Go to first line

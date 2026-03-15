@@ -28,7 +28,7 @@ import pkg/results
 import
   ../[
     types, buffer, modes, motion, key_bindings, command_registry, config, registers,
-    render_utils,
+    render_utils, search_utils,
   ]
 import visual_handler, insert_commands
 
@@ -241,6 +241,57 @@ proc handleMotionCommand*(
     return err(r.error)
   state.cursor = r.value
   return Result[(), string].ok ()
+
+proc findMatchContainingCursor(
+    buffer: TextBuffer, searchText: string, cursorPos: BufferPosition, ignorecase: bool
+): Option[BufferPosition] =
+  ## Return start position of a match that contains the cursor, if any.
+  let searchLen = searchText.charLen
+  # Start searching from up to searchLen-1 characters before cursor
+  let searchStart =
+    BufferPosition(line: cursorPos.line, column: max(-1, cursorPos.column - searchLen))
+  let found = findNext(buffer, searchText, searchStart, ignorecase)
+  if found.isSome:
+    let matchStart = found.get
+    if matchStart.line == cursorPos.line and matchStart.column <= cursorPos.column and
+        matchStart.column + searchLen - 1 >= cursorPos.column:
+      return some(matchStart)
+  return none(BufferPosition)
+
+proc searchMatchAndSelect(
+    buffer: TextBuffer, state: EditorState, forward: bool
+): NormalModeResult =
+  ## Find a search match and enter Visual mode selecting it.
+  ## Used by both gn (forward=true) and gN (forward=false).
+  if state.search.lastText.len == 0:
+    return NormalModeResult(kind: nmrError, errorMessage: "No previous search")
+  let searchText = state.search.lastText
+  let ignoreCase =
+    shouldIgnoreCase(searchText, state.search.ignorecase, state.search.smartcase)
+  state.search.hlsearchTempDisabled = false
+
+  var matchStart =
+    findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase)
+  if matchStart.isNone:
+    matchStart =
+      if forward:
+        findNext(buffer, searchText, state.cursor, ignoreCase)
+      else:
+        findPrev(buffer, searchText, state.cursor, ignoreCase)
+  if matchStart.isNone:
+    return
+      NormalModeResult(kind: nmrError, errorMessage: "Pattern not found: " & searchText)
+
+  let pos = matchStart.get
+  let matchEnd =
+    BufferPosition(line: pos.line, column: pos.column + searchText.charLen - 1)
+  recordJump(state)
+  state.initSelection(buffer, vskChar)
+  state.visualSelection.start = pos
+  state.visualSelection.current = matchEnd
+  state.cursor = matchEnd
+  state.needsFullRedraw = true
+  return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Visual))
 
 proc handleModeSwitchToOverlay*(
     handler: NormalModeHandler,
@@ -804,6 +855,10 @@ proc handleNormalModeKey*(
 
       # Same buffer - update cursor position
       return handler.updateCursorToJumpPosition(buffer, state, pos)
+    of "search.next.select":
+      return searchMatchAndSelect(buffer, state, forward = true)
+    of "search.prev.select":
+      return searchMatchAndSelect(buffer, state, forward = false)
     else:
       # Try to execute using command registry for other actions
       let ctx = CommandContext(
