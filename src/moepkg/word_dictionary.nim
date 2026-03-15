@@ -98,6 +98,10 @@ proc getJavaKeywords(): seq[string] {.compileTime.} =
 proc getJavaScriptKeywords(): seq[string] {.compileTime.} =
   for s in javaScriptkeywords:
     result.add s
+  for s in javaScriptBooleans:
+    result.add s
+  for s in javaScriptBuiltins:
+    result.add s
 
 proc getNimKeywords(): seq[string] {.compileTime.} =
   for s in NimKeywords:
@@ -129,6 +133,10 @@ proc getShellKeywords(): seq[string] {.compileTime.} =
 
 proc getTypeScriptKeywords(): seq[string] {.compileTime.} =
   for s in typescriptKeywords:
+    result.add s
+  for s in typescriptBooleans:
+    result.add s
+  for s in typescriptBuiltins:
     result.add s
 
 # Pre-computed keyword tables for efficiency
