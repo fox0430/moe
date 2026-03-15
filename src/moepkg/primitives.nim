@@ -20,6 +20,13 @@
 ## Primitive types shared across modules
 ## This module has no dependencies to avoid circular imports
 
-type BufferPosition* = object
-  line*: int
-  column*: int
+type
+  BufferPosition* = object
+    line*: int
+    column*: int
+
+  ColumnRange* = object
+    ## A half-open column range [startCol, endCol) used for pre-computed
+    ## per-line match caching (search highlights, current-word highlights).
+    startCol*: int # inclusive
+    endCol*: int # exclusive

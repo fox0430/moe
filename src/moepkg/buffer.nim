@@ -26,7 +26,9 @@ import pkg/results
 import unicode_utils, encoding, highlight, logger, search_utils, primitives
 import buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
 
-export CharacterEncoding, encodingToString, detectCharacterEncoding, BufferPosition
+export
+  CharacterEncoding, encodingToString, detectCharacterEncoding, BufferPosition,
+  ColumnRange
 
 type
   SidebarItemKind* = enum
@@ -2485,6 +2487,117 @@ proc isPositionInSearchMatch*(
     searchCharPos = charIdx + 1
 
   return false
+
+proc findSearchMatchRanges*(
+    b: TextBuffer,
+    lineIndex: int,
+    searchText: string,
+    ignorecase = false,
+    wholeWord = false,
+): seq[ColumnRange] =
+  ## Find all search match ranges on a given line.
+  ## Returns a seq of ColumnRange (half-open [startCol, endCol)).
+  ## This allows O(1) per-character lookup instead of O(n) per character.
+
+  if searchText.len == 0:
+    return @[]
+
+  if lineIndex < 0 or lineIndex >= b.len:
+    return @[]
+
+  let line = b.getLine(lineIndex)
+  if line.len == 0:
+    return @[]
+
+  let lineCharLen = line.charLen
+  let searchTextPrepared = prepareSearchString(searchText, ignorecase)
+  let linePrepared = prepareSearchString(line, ignorecase)
+  let searchTextCharLen = searchText.charLen
+
+  if searchTextCharLen > lineCharLen:
+    return @[]
+
+  # Helper to check word boundary at a match position
+  proc isWholeWordMatch(runes: seq[Rune], matchCol: int, matchLen: int): bool =
+    if matchCol > 0:
+      if isWordChar(runes[matchCol - 1]):
+        return false
+    let endCol = matchCol + matchLen
+    if endCol < runes.len:
+      if isWordChar(runes[endCol]):
+        return false
+    return true
+
+  let runes =
+    if wholeWord:
+      line.toRunes()
+    else:
+      @[]
+
+  var searchCharPos = 0
+  while searchCharPos <= lineCharLen:
+    let searchBytePos = charToBytePos(line, searchCharPos)
+    if searchBytePos > line.len:
+      break
+
+    let byteIdx = linePrepared.find(searchTextPrepared, searchBytePos)
+    if byteIdx < 0:
+      break
+
+    let charIdx = byteToCharPos(line, byteIdx)
+
+    if wholeWord:
+      if isWholeWordMatch(runes, charIdx, searchTextCharLen):
+        result.add(ColumnRange(startCol: charIdx, endCol: charIdx + searchTextCharLen))
+    else:
+      result.add(ColumnRange(startCol: charIdx, endCol: charIdx + searchTextCharLen))
+
+    searchCharPos = charIdx + 1
+
+proc findWordMatchRanges*(
+    b: TextBuffer, lineIndex: int, word: string, excludeCol: int = -1
+): seq[ColumnRange] =
+  ## Find all occurrences of `word` on a given line, returning ColumnRange results.
+  ## If `excludeCol` >= 0, the word containing that column is excluded from results.
+  ## This allows O(1) per-character lookup instead of O(n) per character.
+
+  if word.len == 0:
+    return @[]
+
+  if lineIndex < 0 or lineIndex >= b.len:
+    return @[]
+
+  let line = b.getLine(lineIndex)
+  var runes: seq[Rune] = @[]
+  for r in line.runes:
+    runes.add(r)
+
+  if runes.len == 0:
+    return @[]
+
+  var i = 0
+  while i < runes.len:
+    # Skip non-word characters
+    if not isWordChar(runes[i]):
+      inc i
+      continue
+
+    # Found word start
+    let startCol = i
+    while i < runes.len and isWordChar(runes[i]):
+      inc i
+    let endCol = i # exclusive
+
+    # Build word at this range
+    var wordAtPos = ""
+    for j in startCol ..< endCol:
+      wordAtPos.add($runes[j])
+
+    if wordAtPos == word:
+      # Check exclude
+      if excludeCol >= 0 and excludeCol >= startCol and excludeCol < endCol:
+        continue
+      result.add(ColumnRange(startCol: startCol, endCol: endCol))
 
 # Matching Paren/Bracket Highlight
 
