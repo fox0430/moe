@@ -514,3 +514,319 @@ suite "Buffer Search - findWordMatchRanges":
     check ranges[0].endCol == 1
     check ranges[1].startCol == 4
     check ranges[1].endCol == 5
+
+suite "Buffer Search - compileSearchRegex":
+  test "compileSearchRegex returns compiled regex for valid pattern":
+    let result = compileSearchRegex("hello", false)
+    check result.isSome
+
+  test "compileSearchRegex returns none for empty pattern":
+    let result = compileSearchRegex("", false)
+    check result.isNone
+
+  test "compileSearchRegex returns none for invalid regex":
+    let result = compileSearchRegex("[invalid", false)
+    check result.isNone
+
+  test "compileSearchRegex with case insensitive flag":
+    let result = compileSearchRegex("hello", true)
+    check result.isSome
+
+  test "compileSearchRegex caches repeated calls":
+    let r1 = compileSearchRegex("test", false)
+    let r2 = compileSearchRegex("test", false)
+    check r1.isSome
+    check r2.isSome
+
+  test "compileSearchRegex cache invalidated by different pattern":
+    let r1 = compileSearchRegex("foo", false)
+    let r2 = compileSearchRegex("bar", false)
+    check r1.isSome
+    check r2.isSome
+
+  test "compileSearchRegex cache invalidated by different ignorecase":
+    let r1 = compileSearchRegex("test", false)
+    let r2 = compileSearchRegex("test", true)
+    check r1.isSome
+    check r2.isSome
+
+suite "Buffer Search - Regex findNext":
+  test "findNext with character class":
+    let buf = newTextBuffer("abc 123 def")
+    let result = buf.findNext("\\d+", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 4
+
+  test "findNext with alternation":
+    let buf = newTextBuffer("cat and dog")
+    let result = buf.findNext("cat|dog", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 0
+
+    let result2 = buf.findNext("cat|dog", result.get)
+    check result2.isSome
+    check result2.get.column == 8
+
+  test "findNext with dot (any character)":
+    let buf = newTextBuffer("abc def")
+    let result = buf.findNext("a.c", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 0
+
+  test "findNext with anchored pattern (^)":
+    let buf = newTextBuffer("hello world\nhello again")
+    let result = buf.findNext("^hello", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 0
+
+  test "findNext with anchored pattern ($)":
+    let buf = newTextBuffer("hello world\nfoo bar")
+    let result = buf.findNext("world$", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 6
+
+  test "findNext with quantifier (+)":
+    let buf = newTextBuffer("aaa bbb ccc")
+    let result = buf.findNext("b+", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 4
+
+  test "findNext with quantifier (*)":
+    let buf = newTextBuffer("ac abc abbc")
+    let result = buf.findNext("ab*c", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 0 # "ac" matches ab*c
+
+  test "findNext with quantifier (?)":
+    let buf = newTextBuffer("color colour")
+    let result = buf.findNext("colou?r", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 0
+
+    let result2 = buf.findNext("colou?r", result.get)
+    check result2.isSome
+    check result2.get.column == 6
+
+  test "findNext with group":
+    let buf = newTextBuffer("foobar foobaz")
+    let result = buf.findNext("foo(bar|baz)", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 0
+
+    let result2 = buf.findNext("foo(bar|baz)", result.get)
+    check result2.isSome
+    check result2.get.column == 7
+
+  test "findNext with word boundary (\\b)":
+    let buf = newTextBuffer("foobar foo bar")
+    let result = buf.findNext("\\bfoo\\b", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 7 # standalone "foo", not "foobar"
+
+  test "findNext with invalid regex returns none":
+    let buf = newTextBuffer("hello world")
+    let result = buf.findNext("[invalid", BufferPosition(line: 0, column: 0))
+    check result.isNone
+
+  test "findNext regex wraps around":
+    let buf = newTextBuffer("123 abc 456")
+    let result = buf.findNext("\\d+", BufferPosition(line: 0, column: 3))
+    check result.isSome
+    check result.get.column == 8 # "456"
+
+    # From "456" at col 8, wrap around to "123" at col 0
+    let result2 = buf.findNext("\\d+", BufferPosition(line: 0, column: 10))
+    check result2.isSome
+    check result2.get.column == 0 # wraps to "123"
+
+  test "findNext regex multiline":
+    let buf = newTextBuffer("foo 123\nbar 456\nbaz 789")
+    let result = buf.findNext("\\d+", BufferPosition(line: 0, column: 3))
+    check result.isSome
+    check result.get.line == 0
+    check result.get.column == 4 # "123" at col 4
+
+suite "Buffer Search - Regex findPrev":
+  test "findPrev with character class":
+    let buf = newTextBuffer("abc 123 def 456")
+    let result = buf.findPrev("\\d+", BufferPosition(line: 0, column: 12))
+    check result.isSome
+    check result.get.column == 4 # "123"
+
+  test "findPrev with alternation":
+    let buf = newTextBuffer("cat and dog")
+    let result = buf.findPrev("cat|dog", BufferPosition(line: 0, column: 8))
+    check result.isSome
+    check result.get.column == 0
+
+  test "findPrev regex wraps around":
+    let buf = newTextBuffer("123 abc 456")
+    let result = buf.findPrev("\\d+", BufferPosition(line: 0, column: 0))
+    check result.isSome
+    check result.get.column == 8 # wraps to "456"
+
+  test "findPrev with invalid regex returns none":
+    let buf = newTextBuffer("hello world")
+    let result = buf.findPrev("[invalid", BufferPosition(line: 0, column: 5))
+    check result.isNone
+
+  test "findPrev regex multiline":
+    let buf = newTextBuffer("foo 123\nbar 456\nbaz 789")
+    let result = buf.findPrev("\\d+", BufferPosition(line: 2, column: 0))
+    check result.isSome
+    check result.get.line == 1
+    check result.get.column == 4
+
+suite "Buffer Search - Regex findSearchMatchRanges":
+  test "findSearchMatchRanges with regex":
+    let buf = newTextBuffer("abc 123 def 456")
+    let ranges = buf.findSearchMatchRanges(0, "\\d+")
+    check ranges.len == 2
+    check ranges[0].startCol == 4
+    check ranges[0].endCol == 7
+    check ranges[1].startCol == 12
+    check ranges[1].endCol == 15
+
+  test "findSearchMatchRanges variable length matches":
+    let buf = newTextBuffer("a ab abc abcd")
+    let ranges = buf.findSearchMatchRanges(0, "ab\\w*")
+    check ranges.len == 3
+    # "ab" at col 2
+    check ranges[0].startCol == 2
+    check ranges[0].endCol == 4
+    # "abc" at col 5
+    check ranges[1].startCol == 5
+    check ranges[1].endCol == 8
+    # "abcd" at col 9
+    check ranges[2].startCol == 9
+    check ranges[2].endCol == 13
+
+  test "findSearchMatchRanges with character class":
+    let buf = newTextBuffer("Hello World 123")
+    let ranges = buf.findSearchMatchRanges(0, "[A-Z][a-z]+")
+    check ranges.len == 2
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 5 # "Hello"
+    check ranges[1].startCol == 6
+    check ranges[1].endCol == 11 # "World"
+
+  test "findSearchMatchRanges with alternation":
+    let buf = newTextBuffer("cat dog bird cat")
+    let ranges = buf.findSearchMatchRanges(0, "cat|dog")
+    check ranges.len == 3
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 3
+    check ranges[1].startCol == 4
+    check ranges[1].endCol == 7
+    check ranges[2].startCol == 13
+    check ranges[2].endCol == 16
+
+  test "findSearchMatchRanges with invalid regex":
+    let buf = newTextBuffer("hello world")
+    let ranges = buf.findSearchMatchRanges(0, "[invalid")
+    check ranges.len == 0
+
+  test "findSearchMatchRanges wholeWord uses literal matching":
+    let buf = newTextBuffer("foobar foo bar")
+    # wholeWord=true: "foo" should only match standalone "foo"
+    let ranges = buf.findSearchMatchRanges(0, "foo", wholeWord = true)
+    check ranges.len == 1
+    check ranges[0].startCol == 7
+    check ranges[0].endCol == 10
+
+  test "findSearchMatchRanges wholeWord=false treats as regex":
+    let buf = newTextBuffer("foobar foo bar")
+    # wholeWord=false: "foo" as regex matches "foobar" and "foo"
+    let ranges = buf.findSearchMatchRanges(0, "foo", wholeWord = false)
+    check ranges.len == 2
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 3
+    check ranges[1].startCol == 7
+    check ranges[1].endCol == 10
+
+  test "findSearchMatchRanges regex case insensitive":
+    let buf = newTextBuffer("Foo FOO foo")
+    let ranges = buf.findSearchMatchRanges(0, "foo", ignorecase = true)
+    check ranges.len == 3
+
+  test "findSearchMatchRanges regex with Unicode":
+    let buf = newTextBuffer("テスト123テスト456")
+    let ranges = buf.findSearchMatchRanges(0, "\\d+")
+    check ranges.len == 2
+    check ranges[0].startCol == 3
+    check ranges[0].endCol == 6
+    check ranges[1].startCol == 9
+    check ranges[1].endCol == 12
+
+suite "Buffer Search - Regex isPositionInSearchMatch":
+  test "isPositionInSearchMatch with regex variable length":
+    let buf = newTextBuffer("abc 12345 def")
+    # "12345" matched by \d+, occupies columns 4-8
+    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 4), "\\d+")
+    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 6), "\\d+")
+    check buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 8), "\\d+")
+    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 3), "\\d+")
+    check not buf.isPositionInSearchMatch(BufferPosition(line: 0, column: 9), "\\d+")
+
+  test "isPositionInSearchMatch with invalid regex":
+    let buf = newTextBuffer("hello world")
+    check not buf.isPositionInSearchMatch(
+      BufferPosition(line: 0, column: 0), "[invalid"
+    )
+
+suite "Buffer Search - Regex edge cases":
+  test "Escaped special characters treated as literal":
+    let buf = newTextBuffer("hello.world foo.bar")
+    # Escaped dot matches literal dot
+    let result = buf.findNext("hello\\.world", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 0
+
+  test "Unescaped dot matches any character":
+    let buf = newTextBuffer("hello world")
+    let result = buf.findNext("hello.world", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 0
+
+  test "Special regex chars in search pattern":
+    let buf = newTextBuffer("price is $100")
+    # Escaped $ matches literal dollar sign
+    let result = buf.findNext("\\$\\d+", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 9
+
+  test "Empty match with zero-width pattern doesn't infinite loop":
+    let buf = newTextBuffer("abc")
+    # Empty string regex or similar patterns that can match zero-width
+    let ranges = buf.findSearchMatchRanges(0, "a*")
+    # Should not hang; may produce matches at each position
+    check ranges.len > 0
+
+  test "Regex with Unicode character classes":
+    let buf = newTextBuffer("abc あいう 123")
+    let result = buf.findNext("[あ-お]+", BufferPosition(line: 0, column: -1))
+    check result.isSome
+    check result.get.column == 4
+
+  test "Complex regex pattern":
+    let buf = newTextBuffer("foo123bar baz456qux")
+    let ranges = buf.findSearchMatchRanges(0, "[a-z]+\\d+[a-z]+")
+    check ranges.len == 2
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 9 # "foo123bar"
+    check ranges[1].startCol == 10
+    check ranges[1].endCol == 19 # "baz456qux"
+
+  test "Repeated invalid regex doesn't crash":
+    let buf = newTextBuffer("hello world")
+    for _ in 0 ..< 10:
+      let result = buf.findNext("(unclosed", BufferPosition(line: 0, column: 0))
+      check result.isNone
+
+  test "findPrev with zero-width match pattern":
+    let buf = newTextBuffer("abc def")
+    # \\b is zero-width; findPrev should not infinite loop
+    let result = buf.findPrev("\\b", BufferPosition(line: 0, column: 5))
+    check result.isSome # Should find a word boundary before position

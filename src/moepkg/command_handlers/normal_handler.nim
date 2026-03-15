@@ -243,20 +243,36 @@ proc handleMotionCommand*(
   return Result[(), string].ok ()
 
 proc findMatchContainingCursor(
-    buffer: TextBuffer, searchText: string, cursorPos: BufferPosition, ignorecase: bool
+    buffer: TextBuffer,
+    searchText: string,
+    cursorPos: BufferPosition,
+    ignorecase: bool,
+    wholeWord: bool,
 ): Option[BufferPosition] =
   ## Return start position of a match that contains the cursor, if any.
-  let searchLen = searchText.charLen
-  # Start searching from up to searchLen-1 characters before cursor
-  let searchStart =
-    BufferPosition(line: cursorPos.line, column: max(-1, cursorPos.column - searchLen))
-  let found = findNext(buffer, searchText, searchStart, ignorecase)
-  if found.isSome:
-    let matchStart = found.get
-    if matchStart.line == cursorPos.line and matchStart.column <= cursorPos.column and
-        matchStart.column + searchLen - 1 >= cursorPos.column:
-      return some(matchStart)
+  ## Uses findSearchMatchRanges for regex-aware match detection.
+  let ranges =
+    buffer.findSearchMatchRanges(cursorPos.line, searchText, ignorecase, wholeWord)
+  for r in ranges:
+    if cursorPos.column >= r.startCol and cursorPos.column < r.endCol:
+      return some(BufferPosition(line: cursorPos.line, column: r.startCol))
   return none(BufferPosition)
+
+proc getMatchEndCol(
+    buffer: TextBuffer,
+    searchText: string,
+    matchStart: BufferPosition,
+    ignorecase: bool,
+    wholeWord: bool,
+): int =
+  ## Get the end column (inclusive) of a match starting at matchStart.
+  let ranges =
+    buffer.findSearchMatchRanges(matchStart.line, searchText, ignorecase, wholeWord)
+  for r in ranges:
+    if r.startCol == matchStart.column:
+      return r.endCol - 1
+  # Fallback: use search text char length
+  return matchStart.column + searchText.charLen - 1
 
 proc searchMatchAndSelect(
     buffer: TextBuffer, state: EditorState, forward: bool
@@ -268,10 +284,11 @@ proc searchMatchAndSelect(
   let searchText = state.search.lastText
   let ignoreCase =
     shouldIgnoreCase(searchText, state.search.ignorecase, state.search.smartcase)
+  let wholeWord = state.search.wholeWord
   state.search.hlsearchTempDisabled = false
 
   var matchStart =
-    findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase)
+    findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase, wholeWord)
   if matchStart.isNone:
     matchStart =
       if forward:
@@ -283,8 +300,8 @@ proc searchMatchAndSelect(
       NormalModeResult(kind: nmrError, errorMessage: "Pattern not found: " & searchText)
 
   let pos = matchStart.get
-  let matchEnd =
-    BufferPosition(line: pos.line, column: pos.column + searchText.charLen - 1)
+  let endCol = getMatchEndCol(buffer, searchText, pos, ignoreCase, wholeWord)
+  let matchEnd = BufferPosition(line: pos.line, column: endCol)
   recordJump(state)
   state.initSelection(buffer, vskChar)
   state.visualSelection.start = pos
@@ -302,10 +319,11 @@ proc searchMatchAndOperate(
   let searchText = state.search.lastText
   let ignoreCase =
     shouldIgnoreCase(searchText, state.search.ignorecase, state.search.smartcase)
+  let wholeWord = state.search.wholeWord
   state.search.hlsearchTempDisabled = false
 
   var matchStart =
-    findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase)
+    findMatchContainingCursor(buffer, searchText, state.cursor, ignoreCase, wholeWord)
   if matchStart.isNone:
     matchStart =
       if forward:
@@ -317,8 +335,8 @@ proc searchMatchAndOperate(
       NormalModeResult(kind: nmrError, errorMessage: "Pattern not found: " & searchText)
 
   let pos = matchStart.get
-  let matchEnd =
-    BufferPosition(line: pos.line, column: pos.column + searchText.charLen - 1)
+  let endCol = getMatchEndCol(buffer, searchText, pos, ignoreCase, wholeWord)
+  let matchEnd = BufferPosition(line: pos.line, column: endCol)
   recordJump(state)
 
   # Get text in the match range

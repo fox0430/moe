@@ -137,10 +137,6 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 ## Planned features
 
-- Supports regular expression
-
-- Key bindings
-
 - Snippets
 
 - Spell checker
