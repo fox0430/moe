@@ -335,41 +335,43 @@ proc renderLineSegmentWithSelection*(
         if screenX + displayX < ctx.windowRightEdge:
           # Check if we should show indentation guide at this position
           if e.shouldShowIndentationGuide(indentInfo, displayX, col):
-            buffer.setString(screenX + displayX, screenY, "│", indentationLineStyle())
+            buffer.setCell(
+              screenX + displayX, screenY, "│", 1, indentationLineStyle()
+            )
           else:
-            buffer.setString(screenX + displayX, screenY, " ", tabStyle)
+            buffer.setCell(screenX + displayX, screenY, " ", 1, tabStyle)
         displayX += 1
     else:
       # Normal character
-      var charStr = $rune
       var renderStyle = style
+      let width = runeWidth(rune)
 
       # Check if this is a space and should show indentation guide
       if rune == ' '.Rune and e.shouldShowIndentationGuide(indentInfo, displayX, col):
-        charStr = "│"
-        renderStyle = indentationLineStyle()
+        if screenX + displayX < ctx.windowRightEdge:
+          buffer.setCell(screenX + displayX, screenY, "│", 1, indentationLineStyle())
+        displayX += 1
+      else:
+        # Highlight full-width space if enabled (only in file edit modes)
+        if rune == FULLWIDTH_SPACE and e.config.highlight.fullWidthSpace and
+            ctx.windowMode.isFileEditMode:
+          renderStyle = fullWidthSpaceStyle()
 
-      # Highlight full-width space if enabled (only in file edit modes)
-      if rune == FULLWIDTH_SPACE and e.config.highlight.fullWidthSpace and
-          ctx.windowMode.isFileEditMode:
-        renderStyle = fullWidthSpaceStyle()
+        # Highlight trailing spaces if enabled (only in file edit modes)
+        if e.config.highlight.trailingSpaces and col >= trailingSpaceStart and
+            ctx.windowMode.isFileEditMode:
+          if rune == ' '.Rune or rune == TAB_CHAR or rune == FULLWIDTH_SPACE:
+            renderStyle = trailingSpacesStyle()
 
-      # Highlight trailing spaces if enabled (only in file edit modes)
-      if e.config.highlight.trailingSpaces and col >= trailingSpaceStart and
-          ctx.windowMode.isFileEditMode:
-        if rune == ' '.Rune or rune == TAB_CHAR or rune == FULLWIDTH_SPACE:
-          renderStyle = trailingSpacesStyle()
+        # Highlight inline color codes if enabled
+        for ccm in colorCodeMatches:
+          if col >= ccm.startCol and col <= ccm.endCol:
+            renderStyle = ccm.style
+            break
 
-      # Highlight inline color codes if enabled
-      for ccm in colorCodeMatches:
-        if col >= ccm.startCol and col <= ccm.endCol:
-          renderStyle = ccm.style
-          break
-
-      if screenX + displayX < ctx.windowRightEdge:
-        buffer.setString(screenX + displayX, screenY, charStr, renderStyle)
-      # Account for character width (wide characters like CJK are width 2)
-      displayX += runeWidth(rune)
+        if screenX + displayX < ctx.windowRightEdge:
+          buffer.setCell(screenX + displayX, screenY, rune, width, renderStyle)
+        displayX += width
 
   if useRunes:
     # Character-based rendering (for wrapped mode)
@@ -424,7 +426,7 @@ proc renderLineSegmentWithSelection*(
         cursorColumnHighlightStyle()
       else:
         normalStyle()
-    buffer.setString(screenX + displayX, screenY, " ", fillStyle)
+    buffer.setCell(screenX + displayX, screenY, " ", 1, fillStyle)
     displayX += 1
 
 proc fillLineBackground*(
@@ -447,7 +449,7 @@ proc fillLineBackground*(
         cursorColumnHighlightStyle()
       else:
         normalStyle()
-    buffer.setString(screenX + displayX, screenY, " ", fillStyle)
+    buffer.setCell(screenX + displayX, screenY, " ", 1, fillStyle)
     displayX += 1
 
 proc renderCodeLensInline*(
