@@ -2198,3 +2198,252 @@ suite "NormalModeHandler - Bookmark Navigation":
     let result = pressMC(handler, buf, state, viewport)
     check result.kind == nmrHandled
     check buf.bookmarks.len == 0
+
+suite "NormalModeHandler - gn (search next select)":
+  proc pressGn(
+      handler: NormalModeHandler,
+      buf: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ): NormalModeResult =
+    let gKey = KeyCombo(isSpecial: false, char: "g")
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
+    let nKey = KeyCombo(isSpecial: false, char: "n")
+    handler.handleNormalModeKey(buf, state, viewport, nKey)
+
+  test "gn with no previous search returns error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    let result = pressGn(handler, buf, state, viewport)
+    check result.kind == nmrError
+
+  test "gn selects next match":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "hello"
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let result = pressGn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check result.modeTransition.isSome
+    check result.modeTransition.get == EditorMode.Visual
+    check state.visualSelection.active == true
+    check state.visualSelection.start == BufferPosition(line: 0, column: 0)
+    check state.visualSelection.current == BufferPosition(line: 0, column: 4)
+    check state.cursor == BufferPosition(line: 0, column: 4)
+
+  test "gn selects match at cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "world"
+    state.cursor = BufferPosition(line: 0, column: 7)
+
+    let result = pressGn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check result.modeTransition.get == EditorMode.Visual
+    check state.visualSelection.start == BufferPosition(line: 0, column: 6)
+    check state.visualSelection.current == BufferPosition(line: 0, column: 10)
+
+  test "gn with no match returns error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "xyz"
+
+    let result = pressGn(handler, buf, state, viewport)
+    check result.kind == nmrError
+
+  test "gn selects match on different line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa\nbbb\nccc")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "ccc"
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let result = pressGn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check result.modeTransition.get == EditorMode.Visual
+    check state.visualSelection.start == BufferPosition(line: 2, column: 0)
+    check state.visualSelection.current == BufferPosition(line: 2, column: 2)
+
+  test "gn wraps around to beginning":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "hello"
+    state.cursor = BufferPosition(line: 0, column: 8)
+
+    let result = pressGn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check result.modeTransition.get == EditorMode.Visual
+    check state.visualSelection.start == BufferPosition(line: 0, column: 0)
+    check state.visualSelection.current == BufferPosition(line: 0, column: 4)
+
+  test "gn selects match when cursor at match start":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "world"
+    state.cursor = BufferPosition(line: 0, column: 6)
+
+    let result = pressGn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check state.visualSelection.start == BufferPosition(line: 0, column: 6)
+    check state.visualSelection.current == BufferPosition(line: 0, column: 10)
+
+  test "gn selects match when cursor at match end":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "world"
+    state.cursor = BufferPosition(line: 0, column: 10)
+
+    let result = pressGn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check state.visualSelection.start == BufferPosition(line: 0, column: 6)
+    check state.visualSelection.current == BufferPosition(line: 0, column: 10)
+
+  test "gn with unicode text":
+    let buf = newTextBuffer()
+    discard
+      buf.insertText(BufferPosition(line: 0, column: 0), "あいう abc あいう")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "あいう"
+    state.cursor = BufferPosition(line: 0, column: 4)
+
+    let result = pressGn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check result.modeTransition.get == EditorMode.Visual
+    check state.visualSelection.start == BufferPosition(line: 0, column: 8)
+    check state.visualSelection.current == BufferPosition(line: 0, column: 10)
+
+  test "gn re-enables hlsearch":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "hello"
+    state.search.hlsearchTempDisabled = true
+
+    let result = pressGn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check state.search.hlsearchTempDisabled == false
+
+suite "NormalModeHandler - gN (search prev select)":
+  proc pressGN(
+      handler: NormalModeHandler,
+      buf: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ): NormalModeResult =
+    let gKey = KeyCombo(isSpecial: false, char: "g")
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
+    let nKey = KeyCombo(isSpecial: false, char: "N")
+    handler.handleNormalModeKey(buf, state, viewport, nKey)
+
+  test "gN with no previous search returns error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    let result = pressGN(handler, buf, state, viewport)
+    check result.kind == nmrError
+
+  test "gN selects previous match":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "hello"
+    state.cursor = BufferPosition(line: 0, column: 16)
+
+    let result = pressGN(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check result.modeTransition.isSome
+    check result.modeTransition.get == EditorMode.Visual
+    check state.visualSelection.active == true
+    check state.visualSelection.start == BufferPosition(line: 0, column: 12)
+    check state.visualSelection.current == BufferPosition(line: 0, column: 16)
+    check state.cursor == BufferPosition(line: 0, column: 16)
+
+  test "gN selects match at cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "world"
+    state.cursor = BufferPosition(line: 0, column: 8)
+
+    let result = pressGN(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check result.modeTransition.get == EditorMode.Visual
+    check state.visualSelection.start == BufferPosition(line: 0, column: 6)
+    check state.visualSelection.current == BufferPosition(line: 0, column: 10)
+
+  test "gN with no match returns error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "xyz"
+
+    let result = pressGN(handler, buf, state, viewport)
+    check result.kind == nmrError
+
+  test "gN selects match on different line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa\nbbb\nccc")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "aaa"
+    state.cursor = BufferPosition(line: 2, column: 0)
+
+    let result = pressGN(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check result.modeTransition.get == EditorMode.Visual
+    check state.visualSelection.start == BufferPosition(line: 0, column: 0)
+    check state.visualSelection.current == BufferPosition(line: 0, column: 2)
+
+  test "gN wraps around to end":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "aaa bbb")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "bbb"
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let result = pressGN(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check result.modeTransition.get == EditorMode.Visual
+    check state.visualSelection.start == BufferPosition(line: 0, column: 4)
+    check state.visualSelection.current == BufferPosition(line: 0, column: 6)
