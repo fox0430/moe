@@ -310,7 +310,7 @@ proc renderScrollbar*(
     for col in 0 ..< scrollbarWidth:
       let screenX = scrollbarStartX + col
       if screenX < buffer.area.width and screenY < buffer.area.height:
-        buffer.setString(screenX, screenY, " ", style)
+        buffer.setCell(screenX, screenY, " ", 1, style)
 
 proc renderWindow*(
     e: Editor,
