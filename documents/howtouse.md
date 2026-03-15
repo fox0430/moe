@@ -113,6 +113,8 @@
 | <kbd>**N**</kbd><br> | Search backwards |
 | <kbd>**g**</kbd> <kbd>**n**</kbd><br> | Go to next search match and select it visually |
 | <kbd>**g**</kbd> <kbd>**N**</kbd><br> | Go to previous search match and select it visually |
+| <kbd>**d**</kbd> <kbd>**g**</kbd> <kbd>**n**</kbd><br> | Delete next search match |
+| <kbd>**d**</kbd> <kbd>**g**</kbd> <kbd>**N**</kbd><br> | Delete previous search match |
 | <kbd> * </kbd><br> | Search forwards for the word under cursor |
 | <kbd>**#**</kbd><br> | Search backwards for the word under cursor |
 | <kbd>**]**</kbd> <kbd>**c**</kbd><br> | Jump to next git change hunk |

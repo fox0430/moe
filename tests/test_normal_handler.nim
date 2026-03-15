@@ -2447,3 +2447,147 @@ suite "NormalModeHandler - gN (search prev select)":
     check result.modeTransition.get == EditorMode.Visual
     check state.visualSelection.start == BufferPosition(line: 0, column: 4)
     check state.visualSelection.current == BufferPosition(line: 0, column: 6)
+
+suite "NormalModeHandler - dgn (delete search match forward)":
+  proc pressDgn(
+      handler: NormalModeHandler,
+      buf: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ): NormalModeResult =
+    let dKey = KeyCombo(isSpecial: false, char: "d")
+    discard handler.handleNormalModeKey(buf, state, viewport, dKey)
+    let gKey = KeyCombo(isSpecial: false, char: "g")
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
+    let nKey = KeyCombo(isSpecial: false, char: "n")
+    handler.handleNormalModeKey(buf, state, viewport, nKey)
+
+  test "dgn with no previous search returns error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    let result = pressDgn(handler, buf, state, viewport)
+    check result.kind == nmrError
+
+  test "dgn deletes next match":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "hello"
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let result = pressDgn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check result.modeTransition.isNone or result.modeTransition.get == EditorMode.Normal
+    check buf.getLine(0) == " world hello"
+
+  test "dgn deletes match at cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "world"
+    state.cursor = BufferPosition(line: 0, column: 8)
+
+    let result = pressDgn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check buf.getLine(0) == "hello  hello"
+
+  test "dgn with no match returns error":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "xyz"
+
+    let result = pressDgn(handler, buf, state, viewport)
+    check result.kind == nmrError
+
+  test "dgn stores deleted text in register":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "world"
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let result = pressDgn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check state.yankRegister == "world"
+
+  test "dgn stays in Normal mode":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "hello"
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let result = pressDgn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check result.modeTransition.isNone or result.modeTransition.get == EditorMode.Normal
+
+suite "NormalModeHandler - dgN (delete search match backward)":
+  proc pressDgN(
+      handler: NormalModeHandler,
+      buf: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ): NormalModeResult =
+    let dKey = KeyCombo(isSpecial: false, char: "d")
+    discard handler.handleNormalModeKey(buf, state, viewport, dKey)
+    let gKey = KeyCombo(isSpecial: false, char: "g")
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
+    let nKey = KeyCombo(isSpecial: false, char: "N")
+    handler.handleNormalModeKey(buf, state, viewport, nKey)
+
+  test "dgN deletes previous match":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "hello"
+    state.cursor = BufferPosition(line: 0, column: 16)
+
+    let result = pressDgN(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check buf.getLine(0) == "hello world "
+
+suite "NormalModeHandler - cgn (change search match forward)":
+  proc pressCgn(
+      handler: NormalModeHandler,
+      buf: TextBuffer,
+      state: EditorState,
+      viewport: ViewPort,
+  ): NormalModeResult =
+    let cKey = KeyCombo(isSpecial: false, char: "c")
+    discard handler.handleNormalModeKey(buf, state, viewport, cKey)
+    let gKey = KeyCombo(isSpecial: false, char: "g")
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
+    let nKey = KeyCombo(isSpecial: false, char: "n")
+    handler.handleNormalModeKey(buf, state, viewport, nKey)
+
+  test "cgn deletes match and enters Insert mode":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+    state.search.lastText = "world"
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    let result = pressCgn(handler, buf, state, viewport)
+    check result.kind == nmrHandled
+    check result.modeTransition.isSome
+    check result.modeTransition.get == EditorMode.Insert
+    check buf.getLine(0) == "hello  hello"
