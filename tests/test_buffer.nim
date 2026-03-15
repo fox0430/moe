@@ -461,6 +461,99 @@ suite "Buffer - Word Detection":
     check buf.isPositionInWord(BufferPosition(line: 0, column: 12), "Hello") == true
     check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "World") == false
 
+  test "isPositionInWord - empty word":
+    let buf = newTextBuffer("Hello")
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "") == false
+
+  test "isPositionInWord - empty line":
+    let buf = newTextBuffer("")
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "Hello") == false
+
+  test "isPositionInWord - invalid line":
+    let buf = newTextBuffer("Hello")
+    check buf.isPositionInWord(BufferPosition(line: -1, column: 0), "Hello") == false
+    check buf.isPositionInWord(BufferPosition(line: 1, column: 0), "Hello") == false
+
+  test "isPositionInWord - invalid column":
+    let buf = newTextBuffer("Hello")
+    check buf.isPositionInWord(BufferPosition(line: 0, column: -1), "Hello") == false
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 5), "Hello") == false
+
+  test "isPositionInWord - position on non-word character":
+    let buf = newTextBuffer("Hello World")
+    # Space between words
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 5), "Hello") == false
+
+  test "isPositionInWord - punctuation as separator":
+    let buf = newTextBuffer("foo.bar(baz)")
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "foo") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 2), "foo") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 3), "foo") == false # '.'
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 4), "bar") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 7), "bar") == false # '('
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 8), "baz") == true
+
+  test "isPositionInWord - underscore in word":
+    let buf = newTextBuffer("foo_bar baz")
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "foo_bar") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 3), "foo_bar") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 6), "foo_bar") == true
+    # Partial match should fail
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "foo") == false
+
+  test "isPositionInWord - digits in word":
+    let buf = newTextBuffer("var123 test")
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "var123") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 5), "var123") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "var") == false
+
+  test "isPositionInWord - word at line boundaries":
+    let buf = newTextBuffer("Hello")
+    # First character
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "Hello") == true
+    # Last character
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 4), "Hello") == true
+
+  test "isPositionInWord - middle of word":
+    let buf = newTextBuffer("Hello World")
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 1), "Hello") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 3), "Hello") == true
+
+  test "isPositionInWord - multiline buffer":
+    let buf = newTextBuffer("Hello\nWorld\nHello")
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "Hello") == true
+    check buf.isPositionInWord(BufferPosition(line: 1, column: 0), "World") == true
+    check buf.isPositionInWord(BufferPosition(line: 2, column: 0), "Hello") == true
+    check buf.isPositionInWord(BufferPosition(line: 1, column: 0), "Hello") == false
+
+  test "isPositionInWord - single character word":
+    let buf = newTextBuffer("a b c")
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "a") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 2), "b") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "b") == false
+
+  test "isPositionInWord - Unicode (CJK not word chars)":
+    let buf = newTextBuffer("hello世界world")
+    # CJK characters are not word characters (isWordChar checks alphanumeric + underscore)
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "hello") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 5), "hello") == false
+      # '世'
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 7), "world") == true
+
+  test "isPositionInWord - tabs and special whitespace":
+    let buf = newTextBuffer("hello\tworld")
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "hello") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 5), "hello") == false
+      # tab
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 6), "world") == true
+
+  test "isPositionInWord - case sensitive":
+    let buf = newTextBuffer("Hello hello")
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "Hello") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "hello") == false
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 6), "hello") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 6), "Hello") == false
+
 suite "Buffer - Matching Paren":
   test "findMatchingParenPosition forward":
     let buf = newTextBuffer("(hello)")

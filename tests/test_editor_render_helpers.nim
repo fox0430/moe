@@ -1118,3 +1118,37 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
 
     let trailingStyle = trailingSpacesStyle()
     check buf[2, 0].style != trailingStyle
+
+suite "isColumnInRanges":
+  test "empty ranges":
+    let ranges: seq[ColumnRange] = @[]
+    check not isColumnInRanges(ranges, 0)
+    check not isColumnInRanges(ranges, 5)
+
+  test "single range - inside":
+    let ranges = @[ColumnRange(startCol: 3, endCol: 7)]
+    check isColumnInRanges(ranges, 3)
+    check isColumnInRanges(ranges, 5)
+    check isColumnInRanges(ranges, 6)
+
+  test "single range - outside":
+    let ranges = @[ColumnRange(startCol: 3, endCol: 7)]
+    check not isColumnInRanges(ranges, 2)
+    check not isColumnInRanges(ranges, 7) # endCol is exclusive
+    check not isColumnInRanges(ranges, 10)
+
+  test "multiple ranges":
+    let ranges =
+      @[ColumnRange(startCol: 0, endCol: 3), ColumnRange(startCol: 6, endCol: 9)]
+    check isColumnInRanges(ranges, 0)
+    check isColumnInRanges(ranges, 2)
+    check not isColumnInRanges(ranges, 3)
+    check not isColumnInRanges(ranges, 5)
+    check isColumnInRanges(ranges, 6)
+    check isColumnInRanges(ranges, 8)
+    check not isColumnInRanges(ranges, 9)
+
+  test "boundary values":
+    let ranges = @[ColumnRange(startCol: 0, endCol: 1)]
+    check isColumnInRanges(ranges, 0)
+    check not isColumnInRanges(ranges, 1)

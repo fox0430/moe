@@ -375,3 +375,142 @@ suite "Buffer Search - Error handling":
         break
 
     check count == 2 # Should find exactly 2 occurrences of "foo"
+
+suite "Buffer Search - findSearchMatchRanges":
+  test "findSearchMatchRanges basic":
+    let buf = newTextBuffer("hello world hello")
+    let ranges = buf.findSearchMatchRanges(0, "hello")
+    check ranges.len == 2
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 5
+    check ranges[1].startCol == 12
+    check ranges[1].endCol == 17
+
+  test "findSearchMatchRanges single match":
+    let buf = newTextBuffer("hello world")
+    let ranges = buf.findSearchMatchRanges(0, "world")
+    check ranges.len == 1
+    check ranges[0].startCol == 6
+    check ranges[0].endCol == 11
+
+  test "findSearchMatchRanges no match":
+    let buf = newTextBuffer("hello world")
+    let ranges = buf.findSearchMatchRanges(0, "xyz")
+    check ranges.len == 0
+
+  test "findSearchMatchRanges empty search":
+    let buf = newTextBuffer("hello world")
+    let ranges = buf.findSearchMatchRanges(0, "")
+    check ranges.len == 0
+
+  test "findSearchMatchRanges invalid line":
+    let buf = newTextBuffer("hello")
+    check buf.findSearchMatchRanges(-1, "hello").len == 0
+    check buf.findSearchMatchRanges(5, "hello").len == 0
+
+  test "findSearchMatchRanges empty line":
+    let buf = newTextBuffer("hello\n\nworld")
+    let ranges = buf.findSearchMatchRanges(1, "test")
+    check ranges.len == 0
+
+  test "findSearchMatchRanges Unicode":
+    let buf = newTextBuffer("日本語 世界 日本語")
+    let ranges = buf.findSearchMatchRanges(0, "日本語")
+    check ranges.len == 2
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 3
+    # "日本語 世界 日本語" = 3 + 1(space) + 2 + 1(space) + 3 = positions 0-8
+    check ranges[1].startCol == 7
+    check ranges[1].endCol == 10
+
+  test "findSearchMatchRanges case insensitive":
+    let buf = newTextBuffer("Hello HELLO hello")
+    let ranges = buf.findSearchMatchRanges(0, "hello", ignorecase = true)
+    check ranges.len == 3
+
+suite "Buffer Search - findWordMatchRanges":
+  test "findWordMatchRanges basic":
+    let buf = newTextBuffer("Hello World Hello")
+    let ranges = buf.findWordMatchRanges(0, "Hello")
+    check ranges.len == 2
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 5
+    check ranges[1].startCol == 12
+    check ranges[1].endCol == 17
+
+  test "findWordMatchRanges with excludeCol":
+    let buf = newTextBuffer("Hello World Hello")
+    # Exclude the word at column 0
+    let ranges = buf.findWordMatchRanges(0, "Hello", excludeCol = 2)
+    check ranges.len == 1
+    check ranges[0].startCol == 12
+    check ranges[0].endCol == 17
+
+  test "findWordMatchRanges no match":
+    let buf = newTextBuffer("Hello World")
+    let ranges = buf.findWordMatchRanges(0, "xyz")
+    check ranges.len == 0
+
+  test "findWordMatchRanges empty word":
+    let buf = newTextBuffer("Hello")
+    let ranges = buf.findWordMatchRanges(0, "")
+    check ranges.len == 0
+
+  test "findWordMatchRanges invalid line":
+    let buf = newTextBuffer("Hello")
+    check buf.findWordMatchRanges(-1, "Hello").len == 0
+    check buf.findWordMatchRanges(5, "Hello").len == 0
+
+  test "findWordMatchRanges empty line":
+    let buf = newTextBuffer("")
+    let ranges = buf.findWordMatchRanges(0, "Hello")
+    check ranges.len == 0
+
+  test "findWordMatchRanges punctuation separator":
+    let buf = newTextBuffer("foo.bar(baz)")
+    let ranges = buf.findWordMatchRanges(0, "foo")
+    check ranges.len == 1
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 3
+
+  test "findWordMatchRanges underscore in word":
+    let buf = newTextBuffer("foo_bar baz foo_bar")
+    let ranges = buf.findWordMatchRanges(0, "foo_bar")
+    check ranges.len == 2
+
+  test "findWordMatchRanges partial match rejected":
+    let buf = newTextBuffer("foo_bar baz")
+    let ranges = buf.findWordMatchRanges(0, "foo")
+    check ranges.len == 0
+
+  test "findWordMatchRanges case sensitive":
+    let buf = newTextBuffer("Hello hello")
+    let rangesUpper = buf.findWordMatchRanges(0, "Hello")
+    check rangesUpper.len == 1
+    check rangesUpper[0].startCol == 0
+    let rangesLower = buf.findWordMatchRanges(0, "hello")
+    check rangesLower.len == 1
+    check rangesLower[0].startCol == 6
+
+  test "findWordMatchRanges multiline":
+    let buf = newTextBuffer("Hello\nWorld\nHello")
+    check buf.findWordMatchRanges(0, "Hello").len == 1
+    check buf.findWordMatchRanges(1, "World").len == 1
+    check buf.findWordMatchRanges(2, "Hello").len == 1
+    check buf.findWordMatchRanges(1, "Hello").len == 0
+
+  test "findWordMatchRanges excludeCol at second word":
+    let buf = newTextBuffer("abc def abc")
+    # Exclude the word at column 9 (second "abc")
+    let ranges = buf.findWordMatchRanges(0, "abc", excludeCol = 9)
+    check ranges.len == 1
+    check ranges[0].startCol == 0
+
+  test "findWordMatchRanges single char words":
+    let buf = newTextBuffer("a b a")
+    let ranges = buf.findWordMatchRanges(0, "a")
+    check ranges.len == 2
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 1
+    check ranges[1].startCol == 4
+    check ranges[1].endCol == 5

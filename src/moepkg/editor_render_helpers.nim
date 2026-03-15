@@ -31,6 +31,14 @@ proc colorIndexToStyle*(colorIdx: EditorColorPairIndex): Style =
   ## Convert EditorColorPairIndex to Celina Style using theme colors
   getThemeStyle(colorIdx)
 
+proc isColumnInRanges*(ranges: seq[ColumnRange], col: int): bool {.inline.} =
+  ## Check if a column is within any of the pre-computed ranges.
+  ## O(m) where m is the number of ranges on the line (typically small).
+  for r in ranges:
+    if col >= r.startCol and col < r.endCol:
+      return true
+  return false
+
 proc bufferColToDisplayCol*(
     text: string, bufferCol: int, tabStop: int, startCol: int = 0
 ): int =
@@ -130,157 +138,20 @@ proc hasSyntaxHighlight(
   e.state.display.showSyntax and not buffer.highlight.isNil and
     (windowMode.isFileEditMode or buffer.language != langNone or buffer.isUtilityBuffer)
 
-proc getSelectionStyle*(
+proc baseStyleWithOverlay(
     e: Editor,
     buffer: TextBuffer,
-    hasSelection: bool,
     pos: BufferPosition,
     cursorLine: int,
-    cursorCol: int,
     windowMode: EditorMode,
-    displayCol: int = -1,
-    cursorDisplayCol: int = -1,
+    displayCol: int,
+    cursorDisplayCol: int,
 ): Style =
-  ## Get the appropriate style for a character based on selection state and syntax
-  ## windowMode: The mode of the window being rendered (for correct per-window highlighting)
-  ## displayCol: screen column of this character (for cursor column highlight)
-  ## cursorDisplayCol: screen column of cursor (for cursor column highlight)
-
-  # Check if this position is the matching paren (highlight matching paren)
-  let isMatchingParen =
-    e.state.matchingParenPos.isSome and e.state.matchingParenPos.get.line == pos.line and
-    e.state.matchingParenPos.get.column == pos.column
-
-  # Check if this position is part of the current word (highlight all occurrences)
-  # Skip the word under cursor itself - only highlight other occurrences
-  # Also skip in Search mode to avoid interfering with search highlighting
-  let isInSameWordAsCursor =
-    pos.line == cursorLine and e.state.currentWord.len > 0 and
-    buffer.isPositionInWord(pos, e.state.currentWord)
-
-  let isInCurrentWord =
-    not e.state.isSearchOverlay and e.state.currentWord.len > 0 and
-    not isInSameWordAsCursor and buffer.isPositionInWord(pos, e.state.currentWord)
-
-  let isInFindCharMatch =
-    e.config.highlight.findCharHighlight and e.state.findCharMatches.len > 0 and
-    pos.line == e.state.findCharMatchLine and pos.column in e.state.findCharMatches
-
-  if hasSelection and e.state.visualSelection.isPositionInSelection(pos):
-    # Keep original foreground color (syntax highlight), override only background
-    var style =
-      if e.hasSyntaxHighlight(buffer, windowMode):
-        buffer.updateHighlight()
-        let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
-        colorIndexToStyle(colorPair)
-      else:
-        normalStyle()
-    style.bg = visualStyle().bg
-    style
-  elif isMatchingParen:
-    # Highlight matching paren with special style
-    parenPairStyle()
-  elif isInFindCharMatch:
-    findCharMatchStyle()
-  elif isInCurrentWord:
-    # Highlight other occurrences of the current word
-    # (disabled in Search mode to avoid interfering with search highlighting)
-    currentWordStyle()
-  elif e.state.search.hlsearch and not e.state.search.hlsearchTempDisabled:
-    # Determine which search pattern to use:
-    # - In Search mode with text: use current searchText (incremental highlight)
-    # - In Search mode without text: no highlight (user is starting a new search)
-    # - In Command mode with substitute command: use substitute pattern (incremental highlight)
-    # - Not in Search mode: use lastSearchText (persistent highlight from previous search)
-    let searchPattern =
-      if e.state.isSearchOverlay:
-        # In Search mode: only highlight if user has typed something
-        if e.state.search.text.len > 0:
-          e.state.search.text
-        else:
-          "" # No highlight when starting a new search
-      elif e.state.isCommandOverlay:
-        # In Command mode: check for substitute command pattern
-        let subPattern = extractSubstitutePattern(e.state.commandText)
-        if subPattern.len > 0: subPattern else: e.state.search.lastText
-      else:
-        # Not in Search mode: use last search pattern
-        e.state.search.lastText
-
-    # Only apply highlight if we have a valid search pattern
-    if searchPattern.len > 0:
-      # Apply smartcase logic
-      let shouldIgnoreCase = shouldIgnoreCase(
-        searchPattern, e.state.search.ignorecase, e.state.search.smartcase
-      )
-
-      if buffer.isPositionInSearchMatch(
-        pos, searchPattern, shouldIgnoreCase, e.state.search.wholeWord
-      ):
-        searchHighlightStyle()
-      elif e.hasSyntaxHighlight(buffer, windowMode):
-        # Apply syntax highlighting from buffer
-        # Update highlight if needed (after text edits)
-        buffer.updateHighlight()
-        let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
-        var style = colorIndexToStyle(colorPair)
-        # Apply document highlight or cursor line highlighting
-        let highlightKind = e.isPositionInDocumentHighlight(pos)
-        if highlightKind.isSome:
-          style.bg = getDocumentHighlightStyle(highlightKind.get).bg
-        elif e.state.display.showCursorLine and pos.line == cursorLine:
-          style.bg = cursorLineHighlightStyle().bg
-        elif e.state.display.showCursorColumn and displayCol >= 0 and
-            displayCol == cursorDisplayCol:
-          style.bg = cursorColumnHighlightStyle().bg
-        style
-      else:
-        # Check document highlight first
-        let highlightKind = e.isPositionInDocumentHighlight(pos)
-        if highlightKind.isSome:
-          getDocumentHighlightStyle(highlightKind.get)
-        elif e.state.display.showCursorLine and pos.line == cursorLine:
-          cursorLineHighlightStyle()
-        elif e.state.display.showCursorColumn and displayCol >= 0 and
-            displayCol == cursorDisplayCol:
-          cursorColumnHighlightStyle()
-        else:
-          normalStyle()
-    elif e.hasSyntaxHighlight(buffer, windowMode):
-      # Apply syntax highlighting from buffer
-      # Update highlight if needed (after text edits)
-      buffer.updateHighlight()
-      let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
-      var style = colorIndexToStyle(colorPair)
-      # Apply document highlight or cursor line highlighting
-      let highlightKind = e.isPositionInDocumentHighlight(pos)
-      if highlightKind.isSome:
-        style.bg = getDocumentHighlightStyle(highlightKind.get).bg
-      elif e.state.display.showCursorLine and pos.line == cursorLine:
-        style.bg = cursorLineHighlightStyle().bg
-      elif e.state.display.showCursorColumn and displayCol >= 0 and
-          displayCol == cursorDisplayCol:
-        style.bg = cursorColumnHighlightStyle().bg
-      style
-    else:
-      # Check document highlight first
-      let highlightKind = e.isPositionInDocumentHighlight(pos)
-      if highlightKind.isSome:
-        getDocumentHighlightStyle(highlightKind.get)
-      elif e.state.display.showCursorLine and pos.line == cursorLine:
-        cursorLineHighlightStyle()
-      elif e.state.display.showCursorColumn and displayCol >= 0 and
-          displayCol == cursorDisplayCol:
-        cursorColumnHighlightStyle()
-      else:
-        normalStyle()
-  elif e.hasSyntaxHighlight(buffer, windowMode):
-    # Apply syntax highlighting from buffer
-    # Update highlight if needed (after text edits)
-    buffer.updateHighlight()
+  ## Compute base style (syntax highlight + document highlight / cursor line/column overlay).
+  ## Extracted to avoid 4x duplication in getSelectionStyle.
+  if e.hasSyntaxHighlight(buffer, windowMode):
     let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
     var style = colorIndexToStyle(colorPair)
-    # Apply document highlight or cursor line highlighting
     let highlightKind = e.isPositionInDocumentHighlight(pos)
     if highlightKind.isSome:
       style.bg = getDocumentHighlightStyle(highlightKind.get).bg
@@ -291,7 +162,6 @@ proc getSelectionStyle*(
       style.bg = cursorColumnHighlightStyle().bg
     style
   else:
-    # Check document highlight first
     let highlightKind = e.isPositionInDocumentHighlight(pos)
     if highlightKind.isSome:
       getDocumentHighlightStyle(highlightKind.get)
@@ -302,6 +172,58 @@ proc getSelectionStyle*(
       cursorColumnHighlightStyle()
     else:
       normalStyle()
+
+proc getSelectionStyle*(
+    e: Editor,
+    buffer: TextBuffer,
+    hasSelection: bool,
+    pos: BufferPosition,
+    cursorLine: int,
+    cursorCol: int,
+    windowMode: EditorMode,
+    displayCol: int = -1,
+    cursorDisplayCol: int = -1,
+    searchMatchRanges: seq[ColumnRange] = @[],
+    wordMatchRanges: seq[ColumnRange] = @[],
+): Style =
+  ## Get the appropriate style for a character based on selection state and syntax.
+  ## searchMatchRanges/wordMatchRanges: pre-computed per-line ranges for O(1) lookup.
+
+  # Check if this position is the matching paren
+  let isMatchingParen =
+    e.state.matchingParenPos.isSome and e.state.matchingParenPos.get.line == pos.line and
+    e.state.matchingParenPos.get.column == pos.column
+
+  # Check current-word highlight using pre-computed ranges
+  let isInCurrentWord =
+    not e.state.isSearchOverlay and wordMatchRanges.isColumnInRanges(pos.column)
+
+  let isInFindCharMatch =
+    e.config.highlight.findCharHighlight and e.state.findCharMatches.len > 0 and
+    pos.line == e.state.findCharMatchLine and pos.column in e.state.findCharMatches
+
+  if hasSelection and e.state.visualSelection.isPositionInSelection(pos):
+    # Keep original foreground color (syntax highlight), override only background
+    var style =
+      if e.hasSyntaxHighlight(buffer, windowMode):
+        let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
+        colorIndexToStyle(colorPair)
+      else:
+        normalStyle()
+    style.bg = visualStyle().bg
+    style
+  elif isMatchingParen:
+    parenPairStyle()
+  elif isInFindCharMatch:
+    findCharMatchStyle()
+  elif isInCurrentWord:
+    currentWordStyle()
+  elif searchMatchRanges.isColumnInRanges(pos.column):
+    searchHighlightStyle()
+  else:
+    e.baseStyleWithOverlay(
+      buffer, pos, cursorLine, windowMode, displayCol, cursorDisplayCol
+    )
 
 proc getVisualSelection*(
     e: Editor, windowMode: EditorMode, windowActive: bool = true
@@ -341,6 +263,10 @@ proc renderLineSegmentWithSelection*(
   ## useRunes: true for wrapped mode (character-based), false for byte-based rendering
   ## ctx: RenderContext containing cursor position and selection information
 
+  # Update syntax highlighting once per line (not per character)
+  if e.hasSyntaxHighlight(textBuffer, ctx.windowMode):
+    textBuffer.updateHighlight()
+
   # Get the full line for indentation guide checking
   let fullLine = textBuffer.getLine(lineIndex)
   # Analyze indentation once (O(n)) to avoid repeated scanning (O(n²))
@@ -352,6 +278,37 @@ proc renderLineSegmentWithSelection*(
   let colorCodeMatches =
     if e.config.highlight.colorCodeHighlight and ctx.windowMode.isFileEditMode:
       scanLineForColorCodes(fullLine)
+    else:
+      @[]
+
+  # Pre-compute search match ranges for this line (O(n) once instead of O(n) per char)
+  let searchMatchRanges =
+    if e.state.search.hlsearch and not e.state.search.hlsearchTempDisabled:
+      let searchPattern =
+        if e.state.isSearchOverlay:
+          if e.state.search.text.len > 0: e.state.search.text else: ""
+        elif e.state.isCommandOverlay:
+          let subPattern = extractSubstitutePattern(e.state.commandText)
+          if subPattern.len > 0: subPattern else: e.state.search.lastText
+        else:
+          e.state.search.lastText
+      if searchPattern.len > 0:
+        let shouldIgnoreCase = shouldIgnoreCase(
+          searchPattern, e.state.search.ignorecase, e.state.search.smartcase
+        )
+        textBuffer.findSearchMatchRanges(
+          lineIndex, searchPattern, shouldIgnoreCase, e.state.search.wholeWord
+        )
+      else:
+        @[]
+    else:
+      @[]
+
+  # Pre-compute word match ranges for this line (O(n) once instead of O(n) per char)
+  let wordMatchRanges =
+    if not e.state.isSearchOverlay and e.state.currentWord.len > 0:
+      let excludeCol = if lineIndex == ctx.cursorLine: ctx.cursorCol else: -1
+      textBuffer.findWordMatchRanges(lineIndex, e.state.currentWord, excludeCol)
     else:
       @[]
 
@@ -429,6 +386,8 @@ proc renderLineSegmentWithSelection*(
           ctx.windowMode,
           displayCol = displayX,
           cursorDisplayCol = ctx.cursorDisplayCol,
+          searchMatchRanges = searchMatchRanges,
+          wordMatchRanges = wordMatchRanges,
         )
       renderChar(rune, charIdx, style)
       charIdx += 1
@@ -448,6 +407,8 @@ proc renderLineSegmentWithSelection*(
           ctx.windowMode,
           displayCol = displayX,
           cursorDisplayCol = ctx.cursorDisplayCol,
+          searchMatchRanges = searchMatchRanges,
+          wordMatchRanges = wordMatchRanges,
         )
       renderChar(rune, col, style)
       charIdx += 1
