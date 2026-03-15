@@ -248,6 +248,13 @@ suite "Overlay - enterSearchOverlay":
     check state.search.startPos == BufferPosition(line: 3, column: 7)
     check state.search.historyIndex == -1
 
+  test "Resets hlsearchTempDisabled":
+    let state = createTestState()
+    state.search.hlsearchTempDisabled = true
+    state.enterSearchOverlay(Forward)
+
+    check state.search.hlsearchTempDisabled == false
+
   test "Preserves LogViewer as base mode":
     let state = createTestState()
     state.mode = EditorMode.LogViewer
