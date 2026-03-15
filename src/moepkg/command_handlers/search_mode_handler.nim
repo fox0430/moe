@@ -60,6 +60,11 @@ proc executeSearchFromCurrentPosition(e: Editor): bool =
     e.state.search.text, e.state.search.ignorecase, e.state.search.smartcase
   )
 
+  # Validate regex before searching
+  if compileSearchRegex(e.state.search.text, shouldIgnoreCase).isNone:
+    e.state.statusMessage = "Invalid regex: " & e.state.search.text
+    return false
+
   let activeBuffer = e.activeBuffer()
   let searchResult =
     if e.state.search.direction == Forward:
@@ -183,6 +188,11 @@ proc performIncrementalSearch(e: Editor) =
   let shouldIgnoreCase = shouldIgnoreCase(
     e.state.search.text, e.state.search.ignorecase, e.state.search.smartcase
   )
+
+  # Validate regex - silently ignore invalid patterns during typing
+  if compileSearchRegex(e.state.search.text, shouldIgnoreCase).isNone:
+    e.state.statusMessage = "Invalid regex: " & e.state.search.text
+    return
 
   # Perform search from the original search start position (not current cursor!)
   let activeBuffer = e.activeBuffer()

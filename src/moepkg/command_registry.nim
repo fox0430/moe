@@ -4565,6 +4565,11 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       searchText, ctx.state.search.ignorecase, ctx.state.search.smartcase
     )
 
+    # Validate regex
+    if compileSearchRegex(searchText, shouldIgnoreCase).isNone:
+      ctx.state.statusMessage = "Invalid regex: " & searchText
+      return err("Invalid regex")
+
     # Execute the search (findNext or findPrev)
     let searchResult = searchProc(ctx.buffer, searchText, ctx.cursor, shouldIgnoreCase)
 

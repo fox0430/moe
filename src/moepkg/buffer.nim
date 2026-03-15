@@ -21,7 +21,7 @@
 
 import std/[algorithm, unicode, options, strutils, deques, os, times]
 
-import pkg/results
+import pkg/[results, regex]
 
 import unicode_utils, encoding, highlight, logger, search_utils, primitives
 import buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
@@ -205,7 +205,14 @@ type
     of PieceTable:
       pieceTable*: piece_table.PieceTable
 
+  CachedRegex = object
+    pattern: string
+    ignorecase: bool
+    compiled: Regex2
+
 var nextBufferId = 0
+
+var regexCache: Option[CachedRegex]
 
 proc genBufferId(): int =
   result = nextBufferId
@@ -2102,15 +2109,36 @@ proc updateHighlight*(b: TextBuffer) =
 
     b.highlightNeedsUpdate = false
 
+proc compileSearchRegex*(pattern: string, ignorecase: bool): Option[Regex2] =
+  ## Compile a search pattern as a regex.
+  ## Returns none if the pattern is empty or invalid.
+  ## Results are cached for repeated searches with the same pattern.
+  if pattern.len == 0:
+    return none(Regex2)
+  if regexCache.isSome:
+    let c = regexCache.get
+    if c.pattern == pattern and c.ignorecase == ignorecase:
+      return some(c.compiled)
+  try:
+    let flags =
+      if ignorecase:
+        {regexCaseless}
+      else:
+        default(set[RegexFlag])
+    let compiled = re2(pattern, flags)
+    regexCache =
+      some(CachedRegex(pattern: pattern, ignorecase: ignorecase, compiled: compiled))
+    return some(compiled)
+  except RegexError:
+    return none(Regex2)
+
 proc findNext*(
     b: TextBuffer, searchText: string, startPos: BufferPosition, ignorecase = false
 ): Option[BufferPosition] =
-  ## Find the next occurrence of searchText starting from startPos
-  ## Returns the position of the match or none if not found
-  ##
-  ## The search wraps around from the beginning if not found after startPos
-  ##
-  ## Unicode-aware: All positions are in character (rune) indices, not byte indices
+  ## Find the next occurrence of searchText (regex) starting from startPos.
+  ## Returns the position of the match or none if not found.
+  ## The search wraps around from the beginning if not found after startPos.
+  ## Unicode-aware: All positions are in character (rune) indices, not byte indices.
   if searchText.len == 0:
     return none(BufferPosition)
 
@@ -2118,57 +2146,34 @@ proc findNext*(
   if lineCount == 0:
     return none(BufferPosition)
 
-  # Validate startPos - clamp to valid range
   if startPos.line < 0 or startPos.line >= lineCount:
     return none(BufferPosition)
 
-  # Prepare search string once (optimization: avoid repeated toLowerAscii calls)
-  let searchTextPrepared = prepareSearchString(searchText, ignorecase)
+  let compiled = compileSearchRegex(searchText, ignorecase)
+  if compiled.isNone:
+    return none(BufferPosition)
+  let re = compiled.get
 
-  # Helper proc to search a line (Unicode-aware)
-  # Takes and returns character positions, not byte positions
-  # Returns -1 if no match found or if line is empty
+  # Helper: find first regex match in line at or after startByteCol.
+  # Returns character position or -1.
   proc searchLine(line: string, startCharCol = 0): int =
-    # Early exit for empty lines
     if line.len == 0:
       return -1
-
-    # Prepare search string (case-insensitive if needed)
-    let linePrepared = prepareSearchString(line, ignorecase)
-
-    # Defensive check: ensure search pattern isn't longer than remaining line
     let lineCharLen = line.charLen
     if startCharCol >= lineCharLen:
       return -1
-
-    # Clamp startCharCol to valid range [0, lineCharLen]
     let clampedStartCol = max(0, min(startCharCol, lineCharLen))
-
-    # Convert character position to byte position for find()
-    # This conversion is safe because clampedStartCol is within valid range
     let startByteCol = charToBytePos(line, clampedStartCol)
-
-    # Defensive check: ensure startByteCol is within string bounds
     if startByteCol > line.len:
       return -1
+    var m = RegexMatch2()
+    if find(line, re, m, startByteCol):
+      return byteToCharPos(line, m.boundaries.a)
+    return -1
 
-    # Search using byte position
-    let byteIdx = linePrepared.find(searchTextPrepared, startByteCol)
-
-    if byteIdx < 0:
-      return -1
-
-    # Convert byte position back to character position
-    # This conversion is safe because byteIdx comes from a valid find() result
-    return byteToCharPos(line, byteIdx)
-
-  # Start searching from the current position
-  # First, search the rest of the current line
+  # Search rest of current line
   let currentLine = b.getLine(startPos.line)
   let currentLineCharLen = currentLine.charLen
-
-  # Handle negative column: start from beginning of line
-  # Otherwise, start from after the current position
   let searchStartCol =
     if startPos.column < 0:
       0
@@ -2176,30 +2181,24 @@ proc findNext*(
       min(startPos.column + 1, currentLineCharLen)
 
   let idx = searchLine(currentLine, searchStartCol)
-
-  # Only return if we found something after the current position
-  # For negative startPos.column, any match is valid
   if idx >= 0 and (startPos.column < 0 or idx > startPos.column):
     return some(BufferPosition(line: startPos.line, column: idx))
 
-  # Search remaining lines after current line
+  # Search remaining lines after current
   for lineIdx in (startPos.line + 1) ..< lineCount:
     let line = b.getLine(lineIdx)
     if line.len == 0:
-      continue # Skip empty lines
+      continue
     let idx = searchLine(line)
     if idx >= 0:
       return some(BufferPosition(line: lineIdx, column: idx))
 
-  # Wrap around: search from beginning to current line
+  # Wrap around
   for lineIdx in 0 .. startPos.line:
     let line = b.getLine(lineIdx)
     if line.len == 0:
-      continue # Skip empty lines
-
+      continue
     if lineIdx == startPos.line:
-      # On current line, only search up to current position (excluding current position)
-      # For negative column, we already searched the whole line, so skip it
       if startPos.column < 0:
         continue
       let idx = searchLine(line, 0)
@@ -2215,12 +2214,10 @@ proc findNext*(
 proc findPrev*(
     b: TextBuffer, searchText: string, startPos: BufferPosition, ignorecase = false
 ): Option[BufferPosition] =
-  ## Find the previous occurrence of searchText starting from startPos
-  ## Returns the position of the match or none if not found
-  ##
-  ## The search wraps around from the end if not found before startPos
-  ##
-  ## Unicode-aware: All positions are in character (rune) indices, not byte indices
+  ## Find the previous occurrence of searchText (regex) starting from startPos.
+  ## Returns the position of the match or none if not found.
+  ## The search wraps around from the end if not found before startPos.
+  ## Unicode-aware: All positions are in character (rune) indices, not byte indices.
   if searchText.len == 0:
     return none(BufferPosition)
 
@@ -2228,77 +2225,49 @@ proc findPrev*(
   if lineCount == 0:
     return none(BufferPosition)
 
-  # Validate startPos - clamp to valid range
   if startPos.line < 0 or startPos.line >= lineCount:
     return none(BufferPosition)
 
-  # Prepare search string once (optimization: avoid repeated toLowerAscii calls)
-  let searchTextPrepared = prepareSearchString(searchText, ignorecase)
+  let compiled = compileSearchRegex(searchText, ignorecase)
+  if compiled.isNone:
+    return none(BufferPosition)
+  let re = compiled.get
 
-  # Helper proc to find last occurrence in a line (Unicode-aware)
-  # Takes and returns character positions, not byte positions
-  # Returns -1 if no match found or if line is empty
+  # Find last regex match in line where match start char < maxCharCol.
+  # maxCharCol < 0 means no limit.
   proc findLastInLine(line: string, maxCharCol = -1): int =
-    # Early exit for empty lines
     if line.len == 0:
       return -1
-
-    # Prepare search string (case-insensitive if needed)
-    let linePrepared = prepareSearchString(line, ignorecase)
     let lineCharLen = line.charLen
-
-    var lastCharIdx = -1
-    var searchCharPos = 0
-
-    # Clamp maxCharCol to valid range
     let searchCharLimit =
       if maxCharCol < 0:
         lineCharLen
       elif maxCharCol == 0:
-        0 # Don't search if maxCharCol is 0
+        0
       else:
         min(maxCharCol, lineCharLen)
 
-    # Iterate through all matches up to searchCharLimit
-    while searchCharPos < searchCharLimit:
-      # Convert character position to byte position
-      # This conversion is safe because searchCharPos < searchCharLimit <= lineCharLen
-      let searchBytePos = charToBytePos(line, searchCharPos)
-
-      # Defensive check: ensure byte position is within bounds
-      if searchBytePos > line.len:
+    var lastCharIdx = -1
+    var searchBytePos = 0
+    var m = RegexMatch2()
+    while searchBytePos <= line.len:
+      if not find(line, re, m, searchBytePos):
         break
-
-      # Search using byte position
-      let byteIdx = linePrepared.find(searchTextPrepared, searchBytePos)
-
-      if byteIdx < 0:
+      let charIdx = byteToCharPos(line, m.boundaries.a)
+      if maxCharCol >= 0 and charIdx >= searchCharLimit:
         break
+      lastCharIdx = charIdx
+      # Advance past this match (at least 1 byte to avoid infinite loop on zero-width)
+      searchBytePos = max(m.boundaries.a + 1, m.boundaries.b + 1)
+    return lastCharIdx
 
-      # Convert byte position back to character position
-      # This conversion is safe because byteIdx comes from a valid find() result
-      let charIdx = byteToCharPos(line, byteIdx)
-
-      # Update last match if within limit
-      if maxCharCol < 0 or charIdx < maxCharCol:
-        lastCharIdx = charIdx
-        searchCharPos = charIdx + 1
-      else:
-        break
-
-    lastCharIdx
-
-  # Start searching backwards from the current position
-  # First, search backwards in the current line
+  # Search backwards in current line
   let currentLine = b.getLine(startPos.line)
   let currentLineCharLen = currentLine.charLen
 
-  # Handle negative column: skip current line and start from previous lines
-  # Otherwise, search up to the current position
   if startPos.column >= 0:
     let clampedColumn = min(startPos.column, currentLineCharLen)
     let lastIdx = findLastInLine(currentLine, clampedColumn)
-
     if lastIdx >= 0 and lastIdx < clampedColumn:
       return some(BufferPosition(line: startPos.line, column: lastIdx))
 
@@ -2306,8 +2275,7 @@ proc findPrev*(
   for lineIdx in countdown(startPos.line - 1, 0):
     let line = b.getLine(lineIdx)
     if line.len == 0:
-      continue # Skip empty lines
-
+      continue
     let lastIdx = findLastInLine(line)
     if lastIdx >= 0:
       return some(BufferPosition(line: lineIdx, column: lastIdx))
@@ -2316,50 +2284,30 @@ proc findPrev*(
   for lineIdx in countdown(lineCount - 1, startPos.line):
     let line = b.getLine(lineIdx)
     if line.len == 0:
-      continue # Skip empty lines
+      continue
 
     if lineIdx == startPos.line:
-      # On current line after wrap, find last occurrence after current position
       let lineCharLen = line.charLen
-
-      # For negative column, search the whole line
       let searchStartCharCol =
         if startPos.column < 0:
           0
         else:
           min(startPos.column + 1, lineCharLen)
-
       if searchStartCharCol >= lineCharLen:
         continue
 
+      # Find last match after searchStartCharCol
+      let startByteCol = charToBytePos(line, searchStartCharCol)
       var lastCharIdx = -1
-      var searchCharPos = searchStartCharCol
-      let linePrepared = prepareSearchString(line, ignorecase)
-
-      # Iterate through all matches after searchStartCharCol
-      while searchCharPos < lineCharLen:
-        # Convert character position to byte position
-        # This conversion is safe because searchCharPos < lineCharLen
-        let searchBytePos = charToBytePos(line, searchCharPos)
-
-        # Defensive check: ensure byte position is within bounds
-        if searchBytePos > line.len:
+      var searchBytePos = startByteCol
+      var m = RegexMatch2()
+      while searchBytePos <= line.len:
+        if not find(line, re, m, searchBytePos):
           break
-
-        # Search using byte position
-        let byteIdx = linePrepared.find(searchTextPrepared, searchBytePos)
-
-        if byteIdx < 0:
-          break
-
-        # Convert byte position back to character position
-        # This conversion is safe because byteIdx comes from a valid find() result
-        let charIdx = byteToCharPos(line, byteIdx)
+        let charIdx = byteToCharPos(line, m.boundaries.a)
         lastCharIdx = charIdx
-        searchCharPos = charIdx + 1
+        searchBytePos = max(m.boundaries.a + 1, m.boundaries.b + 1)
 
-      # For negative column, any match is valid
-      # Otherwise, only return if after current position
       if lastCharIdx >= 0 and (startPos.column < 0 or lastCharIdx > startPos.column):
         return some(BufferPosition(line: lineIdx, column: lastCharIdx))
     else:
@@ -2368,125 +2316,6 @@ proc findPrev*(
         return some(BufferPosition(line: lineIdx, column: lastIdx))
 
   return none(BufferPosition)
-
-proc isPositionInSearchMatch*(
-    b: TextBuffer,
-    pos: BufferPosition,
-    searchText: string,
-    ignorecase = false,
-    wholeWord = false,
-): bool =
-  ## Check if the given position is within a search match
-  ## Returns true if pos is at the start of a match or within a match
-  ##
-  ## If wholeWord is true, only matches that are at word boundaries are considered
-  ##
-  ## Optimized: only converts strings to lowercase once
-  ##
-  ## Unicode-aware: All positions are in character (rune) indices, not byte indices
-  ##
-  ## Returns false for invalid positions or empty search text
-
-  # Validate search text
-  if searchText.len == 0:
-    return false
-
-  # Validate line number
-  if pos.line < 0 or pos.line >= b.len:
-    return false
-
-  # Get line and validate it's not empty
-  let line = b.getLine(pos.line)
-  if line.len == 0:
-    return false
-
-  # Validate column position
-  let lineCharLen = line.charLen
-  if pos.column < 0 or pos.column >= lineCharLen:
-    return false
-
-  # Prepare search strings once (optimization: avoid repeated toLowerAscii calls)
-  let searchTextPrepared = prepareSearchString(searchText, ignorecase)
-  let linePrepared = prepareSearchString(line, ignorecase)
-  let searchTextCharLen = searchText.charLen
-
-  # Early exit: if search text is longer than line, no match possible
-  if searchTextCharLen > lineCharLen:
-    return false
-
-  # Early exit: if position is before the first possible match
-  let firstPossibleMatchByte = linePrepared.find(searchTextPrepared)
-  if firstPossibleMatchByte < 0:
-    return false
-
-  # Convert first match byte position to character position
-  # This conversion is safe because firstPossibleMatchByte comes from valid find()
-  let firstPossibleMatchChar = byteToCharPos(line, firstPossibleMatchByte)
-  if pos.column < firstPossibleMatchChar:
-    return false
-
-  # Helper proc to check if a rune is a word character
-  proc isWordChar(r: Rune): bool =
-    let code = int(r)
-    r.isAlpha or (code >= ord('0') and code <= ord('9')) or r == Rune('_')
-
-  # Helper to check word boundary at a match position
-  proc isWholeWordMatch(runes: seq[Rune], matchCol: int, matchLen: int): bool =
-    # Check character before match (must not be word char or at start)
-    if matchCol > 0:
-      if isWordChar(runes[matchCol - 1]):
-        return false
-    # Check character after match (must not be word char or at end)
-    let endCol = matchCol + matchLen
-    if endCol < runes.len:
-      if isWordChar(runes[endCol]):
-        return false
-    return true
-
-  let runes =
-    if wholeWord:
-      line.toRunes()
-    else:
-      @[]
-
-  # Find all matches in the line and check if pos is within any match
-  var searchCharPos = 0
-  while searchCharPos <= lineCharLen:
-    # Convert character position to byte position
-    # This conversion is safe because searchCharPos <= lineCharLen
-    let searchBytePos = charToBytePos(line, searchCharPos)
-
-    # Defensive check: ensure byte position is within bounds
-    if searchBytePos > line.len:
-      break
-
-    # Search using byte position
-    let byteIdx = linePrepared.find(searchTextPrepared, searchBytePos)
-
-    if byteIdx < 0:
-      break
-
-    # Convert byte position back to character position
-    # This conversion is safe because byteIdx comes from a valid find() result
-    let charIdx = byteToCharPos(line, byteIdx)
-
-    # Check if pos.column is within this match [charIdx, charIdx + searchTextCharLen)
-    if pos.column >= charIdx and pos.column < charIdx + searchTextCharLen:
-      # If whole word matching, check word boundaries
-      if wholeWord:
-        if isWholeWordMatch(runes, charIdx, searchTextCharLen):
-          return true
-        # Not a whole word match, continue searching
-      else:
-        return true
-
-    # Early exit: if we've passed the position, no need to continue
-    if charIdx > pos.column:
-      return false
-
-    searchCharPos = charIdx + 1
-
-  return false
 
 proc findSearchMatchRanges*(
     b: TextBuffer,
@@ -2497,7 +2326,8 @@ proc findSearchMatchRanges*(
 ): seq[ColumnRange] =
   ## Find all search match ranges on a given line.
   ## Returns a seq of ColumnRange (half-open [startCol, endCol)).
-  ## This allows O(1) per-character lookup instead of O(n) per character.
+  ## When wholeWord is true, uses literal matching with word boundary checks.
+  ## Otherwise uses regex matching.
 
   if searchText.len == 0:
     return @[]
@@ -2510,49 +2340,79 @@ proc findSearchMatchRanges*(
     return @[]
 
   let lineCharLen = line.charLen
-  let searchTextPrepared = prepareSearchString(searchText, ignorecase)
-  let linePrepared = prepareSearchString(line, ignorecase)
-  let searchTextCharLen = searchText.charLen
 
-  if searchTextCharLen > lineCharLen:
-    return @[]
+  if wholeWord:
+    # Literal matching with word boundary checks (for * and # commands)
+    let searchTextPrepared = prepareSearchString(searchText, ignorecase)
+    let linePrepared = prepareSearchString(line, ignorecase)
+    let searchTextCharLen = searchText.charLen
 
-  # Helper to check word boundary at a match position
-  proc isWholeWordMatch(runes: seq[Rune], matchCol: int, matchLen: int): bool =
-    if matchCol > 0:
-      if isWordChar(runes[matchCol - 1]):
-        return false
-    let endCol = matchCol + matchLen
-    if endCol < runes.len:
-      if isWordChar(runes[endCol]):
-        return false
-    return true
+    if searchTextCharLen > lineCharLen:
+      return @[]
 
-  let runes =
-    if wholeWord:
-      line.toRunes()
-    else:
-      @[]
+    let runes = line.toRunes()
 
-  var searchCharPos = 0
-  while searchCharPos <= lineCharLen:
-    let searchBytePos = charToBytePos(line, searchCharPos)
-    if searchBytePos > line.len:
-      break
+    proc isWholeWordMatch(runes: seq[Rune], matchCol: int, matchLen: int): bool =
+      if matchCol > 0:
+        if isWordChar(runes[matchCol - 1]):
+          return false
+      let endCol = matchCol + matchLen
+      if endCol < runes.len:
+        if isWordChar(runes[endCol]):
+          return false
+      return true
 
-    let byteIdx = linePrepared.find(searchTextPrepared, searchBytePos)
-    if byteIdx < 0:
-      break
-
-    let charIdx = byteToCharPos(line, byteIdx)
-
-    if wholeWord:
+    var searchCharPos = 0
+    while searchCharPos <= lineCharLen:
+      let searchBytePos = charToBytePos(line, searchCharPos)
+      if searchBytePos > line.len:
+        break
+      let byteIdx = linePrepared.find(searchTextPrepared, searchBytePos)
+      if byteIdx < 0:
+        break
+      let charIdx = byteToCharPos(line, byteIdx)
       if isWholeWordMatch(runes, charIdx, searchTextCharLen):
         result.add(ColumnRange(startCol: charIdx, endCol: charIdx + searchTextCharLen))
-    else:
-      result.add(ColumnRange(startCol: charIdx, endCol: charIdx + searchTextCharLen))
+      searchCharPos = charIdx + 1
+  else:
+    # Regex matching
+    let compiled = compileSearchRegex(searchText, ignorecase)
+    if compiled.isNone:
+      return @[]
+    let re = compiled.get
 
-    searchCharPos = charIdx + 1
+    var searchBytePos = 0
+    var m = RegexMatch2()
+    while searchBytePos <= line.len:
+      if not find(line, re, m, searchBytePos):
+        break
+      let startChar = byteToCharPos(line, m.boundaries.a)
+      let endChar = byteToCharPos(line, m.boundaries.b + 1)
+      result.add(ColumnRange(startCol: startChar, endCol: endChar))
+      # Advance past this match (at least 1 byte to avoid infinite loop on zero-width)
+      searchBytePos = max(m.boundaries.a + 1, m.boundaries.b + 1)
+
+proc isPositionInSearchMatch*(
+    b: TextBuffer,
+    pos: BufferPosition,
+    searchText: string,
+    ignorecase = false,
+    wholeWord = false,
+): bool =
+  ## Check if the given position is within a search match.
+  ## Uses regex matching unless wholeWord is true (literal match).
+  if searchText.len == 0:
+    return false
+  if pos.line < 0 or pos.line >= b.len:
+    return false
+
+  let ranges = b.findSearchMatchRanges(pos.line, searchText, ignorecase, wholeWord)
+  for r in ranges:
+    if pos.column >= r.startCol and pos.column < r.endCol:
+      return true
+    if r.startCol > pos.column:
+      return false
+  return false
 
 proc findWordMatchRanges*(
     b: TextBuffer, lineIndex: int, word: string, excludeCol: int = -1
