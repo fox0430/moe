@@ -52,10 +52,11 @@ suite "syntaxjavascript - javaScriptkeywords constant":
     check "async" in javaScriptkeywords
     check "await" in javaScriptkeywords
 
-  test "javaScriptkeywords contains boolean values":
-    check "true" in javaScriptkeywords
-    check "false" in javaScriptkeywords
-    check "null" in javaScriptkeywords
+  test "javaScriptBooleans contains boolean values":
+    check "true" in javaScriptBooleans
+    check "false" in javaScriptBooleans
+    check "null" in javaScriptBooleans
+    check "undefined" in javaScriptBooleans
 
   test "javaScriptkeywords contains type keywords":
     check "typeof" in javaScriptkeywords
@@ -68,20 +69,20 @@ suite "syntaxjavascript - javaScriptkeywords constant":
     check "import" in javaScriptkeywords
     check "from" in javaScriptkeywords
 
-  test "javaScriptkeywords contains built-in objects":
-    check "Array" in javaScriptkeywords
-    check "Object" in javaScriptkeywords
-    check "String" in javaScriptkeywords
-    check "Number" in javaScriptkeywords
-    check "Boolean" in javaScriptkeywords
-    check "Function" in javaScriptkeywords
-    check "Promise" in javaScriptkeywords
-    check "Map" in javaScriptkeywords
-    check "Set" in javaScriptkeywords
-    check "JSON" in javaScriptkeywords
-    check "RegExp" in javaScriptkeywords
-    check "Error" in javaScriptkeywords
-    check "Date" in javaScriptkeywords
+  test "javaScriptBuiltins contains built-in objects":
+    check "Array" in javaScriptBuiltins
+    check "Object" in javaScriptBuiltins
+    check "String" in javaScriptBuiltins
+    check "Number" in javaScriptBuiltins
+    check "Boolean" in javaScriptBuiltins
+    check "Function" in javaScriptBuiltins
+    check "Promise" in javaScriptBuiltins
+    check "Map" in javaScriptBuiltins
+    check "Set" in javaScriptBuiltins
+    check "JSON" in javaScriptBuiltins
+    check "RegExp" in javaScriptBuiltins
+    check "Error" in javaScriptBuiltins
+    check "Date" in javaScriptBuiltins
 
   test "javaScriptkeywords contains global objects":
     check "console" in javaScriptkeywords
@@ -89,15 +90,15 @@ suite "syntaxjavascript - javaScriptkeywords constant":
     check "window" in javaScriptkeywords
     check "globalThis" in javaScriptkeywords
 
-  test "javaScriptkeywords contains typed arrays":
-    check "Int8Array" in javaScriptkeywords
-    check "Int16Array" in javaScriptkeywords
-    check "Int32Array" in javaScriptkeywords
-    check "Uint8Array" in javaScriptkeywords
-    check "Uint16Array" in javaScriptkeywords
-    check "Uint32Array" in javaScriptkeywords
-    check "Float32Array" in javaScriptkeywords
-    check "Float64Array" in javaScriptkeywords
+  test "javaScriptBuiltins contains typed arrays":
+    check "Int8Array" in javaScriptBuiltins
+    check "Int16Array" in javaScriptBuiltins
+    check "Int32Array" in javaScriptBuiltins
+    check "Uint8Array" in javaScriptBuiltins
+    check "Uint16Array" in javaScriptBuiltins
+    check "Uint32Array" in javaScriptBuiltins
+    check "Float32Array" in javaScriptBuiltins
+    check "Float64Array" in javaScriptBuiltins
 
 suite "syntaxjavascript - javaScriptNextToken keywords":
   test "var keyword":
@@ -174,21 +175,21 @@ suite "syntaxjavascript - javaScriptNextToken keywords":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("true")
     g.javaScriptNextToken()
-    check g.kind == gtKeyword
+    check g.kind == gtBoolean
     check g.length == 4
 
   test "false keyword":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("false")
     g.javaScriptNextToken()
-    check g.kind == gtKeyword
+    check g.kind == gtBoolean
     check g.length == 5
 
   test "null keyword":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("null")
     g.javaScriptNextToken()
-    check g.kind == gtKeyword
+    check g.kind == gtBoolean
     check g.length == 4
 
 suite "syntaxjavascript - javaScriptNextToken identifiers":
@@ -711,7 +712,8 @@ suite "syntaxjavascript - javaScriptNextToken complete code":
       tokens.add(g.kind)
 
     check gtKeyword in tokens # function, return
-    check gtIdentifier in tokens # add, a, b
+    check gtFunctionName in tokens # add
+    check gtIdentifier in tokens # a, b
     check gtPunctuation in tokens # (, ), {, }, ,, ;
     check gtOperator in tokens # +
 
@@ -758,6 +760,7 @@ suite "syntaxjavascript - javaScriptNextToken complete code":
       tokens.add(g.kind)
 
     check gtKeyword in tokens # async, function, await, fetch
+    check gtFunctionName in tokens # fetchData
 
   test "class definition":
     var g: GeneralTokenizer
@@ -1244,7 +1247,7 @@ suite "syntaxjavascript - javaScriptNextToken template literal advanced":
       tokens.add(g.kind)
 
     check gtLongStringLit in tokens
-    check gtIdentifier in tokens # fn
+    check gtFunctionName in tokens # fn
     check gtPunctuation in tokens # (, )
 
 suite "syntaxjavascript - javaScriptNextToken string edge cases":
@@ -1469,3 +1472,360 @@ suite "syntaxjavascript - javaScriptNextToken complete JavaScript code":
       tokens.add(g.kind)
 
     check gtKeyword in tokens # switch, case, default, break, return
+
+suite "syntaxjavascript - javaScriptBooleans constant":
+  test "javaScriptBooleans contains boolean values":
+    check "true" in javaScriptBooleans
+    check "false" in javaScriptBooleans
+    check "null" in javaScriptBooleans
+    check "undefined" in javaScriptBooleans
+
+suite "syntaxjavascript - javaScriptBuiltins constant":
+  test "javaScriptBuiltins contains built-in objects":
+    check "Array" in javaScriptBuiltins
+    check "Object" in javaScriptBuiltins
+    check "String" in javaScriptBuiltins
+    check "Number" in javaScriptBuiltins
+    check "Boolean" in javaScriptBuiltins
+    check "Function" in javaScriptBuiltins
+    check "Promise" in javaScriptBuiltins
+    check "Map" in javaScriptBuiltins
+    check "Set" in javaScriptBuiltins
+    check "JSON" in javaScriptBuiltins
+    check "RegExp" in javaScriptBuiltins
+    check "Error" in javaScriptBuiltins
+    check "Date" in javaScriptBuiltins
+    check "Math" in javaScriptBuiltins
+    check "Symbol" in javaScriptBuiltins
+
+  test "javaScriptBuiltins contains typed arrays":
+    check "Int8Array" in javaScriptBuiltins
+    check "Int16Array" in javaScriptBuiltins
+    check "Int32Array" in javaScriptBuiltins
+    check "Uint8Array" in javaScriptBuiltins
+    check "Uint16Array" in javaScriptBuiltins
+    check "Uint32Array" in javaScriptBuiltins
+    check "Float32Array" in javaScriptBuiltins
+    check "Float64Array" in javaScriptBuiltins
+
+suite "syntaxjavascript - javaScriptNextToken boolean tokens":
+  test "true is boolean":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("true")
+    g.javaScriptNextToken()
+    check g.kind == gtBoolean
+    check g.length == 4
+
+  test "false is boolean":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("false")
+    g.javaScriptNextToken()
+    check g.kind == gtBoolean
+    check g.length == 5
+
+  test "null is boolean":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("null")
+    g.javaScriptNextToken()
+    check g.kind == gtBoolean
+    check g.length == 4
+
+  test "undefined is boolean":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("undefined")
+    g.javaScriptNextToken()
+    check g.kind == gtBoolean
+    check g.length == 9
+
+suite "syntaxjavascript - javaScriptNextToken builtin tokens":
+  test "Array is builtin":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("Array")
+    g.javaScriptNextToken()
+    check g.kind == gtBuiltin
+    check g.length == 5
+
+  test "Map is builtin":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("Map")
+    g.javaScriptNextToken()
+    check g.kind == gtBuiltin
+    check g.length == 3
+
+  test "Promise is builtin":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("Promise")
+    g.javaScriptNextToken()
+    check g.kind == gtBuiltin
+    check g.length == 7
+
+  test "JSON is builtin":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("JSON")
+    g.javaScriptNextToken()
+    check g.kind == gtBuiltin
+    check g.length == 4
+
+  test "Math is builtin":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("Math")
+    g.javaScriptNextToken()
+    check g.kind == gtBuiltin
+    check g.length == 4
+
+suite "syntaxjavascript - javaScriptNextToken function name tokens":
+  test "identifier followed by paren is function name":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("foo(")
+    g.javaScriptNextToken()
+    check g.kind == gtFunctionName
+    check g.length == 3
+
+  test "identifier not followed by paren is identifier":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("foo ")
+    g.javaScriptNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 3
+
+  test "keyword followed by paren stays keyword":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("if(")
+    g.javaScriptNextToken()
+    check g.kind == gtKeyword
+    check g.length == 2
+
+  test "builtin followed by paren stays builtin":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("Array(")
+    g.javaScriptNextToken()
+    check g.kind == gtBuiltin
+    check g.length == 5
+
+  test "function call in expression":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("myFunc(x)")
+    g.javaScriptNextToken()
+    check g.kind == gtFunctionName
+    check g.length == 6
+
+suite "syntaxjavascript - JSDoc highlighting":
+  test "regular block comment has no JSDoc tokens":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/* @param x */")
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+    check gtPreprocessor notin tokens
+
+  test "JSDoc tag is preprocessor":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** @param x */")
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+    check gtPreprocessor in tokens
+    check gtLongComment in tokens
+
+  test "JSDoc type annotation is preprocessor":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** @param {string} name */")
+    var kinds: seq[TokenClass] = @[]
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      kinds.add(g.kind)
+    var preprocCount = 0
+    for k in kinds:
+      if k == gtPreprocessor:
+        inc preprocCount
+    check preprocCount >= 2 # @param and {string}
+
+  test "JSDoc multiple tags":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** @param x @returns y */")
+    var kinds: seq[TokenClass] = @[]
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      kinds.add(g.kind)
+    var preprocCount = 0
+    for k in kinds:
+      if k == gtPreprocessor:
+        inc preprocCount
+    check preprocCount >= 2
+
+  test "JSDoc common tags":
+    for tag in [
+      "@param", "@returns", "@type", "@typedef", "@callback", "@deprecated", "@example"
+    ]:
+      var g: GeneralTokenizer
+      g.initGeneralTokenizer("/** " & tag & " */")
+      var hasPreprocessor = false
+      while true:
+        g.javaScriptNextToken()
+        if g.kind == gtEof:
+          break
+        if g.kind == gtPreprocessor:
+          hasPreprocessor = true
+      check hasPreprocessor
+
+  test "empty JSDoc /**/ has no preprocessor tokens":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/**/")
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+    check gtPreprocessor notin tokens
+
+  test "triple star /***/ has no preprocessor tokens":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/***/")
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+    check gtPreprocessor notin tokens
+
+  test "regular block comment with braces has no preprocessor tokens":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/* {string} @param */")
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+    check gtPreprocessor notin tokens
+
+  test "multi-line JSDoc via single buffer":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/**\n * @param {string} name\n */")
+    var hasPreprocessor = false
+    var hasLongComment = false
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind == gtPreprocessor:
+        hasPreprocessor = true
+      if g.kind == gtLongComment:
+        hasLongComment = true
+    check hasPreprocessor
+    check hasLongComment
+
+  test "multi-line JSDoc continuation (line-by-line)":
+    # First line: /**
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/**")
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+    check g.state == gtLongComment
+    check g.commentDepth == 1
+
+    # Second line: * @param x
+    let savedState = g.state
+    let savedDepth = g.commentDepth
+    g.initGeneralTokenizer(" * @param x")
+    g.state = savedState
+    g.commentDepth = savedDepth
+    var hasPreprocessor = false
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind == gtPreprocessor:
+        hasPreprocessor = true
+    check hasPreprocessor
+    check g.state == gtLongComment
+
+    # Third line: */
+    let savedState2 = g.state
+    let savedDepth2 = g.commentDepth
+    g.initGeneralTokenizer(" */")
+    g.state = savedState2
+    g.commentDepth = savedDepth2
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+    check g.state == gtNone
+    check g.commentDepth == 0
+
+  test "JSDoc unclosed type before comment end":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** {unclosed */")
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+    check gtPreprocessor in tokens
+
+  test "JSDoc nested braces in type annotation":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** @param {{key: string}} opts */")
+    var kinds: seq[TokenClass] = @[]
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      kinds.add(g.kind)
+    var preprocCount = 0
+    for k in kinds:
+      if k == gtPreprocessor:
+        inc preprocCount
+    check preprocCount >= 2 # @param and {{key: string}}
+    # Verify the type annotation includes both opening and closing braces
+    var foundType = false
+    var g2: GeneralTokenizer
+    g2.initGeneralTokenizer("/** @param {{key: string}} opts */")
+    while true:
+      g2.javaScriptNextToken()
+      if g2.kind == gtEof:
+        break
+      if g2.kind == gtPreprocessor and g2.length > 1:
+        let startIdx = g2.pos - g2.length
+        if g2.buf[startIdx] == '{':
+          # Check the last char is '}'
+          if g2.buf[g2.pos - 1] == '}':
+            foundType = true
+    check foundType
+
+  test "email address in JSDoc is not a tag":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** Contact user@example.com for help */")
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+    check gtPreprocessor notin tokens
+
+  test "at sign followed by number in JSDoc is not a tag":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** @123 */")
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.javaScriptNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+    check gtPreprocessor notin tokens

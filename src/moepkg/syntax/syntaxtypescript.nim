@@ -31,37 +31,59 @@
 #    distribution, for details about the copyright.
 #
 
+import std/algorithm
+
 import tokenizer, syntaxhtml
 
-const typescriptKeywords* = [
-  "DOMSTRING_SIZE_ERR", "DataViewDate", "HIERARCHY_REQUEST_ERR", "INDEX_SIZE_ERR",
-  "INUSE_ATTRIBUTE_ERR", "INVALID_ACCESS_ERR", "INVALID_CHARACTER_ERR",
-  "INVALID_MODIFICATION_ERR", "INVALID_STATE_ERR", "Int16Array", "Int32Array",
-  "Int8Array", "Intl", "Iterator", "JSON", "Map", "MathNumber", "NAMESPACE_ERR",
-  "NOT_FOUND_ERR", "NOT_SUPPORTED_ERR", "NO_DATA_ALLOWED_ERR",
-  "NO_MODIFICATION_ALLOWED_ERR", "NamedNodeMap", "Node", "NodeList", "Notation",
-  "NumberFormat", "Object", "ParallelArray", "ProcessingInstruction", "Promise",
-  "PromiseProxy", "Reflect", "RegExp", "SYNTAX_ERR", "Set", "String", "Symbol", "Text",
-  "Uint16Array", "Uint32Array", "Uint8Array", "Uint8ClampedArray", "WRONG_DOCUMENT_ERR",
-  "WeakMap", "WeakSet", "WebAssembly", "abstract", "accessor", "any", "apply",
-  "arguments", "as", "assert", "asserts", "async", "await", "bigint", "boolean",
-  "break", "byte", "catch", "catchexport", "char", "charAt", "class", "console",
-  "const", "constructor", "continue", "declare", "decodeURI", "decodeURIComponent",
-  "delete", "do", "document", "double", "else", "encodeURI", "encodeURIComponenteval",
-  "enum", "except", "extends", "false", "fetch", "filter", "final", "finally", "float",
-  "for", "from", "function", "global", "globalThis", "goto", "if", "implements",
-  "implementsprotected", "import", "in", "indexOf", "infer", "instanceof", "int",
-  "interface", "is", "isFinite", "isNaN", "join", "keyof", "keys", "let", "log", "long",
-  "map", "module", "namespace", "native", "never", "new", "null", "number", "onblur",
-  "onclick", "oncontextmenu", "ondblclick", "onfocus", "onkeydown", "onkeypress",
-  "onkeyup", "onmousedown", "onmousemove", "onmouseout", "onmouseover", "onmouseup",
-  "onresize", "or", "out", "override", "package", "parseFloat", "parseIntuneval",
-  "pass", "private", "public", "push", "readonly", "reduce", "reject", "require",
-  "resolve", "return", "satisfies", "short", "static", "string", "switch", "symbol",
-  "synchronized", "then", "throw", "throws", "transient", "true", "try", "type",
-  "typeof", "undefined", "unique", "unknown", "using", "value", "var", "void",
-  "volatile", "while", "window", "yield",
-]
+const
+  typescriptBooleans* = ["false", "null", "true", "undefined"]
+
+  typescriptBuiltins* = [
+    "Array", "ArrayBuffer", "Attr", "BigInt64Array", "BigUint64Array", "Boolean",
+    "Buffer", "CDATASection", "CharacterData", "Collator", "Comment", "DOMException",
+    "DOMImplementation", "DOMSTRING_SIZE_ERR", "DataView", "Date", "DateTimeFormat",
+    "Document", "DocumentFragment", "DocumentType", "Element", "Entity",
+    "EntityReference", "Error", "Float32Array", "Float64Array", "Function",
+    "HIERARCHY_REQUEST_ERR", "INDEX_SIZE_ERR", "INUSE_ATTRIBUTE_ERR",
+    "INVALID_ACCESS_ERR", "INVALID_CHARACTER_ERR", "INVALID_MODIFICATION_ERR",
+    "INVALID_STATE_ERR", "Int16Array", "Int32Array", "Int8Array", "Intl", "Iterator",
+    "JSON", "Map", "Math", "NAMESPACE_ERR", "NOT_FOUND_ERR", "NOT_SUPPORTED_ERR",
+    "NO_DATA_ALLOWED_ERR", "NO_MODIFICATION_ALLOWED_ERR", "NamedNodeMap", "Node",
+    "NodeList", "Notation", "Number", "NumberFormat", "Object", "ParallelArray",
+    "ProcessingInstruction", "Promise", "PromiseProxy", "Reflect", "RegExp",
+    "SYNTAX_ERR", "Set", "String", "Symbol", "Text", "Uint16Array", "Uint32Array",
+    "Uint8Array", "Uint8ClampedArray", "WRONG_DOCUMENT_ERR", "WeakMap", "WeakSet",
+    "WebAssembly",
+  ]
+
+  typescriptKeywords* = [
+    "abstract", "accessor", "any", "apply", "arguments", "as", "assert", "asserts",
+    "async", "await", "bigint", "boolean", "break", "byte", "case", "catch", "char",
+    "charAt", "class", "console", "const", "constructor", "continue", "declare",
+    "decodeURI", "decodeURIComponent", "delete", "do", "document", "double", "else",
+    "encodeURI", "encodeURIComponent", "enum", "eval", "except", "export", "extends",
+    "fetch", "filter", "final", "finally", "float", "for", "from", "function", "global",
+    "globalThis", "goto", "if", "implements", "import", "in", "indexOf", "infer",
+    "instanceof", "int", "interface", "is", "isFinite", "isNaN", "join", "keyof",
+    "keys", "let", "log", "long", "map", "module", "namespace", "native", "never",
+    "new", "number", "onblur", "onclick", "oncontextmenu", "ondblclick", "onfocus",
+    "onkeydown", "onkeypress", "onkeyup", "onmousedown", "onmousemove", "onmouseout",
+    "onmouseover", "onmouseup", "onresize", "or", "out", "override", "package",
+    "parseFloat", "parseInt", "pass", "private", "protected", "public", "push",
+    "readonly", "reduce", "reject", "require", "resolve", "return", "satisfies",
+    "short", "static", "string", "switch", "symbol", "synchronized", "then", "throw",
+    "throws", "transient", "try", "type", "typeof", "uneval", "unique", "unknown",
+    "using", "value", "var", "void", "volatile", "while", "window", "yield",
+  ]
+
+proc tsGetKeyword*(id: string): TokenClass =
+  if binarySearch(typescriptBooleans, id) > -1:
+    return gtBoolean
+  if binarySearch(typescriptBuiltins, id) > -1:
+    return gtBuiltin
+  if binarySearch(typescriptKeywords, id) > -1:
+    return gtKeyword
+  return gtIdentifier
 
 # Template literal depth and brace depth are now tracked in GeneralTokenizer
 
@@ -111,7 +133,39 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
         if g.buf[pos] == '/':
           inc(pos)
           g.state = gtNone
+          g.commentDepth = 0
           break
+      of '@':
+        if g.commentDepth == 1 and g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z'} and
+            (pos == 0 or g.buf[pos - 1] in {' ', '\t', '\n', '\r', '*'}):
+          if pos > g.start:
+            break # Return text before tag
+          else:
+            g.kind = gtPreprocessor
+            inc(pos)
+            while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
+              inc(pos)
+            break
+        else:
+          inc(pos)
+      of '{':
+        if g.commentDepth == 1 and pos > g.start:
+          break
+        elif g.commentDepth == 1:
+          g.kind = gtPreprocessor
+          var braceNest = 0
+          while g.buf[pos] != '\0' and not (g.buf[pos] == '*' and g.buf[pos + 1] == '/'):
+            if g.buf[pos] == '{':
+              inc(braceNest)
+            elif g.buf[pos] == '}':
+              dec(braceNest)
+              if braceNest == 0:
+                inc(pos)
+                break
+            inc(pos)
+          break
+        else:
+          inc(pos)
       of '\0':
         break
       else:
@@ -225,19 +279,54 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
         inc(pos)
     elif g.buf[pos] == '*':
       g.kind = gtLongComment
-      var nested = 0
       inc(pos)
+      # Detect JSDoc: /** but not /**/ (empty)
+      if g.buf[pos] == '*' and g.buf[pos + 1] != '/':
+        g.commentDepth = 1 # Mark as JSDoc
+      else:
+        g.commentDepth = 0
       while true:
         case g.buf[pos]
         of '*':
           inc(pos)
           if g.buf[pos] == '/':
             inc(pos)
-            if nested == 0:
+            g.commentDepth = 0
+            break
+        of '@':
+          if g.commentDepth == 1 and g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z'}:
+            if pos > g.start:
+              g.state = gtLongComment
               break
-        of '/':
-          inc(pos)
-          if g.buf[pos] == '*':
+            else:
+              g.kind = gtPreprocessor
+              g.state = gtLongComment
+              inc(pos)
+              while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
+                inc(pos)
+              break
+          else:
+            inc(pos)
+        of '{':
+          if g.commentDepth == 1 and pos > g.start:
+            g.state = gtLongComment
+            break
+          elif g.commentDepth == 1:
+            g.kind = gtPreprocessor
+            g.state = gtLongComment
+            var braceNest = 0
+            while g.buf[pos] != '\0' and
+                not (g.buf[pos] == '*' and g.buf[pos + 1] == '/'):
+              if g.buf[pos] == '{':
+                inc(braceNest)
+              elif g.buf[pos] == '}':
+                dec(braceNest)
+                if braceNest == 0:
+                  inc(pos)
+                  break
+              inc(pos)
+            break
+          else:
             inc(pos)
         of '\0':
           g.state = gtLongComment
@@ -267,10 +356,13 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
           g.buf[tempPos + 1] == ':':
         isKey = true
 
-    if isKeyword(typescriptKeywords, id) >= 0:
-      g.kind = gtKeyword
+    let kwKind = tsGetKeyword(id)
+    if kwKind != gtIdentifier:
+      g.kind = kwKind
     elif isKey:
       g.kind = gtKey
+    elif g.buf[pos] == '(':
+      g.kind = gtFunctionName
     else:
       g.kind = gtIdentifier
   of '0':
@@ -479,6 +571,15 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
       # Check if we should return to JSX mode after closing expression
       if pos < g.buf.len and g.buf[pos] == '<':
         g.inJsxMode = true
+  of '@':
+    # Decorator syntax
+    inc(pos)
+    if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '_', '\x80' .. '\xFF'}:
+      g.kind = gtPreprocessor
+      while g.buf[pos] in symChars:
+        inc(pos)
+    else:
+      g.kind = gtOperator
   of '\0':
     g.kind = gtEof
   else:
