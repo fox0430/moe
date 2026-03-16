@@ -104,8 +104,14 @@ type
     flags*: seq[string]
     rawText*: string
 
+  ShellCommandEntry* = object
+    command*: string ## The shell command to execute
+    description*: string ## Optional description for completion
+
   CommandLineParser* = ref object
     aliases*: Table[string, CommandLineAction]
+    aliasDescriptions*: Table[string, string] ## Custom descriptions for aliases
+    shellCommands*: Table[string, ShellCommandEntry] ## Shell command definitions
     validators: Table[CommandLineAction, proc(args: seq[string]): Result[void, string]]
 
   CommandLineResult* = object
@@ -261,6 +267,8 @@ proc isNoArgumentAction*(parser: CommandLineParser, command: string): bool =
   ## Returns true for actions not in ArgumentRequiredActions
   if command in parser.aliases:
     return parser.aliases[command] notin ArgumentRequiredActions
+  if command in parser.shellCommands:
+    return false # Custom commands may accept arguments
   return false
 
 # Substitute command utilities
@@ -510,6 +518,8 @@ proc newCommandLineParser*(): CommandLineParser =
   ## Aliases are defined in command_config.nim and loaded via CommandConfig.applyToParser()
   result = CommandLineParser(
     aliases: initTable[string, CommandLineAction](),
+    aliasDescriptions: initTable[string, string](),
+    shellCommands: initTable[string, ShellCommandEntry](),
     validators:
       initTable[CommandLineAction, proc(args: seq[string]): Result[void, string]](),
   )
@@ -596,12 +606,21 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
       cmd.toLowerAscii()
   if baseCmd in parser.aliases:
     result.action = parser.aliases[baseCmd]
+    # Collect remaining parts as arguments
+    if parts.len > 1:
+      result.args = parts[1 ..^ 1]
+  elif baseCmd in parser.shellCommands:
+    # Custom command: resolve as shell command
+    result.action = claShellCommand
+    var shellCmd = parser.shellCommands[baseCmd].command
+    if parts.len > 1:
+      shellCmd &= " " & parts[1 ..^ 1].join(" ")
+    result.args = @[shellCmd]
   else:
     result.action = claUnknown
-
-  # Collect remaining parts as arguments
-  if parts.len > 1:
-    result.args = parts[1 ..^ 1]
+    # Collect remaining parts as arguments
+    if parts.len > 1:
+      result.args = parts[1 ..^ 1]
 
 proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult =
   ## Execute a parsed command and return the result

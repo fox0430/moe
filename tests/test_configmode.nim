@@ -1827,7 +1827,7 @@ suite "ConfigMode - descriptor completeness":
     ].toHashSet
     let excluded = [
       "buildOnSave", "tabLine", "quickRun", "persist", "startUpFileOpen",
-      "editorConfig", "debug", "keyMapping",
+      "editorConfig", "debug", "keyMapping", "shellCommands", "commandAliases",
     ].toHashSet
 
     var cfg = newEditorConfig()

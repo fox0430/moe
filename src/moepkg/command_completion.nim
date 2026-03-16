@@ -334,12 +334,27 @@ proc collectCommands*(parser: CommandLineParser): seq[CommandCompletionEntry] =
     if alias notin seenCommands:
       seenCommands.add(alias)
       let desc =
-        if alias in CommandDescriptions:
+        if alias in parser.aliasDescriptions:
+          parser.aliasDescriptions[alias]
+        elif alias in CommandDescriptions:
           CommandDescriptions[alias]
         else:
-          ""
+          "User alias"
       result.add(
         CommandCompletionEntry(command: alias, description: desc, matchScore: 0)
+      )
+
+  # Add shell commands
+  for name, entry in parser.shellCommands.pairs:
+    if name notin seenCommands:
+      seenCommands.add(name)
+      let desc =
+        if entry.description.len > 0:
+          entry.description
+        else:
+          "Shell: " & entry.command
+      result.add(
+        CommandCompletionEntry(command: name, description: desc, matchScore: 0)
       )
 
   # Sort alphabetically

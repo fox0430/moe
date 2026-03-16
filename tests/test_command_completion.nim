@@ -236,6 +236,73 @@ suite "CommandCompletion - collectCommands":
       if cmd.command == "w":
         check cmd.description.len > 0
 
+  test "Shell commands are included in collected commands":
+    let parser = newCommandLineParser()
+    parser.addAlias("q", claQuit)
+    parser.shellCommands["nimbuild"] = ShellCommandEntry(command: "nimble build")
+
+    let commands = collectCommands(parser)
+    check commands.len == 2
+
+    var hasShellCmd = false
+    for cmd in commands:
+      if cmd.command == "nimbuild":
+        hasShellCmd = true
+        check cmd.description == "Shell: nimble build"
+    check hasShellCmd
+
+  test "Shell command does not duplicate alias":
+    let parser = newCommandLineParser()
+    parser.addAlias("build", claBuild)
+    parser.shellCommands["build"] = ShellCommandEntry(command: "make build")
+
+    let commands = collectCommands(parser)
+    # "build" should appear only once (from alias, not shell command)
+    var count = 0
+    for cmd in commands:
+      if cmd.command == "build":
+        inc count
+    check count == 1
+
+  test "Shell command with custom description":
+    let parser = newCommandLineParser()
+    parser.shellCommands["nimbuild"] =
+      ShellCommandEntry(command: "nimble build", description: "Build project")
+
+    let commands = collectCommands(parser)
+    for cmd in commands:
+      if cmd.command == "nimbuild":
+        check cmd.description == "Build project"
+
+  test "Shell command without description uses default":
+    let parser = newCommandLineParser()
+    parser.shellCommands["nimbuild"] = ShellCommandEntry(command: "nimble build")
+
+    let commands = collectCommands(parser)
+    for cmd in commands:
+      if cmd.command == "nimbuild":
+        check cmd.description == "Shell: nimble build"
+
+  test "Alias with custom description overrides built-in":
+    let parser = newCommandLineParser()
+    parser.addAlias("q", claQuit)
+    parser.aliasDescriptions["q"] = "Custom quit description"
+
+    let commands = collectCommands(parser)
+    for cmd in commands:
+      if cmd.command == "q":
+        check cmd.description == "Custom quit description"
+
+  test "User alias without description shows default":
+    let parser = newCommandLineParser()
+    parser.addAlias("myalias", claQuit)
+    # No aliasDescriptions entry, not in CommandDescriptions
+
+    let commands = collectCommands(parser)
+    for cmd in commands:
+      if cmd.command == "myalias":
+        check cmd.description == "User alias"
+
 suite "CommandCompletion - filterAndSortEntries":
   test "Filter commands by prefix":
     let mgr = newCommandCompletionManager()

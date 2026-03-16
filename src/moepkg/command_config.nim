@@ -22,29 +22,102 @@
 ## This module handles configuration of command line commands, allowing users
 ## to customize command aliases and behavior through configuration files.
 
-import std/[tables, sequtils]
+import std/[tables, sequtils, options, strutils]
 
 import command_line
 
+# Mapping from canonical command names to CommandLineAction.
+# Used for resolving user-defined aliases in [CommandAliases] config.
+const CommandNameTable* = {
+  "quit": claQuit,
+  "quitall": claQuitAll,
+  "save": claSave,
+  "saveall": claSaveAll,
+  "saveandquit": claSaveAndQuit,
+  "saveallandquit": claSaveAllAndQuit,
+  "edit": claEdit,
+  "enew": claEnew,
+  "set": claSet,
+  "help": claHelp,
+  "substitute": claSubstitute,
+  "vsplit": claVSplit,
+  "hsplit": claHSplit,
+  "new": claNew,
+  "vnew": claVnew,
+  "buffernext": claBufferNext,
+  "bufferprev": claBufferPrev,
+  "bufferfirst": claBufferFirst,
+  "bufferlast": claBufferLast,
+  "bufferdelete": claBufferDelete,
+  "buffer": claBuffer,
+  "stripwhitespace": claStripWhitespace,
+  "filer": claFiler,
+  "log": claLogViewer,
+  "quickrun": claQuickRun,
+  "buffermanager": claBufferManager,
+  "backup": claBackupManager,
+  "recent": claRecentFile,
+  "noh": claClearSearchHighlight,
+  "shell": claShellCommand,
+  "background": claBackground,
+  "jumplist": claJumpList,
+  "changes": claChanges,
+  "bookmarks": claBookmarks,
+  "build": claBuild,
+  "debug": claDebug,
+  "config": claConfig,
+  "putconfigfile": claPutConfigFile,
+  "man": claMan,
+  "theme": claTheme,
+  "lsplog": claLspLog,
+  "lspformat": claLspFormat,
+  "lsprestart": claLspRestart,
+  "lspfold": claLspFold,
+  "lspexecommand": claLspExecuteCommand,
+  "lspcallhierarchyincoming": claLspCallHierarchyIncoming,
+  "lspcallhierarchyoutgoing": claLspCallHierarchyOutgoing,
+  "terminal": claTerminal,
+  "only": claOnlyWindow,
+}.toTable
+
+proc resolveCommandName*(name: string): Option[CommandLineAction] =
+  ## Resolve a command name string to a CommandLineAction.
+  ## Returns none if the name is not recognized.
+  let lower = name.toLowerAscii()
+  if lower in CommandNameTable:
+    return some(CommandNameTable[lower])
+  return none(CommandLineAction)
+
 type CommandConfig* = ref object ## Configuration for command line commands
   aliases*: Table[string, CommandLineAction]
-  customCommands*: Table[string, string] ## Custom command definitions
+  aliasDescriptions*: Table[string, string] ## Custom descriptions for aliases
+  shellCommands*: Table[string, ShellCommandEntry] ## Shell command definitions
   disabledCommands*: seq[CommandLineAction] ## Disabled built-in commands
 
 proc newCommandConfig*(): CommandConfig =
   ## Create a new command configuration with defaults
   CommandConfig(
     aliases: initTable[string, CommandLineAction](),
-    customCommands: initTable[string, string](),
+    aliasDescriptions: initTable[string, string](),
+    shellCommands: initTable[string, ShellCommandEntry](),
   )
 
-proc addAlias*(config: CommandConfig, alias: string, action: CommandLineAction) =
-  ## Add a command alias
+proc addAlias*(
+    config: CommandConfig, alias: string, action: CommandLineAction, description = ""
+) =
+  ## Add a command alias with optional description
   config.aliases[alias] = action
+  if description.len > 0:
+    config.aliasDescriptions[alias] = description
+  else:
+    config.aliasDescriptions.del(alias)
 
-proc addCustomCommand*(config: CommandConfig, name: string, definition: string) =
-  ## Add a custom command definition
-  config.customCommands[name] = definition
+proc addShellCommand*(
+    config: CommandConfig, name: string, command: string, description = ""
+) =
+  ## Add a shell command definition with optional description
+  config.shellCommands[name] =
+    ShellCommandEntry(command: command, description: description)
 
 proc disableCommand*(config: CommandConfig, action: CommandLineAction) =
   ## Disable a built-in command
@@ -211,8 +284,16 @@ proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser
   # Clear existing aliases
   parser.aliases.clear()
+  parser.aliasDescriptions.clear()
 
   # Apply configured aliases (only for enabled commands)
   for alias, action in config.aliases.pairs:
     if config.isCommandEnabled(action):
       parser.aliases[alias] = action
+      if alias in config.aliasDescriptions:
+        parser.aliasDescriptions[alias] = config.aliasDescriptions[alias]
+
+  # Apply shell commands
+  parser.shellCommands.clear()
+  for name, entry in config.shellCommands.pairs:
+    parser.shellCommands[name] = entry

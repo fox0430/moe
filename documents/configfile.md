@@ -869,6 +869,105 @@ Please check more [details](https://github.com/fox0430/moe/blob/develop/document
 | splitType | string | vertical | The split type for `StartUp.FileOpen.autoSplit` |
 
 
+### CommandAliases table
+
+Define custom aliases for built-in editor commands.
+Each key is the alias name, and the value is a table with `command` and optional `description`.
+Built-in aliases can be overridden.
+
+Example:
+```toml
+[CommandAliases]
+x = { command = "quit" }
+ww = { command = "saveall", description = "Save all buffers" }
+fmt = { command = "lspformat", description = "Format code with LSP" }
+```
+
+| Key | Type | Required | Description |
+|:----|:-----|:---------|:------------|
+| command | string | yes | Built-in command name (see table below) |
+| description | string | no | Custom description shown in completion popup |
+
+Available command names:
+
+| Name | Description |
+|:-----------------------------|:-----------------------------|
+| quit | Quit |
+| quitall | Quit all |
+| save | Save |
+| saveall | Save all |
+| saveandquit | Save and quit |
+| saveallandquit | Save all and quit |
+| edit | Edit file |
+| enew | New empty buffer |
+| set | Set option |
+| help | Help |
+| substitute | Substitute |
+| vsplit | Vertical split |
+| hsplit | Horizontal split |
+| new | New buffer in horizontal split |
+| vnew | New buffer in vertical split |
+| buffernext | Next buffer |
+| bufferprev | Previous buffer |
+| bufferfirst | First buffer |
+| bufferlast | Last buffer |
+| bufferdelete | Delete buffer |
+| buffer | Switch to buffer |
+| stripwhitespace | Strip trailing whitespace |
+| filer | Open file explorer |
+| log | Open log viewer |
+| quickrun | Quick run |
+| buffermanager | Open buffer manager |
+| backup | Open backup manager |
+| recent | Open recent file |
+| noh | Clear search highlight |
+| shell | Execute shell command |
+| background | Pause editor |
+| jumplist | Show jump list |
+| changes | Show change list |
+| bookmarks | Show bookmarks |
+| build | Build |
+| debug | Debug mode |
+| config | Configuration mode |
+| putconfigfile | Write sample config file |
+| man | Show manual |
+| theme | Change theme |
+| terminal | Open terminal |
+| only | Close all other windows |
+| lsplog | LSP log viewer |
+| lspformat | LSP format |
+| lsprestart | LSP restart |
+| lspfold | LSP folding range |
+| lspexecommand | LSP execute command |
+| lspcallhierarchyincoming | LSP incoming calls |
+| lspcallhierarchyoutgoing | LSP outgoing calls |
+
+
+### ShellCommands table
+
+Define shell commands that can be invoked from command mode.
+Each key is the command name, and the value is a table with `command` and optional `description`.
+Arguments are appended to the shell command.
+Built-in commands and aliases always take priority over shell commands.
+
+Example:
+```toml
+[ShellCommands]
+nimbuild = { command = "nimble build", description = "Build project" }
+nimtest = { command = "nimble test" }
+gitlog = { command = "git log --oneline -20", description = "Recent commits" }
+```
+
+| Key | Type | Required | Description |
+|:----|:-----|:---------|:------------|
+| command | string | yes | Shell command to execute |
+| description | string | no | Custom description shown in completion popup (default: `Shell: <command>`) |
+
+Usage:
+- `:nimbuild` runs `nimble build`
+- `:nimbuild --release` runs `nimble build --release`
+
+
 ### Theme table
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|

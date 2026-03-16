@@ -25,6 +25,10 @@
 import std/[options, tables, os, osproc]
 
 type
+  UserCommandEntry* = object
+    command*: string ## The command to execute (command name or shell command)
+    description*: string ## Optional user-provided description
+
   ColorMode* = enum
     cm8color = "8" ## 8 basic ANSI colors (0-7)
     cm16color = "16" ## 16 ANSI colors (0-15, includes bright)
@@ -416,6 +420,8 @@ type
     theme*: ThemeConfig
     lsp*: LspConfig
     keyMapping*: KeyMappingConfig
+    shellCommands*: Table[string, UserCommandEntry] ## Shell command definitions
+    commandAliases*: Table[string, UserCommandEntry] ## User-defined command aliases
 
 proc isToolAvailable(toolCommand: string): bool =
   ## Check if a command-line tool is available in PATH
@@ -673,4 +679,6 @@ proc newEditorConfig*(): EditorConfig =
       debug: initOrderedTable[string, string](),
       terminal: initOrderedTable[string, string](),
     ),
+    shellCommands: initTable[string, UserCommandEntry](),
+    commandAliases: initTable[string, UserCommandEntry](),
   )
