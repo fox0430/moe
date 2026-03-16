@@ -26,7 +26,7 @@ import std/[os, options, tables, sets, strutils, sequtils]
 
 import pkg/[parsetoml, results]
 
-import config, color, theme, vscode_theme, key_bindings
+import config, color, theme, vscode_theme, key_bindings, command_config
 
 # Configuration validation types and utilities
 
@@ -1181,6 +1181,76 @@ proc loadKeyMappingConfig(
       validCommands,
     )
 
+proc loadCommandAliasesConfig(
+    table: TomlTableRef,
+    commandAliases: var Table[string, UserCommandEntry],
+    vr: var ValidationResult,
+) =
+  ## Load user-defined command aliases from [CommandAliases] section.
+  ## Value format: { command = "quit", description = "Exit editor" }
+  ## description is optional.
+  const section = "CommandAliases"
+  for key, value in table.pairs:
+    if value.kind != TomlValueKind.Table:
+      vr.addError(section & "." & key, $value.kind, "table")
+      continue
+    let t = value.getTable()
+    if not t.hasKey("command"):
+      vr.addError(section & "." & key, "missing 'command' key", "table with 'command'")
+      continue
+    if t["command"].kind != TomlValueKind.String:
+      vr.addError(section & "." & key & ".command", $t["command"].kind, "string")
+      continue
+    let cmdName = t["command"].getStr().toLowerAscii()
+    if resolveCommandName(cmdName).isNone:
+      vr.addError(section & "." & key, cmdName, "valid command name")
+      continue
+    var description = ""
+    if t.hasKey("description"):
+      if t["description"].kind == TomlValueKind.String:
+        description = t["description"].getStr()
+      else:
+        vr.addError(
+          section & "." & key & ".description", $t["description"].kind, "string"
+        )
+    commandAliases[key.toLowerAscii()] =
+      UserCommandEntry(command: cmdName, description: description)
+
+proc loadShellCommandsConfig(
+    table: TomlTableRef,
+    shellCommands: var Table[string, UserCommandEntry],
+    vr: var ValidationResult,
+) =
+  ## Load shell command definitions from [ShellCommands] section.
+  ## Value format: { command = "nimble build", description = "Build project" }
+  ## description is optional.
+  const section = "ShellCommands"
+  for key, value in table.pairs:
+    if value.kind != TomlValueKind.Table:
+      vr.addError(section & "." & key, $value.kind, "table")
+      continue
+    let t = value.getTable()
+    if not t.hasKey("command"):
+      vr.addError(section & "." & key, "missing 'command' key", "table with 'command'")
+      continue
+    if t["command"].kind != TomlValueKind.String:
+      vr.addError(section & "." & key & ".command", $t["command"].kind, "string")
+      continue
+    let cmd = t["command"].getStr()
+    if cmd.len == 0:
+      vr.addError(section & "." & key & ".command", "empty string", "non-empty string")
+      continue
+    var description = ""
+    if t.hasKey("description"):
+      if t["description"].kind == TomlValueKind.String:
+        description = t["description"].getStr()
+      else:
+        vr.addError(
+          section & "." & key & ".description", $t["description"].kind, "string"
+        )
+    shellCommands[key.toLowerAscii()] =
+      UserCommandEntry(command: cmd, description: description)
+
 proc loadConfigFromToml*(
     path: string
 ): Result[(EditorConfig, ValidationResult), string] =
@@ -1210,7 +1280,7 @@ proc loadConfigFromToml*(
     "Standard", "Clipboard", "BuildOnSave", "TabLine", "StatusLine", "Git",
     "SyntaxChecker", "Theme", "AutoSave", "Notification", "QuickRun", "AutoBackup",
     "SmoothScroll", "Highlight", "Filer", "Autocomplete", "Persist", "StartUp",
-    "EditorConfig", "Lsp", "Debug", "KeyMapping",
+    "EditorConfig", "Lsp", "Debug", "KeyMapping", "CommandAliases", "ShellCommands",
   ]
   checkUnknownKeys(toml.getTable(), knownSections, "", vr)
 
@@ -1286,6 +1356,14 @@ proc loadConfigFromToml*(
 
   if toml.hasKey("KeyMapping"):
     loadKeyMappingConfig(toml["KeyMapping"].getTable(), config.keyMapping, vr)
+
+  if toml.hasKey("CommandAliases"):
+    loadCommandAliasesConfig(
+      toml["CommandAliases"].getTable(), config.commandAliases, vr
+    )
+
+  if toml.hasKey("ShellCommands"):
+    loadShellCommandsConfig(toml["ShellCommands"].getTable(), config.shellCommands, vr)
 
   return Result[(EditorConfig, ValidationResult), string].ok((config, vr))
 
@@ -2364,6 +2442,28 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "[Debug.Lsp]"
   lines.add "enable = " & toTomlBool(config.debug.lsp.enable)
   lines.add ""
+
+  # CommandAliases section
+  if config.commandAliases.len > 0:
+    lines.add "[CommandAliases]"
+    for alias, entry in config.commandAliases:
+      var val = "{ command = " & toTomlString(entry.command)
+      if entry.description.len > 0:
+        val &= ", description = " & toTomlString(entry.description)
+      val &= " }"
+      lines.add toTomlString(alias) & " = " & val
+    lines.add ""
+
+  # ShellCommands section
+  if config.shellCommands.len > 0:
+    lines.add "[ShellCommands]"
+    for name, entry in config.shellCommands:
+      var val = "{ command = " & toTomlString(entry.command)
+      if entry.description.len > 0:
+        val &= ", description = " & toTomlString(entry.description)
+      val &= " }"
+      lines.add toTomlString(name) & " = " & val
+    lines.add ""
 
   # Ensure directory exists
   let dir = parentDir(path)

@@ -551,3 +551,24 @@ trace = "verbose"                      # Trace level
 rustAnalyzerRunSingle = true           # rust-analyzer specific: run single
 
 rustAnalyzerDebugSingle = true         # rust-analyzer specific: debug single
+
+# [CommandAliases]
+# Define custom command aliases for built-in editor commands.
+# Each key is the alias name, value is a table with "command" and optional "description".
+# Usage: :x => quit, :ww => saveall
+# Built-in aliases (from loadDefaultConfig) can be overridden.
+#
+# x = { command = "quit" }
+# ww = { command = "saveall", description = "Save all buffers" }
+# fmt = { command = "lspformat", description = "Format code with LSP" }
+
+# [ShellCommands]
+# Define shell commands that can be invoked from command mode.
+# Each key is the command name, value is a table with "command" and optional "description".
+# Usage: :nimbuild => runs "nimble build"
+# Arguments are appended: :nimbuild --release => runs "nimble build --release"
+# Built-in commands and aliases always take priority over shell commands.
+#
+# nimbuild = { command = "nimble build", description = "Build project" }
+# nimtest = { command = "nimble test" }
+# gitlog = { command = "git log --oneline -20", description = "Recent commits" }

@@ -1583,6 +1583,10 @@ suite "Config - saveConfigToToml round-trip completeness":
       rustAnalyzerDebugSingle: true,
     )
 
+    # Add command aliases and shell commands
+    config.commandAliases["x"] = UserCommandEntry(command: "quit")
+    config.shellCommands["nimbuild"] = UserCommandEntry(command: "nimble build")
+
     let saveResult = saveConfigToToml(config, testFile)
     check saveResult.isOk
 
@@ -1610,6 +1614,8 @@ suite "Config - saveConfigToToml round-trip completeness":
     check config.debug == loaded.debug
     check config.theme == loaded.theme
     check config.lsp == loaded.lsp
+    check config.commandAliases == loaded.commandAliases
+    check config.shellCommands == loaded.shellCommands
 
 suite "Config - saveConfig":
   test "Default config does not crash":
@@ -2601,3 +2607,265 @@ suite "Config - saveConfigToToml with KeyMapping":
 
     let content = readFile(testFile)
     check "KeyMapping" notin content
+
+suite "Config Validation - CommandAliases section":
+  test "Valid CommandAliases config":
+    let tomlStr = """
+[CommandAliases]
+x = { command = "quit" }
+ww = { command = "saveall" }
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.commandAliases["x"].command == "quit"
+    check config.commandAliases["ww"].command == "saveall"
+
+  test "With description":
+    let tomlStr = """
+[CommandAliases]
+x = { command = "quit", description = "Exit editor" }
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.commandAliases["x"].command == "quit"
+    check config.commandAliases["x"].description == "Exit editor"
+
+  test "Without description":
+    let tomlStr = """
+[CommandAliases]
+x = { command = "quit" }
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.commandAliases["x"].description == ""
+
+  test "Invalid command name is detected":
+    let tomlStr = """
+[CommandAliases]
+x = { command = "nonexistent" }
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "CommandAliases.x" in vr.errors[0].name
+
+  test "Non-table value is detected":
+    let tomlStr = """
+[CommandAliases]
+x = 42
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "CommandAliases.x" in vr.errors[0].name
+
+  test "Missing command key is detected":
+    let tomlStr = """
+[CommandAliases]
+x = { description = "test" }
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "CommandAliases.x" in vr.errors[0].name
+
+  test "Keys are lowercased":
+    let tomlStr = """
+[CommandAliases]
+MyAlias = { command = "quit" }
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check "myalias" in config.commandAliases
+    check config.commandAliases["myalias"].command == "quit"
+
+  test "Command values are case-insensitive":
+    let tomlStr = """
+[CommandAliases]
+x = { command = "Quit" }
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.commandAliases["x"].command == "quit"
+
+suite "Config Validation - ShellCommands section":
+  test "Valid ShellCommands config":
+    let tomlStr = """
+[ShellCommands]
+nimbuild = { command = "nimble build" }
+nimtest = { command = "nimble test" }
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.shellCommands["nimbuild"].command == "nimble build"
+    check config.shellCommands["nimtest"].command == "nimble test"
+
+  test "With description":
+    let tomlStr = """
+[ShellCommands]
+nimbuild = { command = "nimble build", description = "Build project" }
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.shellCommands["nimbuild"].command == "nimble build"
+    check config.shellCommands["nimbuild"].description == "Build project"
+
+  test "Without description":
+    let tomlStr = """
+[ShellCommands]
+nimbuild = { command = "nimble build" }
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.shellCommands["nimbuild"].description == ""
+
+  test "Non-table value is detected":
+    let tomlStr = """
+[ShellCommands]
+cmd = 42
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "ShellCommands.cmd" in vr.errors[0].name
+
+  test "Missing command key is detected":
+    let tomlStr = """
+[ShellCommands]
+cmd = { description = "test" }
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "ShellCommands.cmd" in vr.errors[0].name
+
+  test "Keys are lowercased":
+    let tomlStr = """
+[ShellCommands]
+NimBuild = { command = "nimble build" }
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check "nimbuild" in config.shellCommands
+
+  test "Empty command string is rejected":
+    let tomlStr = """
+[ShellCommands]
+cmd = { command = "" }
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    check "ShellCommands.cmd.command" in vr.errors[0].name
+
+  test "Shell command value is preserved as-is":
+    let tomlStr = """
+[ShellCommands]
+cmd = { command = "Make -C /opt/project BUILD_TYPE=Release" }
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.shellCommands["cmd"].command ==
+      "Make -C /opt/project BUILD_TYPE=Release"
+
+suite "Config - saveConfigToToml with CommandAliases and ShellCommands":
+  test "CommandAliases round-trip":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_aliases_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.commandAliases["x"] = UserCommandEntry(command: "quit")
+    config.commandAliases["ww"] = UserCommandEntry(command: "saveall")
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.commandAliases.len == 2
+    check loaded.commandAliases["x"].command == "quit"
+    check loaded.commandAliases["ww"].command == "saveall"
+
+  test "CommandAliases round-trip with description":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_aliases_desc_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.commandAliases["x"] =
+      UserCommandEntry(command: "quit", description: "Exit editor")
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.commandAliases["x"].command == "quit"
+    check loaded.commandAliases["x"].description == "Exit editor"
+
+  test "ShellCommands round-trip":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_shellcmds_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.shellCommands["nimbuild"] = UserCommandEntry(command: "nimble build")
+    config.shellCommands["gitlog"] = UserCommandEntry(command: "git log --oneline -20")
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.shellCommands.len == 2
+    check loaded.shellCommands["nimbuild"].command == "nimble build"
+    check loaded.shellCommands["gitlog"].command == "git log --oneline -20"
+
+  test "ShellCommands round-trip with description":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_shellcmds_desc_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    config.shellCommands["nimbuild"] =
+      UserCommandEntry(command: "nimble build", description: "Build project")
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.shellCommands["nimbuild"].command == "nimble build"
+    check loaded.shellCommands["nimbuild"].description == "Build project"
+
+  test "Empty CommandAliases and ShellCommands not saved":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_empty_cmds_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let content = readFile(testFile)
+    check "CommandAliases" notin content
+    check "ShellCommands" notin content

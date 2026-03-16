@@ -19,7 +19,7 @@
 
 ## Tests for command configuration
 
-import std/[unittest, tables]
+import std/[unittest, tables, options]
 
 import ../src/moepkg/command_config {.all.}
 import ../src/moepkg/command_line {.all.}
@@ -30,10 +30,10 @@ suite "CommandConfig - newCommandConfig":
 
     check config.aliases.len == 0
 
-  test "Creates config with empty custom commands":
+  test "Creates config with empty shell commands":
     let config = newCommandConfig()
 
-    check config.customCommands.len == 0
+    check config.shellCommands.len == 0
 
   test "Creates config with empty disabled commands":
     let config = newCommandConfig()
@@ -68,24 +68,33 @@ suite "CommandConfig - addAlias":
     check config.aliases.len == 1
     check config.aliases["x"] == claSaveAndQuit
 
-suite "CommandConfig - addCustomCommand":
-  test "Adds a custom command":
+suite "CommandConfig - addShellCommand":
+  test "Adds a shell command":
     let config = newCommandConfig()
 
-    config.addCustomCommand("myCmd", "echo hello")
+    config.addShellCommand("myCmd", "echo hello")
 
-    check config.customCommands.len == 1
-    check config.customCommands["myCmd"] == "echo hello"
+    check config.shellCommands.len == 1
+    check config.shellCommands["myCmd"].command == "echo hello"
 
-  test "Adds multiple custom commands":
+  test "Adds multiple shell commands":
     let config = newCommandConfig()
 
-    config.addCustomCommand("cmd1", "def1")
-    config.addCustomCommand("cmd2", "def2")
+    config.addShellCommand("cmd1", "def1")
+    config.addShellCommand("cmd2", "def2")
 
-    check config.customCommands.len == 2
-    check config.customCommands["cmd1"] == "def1"
-    check config.customCommands["cmd2"] == "def2"
+    check config.shellCommands.len == 2
+    check config.shellCommands["cmd1"].command == "def1"
+    check config.shellCommands["cmd2"].command == "def2"
+
+  test "Overwrites existing shell command":
+    let config = newCommandConfig()
+
+    config.addShellCommand("cmd", "old")
+    config.addShellCommand("cmd", "new")
+
+    check config.shellCommands.len == 1
+    check config.shellCommands["cmd"].command == "new"
 
 suite "CommandConfig - disableCommand":
   test "Disables a command":
@@ -231,3 +240,197 @@ suite "CommandConfig - applyToParser":
     check parser.aliases["q"] == claQuit
     check parser.aliases["w"] == claSave
     check parser.aliases["wq"] == claSaveAndQuit
+
+  test "Applies shell commands to parser":
+    let config = newCommandConfig()
+    let parser = newCommandLineParser()
+    config.addShellCommand("nimbuild", "nimble build")
+
+    config.applyToParser(parser)
+
+    check parser.shellCommands.len == 1
+    check parser.shellCommands["nimbuild"].command == "nimble build"
+
+  test "Clears existing shell commands on apply":
+    let config = newCommandConfig()
+    let parser = newCommandLineParser()
+    parser.shellCommands["old"] = ShellCommandEntry(command: "old command")
+    config.addShellCommand("new", "new command")
+
+    config.applyToParser(parser)
+
+    check parser.shellCommands.len == 1
+    check "old" notin parser.shellCommands
+    check parser.shellCommands["new"].command == "new command"
+
+suite "Shell commands - parseCommandLine":
+  test "Shell command resolves as claShellCommand":
+    let parser = newCommandLineParser()
+    parser.shellCommands["nimbuild"] = ShellCommandEntry(command: "nimble build")
+
+    let parsed = parser.parseCommandLine(":nimbuild")
+
+    check parsed.action == claShellCommand
+    check parsed.args == @["nimble build"]
+
+  test "Shell command with extra arguments":
+    let parser = newCommandLineParser()
+    parser.shellCommands["nimbuild"] = ShellCommandEntry(command: "nimble build")
+
+    let parsed = parser.parseCommandLine(":nimbuild --release")
+
+    check parsed.action == claShellCommand
+    check parsed.args == @["nimble build --release"]
+
+  test "Built-in alias takes priority over shell command":
+    let parser = newCommandLineParser()
+    parser.addAlias("q", claQuit)
+    parser.shellCommands["q"] = ShellCommandEntry(command: "echo quit")
+
+    let parsed = parser.parseCommandLine(":q")
+
+    check parsed.action == claQuit
+
+  test "Shell command is case-insensitive":
+    let parser = newCommandLineParser()
+    parser.shellCommands["nimbuild"] = ShellCommandEntry(command: "nimble build")
+
+    let parsed = parser.parseCommandLine(":NimBuild")
+
+    check parsed.action == claShellCommand
+    check parsed.args == @["nimble build"]
+
+suite "resolveCommandName":
+  test "Resolves known command names":
+    check resolveCommandName("quit") == some(claQuit)
+    check resolveCommandName("save") == some(claSave)
+    check resolveCommandName("saveandquit") == some(claSaveAndQuit)
+    check resolveCommandName("terminal") == some(claTerminal)
+
+  test "Case-insensitive resolution":
+    check resolveCommandName("Quit") == some(claQuit)
+    check resolveCommandName("SAVE") == some(claSave)
+    check resolveCommandName("SaveAndQuit") == some(claSaveAndQuit)
+
+  test "Returns none for unknown command":
+    check resolveCommandName("nonexistent").isNone
+    check resolveCommandName("").isNone
+
+suite "CommandAliases - applyToParser":
+  test "User-defined alias resolves to editor command":
+    let config = newCommandConfig()
+    let parser = newCommandLineParser()
+    config.loadDefaultConfig()
+    config.addAlias("x", claQuit)
+
+    config.applyToParser(parser)
+
+    let parsed = parser.parseCommandLine(":x")
+    check parsed.action == claQuit
+
+  test "User alias overrides default alias":
+    let config = newCommandConfig()
+    let parser = newCommandLineParser()
+    config.loadDefaultConfig()
+    # Override "q" from quit to saveAndQuit
+    config.addAlias("q", claSaveAndQuit)
+
+    config.applyToParser(parser)
+
+    let parsed = parser.parseCommandLine(":q")
+    check parsed.action == claSaveAndQuit
+
+  test "User alias takes priority over shell command":
+    let config = newCommandConfig()
+    let parser = newCommandLineParser()
+    config.addAlias("build", claBuild)
+    config.addShellCommand("build", "make build")
+
+    config.applyToParser(parser)
+
+    let parsed = parser.parseCommandLine(":build")
+    check parsed.action == claBuild
+
+suite "Shell commands - isNoArgumentAction":
+  test "Shell command returns false (accepts arguments)":
+    let parser = newCommandLineParser()
+    parser.shellCommands["nimbuild"] = ShellCommandEntry(command: "nimble build")
+
+    check parser.isNoArgumentAction("nimbuild") == false
+
+  test "Alias for no-argument action returns true":
+    let parser = newCommandLineParser()
+    parser.addAlias("q", claQuit)
+
+    check parser.isNoArgumentAction("q") == true
+
+suite "Shell commands - disabled shell command alias":
+  test "Disabled command alias is not applied but shell command still works":
+    let config = newCommandConfig()
+    let parser = newCommandLineParser()
+    config.addAlias("q", claQuit)
+    config.addShellCommand("mycmd", "echo hello")
+    config.disableCommand(claQuit)
+
+    config.applyToParser(parser)
+
+    # Disabled alias should not be in parser
+    check "q" notin parser.aliases
+    # Shell command should still be available
+    check parser.shellCommands["mycmd"].command == "echo hello"
+
+    let parsed = parser.parseCommandLine(":mycmd")
+    check parsed.action == claShellCommand
+    check parsed.args == @["echo hello"]
+
+suite "Shell commands - multiple extra arguments":
+  test "Shell command with multiple extra arguments":
+    let parser = newCommandLineParser()
+    parser.shellCommands["git"] = ShellCommandEntry(command: "git")
+
+    let parsed = parser.parseCommandLine(":git log --oneline -20")
+
+    check parsed.action == claShellCommand
+    check parsed.args == @["git log --oneline -20"]
+
+suite "Description support":
+  test "Alias with description is propagated to parser":
+    let config = newCommandConfig()
+    let parser = newCommandLineParser()
+    config.addAlias("x", claQuit, "Exit editor")
+
+    config.applyToParser(parser)
+
+    check parser.aliasDescriptions["x"] == "Exit editor"
+
+  test "Alias without description has no entry in aliasDescriptions":
+    let config = newCommandConfig()
+    let parser = newCommandLineParser()
+    config.addAlias("x", claQuit)
+
+    config.applyToParser(parser)
+
+    check "x" notin parser.aliasDescriptions
+
+  test "Shell command with description":
+    let config = newCommandConfig()
+    config.addShellCommand("nimbuild", "nimble build", "Build project")
+
+    check config.shellCommands["nimbuild"].description == "Build project"
+
+  test "Shell command without description has empty description":
+    let config = newCommandConfig()
+    config.addShellCommand("nimbuild", "nimble build")
+
+    check config.shellCommands["nimbuild"].description == ""
+
+  test "Disabled alias description is not propagated":
+    let config = newCommandConfig()
+    let parser = newCommandLineParser()
+    config.addAlias("x", claQuit, "Exit editor")
+    config.disableCommand(claQuit)
+
+    config.applyToParser(parser)
+
+    check "x" notin parser.aliases
+    check "x" notin parser.aliasDescriptions

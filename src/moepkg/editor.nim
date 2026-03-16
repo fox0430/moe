@@ -569,6 +569,16 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Load command configuration
   cmdConfig.loadDefaultConfig
 
+  # Load user-defined command aliases from editor config
+  for alias, entry in editorConfig.commandAliases.pairs:
+    let action = resolveCommandName(entry.command)
+    if action.isSome:
+      cmdConfig.addAlias(alias, action.get, entry.description)
+
+  # Load shell commands from editor config
+  for name, entry in editorConfig.shellCommands.pairs:
+    cmdConfig.addShellCommand(name, entry.command, entry.description)
+
   # Apply configuration to parser
   cmdConfig.applyToParser(cmdLineParser)
 
