@@ -1887,3 +1887,54 @@ suite "syntaxtypescript - JSDoc highlighting":
         break
       tokens.add(g.kind)
     check gtPreprocessor in tokens
+
+  test "JSDoc nested braces in type annotation":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** @param {{key: string}} opts */")
+    var kinds: seq[TokenClass] = @[]
+    while true:
+      g.typescriptNextToken()
+      if g.kind == gtEof:
+        break
+      kinds.add(g.kind)
+    var preprocCount = 0
+    for k in kinds:
+      if k == gtPreprocessor:
+        inc preprocCount
+    check preprocCount >= 2 # @param and {{key: string}}
+    # Verify the type annotation includes both opening and closing braces
+    var foundType = false
+    var g2: GeneralTokenizer
+    g2.initGeneralTokenizer("/** @param {{key: string}} opts */")
+    while true:
+      g2.typescriptNextToken()
+      if g2.kind == gtEof:
+        break
+      if g2.kind == gtPreprocessor and g2.length > 1:
+        let startIdx = g2.pos - g2.length
+        if g2.buf[startIdx] == '{':
+          if g2.buf[g2.pos - 1] == '}':
+            foundType = true
+    check foundType
+
+  test "email address in JSDoc is not a tag":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** Contact user@example.com for help */")
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.typescriptNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+    check gtPreprocessor notin tokens
+
+  test "at sign followed by number in JSDoc is not a tag":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** @123 */")
+    var tokens: seq[TokenClass] = @[]
+    while true:
+      g.typescriptNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+    check gtPreprocessor notin tokens

@@ -136,14 +136,16 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
           g.commentDepth = 0
           break
       of '@':
-        if g.commentDepth == 1 and pos > g.start:
-          break # Return text before tag
-        elif g.commentDepth == 1:
-          g.kind = gtPreprocessor
-          inc(pos)
-          while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
+        if g.commentDepth == 1 and g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z'} and
+            (pos == 0 or g.buf[pos - 1] in {' ', '\t', '\n', '\r', '*'}):
+          if pos > g.start:
+            break # Return text before tag
+          else:
+            g.kind = gtPreprocessor
             inc(pos)
-          break
+            while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
+              inc(pos)
+            break
         else:
           inc(pos)
       of '{':
@@ -151,10 +153,15 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
           break
         elif g.commentDepth == 1:
           g.kind = gtPreprocessor
-          while g.buf[pos] != '\0' and g.buf[pos] != '}' and
-              not (g.buf[pos] == '*' and g.buf[pos + 1] == '/'):
-            inc(pos)
-          if g.buf[pos] == '}':
+          var braceNest = 0
+          while g.buf[pos] != '\0' and not (g.buf[pos] == '*' and g.buf[pos + 1] == '/'):
+            if g.buf[pos] == '{':
+              inc(braceNest)
+            elif g.buf[pos] == '}':
+              dec(braceNest)
+              if braceNest == 0:
+                inc(pos)
+                break
             inc(pos)
           break
         else:
@@ -287,16 +294,17 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
             g.commentDepth = 0
             break
         of '@':
-          if g.commentDepth == 1 and pos > g.start:
-            g.state = gtLongComment
-            break
-          elif g.commentDepth == 1:
-            g.kind = gtPreprocessor
-            g.state = gtLongComment
-            inc(pos)
-            while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
+          if g.commentDepth == 1 and g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z'}:
+            if pos > g.start:
+              g.state = gtLongComment
+              break
+            else:
+              g.kind = gtPreprocessor
+              g.state = gtLongComment
               inc(pos)
-            break
+              while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
+                inc(pos)
+              break
           else:
             inc(pos)
         of '{':
@@ -306,10 +314,16 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
           elif g.commentDepth == 1:
             g.kind = gtPreprocessor
             g.state = gtLongComment
-            while g.buf[pos] != '\0' and g.buf[pos] != '}' and
+            var braceNest = 0
+            while g.buf[pos] != '\0' and
                 not (g.buf[pos] == '*' and g.buf[pos + 1] == '/'):
-              inc(pos)
-            if g.buf[pos] == '}':
+              if g.buf[pos] == '{':
+                inc(braceNest)
+              elif g.buf[pos] == '}':
+                dec(braceNest)
+                if braceNest == 0:
+                  inc(pos)
+                  break
               inc(pos)
             break
           else:
