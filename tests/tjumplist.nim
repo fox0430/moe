@@ -43,19 +43,18 @@ suite "jumplist: add":
     check l[] ==
       JumpList(
         currentPosition: 2,
-        history:
-          @[
-            JumpInfo(
-              bufferId: 0,
-              path: ru"text0.txt",
-              position: BufferPosition(line: 0, column: 0),
-            ),
-            JumpInfo(
-              bufferId: 1,
-              path: ru"text1.txt",
-              position: BufferPosition(line: 1, column: 1),
-            ),
-          ],
+        history: @[
+          JumpInfo(
+            bufferId: 0,
+            path: ru"text0.txt",
+            position: BufferPosition(line: 0, column: 0),
+          ),
+          JumpInfo(
+            bufferId: 1,
+            path: ru"text1.txt",
+            position: BufferPosition(line: 1, column: 1),
+          ),
+        ],
       )[]
 
   test "Basic 2":
@@ -70,38 +69,32 @@ suite "jumplist: add":
     check l[] ==
       JumpList(
         currentPosition: 2,
-        history:
-          @[
-            JumpInfo(
-              bufferId: 0,
-              path: ru"text0.txt",
-              position: BufferPosition(line: 0, column: 0),
-            ),
-            JumpInfo(
-              bufferId: 1,
-              path: ru"text1.txt",
-              position: BufferPosition(line: 1, column: 1),
-            ),
-          ],
+        history: @[
+          JumpInfo(
+            bufferId: 0,
+            path: ru"text0.txt",
+            position: BufferPosition(line: 0, column: 0),
+          ),
+          JumpInfo(
+            bufferId: 1,
+            path: ru"text1.txt",
+            position: BufferPosition(line: 1, column: 1),
+          ),
+        ],
       )[]
 
 suite "jumplist: jumpBack":
   test "Basic":
     var l = JumpList(
       currentPosition: 2,
-      history:
-        @[
-          JumpInfo(
-            bufferId: 0,
-            path: ru"text0.txt",
-            position: BufferPosition(line: 0, column: 0),
-          ),
-          JumpInfo(
-            bufferId: 0,
-            path: ru"text1.txt",
-            position: BufferPosition(line: 1, column: 1),
-          ),
-        ],
+      history: @[
+        JumpInfo(
+          bufferId: 0, path: ru"text0.txt", position: BufferPosition(line: 0, column: 0)
+        ),
+        JumpInfo(
+          bufferId: 0, path: ru"text1.txt", position: BufferPosition(line: 1, column: 1)
+        ),
+      ],
     )
 
     block:
@@ -116,19 +109,18 @@ suite "jumplist: jumpBack":
       check l[] ==
         JumpList(
           currentPosition: 1,
-          history:
-            @[
-              JumpInfo(
-                bufferId: 0,
-                path: ru"text0.txt",
-                position: BufferPosition(line: 0, column: 0),
-              ),
-              JumpInfo(
-                bufferId: 0,
-                path: ru"text1.txt",
-                position: BufferPosition(line: 1, column: 1),
-              ),
-            ],
+          history: @[
+            JumpInfo(
+              bufferId: 0,
+              path: ru"text0.txt",
+              position: BufferPosition(line: 0, column: 0),
+            ),
+            JumpInfo(
+              bufferId: 0,
+              path: ru"text1.txt",
+              position: BufferPosition(line: 1, column: 1),
+            ),
+          ],
         )[]
 
     block:
@@ -143,19 +135,18 @@ suite "jumplist: jumpBack":
       check l[] ==
         JumpList(
           currentPosition: 0,
-          history:
-            @[
-              JumpInfo(
-                bufferId: 0,
-                path: ru"text0.txt",
-                position: BufferPosition(line: 0, column: 0),
-              ),
-              JumpInfo(
-                bufferId: 0,
-                path: ru"text1.txt",
-                position: BufferPosition(line: 1, column: 1),
-              ),
-            ],
+          history: @[
+            JumpInfo(
+              bufferId: 0,
+              path: ru"text0.txt",
+              position: BufferPosition(line: 0, column: 0),
+            ),
+            JumpInfo(
+              bufferId: 0,
+              path: ru"text1.txt",
+              position: BufferPosition(line: 1, column: 1),
+            ),
+          ],
         )[]
 
     block:
@@ -171,38 +162,32 @@ suite "jumplist: jumpBack":
       check l[] ==
         JumpList(
           currentPosition: 0,
-          history:
-            @[
-              JumpInfo(
-                bufferId: 0,
-                path: ru"text0.txt",
-                position: BufferPosition(line: 0, column: 0),
-              ),
-              JumpInfo(
-                bufferId: 0,
-                path: ru"text1.txt",
-                position: BufferPosition(line: 1, column: 1),
-              ),
-            ],
+          history: @[
+            JumpInfo(
+              bufferId: 0,
+              path: ru"text0.txt",
+              position: BufferPosition(line: 0, column: 0),
+            ),
+            JumpInfo(
+              bufferId: 0,
+              path: ru"text1.txt",
+              position: BufferPosition(line: 1, column: 1),
+            ),
+          ],
         )[]
 
 suite "jumplist: jumpFoward":
   test "Basic":
     var l = JumpList(
       currentPosition: 0,
-      history:
-        @[
-          JumpInfo(
-            bufferId: 0,
-            path: ru"text0.txt",
-            position: BufferPosition(line: 0, column: 0),
-          ),
-          JumpInfo(
-            bufferId: 0,
-            path: ru"text1.txt",
-            position: BufferPosition(line: 1, column: 1),
-          ),
-        ],
+      history: @[
+        JumpInfo(
+          bufferId: 0, path: ru"text0.txt", position: BufferPosition(line: 0, column: 0)
+        ),
+        JumpInfo(
+          bufferId: 0, path: ru"text1.txt", position: BufferPosition(line: 1, column: 1)
+        ),
+      ],
     )
 
     block:
@@ -217,19 +202,18 @@ suite "jumplist: jumpFoward":
       check l[] ==
         JumpList(
           currentPosition: 1,
-          history:
-            @[
-              JumpInfo(
-                bufferId: 0,
-                path: ru"text0.txt",
-                position: BufferPosition(line: 0, column: 0),
-              ),
-              JumpInfo(
-                bufferId: 0,
-                path: ru"text1.txt",
-                position: BufferPosition(line: 1, column: 1),
-              ),
-            ],
+          history: @[
+            JumpInfo(
+              bufferId: 0,
+              path: ru"text0.txt",
+              position: BufferPosition(line: 0, column: 0),
+            ),
+            JumpInfo(
+              bufferId: 0,
+              path: ru"text1.txt",
+              position: BufferPosition(line: 1, column: 1),
+            ),
+          ],
         )[]
 
     block:
@@ -245,17 +229,16 @@ suite "jumplist: jumpFoward":
       check l[] ==
         JumpList(
           currentPosition: 1,
-          history:
-            @[
-              JumpInfo(
-                bufferId: 0,
-                path: ru"text0.txt",
-                position: BufferPosition(line: 0, column: 0),
-              ),
-              JumpInfo(
-                bufferId: 0,
-                path: ru"text1.txt",
-                position: BufferPosition(line: 1, column: 1),
-              ),
-            ],
+          history: @[
+            JumpInfo(
+              bufferId: 0,
+              path: ru"text0.txt",
+              position: BufferPosition(line: 0, column: 0),
+            ),
+            JumpInfo(
+              bufferId: 0,
+              path: ru"text1.txt",
+              position: BufferPosition(line: 1, column: 1),
+            ),
+          ],
         )[]

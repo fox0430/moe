@@ -47,8 +47,7 @@ proc tokens(code: string): seq[GT] =
 
 suite "syntax: Toml":
   test "Basic":
-    const Code =
-      """
+    const Code = """
 [table]
 # Comment1
 str = "value" # Comment2

@@ -95,16 +95,15 @@ proc initGlobalSidebar*(rect: Rect): Result[GlobalSidebar, string] =
   gs.initTerminalBuffer
 
   gs.highlight = Highlight(
-    colorSegments:
-      @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: gs.terminalBuffer.high,
-          lastColumn: gs.terminalBuffer[0].high,
-          color: EditorColorPairIndex.default,
-        )
-      ]
+    colorSegments: @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: gs.terminalBuffer.high,
+        lastColumn: gs.terminalBuffer[0].high,
+        color: EditorColorPairIndex.default,
+      )
+    ]
   )
 
   return Result[GlobalSidebar, string].ok gs
@@ -120,16 +119,15 @@ proc initGlobalSidebar*(): Result[GlobalSidebar, string] =
   gs.initTerminalBuffer
 
   gs.highlight = Highlight(
-    colorSegments:
-      @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 1,
-          lastColumn: 1,
-          color: EditorColorPairIndex.default,
-        )
-      ]
+    colorSegments: @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 1,
+        lastColumn: 1,
+        color: EditorColorPairIndex.default,
+      )
+    ]
   )
 
   return Result[GlobalSidebar, string].ok gs
@@ -138,16 +136,15 @@ proc initHighlight*(sidebar: var GlobalSidebar) =
   ## Init the sidebar highlight
 
   sidebar.highlight = Highlight(
-    colorSegments:
-      @[
-        ColorSegment(
-          firstRow: 0,
-          lastRow: sidebar.terminalBuffer.high,
-          firstColumn: 0,
-          lastColumn: sidebar.terminalBuffer[0].high,
-          color: EditorColorPairIndex.default,
-        )
-      ]
+    colorSegments: @[
+      ColorSegment(
+        firstRow: 0,
+        lastRow: sidebar.terminalBuffer.high,
+        firstColumn: 0,
+        lastColumn: sidebar.terminalBuffer[0].high,
+        color: EditorColorPairIndex.default,
+      )
+    ]
   )
 
 proc write*(

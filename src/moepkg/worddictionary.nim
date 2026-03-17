@@ -55,9 +55,9 @@ proc collect*(wordDictionary: WordDictionary, word: Runes): seq[Runes] =
   ## Collect words for suggestion from `wordDictionary`
 
   result.add wordDictionary
-  .pairsWithPrefix($word).toSeq
-  .sortedByIt(it.val).reversed
-  .mapIt(it.key.toRunes)
+    .pairsWithPrefix($word).toSeq
+    .sortedByIt(it.val).reversed
+    .mapIt(it.key.toRunes)
 
 proc getTextFromBuffer*[T](buffer: T, firstDeletedIndex, lastDeletedIndex: int): Runes =
   result.add buffer.toRunes

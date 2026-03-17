@@ -25,11 +25,10 @@ import moepkg/algo {.all.}
 
 suite "completion: fuzzyScore":
   test "Basic":
-    let scores =
-      @[
-        fuzzyScore(ru"text", ru"texteditor"),
-        fuzzyScore(ru"text", ru"te"),
-        fuzzyScore(ru"text", ru"abcdefghij"),
-      ]
+    let scores = @[
+      fuzzyScore(ru"text", ru"texteditor"),
+      fuzzyScore(ru"text", ru"te"),
+      fuzzyScore(ru"text", ru"abcdefghij"),
+    ]
     for i in 1 .. scores.high:
       check scores[i - 1] > scores[i]

@@ -618,19 +618,18 @@ suite "Ex mode: Open LSP log viewer":
     currentBufStatus.langId = "nim"
 
     status.lspClients["nim"] = LspClient()
-    status.lspClients["nim"].log =
-      @[
-        LspMessage(
-          timestamp: now(),
-          kind: LspMessageKind.request,
-          message: %*{"message1": "message1"},
-        ),
-        LspMessage(
-          timestamp: now(),
-          kind: LspMessageKind.response,
-          message: %*{"message2": "message2"},
-        ),
-      ]
+    status.lspClients["nim"].log = @[
+      LspMessage(
+        timestamp: now(),
+        kind: LspMessageKind.request,
+        message: %*{"message1": "message1"},
+      ),
+      LspMessage(
+        timestamp: now(),
+        kind: LspMessageKind.response,
+        message: %*{"message2": "message2"},
+      ),
+    ]
 
     const Command = @[ru"lspLog"]
     status.exModeCommand(Command)

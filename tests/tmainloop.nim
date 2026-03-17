@@ -1069,12 +1069,11 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
     status.openCompletionWindowInEditor
 
     block:
-      currentBufStatus.lspCompletionList.items =
-        @[
-          CompletionItem(label: ru"ea", insertText: ru"ea"),
-          CompletionItem(label: ru"eb", insertText: ru"eb"),
-          CompletionItem(label: ru"ec", insertText: ru"ec"),
-        ]
+      currentBufStatus.lspCompletionList.items = @[
+        CompletionItem(label: ru"ea", insertText: ru"ea"),
+        CompletionItem(label: ru"eb", insertText: ru"eb"),
+        CompletionItem(label: ru"ec", insertText: ru"ec"),
+      ]
 
       status.completionWindow.get.addInput(ru 'e')
       status.updateCompletionWindowBufferInEditor
@@ -1348,12 +1347,11 @@ suite "mainloop: confirmCompletion in command line":
     status.update
 
     let list = CompletionList(
-      items:
-        @[
-          initCompletionItem(ru"aa"),
-          initCompletionItem(ru"ab"),
-          initCompletionItem(ru"ac"),
-        ]
+      items: @[
+        initCompletionItem(ru"aa"),
+        initCompletionItem(ru"ab"),
+        initCompletionItem(ru"ac"),
+      ]
     )
 
     status.completionWindow = some(
@@ -1393,12 +1391,11 @@ suite "mainloop: confirmCompletion in command line":
     status.update
 
     let list = CompletionList(
-      items:
-        @[
-          initCompletionItem(ru"aa"),
-          initCompletionItem(ru"ab"),
-          initCompletionItem(ru"ac"),
-        ]
+      items: @[
+        initCompletionItem(ru"aa"),
+        initCompletionItem(ru"ab"),
+        initCompletionItem(ru"ac"),
+      ]
     )
 
     status.completionWindow = some(

@@ -80,7 +80,7 @@ type
 
 proc initOperationRegisters(): OperationRegisters =
   concat(toSeq('0' .. '9'), toSeq('A' .. 'Z'), toSeq('a' .. 'z'))
-  .mapIt((it, OperationRegister())).toOrderedTable
+    .mapIt((it, OperationRegister())).toOrderedTable
 
 proc initNoNamedRegister(t: DateTime): NoNamedRegister =
   NoNamedRegister(timestamp: t)
@@ -94,7 +94,7 @@ proc initSmallDeleteRegister(t: DateTime): SmallDeleteRegister =
 
 proc initNamedRegisters(t: DateTime): NamedRegisters =
   concat(toSeq('A' .. 'Z'), toSeq('a' .. 'z'))
-  .mapIt((it, Register(timestamp: t))).toOrderedTable
+    .mapIt((it, Register(timestamp: t))).toOrderedTable
 
 proc initClipBoardRegister(t: DateTime): ClipBoardRegister =
   ClipBoardRegister(timestamp: t)

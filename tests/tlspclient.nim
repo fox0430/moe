@@ -1322,8 +1322,7 @@ suite "lsp: Send requests":
       const
         BufferId = 1
         LanguageId = "nim"
-        Text =
-          """
+        Text = """
   echo 0
 """
 
@@ -1484,8 +1483,7 @@ suite "lsp: Send requests":
       const
         BufferId = 1
         LanguageId = "nim"
-        Text =
-          """
+        Text = """
 type number = int
 var num: number
         """
@@ -1532,8 +1530,7 @@ var num: number
       const
         BufferId = 1
         LanguageId = "nim"
-        Text =
-          """
+        Text = """
 type number = int
 var num: number
         """
@@ -1581,8 +1578,7 @@ var num: number
       const
         BufferId = 1
         LanguageId = "nim"
-        Text =
-          """
+        Text = """
 let a = 0
 let b = a + 1
 echo a
@@ -1646,8 +1642,7 @@ echo a
       const
         BufferId = 1
         LanguageId = "nim"
-        Text =
-          """
+        Text = """
 import test1
 let o = Obj()
 echo Ojb(n: 1)

@@ -45,8 +45,7 @@ proc tokens(code: string): seq[TestToken] =
 
 suite "syntax: Astro":
   test "Basic frontmatter only":
-    const Code =
-      """---
+    const Code = """---
 const a = 'hello';
 ---"""
     check tokens(Code) ==
@@ -66,8 +65,7 @@ const a = 'hello';
       ]
 
   test "Simple Astro component":
-    const Code =
-      """---
+    const Code = """---
 const message = 'Hello World';
 ---
 
@@ -88,8 +86,7 @@ const message = 'Hello World';
     check foundClosingDelimiter
 
   test "Frontmatter with imports":
-    const Code =
-      """---
+    const Code = """---
 import { Component } from 'astro:components';
 const title = 'My Page';
 ---"""
@@ -114,8 +111,7 @@ const title = 'My Page';
     check hasConst
 
   test "JSX template with expressions":
-    const Code =
-      """---
+    const Code = """---
 const name = 'Astro';
 const items = ['a', 'b', 'c'];
 ---
@@ -142,8 +138,7 @@ const items = ['a', 'b', 'c'];
     check closingDelimiterFound
 
   test "Frontmatter with TypeScript":
-    const Code =
-      """---
+    const Code = """---
 interface Props {
   title: string;
   count?: number;
@@ -169,8 +164,7 @@ const { title, count = 0 }: Props = Astro.props;
     check hasInterface
 
   test "HTML template without frontmatter":
-    const Code =
-      """<div>
+    const Code = """<div>
   <h1>Hello World</h1>
   <p>This is just HTML</p>
 </div>"""
@@ -182,8 +176,7 @@ const { title, count = 0 }: Props = Astro.props;
     check result[1].kind == gtKeyword # div is recognized as HTML keyword
 
   test "Complex Astro component":
-    const Code =
-      """---
+    const Code = """---
 export interface Props {
   title: string;
   subtitle?: string;
@@ -220,8 +213,7 @@ const greeting = `Hello, ${title}!`;
     check afterClosing
 
   test "Empty frontmatter":
-    const Code =
-      """---
+    const Code = """---
 ---
 
 <div>Content</div>"""
@@ -233,8 +225,7 @@ const greeting = `Hello, ${title}!`;
     check result[2].kind == gtDirective # Closing ---
 
   test "Frontmatter with comments":
-    const Code =
-      """---
+    const Code = """---
 // This is a comment
 const value = 42; /* block comment */
 ---
@@ -257,8 +248,7 @@ const value = 42; /* block comment */
     check hasBlockComment
 
   test "Template with template literals":
-    const Code =
-      """---
+    const Code = """---
 const message = `Hello ${name}!`;
 ---
 
@@ -276,8 +266,7 @@ const message = `Hello ${name}!`;
     check hasTemplateLiteral
 
   test "Frontmatter object literal key highlighting":
-    const Code =
-      """---
+    const Code = """---
 const data = {"title": "My Page", "author": {"name": "Charlie", "email": "charlie@test.com"}};
 ---
 
@@ -313,8 +302,7 @@ const data = {"title": "My Page", "author": {"name": "Charlie", "email": "charli
     check myPageValueFound
 
   test "Script tag with object literals":
-    const Code =
-      """---
+    const Code = """---
 const serverData = {"api": "https://api.example.com"};
 ---
 

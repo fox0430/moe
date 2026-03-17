@@ -1220,10 +1220,9 @@ proc textDocumentCompletion*(
   if not c.capabilities.get.completion.isSome:
     return R[(), string].err "textDocument/completion unavailable"
 
-  let params =
-    %*initCompletionParams(
-      path, position, c.capabilities.get.completion.get, isIncompleteTrigger, character
-    )
+  let params = %*initCompletionParams(
+    path, position, c.capabilities.get.completion.get, isIncompleteTrigger, character
+  )
 
   let id = await c.request(LspMethod.textDocumentCompletion, params, bufferId)
   if id.isErr:

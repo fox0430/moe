@@ -1289,36 +1289,33 @@ suite "lsp: Selection Range":
         lspMethod: LspMethod.textDocumentSelectionRange,
       )
 
-      let res =
-        %*{
-          "jsonrpc": "2.0",
-          "id": 0,
-          "result": [
-            {
+      let res = %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "range":
+              {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}},
+            "parent": {
               "range": {
-                "start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}
+                "start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 2}
               },
               "parent": {
                 "range": {
                   "start": {"line": 0, "character": 0},
-                  "end": {"line": 0, "character": 2},
+                  "end": {"line": 2, "character": 1},
                 },
                 "parent": {
                   "range": {
                     "start": {"line": 0, "character": 0},
-                    "end": {"line": 2, "character": 1},
-                  },
-                  "parent": {
-                    "range": {
-                      "start": {"line": 0, "character": 0},
-                      "end": {"line": 9, "character": 0},
-                    }
-                  },
+                    "end": {"line": 9, "character": 0},
+                  }
                 },
               },
-            }
-          ],
-        }
+            },
+          }
+        ],
+      }
 
       check status.lspSelectionRange(res).isOk
 

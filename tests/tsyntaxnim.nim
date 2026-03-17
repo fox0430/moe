@@ -47,8 +47,7 @@ proc tokens(code: string): seq[GT] =
 
 suite "syntax: Nim":
   test "Basic":
-    const Code =
-      """
+    const Code = """
 import std/strformat
 
 proc sum(a, b: int): int {.inline.} =

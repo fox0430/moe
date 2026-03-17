@@ -41,18 +41,17 @@ template openReferencesMode(status: var EditorStatus, references: seq[LspReferen
 
 suite "references: initReferencesModeBuffer":
   test "Basic":
-    let r =
-      @[
-        LspReference(
-          path: "/home/user/test1.nim", position: BufferPosition(line: 0, column: 0)
-        ),
-        LspReference(
-          path: "/home/user/test1.nim", position: BufferPosition(line: 1, column: 0)
-        ),
-        LspReference(
-          path: "/home/user/test2.nim", position: BufferPosition(line: 10, column: 5)
-        ),
-      ]
+    let r = @[
+      LspReference(
+        path: "/home/user/test1.nim", position: BufferPosition(line: 0, column: 0)
+      ),
+      LspReference(
+        path: "/home/user/test1.nim", position: BufferPosition(line: 1, column: 0)
+      ),
+      LspReference(
+        path: "/home/user/test2.nim", position: BufferPosition(line: 10, column: 5)
+      ),
+    ]
 
     check initReferencesModeBuffer(r) ==
       @[

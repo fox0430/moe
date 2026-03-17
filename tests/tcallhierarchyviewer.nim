@@ -32,37 +32,34 @@ import moepkg/callhierarchyviewer {.all.}
 
 suite "callhierarchyviewer: initCallHierarchyViewBuffer":
   test "Prepare calls":
-    let items =
-      @[
-        CallHierarchyItem(
-          name: "name0",
-          kind: 0,
-          detail: some("detail0"),
-          uri: "file:///home/user/app/src/test0.rs",
-          range: Range(
-            start: Position(line: 0, character: 1),
-            `end`: Position(line: 2, character: 3),
-          ),
-          selectionRange: Range(
-            start: Position(line: 4, character: 5),
-            `end`: Position(line: 6, character: 7),
-          ),
+    let items = @[
+      CallHierarchyItem(
+        name: "name0",
+        kind: 0,
+        detail: some("detail0"),
+        uri: "file:///home/user/app/src/test0.rs",
+        range: Range(
+          start: Position(line: 0, character: 1), `end`: Position(line: 2, character: 3)
         ),
-        CallHierarchyItem(
-          name: "name1",
-          kind: 1,
-          detail: some("detail1"),
-          uri: "file:///home/user/app/src/test1.rs",
-          range: Range(
-            start: Position(line: 8, character: 9),
-            `end`: Position(line: 10, character: 11),
-          ),
-          selectionRange: Range(
-            start: Position(line: 12, character: 13),
-            `end`: Position(line: 14, character: 15),
-          ),
+        selectionRange: Range(
+          start: Position(line: 4, character: 5), `end`: Position(line: 6, character: 7)
         ),
-      ]
+      ),
+      CallHierarchyItem(
+        name: "name1",
+        kind: 1,
+        detail: some("detail1"),
+        uri: "file:///home/user/app/src/test1.rs",
+        range: Range(
+          start: Position(line: 8, character: 9),
+          `end`: Position(line: 10, character: 11),
+        ),
+        selectionRange: Range(
+          start: Position(line: 12, character: 13),
+          `end`: Position(line: 14, character: 15),
+        ),
+      ),
+    ]
 
     check initCallHierarchyViewBuffer(CallHierarchyType.prepare, items).get ==
       @[
@@ -71,37 +68,34 @@ suite "callhierarchyviewer: initCallHierarchyViewBuffer":
       ].toSeqRunes
 
   test "Incoming calls":
-    let items =
-      @[
-        CallHierarchyItem(
-          name: "name0",
-          kind: 0,
-          detail: some("detail0"),
-          uri: "file:///home/user/app/src/test0.rs",
-          range: Range(
-            start: Position(line: 0, character: 1),
-            `end`: Position(line: 2, character: 3),
-          ),
-          selectionRange: Range(
-            start: Position(line: 4, character: 5),
-            `end`: Position(line: 6, character: 7),
-          ),
+    let items = @[
+      CallHierarchyItem(
+        name: "name0",
+        kind: 0,
+        detail: some("detail0"),
+        uri: "file:///home/user/app/src/test0.rs",
+        range: Range(
+          start: Position(line: 0, character: 1), `end`: Position(line: 2, character: 3)
         ),
-        CallHierarchyItem(
-          name: "name1",
-          kind: 1,
-          detail: some("detail1"),
-          uri: "file:///home/user/app/src/test1.rs",
-          range: Range(
-            start: Position(line: 8, character: 9),
-            `end`: Position(line: 10, character: 11),
-          ),
-          selectionRange: Range(
-            start: Position(line: 12, character: 13),
-            `end`: Position(line: 14, character: 15),
-          ),
+        selectionRange: Range(
+          start: Position(line: 4, character: 5), `end`: Position(line: 6, character: 7)
         ),
-      ]
+      ),
+      CallHierarchyItem(
+        name: "name1",
+        kind: 1,
+        detail: some("detail1"),
+        uri: "file:///home/user/app/src/test1.rs",
+        range: Range(
+          start: Position(line: 8, character: 9),
+          `end`: Position(line: 10, character: 11),
+        ),
+        selectionRange: Range(
+          start: Position(line: 12, character: 13),
+          `end`: Position(line: 14, character: 15),
+        ),
+      ),
+    ]
 
     check initCallHierarchyViewBuffer(CallHierarchyType.incoming, items).get ==
       @[
@@ -110,37 +104,34 @@ suite "callhierarchyviewer: initCallHierarchyViewBuffer":
       ].toSeqRunes
 
   test "Outgoing calls":
-    let items =
-      @[
-        CallHierarchyItem(
-          name: "name0",
-          kind: 0,
-          detail: some("detail0"),
-          uri: "file:///home/user/app/src/test0.rs",
-          range: Range(
-            start: Position(line: 0, character: 1),
-            `end`: Position(line: 2, character: 3),
-          ),
-          selectionRange: Range(
-            start: Position(line: 4, character: 5),
-            `end`: Position(line: 6, character: 7),
-          ),
+    let items = @[
+      CallHierarchyItem(
+        name: "name0",
+        kind: 0,
+        detail: some("detail0"),
+        uri: "file:///home/user/app/src/test0.rs",
+        range: Range(
+          start: Position(line: 0, character: 1), `end`: Position(line: 2, character: 3)
         ),
-        CallHierarchyItem(
-          name: "name1",
-          kind: 1,
-          detail: some("detail1"),
-          uri: "file:///home/user/app/src/test1.rs",
-          range: Range(
-            start: Position(line: 8, character: 9),
-            `end`: Position(line: 10, character: 11),
-          ),
-          selectionRange: Range(
-            start: Position(line: 12, character: 13),
-            `end`: Position(line: 14, character: 15),
-          ),
+        selectionRange: Range(
+          start: Position(line: 4, character: 5), `end`: Position(line: 6, character: 7)
         ),
-      ]
+      ),
+      CallHierarchyItem(
+        name: "name1",
+        kind: 1,
+        detail: some("detail1"),
+        uri: "file:///home/user/app/src/test1.rs",
+        range: Range(
+          start: Position(line: 8, character: 9),
+          `end`: Position(line: 10, character: 11),
+        ),
+        selectionRange: Range(
+          start: Position(line: 12, character: 13),
+          `end`: Position(line: 14, character: 15),
+        ),
+      ),
+    ]
 
     check initCallHierarchyViewBuffer(CallHierarchyType.outgoing, items).get ==
       @[
@@ -186,23 +177,21 @@ suite "callhierarchyviewer: jumpToDestination":
     status.resize(100, 100)
     status.update
 
-    let items =
-      @[
-        CallHierarchyItem(
-          name: "name0",
-          kind: 0,
-          detail: some("detail0"),
-          uri: filePath.pathToUri,
-          range: Range(
-            start: Position(line: 1, character: 4),
-            `end`: Position(line: 1, character: 10),
-          ),
-          selectionRange: Range(
-            start: Position(line: 0, character: 0),
-            `end`: Position(line: 0, character: 0),
-          ),
-        )
-      ]
+    let items = @[
+      CallHierarchyItem(
+        name: "name0",
+        kind: 0,
+        detail: some("detail0"),
+        uri: filePath.pathToUri,
+        range: Range(
+          start: Position(line: 1, character: 4),
+          `end`: Position(line: 1, character: 10),
+        ),
+        selectionRange: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 0)
+        ),
+      )
+    ]
 
     assert status.verticalSplitWindow.isOk
     status.moveNextWindow

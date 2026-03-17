@@ -256,39 +256,38 @@ suite "commandlineutils: initExmodeCompletionList":
 suite "commandlineutils: initDocSymbolCompletionList":
   test "Basic":
     let
-      symbols =
-        @[
-          DocumentSymbol(
-            name: "a",
-            kind: 1,
-            range: some(
-              LspRange(
-                start: LspPosition(line: 0, character: 1),
-                `end`: LspPosition(line: 2, character: 3),
-              )
-            ),
+      symbols = @[
+        DocumentSymbol(
+          name: "a",
+          kind: 1,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 0, character: 1),
+              `end`: LspPosition(line: 2, character: 3),
+            )
           ),
-          DocumentSymbol(
-            name: "b",
-            kind: 2,
-            range: some(
-              LspRange(
-                start: LspPosition(line: 4, character: 5),
-                `end`: LspPosition(line: 6, character: 7),
-              )
-            ),
+        ),
+        DocumentSymbol(
+          name: "b",
+          kind: 2,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 4, character: 5),
+              `end`: LspPosition(line: 6, character: 7),
+            )
           ),
-          DocumentSymbol(
-            name: "c",
-            kind: 3,
-            range: some(
-              LspRange(
-                start: LspPosition(line: 8, character: 9),
-                `end`: LspPosition(line: 10, character: 11),
-              )
-            ),
+        ),
+        DocumentSymbol(
+          name: "c",
+          kind: 3,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 8, character: 9),
+              `end`: LspPosition(line: 10, character: 11),
+            )
           ),
-        ]
+        ),
+      ]
 
       rawInput = ru""
 
@@ -307,39 +306,38 @@ suite "commandlineutils: initDocSymbolCompletionList":
 
   test "Basic 2":
     let
-      symbols =
-        @[
-          DocumentSymbol(
-            name: "aba",
-            kind: 1,
-            range: some(
-              LspRange(
-                start: LspPosition(line: 0, character: 1),
-                `end`: LspPosition(line: 2, character: 3),
-              )
-            ),
+      symbols = @[
+        DocumentSymbol(
+          name: "aba",
+          kind: 1,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 0, character: 1),
+              `end`: LspPosition(line: 2, character: 3),
+            )
           ),
-          DocumentSymbol(
-            name: "abb",
-            kind: 2,
-            range: some(
-              LspRange(
-                start: LspPosition(line: 4, character: 5),
-                `end`: LspPosition(line: 6, character: 7),
-              )
-            ),
+        ),
+        DocumentSymbol(
+          name: "abb",
+          kind: 2,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 4, character: 5),
+              `end`: LspPosition(line: 6, character: 7),
+            )
           ),
-          DocumentSymbol(
-            name: "ccc",
-            kind: 3,
-            range: some(
-              LspRange(
-                start: LspPosition(line: 8, character: 9),
-                `end`: LspPosition(line: 10, character: 11),
-              )
-            ),
+        ),
+        DocumentSymbol(
+          name: "ccc",
+          kind: 3,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 8, character: 9),
+              `end`: LspPosition(line: 10, character: 11),
+            )
           ),
-        ]
+        ),
+      ]
 
       rawInput = ru"a"
 

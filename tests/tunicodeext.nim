@@ -204,8 +204,7 @@ suite "unicodeext: toRunes":
     let runes: Runes = @[]
     check(runes.toGapBuffer.toRunes == runes)
 
-let s =
-  """Sentences that contain all letters commonly used in a language
+let s = """Sentences that contain all letters commonly used in a language
 --------------------------------------------------------------
 
 Markus Kuhn <http://www.cl.cam.ac.uk/~mgk25/> -- 2012-04-11

@@ -149,53 +149,49 @@ suite "highlight: initHighlight":
       ]
 
   test "Semantic tokens":
-    const Code =
-      """
+    const Code = """
 fn main() {
     println!("Hello, world!");
 } """
 
     let
-      semTokens =
-        @[
-          LspSemanticToken(
-            line: 0, column: 0, length: 2, tokenType: 6, tokenModifiers: @[]
-          ),
-          LspSemanticToken(
-            line: 0, column: 3, length: 4, tokenType: 4, tokenModifiers: @[1]
-          ),
-          LspSemanticToken(
-            line: 1, column: 4, length: 7, tokenType: 7, tokenModifiers: @[3, 13]
-          ),
-          LspSemanticToken(
-            line: 1, column: 11, length: 1, tokenType: 7, tokenModifiers: @[]
-          ),
-          LspSemanticToken(
-            line: 1, column: 13, length: 15, tokenType: 14, tokenModifiers: @[14]
-          ),
-        ]
+      semTokens = @[
+        LspSemanticToken(
+          line: 0, column: 0, length: 2, tokenType: 6, tokenModifiers: @[]
+        ),
+        LspSemanticToken(
+          line: 0, column: 3, length: 4, tokenType: 4, tokenModifiers: @[1]
+        ),
+        LspSemanticToken(
+          line: 1, column: 4, length: 7, tokenType: 7, tokenModifiers: @[3, 13]
+        ),
+        LspSemanticToken(
+          line: 1, column: 11, length: 1, tokenType: 7, tokenModifiers: @[]
+        ),
+        LspSemanticToken(
+          line: 1, column: 13, length: 15, tokenType: 14, tokenModifiers: @[14]
+        ),
+      ]
 
       legend = SemanticTokensLegend(
-        tokenTypes:
-          @[
-            "comment", "decorator", "enumMember", "enum", "function", "interface",
-            "keyword", "macro", "method", "namespace", "number", "operator",
-            "parameter", "property", "string", "struct", "typeParameter", "variable",
-            "angle", "arithmetic", "attribute", "attributeBracket", "bitwise",
-            "boolean", "brace", "bracket", "builtinAttribute", "builtinType",
-            "character", "colon", "comma", "comparison", "constParameter", "derive",
-            "deriveHelper", "dot", "escapeSequence", "invalidEscapeSequence",
-            "formatSpecifier", "generic", "label", "lifetime", "logical", "macroBang",
-            "parenthesis", "punctuation", "selfKeyword", "selfTypeKeyword", "semicolon",
-            "typeAlias", "toolModule", "union", "unresolvedReference",
-          ],
-        tokenModifiers:
-          @[
-            "documentation", "declaration", "static", "defaultLibrary", "async",
-            "attribute", "callable", "constant", "consuming", "controlFlow",
-            "crateRoot", "injected", "intraDocLink", "library", "macro", "mutable",
-            "public", "reference", "trait", "unsafe",
-          ],
+        tokenTypes: @[
+          "comment", "decorator", "enumMember", "enum", "function", "interface",
+          "keyword", "macro", "method", "namespace", "number", "operator", "parameter",
+          "property", "string", "struct", "typeParameter", "variable", "angle",
+          "arithmetic", "attribute", "attributeBracket", "bitwise", "boolean", "brace",
+          "bracket", "builtinAttribute", "builtinType", "character", "colon", "comma",
+          "comparison", "constParameter", "derive", "deriveHelper", "dot",
+          "escapeSequence", "invalidEscapeSequence", "formatSpecifier", "generic",
+          "label", "lifetime", "logical", "macroBang", "parenthesis", "punctuation",
+          "selfKeyword", "selfTypeKeyword", "semicolon", "typeAlias", "toolModule",
+          "union", "unresolvedReference",
+        ],
+        tokenModifiers: @[
+          "documentation", "declaration", "static", "defaultLibrary", "async",
+          "attribute", "callable", "constant", "consuming", "controlFlow", "crateRoot",
+          "injected", "intraDocLink", "library", "macro", "mutable", "public",
+          "reference", "trait", "unsafe",
+        ],
       )
 
     let highlight = initHighlight(Code.splitLines.toSeqRunes, semTokens, legend)
@@ -339,12 +335,11 @@ suite "highlight: overwrite":
     check(highlight[0].color == EditorColorPairIndex.highlightFullWidthSpace)
 
 suite "parseReservedWord":
-  const ReservedWords =
-    @[
-      ReservedWord(word: "TODO", color: EditorColorPairIndex.reservedWord),
-      ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord),
-      ReservedWord(word: "NOTE", color: EditorColorPairIndex.reservedWord),
-    ]
+  const ReservedWords = @[
+    ReservedWord(word: "TODO", color: EditorColorPairIndex.reservedWord),
+    ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord),
+    ReservedWord(word: "NOTE", color: EditorColorPairIndex.reservedWord),
+  ]
 
   test "no reserved word":
     check parseReservedWord("abcdefh", ReservedWords, EditorColorPairIndex.default).toSeq ==
@@ -420,57 +415,56 @@ suite "parseReservedWord":
 suite "highlight: addColorSegment":
   test "Basic":
     var h = Highlight()
-    h.colorSegments =
-      @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 2,
-          color: EditorColorPairIndex.keyword,
-          attribute: Attribute.normal,
-        ),
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 3,
-          lastRow: 0,
-          lastColumn: 3,
-          color: EditorColorPairIndex.whitespace,
-          attribute: Attribute.normal,
-        ),
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 4,
-          lastRow: 0,
-          lastColumn: 4,
-          color: EditorColorPairIndex.identifier,
-          attribute: Attribute.normal,
-        ),
-        ColorSegment(
-          firstRow: 1,
-          firstColumn: 0,
-          lastRow: 1,
-          lastColumn: 3,
-          color: EditorColorPairIndex.builtin,
-          attribute: Attribute.normal,
-        ),
-        ColorSegment(
-          firstRow: 1,
-          firstColumn: 4,
-          lastRow: 1,
-          lastColumn: 4,
-          color: EditorColorPairIndex.whitespace,
-          attribute: Attribute.normal,
-        ),
-        ColorSegment(
-          firstRow: 1,
-          firstColumn: 5,
-          lastRow: 1,
-          lastColumn: 5,
-          color: EditorColorPairIndex.identifier,
-          attribute: Attribute.normal,
-        ),
-      ]
+    h.colorSegments = @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 2,
+        color: EditorColorPairIndex.keyword,
+        attribute: Attribute.normal,
+      ),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 3,
+        lastRow: 0,
+        lastColumn: 3,
+        color: EditorColorPairIndex.whitespace,
+        attribute: Attribute.normal,
+      ),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 4,
+        lastRow: 0,
+        lastColumn: 4,
+        color: EditorColorPairIndex.identifier,
+        attribute: Attribute.normal,
+      ),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 0,
+        lastRow: 1,
+        lastColumn: 3,
+        color: EditorColorPairIndex.builtin,
+        attribute: Attribute.normal,
+      ),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 4,
+        lastRow: 1,
+        lastColumn: 4,
+        color: EditorColorPairIndex.whitespace,
+        attribute: Attribute.normal,
+      ),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 5,
+        lastRow: 1,
+        lastColumn: 5,
+        color: EditorColorPairIndex.identifier,
+        attribute: Attribute.normal,
+      ),
+    ]
 
     const
       Line = 0

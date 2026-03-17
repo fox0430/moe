@@ -97,17 +97,16 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
     return @[s]
 
   if t.contains(s):
-    return
-      @[
-        ColorSegment(
-          firstRow: s.firstRow,
-          firstColumn: s.firstColumn,
-          lastRow: s.lastRow,
-          lastColumn: s.lastColumn,
-          color: t.color,
-          attribute: t.attribute,
-        )
-      ]
+    return @[
+      ColorSegment(
+        firstRow: s.firstRow,
+        firstColumn: s.firstColumn,
+        lastRow: s.lastRow,
+        lastColumn: s.lastColumn,
+        color: t.color,
+        attribute: t.attribute,
+      )
+    ]
 
   if s.contains(t):
     if (s.firstRow, s.firstColumn) < (t.firstRow, t.firstColumn):

@@ -47,8 +47,7 @@ proc tokens(code: string): seq[GT] =
 
 suite "syntaxjson: jsonNextToken":
   test "Basic":
-    const Code =
-      """
+    const Code = """
 {
   "simple_types": {
     "string": "Hello, World!",
