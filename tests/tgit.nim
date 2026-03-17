@@ -23,8 +23,7 @@ import moepkg/git {.all.}
 
 suite "git: gitDiff":
   test "Changed 1":
-    const DiffResult =
-      """
+    const DiffResult = """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..4f540b87 100644
 --- a/src/moepkg/editorstatus.nim
@@ -56,8 +55,7 @@ index f328eafe..4f540b87 100644
       ]
 
   test "Deleted 1":
-    const DiffResult =
-      """
+    const DiffResult = """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..a8229205 100644
 --- a/src/moepkg/editorstatus.nim
@@ -76,8 +74,7 @@ index f328eafe..a8229205 100644
       @[Diff(operation: OperationType.deleted, firstLine: 18, lastLine: 18)]
 
   test "Deleted 2":
-    const DiffResult =
-      """
+    const DiffResult = """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..03715814 100644
 --- a/src/moepkg/editorstatus.nim
@@ -97,8 +94,7 @@ index f328eafe..03715814 100644
       @[Diff(operation: OperationType.deleted, firstLine: 18, lastLine: 19)]
 
   test "Deleted 3":
-    const DiffResult =
-      """
+    const DiffResult = """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..8fa55819 100644
 --- a/src/moepkg/editorstatus.nim
@@ -129,8 +125,7 @@ index f328eafe..8fa55819 100644
       ]
 
   test "Added 1":
-    const DiffResult =
-      """
+    const DiffResult = """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..6deb6128 100644
 --- a/src/moepkg/editorstatus.nim
@@ -149,8 +144,7 @@ index f328eafe..6deb6128 100644
       @[Diff(operation: OperationType.added, firstLine: 22, lastLine: 22)]
 
   test "Added 2":
-    const DiffResult =
-      """
+    const DiffResult = """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..e43d4504 100644
 --- a/src/moepkg/editorstatus.nim
@@ -170,8 +164,7 @@ index f328eafe..e43d4504 100644
       @[Diff(operation: OperationType.added, firstLine: 22, lastLine: 23)]
 
   test "Added 3":
-    const DiffResult =
-      """
+    const DiffResult = """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..57a9ea4d 100644
 --- a/src/moepkg/editorstatus.nim
@@ -200,8 +193,7 @@ index f328eafe..57a9ea4d 100644
       ]
 
   test "Changed and added 1":
-    const DiffResult =
-      """
+    const DiffResult = """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index 6b23176b..d3d54244 100644
 --- a/src/moepkg/editorstatus.nim
@@ -225,8 +217,7 @@ index 6b23176b..d3d54244 100644
       ]
 
   test "Changed and deleted 1":
-    const DiffResult =
-      """
+    const DiffResult = """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index 6b23176b..bd0a8fd3 100644
 --- a/src/moepkg/editorstatus.nim

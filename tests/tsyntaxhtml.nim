@@ -131,8 +131,7 @@ suite "syntax: HTML":
     # Closing tag should be present
 
   test "Multi-line HTML":
-    const Code =
-      """<div>
+    const Code = """<div>
   <p>
     Hello World
   </p>
@@ -156,8 +155,7 @@ suite "syntax: HTML":
     # Should have multiple attribute-value pairs
 
   test "HTML comment multi-line":
-    const Code =
-      """<!-- This is a
+    const Code = """<!-- This is a
     multi-line
     comment -->"""
     let tokenList = tokens(Code)

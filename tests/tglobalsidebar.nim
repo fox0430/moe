@@ -40,48 +40,45 @@ suite "sidebar":
 
     check sidebar.highlight[] ==
       Highlight(
-        colorSegments:
-          @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 0,
-              lastColumn: 1,
-              color: EditorColorPairIndex.default,
-            )
-          ]
+        colorSegments: @[
+          ColorSegment(
+            firstRow: 0,
+            firstColumn: 0,
+            lastRow: 0,
+            lastColumn: 1,
+            color: EditorColorPairIndex.default,
+          )
+        ]
       )[]
 
   test "initHighlight":
     var sidebar = initGlobalSidebar(Rect(h: 10, w: 10, y: 0, x: 0)).get
     # Clear the highlight for the test.
     sidebar.highlight[] = Highlight(
-      colorSegments:
-        @[
-          ColorSegment(
-            firstRow: 0,
-            firstColumn: 0,
-            lastRow: 0,
-            lastColumn: 0,
-            color: EditorColorPairIndex.default,
-          )
-        ]
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 0,
+          color: EditorColorPairIndex.default,
+        )
+      ]
     )[]
 
     sidebar.initHighlight
 
     check sidebar.highlight[] ==
       Highlight(
-        colorSegments:
-          @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 9,
-              lastColumn: 9,
-              color: EditorColorPairIndex.default,
-            )
-          ]
+        colorSegments: @[
+          ColorSegment(
+            firstRow: 0,
+            firstColumn: 0,
+            lastRow: 9,
+            lastColumn: 9,
+            color: EditorColorPairIndex.default,
+          )
+        ]
       )[]
 
   test "write 1":
@@ -97,23 +94,22 @@ suite "sidebar":
 
     check sidebar.highlight[] ==
       Highlight(
-        colorSegments:
-          @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 0,
-              lastColumn: 3,
-              color: EditorColorPairIndex.reservedWord,
-            ),
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 4,
-              lastRow: 99,
-              lastColumn: 99,
-              color: EditorColorPairIndex.default,
-            ),
-          ]
+        colorSegments: @[
+          ColorSegment(
+            firstRow: 0,
+            firstColumn: 0,
+            lastRow: 0,
+            lastColumn: 3,
+            color: EditorColorPairIndex.reservedWord,
+          ),
+          ColorSegment(
+            firstRow: 0,
+            firstColumn: 4,
+            lastRow: 99,
+            lastColumn: 99,
+            color: EditorColorPairIndex.default,
+          ),
+        ]
       )[]
 
   test "write 2":
@@ -131,30 +127,29 @@ suite "sidebar":
 
     check sidebar.highlight[] ==
       Highlight(
-        colorSegments:
-          @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 1,
-              lastColumn: 9,
-              color: EditorColorPairIndex.default,
-            ),
-            ColorSegment(
-              firstRow: 1,
-              firstColumn: 10,
-              lastRow: 1,
-              lastColumn: 13,
-              color: EditorColorPairIndex.reservedWord,
-            ),
-            ColorSegment(
-              firstRow: 1,
-              firstColumn: 14,
-              lastRow: 99,
-              lastColumn: 99,
-              color: EditorColorPairIndex.default,
-            ),
-          ]
+        colorSegments: @[
+          ColorSegment(
+            firstRow: 0,
+            firstColumn: 0,
+            lastRow: 1,
+            lastColumn: 9,
+            color: EditorColorPairIndex.default,
+          ),
+          ColorSegment(
+            firstRow: 1,
+            firstColumn: 10,
+            lastRow: 1,
+            lastColumn: 13,
+            color: EditorColorPairIndex.reservedWord,
+          ),
+          ColorSegment(
+            firstRow: 1,
+            firstColumn: 14,
+            lastRow: 99,
+            lastColumn: 99,
+            color: EditorColorPairIndex.default,
+          ),
+        ]
       )[]
 
   test "resize":

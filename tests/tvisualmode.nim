@@ -1522,13 +1522,11 @@ suite "Visual mode: Movement":
     check currentMainWindowNode.jumpList[] ==
       JumpList(
         currentPosition: 1,
-        history:
-          @[
-            JumpInfo(
-              bufferId: currentBufStatus.id,
-              position: BufferPosition(line: 2, column: 0),
-            )
-          ],
+        history: @[
+          JumpInfo(
+            bufferId: currentBufStatus.id, position: BufferPosition(line: 2, column: 0)
+          )
+        ],
       )[]
 
   test "Move to the first line (gg command)":
@@ -1556,13 +1554,11 @@ suite "Visual mode: Movement":
     check currentMainWindowNode.jumpList[] ==
       JumpList(
         currentPosition: 1,
-        history:
-          @[
-            JumpInfo(
-              bufferId: currentBufStatus.id,
-              position: BufferPosition(line: 0, column: 0),
-            )
-          ],
+        history: @[
+          JumpInfo(
+            bufferId: currentBufStatus.id, position: BufferPosition(line: 0, column: 0)
+          )
+        ],
       )[]
 
   test "Move to the previous blank line({ command)":
@@ -1590,13 +1586,11 @@ suite "Visual mode: Movement":
     check currentMainWindowNode.jumpList[] ==
       JumpList(
         currentPosition: 1,
-        history:
-          @[
-            JumpInfo(
-              bufferId: currentBufStatus.id,
-              position: BufferPosition(line: 0, column: 0),
-            )
-          ],
+        history: @[
+          JumpInfo(
+            bufferId: currentBufStatus.id, position: BufferPosition(line: 0, column: 0)
+          )
+        ],
       )[]
 
   test "Move to the next blank line(} command)":
@@ -1623,13 +1617,11 @@ suite "Visual mode: Movement":
     check currentMainWindowNode.jumpList[] ==
       JumpList(
         currentPosition: 1,
-        history:
-          @[
-            JumpInfo(
-              bufferId: currentBufStatus.id,
-              position: BufferPosition(line: 2, column: 0),
-            )
-          ],
+        history: @[
+          JumpInfo(
+            bufferId: currentBufStatus.id, position: BufferPosition(line: 2, column: 0)
+          )
+        ],
       )[]
 
   test "Move to the next blank line(} command)":
@@ -1656,13 +1648,11 @@ suite "Visual mode: Movement":
     check currentMainWindowNode.jumpList[] ==
       JumpList(
         currentPosition: 1,
-        history:
-          @[
-            JumpInfo(
-              bufferId: currentBufStatus.id,
-              position: BufferPosition(line: 2, column: 0),
-            )
-          ],
+        history: @[
+          JumpInfo(
+            bufferId: currentBufStatus.id, position: BufferPosition(line: 2, column: 0)
+          )
+        ],
       )[]
 
 suite "Visual block mode: Converts string into upper-case string":

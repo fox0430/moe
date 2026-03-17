@@ -61,23 +61,22 @@ suite "lsp: parseTextDocumentRenameResponse":
       @[
         LspRename(
           path: "/home/user/moe/src/moe.nim",
-          changes:
-            @[
-              RenameChange(
-                range: BufferRange(
-                  first: BufferPosition(line: 22, column: 5),
-                  last: BufferPosition(line: 22, column: 9),
-                ),
-                text: "abc",
+          changes: @[
+            RenameChange(
+              range: BufferRange(
+                first: BufferPosition(line: 22, column: 5),
+                last: BufferPosition(line: 22, column: 9),
               ),
-              RenameChange(
-                range: BufferRange(
-                  first: BufferPosition(line: 32, column: 19),
-                  last: BufferPosition(line: 32, column: 23),
-                ),
-                text: "abc",
+              text: "abc",
+            ),
+            RenameChange(
+              range: BufferRange(
+                first: BufferPosition(line: 32, column: 19),
+                last: BufferPosition(line: 32, column: 23),
               ),
-            ],
+              text: "abc",
+            ),
+          ],
         )
       ]
 
@@ -121,35 +120,33 @@ suite "lsp: parseTextDocumentRenameResponse":
       @[
         LspRename(
           path: "/home/user/test.nim",
-          changes:
-            @[
-              RenameChange(
-                range: BufferRange(
-                  first: BufferPosition(line: 22, column: 5),
-                  last: BufferPosition(line: 22, column: 9),
-                ),
-                text: "abc",
+          changes: @[
+            RenameChange(
+              range: BufferRange(
+                first: BufferPosition(line: 22, column: 5),
+                last: BufferPosition(line: 22, column: 9),
               ),
-              RenameChange(
-                range: BufferRange(
-                  first: BufferPosition(line: 32, column: 19),
-                  last: BufferPosition(line: 32, column: 23),
-                ),
-                text: "abc",
+              text: "abc",
+            ),
+            RenameChange(
+              range: BufferRange(
+                first: BufferPosition(line: 32, column: 19),
+                last: BufferPosition(line: 32, column: 23),
               ),
-            ],
+              text: "abc",
+            ),
+          ],
         ),
         LspRename(
           path: "/home/user/test2.nim",
-          changes:
-            @[
-              RenameChange(
-                range: BufferRange(
-                  first: BufferPosition(line: 0, column: 0),
-                  last: BufferPosition(line: 0, column: 4),
-                ),
-                text: "abc",
-              )
-            ],
+          changes: @[
+            RenameChange(
+              range: BufferRange(
+                first: BufferPosition(line: 0, column: 0),
+                last: BufferPosition(line: 0, column: 4),
+              ),
+              text: "abc",
+            )
+          ],
         ),
       ]

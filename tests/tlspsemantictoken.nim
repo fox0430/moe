@@ -34,26 +34,24 @@ suite "lsp: parseTextDocumentSemanticTokensResponse":
 
   test "Basic":
     let legend = SemanticTokensLegend(
-      tokenTypes:
-        @[
-          "comment", "decorator", "enumMember", "enum", "function", "interface",
-          "keyword", "macro", "method", "namespace", "number", "operator", "parameter",
-          "property", "string", "struct", "typeParameter", "variable", "angle",
-          "arithmetic", "attribute", "attributeBracket", "bitwise", "boolean", "brace",
-          "bracket", "builtinAttribute", "builtinType", "character", "colon", "comma",
-          "comparison", "constParameter", "derive", "deriveHelper", "dot",
-          "escapeSequence", "invalidEscapeSequence", "formatSpecifier", "generic",
-          "label", "lifetime", "logical", "macroBang", "parenthesis", "punctuation",
-          "selfKeyword", "selfTypeKeyword", "semicolon", "typeAlias", "toolModule",
-          "union", "unresolvedReference",
-        ],
-      tokenModifiers:
-        @[
-          "documentation", "declaration", "static", "defaultLibrary", "async",
-          "attribute", "callable", "constant", "consuming", "controlFlow", "crateRoot",
-          "injected", "intraDocLink", "library", "macro", "mutable", "public",
-          "reference", "trait", "unsafe",
-        ],
+      tokenTypes: @[
+        "comment", "decorator", "enumMember", "enum", "function", "interface",
+        "keyword", "macro", "method", "namespace", "number", "operator", "parameter",
+        "property", "string", "struct", "typeParameter", "variable", "angle",
+        "arithmetic", "attribute", "attributeBracket", "bitwise", "boolean", "brace",
+        "bracket", "builtinAttribute", "builtinType", "character", "colon", "comma",
+        "comparison", "constParameter", "derive", "deriveHelper", "dot",
+        "escapeSequence", "invalidEscapeSequence", "formatSpecifier", "generic",
+        "label", "lifetime", "logical", "macroBang", "parenthesis", "punctuation",
+        "selfKeyword", "selfTypeKeyword", "semicolon", "typeAlias", "toolModule",
+        "union", "unresolvedReference",
+      ],
+      tokenModifiers: @[
+        "documentation", "declaration", "static", "defaultLibrary", "async",
+        "attribute", "callable", "constant", "consuming", "controlFlow", "crateRoot",
+        "injected", "intraDocLink", "library", "macro", "mutable", "public",
+        "reference", "trait", "unsafe",
+      ],
     )
 
     check parseTextDocumentSemanticTokensResponse(

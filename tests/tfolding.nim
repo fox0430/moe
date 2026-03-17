@@ -159,14 +159,13 @@ suite "folding: removeAll with FoldingRange":
     check r == @[FoldingRange(first: 5, last: 6)]
 
   test "Basic 2":
-    var r =
-      @[
-        FoldingRange(first: 0, last: 1),
-        FoldingRange(first: 2, last: 10),
-        FoldingRange(first: 2, last: 7),
-        FoldingRange(first: 2, last: 3),
-        FoldingRange(first: 20, last: 30),
-      ]
+    var r = @[
+      FoldingRange(first: 0, last: 1),
+      FoldingRange(first: 2, last: 10),
+      FoldingRange(first: 2, last: 7),
+      FoldingRange(first: 2, last: 3),
+      FoldingRange(first: 20, last: 30),
+    ]
     r.removeAll(FoldingRange(first: 2, last: 10))
 
     check r == @[FoldingRange(first: 0, last: 1), FoldingRange(first: 20, last: 30)]
@@ -191,25 +190,23 @@ suite "folding: removeAll with line":
     check r == @[FoldingRange(first: 0, last: 2), FoldingRange(first: 5, last: 6)]
 
   test "Basic":
-    var r =
-      @[
-        FoldingRange(first: 0, last: 2),
-        FoldingRange(first: 3, last: 4),
-        FoldingRange(first: 5, last: 6),
-      ]
+    var r = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 3, last: 4),
+      FoldingRange(first: 5, last: 6),
+    ]
     r.removeAll(3)
 
     check r == @[FoldingRange(first: 0, last: 2), FoldingRange(first: 5, last: 6)]
 
   test "Basic 2":
-    var r =
-      @[
-        FoldingRange(first: 0, last: 2),
-        FoldingRange(first: 3, last: 10),
-        FoldingRange(first: 3, last: 4),
-        FoldingRange(first: 3, last: 7),
-        FoldingRange(first: 10, last: 20),
-      ]
+    var r = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 3, last: 10),
+      FoldingRange(first: 3, last: 4),
+      FoldingRange(first: 3, last: 7),
+      FoldingRange(first: 10, last: 20),
+    ]
     r.removeAll(3)
 
     check r == @[FoldingRange(first: 0, last: 2), FoldingRange(first: 10, last: 20)]
@@ -295,13 +292,12 @@ suite "folding: add":
 
 suite "folding: shiftLines":
   test "+2 lines":
-    var r =
-      @[
-        FoldingRange(first: 0, last: 2),
-        FoldingRange(first: 5, last: 6),
-        FoldingRange(first: 5, last: 10),
-        FoldingRange(first: 20, last: 30),
-      ]
+    var r = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6),
+      FoldingRange(first: 5, last: 10),
+      FoldingRange(first: 20, last: 30),
+    ]
 
     r.shiftLines(0, 2)
 
@@ -314,13 +310,12 @@ suite "folding: shiftLines":
       ]
 
   test "+2 lines from the 4th line":
-    var r =
-      @[
-        FoldingRange(first: 0, last: 2),
-        FoldingRange(first: 5, last: 6),
-        FoldingRange(first: 5, last: 10),
-        FoldingRange(first: 20, last: 30),
-      ]
+    var r = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6),
+      FoldingRange(first: 5, last: 10),
+      FoldingRange(first: 20, last: 30),
+    ]
 
     r.shiftLines(4, 2)
 
@@ -333,13 +328,12 @@ suite "folding: shiftLines":
       ]
 
   test "-2 lines":
-    var r =
-      @[
-        FoldingRange(first: 2, last: 4),
-        FoldingRange(first: 7, last: 8),
-        FoldingRange(first: 7, last: 12),
-        FoldingRange(first: 22, last: 32),
-      ]
+    var r = @[
+      FoldingRange(first: 2, last: 4),
+      FoldingRange(first: 7, last: 8),
+      FoldingRange(first: 7, last: 12),
+      FoldingRange(first: 22, last: 32),
+    ]
 
     r.shiftLines(0, -2)
 
@@ -352,13 +346,12 @@ suite "folding: shiftLines":
       ]
 
   test "-2 lines from the 6th line":
-    var r =
-      @[
-        FoldingRange(first: 2, last: 4),
-        FoldingRange(first: 7, last: 8),
-        FoldingRange(first: 7, last: 12),
-        FoldingRange(first: 22, last: 32),
-      ]
+    var r = @[
+      FoldingRange(first: 2, last: 4),
+      FoldingRange(first: 7, last: 8),
+      FoldingRange(first: 7, last: 12),
+      FoldingRange(first: 22, last: 32),
+    ]
 
     r.shiftLines(6, -2)
 

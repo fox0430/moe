@@ -37,17 +37,15 @@ suite "lsp: parseTextDocumentHoverResponse":
     check parseTextDocumentHoverResponse(res).get.isNone
 
   test "Basic":
-    let res =
-      %*{
-        "jsonrpc": "2.0",
-        "id": 0,
-        "result": {
-          "contents": {"language": "nim", "value": "editorstatus.LastCursorPosition"},
-          "range": {
-            "start": {"line": 33, "character": 12}, "end": {"line": 33, "character": 30}
-          },
-        },
-      }
+    let res = %*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "contents": {"language": "nim", "value": "editorstatus.LastCursorPosition"},
+        "range":
+          {"start": {"line": 33, "character": 12}, "end": {"line": 33, "character": 30}},
+      },
+    }
 
     check %*parseTextDocumentHoverResponse(res).get ==
       %*{
@@ -57,15 +55,14 @@ suite "lsp: parseTextDocumentHoverResponse":
       }
 
   test "Without range":
-    let res =
-      %*{
-        "jsonrpc": "2.0",
-        "id": 0,
-        "result": {
-          "contents": {"language": "nim", "value": "editorstatus.LastCursorPosition"},
-          "range": nil,
-        },
-      }
+    let res = %*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "contents": {"language": "nim", "value": "editorstatus.LastCursorPosition"},
+        "range": nil,
+      },
+    }
 
     check %*parseTextDocumentHoverResponse(res).get ==
       %*{
@@ -74,22 +71,21 @@ suite "lsp: parseTextDocumentHoverResponse":
       }
 
   test "Array contents":
-    let res =
-      %*{
-        "jsonrpc": "2.0",
-        "id": 0,
-        "result": {
-          "contents": [
-            {
-              "language": "nim",
-              "value": "system.echo: proc (x: varargs[typed]){.gcsafe.}",
-            },
-            {"language": "", "value": "description"},
-          ],
-          "range":
-            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 4}},
-        },
-      }
+    let res = %*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "contents": [
+          {
+            "language": "nim",
+            "value": "system.echo: proc (x: varargs[typed]){.gcsafe.}",
+          },
+          {"language": "", "value": "description"},
+        ],
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 4}},
+      },
+    }
 
     check %*parseTextDocumentHoverResponse(res).get ==
       %*{
@@ -106,15 +102,13 @@ suite "lsp: parseTextDocumentHoverResponse":
 
 suite "lsp: toHoverContent":
   test "Basic":
-    let hoverJson =
-      %*{
-        "contents": [
-          {"language": "nim", "value": "title"},
-          {"language": "", "value": "line1\nline2"},
-        ],
-        "range":
-          {"start": {"line": 1, "character": 2}, "end": {"line": 3, "character": 4}},
-      }
+    let hoverJson = %*{
+      "contents": [
+        {"language": "nim", "value": "title"}, {"language": "", "value": "line1\nline2"}
+      ],
+      "range":
+        {"start": {"line": 1, "character": 2}, "end": {"line": 3, "character": 4}},
+    }
 
     check toHoverContent(hoverJson.to(Hover)) ==
       HoverContent(
@@ -127,12 +121,11 @@ suite "lsp: toHoverContent":
       )
 
   test "Only description":
-    let hoverJson =
-      %*{
-        "contents": {"language": "nim", "value": "description"},
-        "range":
-          {"start": {"line": 1, "character": 2}, "end": {"line": 3, "character": 4}},
-      }
+    let hoverJson = %*{
+      "contents": {"language": "nim", "value": "description"},
+      "range":
+        {"start": {"line": 1, "character": 2}, "end": {"line": 3, "character": 4}},
+    }
 
     check toHoverContent(hoverJson.to(Hover)) ==
       HoverContent(

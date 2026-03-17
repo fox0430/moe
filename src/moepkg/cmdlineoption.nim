@@ -42,8 +42,7 @@ proc writeVersion() =
   quit()
 
 proc generateHelpMessage(): string =
-  const HelpMessage =
-    """
+  const HelpMessage = """
 Usage:
   moe [file]       Edit file
 

@@ -503,12 +503,11 @@ proc initEditorViewSettings*(): EditorViewSettings =
   result.sidebar = true
 
 proc initReservedWords*(): seq[ReservedWord] =
-  result =
-    @[
-      ReservedWord(word: "TODO", color: EditorColorPairIndex.reservedWord),
-      ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord),
-      ReservedWord(word: "NOTE", color: EditorColorPairIndex.reservedWord),
-    ]
+  result = @[
+    ReservedWord(word: "TODO", color: EditorColorPairIndex.reservedWord),
+    ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord),
+    ReservedWord(word: "NOTE", color: EditorColorPairIndex.reservedWord),
+  ]
 
 proc initHighlightSettings(): HighlightSettings =
   result.replaceText = true

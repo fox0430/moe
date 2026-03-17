@@ -3003,12 +3003,11 @@ suite "Editor: insertMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
-    let positions =
-      @[
-        BufferPosition(line: 0, column: 0),
-        BufferPosition(line: 1, column: 0),
-        BufferPosition(line: 2, column: 0),
-      ]
+    let positions = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 1, column: 0),
+      BufferPosition(line: 2, column: 0),
+    ]
     b.insertMultiplePositions(positions, ru"jkl")
 
     check b.buffer.toSeqRunes == @["jklabc", "jkldef", "jklghi"].toSeqRunes
@@ -3017,15 +3016,14 @@ suite "Editor: insertMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
-    let positions =
-      @[
-        BufferPosition(line: 0, column: 0),
-        BufferPosition(line: 0, column: 1),
-        BufferPosition(line: 1, column: 0),
-        BufferPosition(line: 1, column: 2),
-        BufferPosition(line: 2, column: 0),
-        BufferPosition(line: 2, column: 3),
-      ]
+    let positions = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 0, column: 1),
+      BufferPosition(line: 1, column: 0),
+      BufferPosition(line: 1, column: 2),
+      BufferPosition(line: 2, column: 0),
+      BufferPosition(line: 2, column: 3),
+    ]
     b.insertMultiplePositions(positions, ru"jkl")
 
     check b.buffer.toSeqRunes == @["jklajklbc", "jkldejklf", "jklghijkl"].toSeqRunes
@@ -3034,12 +3032,11 @@ suite "Editor: insertMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["a", "", "a"].toSeqRunes.toGapBuffer
 
-    let positions =
-      @[
-        BufferPosition(line: 0, column: 0),
-        BufferPosition(line: 1, column: 0),
-        BufferPosition(line: 2, column: 0),
-      ]
+    let positions = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 1, column: 0),
+      BufferPosition(line: 2, column: 0),
+    ]
     b.insertMultiplePositions(positions, ru"bc")
 
     check b.buffer.toSeqRunes == @["bca", "bc", "bca"].toSeqRunes
@@ -3048,12 +3045,11 @@ suite "Editor: insertMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["a", "", "a"].toSeqRunes.toGapBuffer
 
-    let positions =
-      @[
-        BufferPosition(line: 0, column: 1),
-        BufferPosition(line: 1, column: 1),
-        BufferPosition(line: 2, column: 1),
-      ]
+    let positions = @[
+      BufferPosition(line: 0, column: 1),
+      BufferPosition(line: 1, column: 1),
+      BufferPosition(line: 2, column: 1),
+    ]
     b.insertMultiplePositions(positions, ru"bc")
 
     check b.buffer.toSeqRunes == @["abc", "", "abc"].toSeqRunes
@@ -3136,13 +3132,12 @@ suite "Editor: deleteMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
 
-    let positions =
-      @[
-        BufferPosition(line: 0, column: 1),
-        BufferPosition(line: 0, column: 3),
-        BufferPosition(line: 1, column: 1),
-        BufferPosition(line: 1, column: 3),
-      ]
+    let positions = @[
+      BufferPosition(line: 0, column: 1),
+      BufferPosition(line: 0, column: 3),
+      BufferPosition(line: 1, column: 1),
+      BufferPosition(line: 1, column: 3),
+    ]
     const NumOfDelete = 1
     b.deleteMultiplePositions(positions, NumOfDelete)
 
@@ -3152,12 +3147,11 @@ suite "Editor: deleteMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["123456", "123", "123456"].toSeqRunes.toGapBuffer
 
-    let positions =
-      @[
-        BufferPosition(line: 0, column: 6),
-        BufferPosition(line: 1, column: 6),
-        BufferPosition(line: 2, column: 6),
-      ]
+    let positions = @[
+      BufferPosition(line: 0, column: 6),
+      BufferPosition(line: 1, column: 6),
+      BufferPosition(line: 2, column: 6),
+    ]
     const NumOfDelete = 1
     b.deleteMultiplePositions(positions, NumOfDelete)
 
@@ -3241,13 +3235,12 @@ suite "Editor: deleteCurrentMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
 
-    let positions =
-      @[
-        BufferPosition(line: 0, column: 0),
-        BufferPosition(line: 0, column: 2),
-        BufferPosition(line: 1, column: 0),
-        BufferPosition(line: 1, column: 2),
-      ]
+    let positions = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 0, column: 2),
+      BufferPosition(line: 1, column: 0),
+      BufferPosition(line: 1, column: 2),
+    ]
     const NumOfDelete = 2
     b.deleteCurrentMultiplePositions(positions, NumOfDelete)
 
@@ -3257,12 +3250,11 @@ suite "Editor: deleteCurrentMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["123456", "123", "123456"].toSeqRunes.toGapBuffer
 
-    let positions =
-      @[
-        BufferPosition(line: 0, column: 5),
-        BufferPosition(line: 1, column: 5),
-        BufferPosition(line: 2, column: 5),
-      ]
+    let positions = @[
+      BufferPosition(line: 0, column: 5),
+      BufferPosition(line: 1, column: 5),
+      BufferPosition(line: 2, column: 5),
+    ]
     const NumOfDelete = 1
     b.deleteCurrentMultiplePositions(positions, NumOfDelete)
 

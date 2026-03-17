@@ -4524,14 +4524,13 @@ suite "Normal mode: jumpBack":
 
     currentMainWindowNode.jumpList = JumpList(
       currentPosition: 0,
-      history:
-        @[
-          JumpInfo(
-            bufferId: status.bufStatus[0].id,
-            path: status.bufStatus[0].path,
-            position: BufferPosition(line: 0, column: 1),
-          )
-        ],
+      history: @[
+        JumpInfo(
+          bufferId: status.bufStatus[0].id,
+          path: status.bufStatus[0].path,
+          position: BufferPosition(line: 0, column: 1),
+        )
+      ],
     )
 
     status.jumpBack
@@ -4551,14 +4550,13 @@ suite "Normal mode: jumpBack":
 
     currentMainWindowNode.jumpList = JumpList(
       currentPosition: 0,
-      history:
-        @[
-          JumpInfo(
-            bufferId: 100,
-            path: testFilePath1.toRunes,
-            position: BufferPosition(line: 0, column: 1),
-          )
-        ],
+      history: @[
+        JumpInfo(
+          bufferId: 100,
+          path: testFilePath1.toRunes,
+          position: BufferPosition(line: 0, column: 1),
+        )
+      ],
     )
 
     status.jumpBack
@@ -4579,19 +4577,18 @@ suite "Normal mode: jumpBack":
 
     currentMainWindowNode.jumpList = JumpList(
       currentPosition: 1,
-      history:
-        @[
-          JumpInfo(
-            bufferId: status.bufStatus[0].id,
-            path: status.bufStatus[0].path,
-            position: BufferPosition(line: 0, column: 2),
-          ),
-          JumpInfo(
-            bufferId: status.bufStatus[0].id,
-            path: status.bufStatus[0].path,
-            position: BufferPosition(line: 0, column: 1),
-          ),
-        ],
+      history: @[
+        JumpInfo(
+          bufferId: status.bufStatus[0].id,
+          path: status.bufStatus[0].path,
+          position: BufferPosition(line: 0, column: 2),
+        ),
+        JumpInfo(
+          bufferId: status.bufStatus[0].id,
+          path: status.bufStatus[0].path,
+          position: BufferPosition(line: 0, column: 1),
+        ),
+      ],
     )
 
     status.jumpBack
@@ -4648,14 +4645,13 @@ suite "Normal mode: jumpFoward":
 
     currentMainWindowNode.jumpList = JumpList(
       currentPosition: 0,
-      history:
-        @[
-          JumpInfo(
-            bufferId: status.bufStatus[0].id,
-            path: status.bufStatus[0].path,
-            position: BufferPosition(line: 0, column: 1),
-          )
-        ],
+      history: @[
+        JumpInfo(
+          bufferId: status.bufStatus[0].id,
+          path: status.bufStatus[0].path,
+          position: BufferPosition(line: 0, column: 1),
+        )
+      ],
     )
 
     status.jumpFoward
@@ -4675,14 +4671,13 @@ suite "Normal mode: jumpFoward":
 
     currentMainWindowNode.jumpList = JumpList(
       currentPosition: 0,
-      history:
-        @[
-          JumpInfo(
-            bufferId: 100,
-            path: testFilePath1.toRunes,
-            position: BufferPosition(line: 0, column: 1),
-          )
-        ],
+      history: @[
+        JumpInfo(
+          bufferId: 100,
+          path: testFilePath1.toRunes,
+          position: BufferPosition(line: 0, column: 1),
+        )
+      ],
     )
 
     status.jumpFoward
@@ -4703,19 +4698,18 @@ suite "Normal mode: jumpFoward":
 
     currentMainWindowNode.jumpList = JumpList(
       currentPosition: 0,
-      history:
-        @[
-          JumpInfo(
-            bufferId: status.bufStatus[0].id,
-            path: status.bufStatus[0].path,
-            position: BufferPosition(line: 0, column: 1),
-          ),
-          JumpInfo(
-            bufferId: status.bufStatus[0].id,
-            path: status.bufStatus[0].path,
-            position: BufferPosition(line: 0, column: 2),
-          ),
-        ],
+      history: @[
+        JumpInfo(
+          bufferId: status.bufStatus[0].id,
+          path: status.bufStatus[0].path,
+          position: BufferPosition(line: 0, column: 1),
+        ),
+        JumpInfo(
+          bufferId: status.bufStatus[0].id,
+          path: status.bufStatus[0].path,
+          position: BufferPosition(line: 0, column: 2),
+        ),
+      ],
     )
 
     status.jumpFoward

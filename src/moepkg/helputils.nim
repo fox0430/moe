@@ -20,8 +20,7 @@
 import std/strutils
 import unicodeext
 
-const HelpSentences =
-  """
+const HelpSentences = """
 # Exiting
 
 :w    - Write file

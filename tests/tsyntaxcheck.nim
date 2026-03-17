@@ -38,19 +38,18 @@ suite "syntaxCheck: isSyntaxCheckFormattedMessage":
 
 suite "syntaxCheck: formattedMessage":
   test "Some messages and none":
-    let results =
-      @[
-        SyntaxError(
-          position: BufferPosition(line: 0, column: 0),
-          messageType: SyntaxCheckMessageType.error,
-          message: "Error1".toRunes,
-        ),
-        SyntaxError(
-          position: BufferPosition(line: 5, column: 10),
-          messageType: SyntaxCheckMessageType.error,
-          message: "Error2".toRunes,
-        ),
-      ]
+    let results = @[
+      SyntaxError(
+        position: BufferPosition(line: 0, column: 0),
+        messageType: SyntaxCheckMessageType.error,
+        message: "Error1".toRunes,
+      ),
+      SyntaxError(
+        position: BufferPosition(line: 5, column: 10),
+        messageType: SyntaxCheckMessageType.error,
+        message: "Error2".toRunes,
+      ),
+    ]
 
     block checkLine0:
       const Line = 0
@@ -94,8 +93,7 @@ suite "syntaxCheck: parseNimCheckResult":
   test "No error":
     const
       Path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      CmdOutput =
-        """
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -110,8 +108,7 @@ Hint:
   test "Including hint":
     const
       Path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      CmdOutput =
-        """
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -131,8 +128,7 @@ Hint:
   test "Including warning":
     const
       Path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      CmdOutput =
-        """
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -152,8 +148,7 @@ Hint:
   test "Including error":
     const
       Path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      CmdOutput =
-        """
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -175,8 +170,7 @@ Hint: used config file '/home/user/moe/tests/config.nims' [Conf]
   test "Including some hints":
     const
       Path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      CmdOutput =
-        """
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -203,8 +197,7 @@ Hint:
   test "Including some warnings":
     const
       Path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      CmdOutput =
-        """
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -236,8 +229,7 @@ Hint:
   test "Including some errors":
     const
       Path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      CmdOutput =
-        """
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -271,8 +263,7 @@ Hint: used config file '/home/user/moe/tests/config.nims' [Conf]
   test "Including hint and warning":
     const
       Path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      CmdOutput =
-        """
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -319,8 +310,7 @@ suite "syntaxCheck: startBackgroundSyntaxCheck: Nim":
 
   test "hint":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const Code =
-      """
+    const Code = """
 let a = 0
 echo "Hello world"
 """
@@ -339,8 +329,7 @@ echo "Hello world"
 
   test "warning":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const Code =
-      """
+    const Code = """
 import std/os
 echo "Hello world"
 """
@@ -364,8 +353,7 @@ echo "Hello world"
 
   test "error":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const Code =
-      """
+    const Code = """
 import std/nonExistModule
 """
     writeFile(testFilePath, Code)
@@ -383,8 +371,7 @@ import std/nonExistModule
 
   test "some warnings":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const Code =
-      """
+    const Code = """
 import std/os
 import std/osproc
 
@@ -418,8 +405,7 @@ echo "Hello world"
 
   test "some errors":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const Code =
-      """
+    const Code = """
 import std/nonExistModule
 import std/nonExistModule2
 """
@@ -443,8 +429,7 @@ import std/nonExistModule2
 
   test "hint and warning":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const Code =
-      """
+    const Code = """
 import std/os
 let a = 1
 echo "Hello world"

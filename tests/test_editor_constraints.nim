@@ -160,15 +160,14 @@ suite "Editor Domain Constraints Tests":
     check result.isOk
 
     # Valid transitions
-    let validTransitions =
-      @[
-        (Mode.normal, Mode.insert),
-        (Mode.insert, Mode.normal),
-        (Mode.normal, Mode.visual),
-        (Mode.visual, Mode.normal),
-        (Mode.normal, Mode.ex),
-        (Mode.ex, Mode.normal),
-      ]
+    let validTransitions = @[
+      (Mode.normal, Mode.insert),
+      (Mode.insert, Mode.normal),
+      (Mode.normal, Mode.visual),
+      (Mode.visual, Mode.normal),
+      (Mode.normal, Mode.ex),
+      (Mode.ex, Mode.normal),
+    ]
 
     for (fromMode, toMode) in validTransitions:
       status.changeMode(fromMode)

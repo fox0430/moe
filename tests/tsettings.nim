@@ -26,8 +26,7 @@ import moepkg/[unicodeext, ui, rgb, color]
 
 import moepkg/settings {.all.}
 
-const MoercStr =
-  """
+const MoercStr = """
 [Standard]
 number = false
 currentNumber = false
@@ -286,8 +285,7 @@ kind = "config"
 path = "~/user/.config/moe/themes/my_theme.toml"
 """
 
-const ColorsConfigStr =
-  """
+const ColorsConfigStr = """
 [Colors]
 
 foreground = "#111111"
@@ -742,8 +740,7 @@ suite "settings: Parse configuration file":
     check settings.theme.path == "~/user/.config/moe/themes/my_theme.toml"
 
   test "Parse Clipboard setting 1":
-    const Str =
-      """
+    const Str = """
       [Clipboard]
       enable = true
       tool = "xclip""""
@@ -755,8 +752,7 @@ suite "settings: Parse configuration file":
     check settings.clipboard.tool == ClipboardTool.xclip
 
   test "Parse Clipboard setting 2":
-    const Str =
-      """
+    const Str = """
       [Clipboard]
       enable = true
       tool = "xsel""""
@@ -768,8 +764,7 @@ suite "settings: Parse configuration file":
     check settings.clipboard.tool == ClipboardTool.xsel
 
   test "Parse Clipboard setting 3":
-    const Str =
-      """
+    const Str = """
       [Clipboard]
       enable = true
       tool = "wl-clipboard""""
@@ -781,8 +776,7 @@ suite "settings: Parse configuration file":
     check settings.clipboard.tool == ClipboardTool.wlClipboard
 
   test "Parse Clipboard setting 4":
-    const Str =
-      """
+    const Str = """
       [Clipboard]
       enable = true
       tool = "wsl-default""""
@@ -794,8 +788,7 @@ suite "settings: Parse configuration file":
     check settings.clipboard.tool == ClipboardTool.wslDefault
 
   test "Parse Clipboard setting 5":
-    const Str =
-      """
+    const Str = """
       [Clipboard]
       enable = true
       tool = "macOS-default""""
@@ -807,8 +800,7 @@ suite "settings: Parse configuration file":
     check settings.clipboard.tool == ClipboardTool.macOsDefault
 
   test "Parse color Mode setting 1":
-    const Str =
-      """
+    const Str = """
       [Standard]
       colorMode = "none"
     """
@@ -819,8 +811,7 @@ suite "settings: Parse configuration file":
     check ColorMode.none == settings.standard.colorMode
 
   test "Parse color Mode setting 2":
-    const Str =
-      """
+    const Str = """
       [Standard]
       colorMode = "8"
     """
@@ -831,8 +822,7 @@ suite "settings: Parse configuration file":
     check ColorMode.c8 == settings.standard.colorMode
 
   test "Parse color Mode setting 3":
-    const Str =
-      """
+    const Str = """
       [Standard]
       colorMode = "256"
     """
@@ -843,8 +833,7 @@ suite "settings: Parse configuration file":
     check ColorMode.c256 == settings.standard.colorMode
 
   test "Parse color Mode setting 4":
-    const Str =
-      """
+    const Str = """
       [Standard]
       colorMode = "24bit"
     """
@@ -863,8 +852,7 @@ suite "settings: Validate editor config":
     check result == none(InvalidItem)
 
   test "Except to fail":
-    const TomlThemeConfig =
-      """
+    const TomlThemeConfig = """
       [Persist]
       a = "a"
     """
@@ -876,8 +864,7 @@ suite "settings: Validate editor config":
 
 suite "settings: Validate Standard.theme":
   test "Invalid value":
-    const TomlThemeConfig =
-      """
+    const TomlThemeConfig = """
       [Standard]
       theme = "a"
     """
@@ -890,8 +877,7 @@ suite "settings: Validate Standard.theme":
 
 suite "settings: Validate theme table":
   test "Invalid":
-    const TomlThemeConfig =
-      """
+    const TomlThemeConfig = """
       [Theme]
       kind = "abc"
     """
@@ -901,8 +887,7 @@ suite "settings: Validate theme table":
     check result.isSome
 
   test "Theme.kind: default":
-    const TomlThemeConfig =
-      """
+    const TomlThemeConfig = """
       [Theme]
       kind = "default"
     """
@@ -912,8 +897,7 @@ suite "settings: Validate theme table":
     check result.isNone
 
   test "Theme.kind: config":
-    const TomlThemeConfig =
-      """
+    const TomlThemeConfig = """
       [Theme]
       kind = "config"
     """
@@ -923,8 +907,7 @@ suite "settings: Validate theme table":
     check result.isNone
 
   test "Theme.kind: vscode":
-    const TomlThemeConfig =
-      """
+    const TomlThemeConfig = """
       [Theme]
       kind = "config"
     """
@@ -934,8 +917,7 @@ suite "settings: Validate theme table":
     check result.isNone
 
   test "Theme.path":
-    const TomlThemeConfig =
-      """
+    const TomlThemeConfig = """
       [Theme]
       kind = "config"
       path = "./theme.toml"
@@ -947,24 +929,21 @@ suite "settings: Validate theme table":
 
 suite "settings: validateLspTable":
   test "Invalid":
-    const Toml =
-      """
+    const Toml = """
 [Lsp]
 a = "b"
 """
     check parsetoml.parseString(Toml).validateTomlConfig.isSome
 
   test "Invalid 2":
-    const Toml =
-      """
+    const Toml = """
 [Lsp]
 enable = "true"
 """
     check parsetoml.parseString(Toml).validateTomlConfig.isSome
 
   test "Invalid 3":
-    const Toml =
-      """
+    const Toml = """
 [Lsp]
 enable = true
 a = "b"
@@ -972,8 +951,7 @@ a = "b"
     check parsetoml.parseString(Toml).validateTomlConfig.isSome
 
   test "Invalid 4":
-    const Toml =
-      """
+    const Toml = """
 [Lsp]
 enable = true
 [Lsp.nim]
@@ -982,8 +960,7 @@ a = "b"
     check parsetoml.parseString(Toml).validateTomlConfig.isSome
 
   test "Invalid 5":
-    const Toml =
-      """
+    const Toml = """
 [Lsp]
 enable = true
 [Lsp.nim]
@@ -992,16 +969,14 @@ extensions = "nim"
     check parsetoml.parseString(Toml).validateTomlConfig.isSome
 
   test "Basic":
-    const Toml =
-      """
+    const Toml = """
 [Lsp]
 enable = true
 """
     check parsetoml.parseString(Toml).validateTomlConfig.isNone
 
   test "Basic 2":
-    const Toml =
-      """
+    const Toml = """
 [Lsp]
 enable = true
 
@@ -1014,16 +989,14 @@ trace = "verbose"
 
 suite "settings: Validate theme colors":
   test "Invalid table":
-    const Toml =
-      """
+    const Toml = """
       [A]
       background = "#ffffff"
     """
     check parsetoml.parseString(Toml).validateThemeColorsConfig.isSome
 
   test "Invalid item":
-    const Toml =
-      """
+    const Toml = """
       [Colors]
       background = "#ffffff"
       invalidItem = "#ffffff"
@@ -1104,8 +1077,7 @@ suite "settings: Generate toml default config":
 
 suite "settings: Error message":
   test "Single line":
-    const MoercStr =
-      """
+    const MoercStr = """
       [test]
       test = "test"
     """
@@ -1118,8 +1090,7 @@ suite "settings: Error message":
     check errorMessage == """(name: test, val: test = "test")"""
 
   test "Single line 2":
-    const MoercStr =
-      """
+    const MoercStr = """
       [Standard]
       test = "test"
     """
@@ -1132,8 +1103,7 @@ suite "settings: Error message":
     check errorMessage == """(name: test, val: test)"""
 
   test "Multiple lines":
-    const MoercStr =
-      """
+    const MoercStr = """
       [test]
       test1 = "test1"
       test2 = "test2"

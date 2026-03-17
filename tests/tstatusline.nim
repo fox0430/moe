@@ -1143,12 +1143,11 @@ suite "statusline: clear":
 
     privateAccess(s.highlight.type)
     privateAccess(StatusLineColorSegment.type)
-    s.highlight.segments =
-      @[
-        StatusLineColorSegment(
-          first: 0, last: 4, color: EditorColorPairIndex.statusLineNormalModeLabel
-        )
-      ]
+    s.highlight.segments = @[
+      StatusLineColorSegment(
+        first: 0, last: 4, color: EditorColorPairIndex.statusLineNormalModeLabel
+      )
+    ]
 
     s.clear
 

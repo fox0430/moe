@@ -1214,16 +1214,15 @@ suite "editorstatus: update":
     assert status.addNewBufferInCurrentWin("").isOk
 
   test "LSP code lens with invalid position":
-    currentBufStatus.codeLenses =
-      @[
-        CodeLens(
-          range: LspRange(
-            start: LspPosition(line: 1, character: 0),
-            `end`: LspPosition(line: 1, character: 0),
-          ),
-          command: some(LspCommand()),
-        )
-      ]
+    currentBufStatus.codeLenses = @[
+      CodeLens(
+        range: LspRange(
+          start: LspPosition(line: 1, character: 0),
+          `end`: LspPosition(line: 1, character: 0),
+        ),
+        command: some(LspCommand()),
+      )
+    ]
 
     status.resize(100, 100)
     status.update
