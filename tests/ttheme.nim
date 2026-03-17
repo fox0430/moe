@@ -19,7 +19,7 @@
 
 import std/unittest
 import pkg/results
-import moepkg/[ui, rgb, color]
+import moepkg/[ui, rgb, color, theme]
 
 import moepkg/theme {.all.}
 
@@ -124,3 +124,8 @@ suite "color: Downgrade":
 
   test "Do nothing if c24bit":
     assert "#800001".hexToRgb.get == "#800001".hexToRgb.get.downgrade(ColorMode.c24bit)
+
+suite "initEditrorColor":
+  test "ColorMode.none should succeed without calling init_pair":
+    let r = initEditrorColor(DefaultColors, ColorMode.none)
+    check r.isOk
