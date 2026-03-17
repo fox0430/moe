@@ -395,7 +395,7 @@ proc startUi*() =
     nonl() # Exit new line mode and improve move cursor performance
     curs_set(1) # Hide cursor
 
-    if can_change_color():
+    if has_colors():
       # Enable Ncurses color
       startColor()
 
@@ -799,22 +799,35 @@ proc parseKey(buffer: seq[int]): Option[Rune] =
         return some(runes[0])
 
 proc pollAsync*(fd: cint, timeout: int = -1): Future[int] {.async: (raw: true).} =
-  ## Check stdin buffer using poll(2).
+  ## Check stdin buffer using select(2).
   ##
-  ## poll(2) return POLLERR if it detects a signal.
+  ## Uses select(2) instead of poll(2) for better compatibility with older
+  ## systems (e.g. macOS 10.6) where poll(2) may not work correctly on
+  ## terminal file descriptors.
   ##
   ## `timeout` is milliseconds.
 
   var retFuture = newFuture[int]("ui.pollAsync")
 
-  var pollFd: TPollfd
-  pollFd.addr.zeroMem(sizeof(pollFd))
-  pollFd.fd = fd
-  pollFd.events = POLLIN or POLLERR
+  if fd >= FD_SETSIZE:
+    retFuture.fail(
+      newException(IOError, "fd " & $fd & " >= FD_SETSIZE (" & $FD_SETSIZE & ")")
+    )
+    return retFuture
 
-  proc pollProc(arg: pointer) {.gcsafe.} =
+  proc selectProc(arg: pointer) {.gcsafe.} =
     try:
-      let res = poll(pollFd.addr, 1.Tnfds, timeout.cint)
+      var fdSet: TFdSet
+      FD_ZERO(fdSet)
+      FD_SET(fd, fdSet)
+
+      var tv: Timeval
+      if timeout >= 0:
+        tv.tv_sec = posix.Time(timeout div 1000)
+        tv.tv_usec = Suseconds((timeout mod 1000) * 1000)
+
+      let res = select(fd + 1, fdSet.addr, nil, nil, if timeout >= 0: tv.addr else: nil)
+
       if not retFuture.finished:
         retFuture.complete(res)
     except CatchableError as e:
@@ -824,7 +837,7 @@ proc pollAsync*(fd: cint, timeout: int = -1): Future[int] {.async: (raw: true).}
       if not retFuture.finished:
         retFuture.fail(newException(IOError, e.msg))
 
-  callSoon(pollProc, nil)
+  callSoon(selectProc, nil)
 
   return retFuture
 

@@ -831,9 +831,10 @@ proc initEditrorColor*(colors: ThemeColors, colorMode: ColorMode): Result[(), st
       if r.isErr:
         return Result[(), string].err r.error
 
-  for pairIndex, colorPair in themeColors:
-    let r = pairIndex.initColorPair(colorMode, colorPair)
-    if r.isErr:
-      return r
+  if colorMode != ColorMode.none:
+    for pairIndex, colorPair in themeColors:
+      let r = pairIndex.initColorPair(colorMode, colorPair)
+      if r.isErr:
+        return r
 
   return Result[(), string].ok ()

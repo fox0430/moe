@@ -17,9 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, sequtils]
+import std/[unittest, options, sequtils, posix]
 
-import pkg/[results, ncurses]
+import pkg/[results, ncurses, chronos]
 
 import moepkg/unicodeext
 
@@ -239,3 +239,39 @@ suite "parseMouseEvent":
     check event.get.bstate == mmask_t(MouseButton5Pressed)
     check event.get.x == 9
     check event.get.y == 19
+
+suite "pollAsync":
+  test "Timeout when no data available":
+    proc runTest(): Future[int] {.async.} =
+      var pipeFds: array[2, cint]
+      doAssert pipe(pipeFds) == 0
+
+      let readFd = pipeFds[0]
+      let writeFd = pipeFds[1]
+
+      let res = await pollAsync(readFd, timeout = 50)
+
+      discard close(readFd)
+      discard close(writeFd)
+      return res
+
+    check waitFor(runTest()) == 0
+
+  test "Ready when data available":
+    proc runTest(): Future[int] {.async.} =
+      var pipeFds: array[2, cint]
+      doAssert pipe(pipeFds) == 0
+
+      let readFd = pipeFds[0]
+      let writeFd = pipeFds[1]
+
+      let data = 'x'
+      discard write(writeFd, data.unsafeAddr, 1)
+
+      let res = await pollAsync(readFd, timeout = 1000)
+
+      discard close(readFd)
+      discard close(writeFd)
+      return res
+
+    check waitFor(runTest()) > 0
