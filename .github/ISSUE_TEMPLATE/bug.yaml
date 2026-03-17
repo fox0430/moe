@@ -35,7 +35,7 @@ body:
       description: |
         Please specify the version of the software in which the bug occurred.
       placeholder: |
-        Please paste the result of `moe -v`
+        Please paste the result of `moe -v`, `nim -v` and `nimble -v`
     validations:
       required: false
 
