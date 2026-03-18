@@ -881,3 +881,40 @@ suite "findMatchingOpenOnLine":
 
   test "With prefix":
     check findMatchingOpenOnLine("func(args)", 9) == 4
+
+suite "isAdjacentPair":
+  test "Empty parens":
+    check isAdjacentPair("()", 0) == true
+    check isAdjacentPair("[]", 0) == true
+    check isAdjacentPair("{}", 0) == true
+
+  test "Quotes":
+    check isAdjacentPair("\"\"", 0) == true
+    check isAdjacentPair("''", 0) == true
+
+  test "Non-adjacent pair":
+    check isAdjacentPair("(hello)", 0) == false
+    check isAdjacentPair("[items]", 0) == false
+
+  test "Not a pair":
+    check isAdjacentPair("ab", 0) == false
+    check isAdjacentPair(")(", 0) == false
+    check isAdjacentPair("][", 0) == false
+
+  test "Out of bounds":
+    check isAdjacentPair("()", -1) == false
+    check isAdjacentPair("()", 1) == false
+    check isAdjacentPair("", 0) == false
+
+  test "Adjacent pair in middle of line":
+    check isAdjacentPair("a()b", 1) == true
+    check isAdjacentPair("a[]b", 1) == true
+    check isAdjacentPair("func()end", 4) == true
+
+  test "Non-matching adjacent chars":
+    check isAdjacentPair("(]", 0) == false
+    check isAdjacentPair("[}", 0) == false
+
+  test "With spaces inside":
+    check isAdjacentPair("[   ]", 0) == false
+    check isAdjacentPair("( )", 0) == false

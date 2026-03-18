@@ -320,7 +320,7 @@ suite "InsertModeHandler - Backspace":
     check state.cursor.column == 5
 
   test "Backspace auto-delete opening paren with content inside":
-    # (hello) -> backspace on ( -> hello
+    # (hello) -> backspace on ( -> only ( deleted (not adjacent pair)
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "(hello)")
     let handler = createTestHandler(buf)
@@ -331,11 +331,11 @@ suite "InsertModeHandler - Backspace":
     let result = handler.handleBackspace(buf, state)
 
     check result.kind == imrHandled
-    check buf.getLine(0) == "hello"
+    check buf.getLine(0) == "hello)"
     check state.cursor.column == 0
 
   test "Backspace auto-delete closing paren with content inside":
-    # (hello) -> backspace on ) -> hello
+    # (hello) -> backspace on ) -> only ) deleted (not adjacent pair)
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "(hello)")
     let handler = createTestHandler(buf)
@@ -346,11 +346,11 @@ suite "InsertModeHandler - Backspace":
     let result = handler.handleBackspace(buf, state)
 
     check result.kind == imrHandled
-    check buf.getLine(0) == "hello"
-    check state.cursor.column == 5
+    check buf.getLine(0) == "(hello"
+    check state.cursor.column == 6
 
   test "Backspace auto-delete nested paren":
-    # ((hello)) -> backspace on inner ( -> (hello)
+    # ((hello)) -> backspace on inner ( -> only inner ( deleted (not adjacent)
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "((hello))")
     let handler = createTestHandler(buf)
@@ -361,11 +361,11 @@ suite "InsertModeHandler - Backspace":
     let result = handler.handleBackspace(buf, state)
 
     check result.kind == imrHandled
-    check buf.getLine(0) == "(hello)"
+    check buf.getLine(0) == "(hello))"
     check state.cursor.column == 1
 
   test "Backspace auto-delete with prefix":
-    # func(args) -> backspace on ( -> funcargs
+    # func(args) -> backspace on ( -> only ( deleted (not adjacent)
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "func(args)")
     let handler = createTestHandler(buf)
@@ -376,7 +376,7 @@ suite "InsertModeHandler - Backspace":
     let result = handler.handleBackspace(buf, state)
 
     check result.kind == imrHandled
-    check buf.getLine(0) == "funcargs"
+    check buf.getLine(0) == "funcargs)"
     check state.cursor.column == 4
 
   test "Backspace auto-delete unmatched paren falls back to normal":
@@ -395,7 +395,7 @@ suite "InsertModeHandler - Backspace":
     check state.cursor.column == 0
 
   test "Backspace auto-delete closing bracket with content":
-    # [items] -> backspace on ] -> items
+    # [items] -> backspace on ] -> only ] deleted (not adjacent)
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "[items]")
     let handler = createTestHandler(buf)
@@ -406,11 +406,11 @@ suite "InsertModeHandler - Backspace":
     let result = handler.handleBackspace(buf, state)
 
     check result.kind == imrHandled
-    check buf.getLine(0) == "items"
-    check state.cursor.column == 5
+    check buf.getLine(0) == "[items"
+    check state.cursor.column == 6
 
   test "Backspace auto-delete closing brace with content":
-    # {body} -> backspace on } -> body
+    # {body} -> backspace on } -> only } deleted (not adjacent)
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "{body}")
     let handler = createTestHandler(buf)
@@ -421,11 +421,11 @@ suite "InsertModeHandler - Backspace":
     let result = handler.handleBackspace(buf, state)
 
     check result.kind == imrHandled
-    check buf.getLine(0) == "body"
-    check state.cursor.column == 4
+    check buf.getLine(0) == "{body"
+    check state.cursor.column == 5
 
   test "Backspace auto-delete nested closing paren":
-    # ((inner)) -> backspace on inner ) -> (inner)
+    # ((inner)) -> backspace on inner ) -> only inner ) deleted (not adjacent)
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "((inner))")
     let handler = createTestHandler(buf)
@@ -436,8 +436,8 @@ suite "InsertModeHandler - Backspace":
     let result = handler.handleBackspace(buf, state)
 
     check result.kind == imrHandled
-    check buf.getLine(0) == "(inner)"
-    check state.cursor.column == 6
+    check buf.getLine(0) == "((inner)"
+    check state.cursor.column == 7
 
   test "Backspace auto-delete quote adjacent pair":
     # "" -> backspace between quotes -> empty
@@ -453,6 +453,36 @@ suite "InsertModeHandler - Backspace":
     check result.kind == imrHandled
     check buf.getLine(0) == ""
     check state.cursor.column == 0
+
+  test "Backspace adjacent bracket pair auto-delete":
+    # [|] -> backspace between adjacent pair -> empty
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "[]")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.display.autoDeleteParen = true
+    state.cursor = BufferPosition(line: 0, column: 1) # Between []
+
+    let result = handler.handleBackspace(buf, state)
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == ""
+    check state.cursor.column == 0
+
+  test "Backspace closing bracket at end of line keeps opening bracket":
+    # []| -> backspace on ] -> [ (only ] deleted)
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "[]")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.display.autoDeleteParen = true
+    state.cursor = BufferPosition(line: 0, column: 2) # After ]
+
+    let result = handler.handleBackspace(buf, state)
+
+    check result.kind == imrHandled
+    check buf.getLine(0) == "["
+    check state.cursor.column == 1
 
   test "Backspace auto-delete disabled":
     # (hello) -> backspace on ( with autoDeleteParen=false -> normal delete
@@ -470,7 +500,7 @@ suite "InsertModeHandler - Backspace":
     check state.cursor.column == 0
 
   test "Backspace auto-delete opening bracket with suffix":
-    # a(b)c -> backspace on ( -> abc
+    # a(b)c -> backspace on ( -> only ( deleted (not adjacent)
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a(b)c")
     let handler = createTestHandler(buf)
@@ -481,11 +511,11 @@ suite "InsertModeHandler - Backspace":
     let result = handler.handleBackspace(buf, state)
 
     check result.kind == imrHandled
-    check buf.getLine(0) == "abc"
+    check buf.getLine(0) == "ab)c"
     check state.cursor.column == 1
 
   test "Backspace auto-delete closing bracket with suffix":
-    # a(b)c -> backspace on ) -> abc
+    # a(b)c -> backspace on ) -> only ) deleted (not adjacent)
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "a(b)c")
     let handler = createTestHandler(buf)
@@ -496,8 +526,8 @@ suite "InsertModeHandler - Backspace":
     let result = handler.handleBackspace(buf, state)
 
     check result.kind == imrHandled
-    check buf.getLine(0) == "abc"
-    check state.cursor.column == 2
+    check buf.getLine(0) == "a(bc"
+    check state.cursor.column == 3
 
 suite "InsertModeHandler - Delete":
   test "Delete character at cursor":

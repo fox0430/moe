@@ -1789,58 +1789,34 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
   if ctx.cursor.column >= lineContent.charLen:
     return err("Nothing to delete")
 
-  # Auto-delete paren logic (only for single character deletion)
+  # Auto-delete adjacent paren pairs only (e.g., [] () {} "" '')
   if ctx.state.display.autoDeleteParen and actualCount == 1:
     let cursorCol = ctx.cursor.column
-    let charAtCursorRune = lineContent.runeAtPos(cursorCol)
 
     try:
-      var matchCol = -1
-      if isOpenBracket(charAtCursorRune):
-        matchCol = findMatchingCloseOnLine(lineContent, cursorCol)
-      elif isCloseBracket(charAtCursorRune):
-        matchCol = findMatchingOpenOnLine(lineContent, cursorCol)
-
-      if matchCol >= 0:
+      if isAdjacentPair(lineContent, cursorCol):
         let txnResult = ctx.buffer.beginTransaction("delete paren pair")
         if txnResult.isErr:
           return err(txnResult.error)
 
-        # Always delete opening bracket first so undo cursor returns to it
-        let openCol = min(cursorCol, matchCol)
-        let closeCol = max(cursorCol, matchCol)
-
-        let delResult1 = ctx.buffer.deleteRange(
-          BufferPosition(line: ctx.cursor.line, column: openCol),
-          BufferPosition(line: ctx.cursor.line, column: openCol),
-        )
-        if delResult1.isErr:
-          discard ctx.buffer.commitTransaction()
-          return err(delResult1.error)
-
-        # Close bracket shifted by -1 since open was deleted before it
-        let delResult2 = ctx.buffer.deleteRange(
-          BufferPosition(line: ctx.cursor.line, column: closeCol - 1),
-          BufferPosition(line: ctx.cursor.line, column: closeCol - 1),
-        )
-        if delResult2.isErr:
-          discard ctx.buffer.commitTransaction()
-          return err(delResult2.error)
+        # Delete opening char, then closing char (now at same position)
+        for i in 0 ..< 2:
+          let delResult = ctx.buffer.deleteRange(
+            BufferPosition(line: ctx.cursor.line, column: cursorCol),
+            BufferPosition(line: ctx.cursor.line, column: cursorCol),
+          )
+          if delResult.isErr:
+            discard ctx.buffer.commitTransaction()
+            return err(delResult.error)
 
         let commitResult = ctx.buffer.commitTransaction()
         if commitResult.isErr:
           return err(commitResult.error)
 
-        # Store in register system (respects pendingRegister)
-        storeDeletedText(ctx, $charAtCursorRune, false)
+        storeDeletedText(ctx, $lineContent.runeAtPos(cursorCol), false)
 
-        # Adjust cursor: if we deleted a closing bracket, opening was before it
-        if isCloseBracket(charAtCursorRune):
-          ctx.cursor.column -= 1
-
-        # Adjust cursor if it's now past the end of the line (Vim behavior)
-        let updatedLineContent = ctx.buffer.getLine(ctx.cursor.line)
-        let updatedLineLen = updatedLineContent.charLen
+        # Adjust cursor if past end of line
+        let updatedLineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
         if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
           ctx.cursor.column = updatedLineLen - 1
 
@@ -1920,56 +1896,33 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
 
   let lineContent = ctx.buffer.getLine(ctx.cursor.line)
 
-  # Auto-delete paren logic (only for single character deletion)
+  # Auto-delete adjacent paren pairs only (e.g., [] () {} "" '')
   if ctx.state.display.autoDeleteParen and actualCount == 1:
     let cursorCol = ctx.cursor.column
-    let charBeforeCursorRune = lineContent.runeAtPos(cursorCol - 1)
 
     try:
-      var matchCol = -1
-      if isOpenBracket(charBeforeCursorRune):
-        matchCol = findMatchingCloseOnLine(lineContent, cursorCol - 1)
-      elif isCloseBracket(charBeforeCursorRune):
-        matchCol = findMatchingOpenOnLine(lineContent, cursorCol - 1)
-
-      if matchCol >= 0:
+      # X deletes char before cursor; check if char at cursorCol-1 and cursorCol form a pair
+      if isAdjacentPair(lineContent, cursorCol - 1):
         let txnResult = ctx.buffer.beginTransaction("delete paren pair")
         if txnResult.isErr:
           return err(txnResult.error)
 
-        # Always delete opening bracket first so undo cursor returns to it
-        let openCol = min(cursorCol - 1, matchCol)
-        let closeCol = max(cursorCol - 1, matchCol)
-
-        let delResult1 = ctx.buffer.deleteRange(
-          BufferPosition(line: ctx.cursor.line, column: openCol),
-          BufferPosition(line: ctx.cursor.line, column: openCol),
-        )
-        if delResult1.isErr:
-          discard ctx.buffer.commitTransaction()
-          return err(delResult1.error)
-
-        # Close bracket shifted by -1 since open was deleted before it
-        let delResult2 = ctx.buffer.deleteRange(
-          BufferPosition(line: ctx.cursor.line, column: closeCol - 1),
-          BufferPosition(line: ctx.cursor.line, column: closeCol - 1),
-        )
-        if delResult2.isErr:
-          discard ctx.buffer.commitTransaction()
-          return err(delResult2.error)
+        # Delete opening char, then closing char (now at same position)
+        for i in 0 ..< 2:
+          let delResult = ctx.buffer.deleteRange(
+            BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
+            BufferPosition(line: ctx.cursor.line, column: cursorCol - 1),
+          )
+          if delResult.isErr:
+            discard ctx.buffer.commitTransaction()
+            return err(delResult.error)
 
         let commitResult = ctx.buffer.commitTransaction()
         if commitResult.isErr:
           return err(commitResult.error)
 
-        # Store in register system (respects pendingRegister)
-        storeDeletedText(ctx, $charBeforeCursorRune, false)
-
-        # Cursor adjustment: one bracket was at cursorCol-1, always shift back by 1
+        storeDeletedText(ctx, $lineContent.runeAtPos(cursorCol - 1), false)
         ctx.cursor.column = cursorCol - 1
-        # If the match was also before cursor, shift back one more
-        if matchCol < cursorCol - 1:
-          ctx.cursor.column -= 1
 
         ctx.state.needsFullRedraw = true
         return Result[(), string].ok ()
