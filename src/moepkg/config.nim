@@ -193,6 +193,10 @@ type
   FilerConfig* = object
     showIcons*: bool
 
+  # FileTree settings
+  FileTreeConfig* = object
+    width*: int
+
   # Autocomplete settings
   AutocompleteConfig* = object
     enable*: bool
@@ -235,6 +239,10 @@ type
   StartUpFileOpenConfig* = object
     autoSplit*: bool
     splitType*: SplitType
+
+  # Startup file tree settings
+  StartUpFileTreeConfig* = object
+    enable*: bool
 
   # Debug window node settings
   DebugWindowNodeConfig* = object
@@ -408,6 +416,7 @@ type
     quickRun*: QuickRunConfig
     notification*: NotificationConfig
     filer*: FilerConfig
+    fileTree*: FileTreeConfig
     autocomplete*: AutocompleteConfig
     autoSave*: AutoSaveConfig
     persist*: PersistConfig
@@ -415,6 +424,7 @@ type
     syntaxChecker*: SyntaxCheckerConfig
     smoothScroll*: SmoothScrollConfig
     startUpFileOpen*: StartUpFileOpenConfig
+    startUpFileTree*: StartUpFileTreeConfig
     editorConfig*: EditorConfigSettings
     debug*: DebugConfig
     theme*: ThemeConfig
@@ -563,6 +573,7 @@ proc newEditorConfig*(): EditorConfig =
       lspLogNotify: true,
     ),
     filer: FilerConfig(showIcons: true),
+    fileTree: FileTreeConfig(width: 30),
     autocomplete: AutocompleteConfig(enable: true, windowBorder: true),
     autoSave: AutoSaveConfig(enable: true, interval: 5),
     persist: PersistConfig(
@@ -577,6 +588,7 @@ proc newEditorConfig*(): EditorConfig =
     syntaxChecker: SyntaxCheckerConfig(enable: false),
     smoothScroll: SmoothScrollConfig(enable: true, friction: 80.0, airDrag: 2.0),
     startUpFileOpen: StartUpFileOpenConfig(autoSplit: true, splitType: stVertical),
+    startUpFileTree: StartUpFileTreeConfig(enable: false),
     editorConfig: EditorConfigSettings(enable: true),
     debug: DebugConfig(
       windowNode: DebugWindowNodeConfig(

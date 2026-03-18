@@ -41,12 +41,16 @@ proc saveActiveWindowState*(e: Editor) =
 
 proc syncActiveWindow*(e: Editor) =
   ## Sync the active window's buffer and viewport with the executor and motion controller
+  ## Also syncs mode and cursor from the active window to EditorState
   ## Viewport is shared by reference - reassigning shares the active window's viewport
   e.executer.buffer = e.activeWindow.buffer
   e.executer.motionController.executor.buffer = e.activeWindow.buffer
   e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
   e.viewport = e.activeWindow.viewport
   e.state.needsFullRedraw = true
+
+  # Sync mode and cursor from the active window to EditorState
+  e.syncStateFromWindow()
 
   # Apply per-buffer EditorConfig overrides to display settings
   applyBufferEditorConfig(e.state.display, e.activeWindow.buffer, e.config)
@@ -201,6 +205,8 @@ proc restoreOriginalBuffer*(win: EditorWindow, mode: EditorMode) =
   of EditorMode.Terminal:
     if win.terminalState.isSome and win.terminalState.get.originalBuffer != nil:
       win.buffer = win.terminalState.get.originalBuffer
+  of EditorMode.FileTree:
+    discard # FileTree uses its own window; no original buffer to restore
   else:
     discard
 
@@ -239,6 +245,9 @@ proc clearModeState*(win: EditorWindow, mode: EditorMode) =
     if win.terminalState.isSome:
       win.terminalState.get.cleanup()
     win.terminalState = none(TerminalState)
+  of EditorMode.FileTree:
+    win.fileTreeState = none(FileTreeState)
+    win.fixedWidth = none(int)
   else:
     discard
 
@@ -574,7 +583,7 @@ proc closeWindow*(e: Editor): bool =
   if shouldQuit:
     return true
 
-  # Sync to the new active window
+  # Sync to the new active window (includes mode/cursor sync)
   e.syncActiveWindow()
 
   # Update cursor position immediately to avoid visual glitch

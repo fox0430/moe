@@ -43,12 +43,12 @@ proc activeBuffer*(wm: EditorWindowManager): Option[TextBuffer] =
   if wm.windows.len > 0 and wm.activeWindowIndex < wm.windows.len:
     return some(wm.windows[wm.activeWindowIndex].buffer)
 
-proc deactivateAllWindows(wm: EditorWindowManager) =
+proc deactivateAllWindows*(wm: EditorWindowManager) =
   ## Deactivate all windows
   for window in wm.windows.mitems:
     window.active = false
 
-proc activateWindow(wm: EditorWindowManager, index: int) =
+proc activateWindow*(wm: EditorWindowManager, index: int) =
   ## Activate a specific window by index and update activeWindowIndex
   if index >= 0 and index < wm.windows.len:
     wm.deactivateAllWindows()
@@ -151,7 +151,9 @@ proc groupWindowsByXAndWidth*(wm: EditorWindowManager): seq[seq[int]] =
 proc equalizeWidthsInGroup*(
     wm: EditorWindowManager, group: seq[int], totalWidth: int, startX: int
 ) =
-  ## Equalize widths of windows in a horizontal group
+  ## Equalize widths of windows in a horizontal group.
+  ## Windows with fixedWidth are allocated their fixed size first;
+  ## remaining space is distributed equally among flexible windows.
   if group.len <= 1:
     return
 
@@ -161,28 +163,56 @@ proc equalizeWidthsInGroup*(
       cmp(wm.windows[a].viewport.x, wm.windows[b].viewport.x)
   )
 
+  let numSeparators = sortedGroup.len - 1
+
+  # Calculate fixed width consumption
+  var fixedWidthTotal = 0
+  var flexCount = 0
+  for idx in sortedGroup:
+    if wm.windows[idx].fixedWidth.isSome:
+      fixedWidthTotal += wm.windows[idx].fixedWidth.get
+    else:
+      flexCount += 1
+
   let
-    numSeparators = sortedGroup.len - 1
     availableWidth = totalWidth - numSeparators * WindowSeparatorWidth
-    windowWidth = availableWidth div sortedGroup.len
+    flexWidth =
+      if flexCount > 0:
+        max(1, (availableWidth - fixedWidthTotal) div flexCount)
+      else:
+        0
 
   var currentX = startX
   for i, idx in sortedGroup:
     wm.windows[idx].viewport.x = currentX
     if i == sortedGroup.len - 1:
-      # Last window gets remaining width
-      wm.windows[idx].viewport.width = (startX + totalWidth) - currentX
+      # Last window gets remaining width to fill the screen edge.
+      # For fixedWidth windows, use at least their fixed size.
+      let remaining = (startX + totalWidth) - currentX
+      wm.windows[idx].viewport.width =
+        if wm.windows[idx].fixedWidth.isSome:
+          max(wm.windows[idx].fixedWidth.get, remaining)
+        else:
+          remaining
     else:
-      wm.windows[idx].viewport.width = windowWidth
-      currentX += windowWidth + WindowSeparatorWidth
+      let w =
+        if wm.windows[idx].fixedWidth.isSome:
+          wm.windows[idx].fixedWidth.get
+        else:
+          flexWidth
+      wm.windows[idx].viewport.width = w
+      currentX += w + WindowSeparatorWidth
 
 proc equalizeWidthsForResize*(wm: EditorWindowManager, group: seq[int], newWidth: int) =
-  ## Equalize widths during window resize (handles single window case)
+  ## Equalize widths during window resize (handles single window case).
+  ## Windows with fixedWidth keep their size; remaining space is distributed.
   if group.len == 1:
-    let
-      idx = group[0]
-      minX = wm.windows[idx].viewport.x
-    wm.windows[idx].viewport.width = newWidth - minX
+    let idx = group[0]
+    if wm.windows[idx].fixedWidth.isSome:
+      wm.windows[idx].viewport.width = wm.windows[idx].fixedWidth.get
+    else:
+      let minX = wm.windows[idx].viewport.x
+      wm.windows[idx].viewport.width = newWidth - minX
     return
 
   var sortedGroup = group
@@ -196,17 +226,61 @@ proc equalizeWidthsForResize*(wm: EditorWindowManager, group: seq[int], newWidth
     minX = firstWindow.viewport.x
     availableWidth = newWidth - minX
     numSeparators = sortedGroup.len - 1
-    totalWidth = availableWidth - numSeparators * WindowSeparatorWidth
-    windowWidth = totalWidth div sortedGroup.len
+
+  # Calculate fixed width consumption
+  var fixedWidthTotal = 0
+  var flexCount = 0
+  for idx in sortedGroup:
+    if wm.windows[idx].fixedWidth.isSome:
+      fixedWidthTotal += wm.windows[idx].fixedWidth.get
+    else:
+      flexCount += 1
+
+  let
+    totalFlexWidth =
+      availableWidth - numSeparators * WindowSeparatorWidth - fixedWidthTotal
+    windowWidth =
+      if flexCount > 0:
+        max(1, totalFlexWidth div flexCount)
+      else:
+        0
 
   var currentX = minX
   for i, idx in sortedGroup:
     wm.windows[idx].viewport.x = currentX
     if i == sortedGroup.len - 1:
-      wm.windows[idx].viewport.width = (minX + availableWidth) - currentX
+      let remaining = (minX + availableWidth) - currentX
+      wm.windows[idx].viewport.width =
+        if wm.windows[idx].fixedWidth.isSome:
+          max(wm.windows[idx].fixedWidth.get, remaining)
+        else:
+          remaining
     else:
-      wm.windows[idx].viewport.width = windowWidth
-      currentX += windowWidth + WindowSeparatorWidth
+      let w =
+        if wm.windows[idx].fixedWidth.isSome:
+          wm.windows[idx].fixedWidth.get
+        else:
+          windowWidth
+      wm.windows[idx].viewport.width = w
+      currentX += w + WindowSeparatorWidth
+
+proc equalizeAllHorizontalGroups*(wm: EditorWindowManager) =
+  ## Equalize widths across all horizontal window groups, respecting fixedWidth.
+  let windowGroups = wm.groupWindowsByY()
+  for group in windowGroups:
+    if group.len > 1:
+      var sortedGroup = group
+      sortedGroup.sort(
+        proc(a, b: int): int =
+          cmp(wm.windows[a].viewport.x, wm.windows[b].viewport.x)
+      )
+      let
+        firstWindow = wm.windows[sortedGroup[0]]
+        lastWindow = wm.windows[sortedGroup[^1]]
+        totalWidth =
+          (lastWindow.viewport.x + lastWindow.viewport.width) - firstWindow.viewport.x
+        startX = firstWindow.viewport.x
+      wm.equalizeWidthsInGroup(sortedGroup, totalWidth, startX)
 
 proc equalizeHeightsInGroup*(
     wm: EditorWindowManager,

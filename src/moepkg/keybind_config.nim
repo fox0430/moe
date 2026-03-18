@@ -42,7 +42,7 @@ const allModeChoices* =
 
 proc parseModes(s: string): seq[EditorMode] =
   ## Parse mode string to seq of EditorMode enums.
-  ## Supports all 22 editor modes plus meta modes:
+  ## Supports all 23 editor modes plus meta modes:
   ## - "all": all modes except CommandLine
   ## - "visualall": Visual, VisualLine, VisualBlock
   ## Returns empty seq for unknown modes.
@@ -91,6 +91,8 @@ proc parseModes(s: string): seq[EditorMode] =
     @[EditorMode.CallHierarchy]
   of "terminal":
     @[EditorMode.Terminal]
+  of "filetree":
+    @[EditorMode.FileTree]
   of "all":
     var modes: seq[EditorMode] = @[]
     for m in EditorMode:
