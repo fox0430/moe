@@ -206,6 +206,18 @@ proc isMatchingPair*(openChar, closeChar: char): bool =
     return parenPairs[openChar] == closeChar
   return false
 
+proc isAdjacentPair*(line: string, pos: int): bool =
+  ## Check if the character at pos and pos+1 form a matching parenthesis pair.
+  ## pos is a character index (not byte position).
+  ## Returns true if line[pos] is an opening paren and line[pos+1] is its match.
+  if pos < 0 or pos + 1 >= line.runeLen:
+    return false
+  let openStr = $line.runeAtPos(pos)
+  let closeStr = $line.runeAtPos(pos + 1)
+  if openStr.len == 1 and closeStr.len == 1:
+    return isMatchingPair(openStr[0], closeStr[0])
+  return false
+
 # Bracket matching functions for % command
 proc isOpenBracket*(r: Rune): bool =
   ## Check if a rune is an opening bracket (for % command)

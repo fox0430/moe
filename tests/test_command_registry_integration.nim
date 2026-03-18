@@ -953,6 +953,178 @@ suite "Handler - Delete char operations":
     check result.isErr
     check "Nothing to delete" in result.error
 
+suite "Handler - Delete char auto-delete paren (x)":
+  test "x on opening bracket of adjacent pair deletes both":
+    # [] -> x on [ -> empty
+    let buffer = newTextBuffer("[]")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check buffer[0] == ""
+
+  test "x on opening paren of adjacent pair deletes both":
+    # () -> x on ( -> empty
+    let buffer = newTextBuffer("()")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check buffer[0] == ""
+
+  test "x on opening brace of adjacent pair deletes both":
+    # {} -> x on { -> empty
+    let buffer = newTextBuffer("{}")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check buffer[0] == ""
+
+  test "x on opening bracket with content only deletes bracket":
+    # [hello] -> x on [ -> hello]
+    let buffer = newTextBuffer("[hello]")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check buffer[0] == "hello]"
+
+  test "x on closing bracket does not auto-delete":
+    # [] -> x on ] -> [
+    let buffer = newTextBuffer("[]")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check buffer[0] == "["
+
+  test "x on bracket with spaces does not auto-delete":
+    # [   ] -> x on ] -> [
+    let buffer = newTextBuffer("[   ]")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 4)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check buffer[0] == "[   "
+
+  test "x on adjacent pair in middle of line":
+    # a()b -> x on ( -> ab
+    let buffer = newTextBuffer("a()b")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check buffer[0] == "ab"
+
+  test "x with autoDeleteParen disabled":
+    # [] -> x on [ with disabled -> ]
+    let buffer = newTextBuffer("[]")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = false
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check buffer[0] == "]"
+
+  test "x on adjacent quote pair":
+    # "" -> x on first " -> empty
+    let buffer = newTextBuffer("\"\"")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char")).isOk
+    check buffer[0] == ""
+
+suite "Handler - Delete char before auto-delete paren (X)":
+  test "X between adjacent pair deletes both":
+    # [] with cursor after [ -> X deletes both
+    let buffer = newTextBuffer("[]")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char.before")).isOk
+    check buffer[0] == ""
+    check ctx.cursor.column == 0
+
+  test "X on closing bracket with content only deletes bracket":
+    # [hello] with cursor on ] -> X deletes only char before (o not ])
+    let buffer = newTextBuffer("[hello]")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 6)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char.before")).isOk
+    check buffer[0] == "[hell]"
+
+  test "X between adjacent brace pair":
+    # {} with cursor after { -> X deletes both
+    let buffer = newTextBuffer("{}")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char.before")).isOk
+    check buffer[0] == ""
+    check ctx.cursor.column == 0
+
+  test "X with autoDeleteParen disabled":
+    # [] with cursor after [ -> X only deletes [
+    let buffer = newTextBuffer("[]")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = false
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char.before")).isOk
+    check buffer[0] == "]"
+    check ctx.cursor.column == 0
+
+  test "X between adjacent pair in middle of line":
+    # a()b with cursor between ( and ) -> X deletes both
+    let buffer = newTextBuffer("a()b")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char.before")).isOk
+    check buffer[0] == "ab"
+    check ctx.cursor.column == 1
+
+  test "X with bracket and spaces does not auto-delete":
+    # [   ] with cursor on ] -> X deletes space only
+    let buffer = newTextBuffer("[   ]")
+    let ctx = createTestContext(buffer)
+    ctx.state.display.autoDeleteParen = true
+    ctx.cursor = BufferPosition(line: 0, column: 4)
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("delete.char.before")).isOk
+    check buffer[0] == "[  ]"
+    check ctx.cursor.column == 3
+
 suite "Handler - Delete line operations":
   test "delete single line (dd)":
     let buffer = newTextBuffer("line1\nline2\nline3")
