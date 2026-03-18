@@ -836,6 +836,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langRust
   of ".bash", ".sh":
     return SourceLanguage.langShell
+  of ".tcl", ".tk", ".itcl", ".itk":
+    return SourceLanguage.langTcl
   of ".toml":
     return SourceLanguage.langToml
   of ".cff", ".yaml", ".yml":

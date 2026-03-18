@@ -789,3 +789,15 @@ suite "Highlight - detectLanguage":
 
   test "detectLanguage for LaTeX .dtx":
     check detectLanguage("package.dtx") == SourceLanguage.langLatex
+
+  test "detectLanguage for Tcl .tcl":
+    check detectLanguage("script.tcl") == SourceLanguage.langTcl
+
+  test "detectLanguage for Tcl .tk":
+    check detectLanguage("gui.tk") == SourceLanguage.langTcl
+
+  test "detectLanguage for Tcl .itcl":
+    check detectLanguage("class.itcl") == SourceLanguage.langTcl
+
+  test "detectLanguage for Tcl .itk":
+    check detectLanguage("widget.itk") == SourceLanguage.langTcl

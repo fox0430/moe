@@ -156,6 +156,7 @@ type
     langPython
     langRust
     langShell
+    langTcl
     langToml
     langYaml
     langJson
@@ -184,8 +185,8 @@ const
   sourceLanguageToStr*: array[SourceLanguage, string] = [
     "none", "Astro", "C", "COMMIT_EDITMSG", "C++", "C#", "Diff", "git-rebase-todo",
     "Haskell", "HTML", "Java", "JavaScript", "JavaScriptReact", "LaTeX", "Lisp",
-    "Markdown", "Nim", "Python", "Rust", "Shell", "Toml", "Yaml", "Json", "TypeScript",
-    "TypeScriptReact",
+    "Markdown", "Nim", "Python", "Rust", "Shell", "Tcl", "Toml", "Yaml", "Json",
+    "TypeScript", "TypeScriptReact",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
@@ -283,7 +284,7 @@ import
   syntaxastro, syntaxc, syntaxcommiteditmsg, syntaxcpp, syntaxcsharp, syntaxdiff,
   syntaxgitrebasetodo, syntaxhaskell, syntaxhtml, syntaxjava, syntaxjavascript,
   syntaxlatex, syntaxlisp, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust,
-  syntaxshell, syntaxyaml, syntaxtoml, syntaxjson, syntaxtypescript
+  syntaxshell, syntaxtcl, syntaxyaml, syntaxtoml, syntaxjson, syntaxtypescript
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -305,6 +306,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langPython: g.pythonNextToken
   of langRust: g.rustNextToken
   of langShell: g.shellNextToken
+  of langTcl: g.tclNextToken
   of langToml: g.tomlNextToken
   of langYaml: g.yamlNextToken
   of langJson: g.jsonNextToken
