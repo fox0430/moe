@@ -96,6 +96,7 @@ type
     claRmapclear # :rmapclear (replace mode)
     claCmapclear # :cmapclear (command-line mode)
     claOnlyWindow # :only (close all other windows)
+    claEditConfigFile # :moerc (open config file for editing)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -227,6 +228,8 @@ type
     of claMapclear, claNmapclear, claImapclear, claVmapclear, claRmapclear, claCmapclear:
       discard
     of claOnlyWindow:
+      discard
+    of claEditConfigFile:
       discard
     of claUnknown:
       errorMessage*: string
@@ -939,6 +942,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claCmapclear)
   of claOnlyWindow:
     return CommandLineResult(kind: claOnlyWindow)
+  of claEditConfigFile:
+    return CommandLineResult(kind: claEditConfigFile)
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

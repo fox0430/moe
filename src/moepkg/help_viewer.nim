@@ -383,6 +383,8 @@ help - Open this help
 
 putconfigfile - Put a sample configuration file in ~/.config/moe
 
+moerc - Open the configuration file (moerc.toml) for editing
+
 quickrun - Quick run
 
 recent - Open recent file selection mode (Only supported on Linux)

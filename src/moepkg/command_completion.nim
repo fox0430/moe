@@ -176,6 +176,7 @@ const CommandDescriptions = {
   "rmapclear": "Clear mappings (Replace mode)",
   "cmapclear": "Clear mappings (Command mode)",
   "only": "Close all other windows",
+  "moerc": "Open config file",
 }.toTable
 
 # Commands that take file path arguments
