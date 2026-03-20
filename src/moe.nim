@@ -235,13 +235,17 @@ proc main() =
   let appConfig = AppConfig(
     title: "moe",
     alternateScreen: true,
-    mouseCapture: true,
+    mouseCapture: false,
     rawMode: true,
     windowMode: false,
     bracketedPaste: true,
   )
   var app = newAsyncApp(appConfig)
   editor.app = app
+
+  # Enable mouse capture if configured
+  if editorConfig.standard.mouse:
+    app.enableMouse()
 
   # Set up LSP diagnostics callback to update buffer markers
   editor.lsp.setDiagnosticsCallback(
