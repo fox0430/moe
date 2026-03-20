@@ -78,6 +78,7 @@ const CommandNameTable* = {
   "lspcallhierarchyoutgoing": claLspCallHierarchyOutgoing,
   "terminal": claTerminal,
   "only": claOnlyWindow,
+  "editconfigfile": claEditConfigFile,
   "filetree": claFileTree,
 }.toTable
 
@@ -275,6 +276,9 @@ proc loadDefaultConfig*(config: CommandConfig) =
 
   # Only window (close all other windows)
   config.addAlias("only", claOnlyWindow)
+
+  # Edit config file
+  config.addAlias("moerc", claEditConfigFile)
 
   # Key mapping clear commands
   config.addAlias("mapclear", claMapclear)

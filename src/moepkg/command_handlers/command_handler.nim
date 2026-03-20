@@ -27,7 +27,7 @@
 
 import std/[options, strutils, os]
 
-import ../[buffer, modes, command_line, command_config, command_registry]
+import ../[buffer, modes, command_line, command_config, command_registry, config_loader]
 
 type
   BoolSettingOption* = enum
@@ -1173,6 +1173,10 @@ proc handleCommandModeInput*(
     return CommandModeResult(kind: cmrMapClear, mapClearModes: modes)
   of claOnlyWindow:
     return CommandModeResult(kind: cmrOnlyWindow)
+  of claEditConfigFile:
+    let configPath = getConfigPath()
+    return
+      CommandModeResult(kind: cmrEdit, editFilename: some(configPath), forceEdit: false)
   of claFileTree:
     return CommandModeResult(
       kind: cmrFileTree,

@@ -176,6 +176,7 @@ const CommandDescriptions = {
   "rmapclear": "Clear mappings (Replace mode)",
   "cmapclear": "Clear mappings (Command mode)",
   "only": "Close all other windows",
+  "moerc": "Open config file",
   "filetree": "Toggle FileTree sidebar",
 }.toTable
 

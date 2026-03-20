@@ -650,6 +650,7 @@ suite "CommandLine - execute additional commands":
     parser.addAlias("debug", claDebug)
     parser.addAlias("conf", claConfig)
     parser.addAlias("putconfigfile", claPutConfigFile)
+    parser.addAlias("moerc", claEditConfigFile)
     parser.addAlias("stripws", claStripWhitespace)
     parser.addAlias("lsplog", claLspLog)
     parser.addAlias("lspformat", claLspFormat)
@@ -792,6 +793,10 @@ suite "CommandLine - execute additional commands":
   test "Execute :putConfigFile":
     let result = parser.parseAndExecute(":putconfigfile")
     check result.kind == claPutConfigFile
+
+  test "Execute :moerc":
+    let result = parser.parseAndExecute(":moerc")
+    check result.kind == claEditConfigFile
 
   test "Execute :stripws":
     let result = parser.parseAndExecute(":stripws")

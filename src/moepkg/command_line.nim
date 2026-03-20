@@ -96,6 +96,7 @@ type
     claRmapclear # :rmapclear (replace mode)
     claCmapclear # :cmapclear (command-line mode)
     claOnlyWindow # :only (close all other windows)
+    claEditConfigFile # :moerc (open config file for editing)
     claFileTree # :filetree (toggle file tree sidebar)
     claUnknown # Unknown command
 
@@ -228,6 +229,8 @@ type
     of claMapclear, claNmapclear, claImapclear, claVmapclear, claRmapclear, claCmapclear:
       discard
     of claOnlyWindow:
+      discard
+    of claEditConfigFile:
       discard
     of claFileTree:
       fileTreePath*: Option[string] # Optional root path for file tree
@@ -943,6 +946,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claCmapclear)
   of claOnlyWindow:
     return CommandLineResult(kind: claOnlyWindow)
+  of claEditConfigFile:
+    return CommandLineResult(kind: claEditConfigFile)
   of claFileTree:
     return CommandLineResult(
       kind: claFileTree,
