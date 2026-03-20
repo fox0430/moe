@@ -17,11 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils]
+import std/[unittest, strutils, os, osproc]
 
 import pkg/results
 
 import ../src/moepkg/registers
+import ../src/moepkg/clipboard {.all.}
+import ../src/moepkg/config
 
 suite "Registers":
   test "initRegisters creates empty registers":
@@ -378,3 +380,161 @@ suite "Registers":
     check r.getNumberRegister(0).getContent() == "yanked"
     # Delete should stay in register 1
     check r.getNumberRegister(1).getContent() == "deleted\nline"
+
+  test "getNoNamedRegister without clipboard tool returns internal register":
+    let r = initRegisters()
+    r.setYankedRegister("internal", false)
+
+    # Without clipboard tool, should just return internal register
+    check r.getNoNamedRegister().getContent() == "internal"
+
+proc isToolAvailable(cmd: string): bool =
+  try:
+    let (_, exitCode) = execCmdEx("which " & cmd)
+    result = exitCode == 0
+  except CatchableError:
+    result = false
+
+proc isXselAvailable(): bool =
+  existsEnv("DISPLAY") and isToolAvailable("xsel")
+
+proc isXclipAvailable(): bool =
+  existsEnv("DISPLAY") and isToolAvailable("xclip")
+
+proc isWlClipboardAvailable(): bool =
+  existsEnv("WAYLAND_DISPLAY") and isToolAvailable("wl-copy")
+
+proc getAvailableTool(): (bool, ClipboardTool) =
+  if isWlClipboardAvailable():
+    return (true, cbtWlClipboard)
+  elif isXselAvailable():
+    return (true, cbtXsel)
+  elif isXclipAvailable():
+    return (true, cbtXclip)
+  return (false, cbtXsel)
+
+proc readPrimaryWithRetry(
+    tool: ClipboardTool, expected: string, maxRetries: int = 10, delayMs: int = 100
+): Result[string, string] =
+  ## Retry reading from PRIMARY selection until the expected value is returned.
+  ## Async writes may not be ready immediately.
+  for i in 0 ..< maxRetries:
+    result = readFromPrimarySelectionSync(tool)
+    if result.isOk and result.get() == expected:
+      return
+    sleep(delayMs)
+  return readFromPrimarySelectionSync(tool)
+
+proc cleanup(tool: ClipboardTool) =
+  ## Clean up clipboard tool processes spawned by async writes during tests.
+  ## Uses -f flag to match only processes started from the test's working dir,
+  ## avoiding killing unrelated user processes.
+  let pid = getCurrentProcessId()
+  case tool
+  of cbtXsel:
+    discard execCmdEx("pkill -P " & $pid & " xsel")
+  of cbtXclip:
+    discard execCmdEx("pkill -P " & $pid & " xclip")
+  else:
+    discard
+  sleep(100)
+
+suite "Registers clipboard integration":
+  test "getNoNamedRegister syncs from system clipboard":
+    let (available, tool) = getAvailableTool()
+    if not available:
+      skip()
+    else:
+      let r = initRegisters()
+      r.setClipboardTool(tool)
+      r.setYankedRegister("old internal", false)
+
+      # Write directly to system clipboard (simulating external app copy)
+      let testText = "external clipboard content"
+      let writeResult = writeToClipboardSync(tool, testText)
+      check writeResult.isOk
+
+      # getNoNamedRegister should pick up the external clipboard content
+      let reg = r.getNoNamedRegister()
+      check reg.getContent() == testText
+
+      cleanup(tool)
+
+  test "getNoNamedRegister syncs from PRIMARY selection":
+    let (available, tool) = getAvailableTool()
+    if not available:
+      skip()
+    else:
+      let r = initRegisters()
+      r.setClipboardTool(tool)
+      r.setYankedRegister("old internal", false)
+
+      # Write directly to PRIMARY selection (simulating mouse selection in browser)
+      let testText = "mouse selected text"
+      let writeResult = writeToPrimarySelectionSync(tool, testText)
+      check writeResult.isOk
+
+      # getNoNamedRegister should pick up the PRIMARY selection content
+      let reg = r.getNoNamedRegister()
+      check reg.getContent() == testText
+
+      cleanup(tool)
+
+  test "setNoNamedRegister writes to PRIMARY selection":
+    let (available, tool) = getAvailableTool()
+    if not available:
+      skip()
+    else:
+      let r = initRegisters()
+      r.setClipboardTool(tool)
+
+      let testText = "primary selection test"
+      r.setNoNamedRegister(testText, false)
+
+      # Read back from PRIMARY selection (with retry for async write)
+      let readResult = readPrimaryWithRetry(tool, testText)
+      check readResult.isOk
+      check readResult.get() == testText
+
+      cleanup(tool)
+
+  test "setNoNamedRegister writes to both CLIPBOARD and PRIMARY":
+    let (available, tool) = getAvailableTool()
+    if not available:
+      skip()
+    else:
+      let r = initRegisters()
+      r.setClipboardTool(tool)
+
+      let testText = "dual clipboard test"
+      r.setNoNamedRegister(testText, false)
+
+      # Allow async writes to complete
+      sleep(200)
+
+      let clipResult = readFromClipboardSync(tool)
+      check clipResult.isOk
+      check clipResult.get() == testText
+
+      let primaryResult = readPrimaryWithRetry(tool, testText)
+      check primaryResult.isOk
+      check primaryResult.get() == testText
+
+      cleanup(tool)
+
+  test "yank syncs to PRIMARY selection":
+    let (available, tool) = getAvailableTool()
+    if not available:
+      skip()
+    else:
+      let r = initRegisters()
+      r.setClipboardTool(tool)
+
+      let testText = "yanked to primary"
+      r.setYankedRegister(testText, false)
+
+      let primaryResult = readPrimaryWithRetry(tool, testText)
+      check primaryResult.isOk
+      check primaryResult.get() == testText
+
+      cleanup(tool)
