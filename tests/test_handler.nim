@@ -2381,6 +2381,70 @@ suite "middleClickPaste":
       let line = e.textBuffer.getLine(0)
       check ($line).len > 5 # Text was inserted
 
+suite "handlePasteEvent":
+  proc createTestEditorForPaste(content: string): Editor =
+    let config = newEditorConfig()
+    result = newEditor(config)
+    result.textBuffer = newTextBuffer(content)
+    result.windowManager.windows[0].buffer = result.textBuffer
+    result.windowManager.windows[0].bufferList = @[result.textBuffer]
+    result.viewport =
+      ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
+    result.windowManager.windows[0].viewport = result.viewport
+    result.executer.motionController.viewportManager.viewport = result.viewport
+
+  proc makePasteEvent(text: string): Event =
+    Event(kind: EventKind.Paste, pastedText: text)
+
+  test "Insert mode with active transaction - paste succeeds":
+    let e = createTestEditorForPaste("hello")
+    e.state.mode = EditorMode.Insert
+    discard e.textBuffer.beginTransaction("Insert mode edit")
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 5)
+    e.state.cursor = BufferPosition(line: 0, column: 5)
+
+    let event = makePasteEvent(" world")
+    discard e.handleEvent(event)
+
+    check $e.textBuffer.getLine(0) == "hello world"
+    # Transaction should still be active (owned by Insert mode, not paste)
+    check e.textBuffer.inTransaction
+
+  test "Insert mode without transaction - paste creates own transaction":
+    let e = createTestEditorForPaste("hello")
+    e.state.mode = EditorMode.Insert
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 5)
+    e.state.cursor = BufferPosition(line: 0, column: 5)
+
+    let event = makePasteEvent(" world")
+    discard e.handleEvent(event)
+
+    check $e.textBuffer.getLine(0) == "hello world"
+    # Transaction should have been committed by paste
+    check not e.textBuffer.inTransaction
+
+  test "Insert mode with active transaction - multiline paste":
+    let e = createTestEditorForPaste("hello")
+    e.state.mode = EditorMode.Insert
+    discard e.textBuffer.beginTransaction("Insert mode edit")
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 5)
+    e.state.cursor = BufferPosition(line: 0, column: 5)
+
+    let event = makePasteEvent("\nworld")
+    discard e.handleEvent(event)
+
+    check e.textBuffer.len >= 2
+    check e.textBuffer.inTransaction
+
+  test "Non-Insert mode - paste shows unsupported message":
+    let e = createTestEditorForPaste("hello")
+    e.state.mode = EditorMode.Normal
+
+    let event = makePasteEvent("text")
+    discard e.handleEvent(event)
+
+    check e.state.statusMessage == "Paste not supported in this mode"
+
 suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
   let quitEvent = Event(kind: EventKind.Quit)
 

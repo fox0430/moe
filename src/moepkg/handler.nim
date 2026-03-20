@@ -287,11 +287,15 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
   # Handle paste differently based on mode
   case e.state.mode
   of EditorMode.Insert:
-    # In Insert mode: Insert text directly without auto-indentation
-    let transactionResult = activeBuffer.beginTransaction("Paste")
-    if transactionResult.isErr:
-      e.state.statusMessage = "Paste failed: " & transactionResult.error
-      return true
+    # In Insert mode: Insert text directly without auto-indentation.
+    # If a transaction is already active (e.g. Insert mode edit), use it
+    # instead of starting a new one so the paste is part of the same undo group.
+    let ownTransaction = not activeBuffer.inTransaction
+    if ownTransaction:
+      let transactionResult = activeBuffer.beginTransaction("Paste")
+      if transactionResult.isErr:
+        e.state.statusMessage = "Paste failed: " & transactionResult.error
+        return true
 
     var pos = e.cursor
     discard activeBuffer.insertText(pos, pastedText)
@@ -309,7 +313,8 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
     e.activeWindow.cursor.line = newLine
     e.activeWindow.cursor.column = newColumn
 
-    discard activeBuffer.commitTransaction()
+    if ownTransaction:
+      discard activeBuffer.commitTransaction()
     e.state.needsFullRedraw = true
   else:
     # For other modes, just show a message
