@@ -107,6 +107,17 @@ In the sidebar, bookmark markers take priority over git/session change indicator
 | `q` / `Escape` | Close Bookmark Manager |
 | `:` | Enter command mode |
 
+## FileTree
+
+moe has a file tree sidebar that displays the directory structure alongside the editor window.
+
+- `:filetree` - Open the fileTree sidebar. If already open, it closes and reopens.
+- Can also be opened automatically on startup via `[StartUp.FileTree]` in the configuration file.
+
+The fileTree supports navigation (`j`/`k`/`gg`/`G`), expanding/collapsing directories (`Enter`/`o`/`x`), changing root (`C`/`u`), incremental search (`/`/`n`/`N`), and toggling hidden files (`.`).
+
+See [How to use - FileTree Mode](howtouse.md#filetree-mode) for key bindings.
+
 ## Runtime Key Mapping
 
 moe supports Vim-like runtime key mapping commands. You can remap keys during an editing session using Command mode commands.

@@ -20,7 +20,7 @@
 ## Tests for handler_manager.nim
 ## This module tests the unified handler manager functionality.
 
-import std/[unittest, options, tables, strutils]
+import std/[unittest, options, tables, strutils, os, tempfiles]
 
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/types {.all.}
@@ -31,10 +31,12 @@ import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/registers {.all.}
 import ../src/moepkg/command_line {.all.}
 import ../src/moepkg/command_config {.all.}
+import ../src/moepkg/filetree {.all.}
 import ../src/moepkg/command_handlers/handler_manager {.all.}
 import ../src/moepkg/command_handlers/command_handler {.all.}
 import ../src/moepkg/command_handlers/visual_handler {.all.}
 import ../src/moepkg/command_handlers/insert_handler {.all.}
+import ../src/moepkg/command_handlers/filetree_handler {.all.}
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
@@ -92,6 +94,7 @@ proc createTestManager(): HandlerManager =
     commandHandler: commandHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
+    fileTreeHandler: newFileTreeHandler(),
   )
 
 suite "HandlerManager - Overlay Transitions":
@@ -1092,6 +1095,7 @@ proc createTestManagerWithMotion(
     commandHandler: commandHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
+    fileTreeHandler: newFileTreeHandler(),
   )
 
 suite "HandlerManager - Ctrl+O Insert-Normal mode":
@@ -2005,3 +2009,91 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     check result.kind == hrQuit
     check not state.insertNormalMode
     check not buffer.inTransaction
+
+suite "HandlerManager - FileTree search statusMessage":
+  test "/ sets statusMessage to search prompt":
+    let tmpDir = createTempDir("moe_test_", "_ftmgr")
+    defer:
+      removeDir(tmpDir)
+
+    writeFile(tmpDir / "file.txt", "hello")
+
+    let manager = createTestManager()
+    let state = createTestState()
+    state.mode = EditorMode.FileTree
+    let fileTreeState = newFileTreeState(tmpDir)
+
+    let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
+    let r1 = manager.handleFileTreeMode(fileTreeState, state, 20, slashKey)
+    check r1.kind == hrHandled
+    check manager.fileTreeHandler.isSearching == true
+    # statusMessage should show the search prompt
+    check state.statusMessage == "/"
+
+  test "typing during search updates statusMessage":
+    let tmpDir = createTempDir("moe_test_", "_ftmgr2")
+    defer:
+      removeDir(tmpDir)
+
+    writeFile(tmpDir / "README.md", "readme")
+
+    let manager = createTestManager()
+    let state = createTestState()
+    state.mode = EditorMode.FileTree
+    let fileTreeState = newFileTreeState(tmpDir)
+
+    # Start search
+    let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
+    discard manager.handleFileTreeMode(fileTreeState, state, 20, slashKey)
+
+    # Type "R"
+    let rKey = KeyCombo(isSpecial: false, char: "R", modifiers: {})
+    discard manager.handleFileTreeMode(fileTreeState, state, 20, rKey)
+    check state.statusMessage == "/R"
+
+  test "Enter confirms search and sets statusMessage":
+    let tmpDir = createTempDir("moe_test_", "_ftmgr3")
+    defer:
+      removeDir(tmpDir)
+
+    writeFile(tmpDir / "README.md", "readme")
+
+    let manager = createTestManager()
+    let state = createTestState()
+    state.mode = EditorMode.FileTree
+    let fileTreeState = newFileTreeState(tmpDir)
+
+    # Start search, type, confirm
+    let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
+    discard manager.handleFileTreeMode(fileTreeState, state, 20, slashKey)
+    let rKey = KeyCombo(isSpecial: false, char: "R", modifiers: {})
+    discard manager.handleFileTreeMode(fileTreeState, state, 20, rKey)
+
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard manager.handleFileTreeMode(fileTreeState, state, 20, enterKey)
+    check manager.fileTreeHandler.isSearching == false
+    check state.statusMessage == "/R"
+
+  test "Escape cancels search and clears statusMessage":
+    let tmpDir = createTempDir("moe_test_", "_ftmgr4")
+    defer:
+      removeDir(tmpDir)
+
+    writeFile(tmpDir / "README.md", "readme")
+
+    let manager = createTestManager()
+    let state = createTestState()
+    state.mode = EditorMode.FileTree
+    let fileTreeState = newFileTreeState(tmpDir)
+
+    # Start search, type, cancel
+    let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
+    discard manager.handleFileTreeMode(fileTreeState, state, 20, slashKey)
+    let rKey = KeyCombo(isSpecial: false, char: "R", modifiers: {})
+    discard manager.handleFileTreeMode(fileTreeState, state, 20, rKey)
+
+    let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    discard manager.handleFileTreeMode(fileTreeState, state, 20, escKey)
+    check manager.fileTreeHandler.isSearching == false
+    # After cancel, statusMessage should be empty (clearSearch returns "")
+    check state.statusMessage == ""

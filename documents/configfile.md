@@ -868,6 +868,18 @@ Please check more [details](https://github.com/fox0430/moe/blob/develop/document
 | autoSplit | bool | true | Display all buffers in multiple views if multiple paths are received when starting the editor |
 | splitType | string | vertical | The split type for `StartUp.FileOpen.autoSplit` |
 
+### FileTree table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| width | int | 30 | Width of the fileTree sidebar |
+
+### StartUp.FileTree table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | false | Open the fileTree sidebar automatically on startup |
+
 
 ### CommandAliases table
 

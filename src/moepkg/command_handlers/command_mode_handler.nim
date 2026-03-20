@@ -28,10 +28,11 @@ import pkg/[celina, results, chronos]
 
 import
   ../[
-    editor, key_bindings, modes, buffer, logger, types, motion, filer, quick_run_utils,
-    help_viewer, buffer_manager, bookmark_manager, backup_manager, backup, debug_viewer,
-    config_loader, message_log, command_line, color, theme, terminal_mode,
-    command_completion, render_utils, config_mode, log_viewer, syntax_checker,
+    editor, key_bindings, modes, buffer, logger, types, motion, filer, filetree,
+    quick_run_utils, help_viewer, buffer_manager, bookmark_manager, backup_manager,
+    backup, debug_viewer, config_loader, message_log, command_line, color, theme,
+    terminal_mode, command_completion, render_utils, config_mode, log_viewer,
+    syntax_checker, window_manager,
   ]
 import handler_manager
 
@@ -106,6 +107,88 @@ proc enterFilerInActiveWindow*(e: Editor, path: string) =
   activeWin.cursor = BufferPosition(line: 0, column: 0)
   activeWin.viewport.topLine = 0
   activeWin.viewport.leftColumn = 0
+
+proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffer) =
+  ## Toggle the fileTree sidebar. If one already exists, close it.
+  ## If none exists, open one.
+  var existingIdx = -1
+  for i, win in e.windowManager.windows:
+    if win.mode == EditorMode.FileTree:
+      existingIdx = i
+      break
+
+  if existingIdx >= 0:
+    # Close existing fileTree window
+    e.windowManager.activateWindow(existingIdx)
+    e.syncActiveWindow()
+    e.activeWindow.clearModeState(EditorMode.FileTree)
+    discard e.closeWindow()
+    return
+
+  # Create fileTree window as left-side vsplit (follows vsplit pattern)
+  let rootPath =
+    if pathOpt.isSome:
+      pathOpt.get
+    elif activeBuffer.filePath.isSome:
+      parentDir(activeBuffer.filePath.get)
+    else:
+      getCurrentDir()
+
+  let ftState = newFileTreeState(rootPath, e.config.fileTree.width)
+  let ftBuffer = ftState.createFileTreeTextBuffer(e.config.filer.showIcons)
+  let ftWidth = ftState.width
+
+  # Compute full extent across ALL windows for filetree's full-height span
+  var minX = int.high
+  var maxXEnd = 0
+  var minY = int.high
+  var maxYEnd = 0
+  for win in e.windowManager.windows:
+    minX = min(minX, win.viewport.x)
+    maxXEnd = max(maxXEnd, win.viewport.x + win.viewport.width)
+    minY = min(minY, win.viewport.y)
+    maxYEnd = max(maxYEnd, win.viewport.y + win.viewport.height)
+
+  let
+    totalWidth = maxXEnd - minX
+    startX = minX
+    fullHeight = maxYEnd - minY
+
+  e.windowManager.deactivateAllWindows()
+
+  let ftWindow = EditorWindow(
+    buffer: ftBuffer,
+    bufferList: @[ftBuffer],
+    viewport: ViewPort(
+      topLine: 0, leftColumn: 0, width: ftWidth, height: fullHeight, x: startX, y: minY
+    ),
+    cursor: BufferPosition(line: 0, column: 0),
+    active: false,
+    mode: EditorMode.FileTree,
+    fileTreeState: some(ftState),
+    fixedWidth: some(ftWidth),
+  )
+
+  e.windowManager.windows.insert(ftWindow, 0)
+  e.windowManager.activeWindowIndex += 1
+  e.windowManager.windows[e.windowManager.activeWindowIndex].active = true
+
+  # Group by Y-row and equalize each row's widths
+  var yRows: seq[int] = @[]
+  for i in 1 ..< e.windowManager.windows.len:
+    let y = e.windowManager.windows[i].viewport.y
+    if y notin yRows:
+      yRows.add(y)
+
+  for y in yRows:
+    var group: seq[int] = @[0] # filetree spans all rows (fullHeight)
+    for i in 1 ..< e.windowManager.windows.len:
+      if e.windowManager.windows[i].viewport.y == y:
+        group.add(i)
+    e.windowManager.equalizeWidthsInGroup(group, totalWidth, startX)
+
+  e.syncActiveWindow()
+  e.state.needsFullRedraw = true
 
 proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ## Update or cancel the live substitute preview based on the current command
@@ -802,6 +885,11 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         e.state.exitOverlay()
         e.state.previousMode = baseModeBeforeOverlay
         e.enterTerminalInActiveWindow(r.enterTerminalCommand)
+      of hrEnterFileTree:
+        overlayHandled = true
+        e.state.exitOverlay()
+        e.setMode(e.state.mode)
+        e.toggleFileTree(r.enterFileTreePath, activeBuffer)
       of hrEnterLogViewer:
         overlayHandled = true
         # Open LogViewer in a new split window for editor messages - exit overlay first
@@ -1239,7 +1327,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           hrLspCodeLensExecute, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
           hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit,
           hrConfigSaveConfig, hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit,
-          hrExecCommand:
+          hrExecCommand, hrFileTreeOpenFile, hrFileTreeQuit:
         discard # Not returned from command mode handler
 
       if not overlayHandled:

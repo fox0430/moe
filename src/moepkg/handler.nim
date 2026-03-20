@@ -184,8 +184,10 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       e.state.statusMessage = "Opened: " & filePath
     e.state.needsFullRedraw = true
     return true
-  of hrHandled, hrUnhandled, hrError:
+  of hrHandled, hrUnhandled:
     discard # Fall through to overlay/mode transition handling
+  of hrError:
+    e.state.statusMessage = r.errorMessage
   of hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrNew, hrVnew, hrEnew,
       hrEdit, hrSetBoolOption, hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight,
       hrSave, hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
@@ -211,7 +213,8 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       hrDocumentSymbolJumpTo, hrEnterDocumentSymbol, hrCallHierarchyQuit,
       hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
       hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrEnterTerminal,
-      hrTerminalQuit, hrExecCommand, hrOnlyWindow:
+      hrTerminalQuit, hrExecCommand, hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile,
+      hrFileTreeQuit:
     discard # Not expected from RecentFile mode handler
 
   # Handle overlay transitions (e.g., entering Command mode with :)
@@ -680,7 +683,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
 
   return false
 
-proc handleWindowCommand(e: Editor, keyCombo: KeyCombo, syncState: bool): Option[bool] =
+proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
   ## Handle Ctrl-W window command second key (j/k/c).
   ## Returns some(true) if handled, some(false) if last window closed (quit),
   ## none if not a window command key.
@@ -689,20 +692,14 @@ proc handleWindowCommand(e: Editor, keyCombo: KeyCombo, syncState: bool): Option
     if not keyCombo.isSpecial:
       if keyCombo.char == "j":
         e.switchToPrevWindow
-        if syncState:
-          e.syncStateFromWindow()
         return some(true)
       elif keyCombo.char == "k":
         e.switchToNextWindow
-        if syncState:
-          e.syncStateFromWindow()
         return some(true)
       elif keyCombo.char == "c":
         let shouldQuit = e.closeWindow()
         if shouldQuit:
           return some(false)
-        if syncState:
-          e.syncStateFromWindow()
         return some(true)
     return some(true) # Unknown window command, cancel
 
@@ -1010,7 +1007,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
         e.state.pendingCommand = PendingNone
         return true
 
-      let winCmd = e.handleWindowCommand(keyCombo, syncState = true)
+      let winCmd = e.handleWindowCommand(keyCombo)
       if winCmd.isSome:
         return winCmd.get
 
@@ -1200,6 +1197,45 @@ proc handleEvent*(e: Editor, event: Event): bool =
     e.activeWindow.clearModeState(EditorMode.Terminal)
     e.activeWindow.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
+    return true
+  of hrFileTreeOpenFile:
+    # Open file from file tree in the first non-FileTree window
+    var targetWinIdx = -1
+    for i, win in e.windowManager.windows:
+      if win.mode != EditorMode.FileTree:
+        targetWinIdx = i
+        break
+    if targetWinIdx >= 0:
+      # Reveal the opened file in the file tree
+      for win in e.windowManager.windows:
+        if win.mode == EditorMode.FileTree and win.fileTreeState.isSome:
+          win.fileTreeState.get.revealPath(r.fileTreeFilePath)
+          break
+
+      # Switch to the target window and open the file
+      # editFile adds to the buffer list without discarding unsaved changes
+      e.windowManager.activateWindow(targetWinIdx)
+      e.syncActiveWindow()
+      let editResult = e.editFile(r.fileTreeFilePath)
+      if editResult.isErr:
+        e.state.statusMessage = "Error: " & editResult.error
+      else:
+        e.state.statusMessage = "Opened: " & r.fileTreeFilePath
+    else:
+      e.state.statusMessage = "No editor window available"
+    e.state.needsFullRedraw = true
+    return true
+  of hrFileTreeQuit:
+    # Close file tree window
+    e.activeWindow.clearModeState(EditorMode.FileTree)
+    # Remove file tree window and redistribute space
+    let shouldQuit = e.closeWindow()
+    if shouldQuit:
+      let enewResult = e.enew()
+      if enewResult.isErr:
+        logError("handler", "Enew failed after file tree quit: " & enewResult.error)
+        e.state.statusMessage = "Error: " & enewResult.error
+    e.state.needsFullRedraw = true
     return true
   of hrFilerDeleteFile:
     # Delete file/directory from filer
@@ -1670,8 +1706,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
     e.switchToLastBuffer()
   of hrBuffer:
     discard e.switchToBuffer(r.bufferArg)
-  of hrHandled, hrUnhandled, hrError:
+  of hrHandled, hrUnhandled:
     discard # Fall through to post-processing
+  of hrError:
+    e.state.statusMessage = r.errorMessage
   of hrCloseWindow:
     let shouldQuit = e.closeWindow()
     if shouldQuit:
@@ -1706,6 +1744,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
       else:
         getCurrentDir()
     e.enterFilerInActiveWindow(startPath)
+  of hrEnterFileTree:
+    let activeBuf = e.activeBuffer()
+    e.toggleFileTree(r.enterFileTreePath, activeBuf)
   of hrBufferDelete:
     let shouldQuit = e.closeWindow()
     if shouldQuit:
@@ -1825,6 +1866,15 @@ proc handleEvent*(e: Editor, event: Event): bool =
       filerWin.buffer =
         filerWin.filerState.get.createFilerTextBuffer(e.config.filer.showIcons)
       filerWin.filerState.get.needsBufferRefresh = false
+
+  # FileTree buffer regeneration after state changes (check all windows since
+  # the file tree sidebar may not be the active window)
+  for win in e.windowManager.windows:
+    if win.mode == EditorMode.FileTree and win.fileTreeState.isSome and
+        win.fileTreeState.get.needsBufferRefresh:
+      win.buffer =
+        win.fileTreeState.get.createFileTreeTextBuffer(e.config.filer.showIcons)
+      win.fileTreeState.get.needsBufferRefresh = false
 
   # Set status message if any
   let statusMsg = r.getStatusMessage()

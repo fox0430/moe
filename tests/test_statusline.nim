@@ -512,7 +512,7 @@ suite "StatusLine - buildRightSideInfo":
     var config = createTestStatusLineConfig()
     config.setupText = "{lineNumber}/{totalLines}"
 
-    let result = buildRightSideInfo(state, textBuffer, config, true)
+    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
 
     check result == " 1/1"
 
@@ -525,7 +525,7 @@ suite "StatusLine - buildRightSideInfo":
 
     # With empty setupText, default format is used
     # Default format depends on display settings
-    let result = buildRightSideInfo(state, textBuffer, config, true)
+    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
 
     # Result should contain percentage and line count based on display settings
     check "1/1" in result or "100%" in result
@@ -660,7 +660,9 @@ suite "StatusLine - renderWindowStatusLine":
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
     let config = createTestStatusLineConfig()
 
-    renderWindowStatusLine(state, textBuffer, displayBuffer, 10, 0, 80, true, config)
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, config
+    )
 
     let line = getBufferLine(displayBuffer, 10)
     check line.strip() == ""
@@ -674,7 +676,9 @@ suite "StatusLine - renderWindowStatusLine":
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
     let config = createTestStatusLineConfig()
 
-    renderWindowStatusLine(state, textBuffer, displayBuffer, 10, 0, 80, true, config)
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, config
+    )
 
     let line = getBufferLine(displayBuffer, 10)
     check line.strip() == ""
@@ -691,7 +695,9 @@ suite "StatusLine - renderWindowStatusLine":
     config.filename = true
     config.directory = false
 
-    renderWindowStatusLine(state, textBuffer, displayBuffer, 10, 0, 80, true, config)
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, config
+    )
 
     let line = getBufferLine(displayBuffer, 10)
     check "NORMAL" in line
@@ -710,7 +716,9 @@ suite "StatusLine - renderWindowStatusLine":
     config.filename = true
     config.directory = false
 
-    renderWindowStatusLine(state, textBuffer, displayBuffer, 10, 0, 80, false, config)
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 10, 0, 80, false, state.mode, config
+    )
 
     let line = getBufferLine(displayBuffer, 10)
     check "NORMAL" in line
@@ -728,7 +736,9 @@ suite "StatusLine - renderWindowStatusLine":
     config.filename = true
     config.directory = false
 
-    renderWindowStatusLine(state, textBuffer, displayBuffer, 10, 0, 80, false, config)
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 10, 0, 80, false, state.mode, config
+    )
 
     let line = getBufferLine(displayBuffer, 10)
     check "NORMAL" notin line
@@ -743,7 +753,9 @@ suite "StatusLine - renderWindowStatusLine":
     var config = createTestStatusLineConfig()
     config.directory = false
 
-    renderWindowStatusLine(state, textBuffer, displayBuffer, 15, 10, 60, true, config)
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 15, 10, 60, true, state.mode, config
+    )
 
     let line = getBufferLine(displayBuffer, 15)
     check "file.nim" in line
@@ -767,7 +779,9 @@ suite "StatusLine - renderWindowStatusLine":
     config.mode = false
 
     # Use a narrow width to force truncation
-    renderWindowStatusLine(state, textBuffer, displayBuffer, 10, 0, 30, true, config)
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 10, 0, 30, true, state.mode, config
+    )
 
     let line = getBufferLine(displayBuffer, 10)
     # Should not crash and should render something
@@ -990,7 +1004,7 @@ suite "StatusLine - buildRightSideInfo default format":
     var config = createTestStatusLineConfig()
     config.setupText = ""
 
-    let result = buildRightSideInfo(state, textBuffer, config, true)
+    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
 
     check "Nim" in result
 
@@ -1005,7 +1019,7 @@ suite "StatusLine - buildRightSideInfo default format":
     var config = createTestStatusLineConfig()
     config.setupText = ""
 
-    let result = buildRightSideInfo(state, textBuffer, config, true)
+    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
 
     check "UTF-8" in result
 
@@ -1021,7 +1035,7 @@ suite "StatusLine - buildRightSideInfo default format":
     var config = createTestStatusLineConfig()
     config.setupText = ""
 
-    let result = buildRightSideInfo(state, textBuffer, config, true)
+    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
 
     check "100%" in result
 
@@ -1037,7 +1051,7 @@ suite "StatusLine - buildRightSideInfo default format":
     var config = createTestStatusLineConfig()
     config.setupText = ""
 
-    let result = buildRightSideInfo(state, textBuffer, config, true)
+    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
 
     check "1/1" in result
 
@@ -1054,7 +1068,7 @@ suite "StatusLine - buildRightSideInfo default format":
     var config = createTestStatusLineConfig()
     config.setupText = ""
 
-    let result = buildRightSideInfo(state, textBuffer, config, true)
+    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
 
     check result == ""
 
@@ -1071,7 +1085,9 @@ suite "StatusLine - renderWindowStatusLine additional":
     var config = createTestStatusLineConfig()
     config.mode = true
 
-    renderWindowStatusLine(state, textBuffer, displayBuffer, 10, 0, 80, true, config)
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, config
+    )
 
     let line = getBufferLine(displayBuffer, 10)
     check "SEARCH" in line
@@ -1088,14 +1104,18 @@ suite "StatusLine - renderWindowStatusLine additional":
     config.directory = false
 
     # Active window should show progress
-    renderWindowStatusLine(state, textBuffer, displayBuffer, 10, 0, 80, true, config)
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 10, 0, 80, true, state.mode, config
+    )
 
     let activeLine = getBufferLine(displayBuffer, 10)
     check "Loading..." in activeLine
 
     # Reset buffer for inactive window test
     displayBuffer = createTestBuffer()
-    renderWindowStatusLine(state, textBuffer, displayBuffer, 10, 0, 80, false, config)
+    renderWindowStatusLine(
+      state, textBuffer, displayBuffer, 10, 0, 80, false, state.mode, config
+    )
 
     let inactiveLine = getBufferLine(displayBuffer, 10)
     check "Loading..." notin inactiveLine
@@ -1107,7 +1127,7 @@ suite "StatusLine - buildGitInfo":
     config.gitChangedLines = false
     config.gitBranchName = false
 
-    let result = buildGitInfo(textBuffer, config, true)
+    let result = buildGitInfo(textBuffer, EditorMode.Normal, config, true)
 
     check result == ""
 
@@ -1117,7 +1137,7 @@ suite "StatusLine - buildGitInfo":
     config.gitChangedLines = true
     config.gitBranchName = true
 
-    let result = buildGitInfo(textBuffer, config, true)
+    let result = buildGitInfo(textBuffer, EditorMode.Normal, config, true)
 
     check result == ""
 
@@ -1131,7 +1151,8 @@ suite "StatusLine - buildGitInfo":
     # Even with a file path, inactive window should not show git info
     # (unless showGitInactive is true)
     # This test verifies the condition check
-    let result = buildGitInfo(textBuffer, config, false) # isActiveWindow = false
+    let result = buildGitInfo(textBuffer, EditorMode.Normal, config, false)
+      # isActiveWindow = false
 
     # Result should be empty because showGitInactive is false
     check result == ""

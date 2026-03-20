@@ -50,6 +50,7 @@ type
     DocumentSymbol
     CallHierarchy
     Terminal
+    FileTree
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -110,6 +111,8 @@ proc modeLabel*(m: EditorMode, insertNormal: bool = false): string =
     "CALL HIERARCHY"
   of EditorMode.Terminal:
     "TERMINAL"
+  of EditorMode.FileTree:
+    "FILETREE"
 
 proc isVisualAllMode*(mode: EditorMode): bool =
   ## Check if the mode is any visual mode variant

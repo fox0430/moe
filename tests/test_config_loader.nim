@@ -1006,6 +1006,58 @@ splitType = "diagonal"
     check "StartUp.FileOpen.splitType" in vr.errors[0].name
     check config.startUpFileOpen.splitType == stVertical # Default value
 
+suite "Config Validation - StartUp.FileTree section":
+  test "Valid StartUp.FileTree config passes validation":
+    let tomlStr = """
+[StartUp.FileTree]
+enable = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.startUpFileTree.enable == true
+
+  test "Default StartUp.FileTree config":
+    let tomlStr = ""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.startUpFileTree.enable == false
+
+  test "StartUp.FileTree enable = false":
+    let tomlStr = """
+[StartUp.FileTree]
+enable = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.startUpFileTree.enable == false
+
+  test "Unknown key in StartUp.FileTree is detected":
+    let tomlStr = """
+[StartUp.FileTree]
+enable = true
+unknownKey = true
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    var found = false
+    for e in vr.errors:
+      if e.kind == iikUnknownKey and e.name == "StartUp.FileTree.unknownKey":
+        found = true
+    check found
+
+  test "Unknown key in StartUp section is detected":
+    let tomlStr = """
+[StartUp.Unknown]
+enable = true
+"""
+    let (_, vr) = loadFromTomlString(tomlStr)
+    check vr.hasErrors
+    var found = false
+    for e in vr.errors:
+      if e.kind == iikUnknownKey and e.name == "StartUp.Unknown":
+        found = true
+    check found
+
 suite "Config Validation - Debug section":
   test "Valid Debug.WindowNode config passes validation":
     let tomlStr = """
@@ -1561,6 +1613,7 @@ suite "Config - saveConfigToToml round-trip completeness":
     modifyAllFields(config.syntaxChecker)
     modifyAllFields(config.smoothScroll)
     modifyAllFields(config.startUpFileOpen)
+    modifyAllFields(config.startUpFileTree)
     modifyAllFields(config.debug)
     modifyAllFields(config.theme)
     modifyAllFields(config.lsp)
@@ -1611,6 +1664,7 @@ suite "Config - saveConfigToToml round-trip completeness":
     check config.syntaxChecker == loaded.syntaxChecker
     check config.smoothScroll == loaded.smoothScroll
     check config.startUpFileOpen == loaded.startUpFileOpen
+    check config.startUpFileTree == loaded.startUpFileTree
     check config.debug == loaded.debug
     check config.theme == loaded.theme
     check config.lsp == loaded.lsp

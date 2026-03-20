@@ -22,17 +22,18 @@ import std/[options, monotimes, times, tables, strutils, json]
 import pkg/celina
 
 import
-  modes, buffer, registers, filer, log_viewer, help_viewer, command_completion,
-  message_log, logger, buffer_manager, bookmark_manager, backup_manager, diff_viewer,
+  modes, buffer, registers, filer, filetree, log_viewer, help_viewer,
+  command_completion, message_log, logger, buffer_manager, bookmark_manager,
+  backup_manager, diff_viewer, debug_viewer, config_mode, references_viewer,
+  documentsymbol_viewer, callhierarchy_viewer, hover_popup, primitives, syntax_checker,
+  recent_file_mode, terminal_mode
+
+export
+  buffer.SidebarItemKind, registers, command_completion, filer, filetree, log_viewer,
+  help_viewer, buffer_manager, bookmark_manager, backup_manager, diff_viewer,
   debug_viewer, config_mode, references_viewer, documentsymbol_viewer,
   callhierarchy_viewer, hover_popup, primitives, syntax_checker, recent_file_mode,
   terminal_mode
-
-export
-  buffer.SidebarItemKind, registers, command_completion, filer, log_viewer, help_viewer,
-  buffer_manager, bookmark_manager, backup_manager, diff_viewer, debug_viewer,
-  config_mode, references_viewer, documentsymbol_viewer, callhierarchy_viewer,
-  hover_popup, primitives, syntax_checker, recent_file_mode, terminal_mode
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -91,6 +92,8 @@ type
       # Call hierarchy viewer state
     recentFileModeState*: Option[RecentFileModeState] # Recent file mode state
     terminalState*: Option[TerminalState] # Terminal mode state
+    fileTreeState*: Option[FileTreeState] # File tree sidebar state
+    fixedWidth*: Option[int] # Fixed width for sidebar windows (skips equalize)
 
   SearchDirection* = enum
     Forward # Search forward (/)
@@ -626,6 +629,8 @@ type
     findCharMatchLine*: int # Line number of the matches
     # Insert-Normal mode (Ctrl-o): execute one Normal command then return to Insert
     insertNormalMode*: bool
+    # Startup window actions completed (runs once on first render)
+    startUpWindowsDone*: bool
 
 proc `==`*(a, b: ViewPort): bool =
   ## Structural equality for ViewPort (ref object defaults to pointer comparison)
