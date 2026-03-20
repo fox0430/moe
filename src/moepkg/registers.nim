@@ -180,14 +180,17 @@ proc getFromPrimarySelection(r: Registers): Result[string, string] =
 # Public API for setting registers
 
 proc setNoNamedRegister*(r: Registers, content: string, isLine: bool) =
-  ## Set the unnamed register (") and sync to clipboard
+  ## Set the unnamed register (") and sync to clipboard and primary selection
   r.noNamed.setRegister(content, isLine)
   r.sendToClipboard(content)
+  r.sendToPrimarySelection(content)
 
 proc setNoNamedRegister*(r: Registers, lines: seq[string], isLine: bool) =
   ## Set the unnamed register from lines
   r.noNamed.setRegister(lines, isLine)
-  r.sendToClipboard(lines.join("\n"))
+  let joined = lines.join("\n")
+  r.sendToClipboard(joined)
+  r.sendToPrimarySelection(joined)
 
 proc setSmallDeleteRegister*(r: Registers, content: string) =
   ## Set the small delete register (-) for deletions less than one line
@@ -324,8 +327,52 @@ proc tryUpdatePrimarySelectionRegister(r: Registers) =
       r.primarySelection.setRegister(content, hasNewline)
 
 proc getNoNamedRegister*(r: Registers): Register =
-  ## Get the unnamed register, updating from clipboard if available
-  r.tryUpdateClipboardSelectionRegister()
+  ## Get the unnamed register, syncing with system clipboard and primary selection.
+  ## Behaves like Vim's clipboard=unnamed,unnamedplus:
+  ## moe writes to both CLIPBOARD and PRIMARY on yank/delete, so if they differ,
+  ## an external app changed one of them. Use the externally changed one.
+  ## If both differ from internal, prefer PRIMARY (mouse selection is more recent).
+  var clipContent = ""
+  var primaryContent = ""
+
+  let clipResult = r.getFromClipboard()
+  if clipResult.isOk:
+    clipContent = clipResult.get
+
+  let primaryResult = r.getFromPrimarySelection()
+  if primaryResult.isOk:
+    primaryContent = primaryResult.get
+
+  let current = r.noNamed.getContent
+  let clipChanged = clipContent.len > 0 and clipContent != current
+  let primaryChanged = primaryContent.len > 0 and primaryContent != current
+
+  # TODO: Cache the last written value to avoid spawning external processes on
+  # every paste when the clipboard hasn't changed.
+
+  if primaryChanged and clipChanged:
+    # Both differ from internal register. If CLIPBOARD == PRIMARY, an external
+    # app set both (e.g. Ctrl+C). Otherwise, they diverged: prefer the one
+    # that differs from the other (i.e. the more recently changed one).
+    # Since moe sets both to the same value, if PRIMARY != CLIPBOARD,
+    # it means an external app changed one after moe's last write.
+    if primaryContent != clipContent:
+      # PRIMARY was changed independently (mouse selection) — prefer it
+      let hasNewline = primaryContent.contains('\n')
+      r.noNamed.setRegister(primaryContent, hasNewline)
+    else:
+      # Both changed to the same value (external Ctrl+C) — use either
+      let hasNewline = clipContent.contains('\n')
+      r.noNamed.setRegister(clipContent, hasNewline)
+  elif primaryChanged:
+    # Only PRIMARY changed (mouse selection in external app)
+    let hasNewline = primaryContent.contains('\n')
+    r.noNamed.setRegister(primaryContent, hasNewline)
+  elif clipChanged:
+    # Only CLIPBOARD changed (Ctrl+C in external app)
+    let hasNewline = clipContent.contains('\n')
+    r.noNamed.setRegister(clipContent, hasNewline)
+
   r.noNamed
 
 proc getSmallDeleteRegister*(r: Registers): Register =
