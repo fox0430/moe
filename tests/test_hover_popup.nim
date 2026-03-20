@@ -38,6 +38,7 @@ suite "HoverPopup - newHoverPopupManager":
     check mgr.display.cachedMaxLineWidth == 0
     check mgr.triggerLine == 0
     check mgr.triggerCol == 0
+    check mgr.isAutoHover == false
 
 suite "HoverPopup - isActive":
   test "Returns false when idle":
@@ -90,6 +91,15 @@ suite "HoverPopup - show":
 
     check mgr.state == hpsIdle
     check mgr.display.lines.len == 0
+
+  test "show() resets isAutoHover to false":
+    let mgr = newHoverPopupManager()
+    mgr.show("first", 0, 0)
+    mgr.isAutoHover = true
+    check mgr.isAutoHover
+
+    mgr.show("second", 0, 0)
+    check not mgr.isAutoHover
 
   test "Resets scroll offsets on new show":
     let mgr = newHoverPopupManager()

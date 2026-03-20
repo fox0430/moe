@@ -99,9 +99,24 @@ Press `K` on the word in Normal mode.
 
 ### Diagnostics
 
-Results will be received from the LPS server and displayed automatically.
+Results will be received from the LSP server and displayed automatically.
 
 ![diagnostics](https://github.com/fox0430/moe/assets/15966436/3cc99b32-c53a-4878-846d-8fd44b4a6fb2)
+
+#### Auto Hover
+
+When `Lsp.Diagnostics.autoHover` is enabled (default: `true`), diagnostic messages are automatically shown in a hover popup when the cursor moves onto a diagnostic range. The popup is dismissed when the cursor moves off the diagnostic.
+
+You can also press `K` to manually show hover information, which will include both diagnostic messages and LSP hover content if available.
+
+The delay before the auto hover popup appears can be configured with `Lsp.Diagnostics.autoHoverDelay` (default: `300` ms).
+
+```toml
+[Lsp.Diagnostics]
+enable = true
+autoHover = true
+autoHoverDelay = 300
+```
 
 ### Signature Help
 

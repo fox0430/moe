@@ -44,6 +44,18 @@ type
     Bookmark ## Line has a bookmark
     Empty ## Empty sidebar cell
 
+  BufferDiagnosticSeverity* = enum
+    bdsError = 1
+    bdsWarning = 2
+    bdsInformation = 3
+    bdsHint = 4
+
+  BufferDiagnostic* = object
+    startLine*, startCol*: int
+    endLine*, endCol*: int
+    severity*: BufferDiagnosticSeverity
+    message*: string
+
   LineModificationKind* = enum
     lmkUnmodified ## Line has not been modified since last save
     lmkModified ## Line content was changed since last save
@@ -190,6 +202,9 @@ type
 
     # Bookmarks (sorted list of bookmarked line numbers)
     bookmarks*: seq[int]
+
+    # LSP diagnostics (full detail for hover display)
+    diagnostics*: seq[BufferDiagnostic]
 
     # Per-buffer EditorConfig overrides
     editorConfig*: Option[BufferEditorConfig]
@@ -2052,9 +2067,18 @@ proc findPrevGitChange*(b: TextBuffer, startLine: int): Option[int] =
   return none(int)
 
 proc clearAllMarkers*(b: TextBuffer) =
-  ## Clear all sidebar markers
+  ## Clear all sidebar markers and diagnostics
   for i in 0 ..< b.lineMarkers.len:
     b.lineMarkers[i] = none(SidebarItemKind)
+  b.diagnostics.setLen(0)
+
+proc getDiagnosticsAt*(b: TextBuffer, line, col: int): seq[BufferDiagnostic] =
+  ## Return diagnostics whose range covers the given (line, col) position
+  for d in b.diagnostics:
+    if line >= d.startLine and line <= d.endLine:
+      if (line > d.startLine or col >= d.startCol) and
+          (line < d.endLine or col < d.endCol):
+        result.add(d)
 
 # Syntax highlighting management
 proc updateHighlight*(b: TextBuffer) =

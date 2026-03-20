@@ -912,8 +912,20 @@ proc loadLspConfig(
       "Lsp.Implementation",
     )
   if table.hasKey("Diagnostics"):
-    loadLspFeatureConfig(
-      table["Diagnostics"].getTable(), config.diagnostics, vr, "Lsp.Diagnostics"
+    let diagTable = table["Diagnostics"].getTable()
+    const diagValidKeys = ["enable", "autoHover", "autoHoverDelay"]
+    checkUnknownKeys(diagTable, diagValidKeys, "Lsp.Diagnostics", vr)
+    loadBool(diagTable, "enable", config.diagnostics.enable, vr, "Lsp.Diagnostics")
+    loadBool(
+      diagTable, "autoHover", config.diagnostics.autoHover, vr, "Lsp.Diagnostics"
+    )
+    loadInt(
+      diagTable,
+      "autoHoverDelay",
+      config.diagnostics.autoHoverDelay,
+      vr,
+      "Lsp.Diagnostics",
+      minVal = 0,
     )
   if table.hasKey("SignatureHelp"):
     loadLspFeatureConfig(
@@ -2211,6 +2223,8 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
 
   lines.add "[Lsp.Diagnostics]"
   lines.add "enable = " & toTomlBool(config.lsp.diagnostics.enable)
+  lines.add "autoHover = " & toTomlBool(config.lsp.diagnostics.autoHover)
+  lines.add "autoHoverDelay = " & $config.lsp.diagnostics.autoHoverDelay
   lines.add ""
 
   lines.add "[Lsp.SignatureHelp]"

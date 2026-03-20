@@ -19,7 +19,7 @@
 
 ## LSP-related procedures for the editor
 
-import std/[options, strutils, json]
+import std/[options, strutils, json, monotimes, times]
 
 import pkg/results
 
@@ -710,18 +710,27 @@ proc pollLspHover*(e: Editor) =
     discard # Still waiting
   of lrsSuccess:
     e.state.lspCache.pendingHoverRequestId = 0
+    var hoverText = ""
     if resultOpt.isSome:
       let hoverOpt = parseHoverResponse(resultOpt.get)
       if hoverOpt.isSome:
-        let hoverText = getHoverText(hoverOpt.get)
-        if hoverText.len > 0:
-          e.state.lspCache.hoverPopup.show(
-            hoverText, e.activeWindow.cursor.line, e.activeWindow.cursor.column
-          )
-        else:
-          e.state.statusMessage = "No hover information available"
-      else:
-        e.state.statusMessage = "No hover information available"
+        hoverText = getHoverText(hoverOpt.get)
+
+    let cursorLine = e.activeWindow.cursor.line
+    let cursorCol = e.activeWindow.cursor.column
+    let diags = e.activeBuffer().getDiagnosticsAt(cursorLine, cursorCol)
+    let diagText = formatDiagnosticsForHover(diags)
+
+    var combinedText = ""
+    if diagText.len > 0 and hoverText.len > 0:
+      combinedText = diagText & "\n\n" & hoverText
+    elif diagText.len > 0:
+      combinedText = diagText
+    else:
+      combinedText = hoverText
+
+    if combinedText.len > 0:
+      e.state.lspCache.hoverPopup.show(combinedText, cursorLine, cursorCol)
     else:
       e.state.statusMessage = "No hover information available"
   of lrsError:
@@ -737,6 +746,52 @@ proc requestLspHover*(e: Editor): bool =
   ## Returns true if request was started
   ## The hover popup will be shown when the response arrives
   e.startLspHover()
+
+proc maybeAutoHoverDiagnostic*(e: Editor) =
+  ## Automatically show diagnostic hover when cursor moves onto a diagnostic.
+  ## Called from tick(). Requires Lsp.Diagnostics.autoHover = true.
+  if not e.lsp.enabled or not e.config.lsp.diagnostics.enable or
+      not e.config.lsp.diagnostics.autoHover:
+    return
+
+  # Only in Normal/Visual modes
+  if e.state.mode notin {EditorMode.Normal, EditorMode.Visual}:
+    return
+
+  let cursorLine = e.activeWindow.cursor.line
+  let cursorCol = e.activeWindow.cursor.column
+
+  # Check if cursor position changed since last auto-hover check
+  if cursorLine == e.state.lspCache.autoHoverCursorLine and
+      cursorCol == e.state.lspCache.autoHoverCursorCol:
+    return
+
+  # Cursor moved — update tracked position
+  e.state.lspCache.autoHoverCursorLine = cursorLine
+  e.state.lspCache.autoHoverCursorCol = cursorCol
+
+  let diags = e.activeBuffer().getDiagnosticsAt(cursorLine, cursorCol)
+  if diags.len == 0:
+    # Cursor moved off diagnostics — hide popup if it was auto-shown
+    if e.state.lspCache.hoverPopup.isActive:
+      e.state.lspCache.hoverPopup.hide()
+    return
+
+  # Debounce — avoid flooding requests on fast cursor movement
+  let now = getMonoTime()
+  let elapsed = now - e.state.lspCache.lastAutoHoverUpdate
+  if elapsed < initDuration(milliseconds = e.config.lsp.diagnostics.autoHoverDelay):
+    # Reset tracked position so next tick retries after debounce expires
+    e.state.lspCache.autoHoverCursorLine = -1
+    e.state.lspCache.autoHoverCursorCol = -1
+    return
+  e.state.lspCache.lastAutoHoverUpdate = now
+
+  # Show diagnostic-only popup (no LSP hover request needed)
+  let diagText = formatDiagnosticsForHover(diags)
+  if diagText.len > 0:
+    e.state.lspCache.hoverPopup.show(diagText, cursorLine, cursorCol)
+    e.state.lspCache.hoverPopup.isAutoHover = true
 
 proc hideHoverPopup*(e: Editor) =
   ## Hide the hover popup

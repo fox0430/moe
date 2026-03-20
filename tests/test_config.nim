@@ -316,6 +316,8 @@ suite "Config - newEditorConfig defaults":
     check config.lsp.implementation.enable == true
     check config.lsp.implementation.openWindow == false
     check config.lsp.diagnostics.enable == true
+    check config.lsp.diagnostics.autoHover == true
+    check config.lsp.diagnostics.autoHoverDelay == 300
     check config.lsp.signatureHelp.enable == true
     check config.lsp.documentFormatting.enable == true
     check config.lsp.foldingRange.enable == true

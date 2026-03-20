@@ -470,6 +470,10 @@ openWindow = false                     # Open in new window
 
 enable = true                          # Enable diagnostics
 
+autoHover = true                       # Auto show diagnostic hover on cursor
+
+autoHoverDelay = 300                   # Delay in ms before auto hover shows
+
 [Lsp.SignatureHelp]
 
 enable = true                          # Enable signature help

@@ -1032,6 +1032,42 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
       ):
         buffer.setLineMarker(line, kind)
 
+  # Store full diagnostics for hover display
+  buffer.diagnostics.setLen(0)
+  for diag in diagnostics:
+    let severity =
+      if diag.severity.isSome:
+        case diag.severity.get
+        of dsError: bdsError
+        of dsWarning: bdsWarning
+        of dsInformation: bdsInformation
+        of dsHint: bdsHint
+      else:
+        bdsError
+    buffer.diagnostics.add(
+      BufferDiagnostic(
+        startLine: diag.range.start.line,
+        startCol: diag.range.start.character,
+        endLine: diag.range.`end`.line,
+        endCol: diag.range.`end`.character,
+        severity: severity,
+        message: diag.message,
+      )
+    )
+
+proc formatDiagnosticsForHover*(diagnostics: seq[BufferDiagnostic]): string =
+  ## Format diagnostics for display in hover popup
+  var lines: seq[string]
+  for diag in diagnostics:
+    let prefix =
+      case diag.severity
+      of bdsError: "[Error]"
+      of bdsWarning: "[Warning]"
+      of bdsInformation: "[Info]"
+      of bdsHint: "[Hint]"
+    lines.add(prefix & " " & diag.message)
+  result = lines.join("\n")
+
 # Signature help content helpers
 proc getSignatureHelpText*(sigHelp: SignatureHelp): string =
   ## Extract formatted text from signature help response

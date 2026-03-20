@@ -1368,6 +1368,7 @@ proc tick*(e: Editor) =
   e.requestSignatureHelpFromLsp()
   e.pollLspCompletion()
   e.pollLspHover()
+  e.maybeAutoHoverDiagnostic()
   e.pollLspLocationRequest()
   e.pollLspCallHierarchy()
   e.pollLspSelectionRange()
