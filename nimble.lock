@@ -36,7 +36,7 @@
     "celina": {
       "version": "0.10.0",
       "vcsRevision": "0dd5bbd2f0d76a6c72e50ab0d4b285700da49a1d",
-      "url": "",
+      "url": "https://github.com/fox0430/celina",
       "downloadMethod": "git",
       "dependencies": [
         "unicodedb"
