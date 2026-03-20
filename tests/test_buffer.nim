@@ -18,8 +18,9 @@
 #[############################################################################]#
 
 import std/[unittest, os, strutils, times, options]
-import pkg/results
+import pkg/[results, celina]
 import ../src/moepkg/buffer
+import ../src/moepkg/highlight
 
 suite "Buffer - Trailing Empty Lines":
   test "Insert text with trailing empty lines preserves them":
@@ -1216,3 +1217,57 @@ suite "Buffer - Bookmarks - line insert/delete integration":
     check buf.bookmarks == @[1, 2]
     discard buf.undo()
     check buf.bookmarks == @[2, 3]
+
+suite "Buffer - Diagnostic Highlights":
+  test "updateHighlight applies diagnostic underlines":
+    let buf = newTextBuffer("hello world")
+    buf.language = SourceLanguage.langNone
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 5,
+        severity: bdsError,
+        message: "test error",
+      )
+    ]
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    # The diagnostic range should have Underline modifier
+    check buf.highlight.getSegmentModifiers(0, 0) == {StyleModifier.Undercurl}
+    check buf.highlight.getSegmentModifiers(0, 3) == {StyleModifier.Undercurl}
+
+    # The color should be syntaxCheckErr
+    check buf.highlight.getColorPair(0, 0) == EditorColorPairIndex.syntaxCheckErr
+
+  test "updateHighlight with warning diagnostic":
+    let buf = newTextBuffer("hello world")
+    buf.language = SourceLanguage.langNone
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 6,
+        endLine: 0,
+        endCol: 11,
+        severity: bdsWarning,
+        message: "test warning",
+      )
+    ]
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    check buf.highlight.getColorPair(0, 6) == EditorColorPairIndex.syntaxCheckWarn
+    check buf.highlight.getSegmentModifiers(0, 6) == {StyleModifier.Undercurl}
+
+    # Outside diagnostic range should have no underline
+    check buf.highlight.getSegmentModifiers(0, 0) == {}
+
+  test "updateHighlight with no diagnostics does not add underlines":
+    let buf = newTextBuffer("hello world")
+    buf.language = SourceLanguage.langNone
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    check buf.highlight.getSegmentModifiers(0, 0) == {}

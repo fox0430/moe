@@ -21,7 +21,7 @@
 
 import std/[algorithm, unicode, options, strutils, deques, os, times]
 
-import pkg/[results, regex]
+import pkg/[results, regex, celina]
 
 import unicode_utils, encoding, highlight, logger, search_utils, primitives
 import buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
@@ -2080,6 +2080,29 @@ proc getDiagnosticsAt*(b: TextBuffer, line, col: int): seq[BufferDiagnostic] =
           (line < d.endLine or col < d.endCol):
         result.add(d)
 
+proc applyDiagnosticHighlights(
+    highlight: var Highlight, diagnostics: seq[BufferDiagnostic]
+) =
+  ## Overwrite highlight segments in diagnostic ranges with undercurl styles.
+  for d in diagnostics:
+    let color =
+      case d.severity
+      of bdsError: EditorColorPairIndex.syntaxCheckErr
+      of bdsWarning: EditorColorPairIndex.syntaxCheckWarn
+      of bdsInformation: EditorColorPairIndex.syntaxCheckInfo
+      of bdsHint: EditorColorPairIndex.syntaxCheckHint
+
+    highlight.overwrite(
+      ColorSegment(
+        firstRow: d.startLine,
+        firstColumn: d.startCol,
+        lastRow: d.endLine,
+        lastColumn: max(d.endCol - 1, d.startCol),
+        color: color,
+        style: Style(modifiers: {StyleModifier.Undercurl}),
+      )
+    )
+
 # Syntax highlighting management
 proc updateHighlight*(b: TextBuffer) =
   ## Update syntax highlighting if needed
@@ -2130,6 +2153,9 @@ proc updateHighlight*(b: TextBuffer) =
     else:
       # Plain text - use simple highlighting
       b.highlight = initHighlight(runesBuffer)
+
+    if b.diagnostics.len > 0:
+      applyDiagnosticHighlights(b.highlight, b.diagnostics)
 
     b.highlightNeedsUpdate = false
 

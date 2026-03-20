@@ -19,6 +19,8 @@
 
 import std/[unittest, unicode]
 
+import pkg/celina
+
 import ../src/moepkg/highlight
 import ../src/moepkg/syntax/tokenizer
 
@@ -801,3 +803,52 @@ suite "Highlight - detectLanguage":
 
   test "detectLanguage for Tcl .itk":
     check detectLanguage("widget.itk") == SourceLanguage.langTcl
+
+suite "Highlight - getSegmentModifiers":
+  test "Empty highlight returns empty modifiers":
+    let h = Highlight(colorSegments: @[])
+    check h.getSegmentModifiers(0, 0) == {}
+
+  test "Position outside range returns empty modifiers":
+    let h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 5,
+          color: EditorColorPairIndex.default,
+          style: Style(modifiers: {StyleModifier.Undercurl}),
+        )
+      ]
+    )
+    check h.getSegmentModifiers(1, 0) == {}
+
+  test "Position inside segment returns segment modifiers":
+    let h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: Style(modifiers: {StyleModifier.Undercurl}),
+        )
+      ]
+    )
+    check h.getSegmentModifiers(0, 3) == {StyleModifier.Undercurl}
+
+  test "Segment without modifiers returns empty set":
+    let h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: Style(modifiers: {}),
+        )
+      ]
+    )

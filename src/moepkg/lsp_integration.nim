@@ -1055,6 +1055,9 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
       )
     )
 
+  # Trigger highlight regeneration so diagnostic underlines are applied
+  buffer.highlightNeedsUpdate = true
+
 proc formatDiagnosticsForHover*(diagnostics: seq[BufferDiagnostic]): string =
   ## Format diagnostics for display in hover popup
   var lines: seq[string]

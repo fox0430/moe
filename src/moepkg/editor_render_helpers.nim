@@ -152,6 +152,8 @@ proc baseStyleWithOverlay(
   if e.hasSyntaxHighlight(buffer, windowMode):
     let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
     var style = colorIndexToStyle(colorPair)
+    style.modifiers =
+      style.modifiers + buffer.highlight.getSegmentModifiers(pos.line, pos.column)
     let highlightKind = e.isPositionInDocumentHighlight(pos)
     if highlightKind.isSome:
       style.bg = getDocumentHighlightStyle(highlightKind.get).bg
@@ -208,7 +210,10 @@ proc getSelectionStyle*(
     var style =
       if e.hasSyntaxHighlight(buffer, windowMode):
         let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
-        colorIndexToStyle(colorPair)
+        var s = colorIndexToStyle(colorPair)
+        s.modifiers =
+          s.modifiers + buffer.highlight.getSegmentModifiers(pos.line, pos.column)
+        s
       else:
         normalStyle()
     style.bg = visualStyle().bg
