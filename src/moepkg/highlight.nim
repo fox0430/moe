@@ -194,6 +194,20 @@ proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPairIndex =
   let idx = highlight.indexOf(line, col)
   return highlight[idx].color
 
+proc getSegmentModifiers*(highlight: Highlight, line, col: int): set[StyleModifier] =
+  ## Get the style modifiers at the specified position using binary search.
+  ## Returns empty set if the position is out of bounds.
+
+  if highlight.colorSegments.len == 0:
+    return {}
+
+  if (line, col) < (highlight[0].firstRow, highlight[0].firstColumn) or
+      (line, col) > (highlight[^1].lastRow, highlight[^1].lastColumn):
+    return {}
+
+  let idx = highlight.indexOf(line, col)
+  return highlight[idx].style.modifiers
+
 template isIntersect(s, t: ColorSegment): bool =
   not (
     (t.lastRow, t.lastColumn) < (s.firstRow, s.firstColumn) or
