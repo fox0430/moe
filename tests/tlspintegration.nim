@@ -717,6 +717,227 @@ suite "Diagnostics Application":
     for i in 0 ..< buffer.len:
       check buffer.getLineMarker(i).isNone
 
+  test "applyDiagnosticsToBuffer - stores BufferDiagnostics":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(1, 2, 1, 8),
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "undeclared identifier",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+      Diagnostic(
+        range: newRange(0, 0, 0, 5),
+        severity: some(dsWarning),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "unused variable",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+    ]
+    applyDiagnosticsToBuffer(buffer, diagnostics)
+    check buffer.diagnostics.len == 2
+    check buffer.diagnostics[0].startLine == 1
+    check buffer.diagnostics[0].startCol == 2
+    check buffer.diagnostics[0].endLine == 1
+    check buffer.diagnostics[0].endCol == 8
+    check buffer.diagnostics[0].severity == bdsError
+    check buffer.diagnostics[0].message == "undeclared identifier"
+    check buffer.diagnostics[1].severity == bdsWarning
+    check buffer.diagnostics[1].message == "unused variable"
+
+suite "getDiagnosticsAt":
+  test "returns diagnostics at cursor position":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    buffer.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 0,
+        endLine: 1,
+        endCol: 5,
+        severity: bdsError,
+        message: "error here",
+      )
+    ]
+    let diags = buffer.getDiagnosticsAt(1, 3)
+    check diags.len == 1
+    check diags[0].message == "error here"
+
+  test "returns empty for position outside diagnostic range":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    buffer.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 0,
+        endLine: 1,
+        endCol: 5,
+        severity: bdsError,
+        message: "error here",
+      )
+    ]
+    check buffer.getDiagnosticsAt(0, 0).len == 0
+    check buffer.getDiagnosticsAt(2, 0).len == 0
+    # endCol is exclusive (LSP spec): col == endCol should be outside
+    check buffer.getDiagnosticsAt(1, 5).len == 0
+    check buffer.getDiagnosticsAt(1, 4).len == 1
+
+  test "multi-line diagnostic - middle line matches":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    buffer.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 3,
+        endLine: 3,
+        endCol: 2,
+        severity: bdsError,
+        message: "multi-line error",
+      )
+    ]
+    # Middle line: any column should match
+    check buffer.getDiagnosticsAt(2, 0).len == 1
+    check buffer.getDiagnosticsAt(2, 99).len == 1
+
+  test "multi-line diagnostic - start line respects startCol":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    buffer.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 3,
+        endLine: 3,
+        endCol: 2,
+        severity: bdsError,
+        message: "multi-line error",
+      )
+    ]
+    # Start line: before startCol should not match
+    check buffer.getDiagnosticsAt(1, 2).len == 0
+    check buffer.getDiagnosticsAt(1, 3).len == 1
+    check buffer.getDiagnosticsAt(1, 10).len == 1
+
+  test "multi-line diagnostic - end line respects exclusive endCol":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    buffer.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 3,
+        endLine: 3,
+        endCol: 2,
+        severity: bdsError,
+        message: "multi-line error",
+      )
+    ]
+    # End line: endCol is exclusive
+    check buffer.getDiagnosticsAt(3, 0).len == 1
+    check buffer.getDiagnosticsAt(3, 1).len == 1
+    check buffer.getDiagnosticsAt(3, 2).len == 0 # exclusive
+
+  test "returns multiple diagnostics at same position":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    buffer.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 0,
+        endLine: 1,
+        endCol: 10,
+        severity: bdsError,
+        message: "error",
+      ),
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 2,
+        endLine: 1,
+        endCol: 8,
+        severity: bdsWarning,
+        message: "warning",
+      ),
+    ]
+    let diags = buffer.getDiagnosticsAt(1, 3)
+    check diags.len == 2
+
+suite "formatDiagnosticsForHover":
+  test "formats single diagnostic":
+    let diags = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 5,
+        severity: bdsError,
+        message: "undeclared identifier",
+      )
+    ]
+    check formatDiagnosticsForHover(diags) == "[Error] undeclared identifier"
+
+  test "formats multiple diagnostics":
+    let diags = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 5,
+        severity: bdsError,
+        message: "error msg",
+      ),
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 5,
+        severity: bdsWarning,
+        message: "warning msg",
+      ),
+    ]
+    check formatDiagnosticsForHover(diags) == "[Error] error msg\n[Warning] warning msg"
+
+  test "formats all severity levels":
+    let diags = @[
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsError,
+        message: "e",
+      ),
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsWarning,
+        message: "w",
+      ),
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsInformation,
+        message: "i",
+      ),
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsHint,
+        message: "h",
+      ),
+    ]
+    let result = formatDiagnosticsForHover(diags)
+    check result == "[Error] e\n[Warning] w\n[Info] i\n[Hint] h"
+
+  test "empty diagnostics returns empty string":
+    check formatDiagnosticsForHover(@[]) == ""
+
 suite "Messages":
   test "getAndClearMessages - empty":
     let lsp = newLspIntegration("/tmp")

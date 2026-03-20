@@ -45,6 +45,7 @@ type
     display*: HoverPopupDisplay
     triggerLine*: int ## Line where hover was triggered
     triggerCol*: int ## Column where hover was triggered
+    isAutoHover*: bool ## true when triggered by auto-hover diagnostic
 
   HoverPopupPosition* = object
     x*, y*: int
@@ -86,6 +87,7 @@ proc show*(mgr: HoverPopupManager, hoverText: string, line, col: int) =
   mgr.display.horizontalOffset = 0
   mgr.triggerLine = line
   mgr.triggerCol = col
+  mgr.isAutoHover = false
   mgr.state = hpsActive
 
   # Cache max line width

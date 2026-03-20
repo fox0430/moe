@@ -335,6 +335,12 @@ type
   LspFeatureConfig* = object
     enable*: bool
 
+  # LSP diagnostics config
+  LspDiagnosticsConfig* = object
+    enable*: bool
+    autoHover*: bool
+    autoHoverDelay*: int # Debounce delay in milliseconds
+
   # LSP feature with openWindow option
   LspOpenWindowConfig* = object
     enable*: bool
@@ -359,7 +365,7 @@ type
     definition*: LspOpenWindowConfig
     typeDefinition*: LspOpenWindowConfig
     implementation*: LspOpenWindowConfig
-    diagnostics*: LspFeatureConfig
+    diagnostics*: LspDiagnosticsConfig
     signatureHelp*: LspFeatureConfig
     documentFormatting*: LspFeatureConfig
     foldingRange*: LspFeatureConfig
@@ -648,7 +654,8 @@ proc newEditorConfig*(): EditorConfig =
       definition: LspOpenWindowConfig(enable: true, openWindow: false),
       typeDefinition: LspOpenWindowConfig(enable: true, openWindow: false),
       implementation: LspOpenWindowConfig(enable: true, openWindow: false),
-      diagnostics: LspFeatureConfig(enable: true),
+      diagnostics:
+        LspDiagnosticsConfig(enable: true, autoHover: true, autoHoverDelay: 300),
       signatureHelp: LspFeatureConfig(enable: true),
       documentFormatting: LspFeatureConfig(enable: true),
       foldingRange: LspFeatureConfig(enable: true),

@@ -723,6 +723,8 @@ The same commands as `[KeyMapping]` are available. See [Available commands](#ava
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | enable | bool | true | LSP Diagnostics |
+| autoHover | bool | true | Automatically show diagnostic messages in hover popup when cursor is on a diagnostic |
+| autoHoverDelay | integer | 300 | Delay in milliseconds before auto hover shows (0 = no delay) |
 
 
 ### Lsp.SignatureHelp table

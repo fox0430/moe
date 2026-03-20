@@ -893,41 +893,43 @@ proc handleEvent*(e: Editor, event: Event): bool =
     if keyComboOpt.isSome:
       let keyCombo = keyComboOpt.get
 
-      # Escape - close popup
+      # Escape always closes the popup
       if keyCombo.isSpecial and keyCombo.special == skEscape:
         e.hideHoverPopup()
         return true
 
-      # j/k/h/l - scroll
-      if not keyCombo.isSpecial:
-        if keyCombo.char == "j":
-          e.hoverPopupScrollDown()
-          return true
-        if keyCombo.char == "k":
-          e.hoverPopupScrollUp()
-          return true
-        if keyCombo.char == "l":
-          e.hoverPopupScrollRight()
-          return true
-        if keyCombo.char == "h":
-          e.hoverPopupScrollLeft()
-          return true
+      # Manual hover (K key): allow j/k/h/l and arrow keys for scrolling
+      if not e.state.lspCache.hoverPopup.isAutoHover:
+        if not keyCombo.isSpecial:
+          if keyCombo.char == "j":
+            e.hoverPopupScrollDown()
+            return true
+          if keyCombo.char == "k":
+            e.hoverPopupScrollUp()
+            return true
+          if keyCombo.char == "l":
+            e.hoverPopupScrollRight()
+            return true
+          if keyCombo.char == "h":
+            e.hoverPopupScrollLeft()
+            return true
 
-      if keyCombo.isSpecial:
-        if keyCombo.special == skDown:
-          e.hoverPopupScrollDown()
-          return true
-        if keyCombo.special == skUp:
-          e.hoverPopupScrollUp()
-          return true
-        if keyCombo.special == skRight:
-          e.hoverPopupScrollRight()
-          return true
-        if keyCombo.special == skLeft:
-          e.hoverPopupScrollLeft()
-          return true
+        if keyCombo.isSpecial:
+          if keyCombo.special == skDown:
+            e.hoverPopupScrollDown()
+            return true
+          if keyCombo.special == skUp:
+            e.hoverPopupScrollUp()
+            return true
+          if keyCombo.special == skRight:
+            e.hoverPopupScrollRight()
+            return true
+          if keyCombo.special == skLeft:
+            e.hoverPopupScrollLeft()
+            return true
 
-      # Any other key closes popup and processes normally
+      # Close popup and fall through to normal key processing.
+      # Auto-hover popup will reappear if cursor is still on a diagnostic.
       e.hideHoverPopup()
       # Don't return - let the key be processed normally
 

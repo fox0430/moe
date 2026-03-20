@@ -216,6 +216,9 @@ type
     pendingSemanticTokensRequestId*: int
       # Request ID for pending semantic tokens request (0 = none)
     pendingHoverRequestId*: int # Request ID for pending hover request (0 = none)
+    autoHoverCursorLine*: int # Last cursor line for auto-hover debounce
+    autoHoverCursorCol*: int # Last cursor column for auto-hover debounce
+    lastAutoHoverUpdate*: MonoTime # Timestamp of last auto-hover request
     # Pending location request (definition, references, etc.)
     pendingLocationRequestId*: int # Request ID (0 = none)
     pendingLocationRequestKind*: LspLocationRequestKind # Type of location request
