@@ -981,6 +981,13 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   # Update LSP enable/disable
   e.lsp.setEnabled(newConfig.lsp.enable)
 
+  # Update mouse capture
+  if not e.app.isNil:
+    if newConfig.standard.mouse:
+      e.app.enableMouse()
+    else:
+      e.app.disableMouse()
+
   # Store the new config
   e.config = newConfig
 
