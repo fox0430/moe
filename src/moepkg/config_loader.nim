@@ -1776,6 +1776,15 @@ proc loadThemeFromToml*(path: string): Result[ThemeColors, string] =
     foreground: ThemeColor(rgb: defaultFg), background: ThemeColor(rgb: defaultBg)
   )
 
+  # Apply default background to all entries that still use the old default (#000000).
+  # This ensures entries not listed in the theme file inherit the user's chosen
+  # background (e.g. "termDefault") instead of keeping hardcoded #000000.
+  let hardcodedDefaultBg = rgb("#000000")
+  for index in EditorColorPairIndex:
+    if index != EditorColorPairIndex.default and
+        colors[index].background.rgb == hardcodedDefaultBg:
+      colors[index].background = ThemeColor(rgb: defaultBg)
+
   # Process all color entries
   for key, value in colorsTable:
     if key == "foreground" or key == "background":
