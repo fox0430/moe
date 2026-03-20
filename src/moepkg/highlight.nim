@@ -812,6 +812,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langCommitEditMsg
   of "git-rebase-todo":
     return SourceLanguage.langGitRebaseTodo
+  of "nimble.lock":
+    return SourceLanguage.langJson
   else:
     discard
 
