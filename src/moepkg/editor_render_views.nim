@@ -253,6 +253,14 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
         e.renderWindow(
           buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
         )
+    of EditorMode.FileTree:
+      # FileTree uses virtual buffer pattern (like Filer)
+      if window.fileTreeState.isSome:
+        window.cursor.line = window.fileTreeState.get.selectedIndex
+        window.cursor.column = 0
+      e.renderWindow(
+        buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
+      )
     else:
       # Normal buffer rendering (Normal, Insert, Visual, Command, Search, etc.)
       e.renderWindow(
@@ -266,7 +274,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       let statusLineY = calculateWindowStatusLineY(window, isBottomWindow)
       e.state.renderWindowStatusLine(
         window.buffer, buffer, statusLineY, window.viewport.x, window.viewport.width,
-        isActiveWindow, e.config.statusLine,
+        isActiveWindow, window.mode, e.config.statusLine,
       )
 
     # Draw separator between windows (except for last window)
@@ -297,7 +305,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     of EditorMode.BufferManager, EditorMode.BookmarkManager, EditorMode.Help,
         EditorMode.BackupManager, EditorMode.DiffViewer, EditorMode.Debug,
         EditorMode.References, EditorMode.DocumentSymbol, EditorMode.CallHierarchy,
-        EditorMode.RecentFile:
+        EditorMode.RecentFile, EditorMode.FileTree:
       # Show cursor when an overlay (command/search/rename) is active
       e.state.cursorVisible = e.state.hasOverlay
     of EditorMode.Terminal:

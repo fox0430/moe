@@ -148,9 +148,16 @@ proc buildFileDisplay(
   return displayText
 
 proc buildGitInfo(
-    textBuffer: TextBuffer, config: StatusLineConfig, isActiveWindow: bool
+    textBuffer: TextBuffer,
+    mode: EditorMode,
+    config: StatusLineConfig,
+    isActiveWindow: bool,
 ): string =
   ## Build git info text (branch name and changed lines) for display before filename
+
+  if mode == EditorMode.FileTree:
+    return ""
+
   var parts: seq[string] = @[]
 
   # Git changed lines count (if enabled and active window or showGitInactive)
@@ -266,11 +273,16 @@ proc parseSetupText(
 proc buildRightSideInfo(
     state: EditorState,
     textBuffer: TextBuffer,
+    mode: EditorMode,
     config: StatusLineConfig,
     isActiveWindow: bool,
 ): string =
   ## Build the right-side status line info (file type, encoding, line count, etc.)
   ## If setupText is configured, use custom format; otherwise use default format.
+
+  # Hide right-side info in FileTree mode
+  if mode == EditorMode.FileTree:
+    return ""
 
   # Use custom format if setupText is configured
   if config.setupText.len > 0:
@@ -349,7 +361,7 @@ proc renderStatusLine*(
       (labelStyle, lineStyle, labelText)
 
   # Build git info (displayed before filename)
-  let gitInfoText = buildGitInfo(textBuffer, config, true)
+  let gitInfoText = buildGitInfo(textBuffer, state.mode, config, true)
 
   # Build file display text
   let filePathText = buildFileDisplay(textBuffer, state.mode, config)
@@ -374,7 +386,7 @@ proc renderStatusLine*(
   currentX += displayWidth(filePathText)
 
   # Build right side info
-  let rightSideText = buildRightSideInfo(state, textBuffer, config, true)
+  let rightSideText = buildRightSideInfo(state, textBuffer, state.mode, config, true)
   let rightSideWidth = displayWidth(rightSideText)
 
   # Build LSP progress text (displayed in the middle section)
@@ -414,6 +426,7 @@ proc renderWindowStatusLine*(
     statusLineX: int,
     statusLineWidth: int,
     isActiveWindow: bool,
+    windowMode: EditorMode,
     config: StatusLineConfig,
 ) =
   ## Render a status line for a specific window
@@ -425,7 +438,7 @@ proc renderWindowStatusLine*(
 
   # Use overlay styles if an overlay is active, otherwise use mode styles
   let (modeLabelStyle, statusLineStyle, modeLabelText) =
-    if state.overlay.isSome:
+    if isActiveWindow and state.overlay.isSome:
       let overlay = state.overlay.get()
       let labelStyle = getOverlayLabelStyle(overlay.kind)
       let lineStyle = getOverlayStyle(overlay.kind)
@@ -436,20 +449,20 @@ proc renderWindowStatusLine*(
           ""
       (labelStyle, lineStyle, labelText)
     else:
-      let labelStyle = getStatusLineModeLabelStyle(state.mode)
-      let lineStyle = getStatusLineModeStyle(state.mode)
+      let labelStyle = getStatusLineModeLabelStyle(windowMode)
+      let lineStyle = getStatusLineModeStyle(windowMode)
       let labelText =
         if showMode:
-          fmt" {modeLabel(state.mode, state.insertNormalMode)} "
+          fmt" {modeLabel(windowMode, state.insertNormalMode)} "
         else:
           ""
       (labelStyle, lineStyle, labelText)
 
   # Build git info (displayed before filename)
-  let gitInfoText = buildGitInfo(textBuffer, config, isActiveWindow)
+  let gitInfoText = buildGitInfo(textBuffer, windowMode, config, isActiveWindow)
 
   # Build file display text
-  let filePathText = buildFileDisplay(textBuffer, state.mode, config)
+  let filePathText = buildFileDisplay(textBuffer, windowMode, config)
 
   # Draw mode label with white background
   var currentX = statusLineX
@@ -484,7 +497,8 @@ proc renderWindowStatusLine*(
   currentX += displayWidth(truncatedFilePath)
 
   # Build right side info
-  let rightSideText = buildRightSideInfo(state, textBuffer, config, isActiveWindow)
+  let rightSideText =
+    buildRightSideInfo(state, textBuffer, windowMode, config, isActiveWindow)
   let rightSideWidth = displayWidth(rightSideText)
 
   # Build LSP progress text (displayed in the middle section, only for active window)

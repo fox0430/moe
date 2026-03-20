@@ -79,6 +79,7 @@ const CommandNameTable* = {
   "terminal": claTerminal,
   "only": claOnlyWindow,
   "editconfigfile": claEditConfigFile,
+  "filetree": claFileTree,
 }.toTable
 
 proc resolveCommandName*(name: string): Option[CommandLineAction] =
@@ -269,6 +270,9 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("vunmap", claVunmap)
   config.addAlias("runmap", claRunmap)
   config.addAlias("cunmap", claCunmap)
+
+  # File tree sidebar
+  config.addAlias("filetree", claFileTree)
 
   # Only window (close all other windows)
   config.addAlias("only", claOnlyWindow)

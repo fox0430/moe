@@ -132,6 +132,7 @@ type
     cmrMapClear # Clear runtime key mappings (:mapclear, :nmapclear, etc.)
     cmrMapList # List runtime key mappings (:map, :nmap, etc. with no args)
     cmrOnlyWindow # Close all other windows (:only)
+    cmrFileTree # Toggle file tree sidebar (:filetree)
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -260,6 +261,8 @@ type
       mapListModes*: seq[EditorMode]
     of cmrOnlyWindow:
       discard
+    of cmrFileTree:
+      fileTreePath*: Option[string]
     of cmrError:
       errorMessage*: string
 
@@ -1174,6 +1177,15 @@ proc handleCommandModeInput*(
     let configPath = getConfigPath()
     return
       CommandModeResult(kind: cmrEdit, editFilename: some(configPath), forceEdit: false)
+  of claFileTree:
+    return CommandModeResult(
+      kind: cmrFileTree,
+      fileTreePath:
+        if cmdResult.kind == claFileTree:
+          cmdResult.fileTreePath
+        else:
+          none(string),
+    )
   of claUnknown:
     return CommandModeResult(kind: cmrError, errorMessage: cmdResult.errorMessage)
 

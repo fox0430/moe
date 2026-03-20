@@ -741,6 +741,73 @@ suite "getSelectionStyle - Cursor line":
     )
     check true
 
+  test "searchResult highlight takes priority over cursor line bg":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    e.state.display.showSyntax = true
+    e.state.display.showDocumentHighlight = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    # Set up highlight with searchResult color on columns 0-4
+    let searchStyle = colorIndexToStyle(EditorColorPairIndex.searchResult)
+    e.textBuffer.highlight = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.searchResult,
+          style: searchStyle,
+        )
+      ]
+    )
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 3),
+      cursorLine = 0,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+    )
+    # searchResult bg should NOT be overwritten by cursorLine bg
+    check style.bg == searchStyle.bg
+    check style.bg != cursorLineHighlightStyle().bg
+
+  test "non-searchResult highlight still gets cursor line bg":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    e.state.display.showSyntax = true
+    e.state.display.showDocumentHighlight = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    # Set up highlight with a normal (non-searchResult) color
+    let defaultStyle = colorIndexToStyle(EditorColorPairIndex.default)
+    e.textBuffer.highlight = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 3),
+      cursorLine = 0,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+    )
+    # cursorLine bg should overwrite default highlight bg
+    check style.bg == cursorLineHighlightStyle().bg
+
 suite "bufferColToDisplayCol":
   test "Simple ASCII text":
     check bufferColToDisplayCol("hello", 0, 4) == 0

@@ -155,11 +155,12 @@ proc baseStyleWithOverlay(
     let highlightKind = e.isPositionInDocumentHighlight(pos)
     if highlightKind.isSome:
       style.bg = getDocumentHighlightStyle(highlightKind.get).bg
-    elif e.state.display.showCursorLine and pos.line == cursorLine:
-      style.bg = cursorLineHighlightStyle().bg
-    elif e.state.display.showCursorColumn and displayCol >= 0 and
-        displayCol == cursorDisplayCol:
-      style.bg = cursorColumnHighlightStyle().bg
+    elif colorPair != EditorColorPairIndex.searchResult:
+      if e.state.display.showCursorLine and pos.line == cursorLine:
+        style.bg = cursorLineHighlightStyle().bg
+      elif e.state.display.showCursorColumn and displayCol >= 0 and
+          displayCol == cursorDisplayCol:
+        style.bg = cursorColumnHighlightStyle().bg
     style
   else:
     let highlightKind = e.isPositionInDocumentHighlight(pos)

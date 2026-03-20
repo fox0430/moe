@@ -177,10 +177,12 @@ const CommandDescriptions = {
   "cmapclear": "Clear mappings (Command mode)",
   "only": "Close all other windows",
   "moerc": "Open config file",
+  "filetree": "Toggle FileTree sidebar",
 }.toTable
 
 # Commands that take file path arguments
-const FilePathCommands* = ["e", "edit", "w", "write", "vs", "vsplit", "sp", "split"]
+const FilePathCommands* =
+  ["e", "edit", "w", "write", "vs", "vsplit", "sp", "split", "filetree"]
 
 # Set options
 const SetOptions* = {

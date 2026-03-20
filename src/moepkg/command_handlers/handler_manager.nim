@@ -35,14 +35,14 @@ import
 import ../lsp/protocol/types as lspTypes
 import
   normal_handler, insert_handler, insert_commands, command_handler, visual_handler,
-  replace_handler, filer_handler, log_viewer_handler, help_handler,
+  replace_handler, filer_handler, filetree_handler, log_viewer_handler, help_handler,
   buffer_manager_handler, bookmark_manager_handler, backup_manager_handler,
   diff_viewer_handler, recent_file_mode_handler, debug_handler, config_handler,
   references_handler, documentsymbol_handler, callhierarchy_handler, terminal_handler
 
 export
   normal_handler, insert_handler, insert_commands, command_handler, visual_handler,
-  replace_handler, filer_handler, log_viewer_handler, help_handler,
+  replace_handler, filer_handler, filetree_handler, log_viewer_handler, help_handler,
   buffer_manager_handler, bookmark_manager_handler, backup_manager_handler,
   diff_viewer_handler, recent_file_mode_handler, debug_handler, config_handler,
   references_handler, documentsymbol_handler, callhierarchy_handler, terminal_handler
@@ -159,6 +159,9 @@ type
     hrTerminalQuit # Close terminal and return to previous mode
     hrExecCommand # Execute a Command mode command directly (@:)
     hrOnlyWindow # Close all other windows (:only)
+    hrEnterFileTree # Enter/toggle fileTree sidebar
+    hrFileTreeOpenFile # Open file from fileTree
+    hrFileTreeQuit # Close fileTree sidebar
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -181,6 +184,7 @@ type
     documentSymbolHandler*: DocumentSymbolHandler
     callHierarchyHandler*: CallHierarchyHandler
     terminalHandler*: TerminalHandler
+    fileTreeHandler*: FileTreeHandler
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandLineParser*: CommandLineParser
@@ -407,6 +411,12 @@ type
       execCommandCount*: int # Number of times to execute
     of hrOnlyWindow:
       discard
+    of hrEnterFileTree:
+      enterFileTreePath*: Option[string]
+    of hrFileTreeOpenFile:
+      fileTreeFilePath*: string
+    of hrFileTreeQuit:
+      discard
     of hrUnhandled:
       discard
     of hrError:
@@ -455,6 +465,7 @@ proc newHandlerManager*(
   let documentSymbolHandler = newDocumentSymbolHandler()
   let callHierarchyHandler = newCallHierarchyHandler()
   let terminalHandler = newTerminalHandler()
+  let fileTreeHandler = newFileTreeHandler()
 
   HandlerManager(
     normalHandler: normalHandler,
@@ -475,6 +486,7 @@ proc newHandlerManager*(
     documentSymbolHandler: documentSymbolHandler,
     callHierarchyHandler: callHierarchyHandler,
     terminalHandler: terminalHandler,
+    fileTreeHandler: fileTreeHandler,
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,
@@ -988,6 +1000,8 @@ proc handleCommandMode*(
     )
   of cmrOnlyWindow:
     return HandlerResult(kind: hrOnlyWindow)
+  of cmrFileTree:
+    return HandlerResult(kind: hrEnterFileTree, enterFileTreePath: r.fileTreePath)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -1238,6 +1252,55 @@ proc handleFilerMode*(
   of frUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of frError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
+proc handleFileTreeMode*(
+    manager: HandlerManager,
+    fileTreeState: FileTreeState,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
+): HandlerResult =
+  ## Handle FileTree mode input
+  let r = manager.fileTreeHandler.handleFileTreeModeKey(
+    fileTreeState, viewportHeight, keyCombo
+  )
+
+  # Transfer any error from fileTree operations to the status message
+  if fileTreeState.lastError.len > 0:
+    state.statusMessage = fileTreeState.lastError
+    fileTreeState.lastError = ""
+
+  # Display search prompt or status message
+  if manager.fileTreeHandler.isSearching:
+    state.statusMessage = "/" & manager.fileTreeHandler.searchBuffer
+  else:
+    state.statusMessage = r.statusMessage
+
+  case r.kind
+  of ftrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of ftrOpenFile:
+    return HandlerResult(kind: hrFileTreeOpenFile, fileTreeFilePath: r.filePath)
+  of ftrEnterCommand:
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
+    )
+  of ftrNextWindow:
+    return HandlerResult(kind: hrNextWindow)
+  of ftrPrevWindow:
+    return HandlerResult(kind: hrPrevWindow)
+  of ftrIncreaseWindowWidth:
+    return HandlerResult(kind: hrIncreaseWindowWidth)
+  of ftrDecreaseWindowWidth:
+    return HandlerResult(kind: hrDecreaseWindowWidth)
+  of ftrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of ftrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleLogViewerMode*(
@@ -2009,6 +2072,14 @@ proc handleKeyCombo*(
       )
     else:
       return HandlerResult(kind: hrError, errorMessage: "Filer state not initialized")
+  of EditorMode.FileTree:
+    if window.isSome and window.get.fileTreeState.isSome:
+      return manager.handleFileTreeMode(
+        window.get.fileTreeState.get, state, viewport.height, keyCombo
+      )
+    else:
+      return
+        HandlerResult(kind: hrError, errorMessage: "FileTree state not initialized")
   of EditorMode.LogViewer:
     return manager.handleLogViewerMode(buffer, state, viewport.height, keyCombo)
   of EditorMode.Help:
@@ -2217,7 +2288,7 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
     hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
     hrLspSelectionRange, hrLspDocumentLink, hrJumpList, hrChanges, hrLspLog,
-    hrOnlyWindow,
+    hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit,
   }
 
 proc hasError*(hrResult: HandlerResult): bool =

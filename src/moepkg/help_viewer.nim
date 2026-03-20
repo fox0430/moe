@@ -327,6 +327,8 @@ vs filename - Open in a vertical split window
 sp          - Horizontal split window
 sp filename - Open in a horizontal split window
 only        - Close all other windows
+filetree      - Toggle FileTree sidebar
+filetree path - Toggle FileTree sidebar with specified root path
 
 theme themeName - Change color theme; for example theme dark
 noh            - Turn off search highlights

@@ -21,7 +21,10 @@
 
 import std/[unittest, os, options, strutils]
 import pkg/results
-import ../src/moepkg/[editor, buffer, config, config_loader, config_mode, highlight]
+import
+  ../src/moepkg/
+    [editor, buffer, config, config_loader, config_mode, highlight, window_manager]
+import ../src/moepkg/command_handlers/command_mode_handler
 import ../src/moepkg/buffer_backends/gap_buffer
 
 proc createTestEditor(): Editor =
@@ -1060,3 +1063,349 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
     configState.toggleBoolValue()
     e.applyConfigSettings(e.config)
     check e.state.display.showSidebar == not original
+
+suite "Startup window - FileTree":
+  ## These tests simulate handleStartUpWindows: viewport height is set to
+  ## termHeight - CommandLineHeight (reserving the command line row) and
+  ## screenSize is synced so no ratio-based resizeWindows runs afterward.
+
+  test "FileTree opens with correct layout":
+    let config = newEditorConfig()
+    config.startUpFileTree.enable = true
+    let e = newEditor(config, newValidationResult())
+
+    const
+      termWidth = 120
+      termHeight = 40
+      viewportHeight = termHeight - CommandLineHeight
+
+    let win = e.activeWindow
+    win.viewport.width = termWidth
+    win.viewport.height = viewportHeight
+
+    e.toggleFileTree(none(string), e.activeBuffer())
+
+    check e.windowManager.windows.len == 2
+
+    let ftWin = e.windowManager.windows[0]
+    let edWin = e.windowManager.windows[1]
+
+    # FileTree window
+    check ftWin.mode == EditorMode.FileTree
+    check ftWin.viewport.x == 0
+    check ftWin.viewport.width == config.fileTree.width
+    check ftWin.viewport.height == viewportHeight
+
+    # Editor window fills remaining space
+    check edWin.viewport.x == config.fileTree.width + WindowSeparatorWidth
+    check edWin.viewport.width ==
+      termWidth - config.fileTree.width - WindowSeparatorWidth
+    check edWin.viewport.height == viewportHeight
+
+    # No gap between fileTree and editor
+    check ftWin.viewport.x + ftWin.viewport.width + WindowSeparatorWidth ==
+      edWin.viewport.x
+
+    # Total width covers entire terminal
+    check edWin.viewport.x + edWin.viewport.width == termWidth
+
+    # Command line row is reserved (viewport does not extend to last row)
+    check ftWin.viewport.y + ftWin.viewport.height < termHeight
+    check edWin.viewport.y + edWin.viewport.height < termHeight
+
+  test "FileTree does not open when disabled":
+    let config = newEditorConfig()
+    config.startUpFileTree.enable = false
+    let e = newEditor(config, newValidationResult())
+
+    check e.windowManager.windows.len == 1
+
+  test "startUpWindowsDone flag prevents double execution":
+    let config = newEditorConfig()
+    config.startUpFileTree.enable = true
+    let e = newEditor(config, newValidationResult())
+
+    const
+      termWidth = 120
+      termHeight = 40
+      viewportHeight = termHeight - CommandLineHeight
+
+    let win = e.activeWindow
+    win.viewport.width = termWidth
+    win.viewport.height = viewportHeight
+
+    e.toggleFileTree(none(string), e.activeBuffer())
+    e.state.startUpWindowsDone = true
+
+    # Calling again closes (true toggle), so back to 1 window
+    e.toggleFileTree(none(string), e.activeBuffer())
+    check e.windowManager.windows.len == 1
+
+  test "FileTree layout with custom width":
+    let config = newEditorConfig()
+    config.startUpFileTree.enable = true
+    config.fileTree.width = 50
+    let e = newEditor(config, newValidationResult())
+
+    const
+      termWidth = 200
+      termHeight = 50
+      viewportHeight = termHeight - CommandLineHeight
+
+    let win = e.activeWindow
+    win.viewport.width = termWidth
+    win.viewport.height = viewportHeight
+
+    e.toggleFileTree(none(string), e.activeBuffer())
+
+    check e.windowManager.windows.len == 2
+
+    let ftWin = e.windowManager.windows[0]
+    let edWin = e.windowManager.windows[1]
+
+    check ftWin.viewport.width == 50
+    check edWin.viewport.x == 50 + WindowSeparatorWidth
+    check edWin.viewport.width == termWidth - 50 - WindowSeparatorWidth
+
+    # No gap
+    check edWin.viewport.x + edWin.viewport.width == termWidth
+
+    # Command line row is reserved
+    check ftWin.viewport.y + ftWin.viewport.height < termHeight
+    check edWin.viewport.y + edWin.viewport.height < termHeight
+
+  test "toggleFileTree closes when already open":
+    ## Calling toggleFileTree when fileTree is already open should close it.
+    ## Calling a third time should reopen it.
+    let config = newEditorConfig()
+    let e = newEditor(config, newValidationResult())
+
+    const
+      termWidth = 120
+      termHeight = 40
+      viewportHeight = termHeight - CommandLineHeight
+
+    let win = e.activeWindow
+    win.viewport.width = termWidth
+    win.viewport.height = viewportHeight
+
+    # 1st call: Open fileTree
+    e.toggleFileTree(none(string), e.activeBuffer())
+    check e.windowManager.windows.len == 2
+    check e.windowManager.windows[0].mode == EditorMode.FileTree
+
+    # 2nd call: Should close
+    e.toggleFileTree(none(string), e.activeBuffer())
+    check e.windowManager.windows.len == 1
+
+    # 3rd call: Should reopen
+    e.toggleFileTree(none(string), e.activeBuffer())
+    check e.windowManager.windows.len == 2
+    check e.windowManager.windows[0].mode == EditorMode.FileTree
+
+  test "Single window startup reserves command line":
+    ## Without fileTree, handleStartUpWindows still reserves the command line.
+    let config = newEditorConfig()
+    let e = newEditor(config, newValidationResult())
+
+    const
+      termWidth = 160
+      termHeight = 48
+      viewportHeight = termHeight - CommandLineHeight
+
+    let win = e.activeWindow
+    win.viewport.width = termWidth
+    win.viewport.height = viewportHeight
+
+    check e.windowManager.windows.len == 1
+    check win.viewport.height == viewportHeight
+    check win.viewport.y + win.viewport.height < termHeight
+
+  test "toggleFileTree with vsplit distributes width to all windows":
+    ## When 2 windows exist via vsplit, opening filetree should redistribute
+    ## width across all windows, not just shrink the active one.
+    let config = newEditorConfig()
+    let e = newEditor(config, newValidationResult())
+
+    const
+      termWidth = 120
+      termHeight = 40
+      viewportHeight = termHeight - CommandLineHeight
+
+    let win = e.activeWindow
+    win.viewport.width = termWidth
+    win.viewport.height = viewportHeight
+
+    # Create a vertical split (2 windows)
+    discard e.vsplit()
+    check e.windowManager.windows.len == 2
+
+    # Open filetree
+    e.toggleFileTree(none(string), e.activeBuffer())
+    check e.windowManager.windows.len == 3
+
+    let ftWin = e.windowManager.windows[0]
+    let win1 = e.windowManager.windows[1]
+    let win2 = e.windowManager.windows[2]
+
+    # FileTree has fixed width
+    check ftWin.mode == EditorMode.FileTree
+    check ftWin.viewport.width == config.fileTree.width
+
+    # Both editor windows should have equal width
+    check win1.viewport.width == win2.viewport.width
+
+    # No gaps: windows are contiguous
+    check ftWin.viewport.x + ftWin.viewport.width + WindowSeparatorWidth ==
+      win1.viewport.x
+    check win1.viewport.x + win1.viewport.width + WindowSeparatorWidth == win2.viewport.x
+
+    # Total width covers entire terminal
+    check win2.viewport.x + win2.viewport.width == termWidth
+
+  test "toggleFileTree with multiple vsplits distributes evenly":
+    ## With 3 windows via vsplit, filetree should give equal width to all 3.
+    let config = newEditorConfig()
+    let e = newEditor(config, newValidationResult())
+
+    const
+      termWidth = 160
+      termHeight = 40
+      viewportHeight = termHeight - CommandLineHeight
+
+    let win = e.activeWindow
+    win.viewport.width = termWidth
+    win.viewport.height = viewportHeight
+
+    # Create 3 editor windows
+    discard e.vsplit()
+    discard e.vsplit()
+    check e.windowManager.windows.len == 3
+
+    # Open filetree
+    e.toggleFileTree(none(string), e.activeBuffer())
+    check e.windowManager.windows.len == 4
+
+    let ftWin = e.windowManager.windows[0]
+
+    # FileTree has fixed width
+    check ftWin.mode == EditorMode.FileTree
+    check ftWin.viewport.width == config.fileTree.width
+
+    # All 3 editor windows should have approximately equal width
+    # (last window absorbs integer division remainder, so allow diff of 1)
+    let edWin1 = e.windowManager.windows[1]
+    let edWin2 = e.windowManager.windows[2]
+    let edWin3 = e.windowManager.windows[3]
+    check edWin1.viewport.width == edWin2.viewport.width
+    check abs(edWin2.viewport.width - edWin3.viewport.width) <= 1
+
+    # No gaps between filetree and first editor window
+    check ftWin.viewport.x + ftWin.viewport.width + WindowSeparatorWidth ==
+      edWin1.viewport.x
+    check edWin1.viewport.x + edWin1.viewport.width + WindowSeparatorWidth ==
+      edWin2.viewport.x
+
+    # Last window extends to terminal edge (absorbs remainder)
+    check edWin3.viewport.x + edWin3.viewport.width == termWidth
+
+  test "toggleFileTree with hsplit spans full height and adjusts all rows":
+    ## When windows are split horizontally (sp), filetree should span the full
+    ## height and shrink windows in both rows.
+    let config = newEditorConfig()
+    let e = newEditor(config, newValidationResult())
+
+    const
+      termWidth = 120
+      termHeight = 40
+      viewportHeight = termHeight - CommandLineHeight
+
+    let win = e.activeWindow
+    win.viewport.width = termWidth
+    win.viewport.height = viewportHeight
+
+    # Create a horizontal split (top and bottom)
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+
+    let topY = e.windowManager.windows[0].viewport.y
+    let bottomY = e.windowManager.windows[1].viewport.y
+    check topY != bottomY
+
+    # Open filetree
+    e.toggleFileTree(none(string), e.activeBuffer())
+    check e.windowManager.windows.len == 3
+
+    let ftWin = e.windowManager.windows[0]
+    check ftWin.mode == EditorMode.FileTree
+    check ftWin.viewport.width == config.fileTree.width
+
+    # FileTree spans full height (top of topmost to bottom of bottommost)
+    let topWin = e.windowManager.windows[1]
+    let bottomWin = e.windowManager.windows[2]
+    check ftWin.viewport.y == min(topWin.viewport.y, bottomWin.viewport.y)
+    check ftWin.viewport.height ==
+      max(
+        topWin.viewport.y + topWin.viewport.height,
+        bottomWin.viewport.y + bottomWin.viewport.height,
+      ) - ftWin.viewport.y
+
+    # Both editor windows should be shifted right
+    check topWin.viewport.x == config.fileTree.width + WindowSeparatorWidth
+    check bottomWin.viewport.x == config.fileTree.width + WindowSeparatorWidth
+
+    # Both editor windows fill remaining width
+    check topWin.viewport.x + topWin.viewport.width == termWidth
+    check bottomWin.viewport.x + bottomWin.viewport.width == termWidth
+
+  test "toggleFileTree with hsplit+vsplit adjusts all windows":
+    ## Mixed splits: hsplit then vsplit in top row. FileTree should span full
+    ## height and redistribute widths in both rows.
+    let config = newEditorConfig()
+    let e = newEditor(config, newValidationResult())
+
+    const
+      termWidth = 120
+      termHeight = 40
+      viewportHeight = termHeight - CommandLineHeight
+
+    let win = e.activeWindow
+    win.viewport.width = termWidth
+    win.viewport.height = viewportHeight
+
+    # hsplit → 2 windows (top, bottom)
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+
+    # vsplit in top window → 3 windows total
+    # Make top window active
+    e.windowManager.activateWindow(0)
+    e.syncActiveWindow()
+    discard e.vsplit()
+    check e.windowManager.windows.len == 3
+
+    # Open filetree
+    e.toggleFileTree(none(string), e.activeBuffer())
+    check e.windowManager.windows.len == 4
+
+    let ftWin = e.windowManager.windows[0]
+    check ftWin.mode == EditorMode.FileTree
+    check ftWin.viewport.width == config.fileTree.width
+
+    # All editor windows should start after filetree
+    for i in 1 ..< e.windowManager.windows.len:
+      check e.windowManager.windows[i].viewport.x >=
+        config.fileTree.width + WindowSeparatorWidth
+
+    # Last window in each row extends to terminal edge
+    for i in 1 ..< e.windowManager.windows.len:
+      let w = e.windowManager.windows[i]
+      # Check that window + anything to its right fills to termWidth
+      var isLastInRow = true
+      for j in 1 ..< e.windowManager.windows.len:
+        if j != i and e.windowManager.windows[j].viewport.y == w.viewport.y and
+            e.windowManager.windows[j].viewport.x > w.viewport.x:
+          isLastInRow = false
+          break
+      if isLastInRow:
+        check w.viewport.x + w.viewport.width == termWidth

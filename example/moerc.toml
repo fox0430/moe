@@ -270,9 +270,15 @@ friction = 80.0                        # Friction coefficient (velocity decay ra
 
 airDrag = 2.0                          # Air drag coefficient (velocity resistance)
 
+[FileTree]
+width = 30                             # Width of the fileTree sidebar
+
 [StartUp.FileOpen]
 autoSplit = true                       # Auto-split on startup when opening multiple files
 splitType = "vertical"                 # Split type: "vertical" or "horizontal"
+
+[StartUp.FileTree]
+enable = false                         # Open fileTree sidebar on startup
 
 # Key mapping settings - persistent key remappings per mode
 # Same key notation as :nmap/:imap commands

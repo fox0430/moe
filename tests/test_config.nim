@@ -236,6 +236,11 @@ suite "Config - newEditorConfig defaults":
     check config.startUpFileOpen.autoSplit == true
     check config.startUpFileOpen.splitType == stVertical
 
+  test "StartUpFileTree config defaults":
+    let config = newEditorConfig()
+
+    check config.startUpFileTree.enable == false
+
   test "Debug config defaults":
     let config = newEditorConfig()
 

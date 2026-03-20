@@ -97,6 +97,7 @@ type
     claCmapclear # :cmapclear (command-line mode)
     claOnlyWindow # :only (close all other windows)
     claEditConfigFile # :moerc (open config file for editing)
+    claFileTree # :filetree (toggle file tree sidebar)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -231,6 +232,8 @@ type
       discard
     of claEditConfigFile:
       discard
+    of claFileTree:
+      fileTreePath*: Option[string] # Optional root path for file tree
     of claUnknown:
       errorMessage*: string
 
@@ -250,6 +253,7 @@ const ArgumentRequiredActions* = {
   claHSplit, # optional but user may want to specify file
   claFiler, # optional but user may want to specify path
   claTerminal, # optional but user may want to specify command
+  claFileTree, # optional but user may want to specify path
   claMap, # requires lhs and rhs
   claNmap, # requires lhs and rhs
   claImap, # requires lhs and rhs
@@ -944,6 +948,15 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claOnlyWindow)
   of claEditConfigFile:
     return CommandLineResult(kind: claEditConfigFile)
+  of claFileTree:
+    return CommandLineResult(
+      kind: claFileTree,
+      fileTreePath:
+        if cmd.args.len > 0:
+          some(cmd.args[0])
+        else:
+          none(string),
+    )
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

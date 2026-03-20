@@ -12,6 +12,7 @@
 - [References Mode](#references-mode)
 - [Call Hierarchy Mode](#call-hierarchy-mode)
 - [Filer Mode](#filer-mode)
+- [FileTree Mode](#filetree-mode)
 - [Terminal Mode](#terminal-mode)
 - [Configuration Mode](#configuration-mode)
 - [Command Mode](#command-mode)
@@ -335,6 +336,57 @@
 </details>
 
 
+## FileTree mode
+
+<details open>
+  <summary>File Tree Sidebar</summary>
+
+Open the fileTree sidebar with `:filetree` command. If already open, it will close and reopen.
+
+### Navigation
+
+| Keys | Description |
+|:-----------------------------|:---------------------------|
+| <kbd>**j**</kbd> OR <kbd>**Down**</kbd><br> | Move selection down |
+| <kbd>**k**</kbd> OR <kbd>**Up**</kbd><br> | Move selection up |
+| <kbd>**g**</kbd> <kbd>**g**</kbd><br> | Move to first item |
+| <kbd>**G**</kbd><br> | Move to last item |
+| <kbd>**p**</kbd><br> | Move to parent node |
+
+### Open / Expand / Collapse
+
+| Keys | Description |
+|:-----------------------------|:---------------------------|
+| <kbd>**Enter**</kbd><br> | Open file, or toggle expand/collapse directory |
+| <kbd>**o**</kbd> OR <kbd>**l**</kbd><br> | Open file, or expand directory |
+| <kbd>**x**</kbd> OR <kbd>**h**</kbd><br> | Collapse directory (or move to parent) |
+
+### Root Navigation
+
+| Keys | Description |
+|:-----------------------------|:---------------------------|
+| <kbd>**C**</kbd><br> | Change root to selected directory |
+| <kbd>**u**</kbd><br> | Move root up one level |
+
+### Search
+
+| Keys | Description |
+|:-----------------------------|:---------------------------|
+| <kbd>**/**</kbd><br> | Start incremental search |
+| <kbd>**n**</kbd><br> | Jump to next search match |
+| <kbd>**N**</kbd><br> | Jump to previous search match |
+
+### Misc
+
+| Keys | Description |
+|:-----------------------------|:---------------------------|
+| <kbd>**.**</kbd><br> | Toggle hidden files visibility |
+| <kbd>**R**</kbd><br> | Refresh tree |
+| <kbd>**:**</kbd><br> | Enter command mode |
+
+</details>
+
+
 ## Terminal mode
 
 <details open>
@@ -451,6 +503,7 @@ All keystrokes are forwarded to the running shell/command.
 | `backup` | Open backup manager |
 | `config` | Open configuration mode |
 | `debug` | Open debug mode |
+| `filetree` | Open fileTree sidebar (reopen if already open) |
 | `jump` | Open Jump list viewer |
 | `terminal` | Open terminal emulator (default shell) |
 | `terminal command` | Run command in terminal emulator |

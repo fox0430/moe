@@ -587,6 +587,14 @@ proc loadFilerConfig(
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "showIcons", config.showIcons, vr, section)
 
+proc loadFileTreeConfig(
+    table: TomlTableRef, config: var FileTreeConfig, vr: var ValidationResult
+) =
+  const section = "FileTree"
+  const validKeys = ["width"]
+  checkUnknownKeys(table, validKeys, section, vr)
+  loadInt(table, "width", config.width, vr, section, minVal = 1)
+
 proc loadAutocompleteConfig(
     table: TomlTableRef, config: var AutocompleteConfig, vr: var ValidationResult
 ) =
@@ -658,6 +666,14 @@ proc loadStartUpFileOpenConfig(
   loadEnum(
     table, "splitType", config.splitType, vr, section, parseSplitType, ValidSplitTypes
   )
+
+proc loadStartUpFileTreeConfig(
+    table: TomlTableRef, config: var StartUpFileTreeConfig, vr: var ValidationResult
+) =
+  const section = "StartUp.FileTree"
+  const validKeys = ["enable"]
+  checkUnknownKeys(table, validKeys, section, vr)
+  loadBool(table, "enable", config.enable, vr, section)
 
 proc loadDebugWindowNodeConfig(
     table: TomlTableRef,
@@ -1279,8 +1295,9 @@ proc loadConfigFromToml*(
   const knownSections = [
     "Standard", "Clipboard", "BuildOnSave", "TabLine", "StatusLine", "Git",
     "SyntaxChecker", "Theme", "AutoSave", "Notification", "QuickRun", "AutoBackup",
-    "SmoothScroll", "Highlight", "Filer", "Autocomplete", "Persist", "StartUp",
-    "EditorConfig", "Lsp", "Debug", "KeyMapping", "CommandAliases", "ShellCommands",
+    "SmoothScroll", "Highlight", "Filer", "FileTree", "Autocomplete", "Persist",
+    "StartUp", "EditorConfig", "Lsp", "Debug", "KeyMapping", "CommandAliases",
+    "ShellCommands",
   ]
   checkUnknownKeys(toml.getTable(), knownSections, "", vr)
 
@@ -1330,6 +1347,9 @@ proc loadConfigFromToml*(
   if toml.hasKey("Filer"):
     loadFilerConfig(toml["Filer"].getTable(), config.filer, vr)
 
+  if toml.hasKey("FileTree"):
+    loadFileTreeConfig(toml["FileTree"].getTable(), config.fileTree, vr)
+
   if toml.hasKey("Autocomplete"):
     loadAutocompleteConfig(toml["Autocomplete"].getTable(), config.autocomplete, vr)
 
@@ -1338,11 +1358,15 @@ proc loadConfigFromToml*(
 
   if toml.hasKey("StartUp"):
     let startUpTable = toml["StartUp"].getTable()
-    const startUpValidKeys = ["FileOpen"]
+    const startUpValidKeys = ["FileOpen", "FileTree"]
     checkUnknownKeys(startUpTable, startUpValidKeys, "StartUp", vr)
     if startUpTable.hasKey("FileOpen"):
       loadStartUpFileOpenConfig(
         startUpTable["FileOpen"].getTable(), config.startUpFileOpen, vr
+      )
+    if startUpTable.hasKey("FileTree"):
+      loadStartUpFileTreeConfig(
+        startUpTable["FileTree"].getTable(), config.startUpFileTree, vr
       )
 
   if toml.hasKey("EditorConfig"):
@@ -1776,6 +1800,15 @@ proc loadThemeFromToml*(path: string): Result[ThemeColors, string] =
     foreground: ThemeColor(rgb: defaultFg), background: ThemeColor(rgb: defaultBg)
   )
 
+  # Apply default background to all entries that still use the old default (#000000).
+  # This ensures entries not listed in the theme file inherit the user's chosen
+  # background (e.g. "termDefault") instead of keeping hardcoded #000000.
+  let hardcodedDefaultBg = rgb("#000000")
+  for index in EditorColorPairIndex:
+    if index != EditorColorPairIndex.default and
+        colors[index].background.rgb == hardcodedDefaultBg:
+      colors[index].background = ThemeColor(rgb: defaultBg)
+
   # Process all color entries
   for key, value in colorsTable:
     if key == "foreground" or key == "background":
@@ -2062,6 +2095,11 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "showIcons = " & toTomlBool(config.filer.showIcons)
   lines.add ""
 
+  # FileTree section
+  lines.add "[FileTree]"
+  lines.add "width = " & $config.fileTree.width
+  lines.add ""
+
   # Autocomplete section
   lines.add "[Autocomplete]"
   lines.add "enable = " & toTomlBool(config.autocomplete.enable)
@@ -2106,6 +2144,11 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "[StartUp.FileOpen]"
   lines.add "autoSplit = " & toTomlBool(config.startUpFileOpen.autoSplit)
   lines.add "splitType = " & toTomlString($config.startUpFileOpen.splitType)
+  lines.add ""
+
+  # StartUp.FileTree section
+  lines.add "[StartUp.FileTree]"
+  lines.add "enable = " & toTomlBool(config.startUpFileTree.enable)
   lines.add ""
 
   # EditorConfig section

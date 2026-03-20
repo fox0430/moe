@@ -26,6 +26,7 @@ import
     editor, handler, modes, logger, cmdline, filer, lsp_integration, config,
     config_loader,
   ]
+import moepkg/command_handlers/command_mode_handler
 
 proc toCursorStyle(ct: CursorType): CursorStyle =
   ## Convert config CursorType to celina CursorStyle
@@ -84,6 +85,32 @@ proc pollTerminalWindows*(e: Editor) =
               e.setMode(EditorMode.Normal)
           e.state.needsFullRedraw = true
           return
+
+proc handleStartUpWindows(e: Editor, termWidth, termHeight: int) =
+  ## Execute startup window actions on first render when terminal size is known.
+  ## Called once; guards itself with `startUpWindowsDone`.
+  if e.state.startUpWindowsDone:
+    return
+  e.state.startUpWindowsDone = true
+
+  # Reserve the command line row (status line and command line share it).
+  let viewportHeight = termHeight - CommandLineHeight
+
+  # Set viewport to real terminal size with command line reserved.
+  let win = e.activeWindow
+  win.viewport.width = termWidth
+  win.viewport.height = viewportHeight
+
+  # Sync screenSize so the subsequent render does NOT trigger resizeWindows,
+  # which would ratio-scale from the initial 80x20 and break the layout.
+  e.screenSize.width = termWidth
+  e.screenSize.height = termHeight
+  e.screenSize.prevWidth = termWidth
+  e.screenSize.prevHeight = termHeight
+
+  # Open file tree sidebar if configured
+  if e.config.startUpFileTree.enable:
+    e.toggleFileTree(none(string), e.activeBuffer())
 
 proc handleResize(e: Editor) =
   ## Debounce resize events to prevent terminal buffer overflow
@@ -155,6 +182,10 @@ proc runEditor(
     app.onRenderAsync proc(buffer: var Buffer) =
       {.cast(gcsafe).}:
         {.cast(raises: []).}:
+          # Execute startup window actions on first render
+          if not editor.state.startUpWindowsDone:
+            editor.handleStartUpWindows(buffer.area.width, buffer.area.height)
+
           # Poll terminal output for all windows in Terminal mode
           editor.pollTerminalWindows()
 
@@ -235,13 +266,17 @@ proc main() =
   let appConfig = AppConfig(
     title: "moe",
     alternateScreen: true,
-    mouseCapture: true,
+    mouseCapture: false,
     rawMode: true,
     windowMode: false,
     bracketedPaste: true,
   )
   var app = newAsyncApp(appConfig)
   editor.app = app
+
+  # Enable mouse capture if configured
+  if editorConfig.standard.mouse:
+    app.enableMouse()
 
   # Set up LSP diagnostics callback to update buffer markers
   editor.lsp.setDiagnosticsCallback(
