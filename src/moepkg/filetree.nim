@@ -55,8 +55,6 @@ type
 
 const DefaultFileTreeWidth* = 30
 
-proc updateSearchMatches*(state: FileTreeState)
-
 proc scanDirectory(
     path: string, depth: int, showHidden: bool, error: var string
 ): seq[FileTreeNode] =
@@ -155,6 +153,26 @@ proc getChildren(state: FileTreeState, path: string, depth: int): seq[FileTreeNo
     cached[i].depth = 0
   state.childrenCache[path] = cached
   return children
+
+proc updateSearchMatches*(state: FileTreeState) =
+  ## Update searchMatches based on searchText and current flatList.
+  state.searchMatches = @[]
+  if state.searchText.len == 0:
+    state.searchMatchIndex = -1
+    return
+  let query = state.searchText.toLower()
+  for i, node in state.flatList:
+    if query in node.name.toLower():
+      state.searchMatches.add(i)
+  # Restore searchMatchIndex to the match closest to current selection
+  state.searchMatchIndex = -1
+  if state.searchMatches.len > 0:
+    for j, matchIdx in state.searchMatches:
+      if matchIdx >= state.selectedIndex:
+        state.searchMatchIndex = j
+        break
+    if state.searchMatchIndex < 0:
+      state.searchMatchIndex = state.searchMatches.high
 
 proc buildFlatList*(state: FileTreeState) =
   ## Build flattened list of visible nodes from the tree, respecting expanded state.
@@ -279,26 +297,6 @@ proc ensureSelectedVisible*(state: FileTreeState, viewportHeight: int) =
     state.topLine = state.selectedIndex
   elif state.selectedIndex >= state.topLine + availableHeight:
     state.topLine = state.selectedIndex - availableHeight + 1
-
-proc updateSearchMatches*(state: FileTreeState) =
-  ## Update searchMatches based on searchText and current flatList.
-  state.searchMatches = @[]
-  if state.searchText.len == 0:
-    state.searchMatchIndex = -1
-    return
-  let query = state.searchText.toLower()
-  for i, node in state.flatList:
-    if query in node.name.toLower():
-      state.searchMatches.add(i)
-  # Restore searchMatchIndex to the match closest to current selection
-  state.searchMatchIndex = -1
-  if state.searchMatches.len > 0:
-    for j, matchIdx in state.searchMatches:
-      if matchIdx >= state.selectedIndex:
-        state.searchMatchIndex = j
-        break
-    if state.searchMatchIndex < 0:
-      state.searchMatchIndex = state.searchMatches.high
 
 proc jumpToNextMatch*(state: FileTreeState, viewportHeight: int) =
   ## Jump to the next search match, wrapping around.
