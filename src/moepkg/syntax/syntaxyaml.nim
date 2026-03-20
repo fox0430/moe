@@ -267,14 +267,26 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
     g.kind = gtLongStringLit
     # first, we have to find the parent indentation of the block scalar, so that
     # we know when to stop
-    assert g.buf[pos] in {'\n', '\r'}
+    if g.buf[pos] notin {'\n', '\r'}:
+      # Buffer was modified and state is stale; fall back to normal parsing.
+      g.kind = gtNone
+      g.state = gtOther
+      inc(pos)
+      g.pos = pos
+      return
     var lookbehind = pos - 1
     var headerStart = -1
     while lookbehind >= 0 and g.buf[lookbehind] notin {'\n', '\r'}:
       if headerStart == -1 and g.buf[lookbehind] in {'|', '>'}:
         headerStart = lookbehind
       dec(lookbehind)
-    assert headerStart != -1
+    if headerStart == -1:
+      # Block scalar header not found; buffer was modified. Fall back.
+      g.kind = gtNone
+      g.state = gtOther
+      inc(pos)
+      g.pos = pos
+      return
     var indentation = 1
     while g.buf[lookbehind + indentation] == ' ':
       inc(indentation)
