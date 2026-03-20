@@ -1455,3 +1455,64 @@ suite "syntaxyaml - yamlNextToken timestamps":
     g.state = gtOther
     g.yamlNextToken()
     check g.kind == gtDate
+
+suite "syntaxyaml - block scalar stale state recovery":
+  test "gtLongStringLit state with non-newline pos does not crash":
+    # Regression: when the buffer is modified (e.g. paste) the highlighter may
+    # resume in gtLongStringLit state but pos no longer points to a newline.
+    # Previously this triggered an AssertionDefect.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("hello world")
+    g.state = gtLongStringLit
+    # Should not crash; should gracefully fall back.
+    g.yamlNextToken()
+    check g.kind == gtNone
+    check g.state == gtOther
+
+  test "gtLongStringLit state with newline but no block header does not crash":
+    # Regression: headerStart == -1 assertion when block scalar header is
+    # missing from the buffer (buffer was edited after state was saved).
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\nplain text here")
+    g.state = gtLongStringLit
+    # pos=0 is '\n' so the first assert passes, but there is no '|' or '>'
+    # before it, so headerStart stays -1. Should fall back gracefully.
+    g.yamlNextToken()
+    check g.kind == gtNone
+    check g.state == gtOther
+
+  test "gtLongStringLit recovery allows continued parsing":
+    # After recovery from stale state, subsequent tokens should parse normally.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: value")
+    g.state = gtLongStringLit
+    g.yamlNextToken() # recovery
+    check g.state == gtOther
+    # Continue parsing the rest of the buffer.
+    var kinds: seq[TokenClass]
+    while g.kind != gtEof:
+      g.yamlNextToken()
+      kinds.add(g.kind)
+    # Should reach EOF without crashing.
+    check kinds[^1] == gtEof
+
+  test "gtCommand with non-newline char transitions to gtOther":
+    # When in gtCommand state (block scalar header) and the current char is
+    # not whitespace/comment/newline, state should reset to gtOther.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("abc")
+    g.state = gtCommand
+    g.yamlNextToken()
+    check g.state == gtOther
+
+  test "normal block scalar still works after fix":
+    # Ensure the fix does not break valid block scalar parsing.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("|\n  hello\n  world\n")
+    g.state = gtOther
+    g.yamlNextToken() # '|'
+    check g.kind == gtCommand
+    g.yamlNextToken() # newline
+    check g.state == gtLongStringLit
+    g.yamlNextToken() # block scalar content
+    check g.kind == gtLongStringLit
