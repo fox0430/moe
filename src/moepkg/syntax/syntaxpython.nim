@@ -48,7 +48,31 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
     symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
-  if g.state == gtStringLit:
+  if g.state == gtDocLongComment:
+    # Continuation of triple-quoted docstring across lines.
+    # commentDepth: 1 = """, 2 = '''
+    g.kind = gtDocLongComment
+    let quoteChar = if g.commentDepth == 1: '\"' else: '\''
+    while true:
+      case g.buf[pos]
+      of '\0':
+        break
+      of '\\':
+        inc(pos)
+        if g.buf[pos] != '\0':
+          inc(pos)
+      of '\"', '\'':
+        if g.buf[pos] == quoteChar and g.buf[pos + 1] == quoteChar and
+            g.buf[pos + 2] == quoteChar:
+          inc(pos, 3)
+          g.state = gtNone
+          g.commentDepth = 0
+          break
+        else:
+          inc(pos)
+      else:
+        inc(pos)
+  elif g.state == gtStringLit:
     g.kind = gtStringLit
     while true:
       case g.buf[pos]
@@ -129,20 +153,45 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
       if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
         inc(pos)
     of '\"', '\'':
+      let quoteChar = g.buf[pos]
       inc(pos)
-      g.kind = gtStringLit
-      while true:
-        case g.buf[pos]
-        of '\0':
-          break
-        of '\"', '\'':
-          inc(pos)
-          break
-        of '\\':
-          g.state = g.kind
-          break
-        else:
-          inc(pos)
+      if g.buf[pos] == quoteChar and g.buf[pos + 1] == quoteChar:
+        # Triple-quoted string (docstring)
+        inc(pos, 2)
+        g.kind = gtDocLongComment
+        while true:
+          case g.buf[pos]
+          of '\0':
+            g.state = gtDocLongComment
+            g.commentDepth = if quoteChar == '\"': 1 else: 2
+            break
+          of '\\':
+            inc(pos)
+            if g.buf[pos] != '\0':
+              inc(pos)
+          of '\"', '\'':
+            if g.buf[pos] == quoteChar and g.buf[pos + 1] == quoteChar and
+                g.buf[pos + 2] == quoteChar:
+              inc(pos, 3)
+              break
+            else:
+              inc(pos)
+          else:
+            inc(pos)
+      else:
+        g.kind = gtStringLit
+        while true:
+          case g.buf[pos]
+          of '\0':
+            break
+          of '\"', '\'':
+            inc(pos)
+            break
+          of '\\':
+            g.state = g.kind
+            break
+          else:
+            inc(pos)
     of '(':
       inc(pos)
       g.kind = gtPunctuation

@@ -724,7 +724,7 @@ suite "syntaxnim - nimNextToken comments":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("## doc comment")
     g.nimNextToken()
-    check g.kind == gtComment
+    check g.kind == gtDocComment
     check g.length == 14
 
   test "multiline comment":
@@ -1441,3 +1441,29 @@ suite "syntaxnim - nimNextToken escape edge cases":
 
     g.nimNextToken()
     check g.kind == gtEscapeSequence
+
+suite "syntaxnim - nimNextToken doc comments":
+  test "doc line comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("## doc comment")
+    g.nimNextToken()
+    check g.kind == gtDocComment
+    check g.length == 14
+
+  test "doc block comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("##[doc block]##")
+    g.nimNextToken()
+    check g.kind == gtDocLongComment
+
+  test "regular line comment is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("# regular comment")
+    g.nimNextToken()
+    check g.kind == gtComment
+
+  test "regular block comment is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#[regular block]#")
+    g.nimNextToken()
+    check g.kind == gtLongComment

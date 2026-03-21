@@ -550,6 +550,21 @@ suite "syntaxpython - pythonNextToken comments":
     g.pythonNextToken() # # comment
     check g.kind == gtComment
 
+  test "double hash is not doc comment":
+    # Python's ## is just a regular comment, not a doc comment
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("## TODO: fix this")
+    g.pythonNextToken()
+    check g.kind == gtComment
+    check g.length == 17
+
+  test "double hash only":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("##")
+    g.pythonNextToken()
+    check g.kind == gtComment
+    check g.length == 2
+
 suite "syntaxpython - pythonNextToken operators":
   test "plus operator":
     var g: GeneralTokenizer
@@ -1152,3 +1167,298 @@ suite "syntaxpython - pythonNextToken special characters":
     g.initGeneralTokenizer("\\")
     g.pythonNextToken()
     check g.kind == gtOperator
+
+suite "syntaxpython - pythonNextToken triple-quoted docstrings":
+  test "triple double-quote docstring":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"hello world\"\"\"")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.length == 17
+
+  test "triple single-quote docstring":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'''hello world'''")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.length == 17
+
+  test "empty triple double-quote docstring":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"\"\"\"")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.length == 6
+
+  test "empty triple single-quote docstring":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("''''''")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.length == 6
+
+  test "triple double-quote with embedded single quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"it's a test\"\"\"")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+
+  test "triple single-quote with embedded double quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'''say \"hello\"'''")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+
+  test "triple double-quote with embedded single double-quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"a \" b\"\"\"")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+
+  test "triple double-quote with embedded double double-quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"a \"\" b\"\"\"")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+
+  test "unterminated triple double-quote sets continuation state":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"hello world")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtDocLongComment
+    check g.commentDepth == 1
+
+  test "unterminated triple single-quote sets continuation state":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'''hello world")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtDocLongComment
+    check g.commentDepth == 2
+
+  test "multi-line triple double-quote continuation":
+    var g: GeneralTokenizer
+    # First line: opening triple quote
+    g.initGeneralTokenizer("\"\"\"first line")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtDocLongComment
+    check g.commentDepth == 1
+
+    # Second line: simulate continuation by setting buf/pos directly
+    let line2 = "second line\"\"\""
+    g.buf = line2
+    g.pos = 0
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtNone
+    check g.commentDepth == 0
+
+  test "multi-line triple single-quote continuation":
+    var g: GeneralTokenizer
+    # First line: opening triple quote
+    g.initGeneralTokenizer("'''first line")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtDocLongComment
+    check g.commentDepth == 2
+
+    # Second line: simulate continuation
+    let line2 = "second line'''"
+    g.buf = line2
+    g.pos = 0
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtNone
+    check g.commentDepth == 0
+
+  test "triple-quote with escape sequence":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"test\\\"\\\"\\\"more\"\"\"")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+
+  test "docstring after def":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("def foo():\n    \"\"\"Docstring.\"\"\"")
+
+    # def
+    g.pythonNextToken()
+    check g.kind == gtKeyword
+
+    # space
+    g.pythonNextToken()
+    check g.kind == gtWhitespace
+
+    # foo
+    g.pythonNextToken()
+    check g.kind == gtIdentifier
+
+    # (
+    g.pythonNextToken()
+    check g.kind == gtPunctuation
+
+    # )
+    g.pythonNextToken()
+    check g.kind == gtPunctuation
+
+    # :
+    g.pythonNextToken()
+    check g.kind == gtPunctuation
+
+    # \n    (whitespace)
+    g.pythonNextToken()
+    check g.kind == gtWhitespace
+
+    # """Docstring."""
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+
+  test "single double-quote string still works":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"hello\"")
+    g.pythonNextToken()
+    check g.kind == gtStringLit
+
+  test "single single-quote string still works":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'hello'")
+    g.pythonNextToken()
+    check g.kind == gtStringLit
+
+  test "empty double-quote string still works":
+    # "" is two quotes, not start of triple quote
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"")
+    g.pythonNextToken()
+    check g.kind == gtStringLit
+    check g.length == 2
+
+  test "empty single-quote string still works":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("''")
+    g.pythonNextToken()
+    check g.kind == gtStringLit
+    check g.length == 2
+
+  test "three-line triple double-quote continuation":
+    var g: GeneralTokenizer
+    # Line 1: opening
+    g.initGeneralTokenizer("\"\"\"first")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtDocLongComment
+
+    # Line 2: middle (no open/close)
+    let line2 = "middle line"
+    g.buf = line2
+    g.pos = 0
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtDocLongComment
+
+    # Line 3: closing
+    let line3 = "last\"\"\""
+    g.buf = line3
+    g.pos = 0
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtNone
+    check g.commentDepth == 0
+
+  test "token after completed docstring":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"doc\"\"\" + x")
+
+    # """doc"""
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+
+    # space
+    g.pythonNextToken()
+    check g.kind == gtWhitespace
+
+    # +
+    g.pythonNextToken()
+    check g.kind == gtOperator
+
+    # space
+    g.pythonNextToken()
+    check g.kind == gtWhitespace
+
+    # x
+    g.pythonNextToken()
+    check g.kind == gtIdentifier
+
+  test "backslash at end of unterminated docstring line":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"test\\")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtDocLongComment
+    check g.commentDepth == 1
+
+  test "triple single-quote not closed by triple double-quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'''hello\"\"\"world'''")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.length == 19
+
+  test "triple double-quote not closed by triple single-quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"hello'''world\"\"\"")
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.length == 19
+
+  test "mismatched quotes in continuation do not close":
+    var g: GeneralTokenizer
+    # Open with """
+    g.initGeneralTokenizer("\"\"\"start")
+    g.pythonNextToken()
+    check g.state == gtDocLongComment
+    check g.commentDepth == 1
+
+    # Continuation with ''' should NOT close
+    let line2 = "has ''' inside"
+    g.buf = line2
+    g.pos = 0
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtDocLongComment
+
+    # Close with correct """
+    let line3 = "end\"\"\""
+    g.buf = line3
+    g.pos = 0
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtNone
+
+  test "token after completed continuation docstring":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"start")
+    g.pythonNextToken()
+    check g.state == gtDocLongComment
+
+    # Closing + more tokens on same line
+    let line2 = "end\"\"\" + y"
+    g.buf = line2
+    g.pos = 0
+    g.pythonNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtNone
+
+    g.pythonNextToken()
+    check g.kind == gtWhitespace
+
+    g.pythonNextToken()
+    check g.kind == gtOperator
+
+    g.pythonNextToken()
+    check g.kind == gtWhitespace
+
+    g.pythonNextToken()
+    check g.kind == gtIdentifier

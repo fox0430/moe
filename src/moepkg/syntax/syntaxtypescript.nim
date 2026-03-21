@@ -120,12 +120,12 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
     return
 
   # Handle block comment continuation
-  if g.state == gtLongComment:
+  if g.state in {gtLongComment, gtDocLongComment}:
     if g.buf[pos] == '\0':
       g.kind = gtEof
       g.length = 0
       return
-    g.kind = gtLongComment
+    g.kind = g.state
     while true:
       case g.buf[pos]
       of '*':
@@ -280,9 +280,10 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
     elif g.buf[pos] == '*':
       g.kind = gtLongComment
       inc(pos)
-      # Detect JSDoc: /** but not /**/ (empty)
+      # Detect TSDoc: /** but not /**/ (empty)
       if g.buf[pos] == '*' and g.buf[pos + 1] != '/':
-        g.commentDepth = 1 # Mark as JSDoc
+        g.commentDepth = 1 # Mark as TSDoc
+        g.kind = gtDocLongComment
       else:
         g.commentDepth = 0
       while true:
@@ -296,11 +297,11 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
         of '@':
           if g.commentDepth == 1 and g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z'}:
             if pos > g.start:
-              g.state = gtLongComment
+              g.state = gtDocLongComment
               break
             else:
               g.kind = gtPreprocessor
-              g.state = gtLongComment
+              g.state = gtDocLongComment
               inc(pos)
               while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
                 inc(pos)
@@ -309,11 +310,11 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
             inc(pos)
         of '{':
           if g.commentDepth == 1 and pos > g.start:
-            g.state = gtLongComment
+            g.state = gtDocLongComment
             break
           elif g.commentDepth == 1:
             g.kind = gtPreprocessor
-            g.state = gtLongComment
+            g.state = gtDocLongComment
             var braceNest = 0
             while g.buf[pos] != '\0' and
                 not (g.buf[pos] == '*' and g.buf[pos + 1] == '/'):
@@ -329,7 +330,7 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
           else:
             inc(pos)
         of '\0':
-          g.state = gtLongComment
+          g.state = if g.commentDepth == 1: gtDocLongComment else: gtLongComment
           break
         else:
           inc(pos)

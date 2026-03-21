@@ -82,11 +82,11 @@ proc clikeNextToken*(
         break
       else:
         inc(pos)
-  elif g.state == gtLongComment:
+  elif g.state in {gtLongComment, gtDocLongComment}:
     if g.buf[pos] == '\0':
       g.kind = gtEof
     else:
-      g.kind = gtLongComment
+      g.kind = g.state
     var nested = 0
     while g.kind != gtEof:
       case g.buf[pos]
@@ -116,13 +116,19 @@ proc clikeNextToken*(
     of '/':
       inc(pos)
       if g.buf[pos] == '/':
-        g.kind = gtComment
+        if g.buf[pos + 1] == '/' and hasTripleSlashDocComments in flags:
+          g.kind = gtDocComment
+        else:
+          g.kind = gtComment
         while not (g.buf[pos] in {'\0', '\n', '\r'}):
           inc(pos)
       elif g.buf[pos] == '*':
         g.kind = gtLongComment
         var nested = 0
         inc(pos)
+        # Detect doc comment: /** but not /**/
+        if g.buf[pos] == '*' and g.buf[pos + 1] != '/':
+          g.kind = gtDocLongComment
         while true:
           case g.buf[pos]
           of '*':
@@ -138,7 +144,7 @@ proc clikeNextToken*(
               if hasNestedComments in flags:
                 inc(nested)
           of '\0':
-            g.state = gtLongComment
+            g.state = g.kind
             break
           else:
             inc(pos)

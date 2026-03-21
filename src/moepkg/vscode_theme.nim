@@ -392,6 +392,8 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
       let fg = colorFromNode(s{"foreground"})
       result[EditorColorPairIndex.comment].foreground = ThemeColor(rgb: fg)
       result[EditorColorPairIndex.longComment].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.docComment].foreground = ThemeColor(rgb: fg)
+      result[EditorColorPairIndex.docLongComment].foreground = ThemeColor(rgb: fg)
 
   # Whitespace foreground
   if colors != nil and colors.contains("editorWhitespace.foreground"):

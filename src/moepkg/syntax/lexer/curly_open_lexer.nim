@@ -103,13 +103,13 @@ proc lexCurlyDashComment*(
     else:
       if lexer.buf[result] == '|':
         if hasCurlyDashPipeComments in flags:
-          lexer.kind = gtStringLit
+          lexer.kind = gtDocLongComment
           inc result
 
       while true:
         case lexer.buf[result]
         of '\0':
-          lexer.state = gtLongComment
+          lexer.state = lexer.kind
           lexer.commentDepth = depth
           break
         of '-':

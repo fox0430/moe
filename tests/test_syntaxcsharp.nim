@@ -374,7 +374,7 @@ suite "syntaxcsharp - csharpNextToken comments":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("/// <summary>")
     g.csharpNextToken()
-    check g.kind == gtComment
+    check g.kind == gtDocComment
 
 suite "syntaxcsharp - csharpNextToken preprocessor":
   test "region directive":
@@ -792,7 +792,7 @@ suite "syntaxcsharp - csharpNextToken additional edge cases":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("/****/")
     g.csharpNextToken()
-    check g.kind == gtLongComment
+    check g.kind == gtDocLongComment
     check g.length == 6
 
   test "preprocessor with extra spaces":
@@ -933,3 +933,22 @@ suite "syntaxcsharp - csharpNextToken C# specific":
 
     check gtIdentifier in tokens # x, i
     check gtKeyword in tokens # is, int
+
+suite "syntaxcsharp - csharpNextToken doc comments":
+  test "triple slash doc comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/// <summary>")
+    g.csharpNextToken()
+    check g.kind == gtDocComment
+
+  test "regular line comment is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("// regular")
+    g.csharpNextToken()
+    check g.kind == gtComment
+
+  test "doc block comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** doc */")
+    g.csharpNextToken()
+    check g.kind == gtDocLongComment

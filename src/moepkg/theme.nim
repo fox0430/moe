@@ -108,6 +108,8 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.octNumber: makeColorPairDefaultBg("#d19a66"),
   EditorColorPairIndex.comment: makeColorPairDefaultBg("#5c6773"),
   EditorColorPairIndex.longComment: makeColorPairDefaultBg("#5c6773"),
+  EditorColorPairIndex.docComment: makeColorPairDefaultBg("#7a8a99"),
+  EditorColorPairIndex.docLongComment: makeColorPairDefaultBg("#7a8a99"),
   EditorColorPairIndex.whitespace: makeColorPairDefaultBg("#4b5263"),
   EditorColorPairIndex.preprocessor: makeColorPairDefaultBg("#c678dd"),
   EditorColorPairIndex.pragma: makeColorPairDefaultBg("#c678dd"),
