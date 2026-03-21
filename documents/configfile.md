@@ -1074,6 +1074,8 @@ And, `termDefault` can be used for both foreground and background to use the ter
 | octNumber | Syntax highlighting color |
 | comment | Syntax highlighting color |
 | longComment | Syntax highlighting color |
+| docComment | Syntax highlighting color |
+| docLongComment | Syntax highlighting color |
 | whitespace | Syntax highlighting color |
 | preprocessor | Syntax highlighting color |
 | pragma | Syntax highlighting color |

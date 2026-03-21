@@ -1104,3 +1104,16 @@ suite "syntaxhaskell - haskellNextToken string continuation":
 
     check gtStringLit in tokens
     check gtEscapeSequence in tokens
+
+suite "syntaxhaskell - haskellNextToken doc comments":
+  test "haddock doc comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("{-| doc -}")
+    g.haskellNextToken()
+    check g.kind == gtDocLongComment
+
+  test "regular block comment is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("{- regular -}")
+    g.haskellNextToken()
+    check g.kind == gtLongComment

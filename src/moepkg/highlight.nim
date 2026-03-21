@@ -437,6 +437,8 @@ proc getEditorColorPair(
   of gtOctNumber: EditorColorPairIndex.octNumber
   of gtComment: EditorColorPairIndex.comment
   of gtLongComment: EditorColorPairIndex.longComment
+  of gtDocComment: EditorColorPairIndex.docComment
+  of gtDocLongComment: EditorColorPairIndex.docLongComment
   of gtPreprocessor: EditorColorPairIndex.preprocessor
   of gtFunctionName: EditorColorPairIndex.functionName
   of gtTypeName: EditorColorPairIndex.typeName

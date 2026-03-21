@@ -842,7 +842,7 @@ suite "syntaxc - cNextToken additional edge cases":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("/****/")
     g.cNextToken()
-    check g.kind == gtLongComment
+    check g.kind == gtDocLongComment
     check g.length == 6
 
   test "block comment with nested slash":
@@ -1111,3 +1111,28 @@ suite "syntaxc - cNextToken special cases":
     check gtDecNumber in tokens # 1
     check gtPunctuation in tokens # ;
     check gtComment in tokens # // comment
+
+suite "syntaxc - cNextToken doc comments":
+  test "doc block comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** doc */")
+    g.cNextToken()
+    check g.kind == gtDocLongComment
+
+  test "regular block comment is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/* regular */")
+    g.cNextToken()
+    check g.kind == gtLongComment
+
+  test "empty doc comment is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/**/")
+    g.cNextToken()
+    check g.kind == gtLongComment
+
+  test "multiline doc block comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/**\n * @param x\n */")
+    g.cNextToken()
+    check g.kind == gtDocLongComment

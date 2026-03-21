@@ -245,6 +245,31 @@ suite "syntaxjava - javaNextToken EOF":
     g.javaNextToken() # EOF
     check g.kind == gtEof
 
+suite "syntaxjava - javaNextToken doc comments":
+  test "doc block comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** doc */")
+    g.javaNextToken()
+    check g.kind == gtDocLongComment
+
+  test "regular block comment is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/* regular */")
+    g.javaNextToken()
+    check g.kind == gtLongComment
+
+  test "empty doc comment is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/**/")
+    g.javaNextToken()
+    check g.kind == gtLongComment
+
+  test "multiline doc block comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/**\n * @param x\n */")
+    g.javaNextToken()
+    check g.kind == gtDocLongComment
+
 suite "syntaxjava - javaNextToken complete code":
   test "simple class definition":
     var g: GeneralTokenizer

@@ -502,7 +502,7 @@ suite "syntaxjavascript - javaScriptNextToken comments":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("/** @param x */")
     g.javaScriptNextToken()
-    check g.kind == gtLongComment
+    check g.kind == gtDocLongComment
 
 suite "syntaxjavascript - javaScriptNextToken operators":
   test "plus operator":
@@ -1292,7 +1292,7 @@ suite "syntaxjavascript - javaScriptNextToken comment edge cases":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("/****/")
     g.javaScriptNextToken()
-    check g.kind == gtLongComment
+    check g.kind == gtDocLongComment
     check g.length == 6
 
   test "block comment with nested slash":
@@ -1631,7 +1631,7 @@ suite "syntaxjavascript - JSDoc highlighting":
         break
       tokens.add(g.kind)
     check gtPreprocessor in tokens
-    check gtLongComment in tokens
+    check gtDocLongComment in tokens
 
   test "JSDoc type annotation is preprocessor":
     var g: GeneralTokenizer
@@ -1715,17 +1715,17 @@ suite "syntaxjavascript - JSDoc highlighting":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("/**\n * @param {string} name\n */")
     var hasPreprocessor = false
-    var hasLongComment = false
+    var hasDocLongComment = false
     while true:
       g.javaScriptNextToken()
       if g.kind == gtEof:
         break
       if g.kind == gtPreprocessor:
         hasPreprocessor = true
-      if g.kind == gtLongComment:
-        hasLongComment = true
+      if g.kind == gtDocLongComment:
+        hasDocLongComment = true
     check hasPreprocessor
-    check hasLongComment
+    check hasDocLongComment
 
   test "multi-line JSDoc continuation (line-by-line)":
     # First line: /**
@@ -1735,7 +1735,7 @@ suite "syntaxjavascript - JSDoc highlighting":
       g.javaScriptNextToken()
       if g.kind == gtEof:
         break
-    check g.state == gtLongComment
+    check g.state == gtDocLongComment
     check g.commentDepth == 1
 
     # Second line: * @param x
@@ -1752,7 +1752,7 @@ suite "syntaxjavascript - JSDoc highlighting":
       if g.kind == gtPreprocessor:
         hasPreprocessor = true
     check hasPreprocessor
-    check g.state == gtLongComment
+    check g.state == gtDocLongComment
 
     # Third line: */
     let savedState2 = g.state

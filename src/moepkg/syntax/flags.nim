@@ -50,6 +50,7 @@ type
     hasShebang
     hasTripleBacktickFramedExpressions
     hasTripleDashPreprocessor
+    hasTripleSlashDocComments
 
   ## The set of rules applying for a given language.
   ##

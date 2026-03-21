@@ -477,7 +477,7 @@ suite "syntaxrust - rustNextToken comments":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("/// doc comment")
     g.rustNextToken()
-    check g.kind == gtComment
+    check g.kind == gtDocComment
 
 suite "syntaxrust - rustNextToken operators":
   test "plus operator":
@@ -1128,3 +1128,28 @@ suite "syntaxrust - rustNextToken special cases":
     g.rustNextToken()
     check g.kind == gtIdentifier
     check g.length == 1
+
+suite "syntaxrust - rustNextToken doc comments":
+  test "outer doc comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/// outer doc")
+    g.rustNextToken()
+    check g.kind == gtDocComment
+
+  test "inner doc comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("//! inner doc")
+    g.rustNextToken()
+    check g.kind == gtDocComment
+
+  test "regular line comment is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("// regular comment")
+    g.rustNextToken()
+    check g.kind == gtComment
+
+  test "quadruple slash is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("//// not doc")
+    g.rustNextToken()
+    check g.kind == gtComment

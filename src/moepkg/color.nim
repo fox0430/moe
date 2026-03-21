@@ -184,6 +184,8 @@ type
     octNumber
     comment
     longComment
+    docComment
+    docLongComment
     whitespace
     preprocessor
     pragma

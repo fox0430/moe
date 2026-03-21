@@ -86,6 +86,8 @@ type
     gtPunctuation
     gtComment
     gtLongComment
+    gtDocComment
+    gtDocLongComment
     gtRegularExpression
     gtTagStart
     gtTagEnd

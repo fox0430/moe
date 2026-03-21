@@ -1533,6 +1533,10 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.comment)
   of "longComment":
     return some(EditorColorPairIndex.longComment)
+  of "docComment":
+    return some(EditorColorPairIndex.docComment)
+  of "docLongComment":
+    return some(EditorColorPairIndex.docLongComment)
   of "whitespace":
     return some(EditorColorPairIndex.whitespace)
   of "preprocessor":

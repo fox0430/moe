@@ -129,7 +129,7 @@ suite "curly_open_lexer - lexCurlyDashComment pipe comments":
     g.initGeneralTokenizer("{-| Documentation -}")
     let endPos = g.lexCurlyDashComment(1, flagsHaskell)
     check endPos == 20
-    check g.kind == gtStringLit
+    check g.kind == gtDocLongComment
 
   test "multiline pipe comment":
     var g: GeneralTokenizer
@@ -137,7 +137,7 @@ suite "curly_open_lexer - lexCurlyDashComment pipe comments":
     g.initGeneralTokenizer(s)
     let endPos = g.lexCurlyDashComment(1, flagsHaskell)
     check endPos == s.len
-    check g.kind == gtStringLit
+    check g.kind == gtDocLongComment
 
   test "pipe comment without hasCurlyDashPipeComments flag":
     var g: GeneralTokenizer
@@ -145,8 +145,8 @@ suite "curly_open_lexer - lexCurlyDashComment pipe comments":
     let flags: TokenizerFlags = {hasCurlyDashComments, hasNestedComments}
     let endPos = g.lexCurlyDashComment(1, flags)
     check endPos == 20
-    # Without flag, kind is not set to gtStringLit
-    check g.kind != gtStringLit
+    # Without flag, kind is not set to gtDocLongComment
+    check g.kind != gtDocLongComment
 
 suite "curly_open_lexer - lexCurlyDashComment unterminated":
   test "unterminated comment":
@@ -256,7 +256,7 @@ suite "curly_open_lexer - lexCurlyDashComment unicode":
     g.initGeneralTokenizer(s)
     let endPos = g.lexCurlyDashComment(1, flagsHaskell)
     check endPos == s.len
-    check g.kind == gtStringLit
+    check g.kind == gtDocLongComment
 
   test "unicode in preprocessor":
     var g: GeneralTokenizer
@@ -291,4 +291,4 @@ suite "curly_open_lexer - lexCurlyDashComment with flagsHaskell":
     g.initGeneralTokenizer("{-| doc -}")
     let endPos = g.lexCurlyDashComment(1, flagsHaskell)
     check endPos == 10
-    check g.kind == gtStringLit
+    check g.kind == gtDocLongComment

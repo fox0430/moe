@@ -647,7 +647,7 @@ suite "syntaxcpp - cppNextToken additional edge cases":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("/****/")
     g.cppNextToken()
-    check g.kind == gtLongComment
+    check g.kind == gtDocLongComment
     check g.length == 6
 
   test "preprocessor with extra spaces":
@@ -784,3 +784,22 @@ suite "syntaxcpp - cppNextToken C++ specific":
     check gtPunctuation in tokens # [, ], (, ), {, }, ;
     check gtKeyword in tokens # int, return
     check gtIdentifier in tokens # x
+
+suite "syntaxcpp - cppNextToken doc comments":
+  test "doc block comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** doc */")
+    g.cppNextToken()
+    check g.kind == gtDocLongComment
+
+  test "regular block comment is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/* regular */")
+    g.cppNextToken()
+    check g.kind == gtLongComment
+
+  test "empty doc comment is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/**/")
+    g.cppNextToken()
+    check g.kind == gtLongComment

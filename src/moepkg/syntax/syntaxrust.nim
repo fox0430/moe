@@ -146,7 +146,11 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
     of '/':
       inc(pos)
       if g.buf[pos] == '/':
-        g.kind = gtComment
+        # /// (outer doc) or //! (inner doc), but //// is not doc
+        if (g.buf[pos + 1] == '/' and g.buf[pos + 2] != '/') or g.buf[pos + 1] == '!':
+          g.kind = gtDocComment
+        else:
+          g.kind = gtComment
         while not (g.buf[pos] in {'\0', '\n', '\r'}):
           inc(pos)
       elif g.buf[pos] == '*':

@@ -13,4 +13,4 @@ const csharpKeywords* = [
 ]
 
 proc csharpNextToken*(g: var GeneralTokenizer) =
-  clikeNextToken(g, csharpKeywords, {hasPreprocessor})
+  clikeNextToken(g, csharpKeywords, {hasPreprocessor, hasTripleSlashDocComments})

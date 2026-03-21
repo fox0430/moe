@@ -94,7 +94,7 @@ proc lexDoubleHashBracketComment(
 ## - Nim
 
 proc lexDoubleHashLineComment(
-    lexer: GeneralTokenizer, position: int, flags: TokenizerFlags
+    lexer: var GeneralTokenizer, position: int, flags: TokenizerFlags
 ): int =
   result = position
 
@@ -103,6 +103,7 @@ proc lexDoubleHashLineComment(
 
     if lexer.buf[result] == '[':
       if hasDoubleHashBracketComments in flags:
+        lexer.kind = gtDocLongComment
         result = lexer.lexDoubleHashBracketComment(result, hasNestedComments in flags)
       else:
         result = lexer.endLine(result)
@@ -173,6 +174,11 @@ proc lexHashLineComment*(
     case lexer.buf[result]
     of '#':
       if hasDoubleHashComments in flags:
+        # Only treat ## as doc comment for languages with ##[ ] bracket comments
+        # (i.e. Nim). Python also has hasDoubleHashComments but ## is not a doc
+        # comment there.
+        if hasDoubleHashBracketComments in flags:
+          lexer.kind = gtDocComment
         result = lexer.lexDoubleHashLineComment(result, flags)
       else:
         result = lexer.endLine(result)
