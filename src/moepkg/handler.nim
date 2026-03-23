@@ -208,8 +208,8 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       hrLspSelectionRange, hrLspDocumentLink, hrShellCommand, hrBackground, hrJumpList,
       hrChanges, hrBuild, hrDebug, hrDebugViewerQuit, hrConfig, hrConfigQuit,
       hrConfigSaveConfig, hrPutConfigFile, hrTheme, hrLspLog, hrLspFormat, hrLspRestart,
-      hrLspFold, hrLspExecuteCommand, hrSubstitute, hrMan, hrReferencesQuit,
-      hrReferencesJumpTo, hrEnterReferences, hrDocumentSymbolQuit,
+      hrLspFold, hrLspExecuteCommand, hrSubstitute, hrDeleteLines, hrMan,
+      hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences, hrDocumentSymbolQuit,
       hrDocumentSymbolJumpTo, hrEnterDocumentSymbol, hrCallHierarchyQuit,
       hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
       hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrEnterTerminal,
@@ -1775,9 +1775,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
         return false
   of hrVSplit, hrHSplit, hrNew, hrVnew, hrEdit, hrSetBoolOption, hrSetIntOption,
       hrSetFloatOption, hrClearSearchHighlight, hrSave, hrStripWhitespace,
-      hrShellCommand, hrBackground, hrMan, hrSubstitute, hrQuickRun, hrBuild, hrDebug,
-      hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList, hrChanges,
-      hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterLogViewer,
+      hrShellCommand, hrBackground, hrMan, hrSubstitute, hrDeleteLines, hrQuickRun,
+      hrBuild, hrDebug, hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList,
+      hrChanges, hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterLogViewer,
       hrEnterHelpViewer, hrEnterBufferManager, hrEnterBookmarkManager,
       hrEnterBackupManager, hrEnterDiffViewer, hrEnterReferences, hrEnterDocumentSymbol,
       hrEnterCallHierarchy, hrEnterTerminal, hrOnlyWindow:

@@ -39,6 +39,7 @@ type
     claSet # :set
     claHelp # :help, :h
     claSubstitute # :s
+    claDeleteLines # :d, :%d (delete lines)
     claGoto # :123 (go to line 123)
     claVSplit # :vs (vertical split)
     claHSplit # :sp (horizontal split)
@@ -150,6 +151,11 @@ type
       isGlobal*: bool # Whether % prefix (all lines)
       startLine*: int # Start line (1-based, 0 means current line)
       endLine*: int # End line (1-based, 0 means current line)
+    of claDeleteLines:
+      deleteHasRange*: bool # Whether a line range is specified
+      deleteIsGlobal*: bool # Whether % prefix (all lines)
+      deleteStartLine*: int # Start line (1-based, 0 means current line)
+      deleteEndLine*: int # End line (1-based, 0 means current line)
     of claHelp:
       topic*: Option[string]
     of claVSplit:
@@ -520,6 +526,119 @@ proc extractSubstituteFlags*(commandText: string): string =
     return parsed.flags
   return ""
 
+type DeleteParseResult* = object ## Result of parsing a delete command
+  isValid*: bool # Whether this is a valid delete command
+  isGlobal*: bool # Whether the % prefix is present (all lines)
+  hasRange*: bool # Whether a line range is specified (e.g., 1,10)
+  startLine*: int # Start line (1-based, 0 means current line)
+  endLine*: int # End line (1-based, 0 means current line)
+
+proc parseDeleteCommand*(commandText: string): DeleteParseResult =
+  ## Parse a delete command and extract range information
+  ## Supports formats:
+  ##   :d - delete current line
+  ##   :%d - delete all lines
+  ##   :1,10d - delete lines 1 to 10
+  ##   :.,10d - delete from current line to line 10
+  ##   :1,.d - delete from line 1 to current line
+  result = DeleteParseResult(isValid: false)
+
+  if commandText.len < 1:
+    return
+
+  # Remove leading ":"
+  let cmd =
+    if commandText[0] == ':':
+      commandText[1 ..^ 1]
+    else:
+      commandText
+
+  if cmd.len == 0:
+    return
+
+  # Check for simple :d
+  if cmd == "d":
+    result.isValid = true
+    return
+
+  # Check for :%d
+  if cmd == "%d":
+    result.isValid = true
+    result.isGlobal = true
+    return
+
+  # Try to parse range: number/dot, comma, number/dot, then d
+  var i = 0
+  var foundComma = false
+  var startStr = ""
+  var endStr = ""
+
+  # Parse first part of range (before comma)
+  while i < cmd.len:
+    let c = cmd[i]
+    if c == ',':
+      foundComma = true
+      i.inc
+      break
+    elif c == 'd' and i + 1 == cmd.len:
+      # Single line range (e.g., "5d")
+      break
+    elif c in {'0' .. '9', '.'}:
+      startStr.add(c)
+      i.inc
+    else:
+      return # Invalid character in range
+
+  if not foundComma and startStr.len > 0 and i < cmd.len and cmd[i] == 'd' and
+      i + 1 == cmd.len:
+    # Single line: "5d"
+    result.isValid = true
+    result.hasRange = true
+    if startStr == ".":
+      result.startLine = 0 # 0 means current line
+      result.endLine = 0
+    else:
+      try:
+        let lineNum = parseInt(startStr)
+        if lineNum < 1:
+          result.isValid = false
+          return
+        result.startLine = lineNum
+        result.endLine = lineNum
+      except ValueError:
+        return
+  elif foundComma:
+    # Parse second part of range (after comma)
+    while i < cmd.len:
+      let c = cmd[i]
+      if c == 'd' and i + 1 == cmd.len:
+        break
+      elif c in {'0' .. '9', '.'}:
+        endStr.add(c)
+        i.inc
+      else:
+        return # Invalid character in range
+
+    if i < cmd.len and cmd[i] == 'd' and i + 1 == cmd.len:
+      result.isValid = true
+      result.hasRange = true
+      # Parse start line
+      if startStr == "." or startStr.len == 0:
+        result.startLine = 0 # 0 means current line
+      else:
+        try:
+          result.startLine = parseInt(startStr)
+        except ValueError:
+          return
+      # Parse end line
+      if endStr == "." or endStr.len == 0:
+        result.endLine = 0 # 0 means current line
+      else:
+        try:
+          result.endLine = parseInt(endStr)
+        except ValueError:
+          return
+
 proc newCommandLineParser*(): CommandLineParser =
   ## Create a new command line parser.
   ## Aliases are defined in command_config.nim and loaded via CommandConfig.applyToParser()
@@ -571,6 +690,20 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
     let shellCmd = cleanInput[1 ..^ 1].strip()
     result.args = @[shellCmd]
     return
+
+  # Check if it's a delete command (:%d, or N,Md)
+  if cleanInput == "%d":
+    result.action = claDeleteLines
+    result.args = @[cleanInput]
+    return
+
+  # Check for range-prefixed delete command (e.g., 1,10d, .d, .,10d)
+  if cleanInput.len > 1 and cleanInput[0] in {'0' .. '9', '.'}:
+    let parsed = parseDeleteCommand(":" & cleanInput)
+    if parsed.isValid:
+      result.action = claDeleteLines
+      result.args = @[cleanInput]
+      return
 
   # Check if it's a substitute command (s/..., %s/..., or N,Ms/...)
   if cleanInput.startsWith("%s/") or cleanInput.startsWith("s/"):
@@ -695,6 +828,24 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         return CommandLineResult(kind: claSet, option: option, value: none(string))
     else:
       return CommandLineResult(kind: claUnknown, errorMessage: "No option specified")
+  of claDeleteLines:
+    # Parse delete command using parseDeleteCommand
+    if cmd.args.len > 0:
+      let parsed = parseDeleteCommand(":" & cmd.args[0])
+      if not parsed.isValid:
+        return CommandLineResult(
+          kind: claUnknown, errorMessage: "Invalid delete command format"
+        )
+      return CommandLineResult(
+        kind: claDeleteLines,
+        deleteHasRange: parsed.hasRange,
+        deleteIsGlobal: parsed.isGlobal,
+        deleteStartLine: parsed.startLine,
+        deleteEndLine: parsed.endLine,
+      )
+    else:
+      # Simple :d with no range — delete current line
+      return CommandLineResult(kind: claDeleteLines)
   of claSubstitute:
     # Parse substitute command using parseSubstituteCommand
     if cmd.args.len > 0:

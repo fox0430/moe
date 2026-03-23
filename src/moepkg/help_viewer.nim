@@ -315,6 +315,8 @@ new        - Create a new empty buffer in a horizontally split window
 vnew       - Create a new empty buffer in a vertically split window
 
 %s/keyword1/keyword2/ - Replace text (normal mode only)
+%d              - Delete all lines and copy to register
+1,10d           - Delete lines in range and copy to register
 
 ls              - Display all buffers
 bprev           - Switch to the previous buffer

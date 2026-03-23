@@ -1945,3 +1945,178 @@ suite "CommandModeHandler - executeSet enum coverage":
 
     for v in FloatSettingOption:
       check v in coveredValues
+
+suite "CommandModeHandler - executeDelete":
+  test "Delete current line":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+    discard buffer.insert(2, "line3")
+
+    let result = handler.executeDelete(
+      buffer, hasRange = false, isGlobalRange = false, currentLine = 1
+    )
+    check result.kind == cmrDeleteLines
+    check result.deletedLineCount == 1
+    check result.deletedText == "line2\n"
+    check buffer.len == 2
+    check buffer.getLine(0) == "line1"
+    check buffer.getLine(1) == "line3"
+
+  test "Delete all lines with :%d":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+    discard buffer.insert(2, "line3")
+
+    let result = handler.executeDelete(buffer, hasRange = false, isGlobalRange = true)
+    check result.kind == cmrDeleteLines
+    check result.deletedLineCount == 3
+    check result.deletedText == "line1\nline2\nline3\n"
+    check buffer.len == 1
+    check buffer.getLine(0) == ""
+
+  test "Delete line range":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+    discard buffer.insert(2, "line3")
+    discard buffer.insert(3, "line4")
+
+    let result = handler.executeDelete(
+      buffer, hasRange = true, isGlobalRange = false, startLine = 2, endLine = 3
+    )
+    check result.kind == cmrDeleteLines
+    check result.deletedLineCount == 2
+    check result.deletedText == "line2\nline3\n"
+    check buffer.len == 2
+    check buffer.getLine(0) == "line1"
+    check buffer.getLine(1) == "line4"
+
+  test "Delete with invalid range returns error":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+
+    let result = handler.executeDelete(
+      buffer, hasRange = true, isGlobalRange = false, startLine = 3, endLine = 1
+    )
+    check result.kind == cmrError
+
+  test "Delete single line by range":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+    discard buffer.insert(2, "line3")
+
+    let result = handler.executeDelete(
+      buffer, hasRange = true, isGlobalRange = false, startLine = 2, endLine = 2
+    )
+    check result.kind == cmrDeleteLines
+    check result.deletedLineCount == 1
+    check buffer.len == 2
+    check buffer.getLine(0) == "line1"
+    check buffer.getLine(1) == "line3"
+
+  test "Delete on single-line buffer leaves one empty line":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "only line")
+
+    let result = handler.executeDelete(
+      buffer, hasRange = false, isGlobalRange = false, currentLine = 0
+    )
+    check result.kind == cmrDeleteLines
+    check result.deletedLineCount == 1
+    check result.deletedText == "only line\n"
+    check buffer.len == 1
+    check buffer.getLine(0) == ""
+
+  test "Delete first line":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+    discard buffer.insert(2, "line3")
+
+    let result = handler.executeDelete(
+      buffer, hasRange = false, isGlobalRange = false, currentLine = 0
+    )
+    check result.kind == cmrDeleteLines
+    check result.deletedLineCount == 1
+    check result.deletedText == "line1\n"
+    check buffer.len == 2
+    check buffer.getLine(0) == "line2"
+    check buffer.getLine(1) == "line3"
+
+  test "Delete last line":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+    discard buffer.insert(2, "line3")
+
+    let result = handler.executeDelete(
+      buffer, hasRange = false, isGlobalRange = false, currentLine = 2
+    )
+    check result.kind == cmrDeleteLines
+    check result.deletedLineCount == 1
+    check result.deletedText == "line3\n"
+    check buffer.len == 2
+    check buffer.getLine(0) == "line1"
+    check buffer.getLine(1) == "line2"
+
+  test "Delete with dot range (currentLine resolution)":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+    discard buffer.insert(2, "line3")
+    discard buffer.insert(3, "line4")
+
+    # startLine=0 means current line, endLine=3 means line 3 (1-based)
+    let result = handler.executeDelete(
+      buffer,
+      hasRange = true,
+      isGlobalRange = false,
+      startLine = 0,
+      endLine = 3,
+      currentLine = 1,
+    )
+    check result.kind == cmrDeleteLines
+    check result.deletedLineCount == 2
+    check result.deletedText == "line2\nline3\n"
+    check buffer.len == 2
+    check buffer.getLine(0) == "line1"
+    check buffer.getLine(1) == "line4"
+
+  test "Delete with endLine beyond buffer is clamped":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+
+    let result = handler.executeDelete(
+      buffer, hasRange = true, isGlobalRange = false, startLine = 1, endLine = 100
+    )
+    check result.kind == cmrDeleteLines
+    check result.deletedLineCount == 2
+    check result.deletedText == "line1\nline2\n"
+    check buffer.len == 1
+    check buffer.getLine(0) == ""
+
+  test "Delete with startLine beyond buffer returns error":
+    let handler = setupHandler()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "line1")
+    discard buffer.insert(1, "line2")
+
+    let result = handler.executeDelete(
+      buffer, hasRange = true, isGlobalRange = false, startLine = 10, endLine = 20
+    )
+    check result.kind == cmrError

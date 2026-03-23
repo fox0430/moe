@@ -439,6 +439,8 @@ All keystrokes are forwarded to the running shell/command.
 | `new` | Create new empty buffer in split window horizontally |
 | `vnew` | Create new empty buffer in split window vertically |
 | `%s/keyword1/keyword2/` | Replace text (normal mode only) |
+| `%d` | Delete all lines and copy to register |
+| `1,10d` | Delete lines in range and copy to register |
 | `ls` | Display all buffer |
 | `bprev` | Switch to the previous buffer |
 | `bnext` | Switch to the next buffer |

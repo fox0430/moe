@@ -40,6 +40,7 @@ const CommandNameTable* = {
   "set": claSet,
   "help": claHelp,
   "substitute": claSubstitute,
+  "delete": claDeleteLines,
   "vsplit": claVSplit,
   "hsplit": claHSplit,
   "new": claNew,
@@ -163,6 +164,9 @@ proc loadDefaultConfig*(config: CommandConfig) =
 
   # Substitute
   config.addAlias("s", claSubstitute)
+
+  # Delete lines
+  config.addAlias("delete", claDeleteLines)
 
   # Window split
   config.addAlias("vs", claVSplit)
