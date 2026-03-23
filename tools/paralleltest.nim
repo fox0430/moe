@@ -44,7 +44,7 @@ proc main() =
   if failedTests.len > 0:
     echo "\nFailed (", failedTests.len, "/", testFiles.len, "):"
     for (name, code) in failedTests:
-      echo "  FAIL: ", name, " (exit code: ", code, ")"
+      echo "  FAIL: tests/", name, " (exit code: ", code, ")"
     echo '\n'
   else:
     echo "\nAll tests passed."
