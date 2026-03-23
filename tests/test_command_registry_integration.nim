@@ -4093,7 +4093,7 @@ suite "Operator + Word End/Backward motions":
     let cmd = Command(kind: ctMotion, motion: Motion.WordEnd, count: 1)
 
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer[0] == "o world test"
+    check buffer[0] == " world test"
 
   test "change word end (ce)":
     let buffer = newTextBuffer("hello world test")
@@ -4108,7 +4108,7 @@ suite "Operator + Word End/Backward motions":
     let cmd = Command(kind: ctMotion, motion: Motion.WordEnd, count: 1)
 
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer[0] == "o world test"
+    check buffer[0] == " world test"
     check ctx.state.mode == EditorMode.Insert
 
   test "yank word end (ye)":
@@ -4125,7 +4125,87 @@ suite "Operator + Word End/Backward motions":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world test" # Buffer unchanged
-    check ctx.state.yankRegister == "hell"
+    check ctx.state.yankRegister == "hello"
+
+  test "delete word end from middle of word (de)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 2) # on 'l' of "hello"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEnd, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "he world test"
+
+  test "delete word end with count (d2e)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEnd, count: 2)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == " test"
+
+  test "yank word end from middle of word (ye)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 2) # on 'l' of "hello"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEnd, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello world test" # Buffer unchanged
+    check ctx.state.yankRegister == "llo"
+
+  test "delete word end to end of current word (de)":
+    let buffer = newTextBuffer("hello\nworld test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 3) # on second 'l' of "hello"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEnd, count: 1)
+
+    # e moves to 'o' (col 4), inclusive delete removes "lo"
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hel"
+    check buffer[1] == "world test"
+
+  test "delete word end across lines (d2e)":
+    let buffer = newTextBuffer("hello\nworld test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 3) # on second 'l' of "hello"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEnd, count: 2)
+
+    # 2e: first e to 'o' (col 4), second e to 'd' of "world" (line 1, col 4)
+    # Cross-line delete merges remaining text into one line
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hel test"
 
   test "delete word backward (db)":
     let buffer = newTextBuffer("hello world test")
@@ -4188,7 +4268,7 @@ suite "Operator + Line start/end motions":
     let cmd = Command(kind: ctMotion, motion: Motion.Home, count: 1)
 
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer[0] == "orld"
+    check buffer[0] == "world"
 
   test "change to line start (c0)":
     let buffer = newTextBuffer("hello world")
@@ -4203,7 +4283,7 @@ suite "Operator + Line start/end motions":
     let cmd = Command(kind: ctMotion, motion: Motion.Home, count: 1)
 
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer[0] == "orld"
+    check buffer[0] == "world"
     check ctx.state.mode == EditorMode.Insert
 
   test "yank to line start (y0)":
@@ -4220,7 +4300,7 @@ suite "Operator + Line start/end motions":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world" # Buffer unchanged
-    check ctx.state.yankRegister == "hello w"
+    check ctx.state.yankRegister == "hello "
 
   test "delete to first non-blank (d^)":
     let buffer = newTextBuffer("   hello world")
@@ -4235,7 +4315,7 @@ suite "Operator + Line start/end motions":
     let cmd = Command(kind: ctMotion, motion: Motion.FirstNonBlank, count: 1)
 
     check registry.executeCommand(ctx, cmd).isOk
-    check buffer[0] == "   orld"
+    check buffer[0] == "   world"
 
   test "yank to end of line (y$)":
     let buffer = newTextBuffer("hello world")
