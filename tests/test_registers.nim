@@ -413,6 +413,18 @@ proc getAvailableTool(): (bool, ClipboardTool) =
     return (true, cbtXclip)
   return (false, cbtXsel)
 
+proc readClipboardWithRetry(
+    tool: ClipboardTool, expected: string, maxRetries: int = 10, delayMs: int = 100
+): Result[string, string] =
+  ## Retry reading from CLIPBOARD selection until the expected value is returned.
+  ## Clipboard writes may not be visible immediately in CI environments.
+  for i in 0 ..< maxRetries:
+    result = readFromClipboardSync(tool)
+    if result.isOk and result.get() == expected:
+      return
+    sleep(delayMs)
+  return readFromClipboardSync(tool)
+
 proc readPrimaryWithRetry(
     tool: ClipboardTool, expected: string, maxRetries: int = 10, delayMs: int = 100
 ): Result[string, string] =
@@ -454,6 +466,10 @@ suite "Registers clipboard integration":
       let writeResult = writeToClipboardSync(tool, testText)
       check writeResult.isOk
 
+      # Wait for clipboard to be readable before testing getNoNamedRegister
+      let clipReady = readClipboardWithRetry(tool, testText)
+      check clipReady.isOk
+
       # getNoNamedRegister should pick up the external clipboard content
       let reg = r.getNoNamedRegister()
       check reg.getContent() == testText
@@ -473,6 +489,10 @@ suite "Registers clipboard integration":
       let testText = "mouse selected text"
       let writeResult = writeToPrimarySelectionSync(tool, testText)
       check writeResult.isOk
+
+      # Wait for PRIMARY selection to be readable
+      let primaryReady = readPrimaryWithRetry(tool, testText)
+      check primaryReady.isOk
 
       # getNoNamedRegister should pick up the PRIMARY selection content
       let reg = r.getNoNamedRegister()
