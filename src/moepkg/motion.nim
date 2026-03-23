@@ -1316,11 +1316,11 @@ proc calculateOperatorRange*(
   let isExclusive =
     motion in {
       Motion.WordForward, # w
-      Motion.WordEnd, # e
       Motion.WordBackward, # b
-      Motion.WordEndBackward, # ge
       Motion.Right, # l (when used with operator)
       Motion.Left, # h (when used with operator)
+      Motion.Home, # 0
+      Motion.FirstNonBlank, # ^
     }
 
   var range = OperatorRange(start: startPos, endPos: endPos, isLinewise: isLinewise)
