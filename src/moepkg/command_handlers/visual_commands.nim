@@ -847,6 +847,19 @@ proc visualMoveWordEnd*(buffer: TextBuffer, state: EditorState, count: int = 1) 
   state.visualSelection.current = state.cursor
   state.needsFullRedraw = true
 
+proc visualMoveWordEndBackward*(
+    buffer: TextBuffer, state: EditorState, count: int = 1
+) =
+  ## Move to end of previous word (ge) and update selection
+  let executor = newMotionExecutor(buffer)
+  let currentPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
+  let cmd = MotionCommand(motion: Motion.WordEndBackward, count: count)
+  let newPos = executor.calculateNewPosition(currentPos, cmd)
+  state.cursor.line = newPos.y
+  state.cursor.column = newPos.x
+  state.visualSelection.current = state.cursor
+  state.needsFullRedraw = true
+
 proc visualMoveParagraphForward*(
     buffer: TextBuffer, state: EditorState, count: int = 1
 ) =

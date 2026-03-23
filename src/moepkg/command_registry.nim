@@ -117,6 +117,7 @@ type
     bcVisualMoveWord = "visual.move.word"
     bcVisualMoveWordBack = "visual.move.word.back"
     bcVisualMoveWordEnd = "visual.move.word.end"
+    bcVisualMoveWordEndBackward = "visual.move.word.end.backward"
     bcVisualMoveParagraphForward = "visual.move.paragraph.forward"
     bcVisualMoveParagraphBackward = "visual.move.paragraph.backward"
     bcVisualToInsertMode = "visual.to.insert"
@@ -1406,6 +1407,14 @@ proc handleVisualMoveWordBack(ctx: CommandContext, count: int = 1): Result[(), s
 proc handleVisualMoveWordEnd(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Move to end of word in visual mode
   visualMoveWordEnd(ctx.buffer, ctx.state, count)
+  ctx.cursor = ctx.state.cursor
+  Result[(), string].ok ()
+
+proc handleVisualMoveWordEndBackward(
+    ctx: CommandContext, count: int = 1
+): Result[(), string] =
+  ## Move to end of previous word in visual mode
+  visualMoveWordEndBackward(ctx.buffer, ctx.state, count)
   ctx.cursor = ctx.state.cursor
   Result[(), string].ok ()
 
@@ -3519,6 +3528,17 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let count = parseCount(args, default = 1)
       handleVisualMoveWordEnd(ctx, count),
+    0,
+    1,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveWordEndBackward),
+    "Visual Move Word End Backward",
+    "Move to end of previous word in visual mode (ge command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleVisualMoveWordEndBackward(ctx, count),
     0,
     1,
   )
