@@ -222,6 +222,13 @@ lspScreenNotify = true                 # LSP screen notifications
 
 lspLogNotify = true                    # LSP log notifications
 
+popupNotifications = false             # Show notifications as floating popups
+popupPosition = "bottomRight"          # Popup position: topRight, bottomRight, topLeft, bottomLeft
+popupTimeoutMs = 3000                  # Auto-dismiss timeout in milliseconds
+popupMaxVisible = 3                    # Maximum simultaneous popup notifications
+popupMaxWidth = 60                     # Maximum popup width in characters
+popupBorder = false                    # Show border around popup notifications                     # Maximum popup width in characters
+
 [Filer]
 
 showIcons = true                       # File browser icons - emoji icons for file types

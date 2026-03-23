@@ -263,6 +263,14 @@ type
     popupWindow
     popupWinCurrentLine
 
+    # Notification popup
+    notificationPopupInfo
+    notificationPopupInfoBorder
+    notificationPopupWarning
+    notificationPopupWarningBorder
+    notificationPopupError
+    notificationPopupErrorBorder
+
     # Highlighting
     replaceText
     parenPair

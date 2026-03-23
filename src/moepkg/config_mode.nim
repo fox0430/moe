@@ -892,6 +892,60 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
     boolSet: proc(c: EditorConfig, v: bool) =
       c.notification.lspLogNotify = v,
   )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "popupNotifications",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.popupNotifications,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.popupNotifications = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkString,
+    displayName: "popupPosition",
+    section: "Notification",
+    stringGet: proc(c: EditorConfig): string =
+      c.notification.popupPosition,
+    stringSetter: proc(c: EditorConfig, v: string) =
+      c.notification.popupPosition = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkInt,
+    displayName: "popupTimeoutMs",
+    section: "Notification",
+    intGet: proc(c: EditorConfig): int =
+      c.notification.popupTimeoutMs,
+    intSet: proc(c: EditorConfig, v: int) =
+      c.notification.popupTimeoutMs = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkInt,
+    displayName: "popupMaxVisible",
+    section: "Notification",
+    intGet: proc(c: EditorConfig): int =
+      c.notification.popupMaxVisible,
+    intSet: proc(c: EditorConfig, v: int) =
+      c.notification.popupMaxVisible = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkInt,
+    displayName: "popupMaxWidth",
+    section: "Notification",
+    intGet: proc(c: EditorConfig): int =
+      c.notification.popupMaxWidth,
+    intSet: proc(c: EditorConfig, v: int) =
+      c.notification.popupMaxWidth = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "popupBorder",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.popupBorder,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.popupBorder = v,
+  )
 
   # Filer section
   result.add ConfigItemDescriptor(

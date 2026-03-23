@@ -188,6 +188,12 @@ type
     restoreLogNotify*: bool
     lspScreenNotify*: bool
     lspLogNotify*: bool
+    popupNotifications*: bool
+    popupPosition*: string
+    popupTimeoutMs*: int
+    popupMaxVisible*: int
+    popupMaxWidth*: int
+    popupBorder*: bool
 
   # Filer settings
   FilerConfig* = object
@@ -577,6 +583,12 @@ proc newEditorConfig*(): EditorConfig =
       restoreLogNotify: true,
       lspScreenNotify: true,
       lspLogNotify: true,
+      popupNotifications: false,
+      popupPosition: "bottomRight",
+      popupTimeoutMs: 3000,
+      popupMaxVisible: 3,
+      popupMaxWidth: 60,
+      popupBorder: false,
     ),
     filer: FilerConfig(showIcons: true),
     fileTree: FileTreeConfig(width: 30),

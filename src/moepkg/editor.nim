@@ -742,6 +742,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         lastSemanticTokensUpdate: getMonoTime(),
         semanticTokensUpdateInterval: 500, # 500ms debounce for semantic tokens
       ),
+      notificationPopup: newNotificationPopupManager(),
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     screenSize: ScreenSize(width: 80, height: 20),
@@ -767,6 +768,21 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
 
   # Apply sidebar bookmark marker from config
   setBookmarkMarker(editorConfig.standard.bookmarkMarker)
+
+  # Sync notification popup settings from config
+  result.state.notificationPopup.timeoutMs = editorConfig.notification.popupTimeoutMs
+  result.state.notificationPopup.maxVisible = editorConfig.notification.popupMaxVisible
+  result.state.notificationPopup.maxWidth = editorConfig.notification.popupMaxWidth
+  result.state.notificationPopup.showBorder = editorConfig.notification.popupBorder
+  case editorConfig.notification.popupPosition
+  of "topRight":
+    result.state.notificationPopup.position = nppTopRight
+  of "topLeft":
+    result.state.notificationPopup.position = nppTopLeft
+  of "bottomLeft":
+    result.state.notificationPopup.position = nppBottomLeft
+  else:
+    result.state.notificationPopup.position = nppBottomRight
 
   # Add initial buffer to buffer list
   result.buffers.add(result.textBuffer)
@@ -987,6 +1003,21 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
       e.app.enableMouse()
     else:
       e.app.disableMouse()
+
+  # Update notification popup settings
+  e.state.notificationPopup.timeoutMs = newConfig.notification.popupTimeoutMs
+  e.state.notificationPopup.maxVisible = newConfig.notification.popupMaxVisible
+  e.state.notificationPopup.maxWidth = newConfig.notification.popupMaxWidth
+  e.state.notificationPopup.showBorder = newConfig.notification.popupBorder
+  case newConfig.notification.popupPosition
+  of "topRight":
+    e.state.notificationPopup.position = nppTopRight
+  of "topLeft":
+    e.state.notificationPopup.position = nppTopLeft
+  of "bottomLeft":
+    e.state.notificationPopup.position = nppBottomLeft
+  else:
+    e.state.notificationPopup.position = nppBottomRight
 
   # Store the new config
   e.config = newConfig
@@ -1329,6 +1360,13 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
   e.state.timing.lastDebugUpdate = now
   e.state.needsFullRedraw = true
 
+proc notify*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
+  ## Send a notification. Routes to popup or status line based on config.
+  if e.config.notification.popupNotifications:
+    e.state.notificationPopup.addNotification(msg, level)
+  else:
+    e.state.statusMessage = msg
+
 proc tick*(e: Editor) =
   ## Background processing: LSP, file watching, autosave, etc.
   ## Should be called each frame before rendering.
@@ -1353,7 +1391,7 @@ proc tick*(e: Editor) =
     addLspMessageLog(lspMessages)
     if e.config.notification.screenNotifications and
         e.config.notification.lspScreenNotify:
-      e.state.statusMessage = lspMessages[^1]
+      e.notify(lspMessages[^1])
     if e.config.notification.logNotifications and e.config.notification.lspLogNotify:
       for msg in lspMessages:
         logInfo("lsp", msg)
@@ -1387,6 +1425,9 @@ proc tick*(e: Editor) =
   # Auto save/backup
   e.autoSave()
   e.autoBackup()
+
+  # Dismiss expired popup notifications
+  e.state.notificationPopup.tick()
 
 proc prepareFrame(e: Editor, buffer: var Buffer): bool =
   ## Prepare for rendering: clear buffer, update animations, prepare highlights.
@@ -1478,6 +1519,19 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
       buffer.area.height, hoverMgr,
     )
     renderHoverPopup(buffer, hoverMgr, popupPos, true)
+
+  # Render notification popups
+  if e.state.notificationPopup.hasActiveNotifications():
+    let bottomReserve =
+      if e.state.display.showStatusLine:
+        StatusAndCommandReserve + 1
+      else:
+        CommandLineReserve
+    let rects = e.state.notificationPopup.calculateNotificationPositions(
+      buffer.area.width, buffer.area.height, bottomReserve
+    )
+    for rect in rects:
+      renderNotificationPopup(buffer, rect)
 
 proc render*(e: Editor, buffer: var Buffer) =
   ## Main render procedure - orchestrates the rendering of all editor components.

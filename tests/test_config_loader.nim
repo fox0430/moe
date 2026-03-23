@@ -1623,6 +1623,9 @@ suite "Config - saveConfigToToml round-trip completeness":
     config.buildOnSave.workspaceRoot = some("/tmp")
     config.autoBackup.backupDir = some("/tmp")
 
+    # popupPosition is validated against allowed values on load
+    config.notification.popupPosition = "topLeft"
+
     # Theme: ensure kind != tkConfig so loadFilePath is not used for path
     config.theme.kind = tkDefault
     config.theme.path = "test_theme_path"

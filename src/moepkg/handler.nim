@@ -1153,7 +1153,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.setMode(EditorMode.Normal)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:
-        e.state.statusMessage = "Opened: " & r.filerFilePath
+        e.notify("Opened: " & r.filerFilePath)
       if e.config.notification.logNotifications and e.config.notification.filerLogNotify:
         logInfo("filer", "Opened file: " & r.filerFilePath)
     return true
@@ -1171,7 +1171,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.setMode(EditorMode.Normal)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:
-        e.state.statusMessage = "Opened in vsplit: " & r.filerFilePath
+        e.notify("Opened in vsplit: " & r.filerFilePath)
       if e.config.notification.logNotifications and e.config.notification.filerLogNotify:
         logInfo("filer", "Opened file in vsplit: " & r.filerFilePath)
     return true
@@ -1189,7 +1189,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.setMode(EditorMode.Normal)
       if e.config.notification.screenNotifications and
           e.config.notification.filerScreenNotify:
-        e.state.statusMessage = "Opened in hsplit: " & r.filerFilePath
+        e.notify("Opened in hsplit: " & r.filerFilePath)
       if e.config.notification.logNotifications and e.config.notification.filerLogNotify:
         logInfo("filer", "Opened file in hsplit: " & r.filerFilePath)
     return true
@@ -1253,7 +1253,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
         # File/directory deleted successfully
         if e.config.notification.screenNotifications and
             e.config.notification.filerScreenNotify:
-          e.state.statusMessage = "Deleted: " & deleteResult.path
+          e.notify("Deleted: " & deleteResult.path)
         if e.config.notification.logNotifications and
             e.config.notification.filerLogNotify:
           logInfo("filer", "Deleted: " & deleteResult.path)
@@ -1575,7 +1575,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
             # Restore screen notification (controlled by config)
             if e.config.notification.screenNotifications and
                 e.config.notification.restoreScreenNotify:
-              e.state.statusMessage = "Backup restored: " & filePath
+              e.notify("Backup restored: " & filePath)
             # Restore log notification (controlled by config)
             if e.config.notification.logNotifications and
                 e.config.notification.restoreLogNotify:
@@ -1588,7 +1588,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
           # Restore screen notification (controlled by config)
           if e.config.notification.screenNotifications and
               e.config.notification.restoreScreenNotify:
-            e.state.statusMessage = "Backup restored successfully"
+            e.notify("Backup restored successfully")
           # Restore log notification (controlled by config)
           if e.config.notification.logNotifications and
               e.config.notification.restoreLogNotify:
@@ -1972,7 +1972,7 @@ proc runBuildAsync(
         else:
           if editor.config.notification.screenNotifications and
               editor.config.notification.buildOnSaveScreenNotify:
-            editor.state.statusMessage = "Build completed: " & info.path
+            editor.notify("Build completed: " & info.path)
       editor.state.needsFullRedraw = true
     except Exception as ex:
       editor.state.statusMessage = "Build error: " & ex.msg
@@ -2010,7 +2010,7 @@ proc runQuickRunAsync(
           else:
             if editor.config.notification.screenNotifications and
                 editor.config.notification.quickRunScreenNotify:
-              editor.state.statusMessage = "QuickRun completed: " & qrProcess.filePath
+              editor.notify("QuickRun completed: " & qrProcess.filePath)
       editor.state.needsFullRedraw = true
     except Exception as ex:
       editor.state.statusMessage = "QuickRun error: " & ex.msg

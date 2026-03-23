@@ -508,7 +508,8 @@ proc loadNotificationConfig(
     "saveScreenNotify", "saveLogNotify", "quickRunScreenNotify", "quickRunLogNotify",
     "buildOnSaveScreenNotify", "buildOnSaveLogNotify", "filerScreenNotify",
     "filerLogNotify", "restoreScreenNotify", "restoreLogNotify", "lspScreenNotify",
-    "lspLogNotify",
+    "lspLogNotify", "popupNotifications", "popupPosition", "popupTimeoutMs",
+    "popupMaxVisible", "popupMaxWidth", "popupBorder",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "screenNotifications", config.screenNotifications, vr, section)
@@ -535,6 +536,20 @@ proc loadNotificationConfig(
   loadBool(table, "restoreLogNotify", config.restoreLogNotify, vr, section)
   loadBool(table, "lspScreenNotify", config.lspScreenNotify, vr, section)
   loadBool(table, "lspLogNotify", config.lspLogNotify, vr, section)
+  loadBool(table, "popupNotifications", config.popupNotifications, vr, section)
+  loadString(table, "popupPosition", config.popupPosition, vr, section)
+  if table.hasKey("popupPosition") and
+      config.popupPosition notin ["topRight", "topLeft", "bottomRight", "bottomLeft"]:
+    vr.addError(
+      fullKey(section, "popupPosition"),
+      config.popupPosition,
+      "one of: topRight, topLeft, bottomRight, bottomLeft",
+    )
+    config.popupPosition = "bottomRight"
+  loadInt(table, "popupTimeoutMs", config.popupTimeoutMs, vr, section, minVal = 100)
+  loadInt(table, "popupMaxVisible", config.popupMaxVisible, vr, section, minVal = 1)
+  loadInt(table, "popupMaxWidth", config.popupMaxWidth, vr, section, minVal = 10)
+  loadBool(table, "popupBorder", config.popupBorder, vr, section)
 
 proc loadAutoBackupConfig(
     table: TomlTableRef, config: var AutoBackupConfig, vr: var ValidationResult
@@ -1667,6 +1682,18 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.popupWindow)
   of "popupWinCurrentLine":
     return some(EditorColorPairIndex.popupWinCurrentLine)
+  of "notificationPopupInfo":
+    return some(EditorColorPairIndex.notificationPopupInfo)
+  of "notificationPopupInfoBorder":
+    return some(EditorColorPairIndex.notificationPopupInfoBorder)
+  of "notificationPopupWarning":
+    return some(EditorColorPairIndex.notificationPopupWarning)
+  of "notificationPopupWarningBorder":
+    return some(EditorColorPairIndex.notificationPopupWarningBorder)
+  of "notificationPopupError":
+    return some(EditorColorPairIndex.notificationPopupError)
+  of "notificationPopupErrorBorder":
+    return some(EditorColorPairIndex.notificationPopupErrorBorder)
   of "replaceText":
     return some(EditorColorPairIndex.replaceText)
   of "parenPair":
@@ -2104,6 +2131,12 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "restoreLogNotify = " & toTomlBool(config.notification.restoreLogNotify)
   lines.add "lspScreenNotify = " & toTomlBool(config.notification.lspScreenNotify)
   lines.add "lspLogNotify = " & toTomlBool(config.notification.lspLogNotify)
+  lines.add "popupNotifications = " & toTomlBool(config.notification.popupNotifications)
+  lines.add "popupPosition = \"" & config.notification.popupPosition & "\""
+  lines.add "popupTimeoutMs = " & $config.notification.popupTimeoutMs
+  lines.add "popupMaxVisible = " & $config.notification.popupMaxVisible
+  lines.add "popupMaxWidth = " & $config.notification.popupMaxWidth
+  lines.add "popupBorder = " & toTomlBool(config.notification.popupBorder)
   lines.add ""
 
   # Filer section

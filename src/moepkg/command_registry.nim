@@ -189,6 +189,13 @@ type
       ## Fast access for builtins
     aliases*: Table[string, CommandId] ## Alias -> command ID mapping
 
+proc notify*(ctx: CommandContext, msg: string, level: NotificationLevel = nlInfo) =
+  ## Send a notification via popup or status line based on config.
+  if ctx.notificationConfig.popupNotifications:
+    ctx.state.notificationPopup.addNotification(msg, level)
+  else:
+    ctx.state.statusMessage = msg
+
 # Helper functions for CommandId
 proc `$`*(id: CommandId): string =
   case id.kind
@@ -2276,7 +2283,7 @@ proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
   # Delete screen notification (controlled by config)
   if ctx.notificationConfig.screenNotifications and
       ctx.notificationConfig.deleteScreenNotify:
-    ctx.state.statusMessage = "Deleted " & $actualCount & " line(s)"
+    ctx.notify("Deleted " & $actualCount & " line(s)")
 
   # Delete log notification (controlled by config)
   if ctx.notificationConfig.logNotifications and ctx.notificationConfig.deleteLogNotify:
@@ -2341,7 +2348,7 @@ proc handleYankLine(ctx: CommandContext, count: int = 1): Result[(), string] =
   # Yank screen notification (controlled by config)
   if ctx.notificationConfig.screenNotifications and
       ctx.notificationConfig.yankScreenNotify:
-    ctx.state.statusMessage = "Yanked " & $actualCount & " line(s)"
+    ctx.notify("Yanked " & $actualCount & " line(s)")
 
   # Yank log notification (controlled by config)
   if ctx.notificationConfig.logNotifications and ctx.notificationConfig.yankLogNotify:
@@ -2447,7 +2454,7 @@ proc handleOperatorYank(ctx: CommandContext, count: int = 1): Result[(), string]
     # Yank screen notification (controlled by config)
     if ctx.notificationConfig.screenNotifications and
         ctx.notificationConfig.yankScreenNotify:
-      ctx.state.statusMessage = "Yanked " & $lineCount & " line(s)"
+      ctx.notify("Yanked " & $lineCount & " line(s)")
     # Yank log notification (controlled by config)
     if ctx.notificationConfig.logNotifications and ctx.notificationConfig.yankLogNotify:
       logInfo("yank", "Yanked " & $lineCount & " line(s)")
@@ -2535,7 +2542,7 @@ proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), strin
     # Delete screen notification (controlled by config)
     if ctx.notificationConfig.screenNotifications and
         ctx.notificationConfig.deleteScreenNotify:
-      ctx.state.statusMessage = "Deleted " & $lineCount & " line(s)"
+      ctx.notify("Deleted " & $lineCount & " line(s)")
     # Delete log notification (controlled by config)
     if ctx.notificationConfig.logNotifications and ctx.notificationConfig.deleteLogNotify:
       logInfo("delete", "Deleted " & $lineCount & " line(s)")
