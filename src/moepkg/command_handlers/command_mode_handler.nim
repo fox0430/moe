@@ -32,7 +32,7 @@ import
     quick_run_utils, help_viewer, buffer_manager, bookmark_manager, backup_manager,
     backup, debug_viewer, config_loader, message_log, command_line, color, theme,
     terminal_mode, command_completion, render_utils, config_mode, log_viewer,
-    syntax_checker, window_manager,
+    syntax_checker, window_manager, registers,
   ]
 import handler_manager
 
@@ -862,6 +862,23 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         let count = r.hrSubstituteCount
         e.state.statusMessage = $count & " substitution" & (if count == 1: "" else: "s")
         e.state.needsFullRedraw = true
+        # Return to Normal mode - exit overlay first
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
+      of hrDeleteLines:
+        overlayHandled = true
+        # Store deleted text in register (linewise)
+        e.state.registers.setDeletedRegister(r.hrDeletedText, true)
+        # Display count
+        let count = r.hrDeletedLineCount
+        e.state.statusMessage =
+          $count & " line" & (if count == 1: "" else: "s") & " deleted"
+        e.state.needsFullRedraw = true
+        # Clamp cursor to valid buffer range
+        let maxLine = e.activeBuffer().len - 1
+        if e.activeWindow.cursor.line > maxLine:
+          e.activeWindow.cursor.line = maxLine
+        e.activeWindow.cursor.column = 0
         # Return to Normal mode - exit overlay first
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)

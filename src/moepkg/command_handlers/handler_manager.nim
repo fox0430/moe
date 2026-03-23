@@ -144,6 +144,7 @@ type
     hrLspFold # LSP folding range (:lspFold)
     hrLspExecuteCommand # LSP execute command (:lspExeCommand)
     hrSubstitute # Search and replace (:s)
+    hrDeleteLines # Delete lines (:d, :%d)
     hrReferencesQuit # Close references viewer and return to previous mode
     hrReferencesJumpTo # Jump to the selected reference
     hrEnterReferences # Enter references viewer mode
@@ -375,6 +376,9 @@ type
       hrLspCommandArgs*: seq[string]
     of hrSubstitute:
       hrSubstituteCount*: int
+    of hrDeleteLines:
+      hrDeletedText*: string
+      hrDeletedLineCount*: int
     of hrReferencesQuit:
       discard
     of hrReferencesJumpTo:
@@ -939,6 +943,12 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrLspCallHierarchyOutgoing)
   of cmrSubstitute:
     return HandlerResult(kind: hrSubstitute, hrSubstituteCount: r.substituteCount)
+  of cmrDeleteLines:
+    return HandlerResult(
+      kind: hrDeleteLines,
+      hrDeletedText: r.deletedText,
+      hrDeletedLineCount: r.deletedLineCount,
+    )
   of cmrTerminal:
     return HandlerResult(kind: hrEnterTerminal, enterTerminalCommand: r.terminalCommand)
   of cmrMapList:

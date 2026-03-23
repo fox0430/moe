@@ -930,3 +930,129 @@ suite "CommandLine - execute edge cases":
     let cmd = ParsedCommand(action: claSubstitute, args: @[], flags: @[], rawText: ":s")
     let result = parser.execute(cmd)
     check result.kind == claUnknown
+
+suite "CommandLine - parseDeleteCommand":
+  test "Simple :d":
+    let result = parseDeleteCommand(":d")
+    check result.isValid == true
+    check result.isGlobal == false
+    check result.hasRange == false
+
+  test "Global :%d":
+    let result = parseDeleteCommand(":%d")
+    check result.isValid == true
+    check result.isGlobal == true
+    check result.hasRange == false
+
+  test "Single line :5d":
+    let result = parseDeleteCommand(":5d")
+    check result.isValid == true
+    check result.hasRange == true
+    check result.startLine == 5
+    check result.endLine == 5
+
+  test "Range :1,10d":
+    let result = parseDeleteCommand(":1,10d")
+    check result.isValid == true
+    check result.hasRange == true
+    check result.startLine == 1
+    check result.endLine == 10
+
+  test "Current line range :.,.d":
+    let result = parseDeleteCommand(":.,.d")
+    check result.isValid == true
+    check result.hasRange == true
+    check result.startLine == 0
+    check result.endLine == 0
+
+  test "Mixed range :.,10d":
+    let result = parseDeleteCommand(":.,10d")
+    check result.isValid == true
+    check result.hasRange == true
+    check result.startLine == 0
+    check result.endLine == 10
+
+  test ":0d (line number 0 is invalid)":
+    let result = parseDeleteCommand(":0d")
+    check result.isValid == false
+
+  test ":,5d (omitted start)":
+    let result = parseDeleteCommand(":,5d")
+    check result.isValid == true
+    check result.hasRange == true
+    check result.startLine == 0 # current line
+    check result.endLine == 5
+
+  test ":10,5d (reverse range parses successfully)":
+    let result = parseDeleteCommand(":10,5d")
+    check result.isValid == true
+    check result.hasRange == true
+    check result.startLine == 10
+    check result.endLine == 5
+
+  test "d (without colon)":
+    let result = parseDeleteCommand("d")
+    check result.isValid == true
+    check result.isGlobal == false
+    check result.hasRange == false
+
+  test "Invalid command":
+    let result = parseDeleteCommand(":xyz")
+    check result.isValid == false
+
+  test "Empty command":
+    let result = parseDeleteCommand("")
+    check result.isValid == false
+
+suite "CommandLine - parseCommandLine delete commands":
+  var parser: CommandLineParser
+
+  setup:
+    parser = newCommandLineParser()
+    parser.addAlias("delete", claDeleteLines)
+
+  test "Parse :%d":
+    let result = parser.parseCommandLine(":%d")
+    check result.action == claDeleteLines
+    check result.args == @["%d"]
+
+  test "Parse :1,5d":
+    let result = parser.parseCommandLine(":1,5d")
+    check result.action == claDeleteLines
+    check result.args == @["1,5d"]
+
+  test "Parse :delete (alias)":
+    let result = parser.parseCommandLine(":delete")
+    check result.action == claDeleteLines
+
+suite "CommandLine - execute delete commands":
+  var parser: CommandLineParser
+
+  setup:
+    parser = newCommandLineParser()
+    parser.addAlias("delete", claDeleteLines)
+
+  test "Execute :%d":
+    let cmd =
+      ParsedCommand(action: claDeleteLines, args: @["%d"], flags: @[], rawText: ":%d")
+    let result = parser.execute(cmd)
+    check result.kind == claDeleteLines
+    check result.deleteIsGlobal == true
+
+  test "Execute :1,10d":
+    let cmd = ParsedCommand(
+      action: claDeleteLines, args: @["1,10d"], flags: @[], rawText: ":1,10d"
+    )
+    let result = parser.execute(cmd)
+    check result.kind == claDeleteLines
+    check result.deleteHasRange == true
+    check result.deleteStartLine == 1
+    check result.deleteEndLine == 10
+
+  test "Execute :d without args (current line)":
+    let cmd =
+      ParsedCommand(action: claDeleteLines, args: @[], flags: @[], rawText: ":d")
+    let result = parser.execute(cmd)
+    check result.kind == claDeleteLines
+    check result.deleteIsGlobal == false
+    check result.deleteHasRange == false

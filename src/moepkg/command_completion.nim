@@ -86,6 +86,8 @@ const CommandDescriptions = {
   "help": "Show help",
   # Substitute
   "s": "Substitute",
+  # Delete lines
+  "delete": "Delete lines and copy to register",
   # Window split
   "vs": "Vertical split",
   "sp": "Horizontal split",

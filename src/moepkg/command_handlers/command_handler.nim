@@ -126,6 +126,7 @@ type
     cmrLspCallHierarchyIncoming # LSP incoming calls (:lspCallHierarchyIncoming)
     cmrLspCallHierarchyOutgoing # LSP outgoing calls (:lspCallHierarchyOutgoing)
     cmrSubstitute # Search and replace (:s)
+    cmrDeleteLines # Delete lines (:d, :%d)
     cmrTerminal # Open terminal emulator (:terminal)
     cmrMapAdd # Add runtime key mapping (:map, :nmap, etc.)
     cmrMapRemove # Remove runtime key mapping (:unmap, :nunmap, etc.)
@@ -246,6 +247,9 @@ type
       substituteReplacement*: string
       substituteGlobal*: bool # true for /g flag
       substituteCount*: int # number of replacements made
+    of cmrDeleteLines:
+      deletedText*: string # deleted content for register storage
+      deletedLineCount*: int # number of lines deleted
     of cmrTerminal:
       terminalCommand*: string # Optional command (empty = default shell)
     of cmrMapAdd:
@@ -967,6 +971,84 @@ proc executeSubstitute*(
     substituteCount: replaceCount,
   )
 
+proc executeDelete*(
+    handler: CommandModeHandler,
+    buffer: TextBuffer,
+    hasRange: bool = false,
+    isGlobalRange: bool = false,
+    startLine: int = 0,
+    endLine: int = 0,
+    currentLine: int = 0,
+): CommandModeResult =
+  ## Execute delete command (:d, :%d, :1,10d)
+  ## hasRange: true if a line range was specified
+  ## isGlobalRange: true if % prefix was used (all lines)
+  ## startLine/endLine: line range (1-based, 0 means current line)
+  ## currentLine: current cursor line (0-based)
+
+  # Determine line range
+  var rangeStart, rangeEnd: int
+  if isGlobalRange:
+    rangeStart = 0
+    rangeEnd = buffer.len - 1
+  elif hasRange:
+    rangeStart =
+      if startLine == 0:
+        currentLine
+      else:
+        startLine - 1
+    rangeEnd =
+      if endLine == 0:
+        currentLine
+      else:
+        endLine - 1
+    if rangeStart < 0:
+      rangeStart = 0
+    if rangeEnd < 0:
+      rangeEnd = 0
+    if rangeEnd >= buffer.len:
+      rangeEnd = buffer.len - 1
+    if rangeStart > rangeEnd:
+      return CommandModeResult(
+        kind: cmrError, errorMessage: "Invalid range: start line > end line"
+      )
+  else:
+    # No range - current line only
+    rangeStart = currentLine
+    rangeEnd = currentLine
+
+  if rangeStart >= buffer.len:
+    return CommandModeResult(kind: cmrError, errorMessage: "Line out of range")
+
+  # Collect text from all lines in range
+  var text = ""
+  for lineIdx in rangeStart .. rangeEnd:
+    if lineIdx > rangeStart:
+      text.add("\n")
+    text.add(buffer.getLine(lineIdx))
+  text.add("\n")
+
+  let lineCount = rangeEnd - rangeStart + 1
+  let deletingAll = rangeStart == 0 and rangeEnd == buffer.len - 1
+
+  discard buffer.beginTransaction("delete lines")
+
+  if deletingAll:
+    # Delete all lines except the first, then clear the first
+    for i in countdown(buffer.len - 1, 1):
+      discard buffer.deleteLine(i)
+    discard buffer.replaceLine(0, "")
+  else:
+    # Delete lines from bottom to top to avoid index shifting
+    for i in countdown(rangeEnd, rangeStart):
+      discard buffer.deleteLine(i)
+
+  discard buffer.commitTransaction()
+
+  return CommandModeResult(
+    kind: cmrDeleteLines, deletedText: text, deletedLineCount: lineCount
+  )
+
 proc handleCommandModeInput*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
@@ -1102,6 +1184,11 @@ proc handleCommandModeInput*(
       buffer, cmdResult.pattern, cmdResult.replacement, cmdResult.substituteFlags,
       cmdResult.hasRange, cmdResult.isGlobal, cmdResult.startLine, cmdResult.endLine,
       currentLine,
+    )
+  of claDeleteLines:
+    return handler.executeDelete(
+      buffer, cmdResult.deleteHasRange, cmdResult.deleteIsGlobal,
+      cmdResult.deleteStartLine, cmdResult.deleteEndLine, currentLine,
     )
   of claMap, claNmap, claImap, claVmap, claRmap, claCmap:
     let modes =
