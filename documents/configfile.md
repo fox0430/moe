@@ -232,6 +232,12 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | restoreLogNotify | bool | true | Restore messages/notifications to the log |
 | lspScreenNotify | bool | true | Lsp messages/notifications in the command line |
 | lspLogNotify | bool | true | Lsp messages/notifications to the log |
+| popupNotifications | bool | false | Show notifications as floating popups instead of the command line |
+| popupPosition | string | "bottomRight" | Popup position: "topRight", "topLeft", "bottomRight", "bottomLeft" |
+| popupTimeoutMs | integer | 3000 | Auto-dismiss timeout in milliseconds (minimum: 100) |
+| popupMaxVisible | integer | 3 | Maximum number of simultaneous popup notifications (minimum: 1) |
+| popupMaxWidth | integer | 60 | Maximum popup width in characters (minimum: 10) |
+| popupBorder | bool | false | Show border around popup notifications |
 
 
 ### Filer table

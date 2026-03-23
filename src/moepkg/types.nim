@@ -25,15 +25,15 @@ import
   modes, buffer, registers, filer, filetree, log_viewer, help_viewer,
   command_completion, message_log, logger, buffer_manager, bookmark_manager,
   backup_manager, diff_viewer, debug_viewer, config_mode, references_viewer,
-  documentsymbol_viewer, callhierarchy_viewer, hover_popup, primitives, syntax_checker,
-  recent_file_mode, terminal_mode
+  documentsymbol_viewer, callhierarchy_viewer, hover_popup, notification_popup,
+  primitives, syntax_checker, recent_file_mode, terminal_mode
 
 export
   buffer.SidebarItemKind, registers, command_completion, filer, filetree, log_viewer,
   help_viewer, buffer_manager, bookmark_manager, backup_manager, diff_viewer,
   debug_viewer, config_mode, references_viewer, documentsymbol_viewer,
-  callhierarchy_viewer, hover_popup, primitives, syntax_checker, recent_file_mode,
-  terminal_mode
+  callhierarchy_viewer, hover_popup, notification_popup, primitives, syntax_checker,
+  recent_file_mode, terminal_mode
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -634,6 +634,8 @@ type
     insertNormalMode*: bool
     # Startup window actions completed (runs once on first render)
     startUpWindowsDone*: bool
+    # Notification popup manager
+    notificationPopup*: NotificationPopupManager
 
 proc `==`*(a, b: ViewPort): bool =
   ## Structural equality for ViewPort (ref object defaults to pointer comparison)

@@ -178,6 +178,18 @@ timeout = 30                           # Timeout in seconds
 
 [Notification]
 
+popupNotifications = false             # Show notifications as floating popups
+
+popupPosition = "bottomRight"          # Popup position: topRight, bottomRight, topLeft, bottomLeft
+
+popupTimeoutMs = 3000                  # Auto-dismiss timeout in milliseconds
+
+popupMaxVisible = 3                    # Maximum simultaneous popup notifications
+
+popupMaxWidth = 60                     # Maximum popup width in characters
+
+popupBorder = false                    # Show border around popup notifications
+
 screenNotifications = true             # Global screen notifications
 
 logNotifications = true                # Global log notifications
