@@ -3880,3 +3880,630 @@ suite "pendingRegister dispatch for clipboard registers":
     check clipboardReg.getContent().contains("line1")
 
     check ctx.state.registers.getClipboardRegister('*').isEmpty
+
+suite "Operator + Find/Till - yank and change till":
+  test "yank find character (yf)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "find",
+      reverse: false,
+      targetChar: "o",
+      count: 1,
+    )
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello world" # Buffer unchanged
+    check ctx.state.yankRegister == "hello"
+
+  test "yank till character (yt)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "till",
+      reverse: false,
+      targetChar: "o",
+      count: 1,
+    )
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello world" # Buffer unchanged
+    check ctx.state.yankRegister == "hell"
+
+  test "change till character (ct)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "till",
+      reverse: false,
+      targetChar: "o",
+      count: 1,
+    )
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "o world"
+    check ctx.state.mode == EditorMode.Insert
+
+suite "Operator + Backward Find/Till":
+  test "delete find backward (dF)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 9) # on 'l' in "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "find",
+      reverse: true,
+      targetChar: "o",
+      count: 1,
+    )
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello wd"
+
+  test "delete till backward (dT)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 9) # on 'l' in "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "till",
+      reverse: true,
+      targetChar: "o",
+      count: 1,
+    )
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello wod"
+
+  test "change find backward (cF)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 9) # on 'l' in "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "find",
+      reverse: true,
+      targetChar: "o",
+      count: 1,
+    )
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello wd"
+    check ctx.state.mode == EditorMode.Insert
+
+  test "change till backward (cT)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 9) # on 'l' in "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "till",
+      reverse: true,
+      targetChar: "o",
+      count: 1,
+    )
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello wod"
+    check ctx.state.mode == EditorMode.Insert
+
+  test "yank find backward (yF)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 9) # on 'l' in "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "find",
+      reverse: true,
+      targetChar: "o",
+      count: 1,
+    )
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello world" # Buffer unchanged
+    check ctx.state.yankRegister == "orl"
+
+  test "yank till backward (yT)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 9) # on 'l' in "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "till",
+      reverse: true,
+      targetChar: "o",
+      count: 1,
+    )
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello world" # Buffer unchanged
+    check ctx.state.yankRegister == "rl"
+
+suite "Operator + Word End/Backward motions":
+  test "delete word end (de)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEnd, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "o world test"
+
+  test "change word end (ce)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEnd, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "o world test"
+    check ctx.state.mode == EditorMode.Insert
+
+  test "yank word end (ye)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEnd, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello world test" # Buffer unchanged
+    check ctx.state.yankRegister == "hell"
+
+  test "delete word backward (db)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "world test"
+
+  test "change word backward (cb)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "world test"
+    check ctx.state.mode == EditorMode.Insert
+
+  test "yank word backward (yb)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello world test" # Buffer unchanged
+    check ctx.state.yankRegister == "hello "
+
+suite "Operator + Line start/end motions":
+  test "delete to line start (d0)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.Home, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "orld"
+
+  test "change to line start (c0)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.Home, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "orld"
+    check ctx.state.mode == EditorMode.Insert
+
+  test "yank to line start (y0)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.Home, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello world" # Buffer unchanged
+    check ctx.state.yankRegister == "hello w"
+
+  test "delete to first non-blank (d^)":
+    let buffer = newTextBuffer("   hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 9) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.FirstNonBlank, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "   orld"
+
+  test "yank to end of line (y$)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.End, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello world" # Buffer unchanged
+    check ctx.state.yankRegister == "world"
+
+suite "Operator + Paragraph/File motions":
+  test "delete paragraph forward (d})":
+    let buffer = newTextBuffer("line1\nline2\n\nline4\nline5")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.ParagraphForward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 2
+    check buffer[0] == "line4"
+    check buffer[1] == "line5"
+
+  test "delete paragraph backward (d{)":
+    let buffer = newTextBuffer("line1\nline2\n\nline4\nline5")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(4, 0) # on "line5"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.ParagraphBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 2
+    check buffer[0] == "line1"
+    check buffer[1] == "line2"
+
+  test "yank paragraph forward (y})":
+    let buffer = newTextBuffer("line1\nline2\n\nline4")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.ParagraphForward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 4 # Buffer unchanged
+    check ctx.state.yankRegister == "line1\nline2\n\n"
+
+  test "delete to first line (dgg)":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(2, 0) # on "line3"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.FirstLine, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "line4"
+    check buffer.len == 1
+
+  test "delete to last line (dG)":
+    let buffer = newTextBuffer("line1\nline2\nline3\nline4")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(1, 0) # on "line2"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.LastLine, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "line1"
+    check buffer.len == 1
+
+  test "yank to first line (ygg)":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(2, 0) # on "line3"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.FirstLine, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 3 # Buffer unchanged
+    check ctx.state.yankRegister == "line1\nline2\nline3\n"
+
+  test "yank to last line (yG)":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0) # on "line1"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.LastLine, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.len == 3 # Buffer unchanged
+    check ctx.state.yankRegister == "line1\nline2\nline3\n"
+
+suite "Operator + Case operators with motions":
+  test "lowercase word (guw)":
+    let buffer = newTextBuffer("HELLO WORLD")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello WORLD"
+
+  test "uppercase word (gUw)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "HELLO world"
+
+  test "lowercase to end of line (gu$)":
+    let buffer = newTextBuffer("HELLO WORLD")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'W' of "WORLD"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpLowerCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.End, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "HELLO world"
+
+  test "uppercase to end of line (gU$)":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpUpperCase, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.End, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello WORLD"
+
+suite "Operator + Matching bracket":
+  test "delete to matching bracket (d%)":
+    let buffer = newTextBuffer("foo(bar)baz")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 3) # on '('
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.MatchBracket, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "foobaz"
+
+  test "change to matching bracket (c%)":
+    let buffer = newTextBuffer("foo(bar)baz")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 3) # on '('
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.MatchBracket, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "foobaz"
+    check ctx.state.mode == EditorMode.Insert
+
+  test "yank to matching bracket (y%)":
+    let buffer = newTextBuffer("foo(bar)baz")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 3) # on '('
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.MatchBracket, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "foo(bar)baz" # Buffer unchanged
+    check ctx.state.yankRegister == "(bar)"
+
+suite "Operator with compound counts":
+  test "count before operator (2dw via operatorCount)":
+    let buffer = newTextBuffer("one two three four")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "three four"
+
+  test "count on both operator and motion (2d2w)":
+    let buffer = newTextBuffer("one two three four five six")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 2)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "five six"
