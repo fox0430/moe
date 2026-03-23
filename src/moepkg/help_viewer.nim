@@ -54,6 +54,7 @@ k          - Go up
 l          - Go right
 w          - Go forwards to the start of a word
 e          - Go forwards to the end of a word
+ge         - Go backwards to the end of a word
 b          - Go backwards to the start of a word
 r          - Replace a character at the cursor
 Page Up    - Page Up

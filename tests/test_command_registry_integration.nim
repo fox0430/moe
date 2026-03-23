@@ -4254,6 +4254,205 @@ suite "Operator + Word End/Backward motions":
     check buffer[0] == "hello world test" # Buffer unchanged
     check ctx.state.yankRegister == "hello "
 
+suite "Operator + Word End Backward (ge) motions":
+  test "ge motion basic":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+
+  test "ge motion from start of word":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+
+  test "ge motion with count (2ge)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 12) # on 't' of "test"
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 2)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+
+  test "delete word end backward (dge)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    # ge is inclusive, deletes from col 4 ('o') to col 6 ('w') = "o w"
+    check buffer[0] == "hellorld test"
+
+  test "yank word end backward (yge)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hello world test" # Buffer unchanged
+
+  test "ge motion across lines":
+    let buffer = newTextBuffer("hello\nworld test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(1, 0) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+
+  test "ge at beginning of buffer":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 0) # at beginning
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 0) # stays at beginning
+
+  test "ge with symbols":
+    # ge stops at end of symbol sequence
+    let buffer = newTextBuffer("hello...world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 8) # on 'o' of "world"
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 7) # end of "..."
+
+  test "ge from symbol to word":
+    # ge from symbol stops at end of preceding word
+    let buffer = newTextBuffer("hello...world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 5) # on first '.'
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+
+  test "ge from middle of word":
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 8) # on 'r' of "world"
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+
+  test "ge across multiple empty lines":
+    let buffer = newTextBuffer("hello\n\n\nworld")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(3, 0) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+
+  test "ge with count exceeding available words":
+    # 10ge but only 2 word ends exist; should stop at the earliest one
+    let buffer = newTextBuffer("hello world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 10) # on 'd' of "world"
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 10)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+
+  test "ge on single character words":
+    let buffer = newTextBuffer("a b c d")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'd'
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4) # 'c'
+
+  test "ge on whitespace":
+    let buffer = newTextBuffer("hello   world")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on middle space
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor == BufferPosition(line: 0, column: 4) # end of "hello"
+
+  test "change word end backward (cge)":
+    let buffer = newTextBuffer("hello world test")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(0, 6) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpChange, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer[0] == "hellorld test"
+    check ctx.state.mode == EditorMode.Insert
+
+  test "delete word end backward across lines (dge)":
+    let buffer = newTextBuffer("hello\nworld")
+    let ctx = createTestContext(buffer)
+    ctx.setCursor(1, 0) # on 'w' of "world"
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+
+    let cmd = Command(kind: ctMotion, motion: Motion.WordEndBackward, count: 1)
+
+    check registry.executeCommand(ctx, cmd).isOk
+    # Inclusive: deletes from (0,4) 'o' to (1,0) 'w', i.e. "o\nw"
+    check buffer[0] == "hellorld"
+
 suite "Operator + Line start/end motions":
   test "delete to line start (d0)":
     let buffer = newTextBuffer("hello world")

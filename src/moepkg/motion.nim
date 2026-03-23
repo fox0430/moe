@@ -554,6 +554,62 @@ proc moveWordEnd(
     result.x = pos
     iterCount -= 1
 
+proc moveWordEndBackward(
+    e: MotionExecutor, currentPos: CursorPosition, count: int
+): CursorPosition =
+  ## Move to the end of the previous word (ge motion)
+  ## A "word end" is a position where the character is non-whitespace and the
+  ## next character is whitespace, a different char type, or end of line.
+  ## We search backward for the nearest such position before current.
+  result = currentPos
+  var iterCount = count
+
+  template getLineRunes(lineIdx: int): seq[Rune] =
+    let line = e.buffer.getLine(lineIdx)
+    let content =
+      if line.len > 0 and line[^1] == '\n':
+        line[0 ..< ^1]
+      else:
+        line
+    content.toRunes()
+
+  template isWordEnd(runes: seq[Rune], pos: int): bool =
+    pos < runes.len and not isWhitespace(runes[pos]) and (
+      pos + 1 >= runes.len or isWhitespace(runes[pos + 1]) or
+      isWordChar(runes[pos]) != isWordChar(runes[pos + 1])
+    )
+
+  while iterCount > 0:
+    var pos = result.x - 1
+    var y = result.y
+    var found = false
+
+    while not found:
+      if pos < 0:
+        if y > 0:
+          y -= 1
+          let runes = getLineRunes(y)
+          pos = runes.len - 1
+          if pos < 0:
+            # Empty line - continue to previous line
+            continue
+        else:
+          # Beginning of buffer
+          break
+
+      let runes = getLineRunes(y)
+      if isWordEnd(runes, pos):
+        found = true
+      else:
+        pos -= 1
+
+    if found:
+      result.x = pos
+      result.y = y
+    # If not found, stay at current position (beginning of buffer)
+
+    iterCount -= 1
+
 proc isBlankLine(line: string): bool =
   ## Check if a line is blank (empty or contains only whitespace)
   let content =
@@ -821,8 +877,7 @@ proc calculateNewPosition*(
   of Motion.WordEnd:
     e.moveWordEnd(currentPos, cmd.count)
   of Motion.WordEndBackward:
-    # Not implemented yet, just return current position
-    currentPos
+    e.moveWordEndBackward(currentPos, cmd.count)
   of Motion.ParagraphForward:
     e.moveParagraphForward(currentPos, cmd.count)
   of Motion.ParagraphBackward:

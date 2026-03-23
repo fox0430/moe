@@ -1159,6 +1159,15 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  registry.registerCommand(
+    Command(
+      name: "word-end-backward",
+      description: "Move to end of previous word",
+      kind: ctMotion,
+      motion: Motion.WordEndBackward,
+    )
+  )
+
   # Paragraph motion commands
   registry.registerCommand(
     Command(
@@ -1410,6 +1419,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "w", "word-forward")
   registry.bindKey(EditorMode.Normal, "b", "word-backward")
   registry.bindKey(EditorMode.Normal, "e", "word-end")
+  registry.bindKey(EditorMode.Normal, "g e", "word-end-backward")
 
   # Paragraph motion bindings
   registry.bindKey(EditorMode.Normal, "}", "paragraph-forward")
@@ -2933,6 +2943,15 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.registerCommand(
     Command(
+      name: "visual-move-word-end-backward",
+      description: "Move to end of previous word in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.word.end.backward",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
       name: "visual-move-paragraph-forward",
       description: "Move to next paragraph in visual mode",
       kind: ctAction,
@@ -3008,6 +3027,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Visual, "w", "visual-move-word")
   registry.bindKey(EditorMode.Visual, "b", "visual-move-word-back")
   registry.bindKey(EditorMode.Visual, "e", "visual-move-word-end")
+  registry.bindKey(EditorMode.Visual, "g e", "visual-move-word-end-backward")
   registry.bindKey(EditorMode.Visual, "}", "visual-move-paragraph-forward")
   registry.bindKey(EditorMode.Visual, "{", "visual-move-paragraph-backward")
   registry.bindKey(EditorMode.Visual, "I", "visual-to-insert")
@@ -3063,6 +3083,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualBlock, "w", "visual-move-word")
   registry.bindKey(EditorMode.VisualBlock, "b", "visual-move-word-back")
   registry.bindKey(EditorMode.VisualBlock, "e", "visual-move-word-end")
+  registry.bindKey(EditorMode.VisualBlock, "g e", "visual-move-word-end-backward")
   registry.bindKey(EditorMode.VisualBlock, "}", "visual-move-paragraph-forward")
   registry.bindKey(EditorMode.VisualBlock, "{", "visual-move-paragraph-backward")
   registry.bindKey(EditorMode.VisualBlock, "I", "visual-to-insert")
@@ -3116,6 +3137,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualLine, "w", "visual-move-word")
   registry.bindKey(EditorMode.VisualLine, "b", "visual-move-word-back")
   registry.bindKey(EditorMode.VisualLine, "e", "visual-move-word-end")
+  registry.bindKey(EditorMode.VisualLine, "g e", "visual-move-word-end-backward")
   registry.bindKey(EditorMode.VisualLine, "}", "visual-move-paragraph-forward")
   registry.bindKey(EditorMode.VisualLine, "{", "visual-move-paragraph-backward")
   registry.bindKey(EditorMode.VisualLine, "I", "visual-to-insert")

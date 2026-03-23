@@ -53,6 +53,7 @@
 | <kbd>**l**</kbd><br> | Go Right :arrow_right: |
 | <kbd>**w**</kbd><br> | Go forwards to the start of a word :arrow_right: |
 | <kbd>**e**</kbd><br> | Go forwards to the end of a word :arrow_right: |
+| <kbd>**g**</kbd> <kbd>**e**</kbd><br> | Go backwards to the end of a word :arrow_left: |
 | <kbd>**b**</kbd><br> | Go backwards to the start of a word :arrow_left: |
 | <kbd>**{**</kbd><br> |Go previous blank line |
 | <kbd>**}**</kbd><br> | Go next blank line |
