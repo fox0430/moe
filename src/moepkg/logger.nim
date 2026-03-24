@@ -61,7 +61,7 @@ proc initLogger*(
 
   let filePath = getLogFilePath()
 
-  if clearBefor and fileExists(filePath):
+  if clearOnStart and fileExists(filePath):
     # Clear before logs
     writeFile(filePath, "")
 
