@@ -330,6 +330,17 @@ suite "Completion - LSP support":
     check mgr.isPendingLsp == true
     check mgr.getLspRequestId().get() == 42
 
+  test "isActive returns true when pending LSP":
+    let mgr = newCompletionManager()
+    check mgr.isActive == false
+
+    mgr.state = csActive
+    check mgr.isActive == true
+
+    mgr.setLspRequestPending(1)
+    check mgr.state == csPendingLsp
+    check mgr.isActive == true
+
   test "setLspItems updates menu":
     let mgr = newCompletionManager()
     mgr.menu.prefix = "tes"
