@@ -225,11 +225,10 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
   if not svc.enabled:
     return err("LSP service is disabled")
 
-  # Check if worker already exists (running or starting)
+  # Return existing worker if present. stopWorker removes from table,
+  # so any worker in the table is active (thread running).
   if langId in svc.workers:
-    let worker = svc.workers[langId]
-    if worker.isRunning or worker.isStarting:
-      return ok(worker)
+    return ok(svc.workers[langId])
 
   # Get config
   if langId notin svc.configs:

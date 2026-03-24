@@ -240,6 +240,29 @@ suite "LspService - Worker Management (without actual workers)":
     check result.isErr
     check "No LSP support" in result.error
 
+  test "startWorker returns existing worker without creating a new one":
+    ## Regression test: startWorker must return an existing worker even when
+    ## its state is lwsStopped (the period between start() and the worker
+    ## thread processing lcmdStart). Previously, the state check
+    ## (isRunning or isStarting) missed this intermediate state, causing a
+    ## duplicate worker to be created and the original thread to be orphaned.
+    let svc = newLspService()
+    let result1 = svc.startWorker("nim")
+    check result1.isOk
+    let worker1 = result1.get
+
+    # Worker is started but LSP server state is still lwsStopped
+    # (lcmdStart hasn't been processed yet)
+    check worker1.state == lwsStopped
+
+    # Second call must return the same worker, not create a new one
+    let result2 = svc.startWorker("nim")
+    check result2.isOk
+    let worker2 = result2.get
+    check worker1 == worker2
+
+    worker1.stop()
+
 suite "LspService - Pending Request Management":
   test "hasPendingRequests returns false initially":
     let svc = newLspService()

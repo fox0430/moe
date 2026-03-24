@@ -24,7 +24,7 @@ import std/[json, options, os, strutils, strtabs, locks, tables, atomics, deques
 import std/times except milliseconds
 
 import pkg/[results, chronos]
-import pkg/chronos/[asyncproc, threadsync]
+import pkg/chronos/[asyncproc, threadsync, selectors2]
 
 import jsonrpc
 import protocol/types
@@ -170,6 +170,8 @@ type
 
   LspWorker* = ref object
     thread: Thread[LspWorkerContext]
+    threadStarted: bool
+    stopped: bool
     commandQueue: CommandQueue
     eventQueue: EventQueue
     sharedState: SharedState
@@ -720,6 +722,13 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     except CatchableError as e:
       sendLogMessage(mtWarning, "Failed to kill LSP server process: " & e.msg)
 
+    if serverProcess != nil:
+      # Close process pipe FDs and streams (must be called explicitly)
+      try:
+        await serverProcess.closeWait()
+      except CatchableError:
+        discard
+
     serverProcess = nil
     serverStreams = nil
     outputFuture = nil
@@ -933,6 +942,17 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     ctx.eventQueue[].push(evt)
     ctx.sharedState.storeState(lwsCrashed)
     ctx.sharedState.storeRunning(false)
+  finally:
+    # Close the chronos dispatcher's selector (epoll fd) to prevent FD leak.
+    # PDispatcher has no destructor, so we must close it explicitly.
+    # Use finally to ensure cleanup even on Defect.
+    try:
+      let disp = getThreadDispatcher()
+      disp.getIoHandler().close()
+    except CatchableError:
+      discard
+    except Defect:
+      discard
 
 # Public API
 
@@ -973,18 +993,33 @@ proc start*(worker: LspWorker) =
   )
 
   createThread(worker.thread, workerThreadProc, ctx)
+  worker.threadStarted = true
 
 proc stop*(worker: LspWorker) =
-  if not worker.sharedState.running.load(moAcquire):
+  if worker.stopped:
     return
 
-  # Push shutdown command and signal worker to wake up
-  worker.commandQueue.pushAndSignal(LspCommand(kind: lcmdShutdown), worker.signal)
-  joinThread(worker.thread)
+  if worker.sharedState.running.load(moAcquire):
+    # Normal case: send shutdown command to gracefully stop
+    worker.commandQueue.pushAndSignal(LspCommand(kind: lcmdShutdown), worker.signal)
+
+  if worker.threadStarted:
+    # Always join the thread if it was started, even if the worker has crashed.
+    # Without joining, the old thread may still be accessing shared memory when
+    # the LspWorker ref is freed, causing allocator corruption.
+    joinThread(worker.thread)
+    worker.threadStarted = false
+
   worker.sharedState.running.store(false, moRelease)
+
+  # Clean up locks
+  deinitLock(worker.commandQueue.lock)
+  deinitLock(worker.eventQueue.lock)
 
   # Clean up signal
   discard worker.signal.close()
+
+  worker.stopped = true
 
 proc startServer*(
     worker: LspWorker, command: string, args: seq[string], workspaceRoot: string
