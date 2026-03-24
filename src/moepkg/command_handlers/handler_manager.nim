@@ -163,6 +163,7 @@ type
     hrEnterFileTree # Enter/toggle fileTree sidebar
     hrFileTreeOpenFile # Open file from fileTree
     hrFileTreeQuit # Close fileTree sidebar
+    hrOpenUri # Open URI/file under cursor
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -421,6 +422,8 @@ type
       fileTreeFilePath*: string
     of hrFileTreeQuit:
       discard
+    of hrOpenUri:
+      openUri*: string
     of hrUnhandled:
       discard
     of hrError:
@@ -717,6 +720,8 @@ proc handleNormalMode*(
     return HandlerResult(kind: hrEqualizeWindows)
   of nmrSwapWindow:
     return HandlerResult(kind: hrSwapWindow)
+  of nmrOpenUri:
+    return HandlerResult(kind: hrOpenUri, openUri: r.openUri)
 
 proc handleInsertMode*(
     manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo

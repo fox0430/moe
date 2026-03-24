@@ -1764,6 +1764,18 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.bindKey(EditorMode.Normal, "g l", "lsp-document-link")
 
+  # Open URI/file under cursor (g f)
+  registry.registerCommand(
+    Command(
+      name: "open-uri",
+      description: "Open URI/file under cursor",
+      kind: ctCustom,
+      commandId: "editor.open.uri",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g f", "open-uri")
+
   # Save file
   registry.registerCommand(
     Command(
