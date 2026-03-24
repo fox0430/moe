@@ -177,6 +177,7 @@ gi         - Goto Implementation (LSP)
 gr         - References (LSP)
 gh         - Open Call hierarchy viewer (LSP)
 gl         - Document Link (LSP)
+gf         - Open URI/file under cursor
 Space r    - Rename (LSP)
 \ r        - Code Lens (LSP)
 zd         - Delete folding lines

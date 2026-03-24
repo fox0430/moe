@@ -23,7 +23,7 @@ import std/[algorithm, unicode, options, strutils, deques, os, times]
 
 import pkg/[results, regex, celina]
 
-import unicode_utils, encoding, highlight, logger, search_utils, primitives
+import unicode_utils, encoding, highlight, logger, search_utils, primitives, uri_utils
 import buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
 
 export
@@ -2156,6 +2156,14 @@ proc updateHighlight*(b: TextBuffer) =
 
     if b.diagnostics.len > 0:
       applyDiagnosticHighlights(b.highlight, b.diagnostics)
+
+    # Apply underline to URIs/URLs
+    for lineIdx in 0 ..< b.len:
+      let line = b.getLine(lineIdx)
+      for m in findAllUris(line):
+        b.highlight.addModifier(
+          lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
+        )
 
     b.highlightNeedsUpdate = false
 

@@ -28,7 +28,7 @@ import pkg/results
 import
   ../[
     types, buffer, modes, motion, key_bindings, command_registry, config, registers,
-    render_utils, search_utils,
+    render_utils, search_utils, uri_utils,
   ]
 import visual_handler, insert_commands
 
@@ -69,6 +69,7 @@ type
     nmrDecreaseWindowWidth # Signal to handler_manager to decrease window width
     nmrEqualizeWindows # Signal to handler_manager to equalize all windows
     nmrSwapWindow # Signal to handler_manager to swap window with next
+    nmrOpenUri # Signal to handler_manager to open URI/file under cursor
 
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
     motionController*: MotionController
@@ -146,6 +147,8 @@ type
     of nmrIncreaseWindowHeight, nmrDecreaseWindowHeight, nmrIncreaseWindowWidth,
         nmrDecreaseWindowWidth, nmrEqualizeWindows, nmrSwapWindow:
       discard
+    of nmrOpenUri:
+      openUri*: string
 
 proc updateCursorToJumpPosition(
     handler: NormalModeHandler,
@@ -1095,6 +1098,17 @@ proc handleNormalModeKey*(
       return NormalModeResult(kind: nmrLspSelectionRange)
     elif cmd.commandId == "lsp.document.link":
       return NormalModeResult(kind: nmrLspDocumentLink)
+    elif cmd.commandId == "editor.open.uri":
+      let line = buffer.getLine(state.cursor.line)
+      let uriOpt = extractUriAtPosition(line, state.cursor.column)
+      if uriOpt.isSome:
+        return NormalModeResult(kind: nmrOpenUri, openUri: uriOpt.get)
+      let pathOpt = extractFilePathAtPosition(line, state.cursor.column)
+      if pathOpt.isSome:
+        return NormalModeResult(kind: nmrOpenUri, openUri: pathOpt.get)
+      return NormalModeResult(
+        kind: nmrError, errorMessage: "No URI or file path under cursor"
+      )
     elif cmd.commandId == "lsp.document.symbol":
       # Transition to DocumentSymbol mode
       return NormalModeResult(
