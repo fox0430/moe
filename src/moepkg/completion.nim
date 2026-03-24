@@ -590,8 +590,8 @@ proc getSelectedWord*(mgr: CompletionManager): string =
   return mgr.menu.entries[mgr.menu.selectedIndex].word
 
 proc isActive*(mgr: CompletionManager): bool =
-  ## Check if completion popup is active
-  mgr.state == csActive
+  ## Check if completion popup is active (including while waiting for LSP)
+  mgr.state in {csActive, csPendingLsp}
 
 # Popup rendering
 
