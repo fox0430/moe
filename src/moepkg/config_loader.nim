@@ -811,6 +811,13 @@ proc loadDebugLspConfig(
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "enable", config.enable, vr, section)
 
+proc loadLogConfig(
+    table: TomlTableRef, config: var LogConfig, vr: var ValidationResult
+) =
+  const validKeys = ["clearOnStart"]
+  checkUnknownKeys(table, validKeys, "Log", vr)
+  loadBool(table, "clearOnStart", config.clearOnStart, vr, "Log")
+
 proc loadDebugConfig(
     table: TomlTableRef, config: var DebugConfig, vr: var ValidationResult
 ) =
@@ -1323,7 +1330,7 @@ proc loadConfigFromToml*(
     "Standard", "Clipboard", "BuildOnSave", "TabLine", "StatusLine", "Git",
     "SyntaxChecker", "Theme", "AutoSave", "Notification", "QuickRun", "AutoBackup",
     "SmoothScroll", "Highlight", "Filer", "FileTree", "Autocomplete", "Persist",
-    "StartUp", "EditorConfig", "Lsp", "Debug", "KeyMapping", "CommandAliases",
+    "StartUp", "EditorConfig", "Lsp", "Log", "Debug", "KeyMapping", "CommandAliases",
     "ShellCommands",
   ]
   checkUnknownKeys(toml.getTable(), knownSections, "", vr)
@@ -1401,6 +1408,9 @@ proc loadConfigFromToml*(
 
   if toml.hasKey("Lsp"):
     loadLspConfig(toml["Lsp"].getTable(), config.lsp, vr)
+
+  if toml.hasKey("Log"):
+    loadLogConfig(toml["Log"].getTable(), config.log, vr)
 
   if toml.hasKey("Debug"):
     loadDebugConfig(toml["Debug"].getTable(), config.debug, vr)

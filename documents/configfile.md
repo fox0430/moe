@@ -275,6 +275,13 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | bookmarks | bool | true | Saving bookmarks |
 
 
+### Log table
+
+| Name | Type | Default Value | Description |
+|:-------------|:-----|:--------------|:-------------------------------------------|
+| clearOnStart | bool | false | Clear existing log file when starting with debug mode |
+
+
 ### Debug.WindowNode table
 
 | Name | Type | Default Value | Description |
