@@ -1783,21 +1783,45 @@ proc chooseBackendForFile(fileSize: int64 = 0): BufferBackend =
   else:
     chooseBackend()
 
-template detectLineEnding(b: TextBuffer, content: lent string) =
-  ## Detect line ending and trailing newline
-  if content.contains("\r\n"):
-    b.lineEnding = CRLF
-  elif content.contains("\r"):
-    b.lineEnding = CR
-  else:
-    b.lineEnding = LF
+proc detectAndNormalizeLineEnding(b: TextBuffer, content: var string) =
+  ## Detect line ending style, detect trailing newline, and normalize \r
+  ## to \n in a single pass. Backends only handle \n as line separator;
+  ## \r in line content causes terminal rendering corruption.
 
-  # Detect if file ends with newline
-  # For empty files (new files), keep the default endOfLine=true (POSIX standard)
+  # Detect if file ends with newline (before modifying content)
   if content.len > 0:
     b.endOfLine =
       content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r")
-  # else: keep the default endOfLine value (true for new files)
+
+  # Single-pass detection + normalization: scan for \r
+  var hasCR = false
+  var hasCRLF = false
+  for i in 0 ..< content.len:
+    if content[i] == '\r':
+      hasCR = true
+      if i + 1 < content.len and content[i + 1] == '\n':
+        hasCRLF = true
+      # Replace \r with \n (for CR-only) or skip \r (for CRLF, handled below)
+      break # One \r is enough to determine the line ending style
+
+  if hasCRLF:
+    b.lineEnding = CRLF
+    # Strip \r in-place: copy non-\r bytes forward
+    var writePos = 0
+    for readPos in 0 ..< content.len:
+      if content[readPos] != '\r':
+        content[writePos] = content[readPos]
+        inc writePos
+      # Skip \r (only occurs before \n in CRLF files)
+    content.setLen(writePos)
+  elif hasCR:
+    b.lineEnding = CR
+    # Replace \r with \n in-place
+    for i in 0 ..< content.len:
+      if content[i] == '\r':
+        content[i] = '\n'
+  else:
+    b.lineEnding = LF
 
 proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   var content: string
@@ -1817,6 +1841,10 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
     logDebug("buffer", "File does not exist, creating new: " & path)
     content = ""
 
+  # Detect line ending, normalize \r, and detect encoding before backend init.
+  b.detectAndNormalizeLineEnding(content)
+  b.encoding = detectCharacterEncoding(content)
+
   let newBackend = chooseBackendForFile(fileSize)
 
   # Reinitialize with new backend if needed
@@ -1833,9 +1861,6 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
       b.rope = newRope(content)
     of PieceTable:
       b.pieceTable = newPieceTable(content)
-
-  b.detectLineEnding(content)
-  b.encoding = detectCharacterEncoding(content)
 
   b.filePath = some(path)
 
@@ -1893,12 +1918,29 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 proc getFileContent*(buffer: TextBuffer): string =
   ## Get the buffer content as it would be written to a file,
   ## with proper trailing newline handling based on endOfLine setting.
+  ## Internal \n line endings are restored to the original line ending style.
   result = buffer.getTextString
 
+  # Restore original line ending style (internal representation uses \n only)
+  case buffer.lineEnding
+  of CRLF:
+    result = result.replace("\n", "\r\n")
+  of CR:
+    result = result.replace('\n', '\r')
+  of LF:
+    discard
+
   if buffer.endOfLine:
-    # Ensure content ends with newline
-    if result.len == 0 or
-        not (result.endsWith("\n") or result.endsWith("\r\n") or result.endsWith("\r")):
+    # Ensure content ends with the appropriate line ending
+    let endsWithNewline =
+      case buffer.lineEnding
+      of LF:
+        result.endsWith("\n")
+      of CRLF:
+        result.endsWith("\r\n")
+      of CR:
+        result.endsWith("\r")
+    if result.len == 0 or not endsWithNewline:
       case buffer.lineEnding
       of LF:
         result.add('\n')
@@ -1907,7 +1949,7 @@ proc getFileContent*(buffer: TextBuffer): string =
       of CR:
         result.add('\r')
   else:
-    # Remove ONE trailing newline if present (endOfLine=false)
+    # Remove ONE trailing line ending if present (endOfLine=false)
     if result.len > 0:
       if result.endsWith("\r\n"):
         result.setLen(result.len - 2)
