@@ -463,6 +463,25 @@ suite "LspWorker - Worker Thread Lifecycle":
     worker.stop()
     check worker.isStopped
 
+  test "double stop after start does not crash":
+    let workerResult = newLspWorker("nim")
+    check workerResult.isOk
+    let worker = workerResult.get
+
+    worker.start()
+    worker.stop()
+    worker.stop() # Second stop should be safe (no double deinitLock/close)
+    check worker.isStopped
+
+  test "double stop without start does not crash":
+    let workerResult = newLspWorker("nim")
+    check workerResult.isOk
+    let worker = workerResult.get
+
+    worker.stop()
+    worker.stop() # Second stop should be safe
+    check worker.isStopped
+
 suite "LspWorker - Document Notification Commands":
   test "didOpen queues command":
     let workerResult = newLspWorker("nim")
