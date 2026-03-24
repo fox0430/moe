@@ -1271,3 +1271,204 @@ suite "Buffer - Diagnostic Highlights":
     buf.updateHighlight()
 
     check buf.highlight.getSegmentModifiers(0, 0) == {}
+
+suite "Buffer - CRLF Line Ending Handling":
+  test "loadFile CRLF: line ending detected":
+    let path = "/tmp/moe_test_crlf_detect.txt"
+    writeFile(path, "line1\r\nline2\r\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CRLF
+
+  test "loadFile CRLF: \\r stripped from line content":
+    let path = "/tmp/moe_test_crlf_strip.txt"
+    writeFile(path, "hello\r\nworld\r\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.len == 2
+    check buf[0] == "hello"
+    check buf[1] == "world"
+
+  test "loadFile CRLF: single line":
+    let path = "/tmp/moe_test_crlf_single.txt"
+    writeFile(path, "const = 'a';\r\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.len == 1
+    check buf[0] == "const = 'a';"
+    check buf.lineEnding == CRLF
+
+  test "loadFile CR-only: line ending detected and normalized":
+    let path = "/tmp/moe_test_cr.txt"
+    writeFile(path, "line1\rline2\r")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CR
+    check buf.len == 2
+    check buf[0] == "line1"
+    check buf[1] == "line2"
+
+  test "loadFile LF: no modification":
+    let path = "/tmp/moe_test_lf.txt"
+    writeFile(path, "line1\nline2\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == LF
+    check buf.len == 2
+    check buf[0] == "line1"
+    check buf[1] == "line2"
+
+  test "saveFile CRLF: roundtrip preserves line endings":
+    let path = "/tmp/moe_test_crlf_roundtrip.txt"
+    let original = "hello\r\nworld\r\n"
+    writeFile(path, original)
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CRLF
+    check buf[0] == "hello"
+    check buf[1] == "world"
+
+    discard buf.saveFile(path)
+    let saved = readFile(path)
+    check saved == original
+
+  test "saveFile CR: roundtrip preserves line endings":
+    let path = "/tmp/moe_test_cr_roundtrip.txt"
+    let original = "hello\rworld\r"
+    writeFile(path, original)
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CR
+
+    discard buf.saveFile(path)
+    let saved = readFile(path)
+    check saved == original
+
+  test "saveFile LF: roundtrip preserves line endings":
+    let path = "/tmp/moe_test_lf_roundtrip.txt"
+    let original = "hello\nworld\n"
+    writeFile(path, original)
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == LF
+
+    discard buf.saveFile(path)
+    let saved = readFile(path)
+    check saved == original
+
+  test "CRLF file with empty lines":
+    let path = "/tmp/moe_test_crlf_empty.txt"
+    writeFile(path, "line1\r\n\r\nline3\r\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.len == 3
+    check buf[0] == "line1"
+    check buf[1] == ""
+    check buf[2] == "line3"
+
+    discard buf.saveFile(path)
+    let saved = readFile(path)
+    check saved == "line1\r\n\r\nline3\r\n"
+
+  test "CRLF endOfLine detection":
+    let path = "/tmp/moe_test_crlf_eol.txt"
+    # File without trailing newline
+    writeFile(path, "hello\r\nworld")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    check buf.lineEnding == CRLF
+    check buf.endOfLine == false
+    check buf[0] == "hello"
+    check buf[1] == "world"
+
+    discard buf.saveFile(path)
+    let saved = readFile(path)
+    check saved == "hello\r\nworld"
+
+  test "CRLF roundtrip after inserting a line":
+    let path = "/tmp/moe_test_crlf_insert.txt"
+    writeFile(path, "aaa\r\nbbb\r\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    discard buf.insert(1, "ccc")
+    check buf.len == 3
+
+    discard buf.saveFile(path)
+    let saved = readFile(path)
+    check saved == "aaa\r\nccc\r\nbbb\r\n"
+
+  test "CRLF roundtrip after deleting a line":
+    let path = "/tmp/moe_test_crlf_delete.txt"
+    writeFile(path, "aaa\r\nbbb\r\nccc\r\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    discard buf.deleteLine(1)
+    check buf.len == 2
+
+    discard buf.saveFile(path)
+    let saved = readFile(path)
+    check saved == "aaa\r\nccc\r\n"
+
+  test "CRLF roundtrip after replacing a line":
+    let path = "/tmp/moe_test_crlf_replace.txt"
+    writeFile(path, "aaa\r\nbbb\r\n")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    discard buf.replaceLine(0, "zzz")
+
+    discard buf.saveFile(path)
+    let saved = readFile(path)
+    check saved == "zzz\r\nbbb\r\n"
+
+  test "CR roundtrip after editing":
+    let path = "/tmp/moe_test_cr_edit.txt"
+    writeFile(path, "aaa\rbbb\r")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    discard buf.insert(1, "new")
+
+    discard buf.saveFile(path)
+    let saved = readFile(path)
+    check saved == "aaa\rnew\rbbb\r"
