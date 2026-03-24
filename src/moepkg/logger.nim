@@ -44,12 +44,17 @@ proc getLogFilePath(): string =
   ## Note: This does not create the file, just determines the path
   result = getCurrentDir() / "moe-debug.log"
 
-proc initLogger*(minLevel: LogLevel = LogLevel.Debug, enabled: bool = false): Logger =
+proc initLogger*(
+    minLevel: LogLevel = LogLevel.Debug,
+    enabled: bool = false,
+    clearOnStart: bool = false,
+): Logger =
   ## Initialize a new logger instance
   ##
   ## Args:
   ##   minLevel: Minimum log level to record (default: Debug)
   ##   enabled: Whether logging is enabled (default: false)
+  ##   clearOnStart: Whether to clear existing log file on start (default: false)
   ##
   ## Returns:
   ##   A new Logger instance
@@ -57,13 +62,14 @@ proc initLogger*(minLevel: LogLevel = LogLevel.Debug, enabled: bool = false): Lo
   initLock(result.lock)
 
   if enabled:
+    let fileMode = if clearOnStart: fmWrite else: fmAppend
     try:
-      result.file = open(result.filePath, fmAppend)
+      result.file = open(result.filePath, fileMode)
     except CatchableError as e:
       # Try fallback location
       try:
         result.filePath = getTempDir() / "moe-debug.log"
-        result.file = open(result.filePath, fmAppend)
+        result.file = open(result.filePath, fileMode)
       except CatchableError:
         # If we can't open the log file, disable logging
         result.enabled = false

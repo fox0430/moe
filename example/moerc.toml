@@ -371,6 +371,13 @@ enable = false                         # Open fileTree sidebar on startup
 # [KeyMapping.Terminal]
 # "C-c" = "Escape"
 
+# Log settings - controls file-based debug logging behavior
+# Debug logging is enabled via -d/--debug command line flag
+# Log file: ./moe-debug.log (fallback: /tmp/moe-debug.log)
+
+[Log]
+clearOnStart = false                   # Clear existing log file when starting with debug mode
+
 # Debug mode settings - controls what sections are shown in :debug view
 # Use :debug command to open the debug viewer (vertical split, auto-refreshes every 500ms)
 

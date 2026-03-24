@@ -315,6 +315,10 @@ type
   DebugLspConfig* = object
     enable*: bool
 
+  # Log settings
+  LogConfig* = object
+    clearOnStart*: bool ## Clear existing log file when starting with debug mode
+
   # Debug settings
   DebugConfig* = object
     windowNode*: DebugWindowNodeConfig
@@ -438,6 +442,7 @@ type
     startUpFileOpen*: StartUpFileOpenConfig
     startUpFileTree*: StartUpFileTreeConfig
     editorConfig*: EditorConfigSettings
+    log*: LogConfig
     debug*: DebugConfig
     theme*: ThemeConfig
     lsp*: LspConfig
@@ -608,6 +613,7 @@ proc newEditorConfig*(): EditorConfig =
     startUpFileOpen: StartUpFileOpenConfig(autoSplit: true, splitType: stVertical),
     startUpFileTree: StartUpFileTreeConfig(enable: false),
     editorConfig: EditorConfigSettings(enable: true),
+    log: LogConfig(clearOnStart: false),
     debug: DebugConfig(
       windowNode: DebugWindowNodeConfig(
         enable: true,

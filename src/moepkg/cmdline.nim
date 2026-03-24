@@ -28,6 +28,7 @@ import app_info
 
 type CmdLineConfig* = object ## Command line configuration
   debugEnabled*: bool ## Enable debug logging
+  clearLog*: bool ## Clear existing log file on start
   isReadonly*: bool ## Open files in readonly mode
   filePaths*: seq[string] ## File paths to open (supports multiple files)
 
@@ -53,6 +54,7 @@ Usage:
 Arguments:
   -R               Readonly mode
   -d, --debug      Enable debug logging
+  --clear-log      Clear existing debug log file on start
   -h, --help       Print this help
   -v, --version    Print version
 """
@@ -77,7 +79,9 @@ proc parseCmdLine*(): CmdLineConfig =
   ##   let config = parseCmdLine()
   ##   if config.debugEnabled:
   ##     echo "Debug mode enabled"
-  result = CmdLineConfig(debugEnabled: false, isReadonly: false, filePaths: @[])
+  result = CmdLineConfig(
+    debugEnabled: false, clearLog: false, isReadonly: false, filePaths: @[]
+  )
 
   for i in 1 .. paramCount():
     let arg = paramStr(i)
@@ -88,6 +92,8 @@ proc parseCmdLine*(): CmdLineConfig =
       showHelp()
     of "-d", "--debug":
       result.debugEnabled = true
+    of "--clear-log":
+      result.clearLog = true
     of "-R":
       result.isReadonly = true
     else:
