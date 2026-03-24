@@ -237,12 +237,6 @@ proc main() =
   # Parse command line arguments
   let cmdLineConfig = parseCmdLine()
 
-  # Initialize file logging system for debugging
-  let log = initLogger(LogLevel.Debug, enabled = cmdLineConfig.debugEnabled)
-  setGlobalLogger(log)
-  if cmdLineConfig.debugEnabled:
-    logInfo("moe", "Editor starting with debug logging enabled")
-
   # Load configuration
   let loadResult = loadConfig()
   var
@@ -256,6 +250,16 @@ proc main() =
     # Config file parse error - add to validation result and use default config
     validationResult.addError("config", loadResult.error, "valid TOML file")
     editorConfig = newEditorConfig()
+
+  # Initialize file logging system for debugging
+  # clearOnStart is enabled if set via command line or config file
+  let clearLog = cmdLineConfig.clearLog or editorConfig.log.clearOnStart
+  let log = initLogger(
+    LogLevel.Debug, enabled = cmdLineConfig.debugEnabled, clearOnStart = clearLog
+  )
+  setGlobalLogger(log)
+  if cmdLineConfig.debugEnabled:
+    logInfo("moe", "Editor starting with debug logging enabled")
 
   # Create editor with loaded configuration and validation result
   var editor = newEditor(editorConfig, validationResult)
