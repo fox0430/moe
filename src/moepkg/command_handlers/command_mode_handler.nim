@@ -1344,7 +1344,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           hrLspCodeLensExecute, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
           hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit,
           hrConfigSaveConfig, hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit,
-          hrExecCommand, hrFileTreeOpenFile, hrFileTreeQuit:
+          hrExecCommand, hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri:
         discard # Not returned from command mode handler
 
       if not overlayHandled:

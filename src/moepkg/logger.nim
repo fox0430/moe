@@ -44,7 +44,9 @@ proc getLogFilePath(): string =
   ## Note: This does not create the file, just determines the path
   result = getCurrentDir() / "moe-debug.log"
 
-proc initLogger*(minLevel: LogLevel = LogLevel.Debug, enabled: bool = false): Logger =
+proc initLogger*(
+    minLevel: LogLevel = LogLevel.Debug, enabled: bool = false, clearBefor: bool = false
+): Logger =
   ## Initialize a new logger instance
   ##
   ## Args:
@@ -53,7 +55,15 @@ proc initLogger*(minLevel: LogLevel = LogLevel.Debug, enabled: bool = false): Lo
   ##
   ## Returns:
   ##   A new Logger instance
-  result = Logger(filePath: getLogFilePath(), minLevel: minLevel, enabled: enabled)
+
+  let filePath = getLogFilePath()
+
+  if clearBefor and fileExists(filePath):
+    # Clear before logs
+    writeFile(filePath, "")
+
+  result = Logger(filePath: filePath, minLevel: minLevel, enabled: enabled)
+
   initLock(result.lock)
 
   if enabled:
@@ -152,17 +162,3 @@ proc logWarn*(module: string, message: string) {.gcsafe, raises: [].} =
 proc logError*(module: string, message: string) {.gcsafe, raises: [].} =
   ## Log an error message using the global logger
   log(LogLevel.Error, module, message)
-
-# Initialize global logger on module import
-when isMainModule:
-  # Test the logger
-  let logger = initLogger()
-  setGlobalLogger(logger)
-
-  logDebug("test", "This is a debug message")
-  logInfo("test", "This is an info message")
-  logWarn("test", "This is a warning message")
-  logError("test", "This is an error message")
-
-  logger.close()
-  echo "Log file created at: ", logger.filePath

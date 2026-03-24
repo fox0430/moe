@@ -26,7 +26,7 @@ import
   editor, key_bindings, modes, buffer, logger, types, motion, filer, quick_run_utils,
   buffer_manager, bookmark_manager, backup_manager, backup, diff_viewer,
   command_completion, build, render_utils, config_loader, documentsymbol_viewer,
-  message_log, tab_line, terminal_mode, clipboard
+  message_log, tab_line, terminal_mode, clipboard, uri_utils
 import
   command_handlers/
     [handler_manager, command_mode_handler, search_mode_handler, insert_commands]
@@ -214,7 +214,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
       hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrEnterTerminal,
       hrTerminalQuit, hrExecCommand, hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile,
-      hrFileTreeQuit:
+      hrFileTreeQuit, hrOpenUri:
     discard # Not expected from RecentFile mode handler
 
   # Handle overlay transitions (e.g., entering Command mode with :)
@@ -1702,6 +1702,33 @@ proc handleEvent*(e: Editor, event: Event): bool =
     return true
   of hrLspExecuteCommand:
     asyncSpawn e.requestLspExecuteCommand(r.hrLspCommand, r.hrLspCommandArgs)
+    return true
+  of hrOpenUri:
+    let uri = r.openUri
+    if isLocalFileUri(uri):
+      let path = fileUriToPath(uri)
+      if e.openFileAndJumpTo(path, 0, 0):
+        e.state.statusMessage = "Opened: " & path.extractFilename
+      else:
+        e.state.statusMessage = "Failed to open: " & path
+    elif isExternalUri(uri):
+      if openExternalUri(uri):
+        e.state.statusMessage = "Opened: " & uri
+      else:
+        e.state.statusMessage = "Failed to open: " & uri
+    else:
+      # Plain file path - resolve relative to current buffer's directory
+      let activeBuffer = e.activeBuffer()
+      let basePath =
+        if activeBuffer.filePath.isSome:
+          activeBuffer.filePath.get.parentDir
+        else:
+          getCurrentDir()
+      let resolvedPath = basePath / uri
+      if e.openFileAndJumpTo(resolvedPath, 0, 0):
+        e.state.statusMessage = "Opened: " & resolvedPath.extractFilename
+      else:
+        e.state.statusMessage = "Failed to open: " & resolvedPath
     return true
   of hrBufferNext:
     e.switchToNextBuffer()

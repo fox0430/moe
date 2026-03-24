@@ -336,6 +336,20 @@ proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
     let cs = old.colorSegments[i]
     highlight.colorSegments.add(cs.overwrite(colorSegment))
 
+proc addModifier*(
+    highlight: var Highlight,
+    firstRow, firstCol, lastRow, lastCol: int,
+    modifier: StyleModifier,
+) =
+  ## Add a style modifier to all segments overlapping the given range,
+  ## preserving existing colors and other modifiers.
+  for i in 0 ..< highlight.colorSegments.len:
+    let cs = highlight.colorSegments[i]
+    # Check if segment overlaps with the range
+    if (cs.lastRow, cs.lastColumn) >= (firstRow, firstCol) and
+        (cs.firstRow, cs.firstColumn) <= (lastRow, lastCol):
+      highlight.colorSegments[i].style.modifiers.incl(modifier)
+
 proc addColorSegment*(
     h: var Highlight,
     line, length: int,

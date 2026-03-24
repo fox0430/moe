@@ -178,6 +178,7 @@
 | <kbd>**g**</kbd> <kbd>**r**</kbd></br> | Open References mode (LSP Find References) |
 | <kbd>**g**</kbd> <kbd>**h**</kbd></br> | Open Call Hierarchy Viewer (LSP Call Hierarchy) |
 | <kbd>**g**</kbd> <kbd>**L**</kbd></br> | Code Lens (LSP) |
+| <kbd>**g**</kbd> <kbd>**f**</kbd></br> | Open URI/file under cursor |
 | <kbd>**Space**</kbd> <kbd>**r**</kbd></br> | Rename (LSP) |
 | <kbd>**z**</kbd> <kbd>**d**</kbd></br> | Delete fold lines |
 | <kbd>**z**</kbd> <kbd>**R**</kbd></br> | Delete fold lines |
