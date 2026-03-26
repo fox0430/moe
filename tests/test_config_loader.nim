@@ -843,6 +843,24 @@ autoBackupLogNotify = false
     check config.notification.autoBackupScreenNotify == true
     check config.notification.autoBackupLogNotify == false
 
+  test "lspForcePopup config loads correctly":
+    let tomlStr = """
+[Notification]
+lspForcePopup = true
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.notification.lspForcePopup == true
+
+  test "lspForcePopup disabled":
+    let tomlStr = """
+[Notification]
+lspForcePopup = false
+"""
+    let (config, vr) = loadFromTomlString(tomlStr)
+    check not vr.hasErrors
+    check config.notification.lspForcePopup == false
+
   test "Invalid bool type is detected":
     let tomlStr = """
 [Notification]
