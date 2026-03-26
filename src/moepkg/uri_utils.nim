@@ -20,57 +20,71 @@
 ## URI/URL detection and external program launching utilities.
 ## Used by the `gf` command to open URIs under the cursor.
 
-import std/[options, osproc, strutils]
+import std/[options, osproc, sequtils, strutils, unicode]
 
 const
   UriSchemes* = ["https://", "http://", "file://", "mailto:", "ftp://", "ssh://"]
 
-  # Characters that terminate a URI.
+  # Characters that terminate a URI (all ASCII).
   UriBreakChars =
     Whitespace + {'<', '>', '"', '`', '[', ']', '{', '}', '|', '\\', '^', '\''}
 
   # Trailing characters that are usually punctuation, not part of the URI.
   TrailingPunctuation = {'.', ',', ';', ':', '!', '?'}
 
-proc stripTrailingPunctuation(uri: string): string =
+proc isUriBreakRune(r: Rune): bool =
+  let c = r.int32
+  if c > 127:
+    return false
+  return char(c) in UriBreakChars
+
+proc stripTrailingPunctuation(runes: seq[Rune]): seq[Rune] =
   ## Remove trailing punctuation that is likely not part of the URI.
   ## Handle balanced parentheses (common in Wikipedia URLs).
-  result = uri
+  result = runes
   while result.len > 0:
     let last = result[^1]
-    if last == ')':
-      # Only strip if parentheses are unbalanced
-      if result.count(')') > result.count('('):
-        result = result[0 ..< result.len - 1]
+    if last == Rune(')'):
+      if result.count(Rune(')')) > result.count(Rune('(')):
+        result.setLen(result.len - 1)
       else:
         break
-    elif last == ']':
-      if result.count(']') > result.count('['):
-        result = result[0 ..< result.len - 1]
+    elif last == Rune(']'):
+      if result.count(Rune(']')) > result.count(Rune('[')):
+        result.setLen(result.len - 1)
       else:
         break
-    elif last in TrailingPunctuation:
-      result = result[0 ..< result.len - 1]
+    elif last.int32 < 128 and char(last.int32) in TrailingPunctuation:
+      result.setLen(result.len - 1)
     else:
       break
 
-proc findSchemeAt(line: string, pos: int): int =
-  ## Check if any URI scheme starts at the given position.
-  ## Returns the length of the scheme if found, -1 otherwise.
+proc findSchemeAtRune(runes: seq[Rune], pos: int): int =
+  ## Check if any URI scheme starts at the given rune position.
+  ## Returns the length (in runes) of the scheme if found, -1 otherwise.
+  ## Since URI schemes are ASCII, rune length == byte length.
   for scheme in UriSchemes:
-    if pos + scheme.len <= line.len and
-        line[pos ..< pos + scheme.len].toLowerAscii() == scheme:
-      return scheme.len
+    if pos + scheme.len <= runes.len:
+      var matches = true
+      for j in 0 ..< scheme.len:
+        let r = runes[pos + j]
+        if r.int32 > 127 or char(r.int32).toLowerAscii != scheme[j]:
+          matches = false
+          break
+      if matches:
+        return scheme.len
   return -1
 
 type UriMatch* = tuple[start, finish: int, uri: string]
 
 proc findAllUris*(line: string): seq[UriMatch] =
   ## Find all URIs in a line of text.
-  ## Returns a sequence of (start column, end column, uri string).
+  ## Returns a sequence of (start rune column, end rune column, uri string).
+  ## Positions are Unicode character (rune) indices.
+  let runes = line.toRunes
   var pos = 0
-  while pos < line.len:
-    let schemeLen = findSchemeAt(line, pos)
+  while pos < runes.len:
+    let schemeLen = findSchemeAtRune(runes, pos)
     if schemeLen < 0:
       inc pos
       continue
@@ -78,51 +92,59 @@ proc findAllUris*(line: string): seq[UriMatch] =
     # Found a scheme. Now scan forward for the URI body.
     let uriStart = pos
     var uriEnd = pos + schemeLen
-    while uriEnd < line.len and line[uriEnd] notin UriBreakChars:
+    while uriEnd < runes.len and not runes[uriEnd].isUriBreakRune:
       inc uriEnd
-    dec uriEnd # uriEnd is now the last character index
+    dec uriEnd # uriEnd is now the last rune index
 
     if uriEnd < uriStart + schemeLen:
       # Scheme only, no body
       pos = uriStart + schemeLen
       continue
 
-    let raw = line[uriStart .. uriEnd]
-    let uri = stripTrailingPunctuation(raw)
-    let finish = uriStart + uri.len - 1
+    let rawRunes = runes[uriStart .. uriEnd]
+    let strippedRunes = stripTrailingPunctuation(rawRunes)
+    let uri = $strippedRunes
+    let finish = uriStart + strippedRunes.len - 1
     result.add((start: uriStart, finish: finish, uri: uri))
     pos = uriEnd + 1
 
 proc extractUriAtPosition*(line: string, column: int): Option[string] =
-  ## Extract the URI at the given cursor column position, if any.
+  ## Extract the URI at the given cursor column (rune index), if any.
   for m in findAllUris(line):
     if column >= m.start and column <= m.finish:
       return some(m.uri)
   return none(string)
 
 proc extractFilePathAtPosition*(line: string, column: int): Option[string] =
-  ## Extract a file path at the given cursor column position.
+  ## Extract a file path at the given cursor column (rune index).
   ## Recognizes absolute paths (/...) and relative paths (./..., ../).
-  if column >= line.len:
+  let runes = line.toRunes
+  if column >= runes.len:
     return none(string)
 
   let pathBreakChars =
     Whitespace + {'<', '>', '"', '`', '[', ']', '{', '}', '(', ')', '\''}
 
+  proc isPathBreak(r: Rune): bool =
+    let c = r.int32
+    if c > 127:
+      return false
+    return char(c) in pathBreakChars
+
   # Find the start of the path: scan backward from cursor
   var start = column
-  while start > 0 and line[start - 1] notin pathBreakChars:
+  while start > 0 and not runes[start - 1].isPathBreak:
     dec start
 
   # Find the end of the path: scan forward from cursor
   var finish = column
-  while finish < line.len - 1 and line[finish + 1] notin pathBreakChars:
+  while finish < runes.len - 1 and not runes[finish + 1].isPathBreak:
     inc finish
 
   if finish < start:
     return none(string)
 
-  let path = line[start .. finish]
+  let path = $runes[start .. finish]
 
   # Must look like a file path
   if path.startsWith("/") or path.startsWith("./") or path.startsWith("../") or

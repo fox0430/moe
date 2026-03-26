@@ -341,14 +341,88 @@ proc addModifier*(
     firstRow, firstCol, lastRow, lastCol: int,
     modifier: StyleModifier,
 ) =
-  ## Add a style modifier to all segments overlapping the given range,
-  ## preserving existing colors and other modifiers.
-  for i in 0 ..< highlight.colorSegments.len:
-    let cs = highlight.colorSegments[i]
-    # Check if segment overlaps with the range
-    if (cs.lastRow, cs.lastColumn) >= (firstRow, firstCol) and
-        (cs.firstRow, cs.firstColumn) <= (lastRow, lastCol):
-      highlight.colorSegments[i].style.modifiers.incl(modifier)
+  ## Add a style modifier to segments overlapping the given range,
+  ## splitting segments at boundaries so only the overlapping portion
+  ## receives the modifier.
+
+  type Position = tuple[row, column: int]
+
+  let rangeFirst: Position = (firstRow, firstCol)
+  let rangeLast: Position = (lastRow, lastCol)
+
+  var newSegments: seq[ColorSegment]
+  for cs in highlight.colorSegments:
+    let csFirst: Position = (cs.firstRow, cs.firstColumn)
+    let csLast: Position = (cs.lastRow, cs.lastColumn)
+
+    if csLast < rangeFirst or csFirst > rangeLast:
+      # No overlap
+      newSegments.add(cs)
+    elif csFirst >= rangeFirst and csLast <= rangeLast:
+      # Fully contained — add modifier to whole segment
+      var modified = cs
+      modified.style.modifiers.incl(modifier)
+      newSegments.add(modified)
+    else:
+      # Partial overlap — split the segment
+      if csFirst < rangeFirst:
+        # Part before the range: no modifier
+        if rangeFirst.column > 0:
+          newSegments.add(
+            ColorSegment(
+              firstRow: cs.firstRow,
+              firstColumn: cs.firstColumn,
+              lastRow: rangeFirst.row,
+              lastColumn: rangeFirst.column - 1,
+              color: cs.color,
+              style: cs.style,
+            )
+          )
+        elif cs.firstRow < rangeFirst.row:
+          # Range starts at column 0 on a later row. End the before-segment
+          # at the previous row using the segment's own lastColumn as an
+          # estimate (exact line length is unavailable here).
+          newSegments.add(
+            ColorSegment(
+              firstRow: cs.firstRow,
+              firstColumn: cs.firstColumn,
+              lastRow: rangeFirst.row - 1,
+              lastColumn: cs.lastColumn,
+              color: cs.color,
+              style: cs.style,
+            )
+          )
+
+      # Overlapping part: add modifier
+      let overlapFirst = if csFirst > rangeFirst: csFirst else: rangeFirst
+      let overlapLast = if csLast < rangeLast: csLast else: rangeLast
+      var modifiedStyle = cs.style
+      modifiedStyle.modifiers.incl(modifier)
+      newSegments.add(
+        ColorSegment(
+          firstRow: overlapFirst.row,
+          firstColumn: overlapFirst.column,
+          lastRow: overlapLast.row,
+          lastColumn: overlapLast.column,
+          color: cs.color,
+          style: modifiedStyle,
+        )
+      )
+
+      if csLast > rangeLast:
+        # Part after the range: no modifier
+        newSegments.add(
+          ColorSegment(
+            firstRow: rangeLast.row,
+            firstColumn: rangeLast.column + 1,
+            lastRow: cs.lastRow,
+            lastColumn: cs.lastColumn,
+            color: cs.color,
+            style: cs.style,
+          )
+        )
+
+  highlight.colorSegments = newSegments
 
 proc addColorSegment*(
     h: var Highlight,
