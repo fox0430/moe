@@ -277,6 +277,40 @@ suite "StatusLine - setEncodingVisible":
 
     check state.display.showEncoding == false
 
+suite "StatusLine - toggleLineEnding":
+  test "Toggle from false to true":
+    var state = createTestState()
+    check state.display.showLineEnding == false
+
+    toggleLineEnding(state)
+
+    check state.display.showLineEnding == true
+
+  test "Toggle from true to false":
+    var state = createTestState()
+    state.display.showLineEnding = true
+
+    toggleLineEnding(state)
+
+    check state.display.showLineEnding == false
+
+suite "StatusLine - setLineEndingVisible":
+  test "Set visible to true":
+    var state = createTestState()
+    state.display.showLineEnding = false
+
+    setLineEndingVisible(state, true)
+
+    check state.display.showLineEnding == true
+
+  test "Set visible to false":
+    var state = createTestState()
+    state.display.showLineEnding = true
+
+    setLineEndingVisible(state, false)
+
+    check state.display.showLineEnding == false
+
 suite "StatusLine - toggleMultiStatusLine":
   test "Toggle from false to true":
     var state = createTestState()
@@ -807,6 +841,33 @@ suite "StatusLine - parseSetupText additional placeholders":
 
     check result == "UTF-8"
 
+  test "Parse lineEnding placeholder for LF":
+    var state = createTestState()
+    let textBuffer = createTestTextBuffer("", false, "test")
+    textBuffer.lineEnding = LF
+
+    let result = parseSetupText(state, textBuffer, "{lineEnding}")
+
+    check result == "LF"
+
+  test "Parse lineEnding placeholder for CRLF":
+    var state = createTestState()
+    let textBuffer = createTestTextBuffer("", false, "test")
+    textBuffer.lineEnding = CRLF
+
+    let result = parseSetupText(state, textBuffer, "{lineEnding}")
+
+    check result == "CRLF"
+
+  test "Parse lineEnding placeholder for CR":
+    var state = createTestState()
+    let textBuffer = createTestTextBuffer("", false, "test")
+    textBuffer.lineEnding = CR
+
+    let result = parseSetupText(state, textBuffer, "{lineEnding}")
+
+    check result == "CR"
+
   test "Parse fileType placeholder with language set":
     var state = createTestState()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "echo \"hello\"")
@@ -1054,6 +1115,59 @@ suite "StatusLine - buildRightSideInfo default format":
     let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
 
     check "1/1" in result
+
+  test "Returns line ending LF in default format":
+    var state = createTestState()
+    state.display.showEncoding = false
+    state.display.showLineCount = false
+    state.display.showLinePercentage = false
+    state.display.showLineEnding = true
+
+    let textBuffer = createTestTextBuffer("", false, "test")
+    textBuffer.lineEnding = LF
+    textBuffer.language = SourceLanguage.langNone
+
+    var config = createTestStatusLineConfig()
+    config.setupText = ""
+
+    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
+
+    check result == " LF"
+
+  test "Returns line ending CRLF in default format":
+    var state = createTestState()
+    state.display.showEncoding = false
+    state.display.showLineCount = false
+    state.display.showLinePercentage = false
+    state.display.showLineEnding = true
+
+    let textBuffer = createTestTextBuffer("", false, "test")
+    textBuffer.lineEnding = CRLF
+    textBuffer.language = SourceLanguage.langNone
+
+    var config = createTestStatusLineConfig()
+    config.setupText = ""
+
+    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
+
+    check result == " CRLF"
+
+  test "Does not return line ending when showLineEnding is false":
+    var state = createTestState()
+    state.display.showEncoding = false
+    state.display.showLineCount = false
+    state.display.showLinePercentage = false
+    state.display.showLineEnding = false
+
+    let textBuffer = createTestTextBuffer("", false, "test")
+    textBuffer.language = SourceLanguage.langNone
+
+    var config = createTestStatusLineConfig()
+    config.setupText = ""
+
+    let result = buildRightSideInfo(state, textBuffer, state.mode, config, true)
+
+    check result == ""
 
   test "Returns empty when all display options are disabled":
     var state = createTestState()

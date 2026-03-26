@@ -56,6 +56,14 @@ proc setEncodingVisible*(state: var EditorState, visible: bool) =
   ## Set the visibility of encoding in status line
   state.display.showEncoding = visible
 
+proc toggleLineEnding*(state: var EditorState) =
+  ## Toggle the visibility of line ending in status line
+  state.display.showLineEnding = not state.display.showLineEnding
+
+proc setLineEndingVisible*(state: var EditorState, visible: bool) =
+  ## Set the visibility of line ending in status line
+  state.display.showLineEnding = visible
+
 proc toggleMultiStatusLine*(state: var EditorState) =
   ## Toggle between single status line (at bottom) and multi status lines (per window)
   state.display.multiStatusLine = not state.display.multiStatusLine
@@ -199,6 +207,7 @@ proc parseSetupText(
   ##   {filename}      - Filename only
   ##   {directory}     - Directory path
   ##   {filePath}      - Full file path
+  ##   {lineEnding}    - Line ending (LF, CRLF, CR)
   ##   {gitBranch}     - Git branch name
   ##   {gitChanges}    - Git changes (+N ~N -N)
   let
@@ -261,6 +270,7 @@ proc parseSetupText(
   result = result.replace("{columnNumber}", $currentCol)
   result = result.replace("{totalColumns}", $totalCols)
   result = result.replace("{encoding}", encoding)
+  result = result.replace("{lineEnding}", $textBuffer.lineEnding)
   result = result.replace("{fileType}", fileType)
   result = result.replace("{percentage}", $percentage & "%")
   result = result.replace("{mode}", modeStr)
@@ -302,6 +312,10 @@ proc buildRightSideInfo(
   # Encoding
   if state.display.showEncoding:
     parts.add(encodingToString(textBuffer.encoding))
+
+  # Line ending
+  if state.display.showLineEnding:
+    parts.add($textBuffer.lineEnding)
 
   # Line percentage
   if state.display.showLinePercentage:

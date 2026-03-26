@@ -125,7 +125,7 @@ suite "Config - newEditorConfig defaults":
     check config.statusLine.showGitInactive == false
     check config.statusLine.showModeInactive == false
     check config.statusLine.setupText ==
-      "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
+      "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {lineEnding} {fileType}"
 
   test "Highlight config defaults":
     let config = newEditorConfig()

@@ -624,6 +624,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         showLineCount: true,
         showLinePercentage: true,
         showEncoding: true,
+        showLineEnding: true,
         showLineNumbers: editorConfig.standard.number,
         relativeLineNumbers: editorConfig.standard.relativeNumber,
         showCursorLine: editorConfig.highlight.currentLine,

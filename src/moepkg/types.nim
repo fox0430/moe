@@ -168,6 +168,7 @@ type
     showLineCount*: bool # Whether to show line count in status line
     showLinePercentage*: bool # Whether to show line percentage in status line
     showEncoding*: bool # Whether to show file encoding in status line
+    showLineEnding*: bool # Whether to show line ending (LF/CRLF/CR) in status line
     showLineNumbers*: bool # Whether to show line numbers
     relativeLineNumbers*: bool # Whether to show relative line numbers
     showCurrentLineNumber*: bool # Whether to highlight current line number

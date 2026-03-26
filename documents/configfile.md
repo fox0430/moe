@@ -61,6 +61,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | columnNumber |
 | totalColumns |
 | encoding |
+| lineEnding |
 | fileType |
 | fileTypeIcon |
 
@@ -153,7 +154,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | gitChangedLines | bool | true | Display number of changed lines |
 | showGitInactive | bool | false | Display the git branch name on the status line in inactive windows |
 | showModeInactive | bool | false | Display the mode on the status line in inactive windows |
-| setupText | string | {lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType} | Text to customize the items displayed in the status line. Please check StatusLineItem |
+| setupText | string | {lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {lineEnding} {fileType} | Text to customize the items displayed in the status line. Please check StatusLineItem |
 
 
 ### BuildOnSave table
