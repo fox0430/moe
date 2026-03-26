@@ -42,6 +42,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
   - Rust
   - Shell languages:
     - Bash
+    - Fish
   - TOML
   - YAML
   - JSON

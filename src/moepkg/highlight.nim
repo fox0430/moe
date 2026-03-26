@@ -868,6 +868,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langRust
   of ".bash", ".sh":
     return SourceLanguage.langShell
+  of ".fish":
+    return SourceLanguage.langFish
   of ".tcl", ".tk", ".itcl", ".itk":
     return SourceLanguage.langTcl
   of ".toml":
