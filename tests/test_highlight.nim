@@ -852,3 +852,265 @@ suite "Highlight - getSegmentModifiers":
         )
       ]
     )
+
+suite "Highlight - addModifier":
+  test "Fully contained segment":
+    # Segment covers 0..10, modifier range covers 0..10
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+    h.addModifier(0, 0, 0, 10, StyleModifier.Underline)
+    check h.colorSegments.len == 1
+    check Underline in h.colorSegments[0].style.modifiers
+
+  test "No overlap":
+    # Segment on row 0, modifier on row 1
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+    h.addModifier(1, 0, 1, 5, StyleModifier.Underline)
+    check h.colorSegments.len == 1
+    check Underline notin h.colorSegments[0].style.modifiers
+
+  test "Split segment - modifier in the middle":
+    # Segment covers cols 0..20, modifier covers cols 5..10
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 20,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+    h.addModifier(0, 5, 0, 10, StyleModifier.Underline)
+    check h.colorSegments.len == 3
+    # Before: 0..4, no modifier
+    check h.colorSegments[0].firstColumn == 0
+    check h.colorSegments[0].lastColumn == 4
+    check Underline notin h.colorSegments[0].style.modifiers
+    # Middle: 5..10, with modifier
+    check h.colorSegments[1].firstColumn == 5
+    check h.colorSegments[1].lastColumn == 10
+    check Underline in h.colorSegments[1].style.modifiers
+    # After: 11..20, no modifier
+    check h.colorSegments[2].firstColumn == 11
+    check h.colorSegments[2].lastColumn == 20
+    check Underline notin h.colorSegments[2].style.modifiers
+
+  test "Split segment - modifier at the start":
+    # Segment covers cols 0..20, modifier covers cols 0..5
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 20,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+    h.addModifier(0, 0, 0, 5, StyleModifier.Underline)
+    check h.colorSegments.len == 2
+    # Modified: 0..5
+    check h.colorSegments[0].firstColumn == 0
+    check h.colorSegments[0].lastColumn == 5
+    check Underline in h.colorSegments[0].style.modifiers
+    # After: 6..20
+    check h.colorSegments[1].firstColumn == 6
+    check h.colorSegments[1].lastColumn == 20
+    check Underline notin h.colorSegments[1].style.modifiers
+
+  test "Split segment - modifier at the end":
+    # Segment covers cols 0..20, modifier covers cols 15..20
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 20,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+    h.addModifier(0, 15, 0, 20, StyleModifier.Underline)
+    check h.colorSegments.len == 2
+    # Before: 0..14
+    check h.colorSegments[0].firstColumn == 0
+    check h.colorSegments[0].lastColumn == 14
+    check Underline notin h.colorSegments[0].style.modifiers
+    # Modified: 15..20
+    check h.colorSegments[1].firstColumn == 15
+    check h.colorSegments[1].lastColumn == 20
+    check Underline in h.colorSegments[1].style.modifiers
+
+  test "Multiple segments - modifier spans partial overlap":
+    # Two segments: cols 0..9 and 10..19, modifier covers 5..14
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 9,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        ),
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 10,
+          lastRow: 0,
+          lastColumn: 19,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        ),
+      ]
+    )
+    h.addModifier(0, 5, 0, 14, StyleModifier.Underline)
+    check h.colorSegments.len == 4
+    # seg0 before: 0..4
+    check h.colorSegments[0].firstColumn == 0
+    check h.colorSegments[0].lastColumn == 4
+    check Underline notin h.colorSegments[0].style.modifiers
+    # seg0 overlap: 5..9
+    check h.colorSegments[1].firstColumn == 5
+    check h.colorSegments[1].lastColumn == 9
+    check Underline in h.colorSegments[1].style.modifiers
+    # seg1 overlap: 10..14
+    check h.colorSegments[2].firstColumn == 10
+    check h.colorSegments[2].lastColumn == 14
+    check Underline in h.colorSegments[2].style.modifiers
+    # seg1 after: 15..19
+    check h.colorSegments[3].firstColumn == 15
+    check h.colorSegments[3].lastColumn == 19
+    check Underline notin h.colorSegments[3].style.modifiers
+
+  test "Preserves existing modifiers":
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: Style(modifiers: {StyleModifier.Bold}),
+        )
+      ]
+    )
+    h.addModifier(0, 0, 0, 10, StyleModifier.Underline)
+    check h.colorSegments.len == 1
+    check Bold in h.colorSegments[0].style.modifiers
+    check Underline in h.colorSegments[0].style.modifiers
+
+  test "Preserves color on split":
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 20,
+          color: EditorColorPairIndex.keyword,
+          style: defaultStyle,
+        )
+      ]
+    )
+    h.addModifier(0, 5, 0, 10, StyleModifier.Underline)
+    check h.colorSegments.len == 3
+    for seg in h.colorSegments:
+      check seg.color == EditorColorPairIndex.keyword
+
+  test "Multi-row segment - modifier starts at column 0 on a later row":
+    # Segment spans rows 0..1, modifier range starts at (1, 0).
+    # The before-segment should end at row 0 without using high(int).
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 5,
+          lastRow: 1,
+          lastColumn: 15,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+    h.addModifier(1, 0, 1, 10, StyleModifier.Underline)
+    check h.colorSegments.len == 3
+    # Before: row 0 col 5 .. row 0 (no modifier)
+    check h.colorSegments[0].firstRow == 0
+    check h.colorSegments[0].firstColumn == 5
+    check h.colorSegments[0].lastRow == 0
+    check h.colorSegments[0].lastColumn <= 15 # Must not be high(int)
+    check Underline notin h.colorSegments[0].style.modifiers
+    # Overlap: (1,0)..(1,10) with modifier
+    check h.colorSegments[1].firstRow == 1
+    check h.colorSegments[1].firstColumn == 0
+    check h.colorSegments[1].lastRow == 1
+    check h.colorSegments[1].lastColumn == 10
+    check Underline in h.colorSegments[1].style.modifiers
+    # After: (1,11)..(1,15) no modifier
+    check h.colorSegments[2].firstRow == 1
+    check h.colorSegments[2].firstColumn == 11
+    check h.colorSegments[2].lastRow == 1
+    check h.colorSegments[2].lastColumn == 15
+    check Underline notin h.colorSegments[2].style.modifiers
+
+  test "Multi-row segment - modifier covers middle rows":
+    # Segment spans rows 0..2, modifier covers row 1 entirely.
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 3,
+          lastRow: 2,
+          lastColumn: 8,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+    h.addModifier(1, 0, 1, 20, StyleModifier.Underline)
+    check h.colorSegments.len == 3
+    # Before: row 0
+    check h.colorSegments[0].firstRow == 0
+    check h.colorSegments[0].lastRow == 0
+    check Underline notin h.colorSegments[0].style.modifiers
+    # Overlap: row 1
+    check h.colorSegments[1].firstRow == 1
+    check h.colorSegments[1].firstColumn == 0
+    check h.colorSegments[1].lastRow == 1
+    check h.colorSegments[1].lastColumn == 20
+    check Underline in h.colorSegments[1].style.modifiers
+    # After: row 1 col 21 .. row 2 col 8
+    check h.colorSegments[2].firstRow == 1
+    check h.colorSegments[2].firstColumn == 21
+    check h.colorSegments[2].lastRow == 2
+    check h.colorSegments[2].lastColumn == 8
+    check Underline notin h.colorSegments[2].style.modifiers

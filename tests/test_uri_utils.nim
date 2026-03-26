@@ -160,6 +160,21 @@ suite "findAllUris":
     let result = findAllUris("http:// next word")
     check result.len == 0
 
+  test "URL after multibyte characters":
+    # "日本語 " is 4 runes, URL starts at rune 4
+    let result = findAllUris("日本語 https://example.com here")
+    check result.len == 1
+    check result[0].uri == "https://example.com"
+    check result[0].start == 4
+    check result[0].finish == 22
+
+  test "URL between multibyte characters":
+    let result = findAllUris("見て https://example.com テスト")
+    check result.len == 1
+    check result[0].uri == "https://example.com"
+    check result[0].start == 3
+    check result[0].finish == 21
+
 suite "extractUriAtPosition":
   test "Cursor at start of URI":
     let result = extractUriAtPosition("Visit https://example.com here", 6)
@@ -201,6 +216,16 @@ suite "extractUriAtPosition":
 
   test "Empty line":
     let result = extractUriAtPosition("", 0)
+    check result.isNone
+
+  test "Cursor on URI after multibyte characters":
+    # "日本語 " = 4 runes, URL at runes 4..22
+    let result = extractUriAtPosition("日本語 https://example.com here", 10)
+    check result.isSome
+    check result.get == "https://example.com"
+
+  test "Cursor on multibyte text before URI":
+    let result = extractUriAtPosition("日本語 https://example.com here", 2)
     check result.isNone
 
 suite "extractFilePathAtPosition":
@@ -254,6 +279,12 @@ suite "extractFilePathAtPosition":
   test "Empty string":
     let result = extractFilePathAtPosition("", 0)
     check result.isNone
+
+  test "Path after multibyte characters":
+    # "日本語 " = 4 runes, path at rune 4
+    let result = extractFilePathAtPosition("日本語 /home/user/file.txt here", 10)
+    check result.isSome
+    check result.get == "/home/user/file.txt"
 
 suite "isLocalFileUri":
   test "file:// URI":
