@@ -145,6 +145,7 @@ type
     langCpp
     langCsharp
     langDiff
+    langFish
     langGitRebaseTodo
     langHaskell
     langHtml
@@ -185,10 +186,10 @@ const
   wsChars*: set[char] = {'\t' .. '\r', ' '}
 
   sourceLanguageToStr*: array[SourceLanguage, string] = [
-    "none", "Astro", "C", "COMMIT_EDITMSG", "C++", "C#", "Diff", "git-rebase-todo",
-    "Haskell", "HTML", "Java", "JavaScript", "JavaScriptReact", "LaTeX", "Lisp",
-    "Markdown", "Nim", "Python", "Rust", "Shell", "Tcl", "Toml", "Yaml", "Json",
-    "TypeScript", "TypeScriptReact",
+    "none", "Astro", "C", "COMMIT_EDITMSG", "C++", "C#", "Diff", "Fish",
+    "git-rebase-todo", "Haskell", "HTML", "Java", "JavaScript", "JavaScriptReact",
+    "LaTeX", "Lisp", "Markdown", "Nim", "Python", "Rust", "Shell", "Tcl", "Toml",
+    "Yaml", "Json", "TypeScript", "TypeScriptReact",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
@@ -286,7 +287,8 @@ import
   syntaxastro, syntaxc, syntaxcommiteditmsg, syntaxcpp, syntaxcsharp, syntaxdiff,
   syntaxgitrebasetodo, syntaxhaskell, syntaxhtml, syntaxjava, syntaxjavascript,
   syntaxlatex, syntaxlisp, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust,
-  syntaxshell, syntaxtcl, syntaxyaml, syntaxtoml, syntaxjson, syntaxtypescript
+  syntaxfish, syntaxshell, syntaxtcl, syntaxyaml, syntaxtoml, syntaxjson,
+  syntaxtypescript
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -296,6 +298,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langCpp: g.cppNextToken
   of langCsharp: g.csharpNextToken
   of langDiff: g.diffNextToken
+  of langFish: g.fishNextToken
   of langGitRebaseTodo: g.gitRebaseTodoNextToken
   of langHaskell: g.haskellNextToken
   of langHtml: g.htmlNextToken
