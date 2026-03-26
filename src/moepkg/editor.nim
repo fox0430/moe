@@ -1389,7 +1389,18 @@ proc tick*(e: Editor) =
   if lspMessages.len > 0:
     # Store LSP messages for the log viewer
     addLspMessageLog(lspMessages)
-    if e.config.notification.screenNotifications and
+    if e.config.notification.lspForcePopup:
+      # Force all LSP messages to popup notifications
+      for msg in lspMessages:
+        let level =
+          if msg.startsWith("[LSP Error]"):
+            nlError
+          elif msg.startsWith("[LSP Warning]"):
+            nlWarning
+          else:
+            nlInfo
+        e.state.notificationPopup.addNotification(msg, level)
+    elif e.config.notification.screenNotifications and
         e.config.notification.lspScreenNotify:
       e.notify(lspMessages[^1])
     if e.config.notification.logNotifications and e.config.notification.lspLogNotify:

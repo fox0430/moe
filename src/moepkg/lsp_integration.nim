@@ -85,17 +85,15 @@ proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
   svc.onLogMessage = proc(
       langId: string, msgType: MessageType, message: string
   ) {.gcsafe.} =
+    let prefix =
+      case msgType
+      of mtError: "[LSP Error] "
+      of mtWarning: "[LSP Warning] "
+      of mtInfo: "[LSP Info] "
+      of mtLog: "[LSP Log] "
     if msgType == mtLog:
-      # Raw JSON logs go directly to LSP log (not shown in status line)
       addLspMessageLog(message)
-    else:
-      let prefix =
-        case msgType
-        of mtError: "[LSP Error] "
-        of mtWarning: "[LSP Warning] "
-        of mtInfo: "[LSP Info] "
-        of mtLog: "[LSP] "
-      lsp.pendingMessages.add(prefix & langId & ": " & message)
+    lsp.pendingMessages.add(prefix & langId & ": " & message)
 
   # Set up progress callback to track active progress operations
   svc.onProgress = proc(

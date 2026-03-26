@@ -894,6 +894,15 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
   )
   result.add ConfigItemDescriptor(
     kind: cvkBool,
+    displayName: "lspForcePopup",
+    section: "Notification",
+    boolGet: proc(c: EditorConfig): bool =
+      c.notification.lspForcePopup,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.notification.lspForcePopup = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
     displayName: "popupNotifications",
     section: "Notification",
     boolGet: proc(c: EditorConfig): bool =

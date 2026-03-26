@@ -188,6 +188,7 @@ type
     restoreLogNotify*: bool
     lspScreenNotify*: bool
     lspLogNotify*: bool
+    lspForcePopup*: bool
     popupNotifications*: bool
     popupPosition*: string
     popupTimeoutMs*: int
@@ -588,6 +589,7 @@ proc newEditorConfig*(): EditorConfig =
       restoreLogNotify: true,
       lspScreenNotify: true,
       lspLogNotify: true,
+      lspForcePopup: true,
       popupNotifications: false,
       popupPosition: "bottomRight",
       popupTimeoutMs: 3000,
