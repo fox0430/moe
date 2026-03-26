@@ -534,7 +534,7 @@ proc newEditorConfig*(): EditorConfig =
       showGitInactive: false,
       showModeInactive: false,
       setupText:
-        "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}",
+        "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {lineEnding} {fileType}",
     ),
     highlight: HighlightConfig(
       currentLine: true,
