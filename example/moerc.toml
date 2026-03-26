@@ -234,6 +234,8 @@ lspScreenNotify = true                 # LSP screen notifications
 
 lspLogNotify = true                    # LSP log notifications
 
+lspForcePopup = true                   # Force all LSP messages to popup notifications
+
 [Filer]
 
 showIcons = true                       # File browser icons - emoji icons for file types

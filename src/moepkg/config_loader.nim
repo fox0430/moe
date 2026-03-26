@@ -508,8 +508,8 @@ proc loadNotificationConfig(
     "saveScreenNotify", "saveLogNotify", "quickRunScreenNotify", "quickRunLogNotify",
     "buildOnSaveScreenNotify", "buildOnSaveLogNotify", "filerScreenNotify",
     "filerLogNotify", "restoreScreenNotify", "restoreLogNotify", "lspScreenNotify",
-    "lspLogNotify", "popupNotifications", "popupPosition", "popupTimeoutMs",
-    "popupMaxVisible", "popupMaxWidth", "popupBorder",
+    "lspLogNotify", "lspForcePopup", "popupNotifications", "popupPosition",
+    "popupTimeoutMs", "popupMaxVisible", "popupMaxWidth", "popupBorder",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "screenNotifications", config.screenNotifications, vr, section)
@@ -536,6 +536,7 @@ proc loadNotificationConfig(
   loadBool(table, "restoreLogNotify", config.restoreLogNotify, vr, section)
   loadBool(table, "lspScreenNotify", config.lspScreenNotify, vr, section)
   loadBool(table, "lspLogNotify", config.lspLogNotify, vr, section)
+  loadBool(table, "lspForcePopup", config.lspForcePopup, vr, section)
   loadBool(table, "popupNotifications", config.popupNotifications, vr, section)
   loadString(table, "popupPosition", config.popupPosition, vr, section)
   if table.hasKey("popupPosition") and
@@ -2141,6 +2142,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "restoreLogNotify = " & toTomlBool(config.notification.restoreLogNotify)
   lines.add "lspScreenNotify = " & toTomlBool(config.notification.lspScreenNotify)
   lines.add "lspLogNotify = " & toTomlBool(config.notification.lspLogNotify)
+  lines.add "lspForcePopup = " & toTomlBool(config.notification.lspForcePopup)
   lines.add "popupNotifications = " & toTomlBool(config.notification.popupNotifications)
   lines.add "popupPosition = \"" & config.notification.popupPosition & "\""
   lines.add "popupTimeoutMs = " & $config.notification.popupTimeoutMs

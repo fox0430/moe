@@ -1409,3 +1409,37 @@ suite "Startup window - FileTree":
           break
       if isLastInRow:
         check w.viewport.x + w.viewport.width == termWidth
+
+suite "Editor - lspForcePopup":
+  test "lspForcePopup routes all messages to popup with correct levels":
+    let e = createTestEditor()
+    e.config.notification.lspForcePopup = true
+
+    # Simulate LSP messages via pendingMessages
+    e.lsp.pendingMessages.add("[LSP Error] nim: something failed")
+    e.lsp.pendingMessages.add("[LSP Warning] nim: deprecation notice")
+    e.lsp.pendingMessages.add("[LSP Info] nim: server ready")
+    e.lsp.pendingMessages.add("[LSP Log] nim: trace data")
+
+    e.tick()
+
+    check e.state.notificationPopup.queue.len == 4
+    check e.state.notificationPopup.queue[0].level == nlError
+    check e.state.notificationPopup.queue[1].level == nlWarning
+    check e.state.notificationPopup.queue[2].level == nlInfo
+    check e.state.notificationPopup.queue[3].level == nlInfo
+
+  test "lspForcePopup disabled falls back to normal notify":
+    let e = createTestEditor()
+    e.config.notification.lspForcePopup = false
+    e.config.notification.screenNotifications = true
+    e.config.notification.lspScreenNotify = true
+    e.config.notification.popupNotifications = false
+
+    e.lsp.pendingMessages.add("[LSP Error] nim: something failed")
+
+    e.tick()
+
+    # Should go to statusMessage, not popup
+    check e.state.notificationPopup.queue.len == 0
+    check e.state.statusMessage == "[LSP Error] nim: something failed"

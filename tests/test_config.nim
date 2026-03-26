@@ -185,6 +185,7 @@ suite "Config - newEditorConfig defaults":
     check config.notification.restoreLogNotify == true
     check config.notification.lspScreenNotify == true
     check config.notification.lspLogNotify == true
+    check config.notification.lspForcePopup == true
 
   test "Filer config defaults":
     let config = newEditorConfig()
