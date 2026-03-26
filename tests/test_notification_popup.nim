@@ -69,13 +69,13 @@ suite "NotificationPopup - addNotification":
 
   test "Long message is wrapped":
     let mgr = newNotificationPopupManager()
-    mgr.maxWidth = 20 # content width = 20 - PopupPadding(2) = 18
+    mgr.maxWidth = 20
     mgr.addNotification("This is a long message that should be wrapped")
 
     check mgr.queue.len == 1
     check mgr.queue[0].lines.len > 1
     for line in mgr.queue[0].lines:
-      check line.runeLen <= 18
+      check line.runeLen <= 20
 
   test "Empty message is ignored":
     let mgr = newNotificationPopupManager()
@@ -210,7 +210,7 @@ suite "NotificationPopup - calculateNotificationPositions":
     check rects[0].x == 0
     check rects[0].y == 0
 
-  test "Without border has smaller size than with border":
+  test "Without border has space margins (left and right)":
     let withBorder = newNotificationPopupManager()
     withBorder.showBorder = true
     withBorder.addNotification("Hello")
@@ -223,8 +223,9 @@ suite "NotificationPopup - calculateNotificationPositions":
     let rectsNB = withoutBorder.calculateNotificationPositions(80, 24)
     check rectsB.len == 1
     check rectsNB.len == 1
-    # Without border: no +2 for borders
-    check rectsNB[0].width == rectsB[0].width - 2
+    # Same width (border +2 vs margin +2)
+    check rectsNB[0].width == rectsB[0].width
+    # No top/bottom margin
     check rectsNB[0].height == rectsB[0].height - 2
 
   test "Stacked without border has gap":
@@ -321,10 +322,14 @@ suite "NotificationPopup - renderNotificationPopup":
 
     renderNotificationPopup(buf, rects[0])
     let r = rects[0]
-    # No border, so content starts at r.x, r.y
-    check buf[r.x, r.y].symbol != "┌"
-    # Height should be 1 (content only, no border)
+    # No top/bottom margin, height is content only
     check r.height == 1
+    # Left space margin
+    check buf[r.x, r.y].symbol == " "
+    # Content starts at r.x + 1
+    check buf[r.x + 1, r.y].symbol == "T"
+    # Right space margin
+    check buf[r.x + r.width - 1, r.y].symbol == " "
 
   test "Render notification with warning level":
     var buf = newBuffer(80, 24)

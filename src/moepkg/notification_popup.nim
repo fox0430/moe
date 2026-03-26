@@ -60,7 +60,6 @@ const
   DefaultTimeoutMs*: int = 3000
   DefaultMaxWidth* = 60
   MaxQueueSize* = 10
-  PopupPadding* = 2
 
 proc notificationInfoStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.notificationPopupInfo)
@@ -95,8 +94,7 @@ proc wrapLine(line: string, maxWidth: int): seq[string] =
   if line.runeLen == 0:
     return @[""]
 
-  let wrapAt = maxWidth - PopupPadding
-  if wrapAt <= 0:
+  if maxWidth <= 0:
     return @[line]
 
   var current = ""
@@ -104,7 +102,7 @@ proc wrapLine(line: string, maxWidth: int): seq[string] =
 
   for r in line.runes:
     let w = runeWidth(r)
-    if currentWidth + w > wrapAt and currentWidth > 0:
+    if currentWidth + w > maxWidth and currentWidth > 0:
       result.add(current)
       current = $r
       currentWidth = w
@@ -194,9 +192,11 @@ proc calculateNotificationPositions*(
     var maxLineWidth = 0
     for line in item.lines:
       maxLineWidth = max(maxLineWidth, line.runeLen)
-    let contentWidth = min(maxLineWidth + PopupPadding, mgr.maxWidth)
+    let contentWidth = min(maxLineWidth, mgr.maxWidth)
     let borderSize = if mgr.showBorder: 2 else: 0
-    let popupWidth = contentWidth + borderSize
+    # When border is off, add left and right space margins.
+    let margin = if mgr.showBorder: 0 else: 2
+    let popupWidth = contentWidth + borderSize + margin
     let popupHeight = item.lines.len + borderSize
 
     # Calculate position based on corner
@@ -238,10 +238,11 @@ proc renderNotificationPopup*(termBuffer: var Buffer, rect: NotificationRect) =
   let contentStyle = getContentStyle(item.level)
   let borderStyle = getBorderStyle(item.level)
 
-  let borderSize = if pos.showBorder: 1 else: 0
-  let contentX = pos.x + borderSize
-  let contentY = pos.y + borderSize
-  let contentWidth = pos.width - borderSize * 2
+  let borderOffset = if pos.showBorder: 1 else: 0
+  let margin = if pos.showBorder: 0 else: 1
+  let contentX = pos.x + borderOffset + margin
+  let contentY = pos.y + borderOffset
+  let contentWidth = pos.width - borderOffset * 2 - margin * 2
 
   # Top border
   if pos.showBorder and pos.y >= 0 and pos.y < termBuffer.area.height:
@@ -261,9 +262,12 @@ proc renderNotificationPopup*(termBuffer: var Buffer, rect: NotificationRect) =
 
     let lineText = item.lines[i]
 
-    # Left border
-    if pos.showBorder and pos.x >= 0 and pos.x < termBuffer.area.width:
-      termBuffer[pos.x, lineY] = cell("│", borderStyle)
+    # Left border or space margin
+    if pos.x >= 0 and pos.x < termBuffer.area.width:
+      if pos.showBorder:
+        termBuffer[pos.x, lineY] = cell("│", borderStyle)
+      else:
+        termBuffer[pos.x, lineY] = cell(" ", contentStyle)
 
     # Content
     var x = contentX
@@ -280,10 +284,12 @@ proc renderNotificationPopup*(termBuffer: var Buffer, rect: NotificationRect) =
         termBuffer[x, lineY] = cell(" ", contentStyle)
       inc x
 
-    # Right border
-    if pos.showBorder and pos.x + pos.width - 1 >= 0 and
-        pos.x + pos.width - 1 < termBuffer.area.width:
-      termBuffer[pos.x + pos.width - 1, lineY] = cell("│", borderStyle)
+    # Right border / margin
+    if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
+      if pos.showBorder:
+        termBuffer[pos.x + pos.width - 1, lineY] = cell("│", borderStyle)
+      else:
+        termBuffer[pos.x + pos.width - 1, lineY] = cell(" ", contentStyle)
 
   # Bottom border
   if pos.showBorder:
