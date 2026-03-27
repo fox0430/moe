@@ -724,6 +724,9 @@ proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
   state.search.historyIndex = -1
   # Re-enable search highlight so incremental search results are visible
   state.search.hlsearchTempDisabled = false
+  # Reset whole word mode so / and ? use regex matching consistently
+  # (wholeWord may be true from a previous * or # command)
+  state.search.wholeWord = false
 
 proc enterRenameOverlay*(state: EditorState, word: string, line, col: int) =
   ## Enter rename mode overlay

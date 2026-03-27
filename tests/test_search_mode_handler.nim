@@ -27,6 +27,7 @@ import ../src/moepkg/modes {.all.}
 import ../src/moepkg/editor {.all.}
 import ../src/moepkg/config {.all.}
 import ../src/moepkg/help_viewer {.all.}
+import ../src/moepkg/search_utils {.all.}
 import ../src/moepkg/command_handlers/search_mode_handler {.all.}
 
 proc createTestEditorWithBuffer(content: string): Editor =
@@ -311,3 +312,127 @@ suite "Search mode - Help mode incremental search sync":
     # Cancel should restore selectedIndex to startPos
     cancelSearch(e)
     check helpState.selectedIndex == 10
+
+suite "Incremental search - case insensitive highlighting":
+  test "Case-insensitive search highlights uppercase matches":
+    let e = createTestEditorWithBuffer("Hello World hello")
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    e.state.search.ignorecase = true
+    e.state.search.smartcase = true
+    e.state.search.startPos = BufferPosition(line: 0, column: 0)
+
+    # Type lowercase "hello"
+    handleSearchCharacterInput(e, "h")
+    handleSearchCharacterInput(e, "e")
+    handleSearchCharacterInput(e, "l")
+    handleSearchCharacterInput(e, "l")
+    handleSearchCharacterInput(e, "o")
+
+    # Search should find "hello" at column 12 (next match after startPos)
+    check e.cursor == BufferPosition(line: 0, column: 12)
+
+    # Verify shouldIgnoreCase returns true for lowercase pattern
+    let ignCase = shouldIgnoreCase(
+      e.state.search.text, e.state.search.ignorecase, e.state.search.smartcase
+    )
+    check ignCase == true
+    check e.state.search.text == "hello"
+
+    # Verify findSearchMatchRanges finds BOTH uppercase and lowercase matches
+    # This is what the rendering uses for highlighting
+    let ranges = e.activeBuffer.findSearchMatchRanges(
+      0, e.state.search.text, ignCase, e.state.search.wholeWord
+    )
+    # Should find both "Hello" (col 0-5) and "hello" (col 12-17)
+    check ranges.len == 2
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 5
+    check ranges[1].startCol == 12
+    check ranges[1].endCol == 17
+
+  test "Case-insensitive search highlights on different lines":
+    # Multi-line: uppercase on line 0, lowercase on line 1
+    let e = createTestEditorWithBuffer("Hello World\nhello world\nHELLO WORLD")
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    e.state.search.ignorecase = true
+    e.state.search.smartcase = true
+    e.state.search.startPos = BufferPosition(line: 0, column: 0)
+
+    handleSearchCharacterInput(e, "h")
+    handleSearchCharacterInput(e, "e")
+    handleSearchCharacterInput(e, "l")
+    handleSearchCharacterInput(e, "l")
+    handleSearchCharacterInput(e, "o")
+
+    # Should find "hello" on line 1 (next after startPos)
+    check e.cursor.line == 1
+    check e.cursor.column == 0
+
+    let ignCase = shouldIgnoreCase(
+      e.state.search.text, e.state.search.ignorecase, e.state.search.smartcase
+    )
+    check ignCase == true
+
+    # Verify highlighting on line 0 (uppercase "Hello")
+    let ranges0 = e.activeBuffer.findSearchMatchRanges(
+      0, e.state.search.text, ignCase, e.state.search.wholeWord
+    )
+    check ranges0.len == 1
+    check ranges0[0].startCol == 0
+    check ranges0[0].endCol == 5
+
+    # Verify highlighting on line 1 (lowercase "hello")
+    let ranges1 = e.activeBuffer.findSearchMatchRanges(
+      1, e.state.search.text, ignCase, e.state.search.wholeWord
+    )
+    check ranges1.len == 1
+    check ranges1[0].startCol == 0
+    check ranges1[0].endCol == 5
+
+    # Verify highlighting on line 2 (all-caps "HELLO")
+    let ranges2 = e.activeBuffer.findSearchMatchRanges(
+      2, e.state.search.text, ignCase, e.state.search.wholeWord
+    )
+    check ranges2.len == 1
+    check ranges2[0].startCol == 0
+    check ranges2[0].endCol == 5
+
+  test "enterSearchOverlay resets wholeWord":
+    ## Regression test: wholeWord must be reset when entering search overlay
+    ## so that / and ? searches use consistent regex matching for both
+    ## cursor movement and highlighting.
+    let e = createTestEditorWithBuffer("abc foobar foo baz")
+    # Simulate * command setting wholeWord=true
+    e.state.search.wholeWord = true
+
+    # Enter search overlay - should reset wholeWord
+    e.state.enterSearchOverlay(Forward)
+    check e.state.search.wholeWord == false
+
+    e.state.search.incsearch = true
+    e.state.search.ignorecase = true
+    e.state.search.smartcase = true
+
+    handleSearchCharacterInput(e, "f")
+    handleSearchCharacterInput(e, "o")
+    handleSearchCharacterInput(e, "o")
+
+    # findNext finds "foo" in "foobar" at col 4
+    check e.cursor == BufferPosition(line: 0, column: 4)
+
+    let ignCase = shouldIgnoreCase(
+      e.state.search.text, e.state.search.ignorecase, e.state.search.smartcase
+    )
+
+    # With wholeWord=false (reset by enterSearchOverlay), highlight also uses regex
+    # and finds both "foo" in "foobar" (col 4) and standalone "foo" (col 11)
+    let ranges = e.activeBuffer.findSearchMatchRanges(
+      0, e.state.search.text, ignCase, e.state.search.wholeWord
+    )
+    check ranges.len == 2
+    check ranges[0].startCol == 4
+    check ranges[0].endCol == 7
+    check ranges[1].startCol == 11
+    check ranges[1].endCol == 14
