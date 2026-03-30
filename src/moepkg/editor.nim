@@ -23,7 +23,7 @@ import pkg/[results, chronos]
 
 import
   editor_types, editor_window, editor_file, editor_lsp, editor_codelens, editor_render,
-  editorconfig_helper
+  editorconfig_helper, emergency
 
 import
   status_line, render_utils, git_diff, logger, config_loader, keybind_config,
@@ -849,6 +849,13 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     # Log all errors
     for msg in errorMessages:
       addMessageLog("Config error: " & msg)
+
+  # Check for crash recovery files from a previous crash
+  if hasCrashRecoveryFiles():
+    let msg = "Crash recovery files found. See " & getCrashRecoveryBaseDir()
+    if result.state.statusMessage.len == 0:
+      result.state.statusMessage = msg
+    addMessageLog(msg)
 
 proc newEditor*(editorConfig: EditorConfig): Editor =
   ## Create a new Editor with the given configuration.

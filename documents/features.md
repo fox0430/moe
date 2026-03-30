@@ -9,6 +9,12 @@ Backup to `~/.cache/moe/backups` by default.
 
 You can set an interval to execute backups.
 
+## Crash recovery
+
+When the editor crashes due to an unhandled exception, all modified (unsaved) buffers are automatically saved to `~/.cache/moe/crash_recovery/<timestamp>/`. A `recovery.json` file in the directory maps recovery filenames to their original file paths.
+
+On next startup, if recovery files are found, a notification is shown in the status line.
+
 ## QuickRun
 
 QuickRun is like vim-quickrun.
