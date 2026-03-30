@@ -346,6 +346,46 @@ suite "Visual Commands - visualYank":
     check state.registers.getRegisterContent('a') == "hello"
     check state.pendingRegister.isNone
 
+  test "Yank multiline clamps cursor column to line length":
+    # When selection starts on a long line and extends downward to a shorter line,
+    # cursor should be clamped to the start line's last character
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "short")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nthis is a long line")
+    let state = createTestState()
+    # Start selection at column 18 on short line (line 0), extend to long line (line 1)
+    # This simulates: cursor on line 0 col 18 (past end), select down to line 1
+    state.cursor = BufferPosition(line: 1, column: 18)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 18),
+      current: BufferPosition(line: 1, column: 18),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualYank(buf, state)
+
+    check state.cursor.line == 0
+    check state.cursor.column == 4 # "short" has 5 chars, last valid column is 4
+
+  test "Yank multiline clamps cursor column on empty line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "")
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\nsome text")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 5)
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 1, column: 5),
+      current: BufferPosition(line: 0, column: 0),
+      active: true,
+      kind: vskChar,
+    )
+
+    visualYank(buf, state)
+
+    check state.cursor.line == 0
+    check state.cursor.column == 0
+
 suite "Visual Commands - visualDelete":
   test "Delete character selection":
     let buf = newTextBuffer()

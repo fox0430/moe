@@ -160,6 +160,12 @@ proc visualYank*(buffer: TextBuffer, state: EditorState) =
 
     # Move cursor to start of selection (Vim behavior)
     state.cursor = selStart
+    # Clamp column to valid range for Normal mode (last char, not past end)
+    let lineLen = buffer.getLine(state.cursor.line).charLen
+    if lineLen > 0:
+      state.cursor.column = min(state.cursor.column, lineLen - 1)
+    else:
+      state.cursor.column = 0
 
     # Clear selection and return to previous mode
     state.visualSelection.active = false
