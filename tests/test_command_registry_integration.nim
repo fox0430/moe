@@ -832,6 +832,48 @@ suite "Handler - Paste operations":
     check buffer.len == 3
     check buffer[1] == "new line"
 
+  test "paste after cursor (p) - linewise moves cursor to first non-blank":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.yankRegister = "  indented"
+    ctx.state.yankIsLine = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after")).isOk
+    check buffer.len == 3
+    check buffer[1] == "  indented"
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 2
+
+  test "paste after cursor (p) - linewise no indent":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.yankRegister = "no indent"
+    ctx.state.yankIsLine = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after")).isOk
+    check buffer.len == 3
+    check buffer[1] == "no indent"
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 0
+
+  test "paste after cursor (p) - linewise all whitespace moves to last char":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.yankRegister = "   "
+    ctx.state.yankIsLine = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.after")).isOk
+    check buffer.len == 3
+    check buffer[1] == "   "
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 2
+
   test "paste with count (3p)":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
@@ -865,6 +907,48 @@ suite "Handler - Paste operations":
 
     check registry.execute(ctx, custom("paste.before")).isOk
     check buffer[0] == "helloXYZ world"
+
+  test "paste before cursor (P) - linewise moves cursor to first non-blank":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    ctx.state.yankRegister = "\tindented"
+    ctx.state.yankIsLine = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.before")).isOk
+    check buffer.len == 3
+    check buffer[1] == "\tindented"
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 1
+
+  test "paste before cursor (P) - linewise no indent":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.yankRegister = "no indent"
+    ctx.state.yankIsLine = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.before")).isOk
+    check buffer.len == 3
+    check buffer[0] == "no indent"
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 0
+
+  test "paste before cursor (P) - linewise all whitespace moves to last char":
+    let buffer = newTextBuffer("line1\nline2")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    ctx.state.yankRegister = "  "
+    ctx.state.yankIsLine = true
+    let registry = createTestRegistry()
+
+    check registry.execute(ctx, custom("paste.before")).isOk
+    check buffer.len == 3
+    check buffer[1] == "  "
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 1
 
   test "paste after cursor (p) - multibyte characterwise":
     let buffer = newTextBuffer("hello world")

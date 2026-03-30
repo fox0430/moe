@@ -1575,6 +1575,16 @@ proc handleClipboardPaste(ctx: CommandContext): Result[(), string] =
   ctx.state.needsFullRedraw = true
   return Result[(), string].ok ()
 
+proc firstNonBlankColumn(line: seq[Rune]): int =
+  ## Return the column of the first non-whitespace character.
+  ## If the line is all whitespace, return the last valid column (Vim behavior).
+  for i, r in line:
+    if not r.isWhiteSpace:
+      return i
+  if line.len > 0:
+    return line.len - 1
+  return 0
+
 proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Paste text from internal register or system clipboard after cursor (p command)
   ## Mimics Vim's 'p' behavior
@@ -1652,9 +1662,10 @@ proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
           discard ctx.buffer.commitTransaction()
         return err(insertResult.error)
 
-      # Move cursor to the start of pasted line (next line)
+      # Move cursor to the first non-whitespace character of pasted line
       ctx.cursor.line = ctx.cursor.line + 1
-      ctx.cursor.column = 0
+      ctx.cursor.column =
+        firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toRunes())
     else:
       # Paste after cursor position (Vim 'p' behavior for characterwise yank)
       let lineContent = ctx.buffer.getLine(ctx.cursor.line)
@@ -1763,8 +1774,9 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
           discard ctx.buffer.commitTransaction()
         return err(insertResult.error)
 
-      # Cursor stays at current line (which is now the pasted content)
-      ctx.cursor.column = 0
+      # Move cursor to the first non-whitespace character of pasted line
+      ctx.cursor.column =
+        firstNonBlankColumn(ctx.buffer.getLine(ctx.cursor.line).toRunes())
     else:
       # Paste at cursor position (Vim 'P' behavior for characterwise yank)
       let pastePos = ctx.cursor
