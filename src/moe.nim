@@ -24,7 +24,7 @@ import pkg/[celina, results, chronos]
 import
   moepkg/[
     editor, handler, modes, logger, cmdline, filer, lsp_integration, config,
-    config_loader,
+    config_loader, emergency,
   ]
 import moepkg/command_handlers/command_mode_handler
 
@@ -132,6 +132,39 @@ proc handleResize(e: Editor) =
   # Set the editor's full redraw flag
   e.state.needsFullRedraw = true
 
+proc emergencySaveAndQuit(
+    editor: Editor, e: ref Exception, cmdLineConfig: CmdLineConfig, log: Logger
+) {.noreturn.} =
+  ## Emergency save modified buffers and exit on crash.
+  let savedPaths = editor.emergencySaveBuffers()
+
+  editor.cleanupBackgroundProcesses()
+  editor.shutdown()
+  editor.savePersistData()
+
+  if cmdLineConfig.debugEnabled:
+    logError("moe", "Fatal: " & e.msg)
+    log.close()
+
+  editor.app.restoreTerminal()
+
+  stderr.writeLine "moe: fatal error: " & e.msg
+  stderr.writeLine e.getStackTrace()
+  if savedPaths.len > 0:
+    stderr.writeLine "Recovery files saved to: " & savedPaths[0].parentDir
+  quit(1)
+
+template editorCallback(
+    ed: Editor, clc: CmdLineConfig, lg: Logger, body: untyped
+): untyped =
+  ## Wrap callback body with gcsafe/raises casts and emergency save on crash.
+  {.cast(gcsafe).}:
+    {.cast(raises: []).}:
+      try:
+        body
+      except Exception as e:
+        ed.emergencySaveAndQuit(e, clc, lg)
+
 proc runEditor(
     editor: Editor, app: AsyncApp, cmdLineConfig: CmdLineConfig, log: Logger
 ) {.async.} =
@@ -139,83 +172,82 @@ proc runEditor(
 
   {.cast(gcsafe).}:
     app.onEventAsync proc(e: Event, app: AsyncApp): Future[bool] {.async.} =
-      {.cast(gcsafe).}:
-        {.cast(raises: []).}:
-          if e.kind == EventKind.Resize:
-            # Special handling for resize events to force screen clear
-            editor.handleResize
-            return true
+      editorCallback(editor, cmdLineConfig, log):
+        if e.kind == EventKind.Resize:
+          # Special handling for resize events to force screen clear
+          editor.handleResize
+          return true
 
-          let shouldContinue = editor.handleEvent(e)
+        let shouldContinue = editor.handleEvent(e)
 
+        if editor.hasPendingAsyncOperations():
           # Handle pending async operations (shell commands, :bg)
-          if editor.hasPendingAsyncOperations():
-            try:
-              await editor.handlePendingAsyncOperations()
-            except Exception as e:
-              logError("moe", "handlePendingAsyncOperations failed: " & e.msg)
+          try:
+            await editor.handlePendingAsyncOperations()
+          except Exception as e:
+            logError("moe", "handlePendingAsyncOperations failed: " & e.msg)
 
+        if editor.keyBindingRegistry.runtimeMappingState.keys.len > 0:
           # Key mapping timeout control
-          if editor.keyBindingRegistry.runtimeMappingState.keys.len > 0:
-            let tl = editor.config.standard.timeoutlen
-            if tl > 0 and app.getApplicationTimeout() == 0:
-              app.setApplicationTimeout(tl)
-          elif app.getApplicationTimeout() > 0:
-            app.setApplicationTimeout(0)
+          let tl = editor.config.standard.timeoutlen
+          if tl > 0 and app.getApplicationTimeout() == 0:
+            app.setApplicationTimeout(tl)
+        elif app.getApplicationTimeout() > 0:
+          app.setApplicationTimeout(0)
 
-          return shouldContinue
+        return shouldContinue
 
     app.onTimeoutAsync proc(app: AsyncApp): Future[bool] {.async.} =
-      {.cast(gcsafe).}:
-        {.cast(raises: []).}:
-          let shouldContinue = editor.handleKeyMappingTimeout()
-          app.setApplicationTimeout(0) # One-shot: disable until next prefix match
-          return shouldContinue
+      editorCallback(editor, cmdLineConfig, log):
+        let shouldContinue = editor.handleKeyMappingTimeout()
+        app.setApplicationTimeout(0) # One-shot: disable until next prefix match
+        return shouldContinue
 
     app.onTickAsync proc(app: AsyncApp): Future[bool] {.async.} =
-      {.cast(gcsafe).}:
-        {.cast(raises: []).}:
-          editor.lsp.poll(0)
-          editor.lsp.cleanupStaleProgress()
+      editorCallback(editor, cmdLineConfig, log):
+        editor.lsp.poll(0)
+        editor.lsp.cleanupStaleProgress()
       return true
 
     app.onRenderAsync proc(buffer: var Buffer) =
-      {.cast(gcsafe).}:
-        {.cast(raises: []).}:
-          # Execute startup window actions on first render
-          if not editor.state.startUpWindowsDone:
-            editor.handleStartUpWindows(buffer.area.width, buffer.area.height)
+      editorCallback(editor, cmdLineConfig, log):
+        # Execute startup window actions on first render
+        if not editor.state.startUpWindowsDone:
+          editor.handleStartUpWindows(buffer.area.width, buffer.area.height)
 
-          # Poll terminal output for all windows in Terminal mode
-          editor.pollTerminalWindows()
+        # Poll terminal output for all windows in Terminal mode
+        editor.pollTerminalWindows()
 
-          editor.render(buffer)
+        editor.render(buffer)
 
+        if not editor.config.standard.disableChangeCursor:
           # Set cursor style based on editor mode (unless disabled)
-          if not editor.config.standard.disableChangeCursor:
-            let cursorStyle =
-              case editor.state.mode
-              of EditorMode.Insert:
-                toCursorStyle(editor.config.standard.insertModeCursor)
-              else:
-                toCursorStyle(editor.config.standard.normalModeCursor)
-            app.setCursorStyle(cursorStyle)
+          let cursorStyle =
+            case editor.state.mode
+            of EditorMode.Insert:
+              toCursorStyle(editor.config.standard.insertModeCursor)
+            else:
+              toCursorStyle(editor.config.standard.normalModeCursor)
+          app.setCursorStyle(cursorStyle)
 
+        if editor.state.cursorVisible:
           # Set cursor position and visibility
-          if editor.state.cursorVisible:
-            app.setCursorPosition(
-              editor.state.screenCursor.x, editor.state.screenCursor.y
-            )
-            app.showCursor()
-          else:
-            app.hideCursor()
+          app.setCursorPosition(
+            editor.state.screenCursor.x, editor.state.screenCursor.y
+          )
+          app.showCursor()
+        else:
+          app.hideCursor()
 
-    # Run the async main loop
-    # Note: Bracketed Paste Mode is enabled via AppConfig(bracketedPaste: true)
-    await app.runAsync()
+    try:
+      # Run the async main loop
+      # Note: Bracketed Paste Mode is enabled via AppConfig(bracketedPaste: true)
+      await app.runAsync()
+    except Exception as e:
+      editor.emergencySaveAndQuit(e, cmdLineConfig, log)
 
-    # Restore cursor to default style on exit
     if not editor.config.standard.disableChangeCursor:
+      # Restore cursor to default style on exit
       let cursorStyle = toCursorStyle(editor.config.standard.defaultCursor)
       app.setCursorStyle(cursorStyle)
 
@@ -228,8 +260,8 @@ proc runEditor(
     # Save all persist data
     editor.savePersistData()
 
-    # Clean up logger
     if cmdLineConfig.debugEnabled:
+      # Clean up logger
       logInfo("moe", "Editor shutting down")
       log.close()
 

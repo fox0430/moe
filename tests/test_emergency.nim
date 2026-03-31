@@ -1,0 +1,228 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+import std/[unittest, os, options, json, strutils, sequtils]
+
+import ../src/moepkg/[editor, editor_window, buffer, config, config_loader, emergency]
+
+const TestRecoveryDir = "/tmp/moe_test_crash_recovery"
+
+proc cleanupTestDir() =
+  if dirExists(TestRecoveryDir):
+    removeDir(TestRecoveryDir)
+
+proc createTestEditor(): Editor =
+  let config = newEditorConfig()
+  let vr = newValidationResult()
+  newEditor(config, vr)
+
+suite "emergency - emergencySaveBuffers":
+  setup:
+    cleanupTestDir()
+
+  teardown:
+    cleanupTestDir()
+
+  test "Save modified buffer":
+    let e = createTestEditor()
+
+    # Load a file and modify its buffer
+    let testFile = "/tmp/moe_test_emergency.txt"
+    writeFile(testFile, "original content")
+    defer:
+      removeFile(testFile)
+
+    discard e.loadFile(testFile)
+    let buf = e.activeBuffer()
+    buf.changeSeq = buf.savedSeq + 1 # Mark as modified
+
+    let savedPaths = e.emergencySaveBuffers(TestRecoveryDir)
+    check savedPaths.len == 1
+
+    let savedContent = readFile(savedPaths[0])
+    check savedContent.contains("original content")
+
+    # Check recovery.json exists
+    let recoveryDir = savedPaths[0].parentDir
+    let metadataPath = recoveryDir / "recovery.json"
+    check fileExists(metadataPath)
+
+    let metadata = parseJson(readFile(metadataPath))
+    let filename = extractFilename(savedPaths[0])
+    check metadata.hasKey(filename)
+    check metadata[filename]["originalPath"].getStr == testFile
+
+  test "Skip unmodified buffer":
+    let e = createTestEditor()
+
+    let testFile = "/tmp/moe_test_emergency_unmod.txt"
+    writeFile(testFile, "unmodified content")
+    defer:
+      removeFile(testFile)
+
+    discard e.loadFile(testFile)
+    # Buffer is not modified (changeSeq == savedSeq)
+
+    let savedPaths = e.emergencySaveBuffers(TestRecoveryDir)
+    check savedPaths.len == 0
+
+  test "Save buffer without file path":
+    let e = createTestEditor()
+
+    # The default buffer has no file path and is not modified
+    let buf = e.activeBuffer()
+    buf.changeSeq = buf.savedSeq + 1 # Mark as modified
+
+    let savedPaths = e.emergencySaveBuffers(TestRecoveryDir)
+    check savedPaths.len == 1
+
+    let filename = extractFilename(savedPaths[0])
+    check filename.startsWith("untitled_")
+
+  test "Save multiple modified buffers":
+    let e = createTestEditor()
+
+    let testFile1 = "/tmp/moe_test_emergency_multi1.txt"
+    let testFile2 = "/tmp/moe_test_emergency_multi2.txt"
+    writeFile(testFile1, "content 1")
+    writeFile(testFile2, "content 2")
+    defer:
+      removeFile(testFile1)
+      removeFile(testFile2)
+
+    discard e.loadFile(testFile1)
+    e.activeBuffer().changeSeq = e.activeBuffer().savedSeq + 1
+
+    let buf2 = newTextBuffer("content 2", some(testFile2))
+    discard e.vsplitWithBuffer(buf2)
+    buf2.changeSeq = buf2.savedSeq + 1
+
+    let savedPaths = e.emergencySaveBuffers(TestRecoveryDir)
+    check savedPaths.len == 2
+
+    let metadata = parseJson(readFile(savedPaths[0].parentDir / "recovery.json"))
+    check metadata.len == 2
+
+  test "Deduplicate same buffer in multiple windows":
+    let e = createTestEditor()
+
+    let testFile = "/tmp/moe_test_emergency_dedup.txt"
+    writeFile(testFile, "shared content")
+    defer:
+      removeFile(testFile)
+
+    discard e.loadFile(testFile)
+    let sharedBuf = e.activeBuffer()
+    sharedBuf.changeSeq = sharedBuf.savedSeq + 1
+
+    # Split with same buffer
+    discard e.vsplitWithBuffer(sharedBuf)
+
+    let savedPaths = e.emergencySaveBuffers(TestRecoveryDir)
+    check savedPaths.len == 1
+
+  test "Handle duplicate filenames from different paths":
+    let e = createTestEditor()
+
+    let dir1 = "/tmp/moe_test_dup_dir1"
+    let dir2 = "/tmp/moe_test_dup_dir2"
+    createDir(dir1)
+    createDir(dir2)
+    let file1 = dir1 / "same.txt"
+    let file2 = dir2 / "same.txt"
+    writeFile(file1, "from dir1")
+    writeFile(file2, "from dir2")
+    defer:
+      removeDir(dir1)
+      removeDir(dir2)
+
+    discard e.loadFile(file1)
+    e.activeBuffer().changeSeq = e.activeBuffer().savedSeq + 1
+
+    let buf2 = newTextBuffer("from dir2", some(file2))
+    discard e.vsplitWithBuffer(buf2)
+    buf2.changeSeq = buf2.savedSeq + 1
+
+    let savedPaths = e.emergencySaveBuffers(TestRecoveryDir)
+    check savedPaths.len == 2
+
+    # One should have the buffer id prefix
+    let filenames = savedPaths.mapIt(extractFilename(it))
+    check filenames.anyIt(it == "same.txt")
+    check filenames.anyIt(it.endsWith("_same.txt"))
+
+  test "Mixed modified and unmodified buffers":
+    let e = createTestEditor()
+
+    let testFile1 = "/tmp/moe_test_emergency_mix1.txt"
+    let testFile2 = "/tmp/moe_test_emergency_mix2.txt"
+    writeFile(testFile1, "modified content")
+    writeFile(testFile2, "unmodified content")
+    defer:
+      removeFile(testFile1)
+      removeFile(testFile2)
+
+    discard e.loadFile(testFile1)
+    e.activeBuffer().changeSeq = e.activeBuffer().savedSeq + 1
+
+    let buf2 = newTextBuffer("unmodified content", some(testFile2))
+    discard e.vsplitWithBuffer(buf2)
+    # buf2 is NOT modified
+
+    let savedPaths = e.emergencySaveBuffers(TestRecoveryDir)
+    check savedPaths.len == 1
+
+    let filename = extractFilename(savedPaths[0])
+    check filename == extractFilename(testFile1)
+
+  test "No modified buffers removes empty directory":
+    let e = createTestEditor()
+    # Default buffer is not modified
+
+    let savedPaths = e.emergencySaveBuffers(TestRecoveryDir)
+    check savedPaths.len == 0
+
+    # The timestamped subdirectory should have been cleaned up
+    if dirExists(TestRecoveryDir):
+      var subdirCount = 0
+      for _ in walkDirs(TestRecoveryDir / "*"):
+        inc subdirCount
+      check subdirCount == 0
+
+suite "emergency - hasCrashRecoveryFiles":
+  setup:
+    cleanupTestDir()
+
+  teardown:
+    cleanupTestDir()
+
+  test "Returns false when no recovery directory exists":
+    check not hasCrashRecoveryFiles(TestRecoveryDir)
+
+  test "Returns false when base directory is empty":
+    createDir(TestRecoveryDir)
+    check not hasCrashRecoveryFiles(TestRecoveryDir)
+
+  test "Returns true when recovery files exist":
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.changeSeq = buf.savedSeq + 1
+
+    discard e.emergencySaveBuffers(TestRecoveryDir)
+    check hasCrashRecoveryFiles(TestRecoveryDir)
