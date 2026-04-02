@@ -741,9 +741,11 @@ suite "CommandModeHandler - map commands":
 
 proc createTestState(mode: EditorMode = EditorMode.Normal): EditorState =
   result = EditorState(
-    cursor: BufferPosition(line: 0, column: 0),
-    mode: mode,
-    previousMode: EditorMode.Normal,
+    activeWindow: EditorWindow(
+      cursor: BufferPosition(line: 0, column: 0),
+      mode: mode,
+      previousMode: EditorMode.Normal,
+    ),
     macroState: MacroState(
       isRecording: false,
       register: '\0',

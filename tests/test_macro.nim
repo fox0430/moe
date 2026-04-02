@@ -28,7 +28,7 @@ import ../src/moepkg/modes
 
 suite "Macro Recording":
   test "start macro recording (qa)":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.isRecording = false
     state.macroState.waitingForRegister = false
@@ -48,7 +48,7 @@ suite "Macro Recording":
     check state.macroState.recordedKeys.len == 0
 
   test "record keys during macro recording":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.isRecording = true
     state.macroState.register = 'a'
@@ -62,7 +62,7 @@ suite "Macro Recording":
     check state.macroState.recordedKeys == @["d", "d"]
 
   test "stop macro recording (q)":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.isRecording = true
     state.macroState.register = 'a'
@@ -81,7 +81,7 @@ suite "Macro Recording":
     check state.macroState.recordedKeys.len == 0
 
   test "record macro to different registers":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.registers = initTable[char, seq[string]]()
 
@@ -105,7 +105,7 @@ suite "Macro Recording":
     check state.macroState.registers['b'] == @["j", "j"]
 
   test "overwrite existing macro":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.registers = initTable[char, seq[string]]()
 
@@ -123,7 +123,7 @@ suite "Macro Recording":
 
 suite "Macro Playback":
   test "playback simple macro (@a)":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.registers = initTable[char, seq[string]]()
     state.macroState.registers['a'] = @["d", "d"]
@@ -134,7 +134,7 @@ suite "Macro Playback":
     check keys == @["d", "d"]
 
   test "playback non-existent macro returns empty":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.registers = initTable[char, seq[string]]()
 
@@ -142,7 +142,7 @@ suite "Macro Playback":
     check not state.macroState.registers.hasKey('z')
 
   test "set last macro register on playback":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.registers = initTable[char, seq[string]]()
     state.macroState.registers['a'] = @["d", "d"]
@@ -155,7 +155,7 @@ suite "Macro Playback":
     check state.macroState.lastRegister.get == 'a'
 
   test "repeat last macro (@@)":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.registers = initTable[char, seq[string]]()
     state.macroState.registers['a'] = @["d", "d"]
@@ -168,7 +168,7 @@ suite "Macro Playback":
     check state.macroState.registers[reg] == @["d", "d"]
 
   test "repeat last macro when no previous macro":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.registers = initTable[char, seq[string]]()
     state.macroState.lastRegister = none(char)
@@ -178,7 +178,7 @@ suite "Macro Playback":
 
 suite "Macro Edge Cases":
   test "cannot start recording while already recording":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.isRecording = true
     state.macroState.register = 'a'
@@ -189,7 +189,7 @@ suite "Macro Edge Cases":
     check state.macroState.isRecording == true
 
   test "empty macro":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.registers = initTable[char, seq[string]]()
 
@@ -203,7 +203,7 @@ suite "Macro Edge Cases":
     check state.macroState.registers['a'].len == 0
 
   test "macro with special keys":
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     state.macroState.registers = initTable[char, seq[string]]()
 

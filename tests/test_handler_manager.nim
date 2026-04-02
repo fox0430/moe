@@ -40,11 +40,12 @@ import ../src/moepkg/command_handlers/filetree_handler {.all.}
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
-  result = EditorState(
+  let window = EditorWindow(
     cursor: BufferPosition(line: 0, column: 0),
     mode: EditorMode.Normal,
     previousMode: EditorMode.Normal,
   )
+  result = EditorState(activeWindow: window)
   result.registers = initRegisters()
 
 proc createTestViewport(): ViewPort =
@@ -189,10 +190,13 @@ suite "HandlerManager - getOverlayTransition helper":
 
 proc createVisualTestState(mode: EditorMode): EditorState =
   ## Create an EditorState with visual selection active for testing
-  result = EditorState(
+  let window = EditorWindow(
     cursor: BufferPosition(line: 0, column: 0),
     mode: mode,
     previousMode: EditorMode.Normal,
+  )
+  result = EditorState(
+    activeWindow: window,
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -329,10 +333,13 @@ proc createBlockVisualTestState(
     startLine, startCol, endLine, endCol: int
 ): EditorState =
   ## Create an EditorState with visual block selection for testing
-  result = EditorState(
+  let window = EditorWindow(
     cursor: BufferPosition(line: endLine, column: endCol),
     mode: EditorMode.VisualBlock,
     previousMode: EditorMode.Normal,
+  )
+  result = EditorState(
+    activeWindow: window,
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -834,10 +841,13 @@ suite "HandlerManager - executeCommandDirect":
 suite "HandlerManager - o/O open line with auto-indent":
   proc createAutoIndentState(): EditorState =
     ## Create EditorState with autoIndent enabled
-    result = EditorState(
+    let window = EditorWindow(
       cursor: BufferPosition(line: 0, column: 0),
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
+    )
+    result = EditorState(
+      activeWindow: window,
       display: DisplaySettings(autoIndent: true, tabStop: 2, expandTab: true),
     )
     result.registers = initRegisters()

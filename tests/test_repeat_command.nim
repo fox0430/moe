@@ -37,7 +37,7 @@ suite "Repeat Command (.) - Insert Text":
   test "repeat simple insert (i{text})":
     # Setup
     let buffer = newTextBuffer("hello world")
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -68,14 +68,12 @@ suite "Repeat Command (.) - Insert Text":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
-      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
-    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -86,7 +84,7 @@ suite "Repeat Command (.) - Insert Text":
   test "repeat insert with newline":
     # Setup
     let buffer = newTextBuffer("line1")
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.cursor = BufferPosition(line: 0, column: 5)
     state.mode = EditorMode.Normal
 
@@ -113,14 +111,12 @@ suite "Repeat Command (.) - Insert Text":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
-      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
-    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -134,7 +130,7 @@ suite "Repeat Command (.) - Delete Operations":
   test "repeat delete char (x)":
     # Setup
     let buffer = newTextBuffer("hello world")
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -156,14 +152,12 @@ suite "Repeat Command (.) - Delete Operations":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
-      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
-    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -172,7 +166,7 @@ suite "Repeat Command (.) - Delete Operations":
   test "repeat delete line (dd)":
     # Setup
     let buffer = newTextBuffer("line1\nline2\nline3")
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.cursor = BufferPosition(line: 1, column: 0)
     state.mode = EditorMode.Normal
 
@@ -194,14 +188,12 @@ suite "Repeat Command (.) - Delete Operations":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
-      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
-    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -213,7 +205,7 @@ suite "Repeat Command (.) - Substitute Operations":
   test "repeat substitute char (s)":
     # Setup
     let buffer = newTextBuffer("hello world")
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -241,14 +233,12 @@ suite "Repeat Command (.) - Substitute Operations":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
-      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
-    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -258,7 +248,7 @@ suite "Repeat Command (.) - Substitute Operations":
   test "repeat substitute line (S)":
     # Setup
     let buffer = newTextBuffer("hello world\nfoo bar")
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.cursor = BufferPosition(line: 1, column: 0)
     state.mode = EditorMode.Normal
 
@@ -286,14 +276,12 @@ suite "Repeat Command (.) - Substitute Operations":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
-      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
-    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -307,7 +295,7 @@ suite "Repeat Command (.) - Replace Char":
   test "repeat replace char (r)":
     # Setup
     let buffer = newTextBuffer("hello world")
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.cursor = BufferPosition(line: 0, column: 1)
     state.mode = EditorMode.Normal
 
@@ -329,14 +317,12 @@ suite "Repeat Command (.) - Replace Char":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
-      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
-    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk
@@ -347,7 +333,7 @@ suite "Repeat Command (.) - Edge Cases":
   test "no previous command returns error":
     # Setup
     let buffer = newTextBuffer("hello world")
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
     state.editState.lastEditCommand = none(LastEditCommand)
@@ -366,14 +352,12 @@ suite "Repeat Command (.) - Edge Cases":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
-      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
-    state.cursor = ctx.cursor
 
     # Verify
     check result.isErr
@@ -382,7 +366,7 @@ suite "Repeat Command (.) - Edge Cases":
   test "repeat empty insert stays at cursor":
     # Setup
     let buffer = newTextBuffer("hello")
-    var state = EditorState()
+    var state = EditorState(activeWindow: EditorWindow())
     state.cursor = BufferPosition(line: 0, column: 2)
     state.mode = EditorMode.Normal
 
@@ -409,14 +393,12 @@ suite "Repeat Command (.) - Edge Cases":
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
-      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: keyBindingRegistry,
     )
 
     let result = registry.execute(ctx, custom("edit.repeat"), @[])
-    state.cursor = ctx.cursor
 
     # Verify
     check result.isOk

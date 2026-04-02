@@ -555,7 +555,7 @@ suite "CommandRegistry - registerBuiltinCommands":
 
 suite "CommandRegistry - Command execution with context":
   proc createTestContext(buffer: TextBuffer): CommandContext =
-    let state = EditorState()
+    let state = EditorState(activeWindow: EditorWindow())
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -569,7 +569,6 @@ suite "CommandRegistry - Command execution with context":
     result = CommandContext(
       buffer: buffer,
       state: state,
-      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: newKeyBindingRegistry(),
@@ -775,7 +774,7 @@ suite "findAllCharPositions":
 
 suite "f/F/t/T highlight - executeCommand sets findCharMatches":
   proc createFindTestContext(buffer: TextBuffer): CommandContext =
-    let state = EditorState()
+    let state = EditorState(activeWindow: EditorWindow())
     state.cursor = BufferPosition(line: 0, column: 0)
     state.mode = EditorMode.Normal
 
@@ -786,7 +785,6 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
     result = CommandContext(
       buffer: buffer,
       state: state,
-      cursor: state.cursor,
       motionController: motionController,
       clipboardConfig: ClipboardConfig(enable: false),
       keyBindingRegistry: newKeyBindingRegistry(),

@@ -34,7 +34,7 @@ import ../src/moepkg/modes {.all.}
 import ../src/moepkg/registers {.all.}
 
 proc createTestContext(buffer: TextBuffer): CommandContext =
-  let state = EditorState()
+  let state = EditorState(activeWindow: EditorWindow())
   state.cursor = BufferPosition(line: 0, column: 0)
   state.mode = EditorMode.Normal
   state.registers = initRegisters()
@@ -50,7 +50,6 @@ proc createTestContext(buffer: TextBuffer): CommandContext =
   result = CommandContext(
     buffer: buffer,
     state: state,
-    cursor: state.cursor,
     motionController: motionController,
     clipboardConfig: ClipboardConfig(enable: false),
     keyBindingRegistry: newKeyBindingRegistry(),
@@ -62,9 +61,8 @@ proc createTestRegistry(): CommandRegistry =
   registerBuiltinCommands(result)
 
 proc setCursor(ctx: CommandContext, line, column: int) =
-  ## Set cursor position on both ctx.cursor and ctx.state.cursor
-  ctx.cursor = BufferPosition(line: line, column: column)
-  ctx.state.cursor = ctx.cursor
+  ## Set cursor position on the state
+  ctx.state.cursor = BufferPosition(line: line, column: column)
 
 proc setupVisual(
     ctx: CommandContext,

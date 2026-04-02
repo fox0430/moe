@@ -74,8 +74,10 @@ type
     viewport*: ViewPort
     cursor*: BufferPosition # Window-local cursor position
     active*: bool # Whether this is the active window
-    # Window-specific mode state (for window splitting in special modes)
     mode*: EditorMode # Current mode for this window
+    previousMode*: EditorMode # Previous mode for ESC handling
+    preferredColumn*: int # Preferred column for vertical movement (vim's $ behavior)
+    screenCursor*: CursorPosition # Screen cursor position (x/y)
     filerState*: Option[FilerState] # File explorer state
     logViewerState*: Option[LogViewerState] # Log viewer state
     helpViewerState*: Option[HelpViewerState] # Help viewer state
@@ -550,18 +552,14 @@ type
     PendingWindowCmd # Ctrl-W prefix: waiting for window subcommand
 
   EditorState* = ref object
-    # Note: The single source of truth for mode/cursor is EditorWindow
-    # These fields are kept for handler compatibility and synced with EditorWindow
-    # Use e.cursor, e.currentMode, e.setMode() accessors when possible
-    cursor*: BufferPosition # Working cursor position (synced with EditorWindow.cursor)
-    mode*: EditorMode # Current mode (synced with EditorWindow.mode)
-    preferredColumn*: int # Preferred column for vertical movement (vim's $ behavior)
-    screenCursor*: CursorPosition # Screen cursor position (x/y)
+    activeWindow*: EditorWindow
+      ## Reference to the currently active EditorWindow.
+      ## cursor, mode, previousMode, preferredColumn, screenCursor are
+      ## forwarded to this window via procs defined after the type block.
     cursorVisible*: bool # Whether the terminal cursor should be visible
     matchingParenPos*: Option[BufferPosition]
       # Position of matching paren (for highlighting)
     currentWord*: string # Word under cursor (for currentWord highlighting)
-    previousMode*: EditorMode # Previous mode for ESC handling
     pendingCommand*: PendingCommand
     commandText*: string # Text being typed in command mode
     commandCursor*: int
@@ -637,6 +635,49 @@ type
     startUpWindowsDone*: bool
     # Notification popup manager
     notificationPopup*: NotificationPopupManager
+
+# Forwarding procs: EditorState delegates cursor/mode/etc. to activeWindow.
+# This eliminates the dual-state sync problem — EditorWindow is the single source of truth.
+
+proc cursor*(s: EditorState): var BufferPosition {.inline.} =
+  ## Get cursor position from the active window (returns var for in-place mutation)
+  s.activeWindow.cursor
+
+proc `cursor=`*(s: EditorState, pos: BufferPosition) {.inline.} =
+  ## Set cursor position on the active window
+  s.activeWindow.cursor = pos
+
+proc mode*(s: EditorState): EditorMode {.inline.} =
+  ## Get current mode from the active window
+  s.activeWindow.mode
+
+proc `mode=`*(s: EditorState, m: EditorMode) {.inline.} =
+  ## Set current mode on the active window
+  s.activeWindow.mode = m
+
+proc previousMode*(s: EditorState): EditorMode {.inline.} =
+  ## Get previous mode from the active window
+  s.activeWindow.previousMode
+
+proc `previousMode=`*(s: EditorState, m: EditorMode) {.inline.} =
+  ## Set previous mode on the active window
+  s.activeWindow.previousMode = m
+
+proc preferredColumn*(s: EditorState): int {.inline.} =
+  ## Get preferred column from the active window
+  s.activeWindow.preferredColumn
+
+proc `preferredColumn=`*(s: EditorState, v: int) {.inline.} =
+  ## Set preferred column on the active window
+  s.activeWindow.preferredColumn = v
+
+proc screenCursor*(s: EditorState): var CursorPosition {.inline.} =
+  ## Get screen cursor from the active window (returns var for in-place mutation)
+  s.activeWindow.screenCursor
+
+proc `screenCursor=`*(s: EditorState, v: CursorPosition) {.inline.} =
+  ## Set screen cursor on the active window
+  s.activeWindow.screenCursor = v
 
 proc `==`*(a, b: ViewPort): bool =
   ## Structural equality for ViewPort (ref object defaults to pointer comparison)

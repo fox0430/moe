@@ -28,11 +28,17 @@ type CommandExecutor* = ref object
   buffer*: buffer.TextBuffer
   state*: EditorState
   viewport*: ViewPort
-  cursor*: BufferPosition # Current cursor position (synced with EditorWindow)
   commandRegistry*: CommandRegistry
   keyBindingRegistry*: KeyBindingRegistry
   clipboardConfig*: ClipboardConfig
   notificationConfig*: NotificationConfig
+
+proc cursor*(e: CommandExecutor): var BufferPosition {.inline.} =
+  ## Cursor position forwarded to EditorState (which delegates to activeWindow)
+  e.state.cursor
+
+proc `cursor=`*(e: CommandExecutor, pos: BufferPosition) {.inline.} =
+  e.state.cursor = pos
 
 proc newCommandExecutor*(
     buffer: buffer.TextBuffer,
@@ -67,8 +73,6 @@ proc newCommandExecutor*(
     buffer: buffer,
     state: state,
     viewport: viewport,
-    cursor: BufferPosition(line: 0, column: 0),
-      # Initialized, synced with window before use
     commandRegistry: cmdReg,
     keyBindingRegistry: keyReg,
     clipboardConfig: clipboardConfig,
@@ -77,29 +81,21 @@ proc newCommandExecutor*(
 
 proc execute*(e: CommandExecutor, command: string): Result[(), string] =
   ## Execute a command string through the command registry
-
-  # Create command context with current cursor
   let ctx = CommandContext(
     buffer: e.buffer,
     state: e.state,
     viewport: e.viewport,
-    cursor: e.cursor, # Pass cursor to context
     motionController: e.motionController,
-    keyBindingRegistry: nil, # Not available in this context
+    keyBindingRegistry: nil,
     clipboardConfig: e.clipboardConfig,
     notificationConfig: e.notificationConfig,
   )
 
-  # Execute through command registry (handles both commands and aliases)
   let r = e.commandRegistry.execute(ctx, command)
   if r.isOk:
-    # Clear command buffer on success
     e.state.pendingCommand = PendingNone
     e.state.commandText = ""
     e.state.commandCursor = 0
-
-  # Sync cursor back from context
-  e.cursor = ctx.cursor
 
   return r
 
@@ -111,17 +107,13 @@ proc executeKeybinding*(
     buffer: e.buffer,
     state: e.state,
     viewport: e.viewport,
-    cursor: e.cursor, # Pass cursor to context
     motionController: e.motionController,
-    keyBindingRegistry: nil, # Not available in this context
+    keyBindingRegistry: nil,
     clipboardConfig: e.clipboardConfig,
     notificationConfig: e.notificationConfig,
   )
 
-  let r = e.commandRegistry.executeCommand(ctx, binding)
-  # Sync cursor back from context
-  e.cursor = ctx.cursor
-  return r
+  return e.commandRegistry.executeCommand(ctx, binding)
 
 # Compatibility methods for existing code
 proc clampCursor*(exec: CommandExecutor) =

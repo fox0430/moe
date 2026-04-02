@@ -215,7 +215,6 @@ proc executeCommand*(
     buffer: buffer,
     state: state,
     viewport: viewport,
-    cursor: state.cursor,
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
     clipboardConfig: handler.clipboardConfig,
@@ -224,7 +223,6 @@ proc executeCommand*(
   )
 
   let r = handler.commandRegistry.execute(ctx, commandId, args)
-  state.cursor = ctx.cursor
   if r.isOk:
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   else:
@@ -705,7 +703,6 @@ proc handleNormalModeKey*(
           buffer: buffer,
           state: state,
           viewport: viewport,
-          cursor: state.cursor,
           motionController: handler.motionController,
           keyBindingRegistry: handler.keyBindingRegistry,
           clipboardConfig: handler.clipboardConfig,
@@ -714,7 +711,6 @@ proc handleNormalModeKey*(
         )
 
         let cmdResult = handler.commandRegistry.execute(ctx, textObjectCommandId, @[])
-        state.cursor = ctx.cursor
         if cmdResult.isOk:
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
         else:
@@ -748,7 +744,6 @@ proc handleNormalModeKey*(
       buffer: buffer,
       state: state,
       viewport: viewport,
-      cursor: state.cursor,
       motionController: handler.motionController,
       keyBindingRegistry: handler.keyBindingRegistry,
       clipboardConfig: handler.clipboardConfig,
@@ -758,7 +753,6 @@ proc handleNormalModeKey*(
 
     # Execute the motion command directly through CommandRegistry
     let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
-    state.cursor = ctx.cursor
     if cmdResult.isOk:
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
@@ -984,7 +978,6 @@ proc handleNormalModeKey*(
         buffer: buffer,
         state: state,
         viewport: viewport,
-        cursor: state.cursor,
         motionController: handler.motionController,
         keyBindingRegistry: handler.keyBindingRegistry,
         clipboardConfig: handler.clipboardConfig,
@@ -992,7 +985,6 @@ proc handleNormalModeKey*(
         notificationConfig: handler.notificationConfig,
       )
       let cmdResult = handler.commandRegistry.execute(ctx, cmd.commandId, cmd.args)
-      state.cursor = ctx.cursor
       if cmdResult.isOk:
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
@@ -1059,7 +1051,6 @@ proc handleNormalModeKey*(
         buffer: buffer,
         state: state,
         viewport: viewport,
-        cursor: state.cursor,
         motionController: handler.motionController,
         keyBindingRegistry: handler.keyBindingRegistry,
         clipboardConfig: handler.clipboardConfig,
@@ -1067,7 +1058,6 @@ proc handleNormalModeKey*(
         notificationConfig: handler.notificationConfig,
       )
       let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
-      state.cursor = ctx.cursor
       if cmdResult.isOk:
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
@@ -1120,7 +1110,6 @@ proc handleNormalModeKey*(
       buffer: buffer,
       state: state,
       viewport: viewport,
-      cursor: state.cursor,
       motionController: handler.motionController,
       keyBindingRegistry: handler.keyBindingRegistry,
       clipboardConfig: handler.clipboardConfig,
@@ -1129,7 +1118,6 @@ proc handleNormalModeKey*(
     )
     # Use executeCommand to handle numeric prefixes properly
     let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
-    state.cursor = ctx.cursor
     if cmdResult.isOk:
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:

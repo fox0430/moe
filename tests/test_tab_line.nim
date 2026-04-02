@@ -33,11 +33,13 @@ import ../src/moepkg/tab_line {.all.}
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
   EditorState(
-    cursor: BufferPosition(line: 0, column: 0),
-    preferredColumn: -1,
-    screenCursor: CursorPosition(x: 0, y: 0),
-    mode: EditorMode.Normal,
-    previousMode: EditorMode.Normal,
+    activeWindow: EditorWindow(
+      cursor: BufferPosition(line: 0, column: 0),
+      preferredColumn: -1,
+      screenCursor: CursorPosition(x: 0, y: 0),
+      mode: EditorMode.Normal,
+      previousMode: EditorMode.Normal,
+    ),
     display: DisplaySettings(
       showTabLine: false,
       showStatusLine: true,
