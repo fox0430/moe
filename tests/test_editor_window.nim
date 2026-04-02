@@ -819,18 +819,16 @@ suite "saveActiveWindowState":
     check e.activeWindow.viewport.topLine == 10
     check e.activeWindow.viewport.leftColumn == 5
 
-  test "saves base mode for overlay modes":
+  test "preserves base mode during overlay":
     let e = createTestEditor()
-    # Set base mode to Filer (state.mode holds the base mode)
+    # Set mode to Filer (state.mode and activeWindow.mode are the same via forwarding)
     e.state.mode = EditorMode.Filer
-    # Enter command overlay (hasOverlay becomes true)
+    # Enter command overlay (hasOverlay becomes true, base mode stays Filer)
     e.state.enterCommandOverlay()
-    # Window mode was showing Normal before overlay activation
-    e.activeWindow.mode = EditorMode.Normal
 
     e.saveActiveWindowState()
 
-    # Should save the base mode (state.mode = Filer), not the window's previous mode
+    # Base mode (Filer) should be preserved in the window
     check e.activeWindow.mode == EditorMode.Filer
 
 suite "syncActiveWindow":
