@@ -36,12 +36,15 @@ import ../src/moepkg/command_handlers/insert_handler {.all.}
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
-  EditorState(
+  let window = EditorWindow(
     cursor: BufferPosition(line: 0, column: 0),
-    preferredColumn: -1,
-    screenCursor: CursorPosition(x: 0, y: 0),
     mode: EditorMode.Insert,
     previousMode: EditorMode.Normal,
+    preferredColumn: -1,
+    screenCursor: CursorPosition(x: 0, y: 0),
+  )
+  EditorState(
+    activeWindow: window,
     display: DisplaySettings(
       showTabLine: false,
       showStatusLine: true,

@@ -776,7 +776,6 @@ proc handleEvent*(e: Editor, event: Event): bool =
         e.state.editState.substituteContext = none(types.SubstituteContext)
         let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
         adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
-        e.syncStateToWindow()
         return true
       # Normal mode: show exit message like Vim
       e.state.statusMessage = "Type :qa and press <Enter> to exit"
@@ -801,7 +800,6 @@ proc handleEvent*(e: Editor, event: Event): bool =
       let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
       adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
 
-      e.syncStateToWindow()
     return true
 
   # Handle mouse events first
@@ -1084,10 +1082,6 @@ proc handleEvent*(e: Editor, event: Event): bool =
     else:
       none(EditorWindow)
 
-  # Sync EditorState from EditorWindow before handler call
-  # (handlers read/write state.cursor and state.mode)
-  e.syncStateFromWindow()
-
   # Update completion manager's other buffers with all FileEditMode buffers
   var otherBufs: seq[TextBuffer] = @[]
   for win in e.windowManager.windows:
@@ -1098,9 +1092,6 @@ proc handleEvent*(e: Editor, event: Event): bool =
   let r = e.handlerManager.handleEvent(
     activeBuffer, e.state, activeViewport, event, activeWin
   )
-
-  # Sync EditorState back to EditorWindow after handler call
-  e.syncStateToWindow()
 
   # Sync display settings when in Config mode (config changes update EditorConfig
   # but the cached display state needs to be kept in sync)
@@ -2164,8 +2155,6 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
     e.state.needsFullRedraw = true
     return shouldContinue
 
-  e.syncStateFromWindow()
-
   let activeBuffer = e.activeBuffer
   let activeViewport = e.viewport
 
@@ -2228,6 +2217,5 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
         break
     registry.isReplayingMapping = false
 
-  e.syncStateToWindow()
   e.state.needsFullRedraw = true
   return shouldContinue

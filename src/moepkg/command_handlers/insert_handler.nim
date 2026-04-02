@@ -97,15 +97,12 @@ proc executeCommand*(
     buffer: buffer,
     state: state,
     viewport: viewport,
-    cursor: state.cursor, # Initialize cursor from state
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
     notificationConfig: handler.notificationConfig,
   )
 
   let cmdResult = handler.commandRegistry.execute(ctx, commandId, args)
-  # Sync cursor back from context to state
-  state.cursor = ctx.cursor
   if cmdResult.isOk:
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
   else:

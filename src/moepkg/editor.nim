@@ -609,13 +609,8 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     lsp: lspIntegration,
     lastLspChangeSeq: 0,
     state: EditorState(
-      cursor: BufferPosition(line: 0, column: 0),
-      preferredColumn: -1,
-        # -1 means not set, will be initialized on first vertical move
-      screenCursor: CursorPosition(x: 0, y: 0),
+      # activeWindow will be set after window creation below
       cursorVisible: true,
-      mode: EditorMode.Normal,
-      previousMode: EditorMode.Normal,
       # Display settings (grouped in DisplaySettings)
       display: DisplaySettings(
         showTabLine: editorConfig.tabLine.enable,
@@ -801,10 +796,15 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       bufferList: @[result.textBuffer], # Initialize with initial buffer
       viewport: result.viewport,
       cursor: BufferPosition(line: 0, column: 0),
+      mode: EditorMode.Normal,
+      previousMode: EditorMode.Normal,
+      preferredColumn: -1,
+      screenCursor: CursorPosition(x: 0, y: 0),
       active: true,
     )
   )
   result.windowManager.activeWindowIndex = 0
+  result.state.activeWindow = result.windowManager.windows[0]
   logDebug(
     "editor",
     "Default window created, windows.len: " & $result.windowManager.windows.len,

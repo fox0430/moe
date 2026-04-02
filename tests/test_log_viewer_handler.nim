@@ -40,13 +40,15 @@ proc specialKey(sk: SpecialKey, mods: set[KeyModifier] = {}): KeyCombo =
 
 proc newTestEditorState(): EditorState =
   ## Create a test EditorState with default values
-  result = EditorState(
+  let window = EditorWindow(
     cursor: BufferPosition(line: 0, column: 0),
-    preferredColumn: -1,
-    screenCursor: CursorPosition(x: 0, y: 0),
     mode: EditorMode.LogViewer,
     previousMode: EditorMode.Normal,
-    viewportReservedLines: 2, # status + command line
+    preferredColumn: -1,
+    screenCursor: CursorPosition(x: 0, y: 0),
+  )
+  result = EditorState(
+    activeWindow: window, viewportReservedLines: 2 # status + command line
   )
 
 proc newTestBuffer(content: string = ""): TextBuffer =

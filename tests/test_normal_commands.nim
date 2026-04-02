@@ -26,41 +26,41 @@ import ../src/moepkg/command_handlers/normal_commands
 
 suite "normal_commands - switchMode":
   test "switch from Normal to Insert":
-    let state = EditorState()
+    let state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     let registry = newKeyBindingRegistry()
     switchMode(state, EditorMode.Insert, registry)
     check state.mode == EditorMode.Insert
 
   test "switch from Insert to Normal":
-    let state = EditorState()
+    let state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Insert
     let registry = newKeyBindingRegistry()
     switchMode(state, EditorMode.Normal, registry)
     check state.mode == EditorMode.Normal
 
   test "switch from Normal to Visual":
-    let state = EditorState()
+    let state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     let registry = newKeyBindingRegistry()
     switchMode(state, EditorMode.Visual, registry)
     check state.mode == EditorMode.Visual
 
   test "switch from Normal to Replace":
-    let state = EditorState()
+    let state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     let registry = newKeyBindingRegistry()
     switchMode(state, EditorMode.Replace, registry)
     check state.mode == EditorMode.Replace
 
   test "switch with nil registry does not crash":
-    let state = EditorState()
+    let state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     switchMode(state, EditorMode.Insert, nil)
     check state.mode == EditorMode.Insert
 
   test "switching clears key sequence state":
-    let state = EditorState()
+    let state = EditorState(activeWindow: EditorWindow())
     state.mode = EditorMode.Normal
     let registry = newKeyBindingRegistry()
     # Add some pending key state

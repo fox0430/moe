@@ -41,16 +41,13 @@ proc saveActiveWindowState*(e: Editor) =
 
 proc syncActiveWindow*(e: Editor) =
   ## Sync the active window's buffer and viewport with the executor and motion controller
-  ## Also syncs mode and cursor from the active window to EditorState
   ## Viewport is shared by reference - reassigning shares the active window's viewport
+  e.state.activeWindow = e.activeWindow
   e.executer.buffer = e.activeWindow.buffer
   e.executer.motionController.executor.buffer = e.activeWindow.buffer
   e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
   e.viewport = e.activeWindow.viewport
   e.state.needsFullRedraw = true
-
-  # Sync mode and cursor from the active window to EditorState
-  e.syncStateFromWindow()
 
   # Apply per-buffer EditorConfig overrides to display settings
   applyBufferEditorConfig(e.state.display, e.activeWindow.buffer, e.config)

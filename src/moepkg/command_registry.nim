@@ -162,8 +162,6 @@ type
     buffer*: buffer.TextBuffer
     state*: EditorState
     viewport*: ViewPort
-    cursor*: BufferPosition
-      # Current cursor position (single source of truth during command execution)
     motionController*: MotionController
     keyBindingRegistry*: key_bindings.KeyBindingRegistry
     clipboardConfig*: ClipboardConfig
@@ -189,6 +187,13 @@ type
     builtinCommands*: array[BuiltinCommandId, RegisteredCommand]
       ## Fast access for builtins
     aliases*: Table[string, CommandId] ## Alias -> command ID mapping
+
+proc cursor*(ctx: CommandContext): var BufferPosition {.inline.} =
+  ## Cursor position forwarded to EditorState (which delegates to activeWindow)
+  ctx.state.cursor
+
+proc `cursor=`*(ctx: CommandContext, pos: BufferPosition) {.inline.} =
+  ctx.state.cursor = pos
 
 proc notify*(ctx: CommandContext, msg: string, level: NotificationLevel = nlInfo) =
   ## Send a notification via popup or status line based on config.

@@ -91,55 +91,16 @@ proc activeWindow*(e: Editor): EditorWindow {.inline.} =
 
 proc currentMode*(e: Editor): EditorMode {.inline.} =
   ## Get the current mode from the active window
-  ## This is the authoritative source for the current mode
   e.activeWindow.mode
 
 proc cursor*(e: Editor): BufferPosition {.inline.} =
   ## Get the cursor position from the active window
-  ## This is the authoritative source for the cursor position
-  ## Also syncs EditorState.cursor for handler compatibility
   e.activeWindow.cursor
 
 proc `cursor=`*(e: Editor, pos: BufferPosition) {.inline.} =
-  ## Set the cursor position in the active window and EditorState
-  ## Both are kept in sync for handler compatibility
+  ## Set the cursor position in the active window
   e.activeWindow.cursor = pos
-  e.state.cursor = pos
-
-proc syncCursorToWindow*(e: Editor) {.inline.} =
-  ## Sync EditorState.cursor to EditorWindow.cursor
-  ## Call this after handler functions modify state.cursor
-  e.activeWindow.cursor = e.state.cursor
-
-proc syncCursorFromWindow*(e: Editor) {.inline.} =
-  ## Sync EditorWindow.cursor to EditorState.cursor
-  ## Call this before handler functions that read state.cursor
-  e.state.cursor = e.activeWindow.cursor
 
 proc setMode*(e: Editor, mode: EditorMode) {.inline.} =
-  ## Set the current mode in the active window and EditorState
-  ## Both are kept in sync for handler compatibility
+  ## Set the current mode in the active window
   e.activeWindow.mode = mode
-  e.state.mode = mode
-
-proc syncModeToWindow*(e: Editor) {.inline.} =
-  ## Sync EditorState.mode to EditorWindow.mode
-  ## Call this after handler functions modify state.mode
-  e.activeWindow.mode = e.state.mode
-
-proc syncModeFromWindow*(e: Editor) {.inline.} =
-  ## Sync EditorWindow.mode to EditorState.mode
-  ## Call this before handler functions that read state.mode
-  e.state.mode = e.activeWindow.mode
-
-proc syncStateFromWindow*(e: Editor) {.inline.} =
-  ## Sync all EditorState fields from EditorWindow
-  ## Call this before handler functions
-  e.state.cursor = e.activeWindow.cursor
-  e.state.mode = e.activeWindow.mode
-
-proc syncStateToWindow*(e: Editor) {.inline.} =
-  ## Sync all EditorState fields to EditorWindow
-  ## Call this after handler functions
-  e.activeWindow.cursor = e.state.cursor
-  e.activeWindow.mode = e.state.mode
