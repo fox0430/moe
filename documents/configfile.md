@@ -119,7 +119,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | liveReloadOfFile | bool | true | Enable live reload of opening files |
 | incrementalSearch | bool | true | Enable incremental search |
 | popupWindowInExmode | bool | true | Show Pop-up window in Command mode |
-| colorMode | TerminalColorMode | 24bit | Terminal color mode |
+| colorMode | TerminalColorMode | 256 | Terminal color mode |
 | mouse | bool | false | Enable mouse cursor movement |
 | timeoutlen | integer | 1000 | Key mapping timeout in milliseconds (0 = no timeout) |
 | bufferBackend | BufferBackend | auto | Buffer data structure. "auto" selects backend based on file size |

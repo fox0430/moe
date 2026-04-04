@@ -512,7 +512,7 @@ proc newEditorConfig*(): EditorConfig =
       popupWindowInExmode: true,
       autoDeleteParen: true,
       liveReloadOfFile: true,
-      colorMode: cm24bit,
+      colorMode: cm256color,
       mouse: false,
       lineWrap: true,
       timeoutlen: 1000,

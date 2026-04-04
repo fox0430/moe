@@ -53,10 +53,10 @@ suite "theme - DefaultColors completeness":
 
   test "default entry has expected colors":
     let pair = DefaultColors[EditorColorPairIndex.default]
-    # Foreground: #dde1e8 = (221, 225, 232)
-    check pair.foreground.rgb.red == 221
-    check pair.foreground.rgb.green == 225
-    check pair.foreground.rgb.blue == 232
+    # Foreground: #dadada = (218, 218, 218)
+    check pair.foreground.rgb.red == 218
+    check pair.foreground.rgb.green == 218
+    check pair.foreground.rgb.blue == 218
     # Background: #000000 = (0, 0, 0)
     check pair.background.rgb.red == 0
     check pair.background.rgb.green == 0
@@ -80,4 +80,4 @@ suite "theme - initDefaultTheme":
   test "initDefaultTheme sets theme colors":
     initDefaultTheme()
     let defaultColor = getThemeColor(EditorColorPairIndex.default)
-    check defaultColor.foreground.rgb.red == 221
+    check defaultColor.foreground.rgb.red == 218

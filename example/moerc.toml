@@ -54,7 +54,7 @@ autoDeleteParen = true                 # Auto-delete matching parens - Set to fa
 
 liveReloadOfFile = true                # Auto-reload when file changed externally
 
-colorMode = "24bit"                    # Color mode: "8", "16", "256", "24bit", "none"
+colorMode = "256"                      # Color mode: "8", "16", "256", "24bit", "none"
 
 mouse = false                           # Enable mouse support
 

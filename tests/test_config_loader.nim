@@ -330,7 +330,7 @@ colorMode = "invalid"
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
     check "Standard.colorMode" in vr.errors[0].name
-    check config.standard.colorMode == cm24bit # Default value
+    check config.standard.colorMode == cm256color # Default value
 
   test "Invalid cursorType enum is detected":
     let tomlStr = """
@@ -663,7 +663,7 @@ colorMode = "invalid"
     check vr.hasErrors # Has validation errors
     check vr.errors.len == 2 # tabStop and colorMode
     check config.standard.tabStop == 2 # Default value (invalid value skipped)
-    check config.standard.colorMode == cm24bit # Default value
+    check config.standard.colorMode == cm256color # Default value
 
   test "loadConfigFromToml with non-existent file returns defaults":
     let loadResult = loadConfigFromToml("/nonexistent/path/config.toml")
