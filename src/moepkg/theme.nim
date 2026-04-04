@@ -33,7 +33,7 @@ proc makeColorPairDefaultBg(fg: string): ColorPair =
 
 const DefaultColors*: ThemeColors = [
   # Basic
-  EditorColorPairIndex.default: makeColorPair("#dde1e8", "#000000"),
+  EditorColorPairIndex.default: makeColorPair("#dadada", "#000000"),
   EditorColorPairIndex.lineNum: makeColorPair("#636d83", "#000000"),
   EditorColorPairIndex.currentLineNum: makeColorPair("#56b6c2", "#000000"),
   EditorColorPairIndex.sidebarSessionModifiedSign: makeColorPair("#e5c07b", "#000000"),
@@ -75,7 +75,7 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.statusLineGitBranch: makeColorPair("#ffffff", "#3d59a1"),
 
   # Tab line
-  EditorColorPairIndex.tab: makeColorPair("#888888", "#252526"),
+  EditorColorPairIndex.tab: makeColorPair("#949494", "#262626"),
   EditorColorPairIndex.currentTab: makeColorPair("#ffffff", "#1e1e1e"),
 
   # Command line
@@ -93,7 +93,7 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.selectArea: makeColorPair("#ffffff", "#5c3d6e"),
 
   # Syntax highlighting - Core
-  EditorColorPairIndex.keyword: makeColorPairDefaultBg("#87d7ff"),
+  EditorColorPairIndex.keyword: makeColorPairDefaultBg("#5fd7ff"),
   EditorColorPairIndex.functionName: makeColorPairDefaultBg("#61afef"),
   EditorColorPairIndex.typeName: makeColorPairDefaultBg("#2ac3de"),
   EditorColorPairIndex.boolean: makeColorPairDefaultBg("#d19a66"),
@@ -113,14 +113,14 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.whitespace: makeColorPairDefaultBg("#4b5263"),
   EditorColorPairIndex.preprocessor: makeColorPairDefaultBg("#c678dd"),
   EditorColorPairIndex.pragma: makeColorPairDefaultBg("#c678dd"),
-  EditorColorPairIndex.identifier: makeColorPairDefaultBg("#dde1e8"),
-  EditorColorPairIndex.table: makeColorPairDefaultBg("#0090a8"),
-  EditorColorPairIndex.date: makeColorPairDefaultBg("#0090a8"),
+  EditorColorPairIndex.identifier: makeColorPairDefaultBg("#dadada"),
+  EditorColorPairIndex.table: makeColorPairDefaultBg("#0087af"),
+  EditorColorPairIndex.date: makeColorPairDefaultBg("#0087af"),
   EditorColorPairIndex.operator: makeColorPairDefaultBg("#89ddff"),
   EditorColorPairIndex.property: makeColorPairDefaultBg("#61afef"),
 
   # Syntax highlighting - Markdown
-  EditorColorPairIndex.markdownCodeBlock: makeColorPair("#dde1e8", "#1a1a2e"),
+  EditorColorPairIndex.markdownCodeBlock: makeColorPair("#dadada", "#1a1a2e"),
 
   # Syntax highlighting - Extended (LSP semantic tokens)
   EditorColorPairIndex.namespace: makeColorPairDefaultBg("#2ac3de"),
@@ -129,48 +129,48 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.enumMember: makeColorPairDefaultBg("#d19a66"),
   EditorColorPairIndex.interfaceName: makeColorPairDefaultBg("#2ac3de"),
   EditorColorPairIndex.typeParameter: makeColorPairDefaultBg("#2ac3de"),
-  EditorColorPairIndex.parameter: makeColorPairDefaultBg("#dde1e8"),
-  EditorColorPairIndex.variable: makeColorPairDefaultBg("#dde1e8"),
+  EditorColorPairIndex.parameter: makeColorPairDefaultBg("#dadada"),
+  EditorColorPairIndex.variable: makeColorPairDefaultBg("#dadada"),
   EditorColorPairIndex.lspString: makeColorPairDefaultBg("#98c379"),
-  EditorColorPairIndex.event: makeColorPairDefaultBg("#dde1e8"),
+  EditorColorPairIndex.event: makeColorPairDefaultBg("#dadada"),
   EditorColorPairIndex.function: makeColorPairDefaultBg("#61afef"),
   EditorColorPairIndex.`method`: makeColorPairDefaultBg("#61afef"),
   EditorColorPairIndex.`macro`: makeColorPairDefaultBg("#c678dd"),
   EditorColorPairIndex.regexp: makeColorPairDefaultBg("#98c379"),
   EditorColorPairIndex.decorator: makeColorPairDefaultBg("#c678dd"),
-  EditorColorPairIndex.angle: makeColorPairDefaultBg("#dde1e8"),
+  EditorColorPairIndex.angle: makeColorPairDefaultBg("#dadada"),
   EditorColorPairIndex.arithmetic: makeColorPairDefaultBg("#89ddff"),
   EditorColorPairIndex.attribute: makeColorPairDefaultBg("#c678dd"),
   EditorColorPairIndex.attributeBracket: makeColorPairDefaultBg("#c678dd"),
   EditorColorPairIndex.bitwise: makeColorPairDefaultBg("#89ddff"),
-  EditorColorPairIndex.brace: makeColorPairDefaultBg("#dde1e8"),
-  EditorColorPairIndex.bracket: makeColorPairDefaultBg("#dde1e8"),
+  EditorColorPairIndex.brace: makeColorPairDefaultBg("#dadada"),
+  EditorColorPairIndex.bracket: makeColorPairDefaultBg("#dadada"),
   EditorColorPairIndex.builtinAttribute: makeColorPairDefaultBg("#c678dd"),
   EditorColorPairIndex.builtinType: makeColorPairDefaultBg("#2ac3de"),
-  EditorColorPairIndex.colon: makeColorPairDefaultBg("#dde1e8"),
-  EditorColorPairIndex.comma: makeColorPairDefaultBg("#dde1e8"),
+  EditorColorPairIndex.colon: makeColorPairDefaultBg("#dadada"),
+  EditorColorPairIndex.comma: makeColorPairDefaultBg("#dadada"),
   EditorColorPairIndex.comparison: makeColorPairDefaultBg("#89ddff"),
   EditorColorPairIndex.constParameter: makeColorPairDefaultBg("#d19a66"),
   EditorColorPairIndex.derive: makeColorPairDefaultBg("#2ac3de"),
   EditorColorPairIndex.deriveHelper: makeColorPairDefaultBg("#2ac3de"),
-  EditorColorPairIndex.dot: makeColorPairDefaultBg("#dde1e8"),
+  EditorColorPairIndex.dot: makeColorPairDefaultBg("#dadada"),
   EditorColorPairIndex.escapeSequence: makeColorPairDefaultBg("#d19a66"),
   EditorColorPairIndex.invalidEscapeSequence: makeColorPairDefaultBg("#e06c75"),
   EditorColorPairIndex.formatSpecifier: makeColorPairDefaultBg("#d19a66"),
-  EditorColorPairIndex.generic: makeColorPairDefaultBg("#dde1e8"),
-  EditorColorPairIndex.label: makeColorPairDefaultBg("#dde1e8"),
+  EditorColorPairIndex.generic: makeColorPairDefaultBg("#dadada"),
+  EditorColorPairIndex.label: makeColorPairDefaultBg("#dadada"),
   EditorColorPairIndex.lifetime: makeColorPairDefaultBg("#c678dd"),
   EditorColorPairIndex.logical: makeColorPairDefaultBg("#89ddff"),
   EditorColorPairIndex.macroBang: makeColorPairDefaultBg("#c678dd"),
-  EditorColorPairIndex.parenthesis: makeColorPairDefaultBg("#dde1e8"),
-  EditorColorPairIndex.punctuation: makeColorPairDefaultBg("#dde1e8"),
+  EditorColorPairIndex.parenthesis: makeColorPairDefaultBg("#dadada"),
+  EditorColorPairIndex.punctuation: makeColorPairDefaultBg("#dadada"),
   EditorColorPairIndex.selfKeyword: makeColorPairDefaultBg("#e06c75"),
   EditorColorPairIndex.selfTypeKeyword: makeColorPairDefaultBg("#2ac3de"),
-  EditorColorPairIndex.semicolon: makeColorPairDefaultBg("#dde1e8"),
+  EditorColorPairIndex.semicolon: makeColorPairDefaultBg("#dadada"),
   EditorColorPairIndex.typeAlias: makeColorPairDefaultBg("#2ac3de"),
-  EditorColorPairIndex.toolModule: makeColorPairDefaultBg("#dde1e8"),
+  EditorColorPairIndex.toolModule: makeColorPairDefaultBg("#dadada"),
   EditorColorPairIndex.union: makeColorPairDefaultBg("#2ac3de"),
-  EditorColorPairIndex.unresolvedReference: makeColorPairDefaultBg("#dde1e8"),
+  EditorColorPairIndex.unresolvedReference: makeColorPairDefaultBg("#dadada"),
 
   # LSP features
   EditorColorPairIndex.inlayHint: makeColorPairDefaultBg("#636d83"),
@@ -200,8 +200,8 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.replaceText: makeColorPair("#ffffff", "#be5046"),
   EditorColorPairIndex.parenPair: makeColorPair("#ffffff", "#61afef"),
   EditorColorPairIndex.currentWord: makeColorPair("#ffffff", "#808080"),
-  EditorColorPairIndex.highlightFullWidthSpace: makeColorPair("#dde1e8", "#ff0000"),
-  EditorColorPairIndex.highlightTrailingSpaces: makeColorPair("#dde1e8", "#ff0000"),
+  EditorColorPairIndex.highlightFullWidthSpace: makeColorPair("#dadada", "#ff0000"),
+  EditorColorPairIndex.highlightTrailingSpaces: makeColorPair("#dadada", "#ff0000"),
   EditorColorPairIndex.reservedWord: makeColorPair("#ffffff", "#808080"),
 
   # Syntax checker
@@ -224,8 +224,8 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.configModeCurrentLine: makeColorPair("#ffffff", "#008080"),
 
   # Current line background
-  EditorColorPairIndex.currentLineBg: makeColorPair("#dde1e8", "#3e4452"),
-  EditorColorPairIndex.currentColumnBg: makeColorPair("#dde1e8", "#3e4452"),
+  EditorColorPairIndex.currentLineBg: makeColorPair("#dadada", "#3e4452"),
+  EditorColorPairIndex.currentColumnBg: makeColorPair("#dadada", "#3e4452"),
   EditorColorPairIndex.foldingLine: makeColorPair("#808080", "#3f3f3f"),
 
   # Side bar
@@ -238,14 +238,14 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.sidebarSyntaxCheckErrSign: makeColorPair("#e06c75", "#000000"),
 
   # Viewer common colors
-  EditorColorPairIndex.viewerHeader: makeColorPair("#ffd700", "#000000"),
+  EditorColorPairIndex.viewerHeader: makeColorPair("#d7af00", "#000000"),
   EditorColorPairIndex.viewerSelectedLine: makeColorPair("#000000", "#ffffff"),
-  EditorColorPairIndex.viewerEmptyMessage: makeColorPair("#878787", "#000000"),
+  EditorColorPairIndex.viewerEmptyMessage: makeColorPair("#8a8a8a", "#000000"),
 
   # Filer mode specific
   EditorColorPairIndex.filerDirectory: makeColorPairDefaultBg("#61afef"),
   EditorColorPairIndex.filerSymlink: makeColorPairDefaultBg("#00ffff"),
-  EditorColorPairIndex.filerSymlinkDir: makeColorPairDefaultBg("#af5fff"),
+  EditorColorPairIndex.filerSymlinkDir: makeColorPairDefaultBg("#875fd7"),
   EditorColorPairIndex.filerHiddenFile: makeColorPairDefaultBg("#808080"),
   EditorColorPairIndex.filerExecutable: makeColorPairDefaultBg("#5fff5f"),
 
@@ -255,21 +255,21 @@ const DefaultColors*: ThemeColors = [
 
   # Configuration mode specific
   EditorColorPairIndex.configModeSection: makeColorPair("#5fff5f", "#000000"),
-  EditorColorPairIndex.configModeEditMode: makeColorPair("#000000", "#ffd700"),
-  EditorColorPairIndex.configModePopupBg: makeColorPair("#ffffff", "#303030"),
+  EditorColorPairIndex.configModeEditMode: makeColorPair("#000000", "#d7af00"),
+  EditorColorPairIndex.configModePopupBg: makeColorPair("#ffffff", "#323232"),
   EditorColorPairIndex.configModePopupSelected: makeColorPair("#ffffff", "#005faf"),
 
   # Diff viewer specific
-  EditorColorPairIndex.diffViewerHeader: makeColorPairDefaultBg("#00d7ff"),
-  EditorColorPairIndex.diffViewerMeta: makeColorPairDefaultBg("#ffd700"),
+  EditorColorPairIndex.diffViewerHeader: makeColorPairDefaultBg("#00afaf"),
+  EditorColorPairIndex.diffViewerMeta: makeColorPairDefaultBg("#d7af00"),
 
   # Other viewers
   EditorColorPairIndex.recentFileMissing: makeColorPairDefaultBg("#606060"),
   EditorColorPairIndex.debugViewerSectionHeader: makeColorPairDefaultBg("#87afff"),
-  EditorColorPairIndex.referencesViewerHeader: makeColorPairDefaultBg("#00afff"),
+  EditorColorPairIndex.referencesViewerHeader: makeColorPairDefaultBg("#0087ff"),
   EditorColorPairIndex.documentSymbolViewerHeader: makeColorPairDefaultBg("#afd700"),
   EditorColorPairIndex.callHierarchyViewerHeader: makeColorPairDefaultBg("#afd700"),
-  EditorColorPairIndex.helpViewerSectionHeader: makeColorPairDefaultBg("#5fafff"),
+  EditorColorPairIndex.helpViewerSectionHeader: makeColorPairDefaultBg("#5f87ff"),
 ]
 
 proc initDefaultTheme*() =
