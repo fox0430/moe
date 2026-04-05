@@ -93,7 +93,8 @@ proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
       of mtLog: "[LSP Log] "
     if msgType == mtLog:
       addLspMessageLog(message)
-    lsp.pendingMessages.add(prefix & langId & ": " & message)
+    else:
+      lsp.pendingMessages.add(prefix & langId & ": " & message)
 
   # Set up progress callback to track active progress operations
   svc.onProgress = proc(
