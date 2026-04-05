@@ -706,16 +706,9 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
     ctx.sharedState.storeState(lwsShuttingDown)
 
-    # Send shutdown request with timeout
-    try:
-      discard await sendRequest("shutdown", newJNull())
-      await sleepAsync(milliseconds(100))
-      # Send exit notification
-      await sendNotificationLog("exit", %*{})
-    except CatchableError as e:
-      sendLogMessage(mtWarning, "Error during graceful shutdown: " & e.msg)
-
-    # Kill process if still exists
+    # Kill the LSP server process immediately without waiting for shutdown RPC
+    # response. The graceful shutdown handshake can block for up to 30 seconds
+    # if the server is unresponsive, which delays editor exit unnecessarily.
     try:
       if serverProcess != nil:
         discard serverProcess.kill()
