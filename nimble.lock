@@ -12,15 +12,15 @@
       }
     },
     "bearssl": {
-      "version": "0.2.6",
-      "vcsRevision": "11e798b62b8e6beabe958e048e9e24c7e0f9ee63",
+      "version": "0.2.7",
+      "vcsRevision": "3b341f30d8c619b9a75c154243f9a55468a404e2",
       "url": "https://github.com/status-im/nim-bearssl",
       "downloadMethod": "git",
       "dependencies": [
         "unittest2"
       ],
       "checksums": {
-        "sha1": "7e068f119664cf47ad0cfb74ef4c56fb6b616523"
+        "sha1": "a85aab15b1b9a8b2438e9a128ac2eba41227da79"
       }
     },
     "unicodedb": {
@@ -56,8 +56,8 @@
       }
     },
     "stew": {
-      "version": "0.4.2",
-      "vcsRevision": "b66168735d6f3841c5239c3169d3fe5fe98b1257",
+      "version": "0.5.0",
+      "vcsRevision": "4382b18f04b3c43c8409bfcd6b62063773b2bbaa",
       "url": "https://github.com/status-im/nim-stew",
       "downloadMethod": "git",
       "dependencies": [
@@ -65,12 +65,12 @@
         "unittest2"
       ],
       "checksums": {
-        "sha1": "928e82cb8d2f554e8f10feb2349ee9c32fee3a8c"
+        "sha1": "db22942939773ab7d5a0f2b2668c237240c67dd6"
       }
     },
     "httputils": {
-      "version": "0.4.0",
-      "vcsRevision": "c53852d9e24205b6363bba517fa8ee7bde823691",
+      "version": "0.4.1",
+      "vcsRevision": "f142cb2e8bd812dd002a6493b6082827bb248592",
       "url": "https://github.com/status-im/nim-http-utils",
       "downloadMethod": "git",
       "dependencies": [
@@ -79,12 +79,12 @@
         "unittest2"
       ],
       "checksums": {
-        "sha1": "298bc5b6fe4e5aa9c3b7e2ebfa17191675020f10"
+        "sha1": "016774ab31c3afff9a423f7d80584905ee59c570"
       }
     },
     "chronos": {
-      "version": "4.2.0",
-      "vcsRevision": "0d00279e67ad9fadeb944944449adc89f052b8bd",
+      "version": "4.2.2",
+      "vcsRevision": "45f43a9ad8bd8bcf5903b42f365c1c879bd54240",
       "url": "https://github.com/status-im/nim-chronos",
       "downloadMethod": "git",
       "dependencies": [
@@ -95,7 +95,7 @@
         "unittest2"
       ],
       "checksums": {
-        "sha1": "add14e711abc98b2203e7c5a35c860c7b86f15b5"
+        "sha1": "3a4c9477df8cef20a04e4f1b54a2d74fdfc2a3d0"
       }
     },
     "regex": {
