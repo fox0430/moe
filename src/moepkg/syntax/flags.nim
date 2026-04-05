@@ -69,6 +69,9 @@ const
     hasDoubleDashComments, hasNestedComments, hasPreprocessor, hasSharpFunction,
   }
 
+  ## The lexing rules for Hyprland config.
+  flagsHyprland*: TokenizerFlags = {hasHashComments}
+
   ## The lexing rules for Markdown.
   flagsMarkdown*: TokenizerFlags = {
     hasBacktickFramedExpressions, hasHashHeadings, hasPreprocessor,

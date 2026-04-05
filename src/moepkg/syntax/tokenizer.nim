@@ -149,6 +149,7 @@ type
     langGitRebaseTodo
     langHaskell
     langHtml
+    langHyprland
     langJava
     langJavaScript
     langJsx
@@ -187,9 +188,9 @@ const
 
   sourceLanguageToStr*: array[SourceLanguage, string] = [
     "none", "Astro", "C", "COMMIT_EDITMSG", "C++", "C#", "Diff", "Fish",
-    "git-rebase-todo", "Haskell", "HTML", "Java", "JavaScript", "JavaScriptReact",
-    "LaTeX", "Lisp", "Markdown", "Nim", "Python", "Rust", "Shell", "Tcl", "Toml",
-    "Yaml", "Json", "TypeScript", "TypeScriptReact",
+    "git-rebase-todo", "Haskell", "HTML", "Hyprland", "Java", "JavaScript",
+    "JavaScriptReact", "LaTeX", "Lisp", "Markdown", "Nim", "Python", "Rust", "Shell",
+    "Tcl", "Toml", "Yaml", "Json", "TypeScript", "TypeScriptReact",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
@@ -287,8 +288,8 @@ import
   syntaxastro, syntaxc, syntaxcommiteditmsg, syntaxcpp, syntaxcsharp, syntaxdiff,
   syntaxgitrebasetodo, syntaxhaskell, syntaxhtml, syntaxjava, syntaxjavascript,
   syntaxlatex, syntaxlisp, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust,
-  syntaxfish, syntaxshell, syntaxtcl, syntaxyaml, syntaxtoml, syntaxjson,
-  syntaxtypescript
+  syntaxfish, syntaxhyprland, syntaxshell, syntaxtcl, syntaxyaml, syntaxtoml,
+  syntaxjson, syntaxtypescript
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -302,6 +303,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langGitRebaseTodo: g.gitRebaseTodoNextToken
   of langHaskell: g.haskellNextToken
   of langHtml: g.htmlNextToken
+  of langHyprland: g.hyprlandNextToken
   of langJava: g.javaNextToken
   of langJavaScript, langJsx: g.javaScriptNextToken
   of langLatex: g.latexNextToken

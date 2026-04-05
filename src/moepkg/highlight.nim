@@ -904,6 +904,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langGitRebaseTodo
   of "nimble.lock":
     return SourceLanguage.langJson
+  of "hyprland.conf":
+    return SourceLanguage.langHyprland
   else:
     discard
 
@@ -956,6 +958,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langLatex
   of ".lisp", ".lsp", ".cl", ".el", ".scm", ".ss", ".rkt", ".asd", ".fasl":
     return SourceLanguage.langLisp
+  of ".hl":
+    return SourceLanguage.langHyprland
   else:
     return SourceLanguage.langNone
 
