@@ -48,6 +48,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
   - JSON
   - Lisp
   - Tcl
+  - Hyprland
 
 - Auto-completion
 
