@@ -158,6 +158,11 @@ proc count0000(s: string): int =
       inc(result)
     i += 2
 
+const EncodingDetectionSampleSize* = 8 * 1024
+  ## Number of bytes to sample from the beginning of a file for encoding
+  ## detection. 8 KB is enough to reliably detect BOM markers and encoding
+  ## patterns while avoiding full-file scans on large files.
+
 proc detectCharacterEncoding*(s: string): CharacterEncoding =
   ## Detect character encoding from raw file content
   ##
@@ -165,6 +170,9 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
   ## 1. Checking for BOM (Byte Order Mark) headers
   ## 2. Validating against known Unicode formats
   ## 3. Using heuristics to disambiguate similar encodings
+  ##
+  ## Only the first `EncodingDetectionSampleSize` bytes are examined to avoid
+  ## expensive full-file scans on large files.
   ##
   ## Returns:
   ## - `utf8` if only ASCII characters are included or UTF-8 BOM is found
@@ -186,25 +194,36 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
     if s[0 .. 1] == "\xFE\xFF" or s[0 .. 1] == "\xFF\xFE":
       return CharacterEncoding.utf16
 
+  # Use a sample of the file for encoding validation to avoid O(n) scans.
+  # Only truncate when the string is larger than the sample size.
+  # When truncating, align to 4 bytes so UTF-16/UTF-32 validators don't
+  # reject the sample due to misalignment.
+  let sample =
+    if s.len > EncodingDetectionSampleSize:
+      let sampleLen = EncodingDetectionSampleSize div 4 * 4
+      s[0 ..< sampleLen]
+    else:
+      s
+
   # Try UTF-8 validation first (most common)
-  if s.validateUtf8 == -1:
+  if sample.validateUtf8 == -1:
     return CharacterEncoding.utf8
 
   # Try other Unicode encodings
   var validEncodings: seq[CharacterEncoding]
-  if s.validateUtf16Be:
+  if sample.validateUtf16Be:
     validEncodings.add(CharacterEncoding.utf16Be)
-  if s.validateUtf16Le:
+  if sample.validateUtf16Le:
     validEncodings.add(CharacterEncoding.utf16Le)
-  if s.validateUtf32Be:
+  if sample.validateUtf32Be:
     validEncodings.add(CharacterEncoding.utf32Be)
-  if s.validateUtf32Le:
+  if sample.validateUtf32Le:
     validEncodings.add(CharacterEncoding.utf32Le)
 
   # Use heuristic to filter out UTF-16 if there are too many null bytes
   # (UTF-32 is more likely in that case)
-  let threshold = (s.len / 2) * (2 / 5)
-  if float(count0000(s)) >= threshold:
+  let threshold = (sample.len / 2) * (2 / 5)
+  if float(count0000(sample)) >= threshold:
     # If there are too many 0x000, assume it is not UTF-16.
     if validEncodings.contains(CharacterEncoding.utf16Be):
       validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Be))
