@@ -359,13 +359,14 @@ proc markSaved*(b: TextBuffer) {.inline.} =
     b.modifiedLines[i] = lmkUnmodified
 
 proc newTextBuffer*(
-    content: string = "",
+    content: sink string = "",
     filePath: Option[string] = none(string),
     backend: BufferBackend = chooseBackend(),
 ): TextBuffer =
+  var c = move content
   case backend
   of GapBuffer:
-    let gb = newGapBuffer(content)
+    let gb = newGapBuffer(move c)
     # Convert buffer to Runes sequence for highlighting
     var runesBuffer: seq[Runes] = @[]
     for i in 0 ..< gb.len:
@@ -402,7 +403,7 @@ proc newTextBuffer*(
       editorConfig: none(BufferEditorConfig),
     )
   of SqrtDecomp:
-    let sd = newSqrtDecomp(content)
+    let sd = newSqrtDecomp(move c)
     var runesBuffer: seq[Runes] = @[]
     for i in 0 ..< sd.len:
       runesBuffer.add(sd.getLine(i).toRunes())
@@ -435,7 +436,7 @@ proc newTextBuffer*(
       editorConfig: none(BufferEditorConfig),
     )
   of Rope:
-    let rp = newRope(content)
+    let rp = newRope(move c)
     var runesBuffer: seq[Runes] = @[]
     for i in 0 ..< rp.len:
       runesBuffer.add(rp.getLine(i).toRunes())
@@ -468,7 +469,7 @@ proc newTextBuffer*(
       editorConfig: none(BufferEditorConfig),
     )
   of PieceTable:
-    let pt = newPieceTable(content)
+    let pt = newPieceTable(move c)
     var runesBuffer: seq[Runes] = @[]
     for i in 0 ..< pt.len:
       runesBuffer.add(pt.getLine(i).toRunes())
@@ -1849,18 +1850,18 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 
   # Reinitialize with new backend if needed
   if b.backendKind != newBackend:
-    let newBuffer = newTextBuffer(content, some(path), backend = newBackend)
+    let newBuffer = newTextBuffer(move content, some(path), backend = newBackend)
     b[] = newBuffer[]
   else:
     case b.backendKind
     of GapBuffer:
-      b.gapBuffer = newGapBuffer(content)
+      b.gapBuffer = newGapBuffer(move content)
     of SqrtDecomp:
-      b.sqrtDecomp = newSqrtDecomp(content)
+      b.sqrtDecomp = newSqrtDecomp(move content)
     of Rope:
-      b.rope = newRope(content)
+      b.rope = newRope(move content)
     of PieceTable:
-      b.pieceTable = newPieceTable(content)
+      b.pieceTable = newPieceTable(move content)
 
   b.filePath = some(path)
 

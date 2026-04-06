@@ -46,7 +46,7 @@ proc newGapBuffer*(initialCapacity: int = DEFAULT_GAP_SIZE): GapBuffer =
   lines[0] = ""
   GapBuffer(lines: lines, gapStart: 1, gapEnd: capacity)
 
-proc newGapBuffer*(text: string): GapBuffer =
+proc newGapBuffer*(text: sink string): GapBuffer =
   # Parse text into lines (POSIX standard: newline is line terminator, not separator)
   # The trailing newline is NOT stored as an empty line - it's managed by TextBuffer.endOfLine
   var
