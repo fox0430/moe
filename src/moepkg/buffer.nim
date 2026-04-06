@@ -1883,32 +1883,67 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 
   # Initialize syntax highlighting based on file extension
   b.language = detectLanguage(path)
-  var runesBuffer: seq[Runes] = @[]
-  for i in 0 ..< b.len:
-    runesBuffer.add(b.getLine(i).toRunes())
 
   if b.language != SourceLanguage.langNone:
-    b.highlight = initHighlight(runesBuffer, @[], b.language)
+    if b.len > 0:
+      const InitialChunkSize = 1000
+      let chunkEnd = min(InitialChunkSize - 1, b.len - 1)
 
-    # Build initial incremental cache for future edits
-    if runesBuffer.len > 0:
+      var lines = newSeq[string](chunkEnd + 1)
+      for i in 0 .. chunkEnd:
+        lines[i] = b.getLine(i)
+
       let (segments, lineStates) = initHighlightIncremental(
-        runesBuffer,
+        lines,
         0,
-        runesBuffer.high,
+        chunkEnd,
         TokenizerState(), # Default initial state
         @[],
         b.language,
       )
 
+      b.highlight = Highlight(colorSegments: segments)
       b.incrementalHighlight = IncrementalHighlight(
         segments: segments,
         lineStates: LineStateCache(states: lineStates, version: b.changeSeq),
+        parsedUpTo: chunkEnd,
       )
+
+      # Apply URI underlines for the initial chunk
+      for lineIdx in 0 .. chunkEnd:
+        let line = b.getLine(lineIdx)
+        for m in findAllUris(line):
+          b.highlight.addModifier(
+            lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
+          )
     else:
+      b.highlight = Highlight(colorSegments: @[])
       b.incrementalHighlight = nil
   else:
-    b.highlight = initHighlight(runesBuffer)
+    # Plain text - single default segment covering all lines
+    if b.len > 0:
+      b.highlight = Highlight(
+        colorSegments: @[
+          ColorSegment(
+            firstRow: 0,
+            firstColumn: 0,
+            lastRow: b.len - 1,
+            lastColumn: max(0, b.getLine(b.len - 1).len - 1),
+            color: EditorColorPairIndex.default,
+            style: defaultStyle,
+          )
+        ]
+      )
+
+      # Apply URI underlines for plain text
+      for lineIdx in 0 ..< b.len:
+        let line = b.getLine(lineIdx)
+        for m in findAllUris(line):
+          b.highlight.addModifier(
+            lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
+          )
+    else:
+      b.highlight = Highlight(colorSegments: @[])
     b.incrementalHighlight = nil
 
   b.highlightNeedsUpdate = false
@@ -2146,14 +2181,53 @@ proc applyDiagnosticHighlights(
     )
 
 # Syntax highlighting management
+proc continueInitialHighlight*(b: TextBuffer): bool =
+  ## Continue progressive initial highlighting if incomplete.
+  ## Returns true if work was done (caller should update the display).
+  const ChunkSize = 1000
+
+  if b.incrementalHighlight == nil or b.isUtilityBuffer:
+    return false
+
+  let parsedUpTo = b.incrementalHighlight.parsedUpTo
+  if parsedUpTo >= b.len - 1:
+    return false
+
+  let startLine = parsedUpTo + 1
+  let endLine = min(startLine + ChunkSize - 1, b.len - 1)
+  let lastState = b.incrementalHighlight.lineStates.states[^1]
+
+  var chunkLines = newSeq[string](endLine - startLine + 1)
+  for i in startLine .. endLine:
+    chunkLines[i - startLine] = b.getLine(i)
+
+  let bufferStr = buildBufferStr(chunkLines, 0, chunkLines.high)
+  let (newSegments, newLineStates) = initHighlightIncrementalFromStr(
+    bufferStr, startLine, endLine, lastState, b.reservedWords, b.language
+  )
+
+  b.incrementalHighlight.segments.add(newSegments)
+  b.incrementalHighlight.lineStates.states.add(newLineStates)
+  b.incrementalHighlight.parsedUpTo = endLine
+
+  # Append new segments to the existing highlight (preserving earlier URI
+  # underlines) rather than rebuilding from incrementalHighlight.segments.
+  b.highlight.colorSegments.add(newSegments)
+
+  # Apply URI underlines for the newly parsed chunk
+  for lineIdx in startLine .. endLine:
+    let line = b.getLine(lineIdx)
+    for m in findAllUris(line):
+      b.highlight.addModifier(
+        lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
+      )
+
+  return true
+
 proc updateHighlight*(b: TextBuffer) =
   ## Update syntax highlighting if needed
   ## This should be called before rendering
   if b.highlightNeedsUpdate and not b.isUtilityBuffer:
-    var runesBuffer: seq[Runes] = @[]
-    for i in 0 ..< b.len:
-      runesBuffer.add(b.getLine(i).toRunes())
-
     if b.language != SourceLanguage.langNone:
       # Check if incremental cache is valid
       let cacheValid =
@@ -2162,45 +2236,73 @@ proc updateHighlight*(b: TextBuffer) =
         b.incrementalHighlight.segments.len > 0
 
       if cacheValid:
-        # Use incremental highlighting for better performance
+        # Use incremental highlighting for better performance.
+        # Only fetches lines for the chunks that need re-parsing.
+        let buf = b
         updateHighlightIncremental(
-          runesBuffer, b.incrementalHighlight, b.lastChangedLines, b.changeSeq,
-          b.reservedWords, b.language,
+          b.len,
+          proc(i: int): string =
+            buf.getLine(i),
+          b.incrementalHighlight,
+          b.lastChangedLines,
+          b.changeSeq,
+          b.reservedWords,
+          b.language,
         )
 
         # Convert IncrementalHighlight segments to Highlight
         b.highlight = Highlight(colorSegments: b.incrementalHighlight.segments)
       else:
-        # Cache invalid or first time - do full parse
-        b.highlight = initHighlight(runesBuffer, b.reservedWords, b.language)
+        # Cache invalid or first time - parse once with incremental
+        if b.len > 0:
+          var lines = newSeq[string](b.len)
+          for i in 0 ..< b.len:
+            lines[i] = b.getLine(i)
 
-        # Build initial incremental cache for next time
-        if runesBuffer.len > 0:
-          # Parse entire buffer with default initial state
           let (segments, lineStates) = initHighlightIncremental(
-            runesBuffer,
+            lines,
             0,
-            runesBuffer.high,
+            lines.high,
             TokenizerState(), # Default initial state
             b.reservedWords,
             b.language,
           )
 
+          b.highlight = Highlight(colorSegments: segments)
           b.incrementalHighlight = IncrementalHighlight(
             segments: segments,
             lineStates: LineStateCache(states: lineStates, version: b.changeSeq),
+            parsedUpTo: b.len - 1,
           )
         else:
+          b.highlight = Highlight(colorSegments: @[])
           b.incrementalHighlight = nil
     else:
-      # Plain text - use simple highlighting
-      b.highlight = initHighlight(runesBuffer)
+      # Plain text - single default segment covering all lines
+      if b.len > 0:
+        b.highlight = Highlight(
+          colorSegments: @[
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 0,
+              lastRow: b.len - 1,
+              lastColumn: max(0, b.getLine(b.len - 1).len - 1),
+              color: EditorColorPairIndex.default,
+              style: defaultStyle,
+            )
+          ]
+        )
+      else:
+        b.highlight = Highlight(colorSegments: @[])
 
     if b.diagnostics.len > 0:
       applyDiagnosticHighlights(b.highlight, b.diagnostics)
 
-    # Apply underline to URIs/URLs
-    for lineIdx in 0 ..< b.len:
+    # Apply underline to URIs/URLs from the changed line onward.
+    # Syntax changes can propagate to all subsequent lines (e.g. opening a
+    # multiline string/comment), so we scan from the change point to the end.
+    let uriStart = max(0, b.lastChangedLines)
+    for lineIdx in uriStart ..< b.len:
       let line = b.getLine(lineIdx)
       for m in findAllUris(line):
         b.highlight.addModifier(

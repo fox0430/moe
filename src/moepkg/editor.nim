@@ -1486,6 +1486,8 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
     let activeBuffer = e.activeBuffer()
     let needsHighlightUpdate = activeBuffer.highlightNeedsUpdate
     activeBuffer.updateHighlight()
+    # Continue progressive initial highlighting if not yet complete
+    discard activeBuffer.continueInitialHighlight()
     # If highlight was regenerated, we need to re-apply semantic tokens
     if needsHighlightUpdate:
       e.invalidateSemanticTokensCache()
