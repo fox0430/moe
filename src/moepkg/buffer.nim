@@ -362,15 +362,25 @@ proc newTextBuffer*(
     content: sink string = "",
     filePath: Option[string] = none(string),
     backend: BufferBackend = chooseBackend(),
+    skipHighlightInit: bool = false,
 ): TextBuffer =
   var c = move content
+
+  proc buildHighlight(lineCount: int, getLine: proc(i: int): string): Highlight =
+    ## Build plain-text highlighting from all lines. Skipped when
+    ## skipHighlightInit is true (e.g. loadFile will set up highlighting
+    ## itself, so building runesBuffer for every line would be wasted work).
+    if skipHighlightInit:
+      return initHighlight()
+
+    var runesBuffer = newSeq[Runes](lineCount)
+    for i in 0 ..< lineCount:
+      runesBuffer[i] = getLine(i).toRunes()
+    initHighlight(runesBuffer)
+
   case backend
   of GapBuffer:
     let gb = newGapBuffer(move c)
-    # Convert buffer to Runes sequence for highlighting
-    var runesBuffer: seq[Runes] = @[]
-    for i in 0 ..< gb.len:
-      runesBuffer.add(gb.getLine(i).toRunes())
 
     TextBuffer(
       id: genBufferId(),
@@ -390,8 +400,11 @@ proc newTextBuffer*(
       inTransaction: false,
       lineMarkers: newSeq[Option[SidebarItemKind]](gb.len),
       modifiedLines: newSeq[LineModificationKind](gb.len),
-      # Initialize with plain text highlighting (no language)
-      highlight: initHighlight(runesBuffer),
+      highlight: buildHighlight(
+        gb.len,
+        proc(i: int): string =
+          gb.getLine(i),
+      ),
       language: SourceLanguage.langNone,
       highlightNeedsUpdate: false,
       incrementalHighlight: nil,
@@ -404,9 +417,6 @@ proc newTextBuffer*(
     )
   of SqrtDecomp:
     let sd = newSqrtDecomp(move c)
-    var runesBuffer: seq[Runes] = @[]
-    for i in 0 ..< sd.len:
-      runesBuffer.add(sd.getLine(i).toRunes())
 
     TextBuffer(
       id: genBufferId(),
@@ -426,7 +436,11 @@ proc newTextBuffer*(
       inTransaction: false,
       lineMarkers: newSeq[Option[SidebarItemKind]](sd.len),
       modifiedLines: newSeq[LineModificationKind](sd.len),
-      highlight: initHighlight(runesBuffer),
+      highlight: buildHighlight(
+        sd.len,
+        proc(i: int): string =
+          sd.getLine(i),
+      ),
       language: SourceLanguage.langNone,
       highlightNeedsUpdate: false,
       incrementalHighlight: nil,
@@ -437,9 +451,6 @@ proc newTextBuffer*(
     )
   of Rope:
     let rp = newRope(move c)
-    var runesBuffer: seq[Runes] = @[]
-    for i in 0 ..< rp.len:
-      runesBuffer.add(rp.getLine(i).toRunes())
 
     TextBuffer(
       id: genBufferId(),
@@ -459,7 +470,11 @@ proc newTextBuffer*(
       inTransaction: false,
       lineMarkers: newSeq[Option[SidebarItemKind]](rp.len),
       modifiedLines: newSeq[LineModificationKind](rp.len),
-      highlight: initHighlight(runesBuffer),
+      highlight: buildHighlight(
+        rp.len,
+        proc(i: int): string =
+          rp.getLine(i),
+      ),
       language: SourceLanguage.langNone,
       highlightNeedsUpdate: false,
       incrementalHighlight: nil,
@@ -470,9 +485,6 @@ proc newTextBuffer*(
     )
   of PieceTable:
     let pt = newPieceTable(move c)
-    var runesBuffer: seq[Runes] = @[]
-    for i in 0 ..< pt.len:
-      runesBuffer.add(pt.getLine(i).toRunes())
 
     TextBuffer(
       id: genBufferId(),
@@ -492,7 +504,11 @@ proc newTextBuffer*(
       inTransaction: false,
       lineMarkers: newSeq[Option[SidebarItemKind]](pt.len),
       modifiedLines: newSeq[LineModificationKind](pt.len),
-      highlight: initHighlight(runesBuffer),
+      highlight: buildHighlight(
+        pt.len,
+        proc(i: int): string =
+          pt.getLine(i),
+      ),
       language: SourceLanguage.langNone,
       highlightNeedsUpdate: false,
       incrementalHighlight: nil,
@@ -1848,9 +1864,13 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 
   let newBackend = chooseBackendForFile(fileSize)
 
-  # Reinitialize with new backend if needed
   if b.backendKind != newBackend:
-    let newBuffer = newTextBuffer(move content, some(path), backend = newBackend)
+    # Reinitialize with new backend. Use newTextBuffer to handle the object
+    # variant discriminant change, but pass skipHighlightInit=true to avoid
+    # building a full runesBuffer (O(n) per line) that loadFile overwrites.
+    let newBuffer = newTextBuffer(
+      move content, some(path), backend = newBackend, skipHighlightInit = true
+    )
     b[] = newBuffer[]
   else:
     case b.backendKind
@@ -1879,8 +1899,9 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   b.changeSeq = 0
   b.savedSeq = 0
 
-  # Reset markers for new file content
+  # Reset markers and modification tracking for new file content
   b.lineMarkers = newSeq[Option[SidebarItemKind]](b.len)
+  b.modifiedLines = newSeq[LineModificationKind](b.len)
 
   # Initialize syntax highlighting based on file extension
   b.language = detectLanguage(path)
@@ -1936,8 +1957,10 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
         ]
       )
 
-      # Apply URI underlines for plain text
-      for lineIdx in 0 ..< b.len:
+      # Apply URI underlines for the visible portion only (same as syntax-
+      # highlighted files). The rest is handled by incremental highlighting.
+      let uriChunkEnd = min(999, b.len - 1)
+      for lineIdx in 0 .. uriChunkEnd:
         let line = b.getLine(lineIdx)
         for m in findAllUris(line):
           b.highlight.addModifier(
