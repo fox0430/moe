@@ -78,6 +78,7 @@ type
   IncrementalHighlight* = ref object ## Incremental highlighting information
     segments*: seq[ColorSegment]
     lineStates*: LineStateCache
+    parsedUpTo*: int ## Last line parsed during initial load. -1 = not started.
 
 proc captureTokenizerState*(g: GeneralTokenizer): TokenizerState =
   ## Capture the current state of a tokenizer
@@ -154,16 +155,13 @@ proc indexOf*(highlight: Highlight, row, column: int): int =
   ## Calculate the index of the color segment which the pair (row, column) belongs to.
   ## Uses binary search for O(log n) performance.
 
-  # Because the following assertion is sluggish, it is disabled in release builds.
-  when not defined(release):
-    doAssert(
-      (row, column) >= (highlight[0].firstRow, highlight[0].firstColumn),
-      fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}",
-    )
-    doAssert(
-      (row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn),
-      fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}",
-    )
+  # Return early if position is outside highlighted range (e.g. during
+  # progressive initial highlighting where not all lines are parsed yet).
+  if highlight.colorSegments.len == 0:
+    return 0
+  if (row, column) < (highlight[0].firstRow, highlight[0].firstColumn) or
+      (row, column) > (highlight[^1].lastRow, highlight[^1].lastColumn):
+    return 0
 
   var
     lb = 0
@@ -567,11 +565,16 @@ proc initHighlight*(
   if language == SourceLanguage.langNone:
     return initHighlight(buffer)
 
-  var bufferStr: string
+  var totalLen = 0
   for i in 0 .. buffer.high:
-    bufferStr &= $buffer[i]
+    totalLen += buffer[i].len
     if i < buffer.high:
-      bufferStr &= '\n'
+      inc totalLen # '\n'
+  var bufferStr = newStringOfCap(totalLen)
+  for i in 0 .. buffer.high:
+    bufferStr.add $buffer[i]
+    if i < buffer.high:
+      bufferStr.add '\n'
 
   var
     currentRow, currentColumn: int
@@ -665,28 +668,15 @@ proc initHighlight*(
 
   return Highlight(colorSegments: colorSegments)
 
-proc initHighlightIncremental*(
-    buffer: seq[Runes],
+proc initHighlightIncrementalFromStr*(
+    bufferStr: string,
     startLine: int,
     endLine: int,
     initialState: TokenizerState,
     reservedWords: seq[ReservedWord],
     language: SourceLanguage,
 ): tuple[segments: seq[ColorSegment], lineStates: seq[TokenizerState]] =
-  ## Parse a partial buffer range with initial tokenizer state
-  ## Returns color segments and tokenizer state at the end of each line
-  ## Used for incremental re-highlighting of changed regions
-
-  if language == SourceLanguage.langNone or buffer.len == 0:
-    # Return empty results for plain text
-    return (segments: @[], lineStates: @[])
-
-  # Build buffer string for the requested range
-  var bufferStr: string
-  for i in startLine .. min(endLine, buffer.high):
-    bufferStr &= $buffer[i]
-    if i < min(endLine, buffer.high):
-      bufferStr &= '\n'
+  ## Core implementation that works directly with a pre-built buffer string.
 
   var
     currentRow = startLine
@@ -803,8 +793,44 @@ proc initHighlightIncremental*(
 
   return (segments: colorSegments, lineStates: lineStates)
 
+proc buildBufferStr*(lines: seq[string], startLine, endLine: int): string =
+  let rangeEnd = min(endLine, lines.high)
+  var totalLen = 0
+  for i in startLine .. rangeEnd:
+    totalLen += lines[i].len
+    if i < rangeEnd:
+      inc totalLen # '\n'
+  result = newStringOfCap(totalLen)
+  for i in startLine .. rangeEnd:
+    result.add lines[i]
+    if i < rangeEnd:
+      result.add '\n'
+
+proc initHighlightIncremental*(
+    lines: seq[string],
+    startLine: int,
+    endLine: int,
+    initialState: TokenizerState,
+    reservedWords: seq[ReservedWord],
+    language: SourceLanguage,
+): tuple[segments: seq[ColorSegment], lineStates: seq[TokenizerState]] =
+  ## Parse lines[startLine..endLine] and produce color segments with matching
+  ## row numbers. `lines` must contain entries at indices startLine..endLine.
+  if language == SourceLanguage.langNone or lines.len == 0:
+    return (segments: @[], lineStates: @[])
+  let bufferStr = buildBufferStr(lines, startLine, endLine)
+  initHighlightIncrementalFromStr(
+    bufferStr,
+    startLine,
+    min(endLine, lines.high),
+    initialState,
+    reservedWords,
+    language,
+  )
+
 proc updateHighlightIncremental*(
-    buffer: seq[Runes],
+    lineCount: int,
+    getLine: proc(i: int): string,
     incrHighlight: var IncrementalHighlight,
     changedStartLine: int,
     bufferChangeSeq: int,
@@ -820,6 +846,8 @@ proc updateHighlightIncremental*(
 
   const ChunkSize = 100
 
+  let lastLine = lineCount - 1
+
   # Start re-parsing from the changed line.
   # A small backward margin accounts for tokens that may span the boundary.
   let reparseStart = max(0, changedStartLine - 2)
@@ -833,7 +861,7 @@ proc updateHighlightIncremental*(
 
   # State convergence detection is only valid when the line count has not
   # changed; otherwise cached states at the same index refer to different lines.
-  let canConverge = buffer.len == incrHighlight.lineStates.states.len
+  let canConverge = lineCount == incrHighlight.lineStates.states.len
 
   # Parse in chunks, checking for state convergence after each chunk
   var
@@ -843,11 +871,17 @@ proc updateHighlightIncremental*(
     allNewLineStates: seq[TokenizerState]
     reparseEnd = reparseStart - 1
 
-  while currentStart <= buffer.high:
-    let chunkEnd = min(currentStart + ChunkSize - 1, buffer.high)
+  while currentStart <= lastLine:
+    let chunkEnd = min(currentStart + ChunkSize - 1, lastLine)
 
-    let (newSegments, newLineStates) = initHighlightIncremental(
-      buffer, currentStart, chunkEnd, currentState, reservedWords, language
+    # Build buffer string only for this chunk
+    var chunkLines = newSeq[string](chunkEnd - currentStart + 1)
+    for i in currentStart .. chunkEnd:
+      chunkLines[i - currentStart] = getLine(i)
+    let bufferStr = buildBufferStr(chunkLines, 0, chunkLines.high)
+
+    let (newSegments, newLineStates) = initHighlightIncrementalFromStr(
+      bufferStr, currentStart, chunkEnd, currentState, reservedWords, language
     )
 
     allNewSegments.add(newSegments)
@@ -860,36 +894,53 @@ proc updateHighlightIncremental*(
     # Check for convergence: if the tokenizer state at the end of this chunk
     # matches the old cached state, all subsequent lines will produce the same
     # segments as before — no need to continue parsing.
-    if canConverge and chunkEnd < buffer.high and newLineStates.len > 0 and
+    if canConverge and chunkEnd < lastLine and newLineStates.len > 0 and
         newLineStates[^1] == incrHighlight.lineStates.states[chunkEnd]:
       break
 
     currentStart = chunkEnd + 1
 
-  # Keep segments outside the re-parsed range
-  var filteredSegments: seq[ColorSegment]
-  for seg in incrHighlight.segments:
-    if seg.firstRow < buffer.len and seg.lastRow < buffer.len and
-        (seg.lastRow < reparseStart or seg.firstRow > reparseEnd):
-      filteredSegments.add(seg)
+  # Find the splice range in the sorted segments using binary search.
+  # Remove segments that overlap [reparseStart, reparseEnd] or exceed buffer,
+  # then insert new segments in place.
+  let spliceStart = incrHighlight.segments.lowerBound(reparseStart) do(
+    seg: ColorSegment, line: int
+  ) -> int:
+    cmp(seg.firstRow, line)
 
-  incrHighlight.segments = filteredSegments & allNewSegments
+  var spliceEnd = spliceStart
+  while spliceEnd < incrHighlight.segments.len:
+    let seg = incrHighlight.segments[spliceEnd]
+    if seg.firstRow > reparseEnd:
+      # Also skip segments beyond buffer bounds
+      if seg.firstRow < lineCount and seg.lastRow < lineCount:
+        break
+    inc spliceEnd
 
-  # Sort segments by position
-  incrHighlight.segments.sort do(a, b: ColorSegment) -> int:
-    if a.firstRow != b.firstRow:
-      return cmp(a.firstRow, b.firstRow)
-    else:
-      return cmp(a.firstColumn, b.firstColumn)
+  # Splice: replace [spliceStart..spliceEnd) with allNewSegments
+  let oldLen = incrHighlight.segments.len
+  let removeCount = spliceEnd - spliceStart
+  let newLen = oldLen - removeCount + allNewSegments.len
+
+  if newLen != oldLen or removeCount > 0:
+    var result = newSeq[ColorSegment](newLen)
+    for i in 0 ..< spliceStart:
+      result[i] = incrHighlight.segments[i]
+    for i in 0 ..< allNewSegments.len:
+      result[spliceStart + i] = allNewSegments[i]
+    for i in spliceEnd ..< oldLen:
+      result[spliceStart + allNewSegments.len + i - spliceEnd] =
+        incrHighlight.segments[i]
+    incrHighlight.segments = result
 
   # Update line state cache - resize to match buffer
-  incrHighlight.lineStates.states.setLen(buffer.len)
+  incrHighlight.lineStates.states.setLen(lineCount)
 
   # Replace states for re-parsed lines only
   if allNewLineStates.len > 0:
     var stateIdx = 0
     for lineIdx in reparseStart .. reparseEnd:
-      if stateIdx < allNewLineStates.len and lineIdx < buffer.len:
+      if stateIdx < allNewLineStates.len and lineIdx < lineCount:
         incrHighlight.lineStates.states[lineIdx] = allNewLineStates[stateIdx]
         inc stateIdx
 

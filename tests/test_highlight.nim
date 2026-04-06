@@ -17,12 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, unicode]
+import std/[unittest, unicode, os]
 
 import pkg/celina
 
 import ../src/moepkg/highlight
 import ../src/moepkg/syntax/tokenizer
+import ../src/moepkg/buffer {.all.}
 
 suite "Highlight - Basic Initialization":
   test "initHighlight with empty buffer":
@@ -99,7 +100,7 @@ suite "Highlight - TokenizerState Capture/Restore":
 
 suite "Highlight - Incremental Initialization":
   test "initHighlightIncremental with empty buffer":
-    let buffer: seq[Runes] = @[]
+    let buffer: seq[string] = @[]
     let (segments, lineStates) = initHighlightIncremental(
       buffer, 0, 0, TokenizerState(), @[], SourceLanguage.langRust
     )
@@ -107,7 +108,7 @@ suite "Highlight - Incremental Initialization":
     check lineStates.len == 0
 
   test "initHighlightIncremental with single line":
-    let buffer = @["let x = 5;".toRunes]
+    let buffer = @["let x = 5;"]
     let (segments, lineStates) = initHighlightIncremental(
       buffer, 0, 0, TokenizerState(), @[], SourceLanguage.langRust
     )
@@ -115,7 +116,7 @@ suite "Highlight - Incremental Initialization":
     check lineStates.len == 1
 
   test "initHighlightIncremental with multiple lines":
-    let buffer = @["fn main() {".toRunes, "    let x = 5;".toRunes, "}".toRunes]
+    let buffer = @["fn main() {", "    let x = 5;", "}"]
     let (segments, lineStates) = initHighlightIncremental(
       buffer, 0, 2, TokenizerState(), @[], SourceLanguage.langRust
     )
@@ -123,10 +124,7 @@ suite "Highlight - Incremental Initialization":
     check lineStates.len == 3
 
   test "initHighlightIncremental partial range":
-    let buffer = @[
-      "line1".toRunes, "line2".toRunes, "line3".toRunes, "line4".toRunes,
-      "line5".toRunes,
-    ]
+    let buffer = @["line1", "line2", "line3", "line4", "line5"]
     let (segments, lineStates) = initHighlightIncremental(
       buffer, 1, 3, TokenizerState(), @[], SourceLanguage.langRust
     )
@@ -138,8 +136,7 @@ suite "Highlight - Incremental Initialization":
       check seg.lastRow <= 3
 
   test "initHighlightIncremental with initial state":
-    let buffer =
-      @["/* comment".toRunes, "still comment */".toRunes, "fn main() {}".toRunes]
+    let buffer = @["/* comment", "still comment */", "fn main() {}"]
 
     # First parse full buffer
     let (segments1, lineStates1) = initHighlightIncremental(
@@ -157,7 +154,7 @@ suite "Highlight - Incremental Initialization":
 
 suite "Highlight - Incremental Update":
   test "updateHighlightIncremental without buffer size change":
-    let buffer = @["fn main() {".toRunes, "    let x = 5;".toRunes, "}".toRunes]
+    let buffer = @["fn main() {", "    let x = 5;", "}"]
 
     # Initialize
     let (segments, lineStates) = initHighlightIncremental(
@@ -169,7 +166,14 @@ suite "Highlight - Incremental Update":
 
     # Update after editing line 1 (no size change)
     updateHighlightIncremental(
-      buffer, incrHighlight, 1, 1, @[], SourceLanguage.langRust
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      incrHighlight,
+      1,
+      1,
+      @[],
+      SourceLanguage.langRust,
     )
 
     check incrHighlight.segments.len > 0
@@ -177,7 +181,7 @@ suite "Highlight - Incremental Update":
     check incrHighlight.lineStates.version == 1
 
   test "updateHighlightIncremental with buffer size increase":
-    var buffer = @["line1".toRunes, "line2".toRunes, "line3".toRunes]
+    var buffer = @["line1", "line2", "line3"]
 
     # Initialize
     let (segments, lineStates) = initHighlightIncremental(
@@ -188,11 +192,18 @@ suite "Highlight - Incremental Update":
     )
 
     # Add a line
-    buffer.add("line4".toRunes)
+    buffer.add("line4")
 
     # Update with size change
     updateHighlightIncremental(
-      buffer, incrHighlight, 3, 1, @[], SourceLanguage.langRust
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      incrHighlight,
+      3,
+      1,
+      @[],
+      SourceLanguage.langRust,
     )
 
     # Line states should be resized to match buffer
@@ -200,7 +211,7 @@ suite "Highlight - Incremental Update":
     check incrHighlight.lineStates.version == 1
 
   test "updateHighlightIncremental with buffer size decrease":
-    var buffer = @["line1".toRunes, "line2".toRunes, "line3".toRunes, "line4".toRunes]
+    var buffer = @["line1", "line2", "line3", "line4"]
 
     # Initialize
     let (segments, lineStates) = initHighlightIncremental(
@@ -215,7 +226,14 @@ suite "Highlight - Incremental Update":
 
     # Update with size change
     updateHighlightIncremental(
-      buffer, incrHighlight, 2, 1, @[], SourceLanguage.langRust
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      incrHighlight,
+      2,
+      1,
+      @[],
+      SourceLanguage.langRust,
     )
 
     # Line states should be resized to match buffer
@@ -223,10 +241,7 @@ suite "Highlight - Incremental Update":
     check incrHighlight.lineStates.version == 1
 
   test "updateHighlightIncremental re-parses all lines from change point":
-    let buffer = @[
-      "line0".toRunes, "line1".toRunes, "line2".toRunes, "line3".toRunes,
-      "line4".toRunes,
-    ]
+    let buffer = @["line0", "line1", "line2", "line3", "line4"]
 
     # Initialize
     let (segments, lineStates) = initHighlightIncremental(
@@ -238,7 +253,14 @@ suite "Highlight - Incremental Update":
 
     # Edit line 2 - should re-parse from line 0 (margin of 2) to end of file
     updateHighlightIncremental(
-      buffer, incrHighlight, 2, 1, @[], SourceLanguage.langRust
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      incrHighlight,
+      2,
+      1,
+      @[],
+      SourceLanguage.langRust,
     )
 
     check incrHighlight.segments.len > 0
@@ -316,7 +338,7 @@ suite "Highlight - Edge Cases":
     check color == EditorColorPairIndex.default
 
   test "initHighlightIncremental with langNone returns empty":
-    let buffer = @["test".toRunes]
+    let buffer = @["test"]
     let (segments, lineStates) = initHighlightIncremental(
       buffer, 0, 0, TokenizerState(), @[], SourceLanguage.langNone
     )
@@ -324,24 +346,29 @@ suite "Highlight - Edge Cases":
     check lineStates.len == 0
 
   test "updateHighlightIncremental with empty buffer":
-    let buffer: seq[Runes] = @[]
+    let buffer: seq[string] = @[]
     var incrHighlight = IncrementalHighlight(
       segments: @[], lineStates: LineStateCache(states: @[], version: 0)
     )
 
     # Should not crash
     updateHighlightIncremental(
-      buffer, incrHighlight, 0, 1, @[], SourceLanguage.langRust
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      incrHighlight,
+      0,
+      1,
+      @[],
+      SourceLanguage.langRust,
     )
 
     check incrHighlight.lineStates.states.len == 0
 
 suite "Highlight - Multi-line Constructs":
   test "Multi-line comment state preservation":
-    let buffer = @[
-      "/* comment line 1".toRunes, "comment line 2".toRunes,
-      "comment line 3 */".toRunes, "fn main() {}".toRunes,
-    ]
+    let buffer =
+      @["/* comment line 1", "comment line 2", "comment line 3 */", "fn main() {}"]
 
     let (segments, lineStates) = initHighlightIncremental(
       buffer, 0, 3, TokenizerState(), @[], SourceLanguage.langRust
@@ -414,8 +441,7 @@ suite "Highlight - Incremental Update After Edit":
     # Regression test: dw (delete word) should not break subsequent highlighting.
     # The incremental highlighter must re-parse to the end of the file so that
     # tokenizer state changes propagate correctly.
-    var buffer =
-      @["let x = \"hello\";".toRunes, "let y = 42;".toRunes, "fn main() {}".toRunes]
+    var buffer = @["let x = \"hello\";", "let y = 42;", "fn main() {}"]
 
     # Initialize incremental highlight
     let (segments, lineStates) = initHighlightIncremental(
@@ -426,11 +452,18 @@ suite "Highlight - Incremental Update After Edit":
     )
 
     # Simulate dw: delete "x = " from line 0 → "let \"hello\";"
-    buffer[0] = "let \"hello\";".toRunes
+    buffer[0] = "let \"hello\";"
 
     # Update with only line 0 changed (no line count change)
     updateHighlightIncremental(
-      buffer, incrHighlight, 0, 1, @[], SourceLanguage.langRust
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      incrHighlight,
+      0,
+      1,
+      @[],
+      SourceLanguage.langRust,
     )
 
     # All lines should have valid segments
@@ -448,10 +481,7 @@ suite "Highlight - Incremental Update After Edit":
   test "incremental update matches full parse after within-line edit":
     # After an in-line edit, the incremental result should produce the same
     # color at every position as a fresh full parse.
-    var buffer = @[
-      "fn main() {".toRunes, "    let x = 5;".toRunes, "    let y = \"hello\";".toRunes,
-      "}".toRunes,
-    ]
+    var buffer = @["fn main() {", "    let x = 5;", "    let y = \"hello\";", "}"]
 
     # Build initial incremental cache
     let (segments0, lineStates0) = initHighlightIncremental(
@@ -462,15 +492,25 @@ suite "Highlight - Incremental Update After Edit":
     )
 
     # Simulate editing line 1: "    let x = 5;" → "    let z = 5;"
-    buffer[1] = "    let z = 5;".toRunes
+    buffer[1] = "    let z = 5;"
 
     updateHighlightIncremental(
-      buffer, incrHighlight, 1, 1, @[], SourceLanguage.langRust
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      incrHighlight,
+      1,
+      1,
+      @[],
+      SourceLanguage.langRust,
     )
     let incrResult = Highlight(colorSegments: incrHighlight.segments)
 
     # Do a full parse of the same buffer
-    let fullResult = initHighlight(buffer, @[], SourceLanguage.langRust)
+    var runesBuffer: seq[Runes]
+    for line in buffer:
+      runesBuffer.add(line.toRunes)
+    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langRust)
 
     # Colors should match at every position
     for row in 0 ..< buffer.len:
@@ -480,9 +520,7 @@ suite "Highlight - Incremental Update After Edit":
   test "multiline comment edit propagates state to end of file":
     # Opening a multiline comment affects all subsequent lines.
     # The incremental highlighter must re-parse to the end.
-    var buffer = @[
-      "fn a() {}".toRunes, "fn b() {}".toRunes, "fn c() {}".toRunes, "fn d() {}".toRunes
-    ]
+    var buffer = @["fn a() {}", "fn b() {}", "fn c() {}", "fn d() {}"]
 
     let (segments0, lineStates0) = initHighlightIncremental(
       buffer, 0, 3, TokenizerState(), @[], SourceLanguage.langRust
@@ -500,16 +538,26 @@ suite "Highlight - Incremental Update After Edit":
     check hadKeywordBefore
 
     # Change line 0 to open a block comment that is never closed
-    buffer[0] = "/* fn a() {}".toRunes
+    buffer[0] = "/* fn a() {}"
 
     updateHighlightIncremental(
-      buffer, incrHighlight, 0, 1, @[], SourceLanguage.langRust
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      incrHighlight,
+      0,
+      1,
+      @[],
+      SourceLanguage.langRust,
     )
 
     # After the edit, all remaining lines should be inside the comment.
     # Line 3 should no longer have keyword highlighting.
     let incrResult = Highlight(colorSegments: incrHighlight.segments)
-    let fullResult = initHighlight(buffer, @[], SourceLanguage.langRust)
+    var runesBuffer: seq[Runes]
+    for line in buffer:
+      runesBuffer.add(line.toRunes)
+    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langRust)
 
     for row in 0 ..< buffer.len:
       for col in 0 ..< buffer[row].len:
@@ -519,9 +567,9 @@ suite "Highlight - Incremental Update After Edit":
     # When editing a line in a large buffer, the incremental highlighter should
     # converge with the cached state and avoid re-parsing the entire file.
     # After convergence, the result must still match a full parse.
-    var buffer: seq[Runes]
+    var buffer: seq[string]
     for i in 0 ..< 300:
-      buffer.add(("let v" & $i & " = " & $i & ";").toRunes)
+      buffer.add("let v" & $i & " = " & $i & ";")
 
     let (segments0, lineStates0) = initHighlightIncremental(
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langRust
@@ -531,17 +579,27 @@ suite "Highlight - Incremental Update After Edit":
     )
 
     # Edit line 5 (well within the buffer, far from end)
-    buffer[5] = "let changed = 999;".toRunes
+    buffer[5] = "let changed = 999;"
 
     updateHighlightIncremental(
-      buffer, incrHighlight, 5, 1, @[], SourceLanguage.langRust
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      incrHighlight,
+      5,
+      1,
+      @[],
+      SourceLanguage.langRust,
     )
 
     check incrHighlight.lineStates.states.len == 300
 
     # Result must match full parse
     let incrResult = Highlight(colorSegments: incrHighlight.segments)
-    let fullResult = initHighlight(buffer, @[], SourceLanguage.langRust)
+    var runesBuffer: seq[Runes]
+    for line in buffer:
+      runesBuffer.add(line.toRunes)
+    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langRust)
     for row in 0 ..< buffer.len:
       for col in 0 ..< buffer[row].len:
         check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
@@ -549,19 +607,21 @@ suite "Highlight - Incremental Update After Edit":
 suite "Highlight - Nim Incremental Comment/String":
   # Helper to verify incremental and full parse produce identical results.
   proc checkIncrMatchesFull(
-      buffer: seq[Runes], ih: IncrementalHighlight, label: string
+      buffer: seq[string], ih: IncrementalHighlight, label: string
   ) =
     let incrResult = Highlight(colorSegments: ih.segments)
-    let fullResult = initHighlight(buffer, @[], SourceLanguage.langNim)
+    var runesBuffer: seq[Runes]
+    for line in buffer:
+      runesBuffer.add(line.toRunes)
+    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langNim)
     for row in 0 ..< buffer.len:
       for col in 0 ..< buffer[row].len:
         check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
 
   test "insert comment in Nim source":
     var buffer = @[
-      "import std/os".toRunes, "".toRunes, "type".toRunes, "  Foo = object".toRunes,
-      "    name: string".toRunes, "    value: int".toRunes, "".toRunes,
-      "proc bar(f: Foo): string =".toRunes, "  result = f.name".toRunes,
+      "import std/os", "", "type", "  Foo = object", "    name: string",
+      "    value: int", "", "proc bar(f: Foo): string =", "  result = f.name",
     ]
 
     let (seg0, ls0) = initHighlightIncremental(
@@ -573,15 +633,21 @@ suite "Highlight - Nim Incremental Comment/String":
     checkIncrMatchesFull(buffer, ih, "initial")
 
     # Insert comment before proc bar
-    buffer.insert("# Helper function".toRunes, 7)
-    updateHighlightIncremental(buffer, ih, 7, 1, @[], SourceLanguage.langNim)
+    buffer.insert("# Helper function", 7)
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      7,
+      1,
+      @[],
+      SourceLanguage.langNim,
+    )
     checkIncrMatchesFull(buffer, ih, "after insert comment")
 
   test "multiline string then insert comment":
-    var buffer = @[
-      "let s = \"\"\"".toRunes, "hello".toRunes, "world".toRunes, "\"\"\"".toRunes,
-      "echo s".toRunes,
-    ]
+    var buffer = @["let s = \"\"\"", "hello", "world", "\"\"\"", "echo s"]
 
     let (seg0, ls0) = initHighlightIncremental(
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langNim
@@ -592,15 +658,21 @@ suite "Highlight - Nim Incremental Comment/String":
     checkIncrMatchesFull(buffer, ih, "initial multiline")
 
     # Insert comment after the multiline string
-    buffer.insert("# done".toRunes, 5)
-    updateHighlightIncremental(buffer, ih, 5, 1, @[], SourceLanguage.langNim)
+    buffer.insert("# done", 5)
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      5,
+      1,
+      @[],
+      SourceLanguage.langNim,
+    )
     checkIncrMatchesFull(buffer, ih, "after comment insert")
 
   test "simulate typing comment char by char":
-    var buffer = @[
-      "import std/os".toRunes, "".toRunes, "proc main() =".toRunes,
-      "  echo \"hello\"".toRunes,
-    ]
+    var buffer = @["import std/os", "", "proc main() =", "  echo \"hello\""]
 
     let (seg0, ls0) = initHighlightIncremental(
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langNim
@@ -612,39 +684,66 @@ suite "Highlight - Nim Incremental Comment/String":
     checkIncrMatchesFull(buffer, ih, "initial")
 
     # Insert empty line at 3
-    buffer.insert("".toRunes, 3)
+    buffer.insert("", 3)
     ver.inc
-    updateHighlightIncremental(buffer, ih, 3, ver, @[], SourceLanguage.langNim)
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      3,
+      ver,
+      @[],
+      SourceLanguage.langNim,
+    )
     checkIncrMatchesFull(buffer, ih, "after o")
 
     # Type '#'
-    buffer[3] = "#".toRunes
+    buffer[3] = "#"
     ver.inc
-    updateHighlightIncremental(buffer, ih, 3, ver, @[], SourceLanguage.langNim)
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      3,
+      ver,
+      @[],
+      SourceLanguage.langNim,
+    )
     checkIncrMatchesFull(buffer, ih, "after #")
 
     # Type '# comment'
-    buffer[3] = "# comment".toRunes
+    buffer[3] = "# comment"
     ver.inc
-    updateHighlightIncremental(buffer, ih, 3, ver, @[], SourceLanguage.langNim)
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      3,
+      ver,
+      @[],
+      SourceLanguage.langNim,
+    )
     checkIncrMatchesFull(buffer, ih, "after # comment")
 
 suite "Highlight - Block Comment Multiline State":
   # Helper to verify incremental and full parse produce identical results.
   proc checkBlockCommentMatch(
-      buffer: seq[Runes], ih: IncrementalHighlight, lang: SourceLanguage
+      buffer: seq[string], ih: IncrementalHighlight, lang: SourceLanguage
   ) =
     let incrResult = Highlight(colorSegments: ih.segments)
-    let fullResult = initHighlight(buffer, @[], lang)
+    var runesBuffer: seq[Runes]
+    for line in buffer:
+      runesBuffer.add(line.toRunes)
+    let fullResult = initHighlight(runesBuffer, @[], lang)
     for row in 0 ..< buffer.len:
       for col in 0 ..< buffer[row].len:
         check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
 
   test "C: insert after multiline block comment":
-    var buffer = @[
-      "int x = 1;".toRunes, "/* this is".toRunes, "   a comment".toRunes, "*/".toRunes,
-      "int y = 2;".toRunes,
-    ]
+    var buffer = @["int x = 1;", "/* this is", "   a comment", "*/", "int y = 2;"]
 
     let (seg0, ls0) = initHighlightIncremental(
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langC
@@ -653,15 +752,21 @@ suite "Highlight - Block Comment Multiline State":
       segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
     )
 
-    buffer.insert("int z = 3;".toRunes, 5)
-    updateHighlightIncremental(buffer, ih, 5, 1, @[], SourceLanguage.langC)
+    buffer.insert("int z = 3;", 5)
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      5,
+      1,
+      @[],
+      SourceLanguage.langC,
+    )
     checkBlockCommentMatch(buffer, ih, SourceLanguage.langC)
 
   test "Rust: insert after multiline block comment":
-    var buffer = @[
-      "fn main() {".toRunes, "/* block".toRunes, "   comment */".toRunes,
-      "let x = 1;".toRunes, "}".toRunes,
-    ]
+    var buffer = @["fn main() {", "/* block", "   comment */", "let x = 1;", "}"]
 
     let (seg0, ls0) = initHighlightIncremental(
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langRust
@@ -670,15 +775,21 @@ suite "Highlight - Block Comment Multiline State":
       segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
     )
 
-    buffer.insert("let z = 2;".toRunes, 4)
-    updateHighlightIncremental(buffer, ih, 4, 1, @[], SourceLanguage.langRust)
+    buffer.insert("let z = 2;", 4)
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      4,
+      1,
+      @[],
+      SourceLanguage.langRust,
+    )
     checkBlockCommentMatch(buffer, ih, SourceLanguage.langRust)
 
   test "JavaScript: insert after multiline block comment":
-    var buffer = @[
-      "let x = 1;".toRunes, "/* block".toRunes, "   comment */".toRunes,
-      "let y = 2;".toRunes,
-    ]
+    var buffer = @["let x = 1;", "/* block", "   comment */", "let y = 2;"]
 
     let (seg0, ls0) = initHighlightIncremental(
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langJavaScript
@@ -687,15 +798,22 @@ suite "Highlight - Block Comment Multiline State":
       segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
     )
 
-    buffer.insert("let z = 3;".toRunes, 4)
-    updateHighlightIncremental(buffer, ih, 4, 1, @[], SourceLanguage.langJavaScript)
+    buffer.insert("let z = 3;", 4)
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      4,
+      1,
+      @[],
+      SourceLanguage.langJavaScript,
+    )
     checkBlockCommentMatch(buffer, ih, SourceLanguage.langJavaScript)
 
   test "TypeScript: insert after multiline block comment":
-    var buffer = @[
-      "let x: number = 1;".toRunes, "/* block".toRunes, "   comment */".toRunes,
-      "let y: number = 2;".toRunes,
-    ]
+    var buffer =
+      @["let x: number = 1;", "/* block", "   comment */", "let y: number = 2;"]
 
     let (seg0, ls0) = initHighlightIncremental(
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langTypeScript
@@ -704,15 +822,22 @@ suite "Highlight - Block Comment Multiline State":
       segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
     )
 
-    buffer.insert("let z: number = 3;".toRunes, 4)
-    updateHighlightIncremental(buffer, ih, 4, 1, @[], SourceLanguage.langTypeScript)
+    buffer.insert("let z: number = 3;", 4)
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      4,
+      1,
+      @[],
+      SourceLanguage.langTypeScript,
+    )
     checkBlockCommentMatch(buffer, ih, SourceLanguage.langTypeScript)
 
   test "Haskell: insert after multiline block comment":
-    var buffer = @[
-      "module Main where".toRunes, "{- block".toRunes, "   comment -}".toRunes,
-      "main = putStrLn \"hello\"".toRunes,
-    ]
+    var buffer =
+      @["module Main where", "{- block", "   comment -}", "main = putStrLn \"hello\""]
 
     let (seg0, ls0) = initHighlightIncremental(
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langHaskell
@@ -721,15 +846,21 @@ suite "Highlight - Block Comment Multiline State":
       segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
     )
 
-    buffer.insert("foo = 1".toRunes, 4)
-    updateHighlightIncremental(buffer, ih, 4, 1, @[], SourceLanguage.langHaskell)
+    buffer.insert("foo = 1", 4)
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      4,
+      1,
+      @[],
+      SourceLanguage.langHaskell,
+    )
     checkBlockCommentMatch(buffer, ih, SourceLanguage.langHaskell)
 
   test "TOML: insert after multiline string":
-    var buffer = @[
-      "name = \"\"\"".toRunes, "hello".toRunes, "world\"\"\"".toRunes,
-      "value = 42".toRunes,
-    ]
+    var buffer = @["name = \"\"\"", "hello", "world\"\"\"", "value = 42"]
 
     let (seg0, ls0) = initHighlightIncremental(
       buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langToml
@@ -738,8 +869,17 @@ suite "Highlight - Block Comment Multiline State":
       segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
     )
 
-    buffer.insert("other = 1".toRunes, 4)
-    updateHighlightIncremental(buffer, ih, 4, 1, @[], SourceLanguage.langToml)
+    buffer.insert("other = 1", 4)
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      4,
+      1,
+      @[],
+      SourceLanguage.langToml,
+    )
     checkBlockCommentMatch(buffer, ih, SourceLanguage.langToml)
 
 suite "Highlight - detectLanguage":
@@ -1114,3 +1254,119 @@ suite "Highlight - addModifier":
     check h.colorSegments[2].lastRow == 2
     check h.colorSegments[2].lastColumn == 8
     check Underline notin h.colorSegments[2].style.modifiers
+
+suite "Highlight - Progressive Initial Highlighting":
+  test "continueInitialHighlight parses remaining lines":
+    # A buffer larger than InitialChunkSize (1000 lines) should be
+    # partially highlighted on load and completed via continueInitialHighlight.
+    var buf = newTextBuffer()
+
+    # Create a temp file with 2500 lines of Rust code
+    let path = "/tmp/test_progressive_highlight.rs"
+    var content = ""
+    for i in 0 ..< 2500:
+      content.add("let v" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    removeFile(path)
+
+    # After loadFile, only first 1000 lines should be parsed
+    check buf.incrementalHighlight != nil
+    check buf.incrementalHighlight.parsedUpTo == 999
+    check buf.incrementalHighlight.lineStates.states.len == 1000
+
+    # First call should parse next 1000 lines (1000..1999)
+    check buf.continueInitialHighlight() == true
+    check buf.incrementalHighlight.parsedUpTo == 1999
+
+    # Second call should parse remaining 500 lines (2000..2499)
+    check buf.continueInitialHighlight() == true
+    check buf.incrementalHighlight.parsedUpTo == 2499
+
+    # Third call should return false (complete)
+    check buf.continueInitialHighlight() == false
+
+suite "Highlight - URI Underline on Load":
+  test "loadFile applies URI underlines in initial chunk":
+    var buf = newTextBuffer()
+
+    let path = "/tmp/test_uri_highlight_initial.rs"
+    var content = ""
+    for i in 0 ..< 10:
+      if i == 5:
+        content.add("// see https://example.com/docs\n")
+      else:
+        content.add("let v" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    removeFile(path)
+
+    # Line 5 contains a URI; it should have Underline modifier
+    let uriCol = "// see ".len
+    let mods = buf.highlight.getSegmentModifiers(5, uriCol)
+    check Underline in mods
+
+  test "loadFile applies URI underlines for plain text":
+    var buf = newTextBuffer()
+
+    let path = "/tmp/test_uri_highlight_plain.txt"
+    var content = ""
+    for i in 0 ..< 10:
+      if i == 3:
+        content.add("visit https://example.com/page\n")
+      else:
+        content.add("plain line " & $i & "\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    removeFile(path)
+
+    let uriCol = "visit ".len
+    let mods = buf.highlight.getSegmentModifiers(3, uriCol)
+    check Underline in mods
+
+  test "continueInitialHighlight applies URI underlines in later chunks":
+    var buf = newTextBuffer()
+
+    # Create file with URI beyond line 1000
+    let path = "/tmp/test_uri_highlight_progressive.rs"
+    var content = ""
+    for i in 0 ..< 1500:
+      if i == 1200:
+        content.add("// see https://example.com/api\n")
+      else:
+        content.add("let v" & $i & " = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    removeFile(path)
+
+    # After loadFile, only first 1000 lines are parsed - line 1200 is not yet
+    check buf.incrementalHighlight.parsedUpTo == 999
+
+    # Continue parsing - should cover line 1200 and apply URI underline
+    check buf.continueInitialHighlight() == true
+    check buf.incrementalHighlight.parsedUpTo == 1499
+
+    let uriCol = "// see ".len
+    let mods = buf.highlight.getSegmentModifiers(1200, uriCol)
+    check Underline in mods
+
+  test "updateHighlight applies URI underlines after edit":
+    var buf = newTextBuffer()
+
+    let path = "/tmp/test_uri_highlight_update.rs"
+    var content = "let x = 1;\nlet y = 2;\nlet z = 3;\n"
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    removeFile(path)
+
+    # Edit line 1 to contain a URI
+    discard buf.beginTransaction()
+    discard buf.deleteLine(1)
+    discard buf.insert(1, "// https://example.com")
+    discard buf.commitTransaction()
+
+    buf.updateHighlight()
+
+    let uriCol = "// ".len
+    let mods = buf.highlight.getSegmentModifiers(1, uriCol)
+    check Underline in mods
