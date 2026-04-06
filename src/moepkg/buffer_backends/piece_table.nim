@@ -631,8 +631,8 @@ proc newPieceTable*(): PieceTable =
     cachedByteLen: 0,
   )
 
-proc newPieceTable*(text: string): PieceTable =
-  var content = text
+proc newPieceTable*(text: sink string): PieceTable =
+  var content = move text
   if content.len > 0 and content[^1] == '\n':
     content.setLen(content.len - 1)
 
@@ -651,29 +651,30 @@ proc newPieceTable*(text: string): PieceTable =
   let lfCount = lineStarts.len - 1
 
   let endLine = lineStarts.len - 1
-  let endCol = content.len - lineStarts[endLine]
+  let contentLen = content.len
+  let endCol = contentLen - lineStarts[endLine]
 
   let node = PieceTreeNode(
     bufferIndex: biOriginal,
     start: PieceBufferPosition(line: 0, column: 0),
     endPos: PieceBufferPosition(line: endLine, column: endCol),
-    length: content.len,
+    length: contentLen,
     lineFeedCount: lfCount,
     color: rbBlack,
     left: nil,
     right: nil,
-    subtreeLength: content.len,
+    subtreeLength: contentLen,
     subtreeLineFeedCount: lfCount,
   )
 
   PieceTable(
     buffers: [
-      TextPieceBuffer(value: content, lineStarts: lineStarts),
+      TextPieceBuffer(value: move content, lineStarts: lineStarts),
       TextPieceBuffer(value: "", lineStarts: @[0]),
     ],
     root: node,
     cachedLineCount: lfCount + 1,
-    cachedByteLen: content.len,
+    cachedByteLen: contentLen,
   )
 
 proc lineCount*(pt: PieceTable): int {.inline.} =

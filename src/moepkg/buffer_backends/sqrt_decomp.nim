@@ -52,7 +52,7 @@ proc newSqrtDecomp*(): SqrtDecomp =
   result =
     SqrtDecomp(blocks: @[Block(lines: @[""])], cachedLineCount: 1, cachedCharLen: 0)
 
-proc newSqrtDecomp*(text: string): SqrtDecomp =
+proc newSqrtDecomp*(text: sink string): SqrtDecomp =
   ## Create a SqrtDecomp buffer from text string.
   ## Uses same line-parsing semantics as GapBuffer:
   ## - POSIX: newline is line terminator, not separator

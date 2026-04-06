@@ -137,7 +137,7 @@ proc textToNode(text: string): RopeNode =
 
   buildTree(leaves)
 
-proc newRope*(text: string): Rope =
+proc newRope*(text: sink string): Rope =
   ## Create a Rope buffer from text string.
   ## Uses same line-parsing semantics as GapBuffer:
   ## - POSIX: newline is line terminator, not separator
@@ -145,7 +145,7 @@ proc newRope*(text: string): Rope =
   ## - Trailing newline is NOT stored (managed by TextBuffer.endOfLine)
 
   # Strip trailing newline (same as GapBuffer/SqrtDecomp)
-  var content = text
+  var content = move text
   if content.len > 0 and content[^1] == '\n':
     content.setLen(content.len - 1)
 
