@@ -2322,11 +2322,13 @@ proc updateHighlight*(b: TextBuffer) =
     if b.diagnostics.len > 0:
       applyDiagnosticHighlights(b.highlight, b.diagnostics)
 
-    # Apply underline to URIs/URLs from the changed line onward.
-    # Syntax changes can propagate to all subsequent lines (e.g. opening a
-    # multiline string/comment), so we scan from the change point to the end.
+    # Apply underline to URIs/URLs in a limited range around the change point.
+    # Scanning all lines from the change point to EOF is O(n) and blocks
+    # rendering for large files. Limit to a reasonable chunk; the rest will be
+    # handled when those lines come into view via progressive highlighting.
     let uriStart = max(0, b.lastChangedLines)
-    for lineIdx in uriStart ..< b.len:
+    let uriEnd = min(uriStart + 1000, b.len) - 1
+    for lineIdx in uriStart .. uriEnd:
       let line = b.getLine(lineIdx)
       for m in findAllUris(line):
         b.highlight.addModifier(
