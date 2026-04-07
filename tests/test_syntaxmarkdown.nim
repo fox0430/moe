@@ -463,6 +463,22 @@ suite "syntaxmarkdown - code block edge cases":
     let tokens = collectTokens("```\n``not closing\n```")
     check tokens[2] == (gtLongStringLit, "``not closing")
 
+  test "triple backticks with closing on same line is not code block":
+    # ```abc``` is not a valid code fence (info string contains backticks)
+    # Text after it should be highlighted normally
+    let tokens = collectTokens("```abc```\ndef")
+    check tokens[0] == (gtSpecialVar, "```abc```")
+    check tokens[2] == (gtIdentifier, "def")
+
+  test "triple backticks inline does not break subsequent highlighting":
+    let tokens = collectTokens("# Title\n\n```abc```\n\n**bold**")
+    # Find the bold token after the inline triple backticks
+    var foundBold = false
+    for (kind, text) in tokens:
+      if kind == gtKeyword and text == "**bold**":
+        foundBold = true
+    check foundBold
+
 suite "syntaxmarkdown - bold edge cases":
   test "** followed by space is not bold":
     let tokens = collectTokens("** text**")
