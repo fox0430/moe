@@ -189,6 +189,7 @@ type
     incrementalHighlight*: IncrementalHighlight # Incremental highlighting cache
     lastChangedLines*: int # First changed line for incremental highlight
     reservedWords*: seq[ReservedWord] # Reserved words to highlight (TODO, NOTE, etc.)
+    uriScanParsedUpTo*: int # Last line scanned for URIs during progressive init
 
     # Performance optimization
     cursorCache*: CursorPosCache # Cache for character-to-byte position conversions
@@ -1930,14 +1931,6 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
         lineStates: LineStateCache(states: lineStates, version: b.changeSeq),
         parsedUpTo: chunkEnd,
       )
-
-      # Apply URI underlines for the initial chunk
-      for lineIdx in 0 .. chunkEnd:
-        let line = b.getLine(lineIdx)
-        for m in findAllUris(line):
-          b.highlight.addModifier(
-            lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
-          )
     else:
       b.highlight = Highlight(colorSegments: @[])
       b.incrementalHighlight = nil
@@ -1956,19 +1949,20 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
           )
         ]
       )
-
-      # Apply URI underlines for the visible portion only (same as syntax-
-      # highlighted files). The rest is handled by incremental highlighting.
-      let uriChunkEnd = min(999, b.len - 1)
-      for lineIdx in 0 .. uriChunkEnd:
-        let line = b.getLine(lineIdx)
-        for m in findAllUris(line):
-          b.highlight.addModifier(
-            lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
-          )
     else:
       b.highlight = Highlight(colorSegments: @[])
     b.incrementalHighlight = nil
+
+  # Apply URI underlines for the initial chunk. The rest is handled
+  # progressively by continueUriScan.
+  let uriChunkEnd = min(999, b.len - 1)
+  for lineIdx in 0 .. uriChunkEnd:
+    let line = b.getLine(lineIdx)
+    for m in findAllUris(line):
+      b.highlight.addModifier(
+        lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
+      )
+  b.uriScanParsedUpTo = uriChunkEnd
 
   b.highlightNeedsUpdate = false
 
@@ -2238,15 +2232,42 @@ proc continueInitialHighlight*(b: TextBuffer): bool =
   # underlines) rather than rebuilding from incrementalHighlight.segments.
   b.highlight.colorSegments.add(newSegments)
 
-  # Apply URI underlines for the newly parsed chunk
+  return true
+
+proc continueUriScan*(b: TextBuffer): bool =
+  ## Continue progressive URI scanning if incomplete.
+  ## Works for all file types (plain text and syntax-highlighted).
+  ## Returns true if work was done (caller should update the display).
+  const ChunkSize = 1000
+
+  if b.isUtilityBuffer or b.uriScanParsedUpTo >= b.len - 1:
+    return false
+
+  # For syntax-highlighted files, don't scan ahead of the syntax highlight
+  # progress — addModifier requires color segments to exist for the target
+  # lines.
+  if b.incrementalHighlight != nil and
+      b.uriScanParsedUpTo >= b.incrementalHighlight.parsedUpTo:
+    return false
+
+  let startLine = b.uriScanParsedUpTo + 1
+  var endLine = min(startLine + ChunkSize - 1, b.len - 1)
+
+  # Clamp to syntax highlight progress.
+  if b.incrementalHighlight != nil:
+    endLine = min(endLine, b.incrementalHighlight.parsedUpTo)
+
+  var modified = false
   for lineIdx in startLine .. endLine:
     let line = b.getLine(lineIdx)
     for m in findAllUris(line):
       b.highlight.addModifier(
         lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
       )
+      modified = true
 
-  return true
+  b.uriScanParsedUpTo = endLine
+  return modified
 
 proc updateHighlight*(b: TextBuffer) =
   ## Update syntax highlighting if needed
@@ -2325,7 +2346,7 @@ proc updateHighlight*(b: TextBuffer) =
     # Apply underline to URIs/URLs in a limited range around the change point.
     # Scanning all lines from the change point to EOF is O(n) and blocks
     # rendering for large files. Limit to a reasonable chunk; the rest will be
-    # handled when those lines come into view via progressive highlighting.
+    # handled progressively by continueUriScan.
     let uriStart = max(0, b.lastChangedLines)
     let uriEnd = min(uriStart + 1000, b.len) - 1
     for lineIdx in uriStart .. uriEnd:
@@ -2334,6 +2355,12 @@ proc updateHighlight*(b: TextBuffer) =
         b.highlight.addModifier(
           lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
         )
+    # The highlight was rebuilt from scratch, so all URI modifiers outside
+    # uriStart..uriEnd were lost. Reset progressive scan to re-cover the
+    # full file from the beginning. The inline scan above provides immediate
+    # feedback around the edit; progressive scanning will redundantly re-apply
+    # those (addModifier + incl is idempotent) then continue beyond.
+    b.uriScanParsedUpTo = -1
 
     b.highlightNeedsUpdate = false
 

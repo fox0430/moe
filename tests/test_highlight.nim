@@ -1324,7 +1324,7 @@ suite "Highlight - URI Underline on Load":
     let mods = buf.highlight.getSegmentModifiers(3, uriCol)
     check Underline in mods
 
-  test "continueInitialHighlight applies URI underlines in later chunks":
+  test "continueUriScan applies URI underlines in later chunks":
     var buf = newTextBuffer()
 
     # Create file with URI beyond line 1000
@@ -1339,16 +1339,110 @@ suite "Highlight - URI Underline on Load":
     discard buf.loadFile(path)
     removeFile(path)
 
-    # After loadFile, only first 1000 lines are parsed - line 1200 is not yet
-    check buf.incrementalHighlight.parsedUpTo == 999
+    # After loadFile, only first 1000 lines are scanned for URIs
+    check buf.uriScanParsedUpTo == 999
 
-    # Continue parsing - should cover line 1200 and apply URI underline
+    # Continue syntax highlighting first (creates color segments for lines 1000+)
     check buf.continueInitialHighlight() == true
-    check buf.incrementalHighlight.parsedUpTo == 1499
+
+    # Continue URI scanning - should cover line 1200 and apply URI underline
+    check buf.continueUriScan() == true
+    check buf.uriScanParsedUpTo == 1499
 
     let uriCol = "// see ".len
     let mods = buf.highlight.getSegmentModifiers(1200, uriCol)
     check Underline in mods
+
+  test "continueUriScan applies URI underlines for plain text beyond 1000 lines":
+    var buf = newTextBuffer()
+
+    # Create plain text file with URI beyond line 1000
+    let path = "/tmp/test_uri_highlight_plain_progressive.txt"
+    var content = ""
+    for i in 0 ..< 1500:
+      if i == 1200:
+        content.add("visit https://example.com/page\n")
+      else:
+        content.add("plain line " & $i & "\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    removeFile(path)
+
+    # After loadFile, only first 1000 lines are scanned for URIs
+    check buf.uriScanParsedUpTo == 999
+    check buf.incrementalHighlight == nil # no syntax highlight for plain text
+
+    # Continue URI scanning - should cover line 1200
+    check buf.continueUriScan() == true
+    check buf.uriScanParsedUpTo == 1499
+
+    let uriCol = "visit ".len
+    let mods = buf.highlight.getSegmentModifiers(1200, uriCol)
+    check Underline in mods
+
+  test "continueUriScan restores URI underlines before edit point after updateHighlight":
+    var buf = newTextBuffer()
+
+    # Create file with URIs at line 5 and line 1500
+    let path = "/tmp/test_uri_restore_before_edit.rs"
+    var content = ""
+    for i in 0 ..< 2000:
+      if i == 5:
+        content.add("// https://early.example.com\n")
+      elif i == 1500:
+        content.add("// https://late.example.com\n")
+      else:
+        content.add("let x = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    removeFile(path)
+
+    # Complete initial highlighting and URI scan
+    while buf.continueInitialHighlight():
+      discard
+    while buf.continueUriScan():
+      discard
+
+    # Verify both URIs have underlines
+    let earlyCol = "// ".len
+    check Underline in buf.highlight.getSegmentModifiers(5, earlyCol)
+    check Underline in buf.highlight.getSegmentModifiers(1500, earlyCol)
+
+    # Edit at line 500 — triggers highlight rebuild, losing all URI modifiers
+    buf.lastChangedLines = 500
+    buf.highlightNeedsUpdate = true
+    buf.updateHighlight()
+
+    # Line 5 (before edit point) lost its URI underline
+    check Underline notin buf.highlight.getSegmentModifiers(5, earlyCol)
+
+    # Progressive URI scan should restore it (starts from 0 after reset)
+    var restored = false
+    for _ in 0 ..< 10:
+      if buf.continueUriScan():
+        if Underline in buf.highlight.getSegmentModifiers(5, earlyCol):
+          restored = true
+          break
+    check restored
+
+  test "continueUriScan returns false when no URIs found in chunk":
+    var buf = newTextBuffer()
+
+    # Create file with no URIs, 1500 lines
+    let path = "/tmp/test_uri_scan_no_uri.rs"
+    var content = ""
+    for i in 0 ..< 1500:
+      content.add("let x = " & $i & ";\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    removeFile(path)
+
+    # Complete initial highlighting
+    while buf.continueInitialHighlight():
+      discard
+
+    # URI scan should return false (no URIs found despite scanning)
+    check buf.continueUriScan() == false
 
   test "updateHighlight applies URI underlines after edit":
     var buf = newTextBuffer()

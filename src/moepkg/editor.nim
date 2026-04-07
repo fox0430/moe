@@ -1484,12 +1484,16 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
   # Update syntax highlight before rendering (so semantic tokens can be applied on top)
   if not isDebugBuffer:
     let activeBuffer = e.activeBuffer()
-    let needsHighlightUpdate = activeBuffer.highlightNeedsUpdate
+    var highlightChanged = activeBuffer.highlightNeedsUpdate
     activeBuffer.updateHighlight()
     # Continue progressive initial highlighting if not yet complete
-    discard activeBuffer.continueInitialHighlight()
-    # If highlight was regenerated, we need to re-apply semantic tokens
-    if needsHighlightUpdate:
+    if activeBuffer.continueInitialHighlight():
+      highlightChanged = true
+    # Continue progressive URI scanning for all file types
+    if activeBuffer.continueUriScan():
+      highlightChanged = true
+    # If highlight was modified, we need to re-apply semantic tokens
+    if highlightChanged:
       e.invalidateSemanticTokensCache()
     # Apply semantic tokens after local highlight is ready
     e.updateSemanticTokensCache()
