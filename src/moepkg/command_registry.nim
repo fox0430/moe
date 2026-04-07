@@ -1690,6 +1690,10 @@ proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
       # Update cursor position for next paste
       ctx.cursor.column = pastePos.column + pasteText.charLen
 
+  # Adjust cursor to last character of pasted text
+  if not isFullLine and pasteText.charLen > 0:
+    ctx.cursor.column = ctx.cursor.column - 1
+
   # Commit transaction if we started one
   if actualCount > 1:
     let txnResult = ctx.buffer.commitTransaction()
@@ -1795,6 +1799,10 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
 
       # Update cursor position for next paste
       ctx.cursor.column = pastePos.column + pasteText.charLen
+
+  # Adjust cursor to last character of pasted text
+  if not isFullLine and pasteText.charLen > 0:
+    ctx.cursor.column = ctx.cursor.column - 1
 
   # Commit transaction if we started one
   if actualCount > 1:
