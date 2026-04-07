@@ -24,12 +24,9 @@ import std/[unittest, options, os, strutils, unicode]
 
 import pkg/results
 
+import ../src/moepkg/[buffer, highlight, color]
+import ../src/moepkg/syntax/[tokenizer, syntax_diff]
 import ../src/moepkg/diff_viewer {.all.}
-import ../src/moepkg/buffer
-import ../src/moepkg/syntax/tokenizer
-import ../src/moepkg/syntax/syntaxdiff
-import ../src/moepkg/highlight
-import ../src/moepkg/color
 
 # Re-export Result type for tests
 export results
