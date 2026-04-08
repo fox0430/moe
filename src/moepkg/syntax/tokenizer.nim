@@ -285,11 +285,11 @@ proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
 
 import
-  syntaxastro, syntaxc, syntaxcommiteditmsg, syntaxcpp, syntaxcsharp, syntaxdiff,
-  syntaxgitrebasetodo, syntaxhaskell, syntaxhtml, syntaxjava, syntaxjavascript,
-  syntaxlatex, syntaxlisp, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust,
-  syntaxfish, syntaxhyprland, syntaxshell, syntaxtcl, syntaxyaml, syntaxtoml,
-  syntaxjson, syntaxtypescript
+  syntax_astro, syntax_c, syntax_commit_edit_msg, syntax_cpp, syntax_csharp,
+  syntax_diff, syntax_git_rebase_todo, syntax_haskell, syntax_html, syntax_java,
+  syntax_javascript, syntax_latex, syntax_lisp, syntax_markdown, syntax_nim,
+  syntax_python, syntax_rust, syntax_fish, syntax_hyprland, syntax_shell, syntax_tcl,
+  syntax_yaml, syntax_toml, syntax_json, syntax_typescript
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang

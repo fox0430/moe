@@ -29,9 +29,9 @@ import pkg/unicodedb/properties
 
 import
   syntax/[
-    tokenizer, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxjava,
-    syntaxjavascript, syntaxlisp, syntaxnim, syntaxpython, syntaxrust, syntaxshell,
-    syntaxtypescript,
+    tokenizer, syntax_c, syntax_cpp, syntax_csharp, syntax_haskell, syntax_java,
+    syntax_javascript, syntax_lisp, syntax_nim, syntax_python, syntax_rust,
+    syntax_shell, syntax_typescript,
   ]
 
 type WordDictionary* = CritBitTree[int]
