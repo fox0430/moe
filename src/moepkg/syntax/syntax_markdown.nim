@@ -207,14 +207,43 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     lexer.kind = gtEof
   of '`':
     if lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`':
-      # Opening ``` - emit just the backticks
-      lexer.kind = gtSpecialVar
-      inc position, 3
-      lexer.mdInCodeBlock = true
-      # state = gtSpecialVar signals that lang name may follow
-      lexer.state = gtSpecialVar
-      # If there's content on this line, it will be lexed as lang name on next call
-      # If we're at EOL, state will be reset by whitespace handler
+      # Check if there are more backticks on this line.
+      # Per CommonMark, a backtick fence info string cannot contain backticks,
+      # so ```abc``` is not a valid code fence.
+      var scanPos = position + 3
+      var hasMoreBackticks = false
+      while lexer.buf[scanPos] notin eolChars:
+        if lexer.buf[scanPos] == '`':
+          hasMoreBackticks = true
+          break
+        inc scanPos
+
+      if not hasMoreBackticks:
+        # Opening ``` - emit just the backticks
+        lexer.kind = gtSpecialVar
+        inc position, 3
+        lexer.mdInCodeBlock = true
+        # state = gtSpecialVar signals that lang name may follow
+        lexer.state = gtSpecialVar
+        # If there's content on this line, it will be lexed as lang name on next call
+        # If we're at EOL, state will be reset by whitespace handler
+      else:
+        # Not a valid code fence - treat as inline code with triple backtick
+        # delimiter (```...```)
+        lexer.kind = gtSpecialVar
+        inc position, 3
+        while true:
+          case lexer.buf[position]
+          of '\0', '\n', '\r':
+            break
+          of '`':
+            if lexer.buf[position + 1] == '`' and lexer.buf[position + 2] == '`':
+              inc position, 3
+              break
+            else:
+              inc position
+          else:
+            inc position
     else:
       # Inline code `...`
       lexer.kind = gtSpecialVar
