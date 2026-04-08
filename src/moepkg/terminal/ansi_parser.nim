@@ -81,6 +81,8 @@ type
     parserState*: AnsiParserState
     escapeBuffer*: string
     utf8Buffer*: string # Incomplete UTF-8 bytes from previous read
+    # Responses to write back to PTY (e.g. DA1, DA2, DSR replies)
+    pendingResponses*: seq[string]
     # Flags
     needsRedraw*: bool
     title*: string
@@ -124,6 +126,7 @@ proc newTerminalGrid*(cols, rows: int): TerminalGrid =
     currentAttrs: {},
     parserState: apsNormal,
     escapeBuffer: "",
+    pendingResponses: @[],
     needsRedraw: false,
     title: "",
   )
@@ -374,6 +377,13 @@ proc processCsi(grid: TerminalGrid, buf: string) =
       discard
     return
 
+  # Handle ESC [ > ... c (DA2 - Secondary Device Attributes)
+  if paramStr.len > 0 and paramStr[0] == '>':
+    if finalByte == 'c':
+      # Reply: VT100, firmware version 0, ROM cartridge 0
+      grid.pendingResponses.add("\x1b[>0;0;0c")
+    return
+
   let params = parseCsiParams(paramStr)
 
   case finalByte
@@ -610,6 +620,28 @@ proc processCsi(grid: TerminalGrid, buf: string) =
         for r in grid.cursorRow ..< grid.rows - 1:
           grid.cells[r] = grid.cells[r + 1]
         grid.cells[grid.rows - 1] = newRow(grid.cols)
+  of 'c':
+    # DA1 - Primary Device Attributes
+    # Reply: VT102 with no options
+    grid.pendingResponses.add("\x1b[?6c")
+  of 'n':
+    # DSR - Device Status Report
+    let mode =
+      if params.len > 0:
+        params[0]
+      else:
+        0
+    case mode
+    of 6:
+      # CPR - Cursor Position Report (1-based)
+      grid.pendingResponses.add(
+        "\x1b[" & $(grid.cursorRow + 1) & ";" & $(grid.cursorCol + 1) & "R"
+      )
+    of 5:
+      # Device status: "OK"
+      grid.pendingResponses.add("\x1b[0n")
+    else:
+      discard
   of 'r':
     # Set Scrolling Region (DECSTSR) - simplified: just reset cursor
     grid.cursorRow = 0
