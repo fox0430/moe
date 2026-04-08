@@ -49,6 +49,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
   - Lisp
   - Tcl
   - Hyprland
+  - Dockerfile
 
 - Auto-completion
 
