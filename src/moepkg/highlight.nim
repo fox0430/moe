@@ -948,7 +948,8 @@ proc updateHighlightIncremental*(
 
 proc detectLanguage*(filename: string): SourceLanguage =
   # Check basename for special files (no extension)
-  case filename.extractFilename
+  let basename = filename.extractFilename
+  case basename
   of "COMMIT_EDITMSG":
     return SourceLanguage.langCommitEditMsg
   of "git-rebase-todo":
@@ -958,7 +959,9 @@ proc detectLanguage*(filename: string): SourceLanguage =
   of "hyprland.conf":
     return SourceLanguage.langHyprland
   else:
-    discard
+    # Check for Dockerfile variants (Dockerfile, Dockerfile.prod, etc.)
+    if basename.startsWith("Dockerfile"):
+      return SourceLanguage.langDockerfile
 
   # TODO: use settings file
   case filename.splitFile.ext
@@ -971,6 +974,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langCpp
   of ".cs":
     return SourceLanguage.langCsharp
+  of ".dockerfile":
+    return SourceLanguage.langDockerfile
   of ".cabal", ".hs":
     return SourceLanguage.langHaskell
   of ".html":
