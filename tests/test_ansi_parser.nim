@@ -617,3 +617,49 @@ suite "TerminalGrid - Wide (CJK) character support":
     grid.processOutput("日本\r\nLine2\r\nLine3\r\nLine4")
     let text = grid.toPlainText()
     check "日本" in text
+
+suite "TerminalGrid - Terminal Query Responses":
+  test "DA1 (Primary Device Attributes) ESC[c":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[c")
+    check grid.pendingResponses.len == 1
+    check grid.pendingResponses[0] == "\x1b[?6c"
+
+  test "DA1 with explicit param ESC[0c":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[0c")
+    check grid.pendingResponses.len == 1
+    check grid.pendingResponses[0] == "\x1b[?6c"
+
+  test "DA2 (Secondary Device Attributes) ESC[>c":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[>c")
+    check grid.pendingResponses.len == 1
+    check grid.pendingResponses[0] == "\x1b[>0;0;0c"
+
+  test "DSR (Device Status Report) ESC[5n":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[5n")
+    check grid.pendingResponses.len == 1
+    check grid.pendingResponses[0] == "\x1b[0n"
+
+  test "CPR (Cursor Position Report) ESC[6n":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[6n")
+    check grid.pendingResponses.len == 1
+    check grid.pendingResponses[0] == "\x1b[1;1R"
+
+  test "CPR after cursor move":
+    let grid = newTerminalGrid(80, 24)
+    # Move cursor to row 5, col 10 (1-based: 5;10)
+    grid.processOutput("\x1b[5;10H\x1b[6n")
+    check grid.pendingResponses.len == 1
+    check grid.pendingResponses[0] == "\x1b[5;10R"
+
+  test "Multiple queries in one output":
+    let grid = newTerminalGrid(80, 24)
+    grid.processOutput("\x1b[c\x1b[>c\x1b[6n")
+    check grid.pendingResponses.len == 3
+    check grid.pendingResponses[0] == "\x1b[?6c"
+    check grid.pendingResponses[1] == "\x1b[>0;0;0c"
+    check grid.pendingResponses[2] == "\x1b[1;1R"

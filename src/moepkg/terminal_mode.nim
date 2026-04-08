@@ -65,6 +65,14 @@ proc newTerminalState*(
 
   ok(state)
 
+proc flushPendingResponses(state: TerminalState) =
+  ## Write any pending terminal query responses back to the PTY.
+  if state.pty.closed:
+    return
+  for response in state.grid.pendingResponses:
+    discard state.pty.writeToPty(response)
+  state.grid.pendingResponses.setLen(0)
+
 proc pollOutput*(state: TerminalState): bool =
   ## Non-blocking read from PTY and process through ANSI parser.
   ## Returns true if the grid was updated.
@@ -74,6 +82,7 @@ proc pollOutput*(state: TerminalState): bool =
   let data = state.pty.readFromPty()
   if data.len > 0:
     state.grid.processOutput(data)
+    state.flushPendingResponses()
     state.needsBufferRefresh = true
     return true
 
@@ -87,6 +96,7 @@ proc pollOutput*(state: TerminalState): bool =
         state.grid.processOutput(remaining)
         remaining = state.pty.readFromPty()
 
+      state.flushPendingResponses()
       state.exitCode = code
       state.needsBufferRefresh = true
       return true
