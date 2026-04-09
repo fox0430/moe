@@ -1575,6 +1575,14 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.table)
   of "date":
     return some(EditorColorPairIndex.date)
+  of "logError":
+    return some(EditorColorPairIndex.logError)
+  of "logWarning":
+    return some(EditorColorPairIndex.logWarning)
+  of "logInfo":
+    return some(EditorColorPairIndex.logInfo)
+  of "logUuid":
+    return some(EditorColorPairIndex.logUuid)
   of "operator":
     return some(EditorColorPairIndex.operator)
   of "property":

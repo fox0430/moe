@@ -1097,6 +1097,10 @@ And, `termDefault` can be used for both foreground and background to use the ter
 | identifier | Syntax highlighting color |
 | table | Syntax highlighting color |
 | date | Syntax highlighting color |
+| logError | Log file error level highlighting color |
+| logWarning | Log file warning level highlighting color |
+| logInfo | Log file info/debug level highlighting color |
+| logUuid | Log file UUID highlighting color |
 | operator | Syntax highlighting color |
 | markdownCodeBlock | Markdown code block text color |
 | markdownCodeBlockBg | Markdown code block background color |

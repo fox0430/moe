@@ -116,6 +116,10 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.identifier: makeColorPairDefaultBg("#dadada"),
   EditorColorPairIndex.table: makeColorPairDefaultBg("#0087af"),
   EditorColorPairIndex.date: makeColorPairDefaultBg("#0087af"),
+  EditorColorPairIndex.logError: makeColorPairDefaultBg("#e06c75"),
+  EditorColorPairIndex.logWarning: makeColorPairDefaultBg("#e5c07b"),
+  EditorColorPairIndex.logInfo: makeColorPairDefaultBg("#61afef"),
+  EditorColorPairIndex.logUuid: makeColorPairDefaultBg("#56b6c2"),
   EditorColorPairIndex.operator: makeColorPairDefaultBg("#89ddff"),
   EditorColorPairIndex.property: makeColorPairDefaultBg("#61afef"),
 

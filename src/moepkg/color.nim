@@ -192,6 +192,10 @@ type
     identifier
     table
     date
+    logError
+    logWarning
+    logInfo
+    logUuid
     operator
     property
 
