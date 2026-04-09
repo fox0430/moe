@@ -111,6 +111,10 @@ type
     gtPragma
     gtTable
     gtDate
+    gtLogError
+    gtLogWarning
+    gtLogInfo
+    gtLogUuid
 
   GeneralTokenizer* = object of RootObj
     kind*: TokenClass
@@ -156,6 +160,7 @@ type
     langJsx
     langLatex
     langLisp
+    langLog
     langMarkdown
     langNim
     langPython
@@ -190,8 +195,8 @@ const
   sourceLanguageToStr*: array[SourceLanguage, string] = [
     "none", "Astro", "C", "COMMIT_EDITMSG", "C++", "C#", "Diff", "Dockerfile", "Fish",
     "git-rebase-todo", "Haskell", "HTML", "Hyprland", "Java", "JavaScript",
-    "JavaScriptReact", "LaTeX", "Lisp", "Markdown", "Nim", "Python", "Rust", "Shell",
-    "Tcl", "Toml", "Yaml", "Json", "TypeScript", "TypeScriptReact",
+    "JavaScriptReact", "LaTeX", "Lisp", "Log", "Markdown", "Nim", "Python", "Rust",
+    "Shell", "Tcl", "Toml", "Yaml", "Json", "TypeScript", "TypeScriptReact",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
@@ -290,7 +295,7 @@ import
   syntax_diff, syntax_dockerfile, syntax_git_rebase_todo, syntax_haskell, syntax_html,
   syntax_java, syntax_javascript, syntax_latex, syntax_lisp, syntax_markdown,
   syntax_nim, syntax_python, syntax_rust, syntax_fish, syntax_hyprland, syntax_shell,
-  syntax_tcl, syntax_yaml, syntax_toml, syntax_json, syntax_typescript
+  syntax_tcl, syntax_yaml, syntax_toml, syntax_json, syntax_typescript, syntax_log
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -310,6 +315,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langJavaScript, langJsx: g.javaScriptNextToken
   of langLatex: g.latexNextToken
   of langLisp: g.lispNextToken
+  of langLog: g.logNextToken
   of langMarkdown: g.markdownNextToken
   of langNim: g.nimNextToken
   of langPython: g.pythonNextToken

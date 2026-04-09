@@ -24,7 +24,7 @@ import ../src/moepkg/syntax/tokenizer
 suite "tokenizer - TokenClass enum":
   test "TokenClass has expected values":
     check gtEof == low(TokenClass)
-    check gtDate == high(TokenClass)
+    check gtLogUuid == high(TokenClass)
 
   test "TokenClass ordering":
     check gtEof < gtNone

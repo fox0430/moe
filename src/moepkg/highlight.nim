@@ -533,6 +533,10 @@ proc getEditorColorPair(
   of gtIdentifier: EditorColorPairIndex.identifier
   of gtTable: EditorColorPairIndex.table
   of gtDate: EditorColorPairIndex.date
+  of gtLogError: EditorColorPairIndex.logError
+  of gtLogWarning: EditorColorPairIndex.logWarning
+  of gtLogInfo: EditorColorPairIndex.logInfo
+  of gtLogUuid: EditorColorPairIndex.logUuid
   of gtKey: EditorColorPairIndex.property
   else: EditorColorPairIndex.default
 
@@ -1014,6 +1018,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langLatex
   of ".lisp", ".lsp", ".cl", ".el", ".scm", ".ss", ".rkt", ".asd", ".fasl":
     return SourceLanguage.langLisp
+  of ".log":
+    return SourceLanguage.langLog
   of ".hl":
     return SourceLanguage.langHyprland
   else:
