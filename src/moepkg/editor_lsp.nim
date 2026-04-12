@@ -310,7 +310,9 @@ proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =
     return false
 
   # Cancel any pending location request
-  e.state.lspCache.pendingLocationRequestId = 0
+  if e.state.lspCache.pendingLocationRequestId != 0:
+    e.lsp.cancelRequest(e.state.lspCache.pendingLocationRequestId)
+    e.state.lspCache.pendingLocationRequestId = 0
   e.state.lspCache.pendingLocationRequestKind = lrkNone
 
   let activeBuffer = e.activeBuffer()
@@ -432,7 +434,9 @@ proc startCallHierarchyRequest(e: Editor, kind: CallHierarchyRequestKind): bool 
     return false
 
   # Cancel any pending call hierarchy request
-  e.state.lspCache.pendingCallHierarchyRequestId = 0
+  if e.state.lspCache.pendingCallHierarchyRequestId != 0:
+    e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
+    e.state.lspCache.pendingCallHierarchyRequestId = 0
   e.state.lspCache.pendingCallHierarchyKind = chrkNone
   e.state.lspCache.pendingCallHierarchyPrepareResult = none(JsonNode)
 
@@ -614,7 +618,9 @@ proc requestCallHierarchyIncomingForItem*(
   let activeBuffer = e.activeBuffer()
 
   # Cancel any pending call hierarchy request
-  e.state.lspCache.pendingCallHierarchyRequestId = 0
+  if e.state.lspCache.pendingCallHierarchyRequestId != 0:
+    e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
+    e.state.lspCache.pendingCallHierarchyRequestId = 0
   e.state.lspCache.pendingCallHierarchyKind = chrkNone
 
   let reqResult = e.lsp.startCallHierarchyIncomingCallsRequest(activeBuffer, item)
@@ -639,7 +645,9 @@ proc requestCallHierarchyOutgoingForItem*(
   let activeBuffer = e.activeBuffer()
 
   # Cancel any pending call hierarchy request
-  e.state.lspCache.pendingCallHierarchyRequestId = 0
+  if e.state.lspCache.pendingCallHierarchyRequestId != 0:
+    e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
+    e.state.lspCache.pendingCallHierarchyRequestId = 0
   e.state.lspCache.pendingCallHierarchyKind = chrkNone
 
   let reqResult = e.lsp.startCallHierarchyOutgoingCallsRequest(activeBuffer, item)
@@ -676,7 +684,9 @@ proc startLspHover*(e: Editor): bool =
     return false
 
   # Cancel any pending hover request
-  e.state.lspCache.pendingHoverRequestId = 0
+  if e.state.lspCache.pendingHoverRequestId != 0:
+    e.lsp.cancelRequest(e.state.lspCache.pendingHoverRequestId)
+    e.state.lspCache.pendingHoverRequestId = 0
 
   let activeBuffer = e.activeBuffer()
   let reqResult = e.lsp.startHoverRequest(
@@ -822,7 +832,9 @@ proc startLspSelectionRange*(e: Editor): bool =
     return false
 
   # Cancel any pending selection range request
-  e.state.lspCache.pendingSelectionRangeRequestId = 0
+  if e.state.lspCache.pendingSelectionRangeRequestId != 0:
+    e.lsp.cancelRequest(e.state.lspCache.pendingSelectionRangeRequestId)
+    e.state.lspCache.pendingSelectionRangeRequestId = 0
 
   let activeBuffer = e.activeBuffer()
   let reqResult = e.lsp.startSelectionRangeRequest(
@@ -924,7 +936,9 @@ proc startLspDocumentSymbols*(e: Editor): bool =
     return false
 
   # Cancel any pending request
-  e.state.lspCache.pendingDocumentSymbolsRequestId = 0
+  if e.state.lspCache.pendingDocumentSymbolsRequestId != 0:
+    e.lsp.cancelRequest(e.state.lspCache.pendingDocumentSymbolsRequestId)
+    e.state.lspCache.pendingDocumentSymbolsRequestId = 0
 
   let reqResult = e.lsp.startDocumentSymbolsRequest(activeBuffer)
   if reqResult.isErr:
@@ -1192,8 +1206,12 @@ proc startLspDocumentLinks*(e: Editor): bool =
     return false
 
   # Cancel any existing requests
-  e.state.lspCache.pendingDocumentLinkRequestId = 0
-  e.state.lspCache.pendingDocumentLinkResolveRequestId = 0
+  if e.state.lspCache.pendingDocumentLinkRequestId != 0:
+    e.lsp.cancelRequest(e.state.lspCache.pendingDocumentLinkRequestId)
+    e.state.lspCache.pendingDocumentLinkRequestId = 0
+  if e.state.lspCache.pendingDocumentLinkResolveRequestId != 0:
+    e.lsp.cancelRequest(e.state.lspCache.pendingDocumentLinkResolveRequestId)
+    e.state.lspCache.pendingDocumentLinkResolveRequestId = 0
 
   # Save cursor position (convert to UTF-16 for LSP comparison)
   let lineText =

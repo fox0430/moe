@@ -1344,7 +1344,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
     return true
   of hrCallHierarchyQuit:
     # Close call hierarchy viewer and return to Normal mode
-    e.state.lspCache.pendingCallHierarchyRequestId = 0
+    if e.state.lspCache.pendingCallHierarchyRequestId != 0:
+      e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
+      e.state.lspCache.pendingCallHierarchyRequestId = 0
     e.state.lspCache.pendingCallHierarchyKind = chrkNone
     e.activeWindow.clearModeState(EditorMode.CallHierarchy)
     e.activeWindow.mode = EditorMode.Normal
@@ -1357,7 +1359,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
         r.callHierarchyJumpUri[7 ..^ 1]
       else:
         r.callHierarchyJumpUri
-    e.state.lspCache.pendingCallHierarchyRequestId = 0
+    if e.state.lspCache.pendingCallHierarchyRequestId != 0:
+      e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
+      e.state.lspCache.pendingCallHierarchyRequestId = 0
     e.state.lspCache.pendingCallHierarchyKind = chrkNone
     e.activeWindow.clearModeState(EditorMode.CallHierarchy)
     e.activeWindow.mode = EditorMode.Normal

@@ -302,7 +302,9 @@ proc updateDocumentHighlightCache*(e: Editor) =
   if e.state.mode in {EditorMode.Insert, EditorMode.Replace}:
     if e.state.lspCache.documentHighlightCache.isValid:
       e.invalidateDocumentHighlightCache()
-    e.state.lspCache.pendingDocumentHighlightRequestId = 0
+    if e.state.lspCache.pendingDocumentHighlightRequestId != 0:
+      e.lsp.cancelRequest(e.state.lspCache.pendingDocumentHighlightRequestId)
+      e.state.lspCache.pendingDocumentHighlightRequestId = 0
     return
 
   let activeBuffer = e.activeBuffer()
@@ -349,7 +351,9 @@ proc updateDocumentHighlightCache*(e: Editor) =
 proc invalidateSemanticTokensCache*(e: Editor) =
   ## Invalidate the semantic tokens cache, forcing re-request on next update
   e.state.lspCache.semanticTokensCache = SemanticTokensCache(isValid: false)
-  e.state.lspCache.pendingSemanticTokensRequestId = 0
+  if e.state.lspCache.pendingSemanticTokensRequestId != 0:
+    e.lsp.cancelRequest(e.state.lspCache.pendingSemanticTokensRequestId)
+    e.state.lspCache.pendingSemanticTokensRequestId = 0
 
 proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
   ## Process semantic tokens response and apply to buffer's highlight

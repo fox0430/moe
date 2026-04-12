@@ -440,6 +440,20 @@ proc cleanupTimedOutRequests*(svc: LspService) =
     svc.activeRequests.del(reqId)
     svc.pendingResponses.del(reqId)
 
+proc cancelRequest*(svc: LspService, requestId: int) =
+  ## Cancel a pending request: send $/cancelRequest to the LSP server and
+  ## clean up tracking state. If the response has already arrived, it is
+  ## discarded silently.
+  if requestId in svc.activeRequests:
+    let req = svc.activeRequests[requestId]
+    # Send $/cancelRequest notification to the LSP server
+    if req.langId in svc.workers:
+      let worker = svc.workers[req.langId]
+      if worker.isRunning:
+        worker.sendNotification("$/cancelRequest", %*{"id": requestId})
+    svc.activeRequests.del(requestId)
+  svc.pendingResponses.del(requestId)
+
 # Request-response helper (async, non-blocking)
 proc waitForResponse*(
     svc: LspService, requestId: int, timeoutMs: int = DefaultRequestTimeoutMs

@@ -61,6 +61,7 @@ type
     lcmdDidChange # textDocument/didChange
     lcmdDidSave # textDocument/didSave
     lcmdRequest # Generic request with response tracking
+    lcmdNotification # Generic notification (no response expected)
 
   LspCommand* = object
     case kind*: LspCommandKind
@@ -89,6 +90,9 @@ type
       requestId*: int # ID for tracking response
       reqMethod*: string
       reqParams*: JsonNode
+    of lcmdNotification:
+      notifyMethod*: string
+      notifyParams*: JsonNode
 
   # Messages from worker thread to main thread
   LspEventKind* = enum
@@ -805,6 +809,9 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           sendResponse(cmd.requestId, none(JsonNode), some(lspIdResult.error))
       else:
         sendResponse(cmd.requestId, none(JsonNode), some("Server not running"))
+    of lcmdNotification:
+      if ctx.sharedState.loadState() == lwsRunning:
+        await sendNotificationLog(cmd.notifyMethod, cmd.notifyParams)
 
   proc processMessages(): Future[void] {.async.} =
     if outputFuture.isNil:
@@ -1085,4 +1092,9 @@ proc sendRequest*(worker: LspWorker, meth: string, params: JsonNode): int =
 
   let cmd =
     LspCommand(kind: lcmdRequest, requestId: result, reqMethod: meth, reqParams: params)
+  worker.commandQueue.pushAndSignal(cmd, worker.signal)
+
+proc sendNotification*(worker: LspWorker, meth: string, params: JsonNode) =
+  ## Send a notification to the LSP server (no response expected)
+  let cmd = LspCommand(kind: lcmdNotification, notifyMethod: meth, notifyParams: params)
   worker.commandQueue.pushAndSignal(cmd, worker.signal)

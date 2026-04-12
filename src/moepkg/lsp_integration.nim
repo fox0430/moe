@@ -691,6 +691,10 @@ proc hasPendingRequests*(lsp: LspIntegration): bool =
   ## Check if there are any pending requests
   lsp.service.hasPendingRequests()
 
+proc cancelRequest*(lsp: LspIntegration, requestId: int) =
+  ## Cancel a pending LSP request and clean up tracking state
+  lsp.service.cancelRequest(requestId)
+
 proc cleanupTimedOutRequests*(lsp: LspIntegration) =
   ## Clean up any timed out requests
   lsp.service.cleanupTimedOutRequests()
