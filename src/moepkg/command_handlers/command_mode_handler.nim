@@ -451,6 +451,9 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       case r.kind
       of hrQuit:
         return false # Signal app should quit
+      of hrCquit:
+        e.state.exitCode = 1
+        return false # Signal app should quit with non-zero exit code
       of hrCloseWindow:
         # Handle window close - may also quit if last window
         let activeWin = e.activeWindow

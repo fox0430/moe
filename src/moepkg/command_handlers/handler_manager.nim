@@ -51,6 +51,7 @@ type
   HandlerResultKind* = enum
     hrHandled # Command was handled successfully
     hrQuit # Application should quit
+    hrCquit # Application should quit with non-zero exit code
     hrCloseWindow # Close current window
     hrGotoLine # Jump to specific line
     hrVSplit # Vertical split window
@@ -201,6 +202,8 @@ type
       statusMessage*: string
     of hrQuit:
       shouldQuit*: bool
+    of hrCquit:
+      discard
     of hrCloseWindow:
       forceClose*: bool
     of hrGotoLine:
@@ -827,6 +830,8 @@ proc handleCommandMode*(
   case r.kind
   of cmrQuit:
     return HandlerResult(kind: hrQuit, shouldQuit: true)
+  of cmrCquit:
+    return HandlerResult(kind: hrCquit)
   of cmrCloseWindow:
     return HandlerResult(kind: hrCloseWindow, forceClose: r.forceClose)
   of cmrModeSwitch:

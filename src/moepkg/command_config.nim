@@ -81,6 +81,7 @@ const CommandNameTable* = {
   "only": claOnlyWindow,
   "editconfigfile": claEditConfigFile,
   "filetree": claFileTree,
+  "cquit": claCquit,
 }.toTable
 
 proc resolveCommandName*(name: string): Option[CommandLineAction] =
@@ -143,6 +144,7 @@ proc loadDefaultConfig*(config: CommandConfig) =
   # Standard quit commands
   config.addAlias("q", claQuit)
   config.addAlias("qa", claQuitAll)
+  config.addAlias("cq", claCquit)
 
   # Save commands
   config.addAlias("w", claSave)

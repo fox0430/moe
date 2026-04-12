@@ -36,6 +36,7 @@
 | <kbd>**:**</kbd> <kbd>**q**</kbd> <kbd>**a**</kbd> <kbd>**!**</kbd> | Force quit all Windows |
 |<kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**!**</kbd> | Force write |
 | <kbd>**:**</kbd> <kbd>**w**</kbd> <kbd>**q**</kbd> <kbd>**!**</kbd> | Force write and quit window |
+| <kbd>**:**</kbd> <kbd>**c**</kbd> <kbd>**q**</kbd> | Quit with non-zero exit code |
 
 </details>
 

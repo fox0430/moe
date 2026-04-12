@@ -572,6 +572,7 @@ suite "CommandLine - isQuitCommand and isSaveCommand":
     check isQuitCommand(CommandLineResult(kind: claQuitAll)) == true
     check isQuitCommand(CommandLineResult(kind: claSaveAndQuit)) == true
     check isQuitCommand(CommandLineResult(kind: claSaveAllAndQuit)) == true
+    check isQuitCommand(CommandLineResult(kind: claCquit)) == true
 
   test "isQuitCommand returns false for non-quit commands":
     check isQuitCommand(CommandLineResult(kind: claSave)) == false
@@ -659,6 +660,11 @@ suite "CommandLine - execute additional commands":
     parser.addAlias("lspexecommand", claLspExecuteCommand)
     parser.addAlias("lspcallhierarchyincoming", claLspCallHierarchyIncoming)
     parser.addAlias("lspcallhierarchyoutgoing", claLspCallHierarchyOutgoing)
+    parser.addAlias("cq", claCquit)
+
+  test "Execute :cq":
+    let result = parser.parseAndExecute(":cq")
+    check result.kind == claCquit
 
   test "Execute :qa":
     let result = parser.parseAndExecute(":qa")

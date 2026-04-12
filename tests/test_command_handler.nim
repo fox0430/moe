@@ -1319,6 +1319,21 @@ suite "CommandModeHandler - handleCommandModeInput":
     let result = handler.handleCommandModeInput(buffer, ":qa")
     check result.kind == cmrQuit
 
+  test "Handle :cq command":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":cq")
+    check result.kind == cmrCquit
+
+  test "Handle :cq with modified buffer":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["Hello"])
+    discard buffer.insertText(BufferPosition(line: 0, column: 5), "!")
+
+    let result = handler.handleCommandModeInput(buffer, ":cq")
+    check result.kind == cmrCquit
+
   test "Handle :123 (goto line)":
     let handler = setupHandler()
     let buffer = setupBuffer(@["Line 1", "Line 2", "Line 3"])
@@ -1809,6 +1824,10 @@ suite "CommandModeHandler - handleCommandModeInput map commands":
 suite "CommandModeHandler - Result Helper Functions":
   test "shouldQuit returns true for quit result":
     let result = CommandModeResult(kind: cmrQuit, forceQuit: false)
+    check shouldQuit(result) == true
+
+  test "shouldQuit returns true for cquit result":
+    let result = CommandModeResult(kind: cmrCquit)
     check shouldQuit(result) == true
 
   test "shouldQuit returns false for non-quit result":
