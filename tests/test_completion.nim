@@ -1163,3 +1163,83 @@ suite "Completion - getSelectedEntry":
   test "Returns none when no entries":
     let mgr = newCompletionManager()
     check mgr.getSelectedEntry().isNone
+
+suite "Completion - resolve support":
+  test "needsResolve returns true when detail is missing":
+    let mgr = newCompletionManager()
+    mgr.menu.entries = @[CompletionEntry(word: "test", matchScore: 100, source: csLsp)]
+    mgr.menu.selectedIndex = 0
+    mgr.menu.hasSelection = true
+    check mgr.needsResolve() == true
+
+  test "needsResolve returns false when detail and doc present":
+    let mgr = newCompletionManager()
+    mgr.menu.entries = @[
+      CompletionEntry(
+        word: "test",
+        matchScore: 100,
+        source: csLsp,
+        detail: some("int"),
+        documentation: some("A test"),
+      )
+    ]
+    mgr.menu.selectedIndex = 0
+    mgr.menu.hasSelection = true
+    check mgr.needsResolve() == false
+
+  test "needsResolve returns false for buffer entries":
+    let mgr = newCompletionManager()
+    mgr.menu.entries =
+      @[CompletionEntry(word: "test", matchScore: 100, source: csBuffer)]
+    mgr.menu.selectedIndex = 0
+    mgr.menu.hasSelection = true
+    check mgr.needsResolve() == false
+
+  test "needsResolve returns false without selection":
+    let mgr = newCompletionManager()
+    mgr.menu.entries = @[CompletionEntry(word: "test", matchScore: 100, source: csLsp)]
+    mgr.menu.hasSelection = false
+    check mgr.needsResolve() == false
+
+  test "getSelectedRawJson returns matching JSON":
+    let mgr = newCompletionManager()
+    mgr.lspItems = @[CompletionItem(label: "foo"), CompletionItem(label: "bar")]
+    mgr.lspRawJsonItems =
+      @[%*{"label": "foo", "data": 1}, %*{"label": "bar", "data": 2}]
+    mgr.menu.entries = @[
+      CompletionEntry(word: "foo", matchScore: 100, source: csLsp),
+      CompletionEntry(word: "bar", matchScore: 90, source: csLsp),
+    ]
+    mgr.menu.selectedIndex = 1
+    mgr.menu.hasSelection = true
+    let rawJson = mgr.getSelectedRawJson()
+    check rawJson.isSome
+    check rawJson.get["label"].getStr == "bar"
+    check rawJson.get["data"].getInt == 2
+
+  test "updateResolvedEntry updates detail and documentation":
+    let mgr = newCompletionManager()
+    mgr.menu.entries = @[CompletionEntry(word: "test", matchScore: 100, source: csLsp)]
+    mgr.resolvedIndex = 0
+
+    let resolved = CompletionItem(
+      label: "test",
+      detail: some("fn() -> int"),
+      documentation: some(%*"Documentation text"),
+    )
+    mgr.updateResolvedEntry(resolved)
+
+    check mgr.menu.entries[0].detail == some("fn() -> int")
+    check mgr.menu.entries[0].documentation == some("Documentation text")
+
+  test "setLspItems stores raw JSON items":
+    let mgr = newCompletionManager()
+    mgr.menu.prefix = "te"
+    mgr.state = csPendingLsp
+
+    let items = @[CompletionItem(label: "test")]
+    let rawJson = @[%*{"label": "test", "data": 42}]
+    mgr.setLspItems(items, rawJson)
+
+    check mgr.lspRawJsonItems.len == 1
+    check mgr.lspRawJsonItems[0]["data"].getInt == 42

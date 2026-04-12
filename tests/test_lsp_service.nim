@@ -285,29 +285,33 @@ suite "LspService - Pending Request Management":
 suite "LspService - Response Parsing":
   test "parseCompletionResponse parses array":
     let resp = %*[{"label": "item1", "kind": 1}, {"label": "item2", "kind": 2}]
-    let (items, isIncomplete) = parseCompletionResponse(resp)
+    let (items, rawJsonItems, isIncomplete) = parseCompletionResponse(resp)
     check items.len == 2
     check items[0].label == "item1"
     check items[1].label == "item2"
+    check rawJsonItems.len == 2
     check not isIncomplete
 
   test "parseCompletionResponse parses object with items":
     let resp =
       %*{"isIncomplete": false, "items": [{"label": "item1"}, {"label": "item2"}]}
-    let (items, isIncomplete) = parseCompletionResponse(resp)
+    let (items, rawJsonItems, isIncomplete) = parseCompletionResponse(resp)
     check items.len == 2
+    check rawJsonItems.len == 2
     check not isIncomplete
 
   test "parseCompletionResponse parses incomplete list":
     let resp = %*{"isIncomplete": true, "items": [{"label": "item1"}]}
-    let (items, isIncomplete) = parseCompletionResponse(resp)
+    let (items, rawJsonItems, isIncomplete) = parseCompletionResponse(resp)
     check items.len == 1
+    check rawJsonItems.len == 1
     check isIncomplete
 
   test "parseCompletionResponse handles empty array":
     let resp = %*[]
-    let (items, isIncomplete) = parseCompletionResponse(resp)
+    let (items, rawJsonItems, isIncomplete) = parseCompletionResponse(resp)
     check items.len == 0
+    check rawJsonItems.len == 0
     check not isIncomplete
 
   test "parseHoverResponse parses valid hover":

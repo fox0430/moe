@@ -607,6 +607,18 @@ proc startCompletionRequest*(
   ## Start a completion request (non-blocking). Returns request ID.
   svc.startPositionRequest(path, line, character, "textDocument/completion")
 
+proc startCompletionResolveRequest*(
+    svc: LspService, path: string, itemJson: JsonNode
+): Result[int, string] =
+  ## Start a completionItem/resolve request (non-blocking). Returns request ID.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+  ok(svc.startTrackedRequest(worker, "completionItem/resolve", itemJson))
+
 proc startHoverRequest*(
     svc: LspService, path: string, line, character: int
 ): Result[int, string] =
@@ -792,19 +804,22 @@ proc startCallHierarchyOutgoingCallsRequest*(
 # Response parsing helpers for async requests
 proc parseCompletionResponse*(
     resp: JsonNode
-): tuple[items: seq[CompletionItem], isIncomplete: bool] =
+): tuple[items: seq[CompletionItem], rawJsonItems: seq[JsonNode], isIncomplete: bool] =
   ## Parse a completion response JSON into CompletionItem sequence
   var items: seq[CompletionItem] = @[]
+  var rawJsonItems: seq[JsonNode] = @[]
   var isIncomplete = false
   if resp.kind == JArray:
     for item in resp:
       items.add(parseCompletionItem(item))
+      rawJsonItems.add(item)
   elif resp.kind == JObject and resp.hasKey("items"):
     if resp.hasKey("isIncomplete"):
       isIncomplete = resp["isIncomplete"].getBool
     for item in resp["items"]:
       items.add(parseCompletionItem(item))
-  return (items, isIncomplete)
+      rawJsonItems.add(item)
+  return (items, rawJsonItems, isIncomplete)
 
 proc parseHoverResponse*(resp: JsonNode): Option[Hover] =
   ## Parse a hover response JSON
