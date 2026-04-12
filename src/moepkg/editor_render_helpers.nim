@@ -332,7 +332,7 @@ proc renderLineSegmentWithSelection*(
       # Determine style for tab (trailing space highlighting takes priority)
       let tabStyle =
         if e.config.highlight.trailingSpaces and col >= trailingSpaceStart and
-            ctx.windowMode.isFileEditMode:
+            ctx.windowMode.isFileEditMode and lineIndex != ctx.cursorLine:
           trailingSpacesStyle()
         else:
           style
@@ -365,7 +365,7 @@ proc renderLineSegmentWithSelection*(
 
         # Highlight trailing spaces if enabled (only in file edit modes)
         if e.config.highlight.trailingSpaces and col >= trailingSpaceStart and
-            ctx.windowMode.isFileEditMode:
+            ctx.windowMode.isFileEditMode and lineIndex != ctx.cursorLine:
           if rune == ' '.Rune or rune == TAB_CHAR or rune == FULLWIDTH_SPACE:
             renderStyle = trailingSpacesStyle()
 

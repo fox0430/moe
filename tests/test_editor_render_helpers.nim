@@ -980,6 +980,33 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
     check buf[6, 0].style == trailingStyle
     check buf[7, 0].style == trailingStyle
 
+  test "Current line does not highlight trailing spaces":
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("hello   ")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "hello   ", 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    # Trailing spaces on the current line should NOT be highlighted
+    check buf[5, 0].style != trailingStyle
+    check buf[6, 0].style != trailingStyle
+    check buf[7, 0].style != trailingStyle
+
   test "Help mode does not highlight trailing spaces":
     let config = newEditorConfig()
     let vr = newValidationResult()
@@ -1159,6 +1186,33 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
     let trailingStyle = trailingSpacesStyle()
     # Tab at column 2 expands to spaces; column 2 should have trailing style
     check buf[2, 0].style == trailingStyle
+
+  test "Current line does not highlight trailing tab":
+    let config = newEditorConfig()
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+    e.state.display.tabStop = 4
+
+    let text = "ab\t"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    # Trailing tab on the current line should NOT be highlighted
+    check buf[2, 0].style != trailingStyle
 
   test "Help mode does not highlight trailing tab":
     let config = newEditorConfig()
