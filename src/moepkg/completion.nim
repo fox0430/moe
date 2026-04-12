@@ -54,6 +54,8 @@ type
     kind*: Option[CompletionItemKind] ## LSP completion kind (function, variable, etc.)
     detail*: Option[string] ## LSP detail (e.g., type signature)
     documentation*: Option[string] ## LSP documentation
+    textEdit*: Option[TextEdit] ## LSP textEdit for range-based replacement
+    additionalTextEdits*: Option[seq[TextEdit]] ## Additional edits to apply
 
   CompletionMenu* = object ## Completion popup state
     entries*: seq[CompletionEntry]
@@ -352,6 +354,18 @@ proc lspItemToEntry*(item: CompletionItem, prefix: string): CompletionEntry =
   if item.documentation.isSome:
     docText = getDocumentationText(item.documentation.get)
 
+  # Parse textEdit if present
+  var textEditOpt: Option[TextEdit] = none(TextEdit)
+  if item.textEdit.isSome:
+    let te = item.textEdit.get
+    if te.hasKey("range"):
+      # Standard TextEdit
+      textEditOpt = some(parseTextEdit(te))
+    elif te.hasKey("replace"):
+      # InsertReplaceEdit — use replace range
+      textEditOpt =
+        some(TextEdit(range: parseRange(te["replace"]), newText: te["newText"].getStr))
+
   CompletionEntry(
     word: word,
     matchScore: matchScore(prefix, word),
@@ -359,6 +373,8 @@ proc lspItemToEntry*(item: CompletionItem, prefix: string): CompletionEntry =
     kind: item.kind,
     detail: item.detail,
     documentation: docText,
+    textEdit: textEditOpt,
+    additionalTextEdits: item.additionalTextEdits,
   )
 
 proc filterAndSortEntries*(
@@ -596,6 +612,12 @@ proc getSelectedWord*(mgr: CompletionManager): string =
   if mgr.menu.entries.len == 0 or mgr.menu.selectedIndex >= mgr.menu.entries.len:
     return ""
   return mgr.menu.entries[mgr.menu.selectedIndex].word
+
+proc getSelectedEntry*(mgr: CompletionManager): Option[CompletionEntry] =
+  ## Get the currently selected completion entry
+  if mgr.menu.entries.len == 0 or mgr.menu.selectedIndex >= mgr.menu.entries.len:
+    return none(CompletionEntry)
+  return some(mgr.menu.entries[mgr.menu.selectedIndex])
 
 proc isActive*(mgr: CompletionManager): bool =
   ## Check if completion popup is active (including while waiting for LSP)

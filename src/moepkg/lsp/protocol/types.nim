@@ -730,6 +730,15 @@ proc parseCompletionItem*(node: JsonNode): CompletionItem =
     result.deprecated = some(node["deprecated"].getBool)
   if node.hasKey("preselect"):
     result.preselect = some(node["preselect"].getBool)
+  if node.hasKey("textEdit"):
+    result.textEdit = some(node["textEdit"])
+  if node.hasKey("additionalTextEdits"):
+    var edits: seq[TextEdit] = @[]
+    for e in node["additionalTextEdits"]:
+      edits.add(parseTextEdit(e))
+    result.additionalTextEdits = some(edits)
+  if node.hasKey("data"):
+    result.data = some(node["data"])
 
 proc parseHover*(node: JsonNode): Hover =
   result.contents = node["contents"]
