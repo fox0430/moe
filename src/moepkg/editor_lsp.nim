@@ -100,6 +100,7 @@ proc pollLspCompletion*(e: Editor) =
 
   # Call the insert handler's poll function
   e.handlerManager.insertHandler.pollLspCompletion()
+  e.handlerManager.insertHandler.pollLspResolve()
 
 proc switchToBufferForLsp(e: Editor, index: int) =
   ## Switch to buffer at given index (simplified version for LSP jumps)

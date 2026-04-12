@@ -84,6 +84,9 @@ type
     lastLspRequestTime*: MonoTime ## Time of last LSP completion request
     isIncomplete*: bool ## Whether last LSP completion list was incomplete
     lastLspPrefix*: string ## Prefix used for last LSP request
+    lspRawJsonItems*: seq[JsonNode] ## Raw JSON for resolve requests
+    resolveRequestId*: Option[int] ## Pending resolve request ID
+    resolvedIndex*: int ## Index of item being resolved
 
 const
   DefaultMaxVisible* = 10
@@ -866,12 +869,17 @@ proc shouldSkipLspRequest*(mgr: CompletionManager, newPrefix: string): bool =
   return false
 
 proc setLspItems*(
-    mgr: CompletionManager, items: seq[CompletionItem], isIncomplete: bool = false
+    mgr: CompletionManager,
+    items: seq[CompletionItem],
+    rawJsonItems: seq[JsonNode] = @[],
+    isIncomplete: bool = false,
 ) =
   ## Set LSP completion items and update the menu
   mgr.lspItems = items
+  mgr.lspRawJsonItems = rawJsonItems
   mgr.isIncomplete = isIncomplete
   mgr.lspRequestId = none(int)
+  mgr.resolveRequestId = none(int)
 
   # Update entries with the new LSP items
   mgr.menu.entries = mgr.filterAndSortEntries(mgr.menu.prefix)
@@ -883,6 +891,57 @@ proc setLspItems*(
     mgr.state = csActive
   else:
     mgr.state = csIdle
+
+proc needsResolve*(mgr: CompletionManager): bool =
+  ## Check if the selected item needs resolve (missing detail or documentation)
+  if not mgr.menu.hasSelection or mgr.menu.entries.len == 0:
+    return false
+  let idx = mgr.menu.selectedIndex
+  if idx >= mgr.menu.entries.len:
+    return false
+  let entry = mgr.menu.entries[idx]
+  if entry.source != csLsp:
+    return false
+  return entry.detail.isNone or entry.documentation.isNone
+
+proc getSelectedRawJson*(mgr: CompletionManager): Option[JsonNode] =
+  ## Get the raw JSON for the selected LSP item (for resolve requests)
+  if not mgr.menu.hasSelection or mgr.menu.entries.len == 0:
+    return none(JsonNode)
+  let idx = mgr.menu.selectedIndex
+  if idx >= mgr.menu.entries.len:
+    return none(JsonNode)
+  let entry = mgr.menu.entries[idx]
+  if entry.source != csLsp:
+    return none(JsonNode)
+
+  # Find the matching raw JSON item by word
+  for i, item in mgr.lspItems:
+    let word =
+      if item.insertText.isSome and item.insertText.get.len > 0:
+        item.insertText.get
+      else:
+        item.label
+    if word == entry.word and i < mgr.lspRawJsonItems.len:
+      return some(mgr.lspRawJsonItems[i])
+
+  return none(JsonNode)
+
+proc updateResolvedEntry*(mgr: CompletionManager, resolved: CompletionItem) =
+  ## Update the selected entry with resolved data from completionItem/resolve
+  if mgr.menu.entries.len == 0:
+    return
+  let idx = mgr.resolvedIndex
+  if idx >= mgr.menu.entries.len:
+    return
+
+  if resolved.detail.isSome:
+    mgr.menu.entries[idx].detail = resolved.detail
+  if resolved.documentation.isSome:
+    mgr.menu.entries[idx].documentation =
+      getDocumentationText(resolved.documentation.get)
+  if resolved.additionalTextEdits.isSome:
+    mgr.menu.entries[idx].additionalTextEdits = resolved.additionalTextEdits
 
 proc triggerLspCompletion*(
     mgr: CompletionManager,

@@ -450,6 +450,19 @@ proc startCompletionRequest*(
   let utf16Col = buffer.toUtf16Column(line, column)
   return lsp.service.startCompletionRequest(path, line, utf16Col)
 
+proc startCompletionResolveRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, itemJson: JsonNode
+): Result[int, string] =
+  ## Start a completionItem/resolve request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startCompletionResolveRequest(path, itemJson)
+
 proc startHoverRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =

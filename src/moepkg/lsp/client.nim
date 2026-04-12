@@ -318,6 +318,8 @@ proc buildClientCapabilities(): JsonNode =
           "documentationFormat": ["plaintext", "markdown"],
           "deprecatedSupport": true,
           "preselectSupport": true,
+          "resolveSupport":
+            {"properties": ["detail", "documentation", "additionalTextEdits"]},
         },
         "contextSupport": true,
       },

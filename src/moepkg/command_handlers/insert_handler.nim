@@ -441,11 +441,53 @@ proc pollLspCompletion*(handler: InsertModeHandler) =
     discard # Still waiting
   of lrsSuccess:
     if resultOpt.isSome:
-      let (items, isIncomplete) = parseCompletionResponse(resultOpt.get)
-      handler.completionManager.setLspItems(items, isIncomplete)
+      let (items, rawJsonItems, isIncomplete) = parseCompletionResponse(resultOpt.get)
+      handler.completionManager.setLspItems(items, rawJsonItems, isIncomplete)
   of lrsError, lrsTimeout:
     # Clear pending state on error/timeout
     handler.completionManager.setLspItems(@[])
+
+proc triggerResolveRequest*(handler: InsertModeHandler, buffer: TextBuffer) =
+  ## Trigger a completionItem/resolve request for the selected item
+  if handler.lsp.isNil or not handler.lsp.isEnabled:
+    return
+  if not handler.completionManager.needsResolve():
+    return
+
+  let rawJsonOpt = handler.completionManager.getSelectedRawJson()
+  if rawJsonOpt.isNone:
+    return
+
+  let reqResult = handler.lsp.startCompletionResolveRequest(buffer, rawJsonOpt.get)
+  if reqResult.isOk:
+    handler.completionManager.resolveRequestId = some(reqResult.get)
+    handler.completionManager.resolvedIndex =
+      handler.completionManager.menu.selectedIndex
+
+proc pollLspResolve*(handler: InsertModeHandler) =
+  ## Poll for pending completionItem/resolve response
+  if handler.lsp.isNil or not handler.lsp.isEnabled:
+    return
+
+  if handler.completionManager.resolveRequestId.isNone:
+    return
+
+  let reqId = handler.completionManager.resolveRequestId.get
+
+  handler.lsp.poll()
+
+  let (status, resultOpt, _) = handler.lsp.checkResponse(reqId)
+
+  case status
+  of lrsPending:
+    discard
+  of lrsSuccess:
+    if resultOpt.isSome:
+      let resolved = parseCompletionItem(resultOpt.get)
+      handler.completionManager.updateResolvedEntry(resolved)
+    handler.completionManager.resolveRequestId = none(int)
+  of lrsError, lrsTimeout:
+    handler.completionManager.resolveRequestId = none(int)
 
 proc isCtrlN(keyCombo: KeyCombo): bool =
   ## Check if key is Ctrl+N
@@ -543,7 +585,9 @@ proc handleInsertModeKey*(
       else:
         handler.completionManager.selectNext()
       # Replace current word with selected one
-      return handler.commitCompletion(buffer, state, keepPopupOpen = true)
+      let commitResult = handler.commitCompletion(buffer, state, keepPopupOpen = true)
+      handler.triggerResolveRequest(buffer)
+      return commitResult
 
     # Ctrl+P, Up, or Shift+Tab/BackTab - select previous and replace current word
     if keyCombo.isCtrlP or (keyCombo.isSpecial and keyCombo.special == skUp) or (
@@ -555,7 +599,9 @@ proc handleInsertModeKey*(
       else:
         handler.completionManager.selectPrevious()
       # Replace current word with selected one
-      return handler.commitCompletion(buffer, state, keepPopupOpen = true)
+      let commitResult = handler.commitCompletion(buffer, state, keepPopupOpen = true)
+      handler.triggerResolveRequest(buffer)
+      return commitResult
 
     # Enter - confirm selection and close popup
     if keyCombo.isSpecial and keyCombo.special == skEnter:
