@@ -84,7 +84,9 @@ const
   MinPrefixLength* = 1 ## Minimum prefix length to trigger (manual)
   AutoTriggerPrefixLength* = 1 ## Minimum prefix length for auto-trigger
   MinPopupWidth* = 15 ## Minimum popup width
-  MaxPopupWidth* = 50 ## Maximum popup width
+  MaxPopupWidth* = 80 ## Maximum popup width
+  MaxDetailWidth* = 30 ## Maximum detail column width
+  DetailSeparatorWidth* = 2 ## Gap between word and detail columns
   PopupPadding* = 2 ## Padding inside popup (left + right)
 
 # Forward declaration
@@ -610,6 +612,16 @@ let
     bg: ColorValue(kind: Indexed, indexed: Color.Cyan),
     modifiers: {},
   )
+  popupDetailStyle* = Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
+    bg: ColorValue(kind: Indexed, indexed: Color.Black),
+    modifiers: {},
+  )
+  popupSelectedDetailStyle* = Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
+    bg: ColorValue(kind: Indexed, indexed: Color.Cyan),
+    modifiers: {},
+  )
   popupBorderStyle* = Style(
     fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
     bg: ColorValue(kind: Indexed, indexed: Color.Black),
@@ -623,6 +635,15 @@ proc calculateMaxWordWidth*(entries: seq[CompletionEntry]): int =
     let width = entry.word.runeLen
     if width > result:
       result = width
+
+proc calculateMaxDetailWidth*(entries: seq[CompletionEntry]): int =
+  ## Calculate the maximum detail width in the entries
+  result = 0
+  for entry in entries:
+    if entry.detail.isSome:
+      let width = entry.detail.get.runeLen
+      if width > result:
+        result = width
 
 proc calculatePopupPosition*(
     cursorX, cursorY: int,
@@ -638,9 +659,16 @@ proc calculatePopupPosition*(
   let borderSize = if showBorder: 2 else: 0
   let popupHeight = visibleItems + borderSize
 
-  # Calculate width based on longest word
+  # Calculate width based on longest word and detail
   let maxWordWidth = calculateMaxWordWidth(entries)
-  let contentWidth = max(MinPopupWidth, min(maxWordWidth + PopupPadding, MaxPopupWidth))
+  let maxDetailWidth = calculateMaxDetailWidth(entries)
+  let detailSpace =
+    if maxDetailWidth > 0:
+      min(maxDetailWidth, MaxDetailWidth) + DetailSeparatorWidth
+    else:
+      0
+  let contentWidth =
+    max(MinPopupWidth, min(maxWordWidth + detailSpace + PopupPadding, MaxPopupWidth))
   let popupWidth = contentWidth + borderSize
 
   var x = cursorX
@@ -724,6 +752,7 @@ proc renderCompletionPopup*(
         termBuffer[pos.x + pos.width - 1, bottomY] = cell("┘", popupBorderStyle)
 
   # Content (always rendered)
+  let maxWordW = calculateMaxWordWidth(menu.entries)
   for i in 0 ..< contentHeight:
     let y = contentY + i
     if y >= 0 and y < termBuffer.area.height:
@@ -745,6 +774,30 @@ proc renderCompletionPopup*(
           if x < contentX + contentWidth and x < termBuffer.area.width:
             termBuffer[x, y] = cell($r, style)
             x += runeWidth(r)
+
+        # Draw detail after the word (if available)
+        let detailStyle = if isSelected: popupSelectedDetailStyle else: popupDetailStyle
+        if entry.detail.isSome and entry.detail.get.len > 0:
+          # Fill gap between word and detail
+          let detailStartX = contentX + maxWordW + DetailSeparatorWidth
+          while x < detailStartX and x < contentX + contentWidth and
+              x < termBuffer.area.width:
+            termBuffer[x, y] = cell(" ", style)
+            inc x
+
+          # Render detail text
+          var displayDetail = entry.detail.get
+          let availableDetailWidth = contentX + contentWidth - x
+          if displayDetail.runeLen > availableDetailWidth:
+            if availableDetailWidth > 1:
+              displayDetail = displayDetail[0 ..< availableDetailWidth - 1] & "…"
+            else:
+              displayDetail = ""
+
+          for r in displayDetail.runes:
+            if x < contentX + contentWidth and x < termBuffer.area.width:
+              termBuffer[x, y] = cell($r, detailStyle)
+              x += runeWidth(r)
 
         # Fill remaining space with background
         while x < contentX + contentWidth and x < termBuffer.area.width:
