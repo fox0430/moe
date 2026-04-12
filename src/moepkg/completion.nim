@@ -67,9 +67,15 @@ type
     triggerCol*: int ## Column where completion was triggered
     hasSelection*: bool ## True after first Tab press (enables auto-insert)
 
+  DocPanel* = object ## Documentation panel display state
+    lines*: seq[string] ## Text lines to display
+    scrollOffset*: int ## Current vertical scroll offset
+    visible*: bool ## Whether the panel is visible
+
   CompletionManager* = ref object ## Manages completion state and operations
     state*: CompletionState
     menu*: CompletionMenu
+    docPanel*: DocPanel ## Documentation panel for selected item
     allWords*: seq[string] ## All collected words from buffer
     wordDictionary*: WordDictionary
       ## Dictionary for language keywords and usage tracking
@@ -99,6 +105,9 @@ const
   DetailSeparatorWidth* = 2 ## Gap between word and detail columns
   PopupPadding* = 2 ## Padding inside popup (left + right)
   LspDebounceMs* = 100 ## Debounce interval for LSP completion requests
+  DocPanelMaxWidth* = 60 ## Maximum width of documentation panel
+  DocPanelMinWidth* = 20 ## Minimum width of documentation panel
+  DocPanelMaxVisibleLines* = 10 ## Maximum visible lines in doc panel
 
 # Forward declaration
 proc cancelCompletion*(mgr: CompletionManager)
@@ -530,10 +539,6 @@ proc triggerCompletion*(
   let line = buffer.getLine(cursorLine)
   let prefix = extractPrefixBeforeCursor(line, cursorCol)
 
-  # Clear any previous LSP items (start fresh with buffer completions)
-  mgr.lspItems = @[]
-  mgr.lspRequestId = none(int)
-
   # Collect words from current buffer and other open buffers
   mgr.allWords = collectBufferWords(
     buffer, BufferPosition(line: cursorLine, column: cursorCol), mgr.otherBuffers
@@ -835,6 +840,158 @@ proc renderCompletionPopup*(
           termBuffer[x, y] = cell(" ", style)
           inc x
 
+# Documentation panel
+
+let
+  docPanelNormalStyle* = Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.White),
+    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
+    modifiers: {},
+  )
+  docPanelBorderStyle* = Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
+    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
+    modifiers: {},
+  )
+  docPanelScrollStyle* = Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
+    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
+    modifiers: {},
+  )
+
+proc updateDocPanel*(mgr: CompletionManager) =
+  ## Update the documentation panel based on the selected entry
+  if not mgr.menu.hasSelection or mgr.menu.entries.len == 0:
+    mgr.docPanel.visible = false
+    return
+
+  let idx = mgr.menu.selectedIndex
+  if idx >= mgr.menu.entries.len:
+    mgr.docPanel.visible = false
+    return
+
+  let entry = mgr.menu.entries[idx]
+  if entry.documentation.isNone or entry.documentation.get.len == 0:
+    mgr.docPanel.visible = false
+    return
+
+  mgr.docPanel.lines = entry.documentation.get.splitLines()
+  mgr.docPanel.scrollOffset = 0
+  mgr.docPanel.visible = true
+
+proc calculateDocPanelPosition*(
+    completionPos: PopupPosition, termWidth, termHeight: int, docPanel: DocPanel
+): PopupPosition =
+  ## Calculate documentation panel position relative to completion popup
+  ## Prefers right side, falls back to left
+
+  # Calculate content dimensions
+  var maxLineLen = 0
+  for line in docPanel.lines:
+    maxLineLen = max(maxLineLen, line.runeLen)
+
+  let contentWidth =
+    min(max(maxLineLen + PopupPadding, DocPanelMinWidth), DocPanelMaxWidth)
+  let popupWidth = contentWidth + 2 # +2 for border
+  let visibleLines = min(docPanel.lines.len, DocPanelMaxVisibleLines)
+  let popupHeight = visibleLines + 2 # +2 for border
+
+  # Try right side of completion popup
+  let rightX = completionPos.x + completionPos.width
+  var x =
+    if rightX + popupWidth <= termWidth:
+      rightX
+    else:
+      # Try left side
+      let leftX = completionPos.x - popupWidth
+      if leftX >= 0:
+        leftX
+      else:
+        # Fall back to right, even if it clips
+        max(0, termWidth - popupWidth)
+
+  # Align vertically with completion popup
+  var y = completionPos.y
+  if y + popupHeight > termHeight - 2:
+    y = max(0, termHeight - 2 - popupHeight)
+
+  PopupPosition(x: x, y: y, width: popupWidth, height: popupHeight)
+
+proc renderDocPanel*(termBuffer: var Buffer, docPanel: DocPanel, pos: PopupPosition) =
+  ## Render documentation panel to terminal buffer
+  if not docPanel.visible or docPanel.lines.len == 0:
+    return
+
+  let contentX = pos.x + 1
+  let contentY = pos.y + 1
+  let contentWidth = pos.width - 2
+  let visibleLines = min(docPanel.lines.len, DocPanelMaxVisibleLines)
+  let canScrollUp = docPanel.scrollOffset > 0
+  let canScrollDown = docPanel.scrollOffset + visibleLines < docPanel.lines.len
+
+  # Top border
+  if pos.y >= 0 and pos.y < termBuffer.area.height:
+    if pos.x >= 0 and pos.x < termBuffer.area.width:
+      termBuffer[pos.x, pos.y] = cell("┌", docPanelBorderStyle)
+    for x in pos.x + 1 ..< min(pos.x + pos.width - 1, termBuffer.area.width):
+      if x >= 0:
+        termBuffer[x, pos.y] = cell("─", docPanelBorderStyle)
+    if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
+      if canScrollUp:
+        termBuffer[pos.x + pos.width - 1, pos.y] = cell("▲", docPanelScrollStyle)
+      else:
+        termBuffer[pos.x + pos.width - 1, pos.y] = cell("┐", docPanelBorderStyle)
+
+  # Content lines
+  for i in 0 ..< visibleLines:
+    let lineY = contentY + i
+    if lineY < 0 or lineY >= termBuffer.area.height:
+      continue
+
+    let lineIdx = docPanel.scrollOffset + i
+    let lineText =
+      if lineIdx < docPanel.lines.len:
+        docPanel.lines[lineIdx]
+      else:
+        ""
+
+    # Left border
+    if pos.x >= 0 and pos.x < termBuffer.area.width:
+      termBuffer[pos.x, lineY] = cell("│", docPanelBorderStyle)
+
+    # Content
+    var x = contentX
+    for r in lineText.runes:
+      if x >= contentX + contentWidth or x >= termBuffer.area.width:
+        break
+      if x >= 0:
+        termBuffer[x, lineY] = cell($r, docPanelNormalStyle)
+      x += runeWidth(r)
+
+    # Fill remaining space
+    while x < contentX + contentWidth and x < termBuffer.area.width:
+      if x >= 0:
+        termBuffer[x, lineY] = cell(" ", docPanelNormalStyle)
+      inc x
+
+    # Right border
+    if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
+      termBuffer[pos.x + pos.width - 1, lineY] = cell("│", docPanelBorderStyle)
+
+  # Bottom border
+  let bottomY = contentY + visibleLines
+  if bottomY >= 0 and bottomY < termBuffer.area.height:
+    if pos.x >= 0 and pos.x < termBuffer.area.width:
+      termBuffer[pos.x, bottomY] = cell("└", docPanelBorderStyle)
+    for x in pos.x + 1 ..< min(pos.x + pos.width - 1, termBuffer.area.width):
+      if x >= 0:
+        termBuffer[x, bottomY] = cell("─", docPanelBorderStyle)
+    if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
+      if canScrollDown:
+        termBuffer[pos.x + pos.width - 1, bottomY] = cell("▼", docPanelScrollStyle)
+      else:
+        termBuffer[pos.x + pos.width - 1, bottomY] = cell("┘", docPanelBorderStyle)
+
 # LSP completion support
 
 proc setLspRequestPending*(mgr: CompletionManager, requestId: int) =
@@ -942,6 +1099,13 @@ proc updateResolvedEntry*(mgr: CompletionManager, resolved: CompletionItem) =
       getDocumentationText(resolved.documentation.get)
   if resolved.additionalTextEdits.isSome:
     mgr.menu.entries[idx].additionalTextEdits = resolved.additionalTextEdits
+  if resolved.textEdit.isSome:
+    let te = resolved.textEdit.get
+    if te.hasKey("range"):
+      mgr.menu.entries[idx].textEdit = some(parseTextEdit(te))
+    elif te.hasKey("replace"):
+      mgr.menu.entries[idx].textEdit =
+        some(TextEdit(range: parseRange(te["replace"]), newText: te["newText"].getStr))
 
 proc triggerLspCompletion*(
     mgr: CompletionManager,
@@ -970,9 +1134,6 @@ proc triggerLspCompletion*(
     if keyword notin wordSet:
       mgr.allWords.add(keyword)
       wordSet.incl(keyword)
-
-  # Clear previous LSP items
-  mgr.lspItems = @[]
 
   # Set trigger position
   mgr.menu.triggerLine = cursorLine

@@ -1243,3 +1243,127 @@ suite "Completion - resolve support":
 
     check mgr.lspRawJsonItems.len == 1
     check mgr.lspRawJsonItems[0]["data"].getInt == 42
+
+suite "Completion - DocPanel":
+  test "updateDocPanel shows panel when documentation present":
+    let mgr = newCompletionManager()
+    mgr.menu.entries = @[
+      CompletionEntry(
+        word: "test",
+        matchScore: 100,
+        source: csLsp,
+        documentation: some("Line 1\nLine 2\nLine 3"),
+      )
+    ]
+    mgr.menu.selectedIndex = 0
+    mgr.menu.hasSelection = true
+    mgr.updateDocPanel()
+
+    check mgr.docPanel.visible == true
+    check mgr.docPanel.lines.len == 3
+    check mgr.docPanel.lines[0] == "Line 1"
+    check mgr.docPanel.scrollOffset == 0
+
+  test "updateDocPanel hides panel when no documentation":
+    let mgr = newCompletionManager()
+    mgr.menu.entries =
+      @[CompletionEntry(word: "test", matchScore: 100, source: csBuffer)]
+    mgr.menu.selectedIndex = 0
+    mgr.menu.hasSelection = true
+    mgr.updateDocPanel()
+
+    check mgr.docPanel.visible == false
+
+  test "updateDocPanel hides panel without selection":
+    let mgr = newCompletionManager()
+    mgr.menu.entries = @[
+      CompletionEntry(
+        word: "test", matchScore: 100, source: csLsp, documentation: some("doc")
+      )
+    ]
+    mgr.menu.hasSelection = false
+    mgr.updateDocPanel()
+
+    check mgr.docPanel.visible == false
+
+  test "calculateDocPanelPosition places right of completion popup":
+    let completionPos = PopupPosition(x: 0, y: 0, width: 20, height: 5)
+    let docPanel = DocPanel(lines: @["short doc"], scrollOffset: 0, visible: true)
+    let pos = calculateDocPanelPosition(completionPos, 80, 24, docPanel)
+    check pos.x == 20 # Right of completion popup
+
+  test "calculateDocPanelPosition falls back to left when no space right":
+    let completionPos = PopupPosition(x: 55, y: 0, width: 20, height: 5)
+    let docPanel = DocPanel(lines: @["short doc"], scrollOffset: 0, visible: true)
+    let pos = calculateDocPanelPosition(completionPos, 80, 24, docPanel)
+    check pos.x < completionPos.x # Should be left of completion
+
+  test "renderDocPanel renders content":
+    let docPanel = DocPanel(lines: @["Hello", "World"], scrollOffset: 0, visible: true)
+    let pos = PopupPosition(x: 0, y: 0, width: 12, height: 4)
+
+    var termBuffer = newBuffer(80, 24)
+    renderDocPanel(termBuffer, docPanel, pos)
+
+    # Border
+    check termBuffer[0, 0].symbol == "┌"
+    check termBuffer[11, 0].symbol == "┐"
+    # Content
+    check termBuffer[1, 1].symbol == "H"
+    check termBuffer[1, 2].symbol == "W"
+    # Bottom border
+    check termBuffer[0, 3].symbol == "└"
+    check termBuffer[11, 3].symbol == "┘"
+
+  test "renderDocPanel shows scroll indicators":
+    let docPanel = DocPanel(
+      lines:
+        @["L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12"],
+      scrollOffset: 1,
+      visible: true,
+    )
+    let pos = PopupPosition(x: 0, y: 0, width: 12, height: 12)
+
+    var termBuffer = newBuffer(80, 24)
+    renderDocPanel(termBuffer, docPanel, pos)
+
+    # Scroll up indicator at top-right
+    check termBuffer[11, 0].symbol == "▲"
+    # Scroll down indicator at bottom-right
+    check termBuffer[11, 11].symbol == "▼"
+
+suite "Completion - triggerCompletion preserves lspItems":
+  test "triggerCompletion does not clear existing lspItems":
+    let mgr = newCompletionManager()
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello hel")
+
+    # Simulate LSP items already present
+    mgr.lspItems = @[
+      CompletionItem(label: "hello", kind: some(cikFunction)),
+      CompletionItem(label: "help", kind: some(cikVariable)),
+    ]
+
+    mgr.triggerCompletion(buf, 0, 9)
+
+    # lspItems should be preserved, not cleared
+    check mgr.lspItems.len == 2
+    check mgr.lspItems[0].label == "hello"
+
+  test "triggerCompletion uses lspItems for filtering when present":
+    let mgr = newCompletionManager()
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "tes")
+
+    # Set LSP items first
+    mgr.lspItems = @[
+      CompletionItem(label: "test", kind: some(cikFunction), detail: some("fn()")),
+      CompletionItem(label: "testing", kind: some(cikVariable)),
+    ]
+
+    mgr.triggerCompletion(buf, 0, 3)
+
+    # Should show LSP items since lspItems is not empty
+    check mgr.state == csActive
+    check mgr.menu.entries.len == 2
+    check mgr.menu.entries[0].source == csLsp

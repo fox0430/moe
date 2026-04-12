@@ -312,8 +312,10 @@ proc commitCompletion*(
   # has an active transaction. The completion changes will be part of that
   # transaction and undone together with other Insert mode edits.
 
-  if entry.textEdit.isSome:
+  if entry.textEdit.isSome and not keepPopupOpen:
     # Use textEdit for range-based replacement (LSP-provided edit)
+    # Only used on final commit (not during Tab cycling) because the textEdit
+    # range refers to the original buffer state and becomes invalid after cycling.
     let edit = entry.textEdit.get
     let applyResult = buffer.applyTextEdits(@[edit])
     if applyResult.isOk:
@@ -393,6 +395,22 @@ proc triggerLspCompletionRequest*(
   let line = buffer.getLine(state.cursor.line)
   let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
 
+  # If LSP is available, check if we can skip the request and filter client-side.
+  # This must be checked BEFORE triggerCompletion, which clears lspItems.
+  if not handler.lsp.isNil and handler.lsp.isEnabled:
+    if handler.completionManager.shouldSkipLspRequest(prefix):
+      # Filter existing LSP items client-side without clearing them
+      if handler.completionManager.lspItems.len > 0:
+        handler.completionManager.menu.prefix = prefix
+        handler.completionManager.menu.entries =
+          handler.completionManager.filterAndSortEntries(prefix)
+        handler.completionManager.menu.selectedIndex = 0
+        handler.completionManager.menu.scrollOffset = 0
+        handler.completionManager.menu.hasSelection = false
+        if handler.completionManager.menu.entries.len > 0:
+          handler.completionManager.state = csActive
+      return
+
   # First, show buffer completions immediately for instant feedback
   handler.completionManager.triggerCompletion(
     buffer, state.cursor.line, state.cursor.column, buffer.language
@@ -400,16 +418,6 @@ proc triggerLspCompletionRequest*(
 
   # If LSP is available, start async request in background
   if not handler.lsp.isNil and handler.lsp.isEnabled:
-    # Check if we can skip the LSP request (debounce or client-side filtering)
-    if handler.completionManager.shouldSkipLspRequest(prefix):
-      # Just filter existing LSP items client-side
-      if handler.completionManager.lspItems.len > 0:
-        handler.completionManager.menu.entries =
-          handler.completionManager.filterAndSortEntries(prefix)
-        if handler.completionManager.menu.entries.len > 0:
-          handler.completionManager.state = csActive
-      return
-
     let reqResult =
       handler.lsp.startCompletionRequest(buffer, state.cursor.line, state.cursor.column)
 
@@ -485,6 +493,7 @@ proc pollLspResolve*(handler: InsertModeHandler) =
     if resultOpt.isSome:
       let resolved = parseCompletionItem(resultOpt.get)
       handler.completionManager.updateResolvedEntry(resolved)
+      handler.completionManager.updateDocPanel()
     handler.completionManager.resolveRequestId = none(int)
   of lrsError, lrsTimeout:
     handler.completionManager.resolveRequestId = none(int)
@@ -586,6 +595,7 @@ proc handleInsertModeKey*(
         handler.completionManager.selectNext()
       # Replace current word with selected one
       let commitResult = handler.commitCompletion(buffer, state, keepPopupOpen = true)
+      handler.completionManager.updateDocPanel()
       handler.triggerResolveRequest(buffer)
       return commitResult
 
@@ -600,6 +610,7 @@ proc handleInsertModeKey*(
         handler.completionManager.selectPrevious()
       # Replace current word with selected one
       let commitResult = handler.commitCompletion(buffer, state, keepPopupOpen = true)
+      handler.completionManager.updateDocPanel()
       handler.triggerResolveRequest(buffer)
       return commitResult
 

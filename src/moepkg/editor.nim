@@ -1525,6 +1525,13 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
         buffer, completionMgr.menu, popupPos, e.config.autocomplete.windowBorder
       )
 
+      # Render documentation panel next to completion popup
+      if completionMgr.docPanel.visible:
+        let docPos = calculateDocPanelPosition(
+          popupPos, buffer.area.width, buffer.area.height, completionMgr.docPanel
+        )
+        renderDocPanel(buffer, completionMgr.docPanel, docPos)
+
     let sigHelpMgr = e.handlerManager.insertHandler.signatureHelpManager
     if sigHelpMgr.isActive():
       let popupPos = calculateSignatureHelpPosition(
