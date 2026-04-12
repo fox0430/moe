@@ -418,6 +418,11 @@ proc triggerLspCompletionRequest*(
 
   # If LSP is available, start async request in background
   if not handler.lsp.isNil and handler.lsp.isEnabled:
+    # Cancel any pending LSP completion request to avoid orphaned responses
+    let oldReqId = handler.completionManager.getLspRequestId
+    if oldReqId.isSome:
+      handler.lsp.cancelRequest(oldReqId.get)
+
     let reqResult =
       handler.lsp.startCompletionRequest(buffer, state.cursor.line, state.cursor.column)
 
@@ -465,6 +470,11 @@ proc triggerResolveRequest*(handler: InsertModeHandler, buffer: TextBuffer) =
   let rawJsonOpt = handler.completionManager.getSelectedRawJson()
   if rawJsonOpt.isNone:
     return
+
+  # Cancel any pending resolve request before starting a new one
+  if handler.completionManager.resolveRequestId.isSome:
+    handler.lsp.cancelRequest(handler.completionManager.resolveRequestId.get)
+    handler.completionManager.resolveRequestId = none(int)
 
   let reqResult = handler.lsp.startCompletionResolveRequest(buffer, rawJsonOpt.get)
   if reqResult.isOk:
@@ -728,6 +738,10 @@ proc handleInsertModeKey*(
     handler.completionManager.cancelCompletion()
     # Request signature help from LSP if available
     if not handler.lsp.isNil and handler.lsp.isEnabled:
+      # Cancel any pending signature help request
+      if state.lspCache.pendingSignatureHelpRequestId != 0:
+        handler.lsp.cancelRequest(state.lspCache.pendingSignatureHelpRequestId)
+        state.lspCache.pendingSignatureHelpRequestId = 0
       let reqResult = handler.lsp.startSignatureHelpRequest(
         buffer, state.cursor.line, state.cursor.column
       )
