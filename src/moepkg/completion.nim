@@ -23,7 +23,9 @@
 ## It collects words from the current buffer and/or LSP server and presents them
 ## in a popup menu for selection.
 
-import std/[algorithm, sequtils, strutils, unicode, sets, options, json, os]
+import
+  std/
+    [algorithm, sequtils, strutils, unicode, sets, options, json, os, monotimes, times]
 
 import pkg/celina
 
@@ -77,6 +79,9 @@ type
     isPathCompletion*: bool ## Whether currently in path completion mode
     pathBasePath*: string ## Base directory for resolving relative paths
     pathOriginalPrefix*: string ## Full path prefix typed so far (e.g. "./src/")
+    lastLspRequestTime*: MonoTime ## Time of last LSP completion request
+    isIncomplete*: bool ## Whether last LSP completion list was incomplete
+    lastLspPrefix*: string ## Prefix used for last LSP request
 
 const
   DefaultMaxVisible* = 10
@@ -88,6 +93,7 @@ const
   MaxDetailWidth* = 30 ## Maximum detail column width
   DetailSeparatorWidth* = 2 ## Gap between word and detail columns
   PopupPadding* = 2 ## Padding inside popup (left + right)
+  LspDebounceMs* = 100 ## Debounce interval for LSP completion requests
 
 # Forward declaration
 proc cancelCompletion*(mgr: CompletionManager)
@@ -819,9 +825,30 @@ proc getLspRequestId*(mgr: CompletionManager): Option[int] =
   ## Get the pending LSP request ID
   mgr.lspRequestId
 
-proc setLspItems*(mgr: CompletionManager, items: seq[CompletionItem]) =
+proc shouldSkipLspRequest*(mgr: CompletionManager, newPrefix: string): bool =
+  ## Check if LSP request can be skipped (debounce + client-side filtering)
+  ## Returns true if we should skip the request and filter client-side instead
+  let now = getMonoTime()
+  let elapsed = now - mgr.lastLspRequestTime
+
+  # If last response was complete and new prefix extends the old one,
+  # we can filter client-side without a new request
+  if not mgr.isIncomplete and mgr.lspItems.len > 0 and mgr.lastLspPrefix.len > 0 and
+      newPrefix.startsWith(mgr.lastLspPrefix):
+    return true
+
+  # Debounce: skip if too soon since last request
+  if elapsed < initDuration(milliseconds = LspDebounceMs):
+    return true
+
+  return false
+
+proc setLspItems*(
+    mgr: CompletionManager, items: seq[CompletionItem], isIncomplete: bool = false
+) =
   ## Set LSP completion items and update the menu
   mgr.lspItems = items
+  mgr.isIncomplete = isIncomplete
   mgr.lspRequestId = none(int)
 
   # Update entries with the new LSP items
