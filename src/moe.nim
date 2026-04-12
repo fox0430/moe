@@ -381,5 +381,8 @@ proc main() =
   # Run the async editor main loop
   waitFor runEditor(editor, app, cmdLineConfig, log)
 
+  if editor.state.exitCode != 0:
+    quit(editor.state.exitCode)
+
 when isMainModule:
   main()

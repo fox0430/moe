@@ -214,7 +214,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
       hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrEnterTerminal,
       hrTerminalQuit, hrExecCommand, hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile,
-      hrFileTreeQuit, hrOpenUri:
+      hrFileTreeQuit, hrOpenUri, hrCquit:
     discard # Not expected from RecentFile mode handler
 
   # Handle overlay transitions (e.g., entering Command mode with :)
@@ -1107,6 +1107,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
   case r.kind
   of hrQuit:
     return false # Signal app should quit
+  of hrCquit:
+    e.state.exitCode = 1
+    return false # Signal app should quit with non-zero exit code
   of hrSaveAndQuit:
     return e.processSaveAndQuitResult(r)
   of hrGotoLine:

@@ -635,6 +635,8 @@ type
     startUpWindowsDone*: bool
     # Notification popup manager
     notificationPopup*: NotificationPopupManager
+    # Exit code (non-zero for :cq)
+    exitCode*: int
 
 # Forwarding procs: EditorState delegates cursor/mode/etc. to activeWindow.
 # This eliminates the dual-state sync problem — EditorWindow is the single source of truth.

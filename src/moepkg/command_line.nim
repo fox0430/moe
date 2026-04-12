@@ -99,6 +99,7 @@ type
     claOnlyWindow # :only (close all other windows)
     claEditConfigFile # :moerc (open config file for editing)
     claFileTree # :filetree (toggle file tree sidebar)
+    claCquit # :cq, :cquit (quit with non-zero exit code)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -240,6 +241,8 @@ type
       discard
     of claFileTree:
       fileTreePath*: Option[string] # Optional root path for file tree
+    of claCquit:
+      discard
     of claUnknown:
       errorMessage*: string
 
@@ -1108,6 +1111,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         else:
           none(string),
     )
+  of claCquit:
+    return CommandLineResult(kind: claCquit)
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText
@@ -1120,7 +1125,7 @@ proc parseAndExecute*(parser: CommandLineParser, input: string): CommandLineResu
 
 proc isQuitCommand*(cmdResult: CommandLineResult): bool =
   ## Check if the result is a quit command
-  cmdResult.kind in {claQuit, claQuitAll, claSaveAndQuit, claSaveAllAndQuit}
+  cmdResult.kind in {claQuit, claQuitAll, claSaveAndQuit, claSaveAllAndQuit, claCquit}
 
 proc isSaveCommand*(cmdResult: CommandLineResult): bool =
   ## Check if the result requires saving

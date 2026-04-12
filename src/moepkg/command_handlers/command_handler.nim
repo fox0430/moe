@@ -134,6 +134,7 @@ type
     cmrMapList # List runtime key mappings (:map, :nmap, etc. with no args)
     cmrOnlyWindow # Close all other windows (:only)
     cmrFileTree # Toggle file tree sidebar (:filetree)
+    cmrCquit # Quit with non-zero exit code (:cq)
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -267,6 +268,8 @@ type
       discard
     of cmrFileTree:
       fileTreePath*: Option[string]
+    of cmrCquit:
+      discard
     of cmrError:
       errorMessage*: string
 
@@ -1273,12 +1276,14 @@ proc handleCommandModeInput*(
         else:
           none(string),
     )
+  of claCquit:
+    return CommandModeResult(kind: cmrCquit)
   of claUnknown:
     return CommandModeResult(kind: cmrError, errorMessage: cmdResult.errorMessage)
 
 proc shouldQuit*(cmdResult: CommandModeResult): bool =
   ## Check if the application should quit
-  cmdResult.kind == cmrQuit
+  cmdResult.kind in {cmrQuit, cmrCquit}
 
 proc shouldSwitchMode*(cmdResult: CommandModeResult): bool =
   ## Check if mode should be switched

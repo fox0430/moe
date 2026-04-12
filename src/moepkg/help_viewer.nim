@@ -33,6 +33,7 @@ const HelpSentences* = """
 :wqa! - Force quit all windows
 :w!   - Force write
 :wq!  - Force write and quit window
+:cq   - Quit with non-zero exit code
 
 # Changing modes
 

@@ -71,6 +71,7 @@ const CommandDescriptions = {
   # Quit commands
   "q": "Quit (close window)",
   "qa": "Quit all windows",
+  "cq": "Quit with non-zero exit code",
   # Save commands
   "w": "Write (save) file",
   "wa": "Write all files",
