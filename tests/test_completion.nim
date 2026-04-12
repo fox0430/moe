@@ -888,3 +888,135 @@ suite "Completion - isPathChar":
 
   test "Colon is not path char":
     check not isPathChar(':'.Rune)
+
+suite "Completion - calculateMaxDetailWidth":
+  test "Returns max detail width":
+    let entries = @[
+      CompletionEntry(word: "foo", matchScore: 100, source: csLsp, detail: some("int")),
+      CompletionEntry(
+        word: "bar", matchScore: 90, source: csLsp, detail: some("string")
+      ),
+    ]
+    check calculateMaxDetailWidth(entries) == 6 # "string".len
+
+  test "Returns zero when no detail":
+    let entries = @[
+      CompletionEntry(word: "foo", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "bar", matchScore: 90, source: csBuffer),
+    ]
+    check calculateMaxDetailWidth(entries) == 0
+
+  test "Ignores entries without detail":
+    let entries = @[
+      CompletionEntry(word: "foo", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "bar", matchScore: 90, source: csLsp, detail: some("i32")),
+    ]
+    check calculateMaxDetailWidth(entries) == 3
+
+suite "Completion - calculatePopupPosition with detail":
+  test "Width includes detail column":
+    let entries = @[
+      CompletionEntry(
+        word: "test", matchScore: 100, source: csLsp, detail: some("fn() -> bool")
+      )
+    ]
+    let pos = calculatePopupPosition(0, 0, 80, 24, entries)
+
+    # Without detail: contentWidth = max(15, min(4+2, 80)) = 15, popupWidth = 17
+    # With detail: contentWidth = max(15, min(4+12+2+2, 80)) = 20, popupWidth = 22
+    let posNoDetail = calculatePopupPosition(
+      0, 0, 80, 24, @[CompletionEntry(word: "test", matchScore: 100, source: csBuffer)]
+    )
+    check pos.width > posNoDetail.width
+
+suite "Completion - renderCompletionPopup with detail":
+  test "Detail is rendered after word":
+    let menu = CompletionMenu(
+      entries: @[
+        CompletionEntry(
+          word: "hello", matchScore: 100, source: csLsp, detail: some("fn()")
+        )
+      ],
+      selectedIndex: 0,
+      hasSelection: false,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    # Use explicit PopupPosition to avoid y offset from calculatePopupPosition
+    let pos = PopupPosition(x: 0, y: 0, width: 15, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    # Word starts at x=0
+    check termBuffer[0, 0].symbol == "h"
+    check termBuffer[1, 0].symbol == "e"
+
+    # Detail "fn()" should appear after word + separator gap
+    # maxWordWidth=5, DetailSeparatorWidth=2, so detail starts at x=7
+    check termBuffer[7, 0].symbol == "f"
+    check termBuffer[8, 0].symbol == "n"
+    check termBuffer[9, 0].symbol == "("
+    check termBuffer[10, 0].symbol == ")"
+
+  test "Detail uses dim style":
+    let menu = CompletionMenu(
+      entries: @[
+        CompletionEntry(
+          word: "foo", matchScore: 100, source: csLsp, detail: some("int")
+        )
+      ],
+      selectedIndex: 0,
+      hasSelection: false,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = PopupPosition(x: 0, y: 0, width: 15, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    # Detail starts at x = maxWordWidth(3) + DetailSeparatorWidth(2) = 5
+    check termBuffer[5, 0].style == popupDetailStyle
+
+  test "Selected item detail uses selected detail style":
+    let menu = CompletionMenu(
+      entries: @[
+        CompletionEntry(
+          word: "foo", matchScore: 100, source: csLsp, detail: some("int")
+        )
+      ],
+      selectedIndex: 0,
+      hasSelection: true,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = PopupPosition(x: 0, y: 0, width: 15, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    # Detail starts at x=5
+    check termBuffer[5, 0].style == popupSelectedDetailStyle
+
+  test "Entry without detail renders normally":
+    let menu = CompletionMenu(
+      entries: @[
+        CompletionEntry(
+          word: "hello", matchScore: 100, source: csLsp, detail: some("fn()")
+        ),
+        CompletionEntry(word: "world", matchScore: 90, source: csBuffer),
+      ],
+      selectedIndex: 0,
+      hasSelection: false,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = PopupPosition(x: 0, y: 0, width: 15, height: 2)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    # Second entry "world" at y=1 should render word normally
+    check termBuffer[0, 1].symbol == "w"
+    check termBuffer[1, 1].symbol == "o"
