@@ -19,7 +19,7 @@
 
 ## Tests for insert_handler.nim
 
-import std/[unittest, options, tables]
+import std/[unittest, options, tables, json]
 
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/types {.all.}
@@ -1957,4 +1957,93 @@ suite "InsertModeHandler - Ctrl+O (Insert-Normal mode)":
     check result.kind == imrHandled
     check result.modeTransition.get == EditorMode.Normal
     check state.insertNormalMode == true
+
+suite "InsertModeHandler - textEdit with keepPopupOpen":
+  test "Tab cycling with textEdit uses prefix-deletion, not textEdit":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    ve")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+
+    # Set up LSP items with textEdit
+    let lspRange = Range(
+      start: lspTypes.Position(line: 0, character: 4),
+      `end`: lspTypes.Position(line: 0, character: 6),
+    )
+    handler.completionManager.lspItems = @[
+      CompletionItem(
+        label: "vec!",
+        textEdit: some(
+          %*{
+            "range":
+              {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 6}},
+            "newText": "vec!",
+          }
+        ),
+      ),
+      CompletionItem(
+        label: "version",
+        textEdit: some(
+          %*{
+            "range":
+              {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 6}},
+            "newText": "version",
+          }
+        ),
+      ),
+    ]
+
+    # Trigger completion to populate entries from lspItems
+    handler.completionManager.triggerCompletion(buf, 0, 6, langNone)
+    check handler.completionManager.isActive()
+    check handler.completionManager.menu.entries.len >= 2
+
+    # First Tab: activates selection (idx=0 "vec!")
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check buf.getLine(0) == "    vec!"
+
+    # Second Tab: selects next (idx=1 "version")
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check buf.getLine(0) == "    version"
+
+    # Third Tab: wraps back (idx=0 "vec!")
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check buf.getLine(0) == "    vec!"
+
+  test "Commit with textEdit applies textEdit on final confirm":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    ve")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+
+    # Set up completion with textEdit entry
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "vec!",
+        matchScore: 100,
+        source: csLsp,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 0, character: 4),
+              `end`: lspTypes.Position(line: 0, character: 6),
+            ),
+            newText: "vec![$0]",
+          )
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "ve"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+
+    # Final commit (keepPopupOpen=false) should use textEdit
+    let result = handler.commitCompletion(buf, state, keepPopupOpen = false)
+    check result.kind == imrHandled
+    # textEdit replaces range [4,6) with "vec![$0]"
+    check buf.getLine(0) == "    vec![$0]"
     check not handler.completionManager.isActive()
