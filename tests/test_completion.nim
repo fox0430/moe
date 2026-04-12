@@ -1084,3 +1084,82 @@ suite "Completion - setLspItems with isIncomplete":
     mgr.setLspItems(items)
 
     check mgr.isIncomplete == false
+
+suite "Completion - lspItemToEntry with textEdit":
+  test "Parses standard TextEdit":
+    let item = CompletionItem(
+      label: "testFunc",
+      kind: some(cikFunction),
+      textEdit: some(
+        %*{
+          "range":
+            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 4}},
+          "newText": "testFunc",
+        }
+      ),
+    )
+    let entry = lspItemToEntry(item, "test")
+    check entry.textEdit.isSome
+    check entry.textEdit.get.newText == "testFunc"
+    check entry.textEdit.get.range.start.line == 0
+    check entry.textEdit.get.range.start.character == 0
+    check entry.textEdit.get.range.`end`.character == 4
+
+  test "Parses InsertReplaceEdit using replace range":
+    let item = CompletionItem(
+      label: "hello",
+      textEdit: some(
+        %*{
+          "insert":
+            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 2}},
+          "replace":
+            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 5}},
+          "newText": "hello",
+        }
+      ),
+    )
+    let entry = lspItemToEntry(item, "he")
+    check entry.textEdit.isSome
+    check entry.textEdit.get.range.`end`.character == 5
+    check entry.textEdit.get.newText == "hello"
+
+  test "No textEdit when not provided":
+    let item = CompletionItem(label: "simple")
+    let entry = lspItemToEntry(item, "si")
+    check entry.textEdit.isNone
+
+  test "Parses additionalTextEdits":
+    let item = CompletionItem(
+      label: "MyClass",
+      additionalTextEdits: some(
+        @[
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 0, character: 0),
+              `end`: lspTypes.Position(line: 0, character: 0),
+            ),
+            newText: "import MyModule\n",
+          )
+        ]
+      ),
+    )
+    let entry = lspItemToEntry(item, "My")
+    check entry.additionalTextEdits.isSome
+    check entry.additionalTextEdits.get.len == 1
+    check entry.additionalTextEdits.get[0].newText == "import MyModule\n"
+
+suite "Completion - getSelectedEntry":
+  test "Returns selected entry":
+    let mgr = newCompletionManager()
+    mgr.menu.entries = @[
+      CompletionEntry(word: "foo", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "bar", matchScore: 90, source: csBuffer),
+    ]
+    mgr.menu.selectedIndex = 1
+    let entry = mgr.getSelectedEntry()
+    check entry.isSome
+    check entry.get.word == "bar"
+
+  test "Returns none when no entries":
+    let mgr = newCompletionManager()
+    check mgr.getSelectedEntry().isNone

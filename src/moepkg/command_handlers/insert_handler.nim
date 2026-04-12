@@ -299,44 +299,83 @@ proc commitCompletion*(
   ## Commit the selected completion item
   ## If keepPopupOpen is true, the popup remains visible for further selection
   ## Changes are added to the existing Insert mode transaction (do not start a new one)
-  let selectedWord = handler.completionManager.getSelectedWord()
-  if selectedWord.len == 0:
+  let entryOpt = handler.completionManager.getSelectedEntry()
+  if entryOpt.isNone or entryOpt.get.word.len == 0:
     if not keepPopupOpen:
       handler.completionManager.cancelCompletion()
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
+  let entry = entryOpt.get
   let menu = handler.completionManager.menu
-
-  # Delete the prefix that was typed (use runeLen for multi-byte character support)
-  let prefixLen = menu.prefix.runeLen
 
   # Note: We do NOT start a new transaction here because Insert mode already
   # has an active transaction. The completion changes will be part of that
   # transaction and undone together with other Insert mode edits.
 
-  if prefixLen > 0:
-    for _ in 0 ..< prefixLen:
-      state.cursor.column -= 1
-      discard buffer.deleteChar(state.cursor)
+  if entry.textEdit.isSome:
+    # Use textEdit for range-based replacement (LSP-provided edit)
+    let edit = entry.textEdit.get
+    let applyResult = buffer.applyTextEdits(@[edit])
+    if applyResult.isOk:
+      # Position cursor at end of inserted text
+      let newTextLines = edit.newText.split('\n')
+      if newTextLines.len == 1:
+        # Single-line edit: cursor at start column + newText length
+        let startCol = utf16OffsetToUtf8(
+          buffer.getLine(edit.range.start.line), edit.range.start.character
+        )
+        state.cursor.line = edit.range.start.line
+        state.cursor.column = startCol + edit.newText.runeLen
+      else:
+        # Multi-line edit: cursor at end of last line
+        let lastLine = edit.range.start.line + newTextLines.len - 1
+        state.cursor.line = lastLine
+        state.cursor.column = newTextLines[^1].runeLen
 
-  # For path completion, strip trailing '/' from directories so the user
-  # can explicitly type '/' to drill in.
-  let insertWord =
-    if handler.completionManager.isPathCompletion and selectedWord.endsWith("/"):
-      selectedWord[0 ..^ 2]
+      # Apply additional text edits if present
+      if entry.additionalTextEdits.isSome:
+        discard buffer.applyTextEdits(entry.additionalTextEdits.get)
     else:
-      selectedWord
+      # Fallback to simple prefix-deletion if textEdit application fails
+      let prefixLen = menu.prefix.runeLen
+      if prefixLen > 0:
+        for _ in 0 ..< prefixLen:
+          state.cursor.column -= 1
+          discard buffer.deleteChar(state.cursor)
+      discard buffer.insertText(state.cursor, entry.word)
+      state.cursor.column += entry.word.runeLen
+  else:
+    # Simple prefix-deletion approach (no textEdit)
+    let prefixLen = menu.prefix.runeLen
+    if prefixLen > 0:
+      for _ in 0 ..< prefixLen:
+        state.cursor.column -= 1
+        discard buffer.deleteChar(state.cursor)
 
-  # Insert the selected word
-  discard buffer.insertText(state.cursor, insertWord)
-  state.cursor.column += insertWord.runeLen
+    # For path completion, strip trailing '/' from directories so the user
+    # can explicitly type '/' to drill in.
+    let insertWord =
+      if handler.completionManager.isPathCompletion and entry.word.endsWith("/"):
+        entry.word[0 ..^ 2]
+      else:
+        entry.word
+
+    # Insert the selected word
+    discard buffer.insertText(state.cursor, insertWord)
+    state.cursor.column += insertWord.runeLen
 
   # Close the completion menu (unless keepPopupOpen)
+  let finalWord =
+    if entry.textEdit.isNone and handler.completionManager.isPathCompletion and
+        entry.word.endsWith("/"):
+      entry.word[0 ..^ 2]
+    else:
+      entry.word
   if not keepPopupOpen:
     handler.completionManager.cancelCompletion()
   else:
     # Update the prefix to the inserted text (so further cycling deletes it correctly)
-    handler.completionManager.menu.prefix = insertWord
+    handler.completionManager.menu.prefix = finalWord
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
