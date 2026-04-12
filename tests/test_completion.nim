@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, strutils]
+import std/[unittest, options, strutils, monotimes, times, os, json]
 
 import pkg/celina
 
@@ -1020,3 +1020,67 @@ suite "Completion - renderCompletionPopup with detail":
     # Second entry "world" at y=1 should render word normally
     check termBuffer[0, 1].symbol == "w"
     check termBuffer[1, 1].symbol == "o"
+
+suite "Completion - shouldSkipLspRequest":
+  test "Skip when prefix extends previous complete result":
+    let mgr = newCompletionManager()
+    mgr.isIncomplete = false
+    mgr.lastLspPrefix = "te"
+    mgr.lspItems = @[CompletionItem(label: "test")]
+    # Set time far in the past so debounce doesn't trigger
+    mgr.lastLspRequestTime = getMonoTime() - initDuration(seconds = 10)
+
+    check mgr.shouldSkipLspRequest("tes") == true
+    check mgr.shouldSkipLspRequest("test") == true
+
+  test "Do not skip when result was incomplete":
+    let mgr = newCompletionManager()
+    mgr.isIncomplete = true
+    mgr.lastLspPrefix = "te"
+    mgr.lspItems = @[CompletionItem(label: "test")]
+    mgr.lastLspRequestTime = getMonoTime() - initDuration(seconds = 10)
+
+    check mgr.shouldSkipLspRequest("tes") == false
+
+  test "Do not skip when prefix does not extend previous":
+    let mgr = newCompletionManager()
+    mgr.isIncomplete = false
+    mgr.lastLspPrefix = "te"
+    mgr.lspItems = @[CompletionItem(label: "test")]
+    mgr.lastLspRequestTime = getMonoTime() - initDuration(seconds = 10)
+
+    check mgr.shouldSkipLspRequest("fo") == false
+
+  test "Skip when within debounce interval":
+    let mgr = newCompletionManager()
+    mgr.lastLspRequestTime = getMonoTime()
+
+    check mgr.shouldSkipLspRequest("foo") == true
+
+  test "Do not skip when debounce interval has passed and no prior items":
+    let mgr = newCompletionManager()
+    mgr.lastLspRequestTime = getMonoTime() - initDuration(seconds = 10)
+
+    check mgr.shouldSkipLspRequest("foo") == false
+
+suite "Completion - setLspItems with isIncomplete":
+  test "setLspItems stores isIncomplete flag":
+    let mgr = newCompletionManager()
+    mgr.menu.prefix = "te"
+    mgr.state = csPendingLsp
+
+    let items = @[CompletionItem(label: "test")]
+    mgr.setLspItems(items, isIncomplete = true)
+
+    check mgr.isIncomplete == true
+    check mgr.state == csActive
+
+  test "setLspItems defaults isIncomplete to false":
+    let mgr = newCompletionManager()
+    mgr.menu.prefix = "te"
+    mgr.state = csPendingLsp
+
+    let items = @[CompletionItem(label: "test")]
+    mgr.setLspItems(items)
+
+    check mgr.isIncomplete == false

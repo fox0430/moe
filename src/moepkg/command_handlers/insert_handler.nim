@@ -27,7 +27,7 @@
 ## - Auto-completion (Ctrl+N/Ctrl+P to navigate, Tab to commit)
 ## - Macro recording support
 
-import std/[options, unicode, strutils]
+import std/[options, unicode, strutils, monotimes]
 
 import pkg/results
 
@@ -350,6 +350,10 @@ proc triggerLspCompletionRequest*(
   if not handler.autocompleteEnabled:
     return
 
+  # Extract prefix for debounce/skip check
+  let line = buffer.getLine(state.cursor.line)
+  let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
+
   # First, show buffer completions immediately for instant feedback
   handler.completionManager.triggerCompletion(
     buffer, state.cursor.line, state.cursor.column, buffer.language
@@ -357,10 +361,22 @@ proc triggerLspCompletionRequest*(
 
   # If LSP is available, start async request in background
   if not handler.lsp.isNil and handler.lsp.isEnabled:
+    # Check if we can skip the LSP request (debounce or client-side filtering)
+    if handler.completionManager.shouldSkipLspRequest(prefix):
+      # Just filter existing LSP items client-side
+      if handler.completionManager.lspItems.len > 0:
+        handler.completionManager.menu.entries =
+          handler.completionManager.filterAndSortEntries(prefix)
+        if handler.completionManager.menu.entries.len > 0:
+          handler.completionManager.state = csActive
+      return
+
     let reqResult =
       handler.lsp.startCompletionRequest(buffer, state.cursor.line, state.cursor.column)
 
     if reqResult.isOk:
+      handler.completionManager.lastLspRequestTime = getMonoTime()
+      handler.completionManager.lastLspPrefix = prefix
       handler.completionManager.setLspRequestPending(reqResult.get)
 
 proc pollLspCompletion*(handler: InsertModeHandler) =
@@ -386,8 +402,8 @@ proc pollLspCompletion*(handler: InsertModeHandler) =
     discard # Still waiting
   of lrsSuccess:
     if resultOpt.isSome:
-      let items = parseCompletionResponse(resultOpt.get)
-      handler.completionManager.setLspItems(items)
+      let (items, isIncomplete) = parseCompletionResponse(resultOpt.get)
+      handler.completionManager.setLspItems(items, isIncomplete)
   of lrsError, lrsTimeout:
     # Clear pending state on error/timeout
     handler.completionManager.setLspItems(@[])

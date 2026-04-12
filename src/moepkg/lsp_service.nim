@@ -790,16 +790,21 @@ proc startCallHierarchyOutgoingCallsRequest*(
   return ok(requestId)
 
 # Response parsing helpers for async requests
-proc parseCompletionResponse*(resp: JsonNode): seq[CompletionItem] =
+proc parseCompletionResponse*(
+    resp: JsonNode
+): tuple[items: seq[CompletionItem], isIncomplete: bool] =
   ## Parse a completion response JSON into CompletionItem sequence
   var items: seq[CompletionItem] = @[]
+  var isIncomplete = false
   if resp.kind == JArray:
     for item in resp:
       items.add(parseCompletionItem(item))
   elif resp.kind == JObject and resp.hasKey("items"):
+    if resp.hasKey("isIncomplete"):
+      isIncomplete = resp["isIncomplete"].getBool
     for item in resp["items"]:
       items.add(parseCompletionItem(item))
-  return items
+  return (items, isIncomplete)
 
 proc parseHoverResponse*(resp: JsonNode): Option[Hover] =
   ## Parse a hover response JSON
@@ -1142,7 +1147,7 @@ proc requestCompletion*(
     if respResult.isErr:
       return err(respResult.error)
 
-    return ok(parseCompletionResponse(respResult.get))
+    return ok(parseCompletionResponse(respResult.get).items)
 
 proc requestHover*(
     svc: LspService, path: string, line, character: int
