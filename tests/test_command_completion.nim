@@ -20,71 +20,7 @@
 import std/[unittest, os, strutils, tables, algorithm, sequtils, importutils]
 
 import ../src/moepkg/command_completion {.all.}
-import ../src/moepkg/[command_line, command_config]
-
-suite "CommandCompletion - fuzzyMatch":
-  test "Exact match":
-    check fuzzyMatch("hello", "hello") == true
-
-  test "Prefix match":
-    check fuzzyMatch("hel", "hello") == true
-
-  test "Fuzzy match with gaps":
-    check fuzzyMatch("hlo", "hello") == true
-
-  test "Case insensitive match":
-    check fuzzyMatch("HEL", "hello") == true
-    check fuzzyMatch("hel", "HELLO") == true
-
-  test "No match":
-    check fuzzyMatch("xyz", "hello") == false
-
-  test "Empty pattern matches everything":
-    check fuzzyMatch("", "hello") == true
-
-  test "Empty text matches nothing (except empty pattern)":
-    check fuzzyMatch("a", "") == false
-    check fuzzyMatch("", "") == true
-
-  test "Pattern longer than text":
-    check fuzzyMatch("helloworld", "hello") == false
-
-  test "Match with underscore":
-    check fuzzyMatch("my", "my_variable") == true
-    check fuzzyMatch("mv", "my_variable") == true
-
-suite "CommandCompletion - matchScore":
-  test "Exact prefix match has high score":
-    let score = matchScore("hel", "hello")
-    check score >= 1000
-
-  test "Case sensitive prefix match has bonus":
-    let score1 = matchScore("Hel", "Hello")
-    let score2 = matchScore("hel", "Hello")
-    check score1 > score2
-
-  test "Fuzzy match has lower score than prefix":
-    let prefixScore = matchScore("hel", "hello")
-    let fuzzyScore = matchScore("hlo", "hello")
-    check prefixScore > fuzzyScore
-
-  test "Empty pattern has zero score":
-    let score = matchScore("", "hello")
-    check score == 0
-
-  test "No match has zero score":
-    let score = matchScore("xyz", "hello")
-    check score == 0
-
-  test "Shorter words preferred for prefix match":
-    let shortScore = matchScore("he", "he")
-    let longScore = matchScore("he", "helicopter")
-    check shortScore > longScore
-
-  test "Consecutive character bonus":
-    let consecutiveScore = matchScore("hel", "hello")
-    let nonConsecutiveScore = matchScore("hlo", "hello")
-    check consecutiveScore > nonConsecutiveScore
+import ../src/moepkg/[command_line, command_config, fuzzy_match]
 
 suite "CommandCompletion - extractCommandPrefix":
   test "Extract prefix from simple command :wq":

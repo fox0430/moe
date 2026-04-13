@@ -29,7 +29,7 @@ import
 
 import pkg/celina
 
-import buffer, word_dictionary, command_completion
+import buffer, word_dictionary, command_completion, fuzzy_match
 import syntax/tokenizer
 import lsp/protocol/types as lspTypes
 
@@ -56,6 +56,7 @@ type
     documentation*: Option[string] ## LSP documentation
     textEdit*: Option[TextEdit] ## LSP textEdit for range-based replacement
     additionalTextEdits*: Option[seq[TextEdit]] ## Additional edits to apply
+    lspItemIndex*: int ## Index into lspItems/lspRawJsonItems (-1 = not from LSP)
 
   CompletionMenu* = object ## Completion popup state
     entries*: seq[CompletionEntry]
@@ -259,60 +260,6 @@ proc collectBufferWords*(
   result = wordSet.toSeq
   result.sort()
 
-# Fuzzy matching
-
-proc fuzzyMatch*(pattern, text: string): bool =
-  ## Simple fuzzy match - check if pattern chars appear in order in text
-  if pattern.len == 0:
-    return true
-  if text.len == 0:
-    return false
-
-  let lowerPattern = pattern.toLowerAscii
-  let lowerText = text.toLowerAscii
-
-  var patternIdx = 0
-  for c in lowerText:
-    if patternIdx < lowerPattern.len and c == lowerPattern[patternIdx]:
-      inc patternIdx
-  return patternIdx >= lowerPattern.len
-
-proc matchScore*(pattern, text: string): int =
-  ## Calculate match score (higher = better)
-  ## Prefers: exact prefix match > fuzzy match > length similarity
-  if pattern.len == 0:
-    return 0
-
-  let lowerPattern = pattern.toLowerAscii
-  let lowerText = text.toLowerAscii
-
-  # Exact prefix match gets highest score
-  if lowerText.startsWith(lowerPattern):
-    result = 1000 + (100 - min(text.len, 100)) # Prefer shorter words
-    # Bonus for case-sensitive match
-    if text.startsWith(pattern):
-      result += 50
-  else:
-    # Fuzzy match score based on character positions
-    var score = 0
-    var patternIdx = 0
-    var lastMatchPos = -1
-
-    for i, c in lowerText:
-      if patternIdx < lowerPattern.len and c == lowerPattern[patternIdx]:
-        # Bonus for consecutive matches
-        if lastMatchPos == i - 1:
-          score += 20
-        else:
-          score += 10
-        lastMatchPos = i
-        inc patternIdx
-
-    if patternIdx >= lowerPattern.len:
-      result = score
-    else:
-      result = 0 # No match
-
 # Completion menu operations
 
 proc newCompletionManager*(): CompletionManager =
@@ -354,7 +301,9 @@ proc getDocumentationText(doc: JsonNode): Option[string] =
     discard
   return none(string)
 
-proc lspItemToEntry*(item: CompletionItem, prefix: string): CompletionEntry =
+proc lspItemToEntry*(
+    item: CompletionItem, prefix: string, lspItemIndex: int = -1
+): CompletionEntry =
   ## Convert an LSP CompletionItem to a CompletionEntry
   let word =
     if item.insertText.isSome and item.insertText.get.len > 0:
@@ -387,6 +336,7 @@ proc lspItemToEntry*(item: CompletionItem, prefix: string): CompletionEntry =
     documentation: docText,
     textEdit: textEditOpt,
     additionalTextEdits: item.additionalTextEdits,
+    lspItemIndex: lspItemIndex,
   )
 
 proc filterAndSortEntries*(
@@ -421,8 +371,8 @@ proc filterAndSortEntries*(
 
   # If LSP items are available, use only LSP items
   if mgr.lspItems.len > 0:
-    for item in mgr.lspItems:
-      let entry = lspItemToEntry(item, prefix)
+    for i, item in mgr.lspItems:
+      let entry = lspItemToEntry(item, prefix, i)
       if prefix.len == 0 or entry.matchScore > 0:
         result.add(entry)
 
@@ -801,8 +751,8 @@ proc renderCompletionPopup*(
 
         # Truncate word to fit
         var displayWord = entry.word
-        if displayWord.len > contentWidth:
-          displayWord = displayWord[0 ..< contentWidth - 1] & "…"
+        if displayWord.runeLen > contentWidth:
+          displayWord = $displayWord.toRunes[0 ..< contentWidth - 1] & "…"
 
         # Draw word
         var x = contentX
@@ -1072,15 +1022,10 @@ proc getSelectedRawJson*(mgr: CompletionManager): Option[JsonNode] =
   if entry.source != csLsp:
     return none(JsonNode)
 
-  # Find the matching raw JSON item by word
-  for i, item in mgr.lspItems:
-    let word =
-      if item.insertText.isSome and item.insertText.get.len > 0:
-        item.insertText.get
-      else:
-        item.label
-    if word == entry.word and i < mgr.lspRawJsonItems.len:
-      return some(mgr.lspRawJsonItems[i])
+  # Use the stored index for direct lookup (avoids overload ambiguity)
+  let lspIdx = entry.lspItemIndex
+  if lspIdx >= 0 and lspIdx < mgr.lspRawJsonItems.len:
+    return some(mgr.lspRawJsonItems[lspIdx])
 
   return none(JsonNode)
 

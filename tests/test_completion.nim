@@ -103,61 +103,6 @@ suite "Completion - extractPrefixBeforeCursor":
     let prefix = extractPrefixBeforeCursor("", 0)
     check prefix == ""
 
-suite "Completion - fuzzyMatch":
-  test "Exact match":
-    check fuzzyMatch("hello", "hello") == true
-
-  test "Prefix match":
-    check fuzzyMatch("hel", "hello") == true
-
-  test "Fuzzy match with gaps":
-    check fuzzyMatch("hlo", "hello") == true
-
-  test "Case insensitive match":
-    check fuzzyMatch("HEL", "hello") == true
-    check fuzzyMatch("hel", "HELLO") == true
-
-  test "No match":
-    check fuzzyMatch("xyz", "hello") == false
-
-  test "Empty pattern matches everything":
-    check fuzzyMatch("", "hello") == true
-
-  test "Empty text matches nothing (except empty pattern)":
-    check fuzzyMatch("a", "") == false
-    check fuzzyMatch("", "") == true
-
-  test "Pattern longer than text":
-    check fuzzyMatch("helloworld", "hello") == false
-
-suite "Completion - matchScore":
-  test "Exact prefix match has high score":
-    let score = matchScore("hel", "hello")
-    check score >= 1000
-
-  test "Case sensitive prefix match has bonus":
-    let score1 = matchScore("Hel", "Hello")
-    let score2 = matchScore("hel", "Hello")
-    check score1 > score2
-
-  test "Fuzzy match has lower score than prefix":
-    let prefixScore = matchScore("hel", "hello")
-    let fuzzyScore = matchScore("hlo", "hello")
-    check prefixScore > fuzzyScore
-
-  test "Empty pattern has zero score":
-    let score = matchScore("", "hello")
-    check score == 0
-
-  test "No match has zero score":
-    let score = matchScore("xyz", "hello")
-    check score == 0
-
-  test "Shorter words preferred for prefix match":
-    let shortScore = matchScore("he", "he")
-    let longScore = matchScore("he", "helicopter")
-    check shortScore > longScore
-
 suite "Completion - CompletionManager":
   test "newCompletionManager creates idle manager":
     let mgr = newCompletionManager()
@@ -1207,8 +1152,8 @@ suite "Completion - resolve support":
     mgr.lspRawJsonItems =
       @[%*{"label": "foo", "data": 1}, %*{"label": "bar", "data": 2}]
     mgr.menu.entries = @[
-      CompletionEntry(word: "foo", matchScore: 100, source: csLsp),
-      CompletionEntry(word: "bar", matchScore: 90, source: csLsp),
+      CompletionEntry(word: "foo", matchScore: 100, source: csLsp, lspItemIndex: 0),
+      CompletionEntry(word: "bar", matchScore: 90, source: csLsp, lspItemIndex: 1),
     ]
     mgr.menu.selectedIndex = 1
     mgr.menu.hasSelection = true
@@ -1216,6 +1161,41 @@ suite "Completion - resolve support":
     check rawJson.isSome
     check rawJson.get["label"].getStr == "bar"
     check rawJson.get["data"].getInt == 2
+
+  test "getSelectedRawJson handles overloaded items with same word":
+    let mgr = newCompletionManager()
+    # Two overloaded functions with the same name but different details
+    mgr.lspItems = @[
+      CompletionItem(label: "foo", detail: some("fn(int)")),
+      CompletionItem(label: "foo", detail: some("fn(string)")),
+    ]
+    mgr.lspRawJsonItems = @[
+      %*{"label": "foo", "detail": "fn(int)", "data": 1},
+      %*{"label": "foo", "detail": "fn(string)", "data": 2},
+    ]
+    mgr.menu.entries = @[
+      CompletionEntry(
+        word: "foo",
+        matchScore: 100,
+        source: csLsp,
+        detail: some("fn(int)"),
+        lspItemIndex: 0,
+      ),
+      CompletionEntry(
+        word: "foo",
+        matchScore: 100,
+        source: csLsp,
+        detail: some("fn(string)"),
+        lspItemIndex: 1,
+      ),
+    ]
+    # Select the second overload
+    mgr.menu.selectedIndex = 1
+    mgr.menu.hasSelection = true
+    let rawJson = mgr.getSelectedRawJson()
+    check rawJson.isSome
+    check rawJson.get["data"].getInt == 2
+    check rawJson.get["detail"].getStr == "fn(string)"
 
   test "updateResolvedEntry updates detail and documentation":
     let mgr = newCompletionManager()
@@ -1367,3 +1347,46 @@ suite "Completion - triggerCompletion preserves lspItems":
     check mgr.state == csActive
     check mgr.menu.entries.len == 2
     check mgr.menu.entries[0].source == csLsp
+
+suite "Completion - renderCompletionPopup with multibyte characters":
+  test "Multibyte word truncated correctly by rune count":
+    # contentWidth=6 (borderless, width=6), word "日本語テスト" is 6 runes
+    # but each CJK char is 2 cells wide, so it won't fit in 6 cells.
+    # Here we test that truncation uses runeLen, not byte len.
+    let menu = CompletionMenu(
+      entries: @[
+        CompletionEntry(word: "日本語テスト", matchScore: 100, source: csBuffer)
+      ],
+      selectedIndex: 0,
+      hasSelection: false,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    # Narrow popup: contentWidth = 5 (width=5, no border)
+    let pos = PopupPosition(x: 0, y: 0, width: 5, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    # "日本語テスト" has runeLen=6 > contentWidth=5, so truncated to 4 runes + "…"
+    # First rune "日" rendered at x=0
+    check termBuffer[0, 0].symbol == "日"
+
+  test "ASCII word not affected by runeLen fix":
+    let menu = CompletionMenu(
+      entries: @[CompletionEntry(word: "longword", matchScore: 100, source: csBuffer)],
+      selectedIndex: 0,
+      hasSelection: false,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    # contentWidth=5: "longword" (runeLen=8 > 5) → truncated to "long…"
+    let pos = PopupPosition(x: 0, y: 0, width: 5, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    check termBuffer[0, 0].symbol == "l"
+    check termBuffer[1, 0].symbol == "o"
+    check termBuffer[2, 0].symbol == "n"
+    check termBuffer[3, 0].symbol == "g"
