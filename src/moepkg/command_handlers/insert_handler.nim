@@ -312,6 +312,14 @@ proc commitCompletion*(
   # has an active transaction. The completion changes will be part of that
   # transaction and undone together with other Insert mode edits.
 
+  # For path completion, strip trailing '/' from directories so the user
+  # can explicitly type '/' to drill in.
+  let insertWord =
+    if handler.completionManager.isPathCompletion and entry.word.endsWith("/"):
+      entry.word[0 ..^ 2]
+    else:
+      entry.word
+
   if entry.textEdit.isSome and not keepPopupOpen:
     # Use textEdit for range-based replacement (LSP-provided edit)
     # Only used on final commit (not during Tab cycling) because the textEdit
@@ -354,30 +362,16 @@ proc commitCompletion*(
         state.cursor.column -= 1
         discard buffer.deleteChar(state.cursor)
 
-    # For path completion, strip trailing '/' from directories so the user
-    # can explicitly type '/' to drill in.
-    let insertWord =
-      if handler.completionManager.isPathCompletion and entry.word.endsWith("/"):
-        entry.word[0 ..^ 2]
-      else:
-        entry.word
-
     # Insert the selected word
     discard buffer.insertText(state.cursor, insertWord)
     state.cursor.column += insertWord.runeLen
 
   # Close the completion menu (unless keepPopupOpen)
-  let finalWord =
-    if entry.textEdit.isNone and handler.completionManager.isPathCompletion and
-        entry.word.endsWith("/"):
-      entry.word[0 ..^ 2]
-    else:
-      entry.word
   if not keepPopupOpen:
     handler.completionManager.cancelCompletion()
   else:
     # Update the prefix to the inserted text (so further cycling deletes it correctly)
-    handler.completionManager.menu.prefix = finalWord
+    handler.completionManager.menu.prefix = insertWord
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 

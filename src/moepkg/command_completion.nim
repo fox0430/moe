@@ -26,7 +26,7 @@ import std/[algorithm, strutils, unicode, tables, os]
 
 import pkg/celina
 
-import command_line
+import command_line, fuzzy_match
 
 type
   CommandCompletionState* = enum
@@ -274,60 +274,6 @@ const SetOptions* = {
   "softtabstop":
     "Tab/Backspace width in insert mode (e.g., softtabstop=4, 0=use tabstop)",
 }.toTable
-
-# Fuzzy matching (similar to completion.nim)
-
-proc fuzzyMatch*(pattern, text: string): bool =
-  ## Simple fuzzy match - check if pattern chars appear in order in text
-  if pattern.len == 0:
-    return true
-  if text.len == 0:
-    return false
-
-  let lowerPattern = pattern.toLowerAscii
-  let lowerText = text.toLowerAscii
-
-  var patternIdx = 0
-  for c in lowerText:
-    if patternIdx < lowerPattern.len and c == lowerPattern[patternIdx]:
-      inc patternIdx
-  return patternIdx >= lowerPattern.len
-
-proc matchScore*(pattern, text: string): int =
-  ## Calculate match score (higher = better)
-  ## Prefers: exact prefix match > fuzzy match > length similarity
-  if pattern.len == 0:
-    return 0
-
-  let lowerPattern = pattern.toLowerAscii
-  let lowerText = text.toLowerAscii
-
-  # Exact prefix match gets highest score
-  if lowerText.startsWith(lowerPattern):
-    result = 1000 + (100 - min(text.len, 100)) # Prefer shorter words
-    # Bonus for case-sensitive match
-    if text.startsWith(pattern):
-      result += 50
-  else:
-    # Fuzzy match score based on character positions
-    var score = 0
-    var patternIdx = 0
-    var lastMatchPos = -1
-
-    for i, c in lowerText:
-      if patternIdx < lowerPattern.len and c == lowerPattern[patternIdx]:
-        # Bonus for consecutive matches
-        if lastMatchPos == i - 1:
-          score += 20
-        else:
-          score += 10
-        lastMatchPos = i
-        inc patternIdx
-
-    if patternIdx >= lowerPattern.len:
-      result = score
-    else:
-      result = 0 # No match
 
 # Command collection
 
