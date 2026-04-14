@@ -36,6 +36,11 @@ proc getEditorConfigProperties*(filePath: string): Option[Table[string, string]]
 
   try:
     let absPath = absolutePath(filePath)
+    # Check that the parent directory exists to avoid a bug in the editorconfig
+    # library where parentDir reaches "" and falls back to CWD.
+    ## TODO: Remove after resolved (https://github.com/fox0430/editorconfig-nim/issues/7)
+    if not dirExists(parentDir(absPath)):
+      return none(Table[string, string])
     let props = getProperties(absPath)
     if props.len > 0:
       return some(props)
