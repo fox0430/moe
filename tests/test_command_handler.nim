@@ -248,13 +248,13 @@ suite "CommandModeHandler - executeGotoLine":
     check result.kind == cmrError
     check result.errorMessage == "Invalid line number"
 
-  test "Goto line beyond buffer length returns error":
+  test "Goto line beyond buffer length clamps to last line":
     let handler = setupHandler()
     let buffer = setupBuffer(@["Line 1", "Line 2"])
 
     let result = handler.executeGotoLine(buffer, 100)
-    check result.kind == cmrError
-    check result.errorMessage == "Line number exceeds buffer length"
+    check result.kind == cmrGotoLine
+    check result.lineNumber == 2
 
 suite "CommandModeHandler - executeSet Boolean Options":
   test "Set number on":
