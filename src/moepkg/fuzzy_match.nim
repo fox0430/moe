@@ -55,24 +55,43 @@ proc matchScore*(pattern, text: string): int =
     if text.startsWith(pattern):
       result += 50
   else:
-    # Fuzzy match score based on character positions
-    var score = 0
+    # Fuzzy match score using forward + reverse pass for optimal consecutive
+    # bonus. Forward greedy finds the earliest match positions; reverse greedy
+    # from the last forward-matched position finds positions that maximize
+    # consecutive runs.
     var patternIdx = 0
-    var lastMatchPos = -1
+    var forwardPositions = newSeq[int](lowerPattern.len)
 
+    # Forward pass: find earliest match positions (greedy left-to-right)
     for i, c in lowerText:
       if patternIdx < lowerPattern.len and c == lowerPattern[patternIdx]:
-        # Bonus for consecutive matches
-        if lastMatchPos == i - 1:
-          score += 20
-        else:
-          score += 10
-        # Bonus for matching near the start of the text
-        score += max(0, 50 - i * 5)
-        lastMatchPos = i
+        forwardPositions[patternIdx] = i
         inc patternIdx
 
-    if patternIdx >= lowerPattern.len:
-      result = score
-    else:
+    if patternIdx < lowerPattern.len:
       result = 0 # No match
+    else:
+      # Reverse pass: starting from the last forward-matched position, scan
+      # backwards to find the latest possible match for each pattern char.
+      # This pulls matches as close together (rightward) as possible,
+      # maximizing consecutive runs.
+      var reversePositions = newSeq[int](lowerPattern.len)
+      var rIdx = lowerPattern.len - 1
+      for i in countdown(forwardPositions[^1], 0):
+        if rIdx >= 0 and lowerText[i] == lowerPattern[rIdx]:
+          reversePositions[rIdx] = i
+          dec rIdx
+
+      # Score both sets of positions, take the best
+      proc calcScore(positions: seq[int]): int =
+        for j, pos in positions:
+          if j > 0 and pos == positions[j - 1] + 1:
+            result += 20 # Consecutive bonus
+          else:
+            result += 10
+          # Bonus for matching near the start of the text
+          result += max(0, 50 - pos * 5)
+
+      let forwardScore = calcScore(forwardPositions)
+      let reverseScore = calcScore(reversePositions)
+      result = max(forwardScore, reverseScore)

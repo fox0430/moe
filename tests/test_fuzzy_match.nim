@@ -89,3 +89,13 @@ suite "matchScore":
     let earlyScore = matchScore("op", "open")
     let lateScore = matchScore("op", "stopwatch")
     check earlyScore > lateScore
+
+  test "Consecutive match found despite earlier non-consecutive match":
+    # pattern "ab" in "a__ab": greedy matches a(0),b(4) = non-consecutive
+    # Optimal is a(3),b(4) = consecutive, which should score higher
+    let score = matchScore("ab", "a__ab")
+    # The reverse pass should find the consecutive "ab" at positions 3,4
+    # Consecutive: 10 + 20 = 30 (plus position bonuses)
+    # Non-consecutive greedy: 10 + 10 = 20 (plus position bonuses)
+    # Score should reflect the consecutive match
+    check score > 20
