@@ -90,8 +90,9 @@ proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
 proc processGotoLineResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
   ## Process hrGotoLine: move cursor to the specified line number.
   let lineNum = r.lineNumber
-  if lineNum > 0 and lineNum <= activeBuffer.len:
-    e.activeWindow.cursor.line = lineNum - 1 # Convert to 0-based
+  if lineNum > 0:
+    # Clamp to last line if lineNum exceeds buffer length
+    e.activeWindow.cursor.line = min(lineNum, activeBuffer.len) - 1
     e.activeWindow.cursor.column = 0
     e.updateViewportForCursor(e.cursor)
 
