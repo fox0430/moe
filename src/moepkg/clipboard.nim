@@ -138,17 +138,15 @@ proc writeToPrimarySelectionSync*(
   let cmd = cmdOpt.get()
   try:
     if tool == cbtWlClipboard:
-      var args = cmd[1 ..^ 1]
-      args.add(text)
-      let process = startProcess(cmd[0], args = args, options = {poUsePath})
-      let exitCode = process.waitForExit()
-      process.close()
-      if exitCode == 0:
-        return Result[void, string].ok()
-      else:
-        return Result[void, string].err(
-          "Failed to write to primary selection: exit code " & $exitCode
-        )
+      # wl-copy stays running to serve the selection content, so we must not
+      # call waitForExit (it would block forever). Pass text via stdin and
+      # close the handle; wl-copy will keep running in the background.
+      let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
+      process.inputStream.write(text)
+      process.inputStream.close()
+      # Don't waitForExit — wl-copy exits automatically when another
+      # wl-copy instance claims the selection.
+      return Result[void, string].ok()
     else:
       let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
       process.inputStream.write(text)
@@ -197,19 +195,16 @@ proc writeToClipboardSync*(tool: ClipboardTool, text: string): Result[void, stri
 
   let cmd = cmdOpt.get()
   try:
-    # wl-copy accepts text as positional argument
     if tool == cbtWlClipboard:
-      var args = cmd[1 ..^ 1]
-      args.add(text)
-      let process = startProcess(cmd[0], args = args, options = {poUsePath})
-      let exitCode = process.waitForExit()
-      process.close()
-      if exitCode == 0:
-        return Result[void, string].ok()
-      else:
-        return Result[void, string].err(
-          "Failed to write to clipboard: exit code " & $exitCode
-        )
+      # wl-copy stays running to serve the clipboard content, so we must not
+      # call waitForExit (it would block forever and freeze the editor).
+      # Pass text via stdin and close the handle; wl-copy will keep running
+      # in the background and exit automatically when another wl-copy
+      # instance claims the clipboard.
+      let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
+      process.inputStream.write(text)
+      process.inputStream.close()
+      return Result[void, string].ok()
     else:
       # Other tools (xclip, xsel, pbcopy, win32yank) use stdin
       let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
