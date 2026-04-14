@@ -366,13 +366,10 @@ proc executeGotoLine*(
   if lineNumber <= 0:
     return CommandModeResult(kind: cmrError, errorMessage: "Invalid line number")
 
-  # Check if line number is beyond the buffer length
-  if lineNumber > buffer.len:
-    return CommandModeResult(
-      kind: cmrError, errorMessage: "Line number exceeds buffer length"
-    )
+  # Clamp to last line if lineNumber exceeds buffer length
+  let clampedLine = min(lineNumber, buffer.len)
 
-  return CommandModeResult(kind: cmrGotoLine, lineNumber: lineNumber)
+  return CommandModeResult(kind: cmrGotoLine, lineNumber: clampedLine)
 
 proc executeSet*(
     handler: CommandModeHandler, option: string, value: Option[string]
