@@ -67,6 +67,8 @@ proc matchScore*(pattern, text: string): int =
           score += 20
         else:
           score += 10
+        # Bonus for matching near the start of the text
+        score += max(0, 50 - i * 5)
         lastMatchPos = i
         inc patternIdx
 

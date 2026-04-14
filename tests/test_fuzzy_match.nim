@@ -84,3 +84,8 @@ suite "matchScore":
     let consecutiveScore = matchScore("hel", "hello")
     let nonConsecutiveScore = matchScore("hlo", "hello")
     check consecutiveScore > nonConsecutiveScore
+
+  test "Earlier match position preferred":
+    let earlyScore = matchScore("op", "open")
+    let lateScore = matchScore("op", "stopwatch")
+    check earlyScore > lateScore
