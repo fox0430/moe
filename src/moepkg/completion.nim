@@ -397,19 +397,18 @@ proc filterAndSortEntries*(
     else:
       # Filter and score buffer words
       for word in mgr.allWords:
-        if fuzzyMatch(prefix, word):
-          let score = matchScore(prefix, word)
-          if score > 0:
-            result.add(
-              CompletionEntry(
-                word: word,
-                matchScore: score,
-                source: csBuffer,
-                kind: none(CompletionItemKind),
-                detail: none(string),
-                documentation: none(string),
-              )
+        let score = matchScore(prefix, word)
+        if score > 0:
+          result.add(
+            CompletionEntry(
+              word: word,
+              matchScore: score,
+              source: csBuffer,
+              kind: none(CompletionItemKind),
+              detail: none(string),
+              documentation: none(string),
             )
+          )
 
     # Sort buffer words by score (descending)
     result.sort do(a, b: CompletionEntry) -> int:

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, strutils, monotimes, times, os, json]
+import std/[unittest, options, strutils, monotimes, times, json]
 
 import pkg/celina
 

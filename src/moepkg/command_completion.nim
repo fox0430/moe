@@ -475,12 +475,11 @@ proc filterAndSortEntries*(
 
   # Filter and score
   for entry in mgr.allCommands:
-    if fuzzyMatch(prefix, entry.command):
-      let score = matchScore(prefix, entry.command)
-      if score > 0:
-        var newEntry = entry
-        newEntry.matchScore = score
-        result.add(newEntry)
+    let score = matchScore(prefix, entry.command)
+    if score > 0:
+      var newEntry = entry
+      newEntry.matchScore = score
+      result.add(newEntry)
 
   # Sort by score (descending)
   result.sort do(a, b: CommandCompletionEntry) -> int:
