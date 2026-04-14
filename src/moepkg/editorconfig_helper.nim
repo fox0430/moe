@@ -31,11 +31,16 @@ import buffer, config, types, logger
 proc getEditorConfigProperties*(filePath: string): Option[Table[string, string]] =
   ## Get EditorConfig properties for a file path.
   ## Returns none if the file path is empty or properties cannot be retrieved.
+  ## TODO: Remove after resolved (https://github.com/fox0430/editorconfig-nim/issues/7)
   if filePath.len == 0:
     return none(Table[string, string])
 
   try:
     let absPath = absolutePath(filePath)
+    # Check that the parent directory exists to avoid a bug in the editorconfig
+    # library where parentDir reaches "" and falls back to CWD.
+    if not dirExists(parentDir(absPath)):
+      return none(Table[string, string])
     let props = getProperties(absPath)
     if props.len > 0:
       return some(props)
