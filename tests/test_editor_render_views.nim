@@ -313,12 +313,12 @@ suite "renderBottomLines - Command mode":
     e.viewport.height = 24
     e.state.enterCommandOverlay()
     e.state.commandText = ":write"
-    e.state.commandCursor = 6
+    e.state.commandCursor = 5 # 0-based after ":", max = runeLen - 1
 
     e.renderBottomLines(buffer)
 
-    # Cursor should be positioned on command line
-    check e.state.screenCursor.x == 7 # 1 + 6 (after ":" + cursor position)
+    # Cursor should be positioned at end of command text
+    check e.state.screenCursor.x == 6 # displayWidthUpTo(":write", 6)
     check e.state.screenCursor.y == buffer.area.height - 1
 
   test "Render empty command line":
@@ -344,11 +344,45 @@ suite "renderBottomLines - Command mode":
     e.viewport.height = 24
     e.state.enterCommandOverlay()
     e.state.commandText = ":set tabstop=4 shiftwidth=4 expandtab"
-    e.state.commandCursor = 37
+    e.state.commandCursor = 36 # 0-based after ":", max = runeLen - 1
 
     e.renderBottomLines(buffer)
 
-    check e.state.screenCursor.x == 38
+    check e.state.screenCursor.x == 37
+    check e.state.screenCursor.y == buffer.area.height - 1
+
+  test "Render command with wide characters":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.enterCommandOverlay()
+    # "あいう" are 3 characters, each with display width 2
+    e.state.commandText = ":あいう"
+    e.state.commandCursor = 3 # After all 3 wide chars
+
+    e.renderBottomLines(buffer)
+
+    # ":" = 1 column, "あいう" = 6 columns, total = 7
+    check e.state.screenCursor.x == 7
+    check e.state.screenCursor.y == buffer.area.height - 1
+
+  test "Render command with mixed ASCII and wide characters":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.enterCommandOverlay()
+    # "eあb" = 'e'(1) + 'あ'(2) + 'b'(1) = 4 display columns
+    e.state.commandText = ":eあb"
+    e.state.commandCursor = 2 # After "eあ"
+
+    e.renderBottomLines(buffer)
+
+    # ":" = 1 column, "eあ" = 3 columns, total = 4
+    check e.state.screenCursor.x == 4
     check e.state.screenCursor.y == buffer.area.height - 1
 
 suite "renderBottomLines - Search mode":

@@ -25,7 +25,7 @@ import pkg/celina
 
 import
   editor_types, editor_window, editor_render_window, editor_render_modes, render_utils,
-  status_line, tab_line, buffer
+  status_line, tab_line, buffer, unicode_utils
 
 proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
   ## Update screen size from buffer area and return true if resized.
@@ -333,8 +333,9 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
   # Overlays render at the same bottomY, overwriting the status line.
   if e.state.isCommandOverlay:
     buffer.setString(buffer.area.x, bottomY, e.state.commandText, commandStyle())
-    # Cursor position: ":" + commandCursor (0-based after ":")
-    e.state.screenCursor.x = 1 + e.state.commandCursor
+    # Cursor position: display width of commandText up to cursor
+    e.state.screenCursor.x =
+      displayWidthUpTo(e.state.commandText, e.state.commandCursor + 1)
     e.state.screenCursor.y = bottomY
 
     # Render command completion popup if active
@@ -352,12 +353,12 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
     let searchChar = if e.state.search.direction == Forward: "/" else: "?"
     let searchPrompt = searchChar & e.state.search.text
     buffer.setString(buffer.area.x, bottomY, searchPrompt, commandStyle())
-    e.state.screenCursor.x = searchPrompt.len
+    e.state.screenCursor.x = displayWidth(searchPrompt)
     e.state.screenCursor.y = bottomY
   elif e.state.isRenameOverlay:
     let renamePrompt = "Rename: " & e.state.renameState.text
     buffer.setString(buffer.area.x, bottomY, renamePrompt, commandStyle())
-    e.state.screenCursor.x = renamePrompt.len
+    e.state.screenCursor.x = displayWidth(renamePrompt)
     e.state.screenCursor.y = bottomY
   else:
     let lineCount = e.state.statusMessageLineCount()
