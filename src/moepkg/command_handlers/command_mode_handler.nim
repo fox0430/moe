@@ -32,7 +32,7 @@ import
     quick_run_utils, help_viewer, buffer_manager, bookmark_manager, backup_manager,
     backup, debug_viewer, config_loader, message_log, command_line, color, theme,
     terminal_mode, command_completion, render_utils, config_mode, log_viewer,
-    syntax_checker, window_manager, registers,
+    syntax_checker, window_manager, registers, unicode_utils,
   ]
 import handler_manager
 
@@ -335,20 +335,20 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       case mgr.mode
       of cmCommand:
         e.state.commandText = ":" & selected
-        e.state.commandCursor = selected.len
+        e.state.commandCursor = selected.runeLen
         return false
       of cmFilePath:
         # Use original directory prefix (saved when completion started)
         let newArg = mgr.originalDirPrefix & selected
         e.state.commandText = ":" & mgr.baseCommand & " " & newArg
-        e.state.commandCursor = mgr.baseCommand.len + 1 + newArg.len
+        e.state.commandCursor = mgr.baseCommand.runeLen + 1 + newArg.runeLen
         # Return true if directory selected (ends with /)
         return selected.endsWith("/")
       of cmSetOption:
         # Replace only the argument part
         let (cmd, _) = parseCommandLine(e.state.commandText)
         e.state.commandText = ":" & cmd & " " & selected
-        e.state.commandCursor = cmd.len + 1 + selected.len
+        e.state.commandCursor = cmd.runeLen + 1 + selected.runeLen
         return false
 
     if kmShift in keyCombo.modifiers or keyCombo.special == skBackTab:
@@ -1396,8 +1396,8 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
   # Handle Right arrow - move cursor right
   if keyCombo.isSpecial and keyCombo.special == skRight:
-    # commandText includes the ":" prefix, so max cursor position is len - 1
-    let maxPos = e.state.commandText.len - 1
+    # commandText includes the ":" prefix, so max cursor position is runeLen - 1
+    let maxPos = e.state.commandText.runeLen - 1
     if e.state.commandCursor < maxPos:
       e.state.commandCursor += 1
       e.state.commandCompletionManager.cancelCompletion()
@@ -1406,12 +1406,10 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   # Handle Backspace - delete character before cursor
   if keyCombo.isSpecial and keyCombo.special == skBackspace:
     e.state.commandState.historyIndex = -1
-    if e.state.commandCursor > 0 and e.state.commandText.len > 1:
-      # Calculate position in commandText (cursor is 0-based after ":")
-      let pos = e.state.commandCursor # Position after ":"
-      # Delete character at pos (which is pos in commandText since commandText starts with ":")
-      e.state.commandText =
-        e.state.commandText[0 ..< pos] & e.state.commandText[pos + 1 ..^ 1]
+    if e.state.commandCursor > 0 and e.state.commandText.runeLen > 1:
+      # Delete the character before cursor (commandCursor is 0-based after ":")
+      let pos = e.state.commandCursor # Character position in commandText
+      e.state.commandText = e.state.commandText.deleteCharAt(pos)
       e.state.commandCursor -= 1
       # Update completion
       let mgr = e.state.commandCompletionManager
@@ -1426,10 +1424,10 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
   # Handle Delete - delete character at cursor
   if keyCombo.isSpecial and keyCombo.special == skDelete:
-    let pos = e.state.commandCursor + 1 # Position in commandText (after ":")
-    if pos < e.state.commandText.len:
-      e.state.commandText =
-        e.state.commandText[0 ..< pos] & e.state.commandText[pos + 1 ..^ 1]
+    let charPos = e.state.commandCursor + 1
+      # Character position in commandText (after ":")
+    if charPos < e.state.commandText.runeLen:
+      e.state.commandText = e.state.commandText.deleteCharAt(charPos)
       # Update completion
       let mgr = e.state.commandCompletionManager
       if ' ' in e.state.commandText:
@@ -1449,7 +1447,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
   # Handle End - move cursor to end
   if keyCombo.isSpecial and keyCombo.special == skEnd:
-    e.state.commandCursor = e.state.commandText.len - 1
+    e.state.commandCursor = e.state.commandText.runeLen - 1
     e.state.commandCompletionManager.cancelCompletion()
     return true
 
@@ -1466,7 +1464,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       # Update command text with history entry
       e.state.commandText =
         ":" & e.state.commandState.history[e.state.commandState.historyIndex]
-      e.state.commandCursor = e.state.commandText.len - 1
+      e.state.commandCursor = e.state.commandText.runeLen - 1
       e.state.commandCompletionManager.cancelCompletion()
       e.updateSubstitutePreviewIfNeeded()
     return true
@@ -1479,7 +1477,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         e.state.commandState.historyIndex -= 1
         e.state.commandText =
           ":" & e.state.commandState.history[e.state.commandState.historyIndex]
-        e.state.commandCursor = e.state.commandText.len - 1
+        e.state.commandCursor = e.state.commandText.runeLen - 1
       else:
         # Reached the newest entry, clear to empty command
         e.state.commandState.historyIndex = -1
@@ -1496,9 +1494,10 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     if e.state.commandText.len == 0:
       e.state.commandText = ":"
       e.state.commandCursor = 0
-    let pos = e.state.commandCursor + 1 # Position in commandText (after ":")
+    let bytePos = charToBytePos(e.state.commandText, e.state.commandCursor + 1)
     e.state.commandText =
-      e.state.commandText[0 ..< pos] & keyCombo.char & e.state.commandText[pos ..^ 1]
+      e.state.commandText[0 ..< bytePos] & keyCombo.char &
+      e.state.commandText[bytePos ..^ 1]
     e.state.commandCursor += 1
     # Handle completion
     let mgr = e.state.commandCompletionManager
