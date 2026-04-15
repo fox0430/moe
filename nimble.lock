@@ -111,15 +111,15 @@
       }
     },
     "editorconfig": {
-      "version": "0.1.0",
-      "vcsRevision": "0ffc3057139ee0904026adbc0edb373f5cf17184",
+      "version": "0.1.1",
+      "vcsRevision": "fe01c05688cc896309fe45a1fe2db1d0552630b5",
       "url": "https://github.com/fox0430/editorconfig-nim",
       "downloadMethod": "git",
       "dependencies": [
         "regex"
       ],
       "checksums": {
-        "sha1": "4617c4ab6463c9fa416717be445645bf621b727c"
+        "sha1": "2e714ce4a485ffb59f47c1bf8b8d1ce24c446312"
       }
     },
     "parsetoml": {
