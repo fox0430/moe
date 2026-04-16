@@ -27,6 +27,18 @@ import pkg/celina
 
 export buffer.runeWidth
 
+proc setRuneCell*(buffer: var Buffer, x, y: int, r: Rune, style: Style): int =
+  ## Write a single rune at (x, y) and the wide-char continuation cell when
+  ## runeWidth(r) == 2. Without the continuation cell, celina's diff cannot
+  ## detect that the second column needs to be repainted when a wide char is
+  ## overwritten, leaving ghost artifacts on popup close.
+  ## Returns the display width of the rune.
+  buffer[x, y] = cell($r, style)
+  let w = runeWidth(r)
+  if w == 2 and x + 1 < buffer.area.width:
+    buffer[x + 1, y] = cell("", style)
+  return w
+
 type CursorPosCache* = object
   ## Cache for accelerating character-to-byte position conversions
   ## Dramatically improves performance for consecutive edits on long lines

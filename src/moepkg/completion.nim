@@ -29,7 +29,7 @@ import
 
 import pkg/celina
 
-import buffer, word_dictionary, command_completion, fuzzy_match
+import buffer, word_dictionary, command_completion, fuzzy_match, unicode_utils
 import syntax/tokenizer
 import lsp/protocol/types as lspTypes
 
@@ -757,8 +757,7 @@ proc renderCompletionPopup*(
         var x = contentX
         for r in displayWord.runes:
           if x < contentX + contentWidth and x < termBuffer.area.width:
-            termBuffer[x, y] = cell($r, style)
-            x += runeWidth(r)
+            x += setRuneCell(termBuffer, x, y, r, style)
 
         # Draw detail after the word (if available)
         let detailStyle = if isSelected: popupSelectedDetailStyle else: popupDetailStyle
@@ -781,8 +780,7 @@ proc renderCompletionPopup*(
 
           for r in displayDetail.runes:
             if x < contentX + contentWidth and x < termBuffer.area.width:
-              termBuffer[x, y] = cell($r, detailStyle)
-              x += runeWidth(r)
+              x += setRuneCell(termBuffer, x, y, r, detailStyle)
 
         # Fill remaining space with background
         while x < contentX + contentWidth and x < termBuffer.area.width:
@@ -914,8 +912,9 @@ proc renderDocPanel*(termBuffer: var Buffer, docPanel: DocPanel, pos: PopupPosit
       if x >= contentX + contentWidth or x >= termBuffer.area.width:
         break
       if x >= 0:
-        termBuffer[x, lineY] = cell($r, docPanelNormalStyle)
-      x += runeWidth(r)
+        x += setRuneCell(termBuffer, x, lineY, r, docPanelNormalStyle)
+      else:
+        x += runeWidth(r)
 
     # Fill remaining space
     while x < contentX + contentWidth and x < termBuffer.area.width:

@@ -334,6 +334,28 @@ suite "SignatureHelp - renderSignatureHelpPopup":
     check termBuffer[0, 0].symbol != "┌"
     check termBuffer[9, 0].symbol != "┐"
 
+  test "Wide char signature writes continuation cell to prevent ghost":
+    # Wide (2-col) characters must set an empty continuation cell at x+1 so
+    # celina's diff can repaint the second column on popup close.
+    let display = SignatureHelpDisplay(
+      signature: "日本語",
+      activeParamStart: -1,
+      activeParamEnd: -1,
+      documentation: "",
+    )
+    let pos = SignatureHelpPopupPosition(x: 0, y: 0, width: 10, height: 3)
+
+    var termBuffer = newBuffer(80, 24)
+    renderSignatureHelpPopup(termBuffer, display, pos, showBorder = true)
+
+    # Content starts at (1, 1) due to border
+    check termBuffer[1, 1].symbol == "日"
+    check termBuffer[2, 1].symbol == ""
+    check termBuffer[2, 1].style == termBuffer[1, 1].style
+    check termBuffer[3, 1].symbol == "本"
+    check termBuffer[4, 1].symbol == ""
+    check termBuffer[4, 1].style == termBuffer[3, 1].style
+
 suite "SignatureHelp - styles":
   test "signatureHelpNormalStyle has white foreground and dark background":
     check signatureHelpNormalStyle.fg.kind == Indexed

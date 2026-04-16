@@ -1390,3 +1390,76 @@ suite "Completion - renderCompletionPopup with multibyte characters":
     check termBuffer[1, 0].symbol == "o"
     check termBuffer[2, 0].symbol == "n"
     check termBuffer[3, 0].symbol == "g"
+
+  test "Wide char word writes continuation cell to prevent ghost":
+    # When the popup contains wide (2-col) characters, the cell at x+1 must
+    # be an empty continuation cell — otherwise celina's diff can't detect
+    # that column when the popup closes, leaving a half-character residual
+    # on terminal.
+    let menu = CompletionMenu(
+      entries: @[CompletionEntry(word: "日本語", matchScore: 100, source: csBuffer)],
+      selectedIndex: 0,
+      hasSelection: false,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = PopupPosition(x: 0, y: 0, width: 10, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    # Main cells hold the wide char symbol
+    check termBuffer[0, 0].symbol == "日"
+    check termBuffer[2, 0].symbol == "本"
+    check termBuffer[4, 0].symbol == "語"
+    # Continuation cells are empty strings with the same style as the main cell
+    check termBuffer[1, 0].symbol == ""
+    check termBuffer[1, 0].style == termBuffer[0, 0].style
+    check termBuffer[3, 0].symbol == ""
+    check termBuffer[3, 0].style == termBuffer[2, 0].style
+    check termBuffer[5, 0].symbol == ""
+    check termBuffer[5, 0].style == termBuffer[4, 0].style
+
+  test "Wide char detail writes continuation cell":
+    let menu = CompletionMenu(
+      entries: @[
+        CompletionEntry(
+          word: "abc", detail: some("日本"), matchScore: 100, source: csBuffer
+        )
+      ],
+      selectedIndex: 0,
+      hasSelection: false,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    # Wide popup so detail fits: word "abc" (3) + gap (3) + detail "日本" (4) = 10
+    let pos = PopupPosition(x: 0, y: 0, width: 12, height: 1)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
+
+    # Find the detail chars — they come after the word and the separator gap.
+    # The exact column depends on layout, but continuation cells must exist
+    # wherever wide chars are placed.
+    for x in 0 ..< pos.width:
+      if termBuffer[x, 0].symbol == "日":
+        check termBuffer[x + 1, 0].symbol == ""
+        check termBuffer[x + 1, 0].style == termBuffer[x, 0].style
+      elif termBuffer[x, 0].symbol == "本":
+        check termBuffer[x + 1, 0].symbol == ""
+        check termBuffer[x + 1, 0].style == termBuffer[x, 0].style
+
+  test "renderDocPanel wide char writes continuation cell":
+    let docPanel = DocPanel(visible: true, lines: @["日本語"], scrollOffset: 0)
+    let pos = PopupPosition(x: 0, y: 0, width: 10, height: 3)
+
+    var termBuffer = newBuffer(80, 24)
+    renderDocPanel(termBuffer, docPanel, pos)
+
+    # Content starts at (1, 1) because of border
+    check termBuffer[1, 1].symbol == "日"
+    check termBuffer[2, 1].symbol == ""
+    check termBuffer[2, 1].style == termBuffer[1, 1].style
+    check termBuffer[3, 1].symbol == "本"
+    check termBuffer[4, 1].symbol == ""
+    check termBuffer[4, 1].style == termBuffer[3, 1].style

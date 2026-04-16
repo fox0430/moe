@@ -27,7 +27,7 @@ import std/[strutils, unicode, monotimes, times]
 
 import pkg/celina
 
-import color
+import color, unicode_utils
 
 type
   NotificationLevel* = enum
@@ -275,8 +275,9 @@ proc renderNotificationPopup*(termBuffer: var Buffer, rect: NotificationRect) =
       if x >= contentX + contentWidth or x >= termBuffer.area.width:
         break
       if x >= 0:
-        termBuffer[x, lineY] = cell($r, contentStyle)
-      x += runeWidth(r)
+        x += setRuneCell(termBuffer, x, lineY, r, contentStyle)
+      else:
+        x += runeWidth(r)
 
     # Fill remaining space with background
     while x < contentX + contentWidth and x < termBuffer.area.width:

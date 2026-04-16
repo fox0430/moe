@@ -27,6 +27,8 @@ import std/[strutils, unicode]
 
 import pkg/celina
 
+import unicode_utils
+
 type
   HoverPopupState* = enum
     hpsIdle ## No hover popup active
@@ -318,8 +320,9 @@ proc renderHoverPopup*(
         if x >= contentX + contentWidth or x >= termBuffer.area.width:
           break
         if x >= 0:
-          termBuffer[x, lineY] = cell($r, hoverPopupNormalStyle)
-        x += runeWidth(r)
+          x += setRuneCell(termBuffer, x, lineY, r, hoverPopupNormalStyle)
+        else:
+          x += runeWidth(r)
         inc charIdx
 
       # Fill remaining space with background

@@ -26,7 +26,7 @@ import std/[algorithm, strutils, unicode, tables, os]
 
 import pkg/celina
 
-import command_line, fuzzy_match
+import command_line, fuzzy_match, unicode_utils
 
 type
   CommandCompletionState* = enum
@@ -785,8 +785,7 @@ proc renderCommandCompletionPopup*(
           var x = contentX
           for r in displayCmd.runes:
             if x < contentX + contentWidth and x < termBuffer.area.width:
-              termBuffer[x, y] = cell($r, cmdStyle)
-              x += runeWidth(r)
+              x += setRuneCell(termBuffer, x, y, r, cmdStyle)
 
           # Pad command to max width for alignment
           let cmdEndX = contentX + min(maxCmdWidth, cmdDisplayWidth) + DescriptionGap
@@ -803,8 +802,7 @@ proc renderCommandCompletionPopup*(
 
             for r in displayDesc.runes:
               if x < contentX + contentWidth and x < termBuffer.area.width:
-                termBuffer[x, y] = cell($r, descStyle)
-                x += runeWidth(r)
+                x += setRuneCell(termBuffer, x, y, r, descStyle)
 
           # Fill remaining space with background
           while x < contentX + contentWidth and x < termBuffer.area.width:

@@ -27,7 +27,7 @@ import std/[options, unicode, json]
 
 import pkg/celina
 
-import lsp_integration
+import lsp_integration, unicode_utils
 import lsp/protocol/types as lspTypes
 
 type
@@ -246,8 +246,7 @@ proc renderSignatureHelpPopup*(
           else:
             signatureHelpNormalStyle
 
-        termBuffer[x, contentY] = cell($r, style)
-        x += runeWidth(r)
+        x += setRuneCell(termBuffer, x, contentY, r, style)
         inc charIdx
 
       # Fill remaining space with background
