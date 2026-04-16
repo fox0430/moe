@@ -19,6 +19,8 @@
 
 import std/[unittest, unicode]
 
+import pkg/celina
+
 import ../src/moepkg/[buffer, unicode_utils, render_utils]
 import ../src/moepkg/buffer_backends/gap_buffer
 
@@ -918,3 +920,40 @@ suite "isAdjacentPair":
   test "With spaces inside":
     check isAdjacentPair("[   ]", 0) == false
     check isAdjacentPair("( )", 0) == false
+
+suite "unicode_utils - setRuneCell":
+  test "ASCII rune writes only the main cell, returns width 1":
+    var buf = newBuffer(10, 3)
+    let style = defaultStyle()
+    let w = setRuneCell(buf, 2, 1, "a".runeAt(0), style)
+    check w == 1
+    check buf[2, 1].symbol == "a"
+    # Adjacent cell is untouched (remains default)
+    check buf[3, 1].symbol == " "
+
+  test "Wide rune writes main and continuation cell, returns width 2":
+    var buf = newBuffer(10, 3)
+    let style = defaultStyle()
+    let w = setRuneCell(buf, 2, 1, "日".runeAt(0), style)
+    check w == 2
+    check buf[2, 1].symbol == "日"
+    # Continuation cell at x+1 is empty string with the same style
+    check buf[3, 1].symbol == ""
+    check buf[3, 1].style == style
+
+  test "Wide rune at right edge does not write beyond buffer":
+    var buf = newBuffer(3, 3)
+    let style = defaultStyle()
+    # x+1 is the last valid cell - continuation is written
+    let w = setRuneCell(buf, 1, 0, "日".runeAt(0), style)
+    check w == 2
+    check buf[1, 0].symbol == "日"
+    check buf[2, 0].symbol == ""
+
+  test "Wide rune at exact buffer right edge skips continuation":
+    var buf = newBuffer(3, 3)
+    let style = defaultStyle()
+    # x=2 is the last valid col; x+1=3 is out of bounds - skip continuation
+    let w = setRuneCell(buf, 2, 0, "日".runeAt(0), style)
+    check w == 2
+    check buf[2, 0].symbol == "日"

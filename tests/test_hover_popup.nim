@@ -557,6 +557,27 @@ suite "HoverPopup - renderHoverPopup":
     # Should not crash
     renderHoverPopup(termBuffer, mgr, pos, showBorder = true)
 
+  test "Wide char content writes continuation cell to prevent ghost":
+    # Wide (2-col) characters must set an empty continuation cell at x+1 so
+    # celina's diff can repaint the second column on popup close.
+    let mgr = newHoverPopupManager()
+    mgr.show("日本語", 0, 0)
+    mgr.display.maxVisibleLines = 1
+    mgr.display.maxVisibleWidth = 20
+
+    let pos = HoverPopupPosition(x: 0, y: 0, width: 10, height: 3)
+
+    var termBuffer = newBuffer(80, 24)
+    renderHoverPopup(termBuffer, mgr, pos, showBorder = true)
+
+    # Content starts at (1, 1) due to border
+    check termBuffer[1, 1].symbol == "日"
+    check termBuffer[2, 1].symbol == ""
+    check termBuffer[2, 1].style == termBuffer[1, 1].style
+    check termBuffer[3, 1].symbol == "本"
+    check termBuffer[4, 1].symbol == ""
+    check termBuffer[4, 1].style == termBuffer[3, 1].style
+
 suite "HoverPopup - styles":
   test "hoverPopupNormalStyle has white foreground and dark background":
     check hoverPopupNormalStyle.fg.kind == Indexed

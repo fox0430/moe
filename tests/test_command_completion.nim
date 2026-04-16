@@ -19,6 +19,8 @@
 
 import std/[unittest, os, strutils, tables, algorithm, sequtils, importutils]
 
+import pkg/celina
+
 import ../src/moepkg/command_completion {.all.}
 import ../src/moepkg/[command_line, command_config, fuzzy_match]
 
@@ -1068,3 +1070,26 @@ suite "CommandCompletion - SetOptions and executeSet sync":
     ]
     for key in SetOptions.keys:
       check key in executeSetPrimaryOptions
+
+suite "CommandCompletion - renderCommandCompletionPopup wide char":
+  test "Wide char command writes continuation cell to prevent ghost":
+    # Wide (2-col) characters must set an empty continuation cell at x+1 so
+    # celina's diff can repaint the second column on popup close.
+    let menu = CommandCompletionMenu(
+      entries: @[CommandCompletionEntry(command: "日本語", description: "")],
+      selectedIndex: 0,
+      scrollOffset: 0,
+      maxVisible: 10,
+    )
+    let pos = CommandPopupPosition(x: 0, y: 0, width: 12, height: 3)
+
+    var termBuffer = newBuffer(80, 24)
+    renderCommandCompletionPopup(termBuffer, menu, pos, showBorder = true)
+
+    # Content starts at (1, 1) due to border
+    check termBuffer[1, 1].symbol == "日"
+    check termBuffer[2, 1].symbol == ""
+    check termBuffer[2, 1].style == termBuffer[1, 1].style
+    check termBuffer[3, 1].symbol == "本"
+    check termBuffer[4, 1].symbol == ""
+    check termBuffer[4, 1].style == termBuffer[3, 1].style
