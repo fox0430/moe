@@ -282,6 +282,15 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
   if pastedText.len == 0:
     return true
 
+  # Command / Search overlay takes precedence over the base mode.
+  # Only the first line is inserted since both are single-line.
+  if e.state.isCommandOverlay:
+    e.insertPastedTextInCommand(pastedText)
+    return true
+  if e.state.isSearchOverlay:
+    e.insertPastedTextInSearch(pastedText)
+    return true
+
   let activeBuffer = e.activeBuffer()
 
   # Handle paste differently based on mode
@@ -408,6 +417,21 @@ proc calculateLineNumOffsetForMouse(e: Editor, buffer: TextBuffer): int =
 proc middleClickPaste(e: Editor) =
   ## Paste clipboard content at current cursor position for middle-click.
   if not e.config.clipboard.enable:
+    return
+
+  # Command / Search overlay: paste into the command / search line instead
+  # of the buffer. Only the first line is inserted since both are single-line.
+  if e.state.isCommandOverlay or e.state.isSearchOverlay:
+    let readResult = readFromPrimarySelectionSync(e.config.clipboard.tool)
+    if readResult.isErr:
+      return
+    let pastedText = readResult.get()
+    if pastedText.len == 0:
+      return
+    if e.state.isCommandOverlay:
+      e.insertPastedTextInCommand(pastedText)
+    else:
+      e.insertPastedTextInSearch(pastedText)
     return
 
   if e.state.mode == EditorMode.Normal:

@@ -231,6 +231,35 @@ proc enterTerminalInActiveWindow(e: Editor, command: string) =
 
 proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool
 
+proc insertPastedTextInCommand*(e: Editor, text: string) =
+  ## Insert pasted text at the current command-line cursor.
+  ## The command line is single-line: only the first line of the paste is used
+  ## (everything up to the first newline, with a trailing CR stripped).
+  let nlIdx = text.find('\n')
+  var insertText =
+    if nlIdx >= 0:
+      text[0 ..< nlIdx]
+    else:
+      text
+  if insertText.len > 0 and insertText[^1] == '\r':
+    insertText = insertText[0 ..< ^1]
+  if insertText.len == 0:
+    return
+
+  e.state.commandState.historyIndex = -1
+  if e.state.commandText.len == 0:
+    e.state.commandText = ":"
+    e.state.commandCursor = 0
+
+  let bytePos = charToBytePos(e.state.commandText, e.state.commandCursor + 1)
+  e.state.commandText =
+    e.state.commandText[0 ..< bytePos] & insertText & e.state.commandText[bytePos ..^ 1]
+  e.state.commandCursor += insertText.runeLen
+
+  e.state.commandCompletionManager.cancelCompletion()
+  e.updateSubstitutePreviewIfNeeded()
+  e.state.needsFullRedraw = true
+
 proc handleCommandModeEvent*(e: Editor, event: Event): bool =
   ## Handle Command mode events (special handling for text input)
   if event.kind != EventKind.Key:

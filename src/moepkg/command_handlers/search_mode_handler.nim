@@ -22,7 +22,7 @@
 ## This module handles incremental search mode (/ and ? commands).
 ## Extracted from handler.nim to reduce file size.
 
-import std/[options, unicode]
+import std/[options, strutils, unicode]
 
 import pkg/celina
 
@@ -233,6 +233,25 @@ proc handleSearchCharacterInput(e: Editor, ch: string) =
   ## - If incsearch enabled: Trigger incremental search
   ## - Always trigger redraw to update search highlight
   e.state.search.text.add(ch)
+  e.performIncrementalSearch()
+  e.state.needsFullRedraw = true
+
+proc insertPastedTextInSearch*(e: Editor, text: string) =
+  ## Append pasted text to the search text.
+  ## The search line is single-line: only the first line of the paste is used
+  ## (everything up to the first newline, with a trailing CR stripped).
+  let nlIdx = text.find('\n')
+  var insertText =
+    if nlIdx >= 0:
+      text[0 ..< nlIdx]
+    else:
+      text
+  if insertText.len > 0 and insertText[^1] == '\r':
+    insertText = insertText[0 ..< ^1]
+  if insertText.len == 0:
+    return
+
+  e.state.search.text.add(insertText)
   e.performIncrementalSearch()
   e.state.needsFullRedraw = true
 
