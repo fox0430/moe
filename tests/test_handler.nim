@@ -2363,6 +2363,59 @@ suite "middleClickPaste":
       check e.windowManager.windows[0].cursor.line == 1
       check e.windowManager.windows[0].cursor.column == 5
 
+  test "Command overlay - paste first line only":
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let tool = getAvailableClipboardTool()
+      let testText = "hello world"
+      let writeResult = writeToPrimarySelectionSync(tool, testText)
+      check writeResult.isOk
+      sleep(100)
+
+      let e = createTestEditorForMiddleClick("")
+      e.state.enterCommandOverlay()
+
+      e.middleClickPaste()
+
+      check e.state.commandText == ":hello world"
+      check e.state.commandCursor == testText.len
+
+  test "Command overlay - multiline paste keeps only first line":
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let tool = getAvailableClipboardTool()
+      let testText = "first\nsecond"
+      let writeResult = writeToPrimarySelectionSync(tool, testText)
+      check writeResult.isOk
+      sleep(100)
+
+      let e = createTestEditorForMiddleClick("")
+      e.state.enterCommandOverlay()
+
+      e.middleClickPaste()
+
+      check e.state.commandText == ":first"
+      check e.state.commandCursor == 5
+
+  test "Search overlay - paste appends first line":
+    if not isClipboardToolAvailable():
+      skip()
+    else:
+      let tool = getAvailableClipboardTool()
+      let testText = "needle\nignored"
+      let writeResult = writeToPrimarySelectionSync(tool, testText)
+      check writeResult.isOk
+      sleep(100)
+
+      let e = createTestEditorForMiddleClick("haystack needle")
+      e.state.enterSearchOverlay(SearchDirection.Forward)
+
+      e.middleClickPaste()
+
+      check e.state.search.text == "needle"
+
   test "handleEvent dispatches middle-click even when mouse config disabled":
     if not isClipboardToolAvailable():
       skip()
@@ -2447,6 +2500,44 @@ suite "handlePasteEvent":
     discard e.handleEvent(event)
 
     check e.state.statusMessage == "Paste not supported in this mode"
+
+  test "Command overlay - bracketed paste inserts at cursor":
+    let e = createTestEditorForPaste("hello")
+    e.state.enterCommandOverlay()
+
+    let event = makePasteEvent("wq")
+    discard e.handleEvent(event)
+
+    check e.state.commandText == ":wq"
+    check e.state.commandCursor == 2
+
+  test "Command overlay - bracketed paste keeps only first line":
+    let e = createTestEditorForPaste("hello")
+    e.state.enterCommandOverlay()
+
+    let event = makePasteEvent("set ts=4\nset nu")
+    discard e.handleEvent(event)
+
+    check e.state.commandText == ":set ts=4"
+    check e.state.commandCursor == 8
+
+  test "Search overlay - bracketed paste appends to search text":
+    let e = createTestEditorForPaste("hello world")
+    e.state.enterSearchOverlay(SearchDirection.Forward)
+
+    let event = makePasteEvent("wor")
+    discard e.handleEvent(event)
+
+    check e.state.search.text == "wor"
+
+  test "Search overlay - bracketed paste keeps only first line":
+    let e = createTestEditorForPaste("hello world")
+    e.state.enterSearchOverlay(SearchDirection.Forward)
+
+    let event = makePasteEvent("wor\nignored")
+    discard e.handleEvent(event)
+
+    check e.state.search.text == "wor"
 
 suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
   let quitEvent = Event(kind: EventKind.Quit)
