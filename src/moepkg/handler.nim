@@ -1224,19 +1224,22 @@ proc handleEvent*(e: Editor, event: Event): bool =
     e.setMode(EditorMode.Normal)
     return true
   of hrFileTreeOpenFile:
-    # Open file from file tree in the first non-FileTree window
+    # Open file from file tree in the first non-FileTree window.
+    # If the FileTree is the only window, open the file in a new window
+    # placed to the right of the FileTree.
     var targetWinIdx = -1
     for i, win in e.windowManager.windows:
       if win.mode != EditorMode.FileTree:
         targetWinIdx = i
         break
-    if targetWinIdx >= 0:
-      # Reveal the opened file in the file tree
-      for win in e.windowManager.windows:
-        if win.mode == EditorMode.FileTree and win.fileTreeState.isSome:
-          win.fileTreeState.get.revealPath(r.fileTreeFilePath)
-          break
 
+    # Reveal the opened file in the file tree (order-independent iteration)
+    for win in e.windowManager.windows:
+      if win.mode == EditorMode.FileTree and win.fileTreeState.isSome:
+        win.fileTreeState.get.revealPath(r.fileTreeFilePath)
+        break
+
+    if targetWinIdx >= 0:
       # Switch to the target window and open the file
       # editFile adds to the buffer list without discarding unsaved changes
       e.windowManager.activateWindow(targetWinIdx)
@@ -1247,7 +1250,12 @@ proc handleEvent*(e: Editor, event: Event): bool =
       else:
         e.state.statusMessage = "Opened: " & r.fileTreeFilePath
     else:
-      e.state.statusMessage = "No editor window available"
+      # FileTree is the only window: create a new window on its right
+      let openResult = e.openFileInNewRightWindow(r.fileTreeFilePath)
+      if openResult.isErr:
+        e.state.statusMessage = "Error: " & openResult.error
+      else:
+        e.state.statusMessage = "Opened: " & r.fileTreeFilePath
     e.state.needsFullRedraw = true
     return true
   of hrFileTreeQuit:

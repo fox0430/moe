@@ -1443,3 +1443,134 @@ suite "Editor - lspForcePopup":
     # Should go to statusMessage, not popup
     check e.state.notificationPopup.queue.len == 0
     check e.state.statusMessage == "[LSP Error] nim: something failed"
+
+suite "Editor - openFileInNewRightWindow":
+  proc setupLoneFileTree(termWidth: int = 120, termHeight: int = 40): Editor =
+    ## Set up an editor where the FileTree is the only window.
+    let config = newEditorConfig()
+    let e = newEditor(config, newValidationResult())
+
+    let viewportHeight = termHeight - CommandLineHeight
+    let win = e.activeWindow
+    win.viewport.width = termWidth
+    win.viewport.height = viewportHeight
+
+    # Open fileTree (creates [FileTree, editor])
+    e.toggleFileTree(none(string), e.activeBuffer())
+    doAssert e.windowManager.windows.len == 2
+
+    # Close the editor window, leaving only the FileTree
+    e.windowManager.activateWindow(1)
+    discard e.closeWindow()
+    doAssert e.windowManager.windows.len == 1
+    doAssert e.activeWindow.mode == EditorMode.FileTree
+
+    return e
+
+  test "opens new window on the right of FileTree":
+    const
+      termWidth = 120
+      termHeight = 40
+    let e = setupLoneFileTree(termWidth, termHeight)
+    let ftWidth = e.config.fileTree.width
+
+    let testFile = "/tmp/moe_test_open_right.txt"
+    writeFile(testFile, "hello right window")
+    defer:
+      removeFile(testFile)
+
+    let r = e.openFileInNewRightWindow(testFile)
+    check r.isOk
+
+    check e.windowManager.windows.len == 2
+    let ftWin = e.windowManager.windows[0]
+    let newWin = e.windowManager.windows[1]
+
+    check ftWin.mode == EditorMode.FileTree
+    check ftWin.viewport.width == ftWidth
+
+    check newWin.mode == EditorMode.Normal
+    check newWin.viewport.x == ftWidth + WindowSeparatorWidth
+    check newWin.viewport.width == termWidth - ftWidth - WindowSeparatorWidth
+    check newWin.viewport.y == ftWin.viewport.y
+    check newWin.viewport.height == ftWin.viewport.height
+
+    # No gap; total width covers entire terminal
+    check newWin.viewport.x + newWin.viewport.width == termWidth
+
+    # New window is active and contains the loaded file
+    check e.windowManager.activeWindowIndex == 1
+    check newWin.buffer.filePath.isSome
+    check newWin.buffer.filePath.get == testFile
+
+    # Per-window bufferList contains only the new buffer
+    check newWin.bufferList.len == 1
+    check newWin.bufferList[0] == newWin.buffer
+
+  test "reuses existing buffer when file is already loaded":
+    let e = setupLoneFileTree()
+
+    let testFile = "/tmp/moe_test_open_right_reuse.txt"
+    writeFile(testFile, "reused")
+    defer:
+      removeFile(testFile)
+
+    # Pre-load the file into the global buffer list via loadOrCreateBuffer
+    # (no window created yet)
+    let preloadResult = e.loadOrCreateBuffer(testFile)
+    check preloadResult.isOk
+    let preloadedBuffer = preloadResult.get
+    let bufferCountAfterPreload = e.buffers.len
+
+    # Opening the preloaded file should reuse the buffer, not create a new one
+    let r = e.openFileInNewRightWindow(testFile)
+    check r.isOk
+    check e.buffers.len == bufferCountAfterPreload
+    check e.activeWindow.buffer == preloadedBuffer
+    check e.activeWindow.buffer.filePath.isSome
+    check e.activeWindow.buffer.filePath.get == testFile
+
+  test "creates new file buffer when path does not exist":
+    let e = setupLoneFileTree()
+
+    let newPath = "/tmp/moe_test_open_right_new_file_does_not_exist.txt"
+    # Ensure it really doesn't exist
+    if fileExists(newPath):
+      removeFile(newPath)
+    defer:
+      if fileExists(newPath):
+        removeFile(newPath)
+
+    let r = e.openFileInNewRightWindow(newPath)
+    check r.isOk
+
+    let newWin = e.windowManager.windows[1]
+    check newWin.buffer.filePath.isSome
+    check newWin.buffer.filePath.get == newPath
+
+  test "returns error when active window is not FileTree":
+    let e = createTestEditor()
+    # Default single window is Normal mode
+    check e.activeWindow.mode == EditorMode.Normal
+
+    let r = e.openFileInNewRightWindow("/tmp/moe_test_open_right_not_ft.txt")
+    check r.isErr
+    # Still only one window
+    check e.windowManager.windows.len == 1
+
+  test "returns error when there is not enough space":
+    # Make the FileTree fill the width such that no room remains for a split
+    let e = setupLoneFileTree()
+    let ftWin = e.activeWindow
+    # Force the filetree's fixed width to equal the full viewport width so
+    # there's no space left on the right
+    ftWin.fixedWidth = some(ftWin.viewport.width)
+
+    let testFile = "/tmp/moe_test_open_right_nospace.txt"
+    writeFile(testFile, "nospace")
+    defer:
+      removeFile(testFile)
+
+    let r = e.openFileInNewRightWindow(testFile)
+    check r.isErr
+    check e.windowManager.windows.len == 1

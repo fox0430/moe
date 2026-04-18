@@ -386,6 +386,33 @@ proc setSyntaxCheckerVisible*(e: Editor, visible: bool) =
   e.state.display.showSyntaxChecker = visible
   e.state.needsFullRedraw = true
 
+const MinNewWindowWidth* = 10
+  ## Minimum width (in columns) required when spawning a new split window.
+
+proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
+  ## Return the buffer for `path`: reuse an existing one from the global
+  ## buffer list, or create, initialise, and register a new buffer.
+  ## New buffers are loaded from disk when the file exists, otherwise created
+  ## empty with filePath preset (for saving later), then have EditorConfig and
+  ## reserved-word highlighting applied.
+  let existingIndex = e.findBufferByPath(path)
+  if existingIndex >= 0:
+    return ok(e.buffers[existingIndex])
+
+  let newBuffer = newTextBuffer()
+  if fileExists(path):
+    let loadResult = newBuffer.loadFile(path)
+    if loadResult.isErr:
+      return err(loadResult.error)
+  else:
+    newBuffer.filePath = some(path)
+    newBuffer.language = detectLanguage(path)
+
+  applyEditorConfigToBuffer(newBuffer, e.config)
+  newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
+  e.buffers.add(newBuffer)
+  ok(newBuffer)
+
 proc editFile*(e: Editor, path: string): Result[(), string] =
   ## Load a file and switch to it (like :e in Vim)
   ## If the buffer already exists in the buffer list, switch to it
@@ -394,39 +421,74 @@ proc editFile*(e: Editor, path: string): Result[(), string] =
   logDebug("editor", "editFile called with path: " & path)
   logDebug("editor", "Current buffers.len: " & $e.buffers.len)
 
-  # Check if buffer already exists in the global buffer list
-  let existingIndex = e.findBufferByPath(path)
-  if existingIndex >= 0:
-    # Buffer already exists, switch to it (also adds to window's bufferList)
-    logDebug("editor", "Buffer already exists at index: " & $existingIndex)
-    e.switchToBufferByIndex(existingIndex)
-    return ok(())
+  let bufferResult = e.loadOrCreateBuffer(path)
+  if bufferResult.isErr:
+    return err(bufferResult.error)
 
-  # Create new buffer
-  let newBuffer = newTextBuffer()
+  let idx = e.findBufferByPath(path)
+  e.switchToBufferByIndex(idx)
+  logDebug("editor", "editFile completed, buffers.len: " & $e.buffers.len)
+  ok(())
 
-  if fileExists(path):
-    # Load existing file
-    let loadResult = newBuffer.loadFile(path)
-    if loadResult.isErr:
-      return err(loadResult.error)
-  else:
-    # New file: set the path for saving later
-    newBuffer.filePath = some(path)
-    newBuffer.language = detectLanguage(path)
+proc openFileInNewRightWindow*(e: Editor, path: string): Result[(), string] =
+  ## Create a new editor window to the right of the currently active FileTree
+  ## window and load the given file into it. Used when FileTree is the only
+  ## window open.
 
-  # Apply EditorConfig settings to the new buffer
-  applyEditorConfigToBuffer(newBuffer, e.config)
+  let ftWindow = e.activeWindow
+  if ftWindow.mode != EditorMode.FileTree:
+    return err("active window is not FileTree")
 
-  # Add new buffer to the global buffer list
-  e.buffers.add(newBuffer)
-  logDebug("editor", "Added new buffer, buffers.len now: " & $e.buffers.len)
+  let
+    origWidth = ftWindow.viewport.width
+    origX = ftWindow.viewport.x
+    origY = ftWindow.viewport.y
+    origHeight = ftWindow.viewport.height
+    ftWidth =
+      if ftWindow.fixedWidth.isSome:
+        ftWindow.fixedWidth.get
+      else:
+        origWidth div 2
+    newWidth = origWidth - ftWidth - WindowSeparatorWidth
 
-  # Add new buffer to the active window's bufferList
-  e.addBufferToWindowList(newBuffer)
+  if newWidth < MinNewWindowWidth:
+    return err("not enough space to open a new window")
 
-  # Switch to the new buffer (sets active window's buffer)
-  e.switchToBufferByIndex(e.buffers.len - 1)
+  let bufferResult = e.loadOrCreateBuffer(path)
+  if bufferResult.isErr:
+    return err(bufferResult.error)
+  let newBuffer = bufferResult.get
+
+  # Shrink FileTree back to its fixed width and place the new window on its right
+  ftWindow.viewport.width = ftWidth
+
+  let newX = origX + ftWidth + WindowSeparatorWidth
+
+  e.windowManager.deactivateAllWindows()
+
+  let newWindow = EditorWindow(
+    buffer: newBuffer,
+    bufferList: @[newBuffer],
+    viewport: ViewPort(
+      topLine: 0, leftColumn: 0, width: newWidth, height: origHeight, x: newX, y: origY
+    ),
+    cursor: BufferPosition(line: 0, column: 0),
+    active: true,
+    mode: EditorMode.Normal,
+  )
+
+  let ftIndex = e.windowManager.activeWindowIndex
+  e.windowManager.windows.insert(newWindow, ftIndex + 1)
+  e.windowManager.activeWindowIndex = ftIndex + 1
+
+  e.syncActiveWindow()
+  e.setMode(EditorMode.Normal)
+  e.state.previousMode = EditorMode.Normal
+
+  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    e.setActiveWindowScreenCursor(e.activeWindow)
+
+  e.state.needsFullRedraw = true
   ok(())
 
 proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
