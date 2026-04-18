@@ -26,6 +26,7 @@ import pkg/celina
 import ../src/moepkg/notification_popup {.all.}
 import ../src/moepkg/color {.all.}
 import ../src/moepkg/theme {.all.}
+import ../src/moepkg/unicode_utils
 
 # Initialize theme colors for tests
 setThemeColors(DefaultColors)
@@ -74,8 +75,19 @@ suite "NotificationPopup - addNotification":
 
     check mgr.queue.len == 1
     check mgr.queue[0].lines.len > 1
+    # Content must fit within maxWidth minus frame (border/margin = 2 cols).
     for line in mgr.queue[0].lines:
-      check line.runeLen <= 20
+      check line.displayWidth <= 20 - PopupFrameSize
+
+  test "Wide characters are wrapped by display width":
+    let mgr = newNotificationPopupManager()
+    mgr.maxWidth = 10
+    mgr.addNotification("あいうえおかきくけこ")
+
+    check mgr.queue.len == 1
+    # Each wide rune is 2 cols, contentMaxWidth = 10 - 2 = 8, so 4 runes per line.
+    for line in mgr.queue[0].lines:
+      check line.displayWidth <= 8
 
   test "Empty message is ignored":
     let mgr = newNotificationPopupManager()
@@ -266,6 +278,58 @@ suite "NotificationPopup - calculateNotificationPositions":
     # All popups should be above status line
     for r in rects:
       check r.y + r.height <= 24 - 2
+
+  test "Popup width matches display width for wide characters":
+    # Issue #2561: popup width was miscalculated for wide (e.g. CJK) characters
+    # because runeLen (rune count) was used instead of display width.
+    let mgr = newNotificationPopupManager()
+    mgr.showBorder = true
+    mgr.addNotification("あいう")
+
+    let rects = mgr.calculateNotificationPositions(80, 24)
+    check rects.len == 1
+    # "あいう" has runeLen=3 but displayWidth=6. With border (+2) width=8.
+    check rects[0].width == 8
+
+  test "Popup width with mixed-width content":
+    let mgr = newNotificationPopupManager()
+    mgr.showBorder = false
+    mgr.addNotification("aあ")
+
+    let rects = mgr.calculateNotificationPositions(80, 24)
+    check rects.len == 1
+    # "aあ" has displayWidth=3. With space margins (+2) width=5.
+    check rects[0].width == 5
+
+  test "Popup width never exceeds maxWidth (with border)":
+    let mgr = newNotificationPopupManager()
+    mgr.maxWidth = 20
+    mgr.showBorder = true
+    mgr.addNotification("This is a long message that should be wrapped")
+
+    let rects = mgr.calculateNotificationPositions(80, 24)
+    check rects.len == 1
+    check rects[0].width <= 20
+
+  test "Popup width never exceeds maxWidth (without border)":
+    let mgr = newNotificationPopupManager()
+    mgr.maxWidth = 20
+    mgr.showBorder = false
+    mgr.addNotification("This is a long message that should be wrapped")
+
+    let rects = mgr.calculateNotificationPositions(80, 24)
+    check rects.len == 1
+    check rects[0].width <= 20
+
+  test "Popup width never exceeds maxWidth with wide characters":
+    let mgr = newNotificationPopupManager()
+    mgr.maxWidth = 10
+    mgr.showBorder = true
+    mgr.addNotification("あいうえおかきくけこ")
+
+    let rects = mgr.calculateNotificationPositions(80, 24)
+    check rects.len == 1
+    check rects[0].width <= 10
 
 suite "NotificationPopup - getContentStyle":
   test "Info level returns info style":

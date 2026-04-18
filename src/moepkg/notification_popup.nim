@@ -60,6 +60,8 @@ const
   DefaultTimeoutMs*: int = 3000
   DefaultMaxWidth* = 60
   MaxQueueSize* = 10
+  # Frame is either a border (2 cols) or space margins (2 cols) — always 2.
+  PopupFrameSize* = 2
 
 proc notificationInfoStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.notificationPopupInfo)
@@ -119,9 +121,11 @@ proc addNotification*(
   if message.len == 0:
     return
 
+  # `maxWidth` bounds the outer popup width, so reserve frame space for content.
+  let contentMaxWidth = max(1, mgr.maxWidth - PopupFrameSize)
   var wrappedLines: seq[string] = @[]
   for line in message.splitLines():
-    wrappedLines.add(wrapLine(line, mgr.maxWidth))
+    wrappedLines.add(wrapLine(line, contentMaxWidth))
 
   var item = NotificationItem(
     message: message, level: level, createdAt: getMonoTime(), lines: wrappedLines
@@ -188,15 +192,16 @@ proc calculateNotificationPositions*(
   for i in countdown(mgr.queue.len - 1, startIdx):
     let item = mgr.queue[i]
 
-    # Calculate popup width based on content
+    # Calculate popup width based on content display width
+    # (accounts for East Asian Wide/Fullwidth characters)
     var maxLineWidth = 0
     for line in item.lines:
-      maxLineWidth = max(maxLineWidth, line.runeLen)
-    let contentWidth = min(maxLineWidth, mgr.maxWidth)
+      maxLineWidth = max(maxLineWidth, line.displayWidth)
     let borderSize = if mgr.showBorder: 2 else: 0
     # When border is off, add left and right space margins.
     let margin = if mgr.showBorder: 0 else: 2
-    let popupWidth = contentWidth + borderSize + margin
+    # Clamp outer width so popup never exceeds `maxWidth` on screen.
+    let popupWidth = min(maxLineWidth + borderSize + margin, mgr.maxWidth)
     let popupHeight = item.lines.len + borderSize
 
     # Calculate position based on corner
