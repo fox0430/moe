@@ -48,6 +48,23 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
     symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
+
+  # If a state continuation begins at end-of-buffer, emit gtEof rather than
+  # producing an empty token.
+  if g.buf[pos] == '\0' and g.state in {gtDocLongComment, gtStringLit}:
+    g.kind = gtEof
+    g.state = gtNone
+    g.commentDepth = 0
+    g.length = 0
+    g.pos = pos
+    return
+
+  # A single-line string continuation cannot cross a newline; drop the state
+  # so the main path can tokenize the newline as whitespace.
+  if g.state == gtStringLit and g.buf[pos] in {'\x0D', '\x0A'}:
+    g.state = gtNone
+    g.commentDepth = 0
+
   if g.state == gtDocLongComment:
     # Continuation of triple-quoted docstring across lines.
     # commentDepth: 1 = """, 2 = '''
@@ -73,7 +90,10 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
       else:
         inc(pos)
   elif g.state == gtStringLit:
+    # Continuation of a single-line string after a \ escape split.
+    # commentDepth: 1 = ", 2 = '
     g.kind = gtStringLit
+    let quoteChar = if g.commentDepth == 2: '\'' else: '\"'
     while true:
       case g.buf[pos]
       of '\\':
@@ -91,16 +111,22 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
             inc(pos)
         of '\0':
           g.state = gtNone
+          g.commentDepth = 0
         else:
           inc(pos)
         break
       of '\0', '\x0D', '\x0A':
         g.state = gtNone
+        g.commentDepth = 0
         break
-      of '\"':
-        inc(pos)
-        g.state = gtNone
-        break
+      of '\"', '\'':
+        if g.buf[pos] == quoteChar:
+          inc(pos)
+          g.state = gtNone
+          g.commentDepth = 0
+          break
+        else:
+          inc(pos)
       else:
         inc(pos)
   else:
@@ -182,13 +208,17 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
         g.kind = gtStringLit
         while true:
           case g.buf[pos]
-          of '\0':
+          of '\0', '\x0D', '\x0A':
             break
           of '\"', '\'':
-            inc(pos)
-            break
+            if g.buf[pos] == quoteChar:
+              inc(pos)
+              break
+            else:
+              inc(pos)
           of '\\':
             g.state = g.kind
+            g.commentDepth = if quoteChar == '\"': 1 else: 2
             break
           else:
             inc(pos)
