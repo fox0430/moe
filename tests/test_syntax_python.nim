@@ -481,6 +481,44 @@ suite "syntax_python - pythonNextToken string literals":
     check g.kind == gtStringLit
     check g.state == gtStringLit
 
+  test "single-quoted string containing double quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\"'")
+    g.pythonNextToken()
+    check g.kind == gtStringLit
+    check g.length == 3
+    check g.state != gtStringLit
+
+  test "double-quoted string containing single quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"'\"")
+    g.pythonNextToken()
+    check g.kind == gtStringLit
+    check g.length == 3
+    check g.state != gtStringLit
+
+  test "single-quoted string with escape containing double quote":
+    var g: GeneralTokenizer
+    # The " must not close the single-quoted string after a \ split resumes.
+    g.initGeneralTokenizer("'a\\t\"b'")
+    g.pythonNextToken() # 'a
+    check g.kind == gtStringLit
+    check g.state == gtStringLit
+    g.pythonNextToken() # \t
+    check g.kind == gtEscapeSequence
+    check g.state == gtStringLit
+    g.pythonNextToken() # "b'
+    check g.kind == gtStringLit
+    check g.state != gtStringLit
+
+  test "single-line string does not span newline":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'hello\nworld'")
+    g.pythonNextToken()
+    check g.kind == gtStringLit
+    check g.length == 6 # 'hello, up to (but not including) the newline
+    check g.state != gtStringLit
+
 suite "syntax_python - pythonNextToken string escape sequences":
   test "escape in double quoted string":
     var g: GeneralTokenizer
@@ -1435,6 +1473,20 @@ suite "syntax_python - pythonNextToken triple-quoted docstrings":
     g.pythonNextToken()
     check g.kind == gtDocLongComment
     check g.state == gtNone
+
+  test "unterminated docstring at end-of-buffer does not assert on next call":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\"\"unterminated")
+    g.pythonNextToken()
+    check g.state == gtDocLongComment
+
+    # Simulate being called again with no more input (end-of-buffer).
+    # Previously this would assert due to producing an empty token.
+    let emptyBuf = ""
+    g.buf = emptyBuf
+    g.pos = 0
+    g.pythonNextToken()
+    check g.kind == gtEof
 
   test "token after completed continuation docstring":
     var g: GeneralTokenizer
