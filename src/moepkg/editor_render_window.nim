@@ -79,6 +79,7 @@ proc renderWindowLineWrapped*(
       window.cursor.line,
       window.viewport.x + window.viewport.width,
       cursorDisplayCol = ctx.cursorDisplayCol,
+      textBuffer = window.buffer,
     )
     inc screenY
     inc lineIndex
@@ -213,6 +214,7 @@ proc renderWindowLineNoWrap*(
       window.cursor.line,
       window.viewport.x + window.viewport.width,
       cursorDisplayCol = ctx.cursorDisplayCol,
+      textBuffer = window.buffer,
     )
 
 proc renderWindowSidebar*(

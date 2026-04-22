@@ -32,7 +32,7 @@ import
     quick_run_utils, help_viewer, buffer_manager, bookmark_manager, backup_manager,
     backup, debug_viewer, config_loader, message_log, command_line, color, theme,
     terminal_mode, command_completion, render_utils, config_mode, log_viewer,
-    syntax_checker, window_manager, registers, unicode_utils,
+    syntax_checker, window_manager, registers, unicode_utils, git_conflict,
   ]
 import handler_manager
 
@@ -663,6 +663,14 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         of bsoHighlightColorCode:
           e.config.highlight.colorCodeHighlight = val
           e.state.statusMessage = "highlightcolorcode = " & $val
+        of bsoHighlightGitConflict:
+          e.config.highlight.gitConflict = val
+          e.state.statusMessage = "highlightgitconflict = " & $val
+          e.state.needsFullRedraw = true
+        of bsoHighlightGitConflictTwoColor:
+          e.config.highlight.gitConflictTwoColor = val
+          e.state.statusMessage = "highlightgitconflicttwocolor = " & $val
+          e.state.needsFullRedraw = true
         of bsoMultipleStatusLine:
           e.setMultiStatusLine(val)
         of bsoIgnoreCase:
@@ -1225,6 +1233,32 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
               ($(w.cursor.column + 1)).align(4) & "  "
           )
           e.state.needsFullRedraw = true
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
+      of hrConflictNext:
+        overlayHandled = true
+        let buf = e.activeBuffer()
+        let fromLine = e.activeWindow.cursor.line
+        let nxt = buf.findNextConflict(fromLine)
+        if nxt.isSome:
+          e.activeWindow.cursor.line = nxt.get.startLine
+          e.activeWindow.cursor.column = 0
+          e.updateViewportForCursor(e.cursor)
+        else:
+          e.state.statusMessage = "No next git conflict"
+        e.state.exitOverlay()
+        e.setMode(EditorMode.Normal)
+      of hrConflictPrev:
+        overlayHandled = true
+        let buf = e.activeBuffer()
+        let fromLine = e.activeWindow.cursor.line
+        let prv = buf.findPrevConflict(fromLine)
+        if prv.isSome:
+          e.activeWindow.cursor.line = prv.get.startLine
+          e.activeWindow.cursor.column = 0
+          e.updateViewportForCursor(e.cursor)
+        else:
+          e.state.statusMessage = "No previous git conflict"
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
       of hrEnterBookmarkManager:

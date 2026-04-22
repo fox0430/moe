@@ -39,6 +39,7 @@ type SidebarMarkerConfig* = object ## Configuration for sidebar marker display s
   gitChanged*: string
   gitDeleted*: string
   gitChangedAndDeleted*: string
+  gitConflict*: string
   syntaxError*: string
   syntaxWarning*: string
   sessionModified*: string
@@ -51,6 +52,7 @@ const
   DefaultGitChangedMarker = "~ "
   DefaultGitDeletedMarker = "_ "
   DefaultGitChangedAndDeletedMarker = "~_"
+  DefaultGitConflictMarker = "!!"
   DefaultSyntaxErrorMarker = ">>"
   DefaultSyntaxWarningMarker = "⚠ "
   DefaultSessionModifiedMarker = "~ "
@@ -63,6 +65,7 @@ var globalMarkerConfig* = SidebarMarkerConfig(
   gitChanged: DefaultGitChangedMarker,
   gitDeleted: DefaultGitDeletedMarker,
   gitChangedAndDeleted: DefaultGitChangedAndDeletedMarker,
+  gitConflict: DefaultGitConflictMarker,
   syntaxError: DefaultSyntaxErrorMarker,
   syntaxWarning: DefaultSyntaxWarningMarker,
   sessionModified: DefaultSessionModifiedMarker,
@@ -100,6 +103,11 @@ proc gitDeletedStyle*(): Style =
     bg: themeBackground(),
     modifiers: {},
   )
+
+proc gitConflictSidebarStyle*(): Style =
+  var style = getThemeStyle(EditorColorPairIndex.sidebarGitConflictSign)
+  style.modifiers.incl(StyleModifier.Bold)
+  style
 
 proc syntaxErrorStyle*(): Style =
   Style(
@@ -150,6 +158,8 @@ proc getStyleForKind(kind: SidebarItemKind): Style =
     gitDeletedStyle()
   of GitChangedAndDeleted:
     gitChangedStyle()
+  of GitConflict:
+    gitConflictSidebarStyle()
   of SyntaxError:
     syntaxErrorStyle()
   of SyntaxWarning:
@@ -290,6 +300,12 @@ proc generateSidebarFromBuffer*(
             of SyntaxWarning: globalMarkerConfig.syntaxWarning
             else: " "
           setSidebarLine(result, screenLine, text, kind)
+        elif kind == GitConflict:
+          # GitConflict outranks bookmarks and regular git markers — a merge
+          # conflict is actionable state the user needs to resolve first.
+          setSidebarLine(
+            result, screenLine, globalMarkerConfig.gitConflict, GitConflict
+          )
         elif b.hasBookmark(bufferLine):
           # Bookmark overrides git/session markers
           setSidebarLine(result, screenLine, globalMarkerConfig.bookmark, Bookmark)
@@ -301,6 +317,7 @@ proc generateSidebarFromBuffer*(
             of GitChanged: globalMarkerConfig.gitChanged
             of GitDeleted: globalMarkerConfig.gitDeleted
             of GitChangedAndDeleted: globalMarkerConfig.gitChangedAndDeleted
+            of GitConflict: globalMarkerConfig.gitConflict
             of SyntaxError: globalMarkerConfig.syntaxError
             of SyntaxWarning: globalMarkerConfig.syntaxWarning
             of SessionModified: globalMarkerConfig.sessionModified

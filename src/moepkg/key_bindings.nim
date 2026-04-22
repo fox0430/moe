@@ -2438,6 +2438,29 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.bindKey(EditorMode.Normal, "[ c", "navigate-git-prev")
 
+  # Git merge conflict navigation
+  registry.registerCommand(
+    Command(
+      name: "navigate-conflict-next",
+      description: "Next git merge conflict",
+      kind: ctCustom,
+      commandId: "navigate.conflict.next",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "] x", "navigate-conflict-next")
+
+  registry.registerCommand(
+    Command(
+      name: "navigate-conflict-prev",
+      description: "Previous git merge conflict",
+      kind: ctCustom,
+      commandId: "navigate.conflict.prev",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "[ x", "navigate-conflict-prev")
+
   registry.registerCommand(
     Command(
       name: "textobject-brace",

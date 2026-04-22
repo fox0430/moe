@@ -122,6 +122,8 @@
 | <kbd>**#**</kbd><br> | Search backwards for the word under cursor |
 | <kbd>**]**</kbd> <kbd>**c**</kbd><br> | Jump to next git change hunk |
 | <kbd>**[**</kbd> <kbd>**c**</kbd><br> | Jump to previous git change hunk |
+| <kbd>**]**</kbd> <kbd>**x**</kbd><br> | Jump to next git merge conflict block |
+| <kbd>**[**</kbd> <kbd>**x**</kbd><br> | Jump to previous git merge conflict block |
 | <kbd>**f**</kbd><br> | Jump to next occurrence |
 | <kbd>**F**</kbd><br> |Jump to previous occurrence |
 | <kbd>**z**</kbd> <kbd>**t**</kbd><br> | Scroll the screen so the cursor is at the top |
@@ -479,6 +481,8 @@ All keystrokes are forwarded to the running shell/command.
 | `set highlightparen` or `set nohighlightparen` | Highlight matching paren (alias: `hp`, `nohp`) |
 | `set highlightfindchar` or `set nohighlightfindchar` | Highlight f/F/t/T matches (alias: `hfc`, `nohfc`) |
 | `set highlightcolorcode` or `set nohighlightcolorcode` | Highlight inline color codes (#RRGGBB, #RGB) with their actual color (alias: `hcc`, `nohcc`) |
+| `set highlightgitconflict` or `set nohighlightgitconflict` | Highlight git merge conflict blocks (`<<<<<<<` / `=======` / `>>>>>>>`) (alias: `hgc`, `nohgc`) |
+| `set highlightgitconflicttwocolor` or `set nohighlightgitconflicttwocolor` | Use two-color (ours/theirs) conflict scheme; disable for single-color fallback (alias: `hgctc`, `nohgctc`) |
 | `set multistatusline` or `set nomultistatusline` | Enable/disable multiple status line (alias: `msl`, `nomsl`) |
 | `set ignorecase` or `set noignorecase` | Enable/disable ignorecase (alias: `ic`, `noic`) |
 | `set smartcase` or `set nosmartcase` | Enable/disable smartcase (alias: `scs`, `noscs`) |
@@ -515,6 +519,8 @@ All keystrokes are forwarded to the running shell/command.
 | `terminal command` | Run command in terminal emulator |
 | `changes` | Show Change list |
 | `bookmarks` | Show bookmark list |
+| `conflictnext` | Jump to next git merge conflict block |
+| `conflictprev` | Jump to previous git merge conflict block |
 
 </details>
 

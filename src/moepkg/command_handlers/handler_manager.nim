@@ -130,6 +130,8 @@ type
     hrBackground # Pause editor and show terminal (:bg)
     hrJumpList # Show jump list (:ju, :jump)
     hrChanges # Show change list (:changes)
+    hrConflictNext # Jump to next git conflict block (:conflictnext)
+    hrConflictPrev # Jump to previous git conflict block (:conflictprev)
     hrBuild # Build current buffer (:build)
     hrDebug # Open debug mode (:debug)
     hrDebugViewerQuit # Close debug viewer
@@ -348,6 +350,10 @@ type
     of hrJumpList:
       discard
     of hrChanges:
+      discard
+    of hrConflictNext:
+      discard
+    of hrConflictPrev:
       discard
     of hrBuild:
       discard
@@ -921,6 +927,10 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrChanges)
   of cmrBookmarks:
     return HandlerResult(kind: hrEnterBookmarkManager)
+  of cmrConflictNext:
+    return HandlerResult(kind: hrConflictNext)
+  of cmrConflictPrev:
+    return HandlerResult(kind: hrConflictPrev)
   of cmrBuild:
     return HandlerResult(kind: hrBuild)
   of cmrDebug:
@@ -2308,7 +2318,8 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
     hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
     hrLspSelectionRange, hrLspDocumentLink, hrJumpList, hrChanges, hrLspLog,
-    hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit,
+    hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit, hrConflictNext,
+    hrConflictPrev,
   }
 
 proc hasError*(hrResult: HandlerResult): bool =

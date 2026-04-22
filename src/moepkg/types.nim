@@ -269,6 +269,9 @@ type
     lastGitDiffUpdate*: MonoTime # Timestamp of last git diff update
     lastGitDiffChangeSeq*: int # Buffer changeSeq at last git diff update
     gitDiffUpdateInterval*: int64 # Minimum milliseconds between git diff updates
+    lastConflictScan*: MonoTime # Timestamp of last conflict marker scan
+    lastConflictScanSeq*: int # Buffer changeSeq at last conflict scan
+    conflictScanInterval*: int64 # Minimum milliseconds between conflict scans
     lastAutoSave*: MonoTime # Timestamp of last auto save
     lastAutoBackup*: MonoTime # Timestamp of last auto backup
     lastInputTime*: MonoTime # Timestamp of last user input (for idle detection)

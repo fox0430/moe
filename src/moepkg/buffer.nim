@@ -37,12 +37,33 @@ type
     GitChanged ## Line was changed in git diff
     GitDeleted ## Line was deleted in git diff
     GitChangedAndDeleted ## Line was changed and deleted in git diff
+    GitConflict ## Line is inside a git merge conflict block
     SyntaxError ## Syntax error indicator
     SyntaxWarning ## Syntax warning indicator
     SessionModified ## Line was modified in current session (cleared on save)
     SessionInserted ## Line was inserted in current session (cleared on save)
     Bookmark ## Line has a bookmark
     Empty ## Empty sidebar cell
+
+  ConflictMarkerKind* = enum
+    ## Classification of a line with respect to a git merge conflict block
+    cmkNone ## Line is outside any conflict block
+    cmkStartMarker ## The `<<<<<<<` marker line
+    cmkOurs ## Line between `<<<<<<<` and `=======` (or `|||||||`)
+    cmkBaseMarker ## The `|||||||` marker line (diff3 style only)
+    cmkBase ## Line between `|||||||` and `=======` (diff3 style only)
+    cmkSeparator ## The `=======` marker line
+    cmkTheirs ## Line between `=======` and `>>>>>>>`
+    cmkEndMarker ## The `>>>>>>>` marker line
+
+  ConflictBlock* = object
+    ## A single git merge conflict block (from `<<<<<<<` through `>>>>>>>`)
+    startLine*: int ## Line index of `<<<<<<<`
+    baseMarkerLine*: Option[int] ## Line index of `|||||||` (diff3 only)
+    separatorLine*: int ## Line index of `=======`
+    endLine*: int ## Line index of `>>>>>>>`
+    oursLabel*: string ## Label after `<<<<<<<` (e.g. "HEAD")
+    theirsLabel*: string ## Label after `>>>>>>>` (e.g. branch name)
 
   BufferDiagnosticSeverity* = enum
     bdsError = 1
@@ -177,6 +198,9 @@ type
 
     # Sidebar markers (line-based markers for git diff, syntax errors, etc.)
     lineMarkers*: seq[Option[SidebarItemKind]] # Each line can have at most one marker
+
+    # Git merge conflict ranges (populated by git_conflict.scanBufferForConflicts)
+    conflictBlocks*: seq[ConflictBlock]
 
     # Modified line tracking (session-based, cleared on save)
     modifiedLines*: seq[LineModificationKind]

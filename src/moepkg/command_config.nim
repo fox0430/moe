@@ -64,6 +64,8 @@ const CommandNameTable* = {
   "jumplist": claJumpList,
   "changes": claChanges,
   "bookmarks": claBookmarks,
+  "conflictnext": claConflictNext,
+  "conflictprev": claConflictPrev,
   "build": claBuild,
   "debug": claDebug,
   "config": claConfig,
@@ -225,6 +227,10 @@ proc loadDefaultConfig*(config: CommandConfig) =
 
   # Bookmarks
   config.addAlias("bookmarks", claBookmarks)
+
+  # Git conflict navigation
+  config.addAlias("conflictnext", claConflictNext)
+  config.addAlias("conflictprev", claConflictPrev)
 
   # Build
   config.addAlias("build", claBuild)

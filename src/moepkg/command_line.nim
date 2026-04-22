@@ -64,6 +64,8 @@ type
     claJumpList # :jump (show jump list)
     claChanges # :changes (show change list)
     claBookmarks # :bookmarks (show bookmark list)
+    claConflictNext # :conflictnext (jump to next git conflict block)
+    claConflictPrev # :conflictprev (jump to previous git conflict block)
     claBuild # :build (build current buffer)
     claDebug # :debug (open debug mode)
     claConfig # :config (open configuration mode)
@@ -198,6 +200,10 @@ type
     of claChanges:
       discard
     of claBookmarks:
+      discard
+    of claConflictNext:
+      discard
+    of claConflictPrev:
       discard
     of claBuild:
       discard
@@ -960,6 +966,10 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claChanges)
   of claBookmarks:
     return CommandLineResult(kind: claBookmarks)
+  of claConflictNext:
+    return CommandLineResult(kind: claConflictNext)
+  of claConflictPrev:
+    return CommandLineResult(kind: claConflictPrev)
   of claBuild:
     return CommandLineResult(kind: claBuild)
   of claDebug:

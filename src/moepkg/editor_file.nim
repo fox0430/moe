@@ -24,7 +24,8 @@ import std/[options, strformat, os, monotimes, times, tables]
 import pkg/results
 
 import
-  editor_types, logger, git_diff, backup, search_utils, editorconfig_helper, highlight
+  editor_types, logger, git_diff, git_conflict, backup, search_utils,
+  editorconfig_helper, highlight
 
 proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
   ## Refresh git diff information for the active buffer
@@ -100,6 +101,12 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
     else:
       # Update lastGitDiffChangeSeq to prevent immediate re-check
       e.state.timing.lastGitDiffChangeSeq = e.textBuffer.changeSeq
+
+  # Scan for git conflict markers. Run regardless of the highlight config so
+  # that `buffer.conflictBlocks` is populated for future navigation commands.
+  e.textBuffer.refreshConflicts()
+  e.state.timing.lastConflictScanSeq = e.textBuffer.changeSeq
+  e.state.timing.lastConflictScan = getMonoTime()
 
   # LSP initialization - non-blocking, will start in background
   if e.lsp.enabled:

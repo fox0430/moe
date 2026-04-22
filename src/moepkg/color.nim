@@ -291,6 +291,10 @@ type
 
     # Git
     gitConflict
+    gitConflictMarker
+    gitConflictOurs
+    gitConflictBase
+    gitConflictTheirs
 
     # Backup manager
     backupManagerCurrentLine
@@ -312,6 +316,7 @@ type
     sidebarGitAddedSign
     sidebarGitDeletedSign
     sidebarGitChangedSign
+    sidebarGitConflictSign
     sidebarSyntaxCheckInfoSign
     sidebarSyntaxCheckHintSign
     sidebarSyntaxCheckWarnSign

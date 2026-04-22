@@ -143,6 +143,10 @@ findCharHighlight = true               # Highlight f/F/t/T matches
 
 colorCodeHighlight = true               # Highlight inline color codes (#RRGGBB, #RGB) with their actual color
 
+gitConflict = true                     # Highlight git merge conflict blocks (<<<<<<< / ======= / >>>>>>>)
+
+gitConflictTwoColor = true             # Use two-color scheme (ours / theirs distinct); false for single red background
+
 [AutoBackup]
 
 enable = false                         # Auto-backup feature

@@ -143,6 +143,8 @@ type
     currentColumn*: bool
     findCharHighlight*: bool
     colorCodeHighlight*: bool
+    gitConflict*: bool
+    gitConflictTwoColor*: bool
 
   # Auto backup settings
   AutoBackupConfig* = object
@@ -547,6 +549,8 @@ proc newEditorConfig*(): EditorConfig =
       currentWord: true,
       findCharHighlight: true,
       colorCodeHighlight: true,
+      gitConflict: true,
+      gitConflictTwoColor: true,
     ),
     autoBackup: AutoBackupConfig(
       enable: false,
