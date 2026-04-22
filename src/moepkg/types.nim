@@ -118,6 +118,7 @@ type
 
   SearchState* = object ## Search-related state grouped together for better organization
     text*: string # Text being typed in search mode (was: searchText)
+    cursor*: int # Cursor position within text (0-based character index)
     lastText*: string # Last executed search text for n/N commands (was: lastSearchText)
     direction*: SearchDirection # Direction of current search (/ or ?)
     history*: seq[string] # Search history (most recent first)
@@ -766,6 +767,7 @@ proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
   # Initialize search state
   state.search.direction = direction
   state.search.text = ""
+  state.search.cursor = 0
   state.search.startPos = state.cursor
   state.search.historyIndex = -1
   # Re-enable search highlight so incremental search results are visible
@@ -801,6 +803,7 @@ proc exitOverlay*(state: EditorState) =
     state.commandCursor = 0
     state.commandState.historyIndex = -1
     state.search.text = ""
+    state.search.cursor = 0
     state.search.historyIndex = -1
 
 proc baseMode*(state: EditorState): EditorMode =
