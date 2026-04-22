@@ -394,6 +394,7 @@ suite "renderBottomLines - Search mode":
     e.viewport.height = 24
     e.state.enterSearchOverlay(Forward)
     e.state.search.text = "pattern"
+    e.state.search.cursor = 7
 
     e.renderBottomLines(buffer)
 
@@ -409,6 +410,7 @@ suite "renderBottomLines - Search mode":
     e.viewport.height = 24
     e.state.enterSearchOverlay(Backward)
     e.state.search.text = "test"
+    e.state.search.cursor = 4
 
     e.renderBottomLines(buffer)
 

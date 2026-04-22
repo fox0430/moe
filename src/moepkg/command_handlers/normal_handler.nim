@@ -416,6 +416,7 @@ proc handleModeSwitchToOverlay*(
   of okSearch:
     # Initialize search mode state
     state.search.text = ""
+    state.search.cursor = 0
     # Save current cursor position for incsearch cancellation
     state.search.startPos = state.cursor
     # Set search direction based on command name

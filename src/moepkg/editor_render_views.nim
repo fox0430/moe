@@ -353,7 +353,10 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
     let searchChar = if e.state.search.direction == Forward: "/" else: "?"
     let searchPrompt = searchChar & e.state.search.text
     buffer.setString(buffer.area.x, bottomY, searchPrompt, commandStyle())
-    e.state.screenCursor.x = displayWidth(searchPrompt)
+    # Cursor position: 1 for the prompt char ("/" or "?", always ASCII)
+    # plus the display width of the search text up to the cursor.
+    e.state.screenCursor.x =
+      1 + displayWidthUpTo(e.state.search.text, e.state.search.cursor)
     e.state.screenCursor.y = bottomY
   elif e.state.isRenameOverlay:
     let renamePrompt = "Rename: " & e.state.renameState.text

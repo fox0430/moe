@@ -26,7 +26,10 @@ import std/[options, strutils, unicode]
 
 import pkg/celina
 
-import ../[editor, key_bindings, modes, buffer, search_utils, types, help_viewer]
+import
+  ../[
+    editor, key_bindings, modes, buffer, search_utils, types, help_viewer, unicode_utils
+  ]
 import command_mode_handler
 
 ## NOTE: While in Search Mode:
@@ -229,15 +232,19 @@ proc handleSearchCharacterInput(e: Editor, ch: string) =
   ## Called when: Any printable character is typed
   ##
   ## Behavior:
-  ## - Append character to searchText
+  ## - Insert character at cursor position in searchText
+  ## - Advance cursor past the inserted character
   ## - If incsearch enabled: Trigger incremental search
   ## - Always trigger redraw to update search highlight
-  e.state.search.text.add(ch)
+  let bytePos = charToBytePos(e.state.search.text, e.state.search.cursor)
+  e.state.search.text =
+    e.state.search.text[0 ..< bytePos] & ch & e.state.search.text[bytePos ..^ 1]
+  e.state.search.cursor += ch.runeLen
   e.performIncrementalSearch()
   e.state.needsFullRedraw = true
 
 proc insertPastedTextInSearch*(e: Editor, text: string) =
-  ## Append pasted text to the search text.
+  ## Insert pasted text at the cursor position in the search text.
   ## The search line is single-line: only the first line of the paste is used
   ## (everything up to the first newline, with a trailing CR stripped).
   let nlIdx = text.find('\n')
@@ -251,7 +258,10 @@ proc insertPastedTextInSearch*(e: Editor, text: string) =
   if insertText.len == 0:
     return
 
-  e.state.search.text.add(insertText)
+  let bytePos = charToBytePos(e.state.search.text, e.state.search.cursor)
+  e.state.search.text =
+    e.state.search.text[0 ..< bytePos] & insertText & e.state.search.text[bytePos ..^ 1]
+  e.state.search.cursor += insertText.runeLen
   e.performIncrementalSearch()
   e.state.needsFullRedraw = true
 
@@ -261,12 +271,13 @@ proc handleSearchBackspace(e: Editor) =
   ## Called when: Backspace is pressed
   ##
   ## Behavior:
-  ## - Remove last character from searchText (if any)
+  ## - Remove the character before the cursor (if any)
+  ## - Move cursor left by one
   ## - If incsearch enabled: Trigger incremental search with updated text
   ## - Always trigger redraw to update search highlight
-  if e.state.search.text.len > 0:
-    e.state.search.text =
-      e.state.search.text.runeSubStr(0, e.state.search.text.runeLen - 1)
+  if e.state.search.cursor > 0:
+    e.state.search.text = e.state.search.text.deleteCharAt(e.state.search.cursor - 1)
+    e.state.search.cursor -= 1
     e.performIncrementalSearch()
   e.state.needsFullRedraw = true
 
@@ -320,6 +331,7 @@ proc handleSearchModeEvent*(e: Editor, event: Event): bool =
 
       # Update search text with history entry
       e.state.search.text = e.state.search.history[e.state.search.historyIndex]
+      e.state.search.cursor = e.state.search.text.runeLen
       # Trigger incremental search with history entry
       e.performIncrementalSearch()
     return true
@@ -331,15 +343,53 @@ proc handleSearchModeEvent*(e: Editor, event: Event): bool =
       if e.state.search.historyIndex > 0:
         e.state.search.historyIndex -= 1
         e.state.search.text = e.state.search.history[e.state.search.historyIndex]
+        e.state.search.cursor = e.state.search.text.runeLen
         e.performIncrementalSearch()
       else:
         # Reached the newest entry, clear search text
         e.state.search.historyIndex = -1
         e.state.search.text = ""
+        e.state.search.cursor = 0
         # Restore cursor to start position if incsearch is enabled
         if e.state.search.incsearch:
           e.cursor = e.state.search.startPos
           e.syncHelpViewerIndex(e.state.search.startPos.line)
+    return true
+
+  # Left arrow: Move cursor left within search text
+  if keyCombo.isSpecial and keyCombo.special == skLeft:
+    if e.state.search.cursor > 0:
+      e.state.search.cursor -= 1
+      e.state.needsFullRedraw = true
+    return true
+
+  # Right arrow: Move cursor right within search text
+  if keyCombo.isSpecial and keyCombo.special == skRight:
+    if e.state.search.cursor < e.state.search.text.runeLen:
+      e.state.search.cursor += 1
+      e.state.needsFullRedraw = true
+    return true
+
+  # Home: Move cursor to start of search text
+  if keyCombo.isSpecial and keyCombo.special == skHome:
+    e.state.search.cursor = 0
+    e.state.needsFullRedraw = true
+    return true
+
+  # End: Move cursor to end of search text
+  if keyCombo.isSpecial and keyCombo.special == skEnd:
+    e.state.search.cursor = e.state.search.text.runeLen
+    e.state.needsFullRedraw = true
+    return true
+
+  # Delete: Remove character at cursor position
+  if keyCombo.isSpecial and keyCombo.special == skDelete:
+    if e.state.search.cursor < e.state.search.text.runeLen:
+      # Reset history navigation when user edits
+      e.state.search.historyIndex = -1
+      e.state.search.text = e.state.search.text.deleteCharAt(e.state.search.cursor)
+      e.performIncrementalSearch()
+      e.state.needsFullRedraw = true
     return true
 
   # Backspace: Remove last character and re-search

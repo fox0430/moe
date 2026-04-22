@@ -19,7 +19,9 @@
 
 ## Tests for command_handlers/search_mode_handler.nim
 
-import std/[unittest, options]
+import std/[unittest, options, unicode]
+
+import pkg/celina
 
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/types {.all.}
@@ -29,6 +31,12 @@ import ../src/moepkg/config {.all.}
 import ../src/moepkg/help_viewer {.all.}
 import ../src/moepkg/search_utils {.all.}
 import ../src/moepkg/command_handlers/search_mode_handler {.all.}
+
+proc setSearchText(e: Editor, text: string) =
+  ## Test helper: set search text and position cursor at the end,
+  ## matching the state after the user has typed the text.
+  e.state.search.text = text
+  e.state.search.cursor = text.runeLen
 
 proc createTestEditorWithBuffer(content: string): Editor =
   let config = newEditorConfig()
@@ -59,7 +67,7 @@ suite "handleSearchBackspace":
   test "Remove last ASCII character":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
-    e.state.search.text = "abc"
+    e.setSearchText("abc")
 
     handleSearchBackspace(e)
 
@@ -68,7 +76,7 @@ suite "handleSearchBackspace":
   test "Remove last multibyte character (Japanese)":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
-    e.state.search.text = "検索"
+    e.setSearchText("検索")
 
     handleSearchBackspace(e)
 
@@ -77,7 +85,7 @@ suite "handleSearchBackspace":
   test "Remove last character from mixed ASCII and multibyte":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
-    e.state.search.text = "abc日本語"
+    e.setSearchText("abc日本語")
 
     handleSearchBackspace(e)
 
@@ -86,7 +94,7 @@ suite "handleSearchBackspace":
   test "Backspace on single character leaves empty string":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
-    e.state.search.text = "x"
+    e.setSearchText("x")
 
     handleSearchBackspace(e)
 
@@ -95,7 +103,7 @@ suite "handleSearchBackspace":
   test "Backspace on single multibyte character leaves empty string":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
-    e.state.search.text = "あ"
+    e.setSearchText("あ")
 
     handleSearchBackspace(e)
 
@@ -104,7 +112,7 @@ suite "handleSearchBackspace":
   test "Backspace on empty string does nothing":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
-    e.state.search.text = ""
+    e.setSearchText("")
 
     handleSearchBackspace(e)
 
@@ -113,7 +121,7 @@ suite "handleSearchBackspace":
   test "Backspace sets needsFullRedraw":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
-    e.state.search.text = "test"
+    e.setSearchText("test")
     e.state.needsFullRedraw = false
 
     handleSearchBackspace(e)
@@ -126,7 +134,7 @@ suite "Search mode - Insert-Normal mode (Ctrl-O)":
     e.state.mode = EditorMode.Normal
     e.state.insertNormalMode = true
     e.state.enterSearchOverlay(Forward)
-    e.state.search.text = "world"
+    e.setSearchText("world")
 
     finalizeSearch(e)
 
@@ -139,7 +147,7 @@ suite "Search mode - Insert-Normal mode (Ctrl-O)":
     e.state.mode = EditorMode.Normal
     e.state.insertNormalMode = true
     e.state.enterSearchOverlay(Forward)
-    e.state.search.text = "world"
+    e.setSearchText("world")
 
     cancelSearch(e)
 
@@ -152,7 +160,7 @@ suite "Search mode - Insert-Normal mode (Ctrl-O)":
     e.state.mode = EditorMode.Normal
     e.state.insertNormalMode = false
     e.state.enterSearchOverlay(Forward)
-    e.state.search.text = "world"
+    e.setSearchText("world")
 
     finalizeSearch(e)
 
@@ -164,7 +172,7 @@ suite "Search mode - Insert-Normal mode (Ctrl-O)":
     e.state.mode = EditorMode.Normal
     e.state.insertNormalMode = false
     e.state.enterSearchOverlay(Forward)
-    e.state.search.text = "world"
+    e.setSearchText("world")
 
     cancelSearch(e)
 
@@ -176,7 +184,7 @@ suite "Search mode - Insert-Normal mode (Ctrl-O)":
     e.state.mode = EditorMode.Normal
     e.state.insertNormalMode = true
     e.state.enterSearchOverlay(Backward)
-    e.state.search.text = "hello"
+    e.setSearchText("hello")
 
     finalizeSearch(e)
 
@@ -189,7 +197,7 @@ suite "Search mode - Insert-Normal mode (Ctrl-O)":
     e.state.mode = EditorMode.Normal
     e.state.insertNormalMode = true
     e.state.enterSearchOverlay(Backward)
-    e.state.search.text = "hello"
+    e.setSearchText("hello")
 
     cancelSearch(e)
 
@@ -203,7 +211,7 @@ suite "Search mode - Help mode incremental search sync":
     e.state.enterSearchOverlay(Forward)
     e.state.search.incsearch = true
     e.state.search.startPos = BufferPosition(line: 0, column: 0)
-    e.state.search.text = "Visual"
+    e.setSearchText("Visual")
 
     performIncrementalSearch(e)
 
@@ -217,7 +225,7 @@ suite "Search mode - Help mode incremental search sync":
     e.state.enterSearchOverlay(Forward)
     e.state.search.incsearch = true
     e.state.search.startPos = BufferPosition(line: 5, column: 0)
-    e.state.search.text = "zzzzNonExistentPattern"
+    e.setSearchText("zzzzNonExistentPattern")
 
     performIncrementalSearch(e)
 
@@ -245,7 +253,7 @@ suite "Search mode - Help mode incremental search sync":
     e.state.enterSearchOverlay(Forward)
     e.state.search.incsearch = true
     e.state.search.startPos = BufferPosition(line: 0, column: 0)
-    e.state.search.text = "Visual"
+    e.setSearchText("Visual")
 
     # Perform incremental search first to move cursor
     performIncrementalSearch(e)
@@ -263,7 +271,7 @@ suite "Search mode - Help mode incremental search sync":
     e.state.enterSearchOverlay(Forward)
     e.state.search.incsearch = false
     e.state.search.startPos = BufferPosition(line: 0, column: 0)
-    e.state.search.text = "Insert"
+    e.setSearchText("Insert")
 
     finalizeSearch(e)
 
@@ -276,7 +284,7 @@ suite "Search mode - Help mode incremental search sync":
     e.state.enterSearchOverlay(Forward)
     e.state.search.incsearch = true
     e.state.search.startPos = BufferPosition(line: 0, column: 0)
-    e.state.search.text = "Visual"
+    e.setSearchText("Visual")
 
     # First search to set position
     performIncrementalSearch(e)
@@ -302,7 +310,7 @@ suite "Search mode - Help mode incremental search sync":
     e.state.search.incsearch = true
     e.state.search.startPos = BufferPosition(line: 10, column: 0)
     e.cursor = BufferPosition(line: 10, column: 0)
-    e.state.search.text = "Visual"
+    e.setSearchText("Visual")
 
     # Move selectedIndex away from startPos via incremental search
     performIncrementalSearch(e)
@@ -436,3 +444,186 @@ suite "Incremental search - case insensitive highlighting":
     check ranges[0].endCol == 7
     check ranges[1].startCol == 11
     check ranges[1].endCol == 14
+
+proc makeLeftEvent(): Event =
+  Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.ArrowLeft))
+
+proc makeRightEvent(): Event =
+  Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.ArrowRight))
+
+proc makeHomeEvent(): Event =
+  Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Home))
+
+proc makeEndEvent(): Event =
+  Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.End))
+
+proc makeDeleteEvent(): Event =
+  Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Delete))
+
+proc makeCharEvent(c: string): Event =
+  Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Char, char: c))
+
+proc makeBackspaceEvent(): Event =
+  Event(kind: EventKind.Key, key: KeyEvent(code: KeyCode.Backspace))
+
+suite "Search mode - cursor movement":
+  test "Left arrow moves cursor left":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("abc")
+
+    discard handleSearchModeEvent(e, makeLeftEvent())
+
+    check e.state.search.cursor == 2
+
+  test "Left arrow does not move past start":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("abc")
+    e.state.search.cursor = 0
+
+    discard handleSearchModeEvent(e, makeLeftEvent())
+
+    check e.state.search.cursor == 0
+
+  test "Right arrow moves cursor right":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("abc")
+    e.state.search.cursor = 0
+
+    discard handleSearchModeEvent(e, makeRightEvent())
+
+    check e.state.search.cursor == 1
+
+  test "Right arrow does not move past end":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("abc")
+
+    discard handleSearchModeEvent(e, makeRightEvent())
+
+    check e.state.search.cursor == 3
+
+  test "Left arrow steps over multibyte character":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("検索")
+
+    discard handleSearchModeEvent(e, makeLeftEvent())
+
+    check e.state.search.cursor == 1
+
+  test "Home moves cursor to start":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("abc")
+
+    discard handleSearchModeEvent(e, makeHomeEvent())
+
+    check e.state.search.cursor == 0
+
+  test "End moves cursor to end":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("abc")
+    e.state.search.cursor = 0
+
+    discard handleSearchModeEvent(e, makeEndEvent())
+
+    check e.state.search.cursor == 3
+
+suite "Search mode - character insertion at cursor":
+  test "Insert character at cursor position":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("ac")
+    e.state.search.cursor = 1
+
+    discard handleSearchModeEvent(e, makeCharEvent("b"))
+
+    check e.state.search.text == "abc"
+    check e.state.search.cursor == 2
+
+  test "Insert character at start":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("bc")
+    e.state.search.cursor = 0
+
+    discard handleSearchModeEvent(e, makeCharEvent("a"))
+
+    check e.state.search.text == "abc"
+    check e.state.search.cursor == 1
+
+  test "Insert character at end (append)":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("ab")
+
+    discard handleSearchModeEvent(e, makeCharEvent("c"))
+
+    check e.state.search.text == "abc"
+    check e.state.search.cursor == 3
+
+  test "Insert multibyte character at cursor":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("a検")
+    e.state.search.cursor = 1
+
+    discard handleSearchModeEvent(e, makeCharEvent("索"))
+
+    check e.state.search.text == "a索検"
+    check e.state.search.cursor == 2
+
+suite "Search mode - Delete and Backspace at cursor":
+  test "Delete removes character at cursor":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("abc")
+    e.state.search.cursor = 1
+
+    discard handleSearchModeEvent(e, makeDeleteEvent())
+
+    check e.state.search.text == "ac"
+    check e.state.search.cursor == 1
+
+  test "Delete at end does nothing":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("abc")
+
+    discard handleSearchModeEvent(e, makeDeleteEvent())
+
+    check e.state.search.text == "abc"
+    check e.state.search.cursor == 3
+
+  test "Backspace removes character before cursor":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("abc")
+    e.state.search.cursor = 2
+
+    discard handleSearchModeEvent(e, makeBackspaceEvent())
+
+    check e.state.search.text == "ac"
+    check e.state.search.cursor == 1
+
+  test "Backspace at start does nothing":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.enterSearchOverlay(Forward)
+    e.setSearchText("abc")
+    e.state.search.cursor = 0
+
+    discard handleSearchModeEvent(e, makeBackspaceEvent())
+
+    check e.state.search.text == "abc"
+    check e.state.search.cursor == 0
+
+suite "Search mode - enterSearchOverlay cursor init":
+  test "enterSearchOverlay resets cursor to 0":
+    let e = createTestEditorWithBuffer("hello")
+    e.state.search.cursor = 5
+    e.state.enterSearchOverlay(Forward)
+    check e.state.search.cursor == 0
