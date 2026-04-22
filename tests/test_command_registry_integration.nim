@@ -2297,7 +2297,9 @@ suite "Handler - Visual Move Commands":
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcVisualMoveEnd)).isOk
-    check ctx.state.cursor.column == 10 # End of "hello world"
+    # In Visual mode, cursor can go one past the last character (== lineLen)
+    # so the selection can include the newline.
+    check ctx.state.cursor.column == 11
 
   test "visual move first non-blank (^)":
     let buffer = newTextBuffer("    hello world")
