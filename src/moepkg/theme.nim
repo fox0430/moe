@@ -215,7 +215,11 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.syntaxCheckErr: makeColorPair("#e06c75", "#000000"),
 
   # Git
-  EditorColorPairIndex.gitConflict: makeColorPair("#98c379", "#000000"),
+  EditorColorPairIndex.gitConflict: makeColorPair("#ffffff", "#3a1e1e"),
+  EditorColorPairIndex.gitConflictMarker: makeColorPair("#ffffff", "#be5046"),
+  EditorColorPairIndex.gitConflictOurs: makeColorPair("#ffffff", "#2f2540"),
+  EditorColorPairIndex.gitConflictBase: makeColorPair("#dadada", "#3a2f1a"),
+  EditorColorPairIndex.gitConflictTheirs: makeColorPair("#ffffff", "#1a2f3a"),
 
   # Backup manager
   EditorColorPairIndex.backupManagerCurrentLine: makeColorPair("#ffffff", "#008080"),
@@ -236,6 +240,7 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.sidebarGitAddedSign: makeColorPair("#98c379", "#000000"),
   EditorColorPairIndex.sidebarGitDeletedSign: makeColorPair("#e06c75", "#000000"),
   EditorColorPairIndex.sidebarGitChangedSign: makeColorPair("#e5c07b", "#000000"),
+  EditorColorPairIndex.sidebarGitConflictSign: makeColorPair("#e06c75", "#000000"),
   EditorColorPairIndex.sidebarSyntaxCheckInfoSign: makeColorPair("#e5c07b", "#000000"),
   EditorColorPairIndex.sidebarSyntaxCheckHintSign: makeColorPair("#e5c07b", "#000000"),
   EditorColorPairIndex.sidebarSyntaxCheckWarnSign: makeColorPair("#e5c07b", "#000000"),

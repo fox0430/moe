@@ -653,6 +653,24 @@ proc makeDescriptors(): seq[ConfigItemDescriptor] =
     boolSet: proc(c: EditorConfig, v: bool) =
       c.highlight.colorCodeHighlight = v,
   )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "gitConflict",
+    section: "Highlight",
+    boolGet: proc(c: EditorConfig): bool =
+      c.highlight.gitConflict,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.highlight.gitConflict = v,
+  )
+  result.add ConfigItemDescriptor(
+    kind: cvkBool,
+    displayName: "gitConflictTwoColor",
+    section: "Highlight",
+    boolGet: proc(c: EditorConfig): bool =
+      c.highlight.gitConflictTwoColor,
+    boolSet: proc(c: EditorConfig, v: bool) =
+      c.highlight.gitConflictTwoColor = v,
+  )
 
   # AutoBackup section
   result.add ConfigItemDescriptor(

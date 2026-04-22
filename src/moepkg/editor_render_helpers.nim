@@ -25,7 +25,7 @@ import pkg/celina
 
 import
   editor_types, color, render_utils, unicode_utils, search_utils, highlight, modes,
-  colorcode
+  colorcode, git_conflict
 
 proc colorIndexToStyle*(colorIdx: EditorColorPairIndex): Style =
   ## Convert EditorColorPairIndex to Celina Style using theme colors
@@ -146,9 +146,14 @@ proc baseStyleWithOverlay(
     windowMode: EditorMode,
     displayCol: int,
     cursorDisplayCol: int,
+    lineConflict: ConflictMarkerKind,
 ): Style =
   ## Compute base style (syntax highlight + document highlight / cursor line/column overlay).
   ## Extracted to avoid 4x duplication in getSelectionStyle.
+  ## `lineConflict` is pre-computed once per line by the caller.
+  let conflictKind = lineConflict
+  let useTwoColor = e.config.highlight.gitConflictTwoColor
+
   if e.hasSyntaxHighlight(buffer, windowMode):
     let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
     var style = colorIndexToStyle(colorPair)
@@ -157,6 +162,8 @@ proc baseStyleWithOverlay(
     let highlightKind = e.isPositionInDocumentHighlight(pos)
     if highlightKind.isSome:
       style.bg = getDocumentHighlightStyle(highlightKind.get).bg
+    elif conflictKind != cmkNone:
+      style.bg = conflictStyleFor(conflictKind, useTwoColor).bg
     elif colorPair != EditorColorPairIndex.searchResult:
       if e.state.display.showCursorLine and pos.line == cursorLine:
         style.bg = cursorLineHighlightStyle().bg
@@ -168,6 +175,8 @@ proc baseStyleWithOverlay(
     let highlightKind = e.isPositionInDocumentHighlight(pos)
     if highlightKind.isSome:
       getDocumentHighlightStyle(highlightKind.get)
+    elif conflictKind != cmkNone:
+      conflictStyleFor(conflictKind, useTwoColor)
     elif e.state.display.showCursorLine and pos.line == cursorLine:
       cursorLineHighlightStyle()
     elif e.state.display.showCursorColumn and displayCol >= 0 and
@@ -188,6 +197,7 @@ proc getSelectionStyle*(
     cursorDisplayCol: int = -1,
     searchMatchRanges: seq[ColumnRange] = @[],
     wordMatchRanges: seq[ColumnRange] = @[],
+    lineConflict: ConflictMarkerKind = cmkNone,
 ): Style =
   ## Get the appropriate style for a character based on selection state and syntax.
   ## searchMatchRanges/wordMatchRanges: pre-computed per-line ranges for O(1) lookup.
@@ -228,7 +238,7 @@ proc getSelectionStyle*(
     searchHighlightStyle()
   else:
     e.baseStyleWithOverlay(
-      buffer, pos, cursorLine, windowMode, displayCol, cursorDisplayCol
+      buffer, pos, cursorLine, windowMode, displayCol, cursorDisplayCol, lineConflict
     )
 
 proc getVisualSelection*(
@@ -318,6 +328,13 @@ proc renderLineSegmentWithSelection*(
     else:
       @[]
 
+  # Pre-compute conflict kind once per line (avoids O(K) scan per character)
+  let lineConflict =
+    if e.config.highlight.gitConflict:
+      textBuffer.lineConflictKind(lineIndex)
+    else:
+      cmkNone
+
   # Always render character by character to apply syntax highlighting
   var displayX = 0
 
@@ -396,6 +413,7 @@ proc renderLineSegmentWithSelection*(
           cursorDisplayCol = ctx.cursorDisplayCol,
           searchMatchRanges = searchMatchRanges,
           wordMatchRanges = wordMatchRanges,
+          lineConflict = lineConflict,
         )
       renderChar(rune, charIdx, style)
       charIdx += 1
@@ -417,15 +435,19 @@ proc renderLineSegmentWithSelection*(
           cursorDisplayCol = ctx.cursorDisplayCol,
           searchMatchRanges = searchMatchRanges,
           wordMatchRanges = wordMatchRanges,
+          lineConflict = lineConflict,
         )
       renderChar(rune, col, style)
       charIdx += 1
 
   # Fill the rest of the line to the window right edge.
   # Always fill to clear stale content (e.g. old cursor line highlight).
+  let useTwoColor = e.config.highlight.gitConflictTwoColor
   while screenX + displayX < ctx.windowRightEdge:
     let fillStyle =
-      if e.state.display.showCursorLine and lineIndex == ctx.cursorLine:
+      if lineConflict != cmkNone:
+        conflictStyleFor(lineConflict, useTwoColor)
+      elif e.state.display.showCursorLine and lineIndex == ctx.cursorLine:
         cursorLineHighlightStyle()
       elif e.state.display.showCursorColumn and ctx.cursorDisplayCol >= 0 and
         displayX == ctx.cursorDisplayCol:
@@ -442,13 +464,24 @@ proc fillLineBackground*(
     lineIndex, cursorLine: int,
     windowRightEdge: int,
     cursorDisplayCol: int = -1,
+    textBuffer: TextBuffer = nil,
 ) =
   ## Fill the rest of the line to the window right edge.
   ## Uses cursor line highlight for the cursor line, normal style otherwise.
+  ## When `textBuffer` is provided and the line is inside a git conflict block,
+  ## the conflict background takes priority over cursor-line highlight.
+  let lineConflict =
+    if textBuffer != nil and e.config.highlight.gitConflict:
+      textBuffer.lineConflictKind(lineIndex)
+    else:
+      cmkNone
+  let useTwoColor = e.config.highlight.gitConflictTwoColor
   var displayX = 0
   while screenX + displayX < windowRightEdge:
     let fillStyle =
-      if e.state.display.showCursorLine and lineIndex == cursorLine:
+      if lineConflict != cmkNone:
+        conflictStyleFor(lineConflict, useTwoColor)
+      elif e.state.display.showCursorLine and lineIndex == cursorLine:
         cursorLineHighlightStyle()
       elif e.state.display.showCursorColumn and cursorDisplayCol >= 0 and
         displayX == cursorDisplayCol:

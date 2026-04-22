@@ -132,6 +132,9 @@ const CommandDescriptions = {
   "changes": "Show change list",
   # Bookmarks
   "bookmarks": "Show bookmark list",
+  # Git conflict navigation
+  "conflictnext": "Jump to next git conflict block",
+  "conflictprev": "Jump to previous git conflict block",
   # Build
   "build": "Build project",
   # Debug mode
@@ -243,6 +246,10 @@ const SetOptions* = {
   "nohighlightfindchar": "Disable f/F/t/T match highlight",
   "highlightcolorcode": "Highlight inline color codes",
   "nohighlightcolorcode": "Disable inline color code highlight",
+  "highlightgitconflict": "Highlight git merge conflict blocks",
+  "nohighlightgitconflict": "Disable git conflict highlight",
+  "highlightgitconflicttwocolor": "Use two-color (ours/theirs) conflict scheme",
+  "nohighlightgitconflicttwocolor": "Use single-color conflict scheme",
   # Search
   "ignorecase": "Case insensitive search",
   "noignorecase": "Case sensitive search",

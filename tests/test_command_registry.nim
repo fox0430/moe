@@ -28,6 +28,7 @@ import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/key_bindings {.all.}
 import ../src/moepkg/config {.all.}
 import ../src/moepkg/modes {.all.}
+import ../src/moepkg/git_conflict {.all.}
 
 suite "CommandRegistry - CommandId":
   test "builtin creates CommandId from BuiltinCommandId":
@@ -923,3 +924,156 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
     check r.isOk
     # With pending operator, highlight should not be set
     check ctx.state.findCharMatches.len == 0
+
+suite "CommandRegistry - Git conflict navigation (]x / [x)":
+  const ConflictContent =
+    "before\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\nmiddle\n" &
+    "<<<<<<< A\na\n=======\nb\n>>>>>>> B\nafter\n"
+    # Lines: 0:before 1:<<<< 2:ours 3:=== 4:theirs 5:>>>> 6:middle
+    #        7:<<<< 8:a 9:=== 10:b 11:>>>> 12:after
+
+  proc createConflictTestContext(buffer: TextBuffer): CommandContext =
+    let state = EditorState(activeWindow: EditorWindow())
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.mode = EditorMode.Normal
+
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80, x: 0, y: 0)
+    let motionController = newMotionController(buffer, state, viewport)
+
+    result = CommandContext(
+      buffer: buffer,
+      state: state,
+      motionController: motionController,
+      clipboardConfig: ClipboardConfig(enable: false),
+      keyBindingRegistry: newKeyBindingRegistry(),
+    )
+
+  test "navigate.conflict.next jumps from before first to first conflict":
+    let buffer = newTextBuffer(ConflictContent)
+    applyConflictsToBuffer(buffer, scanBufferForConflicts(buffer))
+    let ctx = createConflictTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let r = registry.execute(ctx, custom("navigate.conflict.next"))
+    check r.isOk
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 0
+
+  test "navigate.conflict.next advances from inside first to second":
+    let buffer = newTextBuffer(ConflictContent)
+    applyConflictsToBuffer(buffer, scanBufferForConflicts(buffer))
+    let ctx = createConflictTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 3, column: 0)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let r = registry.execute(ctx, custom("navigate.conflict.next"))
+    check r.isOk
+    check ctx.cursor.line == 7
+
+  test "navigate.conflict.next past last conflict returns error":
+    let buffer = newTextBuffer(ConflictContent)
+    applyConflictsToBuffer(buffer, scanBufferForConflicts(buffer))
+    let ctx = createConflictTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 12, column: 0)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let r = registry.execute(ctx, custom("navigate.conflict.next"))
+    check r.isErr
+    check ctx.cursor.line == 12
+    check ctx.state.statusMessage == "No more git conflicts"
+
+  test "navigate.conflict.prev jumps from after last to last conflict":
+    let buffer = newTextBuffer(ConflictContent)
+    applyConflictsToBuffer(buffer, scanBufferForConflicts(buffer))
+    let ctx = createConflictTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 12, column: 0)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let r = registry.execute(ctx, custom("navigate.conflict.prev"))
+    check r.isOk
+    check ctx.cursor.line == 7
+
+  test "navigate.conflict.prev from inside second returns second's start":
+    # From inside a conflict block, [x jumps to the start of that block
+    # (matches vim [c behavior for diff mode).
+    let buffer = newTextBuffer(ConflictContent)
+    applyConflictsToBuffer(buffer, scanBufferForConflicts(buffer))
+    let ctx = createConflictTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 9, column: 0)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let r = registry.execute(ctx, custom("navigate.conflict.prev"))
+    check r.isOk
+    check ctx.cursor.line == 7
+
+  test "navigate.conflict.prev from second's start jumps to first":
+    let buffer = newTextBuffer(ConflictContent)
+    applyConflictsToBuffer(buffer, scanBufferForConflicts(buffer))
+    let ctx = createConflictTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 7, column: 0)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let r = registry.execute(ctx, custom("navigate.conflict.prev"))
+    check r.isOk
+    check ctx.cursor.line == 1
+
+  test "navigate.conflict.prev before first conflict returns error":
+    let buffer = newTextBuffer(ConflictContent)
+    applyConflictsToBuffer(buffer, scanBufferForConflicts(buffer))
+    let ctx = createConflictTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let r = registry.execute(ctx, custom("navigate.conflict.prev"))
+    check r.isErr
+    check ctx.cursor.line == 0
+    check ctx.state.statusMessage == "No more git conflicts"
+
+  test "navigate.conflict.next in buffer without conflicts returns error":
+    let buffer = newTextBuffer("plain\ntext\nno markers\n")
+    applyConflictsToBuffer(buffer, scanBufferForConflicts(buffer))
+    let ctx = createConflictTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let r = registry.execute(ctx, custom("navigate.conflict.next"))
+    check r.isErr
+
+  test "navigate.conflict.next records a jump":
+    let buffer = newTextBuffer(ConflictContent)
+    applyConflictsToBuffer(buffer, scanBufferForConflicts(buffer))
+    let ctx = createConflictTestContext(buffer)
+    let registry = newCommandRegistry()
+    registerBuiltinCommands(registry)
+
+    let before = ctx.state.jumpList.len
+    discard registry.execute(ctx, custom("navigate.conflict.next"))
+    check ctx.state.jumpList.len == before + 1
+
+suite "KeyBindings - ]x / [x resolve to conflict navigation":
+  test "] x maps to navigate-conflict-next":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check registry.processKey(EditorMode.Normal, toKeyCombo(']')).isNone
+    let r = registry.processKey(EditorMode.Normal, toKeyCombo('x'))
+    check r.isSome
+    check r.get.name == "navigate-conflict-next"
+    check r.get.commandId == "navigate.conflict.next"
+
+  test "[ x maps to navigate-conflict-prev":
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    check registry.processKey(EditorMode.Normal, toKeyCombo('[')).isNone
+    let r = registry.processKey(EditorMode.Normal, toKeyCombo('x'))
+    check r.isSome
+    check r.get.name == "navigate-conflict-prev"
+    check r.get.commandId == "navigate.conflict.prev"

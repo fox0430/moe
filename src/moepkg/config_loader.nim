@@ -581,7 +581,7 @@ proc loadHighlightConfig(
   const validKeys = [
     "currentLine", "currentColumn", "reservedWord", "replaceText", "pairOfParen",
     "fullWidthSpace", "trailingSpaces", "currentWord", "findCharHighlight",
-    "colorCodeHighlight",
+    "colorCodeHighlight", "gitConflict", "gitConflictTwoColor",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
   loadBool(table, "currentLine", config.currentLine, vr, section)
@@ -594,6 +594,8 @@ proc loadHighlightConfig(
   loadBool(table, "currentWord", config.currentWord, vr, section)
   loadBool(table, "findCharHighlight", config.findCharHighlight, vr, section)
   loadBool(table, "colorCodeHighlight", config.colorCodeHighlight, vr, section)
+  loadBool(table, "gitConflict", config.gitConflict, vr, section)
+  loadBool(table, "gitConflictTwoColor", config.gitConflictTwoColor, vr, section)
 
 proc loadFilerConfig(
     table: TomlTableRef, config: var FilerConfig, vr: var ValidationResult
@@ -1735,6 +1737,14 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.syntaxCheckErr)
   of "gitConflict":
     return some(EditorColorPairIndex.gitConflict)
+  of "gitConflictMarker":
+    return some(EditorColorPairIndex.gitConflictMarker)
+  of "gitConflictOurs":
+    return some(EditorColorPairIndex.gitConflictOurs)
+  of "gitConflictBase":
+    return some(EditorColorPairIndex.gitConflictBase)
+  of "gitConflictTheirs":
+    return some(EditorColorPairIndex.gitConflictTheirs)
   of "backupManagerCurrentLine":
     return some(EditorColorPairIndex.backupManagerCurrentLine)
   of "diffViewerAddedLine":
@@ -1759,6 +1769,8 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.sidebarGitDeletedSign)
   of "sidebarGitChangedSign":
     return some(EditorColorPairIndex.sidebarGitChangedSign)
+  of "sidebarGitConflictSign":
+    return some(EditorColorPairIndex.sidebarGitConflictSign)
   of "sidebarSyntaxCheckInfoSign":
     return some(EditorColorPairIndex.sidebarSyntaxCheckInfoSign)
   of "sidebarSyntaxCheckHintSign":
@@ -2105,6 +2117,8 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "currentWord = " & toTomlBool(config.highlight.currentWord)
   lines.add "findCharHighlight = " & toTomlBool(config.highlight.findCharHighlight)
   lines.add "colorCodeHighlight = " & toTomlBool(config.highlight.colorCodeHighlight)
+  lines.add "gitConflict = " & toTomlBool(config.highlight.gitConflict)
+  lines.add "gitConflictTwoColor = " & toTomlBool(config.highlight.gitConflictTwoColor)
   lines.add ""
 
   # AutoBackup section

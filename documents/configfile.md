@@ -179,6 +179,8 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | currentWord | bool | true | Highlight other uses of the current word under the cursor |
 | findCharHighlight | bool | true | Highlight f/F/t/T matches |
 | colorCodeHighlight | bool | true | Highlight inline color codes (#RRGGBB, #RGB) with their actual color |
+| gitConflict | bool | true | Highlight git merge conflict blocks (`<<<<<<<` / `=======` / `>>>>>>>`) |
+| gitConflictTwoColor | bool | true | Use GitHub-style two-color scheme (ours / theirs distinct); false for single red background |
 
 
 ### AutoBackup table
@@ -1188,8 +1190,16 @@ And, `termDefault` can be used for both foreground and background to use the ter
 | syntaxCheckWarnBg | A warning color of syntax checker result highlighting |
 | syntaxCheckErr | An error color of syntax checker result highlighting |
 | syntaxCheckErrBg | An error color of syntax checker result highlighting |
-| gitConflict | Git conflict marker color |
-| gitConflictBg | Git conflict marker color |
+| gitConflict | Single-color fallback for git conflict block (used when gitConflictTwoColor = false) |
+| gitConflictBg | Single-color fallback background for git conflict block |
+| gitConflictMarker | Foreground color for marker lines (`<<<<<<<`, `\|\|\|\|\|\|\|`, `=======`, `>>>>>>>`) |
+| gitConflictMarkerBg | Background color for marker lines |
+| gitConflictOurs | Foreground color for the "ours" side of a conflict block |
+| gitConflictOursBg | Background color for the "ours" side |
+| gitConflictBase | Foreground color for the diff3 "base" side of a conflict block |
+| gitConflictBaseBg | Background color for the diff3 "base" side |
+| gitConflictTheirs | Foreground color for the "theirs" side of a conflict block |
+| gitConflictTheirsBg | Background color for the "theirs" side |
 | diffViewerAddedLine  | Added line color on Diff viewer |
 | diffViewerAddedLineBg  | Added line color on Diff viewer |
 | diffViewerDeletedLine | Deleted line color on Diff viewer |
@@ -1206,6 +1216,8 @@ And, `termDefault` can be used for both foreground and background to use the ter
 | sidebarGitDeletedSignBg | A deleted lines sign color of Git in sidebars |
 | sidebarGitChangedSign | A changed lines sign color of Git in sidebars |
 | sidebarGitChangedSignBg | A changed lines sign color of Git in sidebars |
+| sidebarGitConflictSign | A merge conflict sign color of Git in sidebars |
+| sidebarGitConflictSignBg | A merge conflict sign color of Git in sidebars |
 | sidebarSyntaxCheckInfoSign  | A info sign color of syntax checker results in sidebars |
 | sidebarSyntaxCheckInfoSignBg  | A info sign color of syntax checker results in sidebars |
 | sidebarSyntaxCheckHintSign | A hint sign color of syntax checker results in sidebars |

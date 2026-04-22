@@ -536,6 +536,24 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.sidebarGitChangedSign].foreground =
       ThemeColor(rgb: colorFromNode(colors{"gitDecoration.modifiedResourceForeground"}))
 
+  # Git merge conflict colors
+  if colors != nil and colors.contains("gitDecoration.conflictingResourceForeground"):
+    result[EditorColorPairIndex.sidebarGitConflictSign].foreground = ThemeColor(
+      rgb: colorFromNode(colors{"gitDecoration.conflictingResourceForeground"})
+    )
+  if colors != nil and colors.contains("merge.currentContentBackground"):
+    result[EditorColorPairIndex.gitConflictOurs].background =
+      ThemeColor(rgb: colorFromNode(colors{"merge.currentContentBackground"}))
+  if colors != nil and colors.contains("merge.currentHeaderBackground"):
+    result[EditorColorPairIndex.gitConflictMarker].background =
+      ThemeColor(rgb: colorFromNode(colors{"merge.currentHeaderBackground"}))
+  if colors != nil and colors.contains("merge.incomingContentBackground"):
+    result[EditorColorPairIndex.gitConflictTheirs].background =
+      ThemeColor(rgb: colorFromNode(colors{"merge.incomingContentBackground"}))
+  if colors != nil and colors.contains("merge.commonContentBackground"):
+    result[EditorColorPairIndex.gitConflictBase].background =
+      ThemeColor(rgb: colorFromNode(colors{"merge.commonContentBackground"}))
+
   # Error/Warning colors
   if colors != nil and colors.contains("editorError.foreground"):
     result[EditorColorPairIndex.errorMessage].foreground =

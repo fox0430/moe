@@ -58,6 +58,43 @@ proc searchHighlightStyle*(): Style =
   ## Get search result highlight style from theme
   getThemeStyle(EditorColorPairIndex.searchResult)
 
+proc gitConflictStyle*(): Style =
+  ## One-color fallback for git conflict highlighting (used when the
+  ## two-color config is disabled).
+  getThemeStyle(EditorColorPairIndex.gitConflict)
+
+proc gitConflictMarkerStyle*(): Style =
+  ## Style for the marker lines (`<<<<<<<` / `|||||||` / `=======` / `>>>>>>>`).
+  getThemeStyle(EditorColorPairIndex.gitConflictMarker)
+
+proc gitConflictOursStyle*(): Style =
+  ## Style for the "ours" side of a merge conflict.
+  getThemeStyle(EditorColorPairIndex.gitConflictOurs)
+
+proc gitConflictBaseStyle*(): Style =
+  ## Style for the base (merged common ancestor) side of a diff3 conflict.
+  getThemeStyle(EditorColorPairIndex.gitConflictBase)
+
+proc gitConflictTheirsStyle*(): Style =
+  ## Style for the "theirs" side of a merge conflict.
+  getThemeStyle(EditorColorPairIndex.gitConflictTheirs)
+
+proc conflictStyleFor*(kind: ConflictMarkerKind, useTwoColor: bool): Style =
+  ## Resolve the background style for a conflict line kind.
+  if not useTwoColor:
+    return gitConflictStyle()
+  case kind
+  of cmkStartMarker, cmkBaseMarker, cmkSeparator, cmkEndMarker:
+    gitConflictMarkerStyle()
+  of cmkOurs:
+    gitConflictOursStyle()
+  of cmkBase:
+    gitConflictBaseStyle()
+  of cmkTheirs:
+    gitConflictTheirsStyle()
+  of cmkNone:
+    normalStyle()
+
 proc lineNumStyle*(): Style =
   ## Get line number style from theme
   getThemeStyle(EditorColorPairIndex.lineNum)

@@ -52,6 +52,8 @@ type
     bsoHighlightPairOfParen # highlight pair of parentheses
     bsoHighlightFindChar # highlight f/F/t/T matches
     bsoHighlightColorCode # highlight inline color codes
+    bsoHighlightGitConflict # highlight git merge conflict blocks
+    bsoHighlightGitConflictTwoColor # two-color (ours/theirs) conflict scheme
     bsoMultipleStatusLine # multiple status line
     bsoIgnoreCase # ignore case in search
     bsoSmartCase # smart case in search
@@ -112,6 +114,8 @@ type
     cmrJumpList # Show jump list (:ju, :jump)
     cmrChanges # Show change list (:changes)
     cmrBookmarks # Show bookmark list (:bookmarks)
+    cmrConflictNext # Jump to next git conflict block (:conflictnext)
+    cmrConflictPrev # Jump to previous git conflict block (:conflictprev)
     cmrBuild # Build current buffer (:build)
     cmrDebug # Open debug mode (:debug)
     cmrConfig # Open configuration mode (:conf)
@@ -215,6 +219,10 @@ type
     of cmrChanges:
       discard
     of cmrBookmarks:
+      discard
+    of cmrConflictNext:
+      discard
+    of cmrConflictPrev:
       discard
     of cmrBuild:
       discard
@@ -554,6 +562,28 @@ proc executeSet*(
   of "nohighlightcolorcode", "nohcc":
     return CommandModeResult(
       kind: cmrSetBoolOption, boolOption: bsoHighlightColorCode, boolValue: false
+    )
+  # Highlight git conflict
+  of "highlightgitconflict", "hgc":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightGitConflict, boolValue: true
+    )
+  of "nohighlightgitconflict", "nohgc":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightGitConflict, boolValue: false
+    )
+  # Highlight git conflict two-color
+  of "highlightgitconflicttwocolor", "hgctc":
+    return CommandModeResult(
+      kind: cmrSetBoolOption,
+      boolOption: bsoHighlightGitConflictTwoColor,
+      boolValue: true,
+    )
+  of "nohighlightgitconflicttwocolor", "nohgctc":
+    return CommandModeResult(
+      kind: cmrSetBoolOption,
+      boolOption: bsoHighlightGitConflictTwoColor,
+      boolValue: false,
     )
   # Multiple status line
   of "multistatusline", "msl":
@@ -1146,6 +1176,10 @@ proc handleCommandModeInput*(
     return CommandModeResult(kind: cmrChanges)
   of claBookmarks:
     return CommandModeResult(kind: cmrBookmarks)
+  of claConflictNext:
+    return CommandModeResult(kind: cmrConflictNext)
+  of claConflictPrev:
+    return CommandModeResult(kind: cmrConflictPrev)
   of claBuild:
     return CommandModeResult(kind: cmrBuild)
   of claDebug:

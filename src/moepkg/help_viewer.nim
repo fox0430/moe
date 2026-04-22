@@ -90,6 +90,8 @@ dgn        - Delete next search match
 dgN        - Delete previous search match
 ]c         - Jump to next git change hunk
 [c         - Jump to previous git change hunk
+]x         - Jump to next git merge conflict block
+[x         - Jump to previous git merge conflict block
 :          - Start command mode
 u          - Undo
 Ctrl-r     - Redo
@@ -360,6 +362,8 @@ set highlightfullspace / set nohighlightfullspace (hfs/nohfs)     - Highlight fu
 set highlightparen / set nohighlightparen (hp/nohp)         - Highlight matching paren
 set highlightfindchar / set nohighlightfindchar (hfc/nohfc) - Highlight f/F/t/T matches
 set highlightcolorcode / set nohighlightcolorcode (hcc/nohcc) - Highlight inline color codes
+set highlightgitconflict / set nohighlightgitconflict (hgc/nohgc) - Highlight git merge conflict blocks
+set highlightgitconflicttwocolor / set nohighlightgitconflicttwocolor (hgctc/nohgctc) - Use two-color (ours/theirs) conflict scheme
 set multistatusline / set nomultistatusline (msl/nomsl)     - Enable/disable multiple status line
 set ignorecase / set noignorecase (ic/noic)                 - Enable/disable ignorecase
 set smartcase / set nosmartcase (scs/noscs)                 - Enable/disable smartcase
@@ -411,6 +415,9 @@ terminal command - Run command in terminal emulator
 changes - Show Change list
 
 bookmarks - Show bookmark list
+
+conflictnext - Jump to next git merge conflict block
+conflictprev - Jump to previous git merge conflict block
 
 ## Runtime Key Mapping
 

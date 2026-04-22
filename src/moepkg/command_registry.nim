@@ -28,7 +28,7 @@ import pkg/results
 
 import
   types, buffer, motion, key_bindings, modes, search_utils, clipboard, config, logger,
-  unicode_utils, registers, render_utils
+  unicode_utils, registers, render_utils, git_conflict
 
 import command_handlers/[visual_commands, insert_commands, normal_commands]
 
@@ -3029,6 +3029,28 @@ proc handleDecrementNumber(ctx: CommandContext, args: seq[string]): Result[(), s
 
   return ok(())
 
+proc jumpCursorToLine(ctx: CommandContext, line: int) =
+  ## Record a jump, move the cursor to `line` at column 0, and refresh the
+  ## viewport. Shared by commands that jump to non-adjacent lines (git change
+  ## hunks, conflict blocks).
+  recordJump(ctx.state)
+  ctx.cursor = BufferPosition(line: line, column: 0)
+  let lineNumOffset = calculateViewportOffset(
+    ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar,
+    ctx.state.display.scrollbar, ctx.state.display.scrollbarWidth,
+  )
+  ctx.motionController.viewportManager.updateViewport(
+    CursorPosition(x: 0, y: line),
+    ctx.buffer.len,
+    ctx.state.display.showStatusLine,
+    ctx.state.viewportReservedLines,
+    ctx.state.display.lineWrap,
+    ctx.buffer,
+    lineNumOffset,
+    ctx.state.display.tabStop,
+  )
+  ctx.state.needsFullRedraw = true
+
 ## Register built-in commands
 proc registerBuiltinCommands*(registry: CommandRegistry) =
   ## Register all built-in commands
@@ -4651,23 +4673,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let nextLine = ctx.buffer.findNextGitChange(ctx.cursor.line)
       if nextLine.isSome:
-        recordJump(ctx.state)
-        ctx.cursor = BufferPosition(line: nextLine.get, column: 0)
-        let lineNumOffset = calculateViewportOffset(
-          ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar,
-          ctx.state.display.scrollbar, ctx.state.display.scrollbarWidth,
-        )
-        ctx.motionController.viewportManager.updateViewport(
-          CursorPosition(x: 0, y: nextLine.get),
-          ctx.buffer.len,
-          ctx.state.display.showStatusLine,
-          ctx.state.viewportReservedLines,
-          ctx.state.display.lineWrap,
-          ctx.buffer,
-          lineNumOffset,
-          ctx.state.display.tabStop,
-        )
-        ctx.state.needsFullRedraw = true
+        jumpCursorToLine(ctx, nextLine.get)
         return Result[(), string].ok ()
       else:
         ctx.state.statusMessage = "No more git changes"
@@ -4683,27 +4689,44 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let prevLine = ctx.buffer.findPrevGitChange(ctx.cursor.line)
       if prevLine.isSome:
-        recordJump(ctx.state)
-        ctx.cursor = BufferPosition(line: prevLine.get, column: 0)
-        let lineNumOffset = calculateViewportOffset(
-          ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar,
-          ctx.state.display.scrollbar, ctx.state.display.scrollbarWidth,
-        )
-        ctx.motionController.viewportManager.updateViewport(
-          CursorPosition(x: 0, y: prevLine.get),
-          ctx.buffer.len,
-          ctx.state.display.showStatusLine,
-          ctx.state.viewportReservedLines,
-          ctx.state.display.lineWrap,
-          ctx.buffer,
-          lineNumOffset,
-          ctx.state.display.tabStop,
-        )
-        ctx.state.needsFullRedraw = true
+        jumpCursorToLine(ctx, prevLine.get)
         return Result[(), string].ok ()
       else:
         ctx.state.statusMessage = "No more git changes"
         return err("No more git changes"),
+    0,
+    0,
+  )
+
+  # Git merge conflict block navigation commands
+  registry.register(
+    custom("navigate.conflict.next"),
+    "Next Git Conflict",
+    "Jump to next git merge conflict block",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let nxt = ctx.buffer.findNextConflict(ctx.cursor.line)
+      if nxt.isSome:
+        jumpCursorToLine(ctx, nxt.get.startLine)
+        return Result[(), string].ok ()
+      else:
+        ctx.state.statusMessage = "No more git conflicts"
+        return err("No more git conflicts"),
+    0,
+    0,
+  )
+
+  registry.register(
+    custom("navigate.conflict.prev"),
+    "Previous Git Conflict",
+    "Jump to previous git merge conflict block",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let prv = ctx.buffer.findPrevConflict(ctx.cursor.line)
+      if prv.isSome:
+        jumpCursorToLine(ctx, prv.get.startLine)
+        return Result[(), string].ok ()
+      else:
+        ctx.state.statusMessage = "No more git conflicts"
+        return err("No more git conflicts"),
     0,
     0,
   )

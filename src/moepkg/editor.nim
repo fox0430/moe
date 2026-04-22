@@ -26,9 +26,10 @@ import
   editorconfig_helper, emergency
 
 import
-  status_line, render_utils, git_diff, logger, config_loader, keybind_config,
-  search_utils, completion, signature_help, hover_popup, command_completion, motion,
-  color, debug_viewer, message_log, unicode_utils, highlight, sidebar
+  status_line, render_utils, git_diff, git_conflict, logger, config_loader,
+  keybind_config, search_utils, completion, signature_help, hover_popup,
+  command_completion, motion, color, debug_viewer, message_log, unicode_utils,
+  highlight, sidebar
 
 import key_bindings except Command
 import command_handlers/insert_handler
@@ -713,6 +714,9 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         lastGitDiffUpdate: getMonoTime(),
         lastGitDiffChangeSeq: 0,
         gitDiffUpdateInterval: editorConfig.git.updateInterval,
+        lastConflictScan: getMonoTime(),
+        lastConflictScanSeq: -1,
+        conflictScanInterval: DefaultConflictScanIntervalMs,
         lastAutoSave: getMonoTime(),
         lastAutoBackup: getMonoTime(),
         lastInputTime: getMonoTime(),
@@ -983,6 +987,10 @@ proc maybeReloadExternallyModifiedFile*(e: Editor) =
     e.state.needsFullRedraw = true
     # Update git diff after reload
     e.refreshGitDiff(useBuffer = false)
+    # Rescan conflict markers against the newly loaded content
+    activeBuffer.refreshConflicts()
+    e.state.timing.lastConflictScan = getMonoTime()
+    e.state.timing.lastConflictScanSeq = activeBuffer.changeSeq
   else:
     e.state.statusMessage = "Failed to reload file: " & reloadResult.error
 
@@ -1000,6 +1008,9 @@ proc reloadCurrentFile*(e: Editor): Result[void, string] =
   e.state.statusMessage = "File reloaded: " & filePath
   e.state.needsFullRedraw = true
   e.refreshGitDiff(useBuffer = false)
+  activeBuffer.refreshConflicts()
+  e.state.timing.lastConflictScan = getMonoTime()
+  e.state.timing.lastConflictScanSeq = activeBuffer.changeSeq
   return ok()
 
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
@@ -1167,6 +1178,26 @@ proc maybeUpdateGitDiff*(e: Editor) =
 
   if elapsed >= threshold:
     e.refreshGitDiff(useBuffer = true)
+
+proc maybeUpdateConflicts*(e: Editor) =
+  ## Rescan the active buffer for git conflict markers when it has been
+  ## modified since the last scan. Debounced by `conflictScanInterval` to
+  ## keep editing responsive on very large files.
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.changeSeq == e.state.timing.lastConflictScanSeq:
+    return
+  let now = getMonoTime()
+  let threshold = initDuration(milliseconds = e.state.timing.conflictScanInterval)
+  if now - e.state.timing.lastConflictScan < threshold:
+    return
+  let prevBlocks = activeBuffer.conflictBlocks
+  activeBuffer.refreshConflicts()
+  e.state.timing.lastConflictScan = now
+  e.state.timing.lastConflictScanSeq = activeBuffer.changeSeq
+  # Only force a full redraw when the block structure actually changed —
+  # per-line edits already trigger their own redraws.
+  if activeBuffer.conflictBlocks != prevBlocks:
+    e.state.needsFullRedraw = true
 
 proc enterRecentFileMode*(e: Editor): Result[void, string] =
   ## Enter Recent File mode in a vertical split window
@@ -1501,6 +1532,7 @@ proc tick*(e: Editor) =
 
   # Git and debug updates
   e.maybeUpdateGitDiff()
+  e.maybeUpdateConflicts()
   e.maybeUpdateDebugBuffer()
 
   # Auto save/backup
