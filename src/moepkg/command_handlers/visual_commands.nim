@@ -781,12 +781,12 @@ proc visualMoveHome*(buffer: TextBuffer, state: EditorState) =
   state.needsFullRedraw = true
 
 proc visualMoveEnd*(buffer: TextBuffer, state: EditorState) =
-  ## Move to end of line ($) and update selection
+  ## Move to end of line ($) and update selection.
+  ## In Visual mode, cursor can be placed one past the last character
+  ## (at column == lineLen) so the selection can include the newline
+  ## and `d` can delete the entire line.
   let lineLen = buffer.getLine(state.cursor.line).charLen
-  if lineLen > 0:
-    state.cursor.column = lineLen - 1
-  else:
-    state.cursor.column = 0
+  state.cursor.column = lineLen
   state.visualSelection.current = state.cursor
   state.needsFullRedraw = true
 

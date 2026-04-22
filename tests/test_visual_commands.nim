@@ -439,6 +439,45 @@ suite "Visual Commands - visualDelete":
 
     check buf.getLine(0) == "hello world"
 
+  test "Delete selection extending to column == lineLen removes line":
+    # v l...l (to column == lineLen) + d should delete the entire line
+    # including the newline, joining with the next line.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.visualSelection = VisualSelection(
+      start: state.cursor, current: state.cursor, active: true, kind: vskChar
+    )
+
+    for _ in 1 .. 5:
+      visualMoveRight(buf, state)
+    check state.cursor.column == 5 # == lineLen
+
+    visualDelete(buf, state)
+
+    check buf.len == 1
+    check buf.getLine(0) == "world"
+
+  test "v$d deletes the entire line including the newline":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard buf.insertText(BufferPosition(line: 0, column: 5), "\nworld")
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    state.visualSelection = VisualSelection(
+      start: state.cursor, current: state.cursor, active: true, kind: vskChar
+    )
+
+    visualMoveEnd(buf, state)
+    check state.cursor.column == 5 # == lineLen
+
+    visualDelete(buf, state)
+
+    check buf.len == 1
+    check buf.getLine(0) == "world"
+
 suite "Visual Commands - visualIndent":
   test "Indent single line selection":
     let buf = newTextBuffer()
@@ -764,7 +803,9 @@ suite "Visual Commands - visualMoveEnd":
 
     visualMoveEnd(buf, state)
 
-    check state.cursor.column == 10 # len - 1
+    # In Visual mode, cursor can go to column == lineLen (one past last char)
+    # so that the selection includes the newline.
+    check state.cursor.column == 11
 
   test "Move to end of empty line":
     let buf = newTextBuffer()
