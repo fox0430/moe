@@ -132,13 +132,25 @@ proc calculateRelativePath(filePath, gitRoot: string): string =
 proc getHeadContent(relativePath, gitRoot: string): Result[string, string] =
   ## Get file content from git HEAD
   ## Returns error if file is not in git repository or git command fails
-  let gitShowCmd = "git show HEAD:" & quoteShell(relativePath)
-
-  let (headContent, showExitCode) =
+  ##
+  ## Uses startProcess + readAll (not execCmdEx) to preserve the blob's
+  ## exact byte sequence. execCmdEx reads line-by-line and appends "\n"
+  ## per iteration, which fabricates a trailing newline for files that
+  ## were committed without one.
+  let process =
     try:
-      execCmdEx(gitShowCmd, workingDir = gitRoot)
+      startProcess(
+        "git",
+        workingDir = gitRoot,
+        args = ["show", "HEAD:" & relativePath],
+        options = {poUsePath},
+      )
     except OSError as e:
       return err("Failed to execute git show: " & e.msg)
+
+  let headContent = process.outputStream.readAll()
+  let showExitCode = process.waitForExit()
+  process.close()
 
   if showExitCode != 0:
     # File not in git yet
@@ -481,7 +493,7 @@ proc getGitDiffFromBuffer*(buffer: TextBuffer): Result[GitDiffInfo, string] =
   let gitRoot = gitRootResult.get
 
   # Prepare temporary files for comparison
-  let bufferContent = buffer.getTextString()
+  let bufferContent = buffer.getFileContent()
   let tempFilesResult = prepareBufferDiffTempFiles(filePath, gitRoot, bufferContent)
 
   # Handle case where file is not in git yet
@@ -536,7 +548,7 @@ proc startGitDiffFromBufferAsync*(buffer: TextBuffer): Result[GitDiffProcess, st
   let gitRoot = gitRootResult.get
 
   # Prepare temporary files for comparison
-  let bufferContent = buffer.getTextString()
+  let bufferContent = buffer.getFileContent()
   let tempFilesResult = prepareBufferDiffTempFiles(filePath, gitRoot, bufferContent)
   if tempFilesResult.isErr:
     return err(tempFilesResult.error)
