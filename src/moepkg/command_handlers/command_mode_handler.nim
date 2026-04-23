@@ -32,7 +32,7 @@ import
     quick_run_utils, help_viewer, buffer_manager, bookmark_manager, backup_manager,
     backup, debug_viewer, config_loader, message_log, command_line, color, theme,
     terminal_mode, command_completion, render_utils, config_mode, log_viewer,
-    syntax_checker, window_manager, registers, unicode_utils, git_conflict,
+    syntax_checker, window_manager, registers, unicode_utils, git_conflict, status_line,
   ]
 import handler_manager
 
@@ -497,6 +497,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           if e.windowManager.windows.len > 1:
             let idx = e.buffers.find(splitBuf)
             if idx >= 0:
+              evictGitCacheForBuffer(splitBuf)
               e.buffers.delete(idx)
 
         # Reset mode before closing

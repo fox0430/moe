@@ -352,6 +352,43 @@ suite "GitDiff - applyGitDiffToBuffer":
     check buf.getLineMarker(0) == some(GitAdded)
     check buf.getLineMarker(1) == none(SidebarItemKind)
 
+  test "Apply diff preserves LSP diagnostics and non-git markers":
+    let buf = newTextBuffer()
+    discard buf.insertText(
+      BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3\nLine 4"
+    )
+
+    # Pre-seed LSP diagnostics and a non-git marker.
+    buf.diagnostics = @[
+      BufferDiagnostic(
+        startLine: 1,
+        startCol: 0,
+        endLine: 1,
+        endCol: 5,
+        severity: bdsError,
+        message: "oops",
+      )
+    ]
+    buf.setLineMarker(1, SyntaxError)
+    buf.setLineMarker(3, Bookmark)
+    # And a pre-existing git marker that should be cleared on re-apply.
+    buf.setLineMarker(0, GitAdded)
+
+    let diffInfo = GitDiffInfo(lines: @[GitDiffLine(lineNumber: 2, kind: Modified)])
+
+    buf.applyGitDiffToBuffer(diffInfo)
+
+    # New git marker applied.
+    check buf.getLineMarker(2) == some(GitChanged)
+    # Old git marker cleared.
+    check buf.getLineMarker(0) == none(SidebarItemKind)
+    # Non-git markers preserved.
+    check buf.getLineMarker(1) == some(SyntaxError)
+    check buf.getLineMarker(3) == some(Bookmark)
+    # Diagnostics untouched.
+    check buf.diagnostics.len == 1
+    check buf.diagnostics[0].message == "oops"
+
 suite "GitDiff - getGitDiff":
   test "Non-existent file returns error":
     let result = getGitDiff("/nonexistent/path/file.txt")

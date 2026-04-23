@@ -26,7 +26,7 @@ import
   editor, key_bindings, modes, buffer, logger, types, motion, filer, quick_run_utils,
   buffer_manager, bookmark_manager, backup_manager, backup, diff_viewer,
   command_completion, build, render_utils, config_loader, documentsymbol_viewer,
-  message_log, tab_line, terminal_mode, clipboard, uri_utils
+  message_log, tab_line, terminal_mode, clipboard, uri_utils, status_line
 import
   command_handlers/
     [handler_manager, command_mode_handler, search_mode_handler, insert_commands]
@@ -152,6 +152,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
     let buf = activeWin.buffer
     let idx = e.buffers.find(buf)
     if idx >= 0:
+      evictGitCacheForBuffer(buf)
       e.buffers.delete(idx)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
@@ -171,6 +172,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
     let buf = activeWin.buffer
     let idx = e.buffers.find(buf)
     if idx >= 0:
+      evictGitCacheForBuffer(buf)
       e.buffers.delete(idx)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
@@ -1303,6 +1305,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       let buf = activeWin.buffer
       let idx = e.buffers.find(buf)
       if idx >= 0:
+        evictGitCacheForBuffer(buf)
         e.buffers.delete(idx)
       discard e.closeWindow()
     return true
@@ -1343,6 +1346,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       let buf = activeWin.buffer
       let idx = e.buffers.find(buf)
       if idx >= 0:
+        evictGitCacheForBuffer(buf)
         e.buffers.delete(idx)
       discard e.closeWindow()
     return true
@@ -1433,6 +1437,11 @@ proc handleEvent*(e: Editor, event: Event): bool =
       # Can only delete if there's more than one buffer
       if bufferIndex >= 0 and bufferIndex < e.buffers.len:
         let deletedBuffer = e.buffers[bufferIndex]
+        # Drop this buffer's git diff / branch cache entries before the
+        # buffer is removed, so a pending async `git diff` is terminated
+        # and the buffer's pointer address won't alias a future buffer
+        # via leftover Table entries.
+        evictGitCacheForBuffer(deletedBuffer)
         e.buffers.delete(bufferIndex)
 
         # If deleted buffer was shown in any window, switch to another buffer
@@ -1506,6 +1515,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       let buf = activeWin.buffer
       let idx = e.buffers.find(buf)
       if idx >= 0:
+        evictGitCacheForBuffer(buf)
         e.buffers.delete(idx)
       discard e.closeWindow()
     return true
@@ -1526,6 +1536,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       let buf = activeWin.buffer
       let idx = e.buffers.find(buf)
       if idx >= 0:
+        evictGitCacheForBuffer(buf)
         e.buffers.delete(idx)
       discard e.closeWindow()
     return true

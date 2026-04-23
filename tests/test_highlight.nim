@@ -1380,7 +1380,7 @@ suite "Highlight - URI Underline on Load":
     let mods = buf.highlight.getSegmentModifiers(1200, uriCol)
     check Underline in mods
 
-  test "continueUriScan restores URI underlines before edit point after updateHighlight":
+  test "URI underlines survive incremental updateHighlight outside re-parse region":
     var buf = newTextBuffer()
 
     # Create file with URIs at line 5 and line 1500
@@ -1408,22 +1408,20 @@ suite "Highlight - URI Underline on Load":
     check Underline in buf.highlight.getSegmentModifiers(5, earlyCol)
     check Underline in buf.highlight.getSegmentModifiers(1500, earlyCol)
 
-    # Edit at line 500 — triggers highlight rebuild, losing all URI modifiers
+    # Edit at line 500 — triggers incremental update around that line
     buf.lastChangedLines = 500
     buf.highlightNeedsUpdate = true
     buf.updateHighlight()
 
-    # Line 5 (before edit point) lost its URI underline
-    check Underline notin buf.highlight.getSegmentModifiers(5, earlyCol)
+    # URI modifiers outside the incremental re-parse region must survive —
+    # they are persisted in incrementalHighlight.segments, not rebuilt from
+    # scratch on every edit.
+    check Underline in buf.highlight.getSegmentModifiers(5, earlyCol)
+    check Underline in buf.highlight.getSegmentModifiers(1500, earlyCol)
 
-    # Progressive URI scan should restore it (starts from 0 after reset)
-    var restored = false
-    for _ in 0 ..< 10:
-      if buf.continueUriScan():
-        if Underline in buf.highlight.getSegmentModifiers(5, earlyCol):
-          restored = true
-          break
-    check restored
+    # Progressive scan should not need to rewind to the start of the file;
+    # only the region around the change point is re-scanned.
+    check buf.uriScanParsedUpTo >= 400
 
   test "continueUriScan returns false when no URIs found in chunk":
     var buf = newTextBuffer()

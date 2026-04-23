@@ -77,6 +77,26 @@ proc cleanupTempFiles(diffProc: GitDiffProcess) =
   removeTempFileSafely(diffProc.tempOriginal)
   removeTempFileSafely(diffProc.tempModified)
 
+proc abandonGitDiffProcess*(diffProc: GitDiffProcess) =
+  ## Terminate a pending GitDiffProcess and release its resources without
+  ## waiting for completion. Used by callers that cache pending async diffs
+  ## (e.g. status-line cache) to clean up on buffer close or editor
+  ## shutdown. Safe to call multiple times; swallows all process/OS
+  ## errors so it can be used from shutdown paths.
+  try:
+    diffProc.process.terminate()
+  except CatchableError as e:
+    logWarn("git diff", "Failed to terminate pending git diff: " & e.msg)
+    try:
+      diffProc.process.kill()
+    except CatchableError as killErr:
+      logError("git diff", "Failed to kill pending git diff: " & killErr.msg)
+  try:
+    diffProc.process.close()
+  except CatchableError as e:
+    logWarn("git diff", "Failed to close pending git diff process: " & e.msg)
+  cleanupTempFiles(diffProc)
+
 proc getGitRoot(filePath: string): Result[string, string] =
   ## Get git repository root for a given file path
   ## Returns error if file is not in a git repository
@@ -559,8 +579,11 @@ proc applyGitDiffToBuffer*(buffer: TextBuffer, diffInfo: GitDiffInfo) =
   ## Apply git diff information to buffer sidebar markers
   ## This will set appropriate markers for added, modified, and deleted lines
 
-  # Clear existing git markers
-  buffer.clearAllMarkers()
+  # Clear existing git markers only. LSP diagnostics and other marker kinds
+  # (SessionModified, Bookmark, GitConflict) are preserved, since this
+  # proc may run periodically via the async cache refresh and blowing away
+  # diagnostics on every tick causes the LSP error gutter to flicker.
+  buffer.clearGitMarkers()
 
   # Group consecutive changes to identify modified regions
   var lineKinds = initTable[int, GitDiffLineKind]()
