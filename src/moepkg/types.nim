@@ -266,9 +266,12 @@ type
 
   TimingState* = object ## Timing and debounce state grouped together
     lastResizeTime*: MonoTime # Timestamp of last processed resize event
-    lastGitDiffUpdate*: MonoTime # Timestamp of last git diff update
-    lastGitDiffChangeSeq*: int # Buffer changeSeq at last git diff update
-    gitDiffUpdateInterval*: int64 # Minimum milliseconds between git diff updates
+    gitDiffUpdateInterval*: int64
+      # Minimum milliseconds between git diff
+      # refresh cycles. Consumed by status_line's async cache via
+      # setGitDiffRefreshInterval; the historical debounce timestamps
+      # (lastGitDiffUpdate/ChangeSeq) were removed along with
+      # maybeUpdateGitDiff when the async cache took over.
     lastConflictScan*: MonoTime # Timestamp of last conflict marker scan
     lastConflictScanSeq*: int # Buffer changeSeq at last conflict scan
     conflictScanInterval*: int64 # Minimum milliseconds between conflict scans

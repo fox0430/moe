@@ -543,8 +543,8 @@ suite "Editor - refreshGitDiff":
     let e = createTestEditor()
     e.state.display.showGitDiff = true
 
-    # refreshGitDiff on a non-git file won't update timing (it fails silently)
-    # But the function should not crash
+    # refreshGitDiff on a non-git file fails silently; the function must
+    # not crash regardless.
     e.refreshGitDiff()
     # If we get here without crashing, the test passes
     check true
@@ -552,10 +552,8 @@ suite "Editor - refreshGitDiff":
   test "Refresh git diff does nothing when disabled":
     let e = createTestEditor()
     e.state.display.showGitDiff = false
+    e.state.needsFullRedraw = false
 
-    let beforeTime = e.state.timing.lastGitDiffUpdate
-
+    # Should early-return without touching buffer state or spawning git.
     e.refreshGitDiff()
-
-    # Timing should not change
-    check e.state.timing.lastGitDiffUpdate == beforeTime
+    check e.state.needsFullRedraw == false

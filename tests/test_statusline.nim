@@ -1272,3 +1272,96 @@ suite "StatusLine - buildGitInfo":
 
     # Result should be empty because showGitInactive is false
     check result == ""
+
+suite "StatusLine - git cache":
+  # These tests drive the private cache machinery directly. Buffers are
+  # created without a filePath so `startGitDiffFromBufferAsync` returns Err
+  # and no real `git diff` subprocess is spawned — but the cache entry is
+  # still populated, which is what we need to verify eviction/cleanup.
+
+  test "cachedGitDiffCounts creates a cache entry":
+    cleanupGitDiffCache()
+    let buf = createTestTextBuffer("", false, "line")
+
+    discard cachedGitDiffCounts(buf)
+
+    check diffCacheStore.len == 1
+
+  test "evictGitCacheForBuffer removes both diff and branch entries":
+    cleanupGitDiffCache()
+    let buf = createTestTextBuffer("", false, "line")
+
+    discard cachedGitDiffCounts(buf)
+    discard cachedGitBranchName(buf, "/nonexistent/path")
+    check diffCacheStore.len == 1
+    check branchCacheStore.len == 1
+
+    evictGitCacheForBuffer(buf)
+
+    check diffCacheStore.len == 0
+    check branchCacheStore.len == 0
+
+  test "evictGitCacheForBuffer is safe when entry is absent":
+    cleanupGitDiffCache()
+    let buf = createTestTextBuffer("", false, "line")
+
+    # Should not raise when called on a buffer never seen by the cache.
+    evictGitCacheForBuffer(buf)
+
+    check diffCacheStore.len == 0
+    check branchCacheStore.len == 0
+
+  test "evictGitCacheForBuffer only drops the targeted buffer":
+    cleanupGitDiffCache()
+    let buf1 = createTestTextBuffer("", false, "a")
+    let buf2 = createTestTextBuffer("", false, "b")
+
+    discard cachedGitDiffCounts(buf1)
+    discard cachedGitDiffCounts(buf2)
+    check diffCacheStore.len == 2
+
+    evictGitCacheForBuffer(buf1)
+
+    check diffCacheStore.len == 1
+
+  test "cleanupGitDiffCache clears all entries":
+    cleanupGitDiffCache()
+    let buf1 = createTestTextBuffer("", false, "a")
+    let buf2 = createTestTextBuffer("", false, "b")
+
+    discard cachedGitDiffCounts(buf1)
+    discard cachedGitDiffCounts(buf2)
+    discard cachedGitBranchName(buf1, "/x")
+    discard cachedGitBranchName(buf2, "/y")
+
+    cleanupGitDiffCache()
+
+    check diffCacheStore.len == 0
+    check branchCacheStore.len == 0
+
+  test "cleanupGitDiffCache is idempotent on empty cache":
+    cleanupGitDiffCache()
+    cleanupGitDiffCache()
+
+    check diffCacheStore.len == 0
+    check branchCacheStore.len == 0
+
+  test "setGitDiffRefreshInterval accepts positive values":
+    let original = gitDiffRefreshIntervalMs
+
+    setGitDiffRefreshInterval(777)
+    check gitDiffRefreshIntervalMs == 777
+
+    setGitDiffRefreshInterval(original)
+
+  test "setGitDiffRefreshInterval ignores zero and negative values":
+    setGitDiffRefreshInterval(500)
+    check gitDiffRefreshIntervalMs == 500
+
+    setGitDiffRefreshInterval(0)
+    check gitDiffRefreshIntervalMs == 500
+
+    setGitDiffRefreshInterval(-1)
+    check gitDiffRefreshIntervalMs == 500
+
+    setGitDiffRefreshInterval(DefaultGitDiffRefreshIntervalMs)

@@ -24,7 +24,7 @@ import pkg/[celina, results, chronos]
 import
   moepkg/[
     editor, handler, modes, logger, cmdline, filer, lsp_integration, config,
-    config_loader, emergency,
+    config_loader, emergency, status_line,
   ]
 import moepkg/command_handlers/command_mode_handler
 
@@ -253,6 +253,14 @@ proc runEditor(
 
     # Cleanup background processes before exiting
     editor.cleanupBackgroundProcesses()
+
+    # Terminate any pending async git diff subprocesses and free their
+    # tempfiles. Swallow exceptions so a cache cleanup failure can't block
+    # the rest of the shutdown sequence.
+    try:
+      cleanupGitDiffCache()
+    except CatchableError as e:
+      logError("moe", "cleanupGitDiffCache failed: " & e.msg)
 
     # Shutdown LSP servers before exiting
     editor.shutdown()

@@ -711,8 +711,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       # Timing state (grouped in TimingState)
       timing: TimingState(
         lastResizeTime: getMonoTime(),
-        lastGitDiffUpdate: getMonoTime(),
-        lastGitDiffChangeSeq: 0,
         gitDiffUpdateInterval: editorConfig.git.updateInterval,
         lastConflictScan: getMonoTime(),
         lastConflictScanSeq: -1,
@@ -923,6 +921,12 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       result.state.statusMessage = msg
     addMessageLog(msg)
 
+  # Propagate the configured git diff refresh cadence into the status-line
+  # cache's module global. applyConfigSettings does this on config reload;
+  # without an initial call here the cache would run at the hardcoded
+  # default until the first reload.
+  setGitDiffRefreshInterval(editorConfig.git.updateInterval.int64)
+
 proc newEditor*(editorConfig: EditorConfig): Editor =
   ## Create a new Editor with the given configuration.
   result = newEditor(editorConfig, newValidationResult())
@@ -1049,6 +1053,7 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
 
   # Update timing intervals
   e.state.timing.gitDiffUpdateInterval = newConfig.git.updateInterval
+  setGitDiffRefreshInterval(newConfig.git.updateInterval.int64)
 
   # Update color mode with fallback
   let requestedColorMode =
@@ -1156,28 +1161,6 @@ proc maybeReloadConfig*(e: Editor) =
 
   e.state.statusMessage = "Configuration reloaded"
   e.state.needsFullRedraw = true
-
-proc maybeUpdateGitDiff*(e: Editor) =
-  ## Update git diff if buffer was modified and enough time has passed (debouncing)
-  ## This should be called after buffer modifications to provide real-time updates
-
-  if not e.state.display.showGitDiff:
-    return
-
-  let activeBuffer = e.activeBuffer()
-
-  # Only update if buffer has changed since last update
-  if activeBuffer.changeSeq == e.state.timing.lastGitDiffChangeSeq:
-    return
-
-  let now = getMonoTime()
-  let elapsed = now - e.state.timing.lastGitDiffUpdate
-
-  # Compare with threshold duration (500ms)
-  let threshold = initDuration(milliseconds = e.state.timing.gitDiffUpdateInterval)
-
-  if elapsed >= threshold:
-    e.refreshGitDiff(useBuffer = true)
 
 proc maybeUpdateConflicts*(e: Editor) =
   ## Rescan the active buffer for git conflict markers when it has been
@@ -1530,8 +1513,12 @@ proc tick*(e: Editor) =
   e.maybeReloadExternallyModifiedFile()
   e.maybeReloadConfig()
 
-  # Git and debug updates
-  e.maybeUpdateGitDiff()
+  # Git and debug updates. The diff subprocess itself is scheduled lazily
+  # from status_line.cachedGitDiffCounts (called during status-line
+  # rendering); here we just consume the most recent diff result for the
+  # sidebar gutter, gated on the user's showGitDiff flag.
+  if e.state.display.showGitDiff:
+    maybeApplyGitMarkers(e.activeBuffer())
   e.maybeUpdateConflicts()
   e.maybeUpdateDebugBuffer()
 

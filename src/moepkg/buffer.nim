@@ -2191,6 +2191,16 @@ proc clearAllMarkers*(b: TextBuffer) =
     b.lineMarkers[i] = none(SidebarItemKind)
   b.diagnostics.setLen(0)
 
+proc clearGitMarkers*(b: TextBuffer) =
+  ## Clear only git-diff sidebar markers (added / changed / deleted).
+  ## Leaves LSP diagnostics and other marker kinds (SyntaxError, Bookmark,
+  ## SessionModified/Inserted, GitConflict) untouched. Used when
+  ## re-applying git diff results so that diagnostics survive the refresh.
+  for i in 0 ..< b.lineMarkers.len:
+    let m = b.lineMarkers[i]
+    if m.isSome and m.get.isGitChangeMarker:
+      b.lineMarkers[i] = none(SidebarItemKind)
+
 proc getDiagnosticsAt*(b: TextBuffer, line, col: int): seq[BufferDiagnostic] =
   ## Return diagnostics whose range covers the given (line, col) position
   for d in b.diagnostics:
@@ -2281,22 +2291,41 @@ proc continueUriScan*(b: TextBuffer): bool =
   if b.incrementalHighlight != nil:
     endLine = min(endLine, b.incrementalHighlight.parsedUpTo)
 
-  var modified = false
+  # Collect URI ranges across the whole chunk, then apply them in one
+  # batched pass over the segment seq. Calling addModifier per URI rebuilds
+  # the whole colorSegments seq each time (O(N) memcpy), which dominates
+  # frame time for large files with many segments (e.g. 40k-line JSON:
+  # ~300k segments × ~140 URIs/chunk → ~400ms). The batched apply is
+  # O(N + M) total.
+  var ranges: seq[tuple[row, firstCol, lastCol: int]]
   for lineIdx in startLine .. endLine:
     let line = b.getLine(lineIdx)
     for m in findAllUris(line):
-      b.highlight.addModifier(
-        lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
-      )
-      modified = true
+      ranges.add((row: lineIdx, firstCol: m.start, lastCol: m.finish))
+
+  let modified = ranges.len > 0
+  if modified:
+    b.highlight.addUnderlineRanges(ranges)
 
   b.uriScanParsedUpTo = endLine
+
+  # Persist URI modifiers into incrementalHighlight.segments so they survive
+  # the next updateHighlight call (which assigns b.highlight from that seq).
+  if modified and b.incrementalHighlight != nil:
+    b.incrementalHighlight.segments = b.highlight.colorSegments
+
   return modified
 
 proc updateHighlight*(b: TextBuffer) =
   ## Update syntax highlighting if needed
   ## This should be called before rendering
   if b.highlightNeedsUpdate and not b.isUtilityBuffer:
+    # Track whether the highlight was rebuilt from scratch. When true, all
+    # previously-applied URI modifiers outside the inline scan range are lost
+    # and the progressive scan must restart from the beginning. When false
+    # (incremental update), unchanged segments keep their URI modifiers.
+    var highlightRebuilt = true
+
     if b.language != SourceLanguage.langNone:
       # Check if incremental cache is valid
       let cacheValid =
@@ -2321,6 +2350,7 @@ proc updateHighlight*(b: TextBuffer) =
 
         # Convert IncrementalHighlight segments to Highlight
         b.highlight = Highlight(colorSegments: b.incrementalHighlight.segments)
+        highlightRebuilt = false
       else:
         # Cache invalid or first time - parse once with incremental
         if b.len > 0:
@@ -2364,27 +2394,47 @@ proc updateHighlight*(b: TextBuffer) =
       else:
         b.highlight = Highlight(colorSegments: @[])
 
-    if b.diagnostics.len > 0:
-      applyDiagnosticHighlights(b.highlight, b.diagnostics)
-
     # Apply underline to URIs/URLs in a limited range around the change point.
     # Scanning all lines from the change point to EOF is O(n) and blocks
     # rendering for large files. Limit to a reasonable chunk; the rest will be
     # handled progressively by continueUriScan.
+    # Applied BEFORE diagnostics so the URI modifiers can be synced into
+    # incrementalHighlight.segments without mixing in transient diagnostic mods.
+    # Batched to avoid per-range O(N) segment-seq rebuilds.
     let uriStart = max(0, b.lastChangedLines)
     let uriEnd = min(uriStart + 1000, b.len) - 1
+    var inlineRanges: seq[tuple[row, firstCol, lastCol: int]]
     for lineIdx in uriStart .. uriEnd:
       let line = b.getLine(lineIdx)
       for m in findAllUris(line):
-        b.highlight.addModifier(
-          lineIdx, m.start, lineIdx, m.finish, StyleModifier.Underline
-        )
-    # The highlight was rebuilt from scratch, so all URI modifiers outside
-    # uriStart..uriEnd were lost. Reset progressive scan to re-cover the
-    # full file from the beginning. The inline scan above provides immediate
-    # feedback around the edit; progressive scanning will redundantly re-apply
-    # those (addModifier + incl is idempotent) then continue beyond.
-    b.uriScanParsedUpTo = -1
+        inlineRanges.add((row: lineIdx, firstCol: m.start, lastCol: m.finish))
+    if inlineRanges.len > 0:
+      b.highlight.addUnderlineRanges(inlineRanges)
+
+    # Persist URI modifiers into incrementalHighlight.segments. Without this,
+    # the next incremental update's `b.highlight = Highlight(...)` assignment
+    # would drop URI modifiers in the unchanged region, forcing a full rescan.
+    if not highlightRebuilt and b.incrementalHighlight != nil:
+      b.incrementalHighlight.segments = b.highlight.colorSegments
+
+    if b.diagnostics.len > 0:
+      applyDiagnosticHighlights(b.highlight, b.diagnostics)
+
+    if highlightRebuilt:
+      # Highlight was rebuilt from scratch, so all URI modifiers outside
+      # uriStart..uriEnd were lost. Reset progressive scan to re-cover the
+      # full file from the beginning.
+      b.uriScanParsedUpTo = -1
+    else:
+      # Incremental update: unchanged segments kept their URI modifiers. Only
+      # the re-parsed region (around lastChangedLines) lost them. Rewind just
+      # past the change point so the progressive scan re-covers that region,
+      # instead of re-scanning the entire file on every edit. The -3 margin
+      # matches updateHighlightIncremental's reparseStart backward margin (-2)
+      # plus one so lineIdx = uriScanParsedUpTo + 1 lands at reparseStart.
+      let rewindTo = max(-1, b.lastChangedLines - 3)
+      if b.uriScanParsedUpTo > rewindTo:
+        b.uriScanParsedUpTo = rewindTo
 
     b.highlightNeedsUpdate = false
 
@@ -2745,11 +2795,14 @@ const
   closeBrackets = [')', ']', '}', '>']
 
 proc findMatchingParenPosition*(
-    b: TextBuffer, cursor: BufferPosition
+    b: TextBuffer, cursor: BufferPosition, maxScanLines: int = 2000
 ): Option[BufferPosition] =
   ## Find the position of the matching parenthesis/bracket/brace
   ## Searches across multiple lines. Returns none if cursor is not on a bracket
-  ## or no matching bracket is found.
+  ## or no matching bracket is found within `maxScanLines` lines of the cursor.
+  ## The line limit keeps this bounded for paren-highlight callers running on
+  ## every frame against huge files (e.g. 40k-line JSON wrapped in a root
+  ## object); matches further than the viewport cannot be seen anyway.
 
   if cursor.line < 0 or cursor.line >= b.len:
     return none(BufferPosition)
@@ -2782,8 +2835,9 @@ proc findMatchingParenPosition*(
     var depth = 1
     var searchLine = cursor.line
     var searchCol = cursor.column + 1
+    let scanUntil = min(b.len - 1, cursor.line + maxScanLines)
 
-    while searchLine < b.len:
+    while searchLine <= scanUntil:
       let curLine = b.getLine(searchLine)
       let curRunes = curLine.toRunes()
 
@@ -2804,11 +2858,12 @@ proc findMatchingParenPosition*(
     var depth = 1
     var searchLine = cursor.line
     var searchCol = cursor.column - 1
+    let scanUntil = max(0, cursor.line - maxScanLines)
 
-    while searchLine >= 0:
+    while searchLine >= scanUntil:
       if searchCol < 0:
         searchLine.dec
-        if searchLine >= 0:
+        if searchLine >= scanUntil:
           let prevLine = b.getLine(searchLine)
           searchCol = prevLine.toRunes().len - 1
         continue

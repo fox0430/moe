@@ -28,8 +28,11 @@ import
   editorconfig_helper, highlight
 
 proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
-  ## Refresh git diff information for the active buffer
-  ## This should be called after saving a file or buffer modifications
+  ## Refresh git diff information for the active buffer (synchronous).
+  ## Used on explicit events where we want the gutter to reflect the new
+  ## state immediately: save, external reload, `:e!`, and toggling
+  ## showGitDiff on. The periodic background refresh is handled by the
+  ## async cache in status_line, not by this proc.
   ##
   ## Parameters:
   ## - useBuffer: If true, compare buffer contents with HEAD (real-time)
@@ -39,8 +42,6 @@ proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
     let diffResult = updateBufferWithGitDiff(activeBuffer, useBuffer)
 
     if diffResult.isOk:
-      e.state.timing.lastGitDiffUpdate = getMonoTime()
-      e.state.timing.lastGitDiffChangeSeq = activeBuffer.changeSeq
       e.state.needsFullRedraw = true
 
 template isPersistCursorPositionFile(lang: SourceLanguage): bool =
@@ -98,9 +99,6 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
       # Log error but don't fail the file load
       # (file might not be in a git repository)
       logDebug("editor", "Git diff not available for " & path & ": " & diffResult.error)
-    else:
-      # Update lastGitDiffChangeSeq to prevent immediate re-check
-      e.state.timing.lastGitDiffChangeSeq = e.textBuffer.changeSeq
 
   # Scan for git conflict markers. Run regardless of the highlight config so
   # that `buffer.conflictBlocks` is populated for future navigation commands.
