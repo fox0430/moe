@@ -553,6 +553,9 @@ type
     originalLines*: seq[string] # Snapshot of original buffer content
     lastPattern*: string # Last pattern used for preview
     lastReplacement*: string # Last replacement used for preview
+    originalCursor*: BufferPosition # Cursor position when preview started
+    originalTopLine*: int # Viewport top line when preview started
+    originalLeftColumn*: int # Viewport left column when preview started
 
   PendingCommand* = enum
     PendingNone

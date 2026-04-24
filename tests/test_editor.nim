@@ -590,6 +590,117 @@ suite "Editor - Substitute preview":
     # Only first occurrence replaced
     check buffer.getLine(0) == "baz bar foo"
 
+  test "Start substitute preview captures cursor and viewport":
+    let e = createTestEditor()
+    let buffer = e.activeBuffer()
+
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    e.cursor = BufferPosition(line: 0, column: 3)
+    e.activeWindow.viewport.topLine = 2
+    e.activeWindow.viewport.leftColumn = 5
+
+    e.startSubstitutePreview()
+
+    check e.state.substitutePreview.originalCursor == BufferPosition(line: 0, column: 3)
+    check e.state.substitutePreview.originalTopLine == 2
+    check e.state.substitutePreview.originalLeftColumn == 5
+
+  test "Cancel substitute preview restores cursor and viewport":
+    let e = createTestEditor()
+    let buffer = e.activeBuffer()
+
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    e.cursor = BufferPosition(line: 0, column: 2)
+    e.activeWindow.viewport.topLine = 0
+    e.activeWindow.viewport.leftColumn = 0
+
+    e.startSubstitutePreview()
+
+    # Simulate viewport/cursor moving during preview jump
+    e.cursor = BufferPosition(line: 0, column: 0)
+    e.activeWindow.viewport.topLine = 10
+    e.activeWindow.viewport.leftColumn = 7
+
+    e.cancelSubstitutePreview()
+
+    check e.cursor == BufferPosition(line: 0, column: 2)
+    check e.activeWindow.viewport.topLine == 0
+    check e.activeWindow.viewport.leftColumn == 0
+
+  test "findFirstSubstituteMatch finds first occurrence across lines":
+    let lines = @["aaa", "bbb foo", "ccc foo ddd"]
+    let match = findFirstSubstituteMatch(lines, "foo")
+    check match.isSome
+    check match.get == BufferPosition(line: 1, column: 4)
+
+  test "findFirstSubstituteMatch returns none when pattern absent":
+    let lines = @["aaa", "bbb", "ccc"]
+    let match = findFirstSubstituteMatch(lines, "zzz")
+    check match.isNone
+
+  test "findFirstSubstituteMatch returns none for empty pattern":
+    let lines = @["aaa", "bbb"]
+    let match = findFirstSubstituteMatch(lines, "")
+    check match.isNone
+
+  test "jumpToFirstSubstituteMatch moves cursor to first match":
+    let e = createTestEditor()
+    let buffer = e.activeBuffer()
+
+    # Build multi-line content
+    discard buffer.insertText(
+      BufferPosition(line: 0, column: 0), "no match here\nalso nothing\ntarget foo here"
+    )
+
+    e.cursor = BufferPosition(line: 0, column: 0)
+    e.startSubstitutePreview()
+
+    e.jumpToFirstSubstituteMatch("foo")
+
+    check e.cursor == BufferPosition(line: 2, column: 7)
+
+  test "restoreFromPreview clears last applied state and undoes preview":
+    let e = createTestEditor()
+    let buffer = e.activeBuffer()
+
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "foo bar")
+
+    e.startSubstitutePreview()
+    e.updateSubstitutePreview("foo", "baz", isGlobalFlag = true)
+    check buffer.getLine(0) == "baz bar"
+
+    e.restoreFromPreview()
+    check buffer.getLine(0) == "foo bar"
+    # lastPattern/lastReplacement must be cleared so the same preview can be
+    # re-applied after a restore.
+    check e.state.substitutePreview.lastPattern == ""
+    check e.state.substitutePreview.lastReplacement == ""
+
+    e.updateSubstitutePreview("foo", "baz", isGlobalFlag = true)
+    check buffer.getLine(0) == "baz bar"
+
+  test "jumpToFirstSubstituteMatch restores cursor when no match":
+    let e = createTestEditor()
+    let buffer = e.activeBuffer()
+
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    e.cursor = BufferPosition(line: 0, column: 4)
+    e.activeWindow.viewport.topLine = 3
+    e.activeWindow.viewport.leftColumn = 2
+
+    e.startSubstitutePreview()
+
+    # Simulate cursor moved elsewhere
+    e.cursor = BufferPosition(line: 0, column: 0)
+    e.activeWindow.viewport.topLine = 0
+    e.activeWindow.viewport.leftColumn = 0
+
+    e.jumpToFirstSubstituteMatch("zzz")
+
+    check e.cursor == BufferPosition(line: 0, column: 4)
+    check e.activeWindow.viewport.topLine == 3
+    check e.activeWindow.viewport.leftColumn == 2
+
 suite "Editor - newEditor":
   test "Create editor with default config":
     let e = createTestEditor()

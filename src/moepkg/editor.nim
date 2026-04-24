@@ -1207,9 +1207,13 @@ proc startSubstitutePreview*(e: Editor) =
   e.state.substitutePreview.isActive = true
   e.state.substitutePreview.lastPattern = ""
   e.state.substitutePreview.lastReplacement = ""
+  e.state.substitutePreview.originalCursor = e.cursor
+  e.state.substitutePreview.originalTopLine = e.activeWindow.viewport.topLine
+  e.state.substitutePreview.originalLeftColumn = e.activeWindow.viewport.leftColumn
 
-proc restoreFromPreview(e: Editor) =
-  ## Restore buffer content from preview snapshot
+proc restoreFromPreview*(e: Editor) =
+  ## Restore buffer content from preview snapshot without cancelling the preview.
+  ## Callers that want to cancel preview entirely should use cancelSubstitutePreview.
   if not e.state.substitutePreview.isActive:
     return
 
@@ -1228,6 +1232,10 @@ proc restoreFromPreview(e: Editor) =
     )
 
   buffer.highlightNeedsUpdate = true
+  # Clear last-applied pattern/replacement so the next updateSubstitutePreview
+  # call does not skip work when identical values are reapplied.
+  e.state.substitutePreview.lastPattern = ""
+  e.state.substitutePreview.lastReplacement = ""
 
 proc cancelSubstitutePreview*(e: Editor) =
   ## Cancel substitute preview and restore original content
@@ -1235,6 +1243,9 @@ proc cancelSubstitutePreview*(e: Editor) =
     return
 
   e.restoreFromPreview()
+  e.cursor = e.state.substitutePreview.originalCursor
+  e.activeWindow.viewport.topLine = e.state.substitutePreview.originalTopLine
+  e.activeWindow.viewport.leftColumn = e.state.substitutePreview.originalLeftColumn
   e.state.substitutePreview.isActive = false
   e.state.substitutePreview.originalLines = @[]
   e.state.needsFullRedraw = true
@@ -1257,11 +1268,12 @@ proc updateSubstitutePreview*(
       replacement == e.state.substitutePreview.lastReplacement:
     return
 
+  # Restore from snapshot first (this clears lastPattern/lastReplacement, so
+  # cache the new values *after* restoring).
+  e.restoreFromPreview()
+
   e.state.substitutePreview.lastPattern = pattern
   e.state.substitutePreview.lastReplacement = replacement
-
-  # Restore from snapshot first
-  e.restoreFromPreview()
 
   if pattern.len == 0:
     e.state.needsFullRedraw = true
