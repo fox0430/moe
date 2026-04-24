@@ -191,19 +191,58 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
   e.syncActiveWindow()
   e.state.needsFullRedraw = true
 
+proc findFirstSubstituteMatch*(
+    lines: seq[string], pattern: string
+): Option[BufferPosition] =
+  ## Find the first occurrence of pattern in the given lines (plain string match).
+  ## Matches the plain-string semantics used by executeSubstitute / updateSubstitutePreview.
+  if pattern.len == 0:
+    return none(BufferPosition)
+  for lineIdx in 0 ..< lines.len:
+    let idx = lines[lineIdx].find(pattern)
+    if idx >= 0:
+      let charCol = byteToCharPos(lines[lineIdx], idx)
+      return some(BufferPosition(line: lineIdx, column: charCol))
+  return none(BufferPosition)
+
+proc jumpToFirstSubstituteMatch*(e: Editor, pattern: string) =
+  ## Move cursor/viewport to the first pattern match (incsearch-like behavior).
+  ## If no match is found, restore cursor to the position captured at preview start.
+  let match = findFirstSubstituteMatch(e.state.substitutePreview.originalLines, pattern)
+  if match.isSome:
+    let pos = match.get
+    e.cursor = pos
+    e.updateViewportForCursor(pos)
+  else:
+    e.cursor = e.state.substitutePreview.originalCursor
+    e.activeWindow.viewport.topLine = e.state.substitutePreview.originalTopLine
+    e.activeWindow.viewport.leftColumn = e.state.substitutePreview.originalLeftColumn
+
 proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ## Update or cancel the live substitute preview based on the current command
   ## text. Call after any edit to commandText (backspace, delete, char input).
+  ##
+  ## Behavior:
+  ## - Pattern only (e.g. ":%s/foo"): jump cursor to first match (incsearch-like)
+  ## - Pattern + replacement (e.g. ":%s/foo/bar"): also preview the replacement
+  ##   in the buffer when config.highlight.replaceText is enabled.
   if e.state.commandText.contains("s/"):
     let pattern = extractSubstitutePattern(e.state.commandText)
     let (replacement, hasReplacement) =
       extractSubstituteReplacement(e.state.commandText)
     let flags = extractSubstituteFlags(e.state.commandText)
     let isGlobal = "g" in flags
-    if hasReplacement and pattern.len > 0 and e.config.highlight.replaceText:
+    if pattern.len > 0:
       if not e.state.substitutePreview.isActive:
         e.startSubstitutePreview()
-      e.updateSubstitutePreview(pattern, replacement, isGlobal)
+      if hasReplacement and e.config.highlight.replaceText:
+        e.updateSubstitutePreview(pattern, replacement, isGlobal)
+      else:
+        # Pattern-only state: restore buffer (in case a replacement preview was
+        # previously applied) but keep the preview active for cursor tracking.
+        e.restoreFromPreview()
+        e.state.needsFullRedraw = true
+      e.jumpToFirstSubstituteMatch(pattern)
     elif e.state.substitutePreview.isActive:
       e.cancelSubstitutePreview()
     else:
