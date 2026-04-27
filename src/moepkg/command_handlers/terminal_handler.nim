@@ -26,6 +26,8 @@
 import std/options
 
 import ../[terminal_mode, key_bindings]
+import handler_types
+export handler_types
 
 type
   TerminalResultKind* = enum
@@ -43,9 +45,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  TerminalHandler* = ref object ## Handler for Terminal mode specific commands
-    discard
 
 proc newTerminalHandler*(): TerminalHandler =
   TerminalHandler()

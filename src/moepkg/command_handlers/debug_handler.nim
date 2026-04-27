@@ -22,6 +22,8 @@
 ## This module handles key events in Debug mode.
 
 import ../[key_bindings, debug_viewer]
+import handler_types
+export handler_types
 
 type
   DebugViewerResultKind* = enum
@@ -36,9 +38,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  DebugViewerHandler* = ref object ## Handler for Debug Viewer mode specific commands
-    discard
 
 proc newDebugViewerHandler*(): DebugViewerHandler =
   ## Create a new Debug Viewer mode handler

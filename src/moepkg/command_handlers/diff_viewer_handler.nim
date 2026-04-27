@@ -33,6 +33,8 @@
 ## - :: Enter command mode
 
 import ../[diff_viewer, key_bindings]
+import handler_types
+export handler_types
 
 type
   DiffViewerResultKind* = enum
@@ -48,9 +50,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  DiffViewerHandler* = ref object ## Handler for Diff Viewer mode specific commands
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newDiffViewerHandler*(): DiffViewerHandler =
   ## Create a new Diff Viewer mode handler

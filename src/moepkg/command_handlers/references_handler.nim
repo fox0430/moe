@@ -25,6 +25,8 @@
 import std/options
 
 import ../[types, key_bindings, references_viewer]
+import handler_types
+export handler_types
 
 type
   ReferencesResultKind* = enum
@@ -42,10 +44,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  ReferencesHandler* = ref object
-    ## Handler for References Viewer mode specific commands
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newReferencesHandler*(): ReferencesHandler =
   ## Create a new References Viewer mode handler

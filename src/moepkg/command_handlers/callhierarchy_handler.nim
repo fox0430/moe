@@ -26,6 +26,8 @@ import std/options
 
 import ../[types, key_bindings, callhierarchy_viewer]
 import ../lsp/protocol/types as lspTypes
+import handler_types
+export handler_types
 
 type
   CallHierarchyResultKind* = enum
@@ -46,10 +48,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  CallHierarchyHandler* = ref object
-    ## Handler for Call Hierarchy Viewer mode specific commands
-    waitingForG*: bool ## Waiting for second 'g' for 'gg' command
 
 proc newCallHierarchyHandler*(): CallHierarchyHandler =
   ## Create a new Call Hierarchy Viewer mode handler

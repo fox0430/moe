@@ -25,6 +25,8 @@
 import std/options
 
 import ../[types, buffer_manager, key_bindings]
+import handler_types
+export handler_types
 
 type
   BufferManagerResultKind* = enum
@@ -46,10 +48,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  BufferManagerHandler* = ref object
-    ## Handler for Buffer Manager mode specific commands
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newBufferManagerHandler*(): BufferManagerHandler =
   ## Create a new Buffer Manager mode handler

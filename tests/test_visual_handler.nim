@@ -29,6 +29,8 @@ import ../src/moepkg/motion {.all.}
 import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/config {.all.}
 import ../src/moepkg/registers {.all.}
+import ../src/moepkg/window_manager {.all.}
+import ../src/moepkg/editor_types {.all.}
 import ../src/moepkg/command_handlers/visual_handler {.all.}
 
 proc createTestState(): EditorState =
@@ -90,6 +92,17 @@ proc createTestState(): EditorState =
 proc createTestViewport(): ViewPort =
   ## Create a minimal viewport for testing
   ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+
+proc createTestEditor(buf: TextBuffer, state: EditorState, viewport: ViewPort): Editor =
+  ## Create a minimal Editor wrapping the given buffer/state/viewport for testing
+  state.activeWindow.buffer = buf
+  Editor(
+    textBuffer: buf,
+    state: state,
+    viewport: viewport,
+    windowManager:
+      EditorWindowManager(windows: @[state.activeWindow], activeWindowIndex: 0),
+  )
 
 proc createTestHandler(buf: TextBuffer): VisualModeHandler =
   ## Create a VisualModeHandler for testing
@@ -425,7 +438,8 @@ suite "VisualModeHandler - handleVisualModeKey":
     let viewport = createTestViewport()
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    discard
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
 
     check state.visualSelection.active == false
 
@@ -440,9 +454,10 @@ suite "VisualModeHandler - handleVisualModeKey":
 
     # Use a key that is unlikely to be bound
     let keyCombo = KeyCombo(isSpecial: false, char: "\x00", modifiers: {})
-    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    let r =
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
 
-    check result.kind == vmrUnhandled or result.kind == vmrHandled
+    check r.kind == vmrUnhandled or r.kind == vmrHandled
 
   test "Keys are recorded during macro recording":
     let buf = newTextBuffer()
@@ -457,7 +472,8 @@ suite "VisualModeHandler - handleVisualModeKey":
     let viewport = createTestViewport()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "h", modifiers: {})
-    discard handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    discard
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
 
     check state.macroState.recordedKeys.len >= 1
 
@@ -472,9 +488,10 @@ suite "VisualModeHandler - handleVisualModeKey":
 
     # Try a key that should be handled by Visual mode bindings
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    let r =
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
 
-    check result.kind == vmrHandled or result.kind == vmrUnhandled
+    check r.kind == vmrHandled or r.kind == vmrUnhandled
 
   test "Handle Visual mode fallback to VisualBlock":
     let buf = newTextBuffer()
@@ -486,9 +503,10 @@ suite "VisualModeHandler - handleVisualModeKey":
     let viewport = createTestViewport()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
-    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    let r =
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
 
-    check result.kind == vmrHandled or result.kind == vmrUnhandled
+    check r.kind == vmrHandled or r.kind == vmrUnhandled
 
 suite "VisualModeHandler - Mode Transitions":
   test "Yank command transitions to Normal mode":
@@ -508,11 +526,12 @@ suite "VisualModeHandler - Mode Transitions":
 
     # 'y' key for yank
     let keyCombo = KeyCombo(isSpecial: false, char: "y", modifiers: {})
-    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    let r =
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
 
-    check result.kind == vmrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Normal
+    check r.kind == vmrHandled
+    check r.modeTransition.isSome
+    check r.modeTransition.get == EditorMode.Normal
 
   test "Delete command transitions to previous mode":
     let buf = newTextBuffer()
@@ -531,9 +550,10 @@ suite "VisualModeHandler - Mode Transitions":
 
     # 'd' key for delete
     let keyCombo = KeyCombo(isSpecial: false, char: "d", modifiers: {})
-    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    let r =
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
 
-    check result.kind == vmrHandled
+    check r.kind == vmrHandled
 
   test "Change command transitions to Insert mode":
     let buf = newTextBuffer()
@@ -551,11 +571,12 @@ suite "VisualModeHandler - Mode Transitions":
 
     # 'c' key for change
     let keyCombo = KeyCombo(isSpecial: false, char: "c", modifiers: {})
-    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    let r =
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
 
-    check result.kind == vmrHandled
+    check r.kind == vmrHandled
     # Mode should transition to Insert
-    check state.mode == EditorMode.Insert or result.modeTransition.isSome
+    check state.mode == EditorMode.Insert or r.modeTransition.isSome
 
 suite "VisualModeHandler - Selection Types":
   test "Char selection handles correctly":
@@ -575,9 +596,10 @@ suite "VisualModeHandler - Selection Types":
 
     # Move right
     let keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
-    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    let r =
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
 
-    check result.kind == vmrHandled
+    check r.kind == vmrHandled
     # After 'l', cursor moves from column 4 to 5
     check state.cursor.column == 5
 
@@ -598,9 +620,10 @@ suite "VisualModeHandler - Selection Types":
 
     # Move down
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    let r =
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
 
-    check result.kind == vmrHandled
+    check r.kind == vmrHandled
     check state.visualSelection.current.line == 1
 
   test "Block selection handles correctly":
@@ -620,11 +643,13 @@ suite "VisualModeHandler - Selection Types":
 
     # Move right then down
     var keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
-    discard handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    discard
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
     keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    let r =
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
 
-    check result.kind == vmrHandled
+    check r.kind == vmrHandled
     check state.visualSelection.current.line == 1
     check state.visualSelection.current.column == 1
 
@@ -640,10 +665,11 @@ suite "VisualModeHandler - Waiting for Input":
 
     # Try 'r' for replace - should wait for char input
     let keyCombo = KeyCombo(isSpecial: false, char: "r", modifiers: {})
-    let result = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
+    let r =
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
 
     # Either waiting for input or handled depending on implementation
-    check result.kind in {vmrWaitingForInput, vmrHandled, vmrUnhandled}
+    check r.kind in {vmrWaitingForInput, vmrHandled, vmrUnhandled}
 
 suite "VisualModeHandler - Error Handling":
   test "Error result contains message":

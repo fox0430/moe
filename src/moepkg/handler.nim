@@ -1115,9 +1115,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       otherBufs.add(win.buffer)
   e.handlerManager.insertHandler.completionManager.otherBuffers = otherBufs
 
-  let r = e.handlerManager.handleEvent(
-    activeBuffer, e.state, activeViewport, event, activeWin
-  )
+  let r = e.handlerManager.handleEvent(e, event)
 
   # Sync display settings when in Config mode (config changes update EditorConfig
   # but the cached display state needs to be kept in sync)
@@ -2242,9 +2240,7 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
     else:
       # Key-sequence mapping: execute via playbackMacro
       registry.isReplayingMapping = true
-      let r = e.handlerManager.playbackMacro(
-        activeBuffer, e.state, activeViewport, matched.targetKeys, activeWindow
-      )
+      let r = e.handlerManager.playbackMacro(e, matched.targetKeys)
       registry.isReplayingMapping = false
 
       # Handle mode transition
@@ -2256,9 +2252,7 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
     # No exact match: replay each accumulated key individually
     registry.isReplayingMapping = true
     for k in accKeys:
-      let r = e.handlerManager.handleKeyCombo(
-        activeBuffer, e.state, activeViewport, k, activeWindow
-      )
+      let r = e.handlerManager.handleKeyCombo(e, k)
       if r.kind == hrHandled and r.modeTransition.isSome:
         e.state.mode = r.modeTransition.get
       if r.kind == hrQuit:

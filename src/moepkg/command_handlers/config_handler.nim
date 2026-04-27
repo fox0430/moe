@@ -25,6 +25,8 @@
 import std/options
 
 import ../[types, config_mode, key_bindings]
+import handler_types
+export handler_types
 
 type
   ConfigModeResultKind* = enum
@@ -40,9 +42,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  ConfigModeHandler* = ref object ## Handler for Configuration mode specific commands
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newConfigModeHandler*(): ConfigModeHandler =
   ## Create a new Configuration mode handler

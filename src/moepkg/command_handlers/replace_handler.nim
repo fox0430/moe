@@ -24,17 +24,15 @@ import std/[options, unicode]
 import pkg/results
 
 import ../[types, buffer, modes, key_bindings, motion, command_registry]
+import ../editor_types
+import handler_types
+export handler_types
 
 type
   ReplaceModeResultKind* = enum
     rmrHandled
     rmrUnhandled
     rmrError
-
-  ReplaceModeHandler* = ref object ## Handler for Replace mode specific commands
-    keyBindingRegistry*: KeyBindingRegistry
-    motionController*: MotionController
-    commandRegistry*: CommandRegistry
 
   ReplaceModeResult* = object ## Result of replace mode command execution
     case kind*: ReplaceModeResultKind
@@ -202,12 +200,11 @@ proc handleModeSwitch*(
   return ReplaceModeResult(kind: rmrHandled, modeTransition: some(targetMode))
 
 proc handleReplaceModeKey*(
-    handler: ReplaceModeHandler,
-    buffer: TextBuffer,
-    state: EditorState,
-    keyCombo: KeyCombo,
+    handler: ReplaceModeHandler, editor: Editor, keyCombo: KeyCombo
 ): ReplaceModeResult =
   ## Main entry point for handling Replace mode key presses
+  let buffer = editor.activeBuffer
+  let state = editor.state
 
   # Record key for macro if recording is active
   if state.macroState.isRecording:
