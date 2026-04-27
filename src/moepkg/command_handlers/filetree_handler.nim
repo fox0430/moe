@@ -24,6 +24,8 @@
 import std/options
 
 import ../[filetree, key_bindings]
+import handler_types
+export handler_types
 
 type
   FileTreeResultKind* = enum
@@ -46,12 +48,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  FileTreeHandler* = ref object
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
-    waitingForCtrlW*: bool # Waiting for second key after Ctrl-w
-    isSearching*: bool # In search input mode
-    searchBuffer*: string # Text being typed during search
 
 proc newFileTreeHandler*(): FileTreeHandler =
   FileTreeHandler(

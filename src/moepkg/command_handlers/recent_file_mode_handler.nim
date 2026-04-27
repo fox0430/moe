@@ -32,6 +32,8 @@
 import std/options
 
 import ../[modes, key_bindings, recent_file_mode]
+import handler_types
+export handler_types
 
 type
   RecentFileModeResultKind* = enum
@@ -51,9 +53,6 @@ type
       discard
     modeTransition*: Option[EditorMode]
     overlayTransition*: Option[OverlayKind]
-
-  RecentFileModeHandler* = ref object
-    waitingForG*: bool # Waiting for second 'g' in 'gg' command
 
 proc newRecentFileModeHandler*(): RecentFileModeHandler =
   ## Create a new Recent File mode handler

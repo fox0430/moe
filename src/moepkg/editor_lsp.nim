@@ -27,6 +27,7 @@ import
   editor_types, editor_file, signature_help, documentsymbol_viewer, references_viewer,
   callhierarchy_viewer, lsp_service, lsp_integration, buffer, unicode_utils
 import lsp/protocol/types as lspTypes
+import command_handlers/[handler_manager, insert_handler]
 
 proc maybeUpdateLsp*(e: Editor) =
   ## Update LSP if buffer was modified

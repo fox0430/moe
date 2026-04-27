@@ -32,6 +32,8 @@ import ../src/moepkg/registers {.all.}
 import ../src/moepkg/command_line {.all.}
 import ../src/moepkg/command_config {.all.}
 import ../src/moepkg/filetree {.all.}
+import ../src/moepkg/window_manager {.all.}
+import ../src/moepkg/editor_types except Command
 import ../src/moepkg/command_handlers/handler_manager {.all.}
 import ../src/moepkg/command_handlers/command_handler {.all.}
 import ../src/moepkg/command_handlers/visual_handler {.all.}
@@ -50,6 +52,17 @@ proc createTestState(): EditorState =
 
 proc createTestViewport(): ViewPort =
   ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80)
+
+proc createTestEditor(buf: TextBuffer, state: EditorState, viewport: ViewPort): Editor =
+  ## Create a minimal Editor wrapping the given buffer/state/viewport for testing
+  state.activeWindow.buffer = buf
+  Editor(
+    textBuffer: buf,
+    state: state,
+    viewport: viewport,
+    windowManager:
+      EditorWindowManager(windows: @[state.activeWindow], activeWindowIndex: 0),
+  )
 
 proc createTestManager(): HandlerManager =
   ## Create a HandlerManager for testing
@@ -111,11 +124,12 @@ suite "HandlerManager - Overlay Transitions":
     # Create ':' key combo
     let keyCombo = KeyCombo(isSpecial: false, char: ":", modifiers: {})
 
-    let result = manager.handleNormalMode(buffer, state, viewport, keyCombo)
+    let r =
+      manager.handleNormalMode(createTestEditor(buffer, state, viewport), keyCombo)
 
-    check result.kind == hrHandled
-    check result.overlayTransition.isSome
-    check result.overlayTransition.get == okCommand
+    check r.kind == hrHandled
+    check r.overlayTransition.isSome
+    check r.overlayTransition.get == okCommand
 
   test "Forward slash key returns overlayTransition for search overlay":
     ## This test ensures that pressing '/' in Normal mode returns
@@ -128,11 +142,12 @@ suite "HandlerManager - Overlay Transitions":
     # Create '/' key combo
     let keyCombo = KeyCombo(isSpecial: false, char: "/", modifiers: {})
 
-    let result = manager.handleNormalMode(buffer, state, viewport, keyCombo)
+    let r =
+      manager.handleNormalMode(createTestEditor(buffer, state, viewport), keyCombo)
 
-    check result.kind == hrHandled
-    check result.overlayTransition.isSome
-    check result.overlayTransition.get == okSearch
+    check r.kind == hrHandled
+    check r.overlayTransition.isSome
+    check r.overlayTransition.get == okSearch
 
   test "Question mark key returns overlayTransition for backward search overlay":
     ## This test ensures that pressing '?' in Normal mode returns
@@ -145,11 +160,12 @@ suite "HandlerManager - Overlay Transitions":
     # Create '?' key combo
     let keyCombo = KeyCombo(isSpecial: false, char: "?", modifiers: {})
 
-    let result = manager.handleNormalMode(buffer, state, viewport, keyCombo)
+    let r =
+      manager.handleNormalMode(createTestEditor(buffer, state, viewport), keyCombo)
 
-    check result.kind == hrHandled
-    check result.overlayTransition.isSome
-    check result.overlayTransition.get == okSearch
+    check r.kind == hrHandled
+    check r.overlayTransition.isSome
+    check r.overlayTransition.get == okSearch
 
 suite "HandlerManager - getOverlayTransition helper":
   test "getOverlayTransition returns overlay from hrHandled result":
@@ -236,7 +252,8 @@ suite "HandlerManager - Visual to Insert mode transaction":
 
     # Press 'I' in Visual mode
     let iKey = KeyCombo(isSpecial: false, char: "I", modifiers: {})
-    let enterResult = manager.handleVisualMode(buffer, state, viewport, iKey)
+    let enterResult =
+      manager.handleVisualMode(createTestEditor(buffer, state, viewport), iKey)
 
     check enterResult.kind == hrHandled
     check enterResult.modeTransition.isSome
@@ -246,7 +263,8 @@ suite "HandlerManager - Visual to Insert mode transaction":
     # Now press Escape in Insert mode to exit
     state.mode = EditorMode.Insert
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let exitResult = manager.handleInsertMode(buffer, state, escKey)
+    let exitResult =
+      manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     check exitResult.kind == hrHandled
     check exitResult.modeTransition.isSome
@@ -262,7 +280,8 @@ suite "HandlerManager - Visual to Insert mode transaction":
 
     # Press 'I' in VisualBlock mode
     let iKey = KeyCombo(isSpecial: false, char: "I", modifiers: {})
-    let enterResult = manager.handleVisualMode(buffer, state, viewport, iKey)
+    let enterResult =
+      manager.handleVisualMode(createTestEditor(buffer, state, viewport), iKey)
 
     check enterResult.kind == hrHandled
     check enterResult.modeTransition.isSome
@@ -272,7 +291,8 @@ suite "HandlerManager - Visual to Insert mode transaction":
     # Now press Escape in Insert mode to exit
     state.mode = EditorMode.Insert
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let exitResult = manager.handleInsertMode(buffer, state, escKey)
+    let exitResult =
+      manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     check exitResult.kind == hrHandled
     check exitResult.modeTransition.isSome
@@ -288,7 +308,8 @@ suite "HandlerManager - Visual to Insert mode transaction":
 
     # Press 'I' in VisualLine mode
     let iKey = KeyCombo(isSpecial: false, char: "I", modifiers: {})
-    let enterResult = manager.handleVisualMode(buffer, state, viewport, iKey)
+    let enterResult =
+      manager.handleVisualMode(createTestEditor(buffer, state, viewport), iKey)
 
     check enterResult.kind == hrHandled
     check enterResult.modeTransition.isSome
@@ -298,7 +319,8 @@ suite "HandlerManager - Visual to Insert mode transaction":
     # Now press Escape in Insert mode to exit
     state.mode = EditorMode.Insert
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let exitResult = manager.handleInsertMode(buffer, state, escKey)
+    let exitResult =
+      manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     check exitResult.kind == hrHandled
     check exitResult.modeTransition.isSome
@@ -313,7 +335,8 @@ suite "HandlerManager - Visual to Insert mode transaction":
 
     # Press 'c' in Visual mode (change)
     let cKey = KeyCombo(isSpecial: false, char: "c", modifiers: {})
-    let enterResult = manager.handleVisualMode(buffer, state, viewport, cKey)
+    let enterResult =
+      manager.handleVisualMode(createTestEditor(buffer, state, viewport), cKey)
 
     check enterResult.kind == hrHandled
     check enterResult.modeTransition.isSome
@@ -323,7 +346,8 @@ suite "HandlerManager - Visual to Insert mode transaction":
     # Now press Escape in Insert mode to exit
     state.mode = EditorMode.Insert
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let exitResult = manager.handleInsertMode(buffer, state, escKey)
+    let exitResult =
+      manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     check exitResult.kind == hrHandled
     check exitResult.modeTransition.isSome
@@ -373,7 +397,8 @@ suite "HandlerManager - Visual Block insert replication":
 
     # Press 'I' in VisualBlock mode
     let iKey = KeyCombo(isSpecial: false, char: "I", modifiers: {})
-    let enterResult = manager.handleVisualMode(buffer, state, viewport, iKey)
+    let enterResult =
+      manager.handleVisualMode(createTestEditor(buffer, state, viewport), iKey)
     check enterResult.kind == hrHandled
     check enterResult.modeTransition.isSome
     check enterResult.modeTransition.get == EditorMode.Insert
@@ -383,12 +408,13 @@ suite "HandlerManager - Visual Block insert replication":
     # Type "XX" in insert mode
     state.mode = EditorMode.Insert
     let xKey = KeyCombo(isSpecial: false, char: "X", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, xKey)
-    discard manager.handleInsertMode(buffer, state, xKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), xKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), xKey)
 
     # Press Escape to leave insert mode — triggers replication
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let exitResult = manager.handleInsertMode(buffer, state, escKey)
+    let exitResult =
+      manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
     check exitResult.kind == hrHandled
 
     # Verify all 3 lines have "XX" at column 0
@@ -407,16 +433,16 @@ suite "HandlerManager - Visual Block insert replication":
 
     # Press 'I' in VisualBlock mode
     let iKey = KeyCombo(isSpecial: false, char: "I", modifiers: {})
-    discard manager.handleVisualMode(buffer, state, viewport, iKey)
+    discard manager.handleVisualMode(createTestEditor(buffer, state, viewport), iKey)
 
     # Type "Z" in insert mode
     state.mode = EditorMode.Insert
     let zKey = KeyCombo(isSpecial: false, char: "Z", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, zKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), zKey)
 
     # Press Escape
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard manager.handleInsertMode(buffer, state, escKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     # Verify line 0 and 2 have "Z" at col 4, line 1 is padded
     check buffer.getLine(0) == "abcdZef"
@@ -434,7 +460,8 @@ suite "HandlerManager - Visual Block insert replication":
 
     # Press 'A' in VisualBlock mode
     let aKey = KeyCombo(isSpecial: false, char: "A", modifiers: {})
-    let enterResult = manager.handleVisualMode(buffer, state, viewport, aKey)
+    let enterResult =
+      manager.handleVisualMode(createTestEditor(buffer, state, viewport), aKey)
     check enterResult.kind == hrHandled
     check enterResult.modeTransition.isSome
     check enterResult.modeTransition.get == EditorMode.Insert
@@ -442,12 +469,12 @@ suite "HandlerManager - Visual Block insert replication":
     # Type "YY" in insert mode
     state.mode = EditorMode.Insert
     let yKey = KeyCombo(isSpecial: false, char: "Y", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, yKey)
-    discard manager.handleInsertMode(buffer, state, yKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), yKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), yKey)
 
     # Press Escape
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard manager.handleInsertMode(buffer, state, escKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     # Verify "YY" is inserted at column 2 on all lines
     check buffer.getLine(0) == "aaYYaa"
@@ -466,7 +493,8 @@ suite "HandlerManager - Visual Block insert replication":
 
     # Press 'c' in VisualBlock mode
     let cKey = KeyCombo(isSpecial: false, char: "c", modifiers: {})
-    let enterResult = manager.handleVisualMode(buffer, state, viewport, cKey)
+    let enterResult =
+      manager.handleVisualMode(createTestEditor(buffer, state, viewport), cKey)
     check enterResult.kind == hrHandled
     check enterResult.modeTransition.isSome
     check enterResult.modeTransition.get == EditorMode.Insert
@@ -479,11 +507,11 @@ suite "HandlerManager - Visual Block insert replication":
     # Type "Z" in insert mode
     state.mode = EditorMode.Insert
     let zKey = KeyCombo(isSpecial: false, char: "Z", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, zKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), zKey)
 
     # Press Escape
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard manager.handleInsertMode(buffer, state, escKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     # Verify "Z" is at column 1 on all lines
     check buffer.getLine(0) == "aZa"
@@ -501,13 +529,14 @@ suite "HandlerManager - Visual Block insert replication":
 
     # Press 'I' in VisualBlock mode
     let iKey = KeyCombo(isSpecial: false, char: "I", modifiers: {})
-    discard manager.handleVisualMode(buffer, state, viewport, iKey)
+    discard manager.handleVisualMode(createTestEditor(buffer, state, viewport), iKey)
     check state.editState.visualBlockInsertContext.isSome
 
     # Immediately press Escape without typing anything
     state.mode = EditorMode.Insert
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let exitResult = manager.handleInsertMode(buffer, state, escKey)
+    let exitResult =
+      manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
     check exitResult.kind == hrHandled
 
     # Buffer should be unchanged
@@ -529,7 +558,7 @@ suite "HandlerManager - Visual Block insert replication":
 
     # Press 'I' in VisualBlock mode
     let iKey = KeyCombo(isSpecial: false, char: "I", modifiers: {})
-    discard manager.handleVisualMode(buffer, state, viewport, iKey)
+    discard manager.handleVisualMode(createTestEditor(buffer, state, viewport), iKey)
 
     # Verify cursor moved to normalized start (line 0, col 0)
     check state.cursor.line == 0
@@ -543,9 +572,9 @@ suite "HandlerManager - Visual Block insert replication":
     # Type "X" and Escape
     state.mode = EditorMode.Insert
     let xKey = KeyCombo(isSpecial: false, char: "X", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, xKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), xKey)
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard manager.handleInsertMode(buffer, state, escKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     check buffer.getLine(0) == "Xaaaa"
     check buffer.getLine(1) == "Xbbbb"
@@ -562,14 +591,14 @@ suite "HandlerManager - Visual Block insert replication":
 
     # Press 'I'
     let iKey = KeyCombo(isSpecial: false, char: "I", modifiers: {})
-    discard manager.handleVisualMode(buffer, state, viewport, iKey)
+    discard manager.handleVisualMode(createTestEditor(buffer, state, viewport), iKey)
 
     # Type "Z" and Escape
     state.mode = EditorMode.Insert
     let zKey = KeyCombo(isSpecial: false, char: "Z", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, zKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), zKey)
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard manager.handleInsertMode(buffer, state, escKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     # Only line 1 should be modified
     check buffer.getLine(0) == "aaaa"
@@ -587,7 +616,7 @@ suite "HandlerManager - Visual Block insert replication":
 
     # Press 'A' in VisualBlock mode
     let aKey = KeyCombo(isSpecial: false, char: "A", modifiers: {})
-    discard manager.handleVisualMode(buffer, state, viewport, aKey)
+    discard manager.handleVisualMode(createTestEditor(buffer, state, viewport), aKey)
 
     # Cursor should be at (0, 5)
     check state.cursor.column == 5
@@ -595,9 +624,9 @@ suite "HandlerManager - Visual Block insert replication":
     # Type "Z" and Escape
     state.mode = EditorMode.Insert
     let zKey = KeyCombo(isSpecial: false, char: "Z", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, zKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), zKey)
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard manager.handleInsertMode(buffer, state, escKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     # Line 0 and 2 get Z at col 5, line 1 ("ab") gets padded to col 5
     check buffer.getLine(0) == "abcdeZf"
@@ -614,7 +643,7 @@ suite "HandlerManager - Visual Block insert replication":
 
     # Press 'I' in Visual (char) mode
     let iKey = KeyCombo(isSpecial: false, char: "I", modifiers: {})
-    discard manager.handleVisualMode(buffer, state, viewport, iKey)
+    discard manager.handleVisualMode(createTestEditor(buffer, state, viewport), iKey)
 
     # Context should NOT be set
     check state.editState.visualBlockInsertContext.isNone
@@ -862,10 +891,10 @@ suite "HandlerManager - o/O open line with auto-indent":
     let state = createAutoIndentState()
     let viewport = createTestViewport()
 
-    let result = manager.handleNormalMode(buffer, state, viewport, oKey)
+    let r = manager.handleNormalMode(createTestEditor(buffer, state, viewport), oKey)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.Insert
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.Insert
     check buffer.inTransaction
     check buffer.len == 2
     check buffer.getLine(1) == "  "
@@ -879,9 +908,10 @@ suite "HandlerManager - o/O open line with auto-indent":
     let state = createAutoIndentState()
     let viewport = createTestViewport()
 
-    discard manager.handleNormalMode(buffer, state, viewport, oKey)
+    discard manager.handleNormalMode(createTestEditor(buffer, state, viewport), oKey)
     state.mode = EditorMode.Insert
-    let exitResult = manager.handleInsertMode(buffer, state, escKey)
+    let exitResult =
+      manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     check exitResult.kind == hrHandled
     check exitResult.modeTransition.get == EditorMode.Normal
@@ -895,9 +925,9 @@ suite "HandlerManager - o/O open line with auto-indent":
     let state = createAutoIndentState()
     let viewport = createTestViewport()
 
-    discard manager.handleNormalMode(buffer, state, viewport, oKey)
+    discard manager.handleNormalMode(createTestEditor(buffer, state, viewport), oKey)
     state.mode = EditorMode.Insert
-    discard manager.handleInsertMode(buffer, state, escKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     # Single undo should restore original buffer
     discard buffer.undo()
@@ -911,13 +941,13 @@ suite "HandlerManager - o/O open line with auto-indent":
     let state = createAutoIndentState()
     let viewport = createTestViewport()
 
-    discard manager.handleNormalMode(buffer, state, viewport, oKey)
+    discard manager.handleNormalMode(createTestEditor(buffer, state, viewport), oKey)
     state.mode = EditorMode.Insert
 
     # Type 'x' in Insert mode
     let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, xKey)
-    discard manager.handleInsertMode(buffer, state, escKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), xKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     check buffer.getLine(1) == "  x"
 
@@ -928,11 +958,11 @@ suite "HandlerManager - o/O open line with auto-indent":
     let state = createAutoIndentState()
     let viewport = createTestViewport()
 
-    discard manager.handleNormalMode(buffer, state, viewport, oKey)
+    discard manager.handleNormalMode(createTestEditor(buffer, state, viewport), oKey)
     state.mode = EditorMode.Insert
     let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, xKey)
-    discard manager.handleInsertMode(buffer, state, escKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), xKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     # Single undo should restore original buffer
     discard buffer.undo()
@@ -948,9 +978,9 @@ suite "HandlerManager - o/O open line with auto-indent":
 
     # Press O
     let bigOKey = KeyCombo(isSpecial: false, char: "O", modifiers: {})
-    discard manager.handleNormalMode(buffer, state, viewport, bigOKey)
+    discard manager.handleNormalMode(createTestEditor(buffer, state, viewport), bigOKey)
     state.mode = EditorMode.Insert
-    discard manager.handleInsertMode(buffer, state, escKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     check buffer.getLine(0) == ""
     check buffer.getLine(1) == "  hello"
@@ -968,9 +998,9 @@ suite "HandlerManager - o/O open line with auto-indent":
 
     # Press i (simple insert, no line creation)
     let iKey = KeyCombo(isSpecial: false, char: "i", modifiers: {})
-    discard manager.handleNormalMode(buffer, state, viewport, iKey)
+    discard manager.handleNormalMode(createTestEditor(buffer, state, viewport), iKey)
     state.mode = EditorMode.Insert
-    discard manager.handleInsertMode(buffer, state, escKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     check buffer.len == 1
     check buffer.getLine(0) == "  hello"
@@ -982,9 +1012,9 @@ suite "HandlerManager - o/O open line with auto-indent":
     let state = createAutoIndentState()
     let viewport = createTestViewport()
 
-    discard manager.handleNormalMode(buffer, state, viewport, oKey)
+    discard manager.handleNormalMode(createTestEditor(buffer, state, viewport), oKey)
     state.mode = EditorMode.Insert
-    discard manager.handleInsertMode(buffer, state, escKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
 
     check buffer.len == 2
     check buffer.getLine(1) == ""
@@ -1006,12 +1036,14 @@ suite "HandlerManager - Repeat last Command mode command (@:)":
 
     # Simulate @: via keybinding registry: @ builds sequence, : completes it
     let atKey = KeyCombo(isSpecial: false, char: "@", modifiers: {})
-    let atResult = manager.handleNormalMode(buffer, state, viewport, atKey)
+    let atResult =
+      manager.handleNormalMode(createTestEditor(buffer, state, viewport), atKey)
     # @ is building a sequence in the keybinding registry (waiting for target char)
     check atResult.kind == hrHandled
 
     let colonKey = KeyCombo(isSpecial: false, char: ":", modifiers: {})
-    let colonResult = manager.handleNormalMode(buffer, state, viewport, colonKey)
+    let colonResult =
+      manager.handleNormalMode(createTestEditor(buffer, state, viewport), colonKey)
 
     # hrExecCommand is returned for handler.nim to execute with full Editor context
     check colonResult.kind == hrExecCommand
@@ -1028,10 +1060,11 @@ suite "HandlerManager - Repeat last Command mode command (@:)":
     state.commandState.history = @[]
 
     let atKey = KeyCombo(isSpecial: false, char: "@", modifiers: {})
-    discard manager.handleNormalMode(buffer, state, viewport, atKey)
+    discard manager.handleNormalMode(createTestEditor(buffer, state, viewport), atKey)
 
     let colonKey = KeyCombo(isSpecial: false, char: ":", modifiers: {})
-    let colonResult = manager.handleNormalMode(buffer, state, viewport, colonKey)
+    let colonResult =
+      manager.handleNormalMode(createTestEditor(buffer, state, viewport), colonKey)
 
     check colonResult.kind == hrHandled
     check state.statusMessage == "No previous Command mode command"
@@ -1047,17 +1080,19 @@ suite "HandlerManager - Repeat last Command mode command (@:)":
 
     # Type "3@:" (count 3, then @:)
     let threeKey = KeyCombo(isSpecial: false, char: "3", modifiers: {})
-    discard manager.handleNormalMode(buffer, state, viewport, threeKey)
+    discard
+      manager.handleNormalMode(createTestEditor(buffer, state, viewport), threeKey)
 
     let atKey = KeyCombo(isSpecial: false, char: "@", modifiers: {})
-    discard manager.handleNormalMode(buffer, state, viewport, atKey)
+    discard manager.handleNormalMode(createTestEditor(buffer, state, viewport), atKey)
 
     let colonKey = KeyCombo(isSpecial: false, char: ":", modifiers: {})
-    let result = manager.handleNormalMode(buffer, state, viewport, colonKey)
+    let r =
+      manager.handleNormalMode(createTestEditor(buffer, state, viewport), colonKey)
 
-    check result.kind == hrExecCommand
-    check result.execCommandText == "set number"
-    check result.execCommandCount == 3
+    check r.kind == hrExecCommand
+    check r.execCommandText == "set number"
+    check r.execCommandCount == 3
 
 proc createTestManagerWithMotion(
     buffer: TextBuffer, state: EditorState, viewport: ViewPort
@@ -1125,7 +1160,9 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
   proc ctrlOToNormal(manager: HandlerManager, buffer: TextBuffer, state: EditorState) =
     ## Helper: press Ctrl-O in Insert mode to enter insert-normal
-    discard manager.handleInsertMode(buffer, state, ctrlO)
+    discard manager.handleInsertMode(
+      createTestEditor(buffer, state, createTestViewport()), ctrlO
+    )
     state.mode = EditorMode.Normal
 
   test "Ctrl-O skips transaction commit":
@@ -1354,7 +1391,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Type a character
     let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, xKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), xKey)
 
     manager.ctrlOToNormal(buffer, state)
 
@@ -1377,7 +1414,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     # Enter Insert and type 'x'
     enterInsertMode(buffer, state)
     let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, xKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), xKey)
 
     # Ctrl-O → 'w' (move word) → back to Insert
     manager.ctrlOToNormal(buffer, state)
@@ -1387,10 +1424,11 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Type 'y' in Insert mode
     let yKey = KeyCombo(isSpecial: false, char: "y", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, yKey)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), yKey)
 
     # Escape to Normal
-    let exitResult = manager.handleInsertMode(buffer, state, escKey)
+    let exitResult =
+      manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
     check exitResult.modeTransition.get == EditorMode.Normal
     check not buffer.inTransaction
 
@@ -1636,7 +1674,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     # Enter Insert and type 'a'
     enterInsertMode(buffer, state)
     let aChar = KeyCombo(isSpecial: false, char: "a", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, aChar)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), aChar)
 
     # First Ctrl-O → 'w' → back to Insert
     manager.ctrlOToNormal(buffer, state)
@@ -1647,7 +1685,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Type 'b'
     let bChar = KeyCombo(isSpecial: false, char: "b", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, bChar)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), bChar)
 
     # Second Ctrl-O → 'w' → back to Insert
     manager.ctrlOToNormal(buffer, state)
@@ -1657,10 +1695,11 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Type 'c'
     let cChar = KeyCombo(isSpecial: false, char: "c", modifiers: {})
-    discard manager.handleInsertMode(buffer, state, cChar)
+    discard manager.handleInsertMode(createTestEditor(buffer, state, viewport), cChar)
 
     # Escape to Normal
-    let exitResult = manager.handleInsertMode(buffer, state, escKey)
+    let exitResult =
+      manager.handleInsertMode(createTestEditor(buffer, state, viewport), escKey)
     check exitResult.modeTransition.get == EditorMode.Normal
     check not buffer.inTransaction
 
@@ -1984,14 +2023,15 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     let buffer = newTextBuffer()
     discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
     let state = createTestState()
+    let viewport = createTestViewport()
 
     enterInsertMode(buffer, state)
 
     let ctrlO = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
-    let result = manager.handleInsertMode(buffer, state, ctrlO)
+    let r = manager.handleInsertMode(createTestEditor(buffer, state, viewport), ctrlO)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.Normal
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.Normal
     check state.insertNormalMode
     # Transaction should still be open (skipped commit)
     check buffer.inTransaction

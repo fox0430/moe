@@ -28,6 +28,8 @@
 import std/[options, strutils, os]
 
 import ../[buffer, modes, command_line, command_config, command_registry, config_loader]
+import handler_types
+export handler_types
 
 type
   BoolSettingOption* = enum
@@ -140,11 +142,6 @@ type
     cmrFileTree # Toggle file tree sidebar (:filetree)
     cmrCquit # Quit with non-zero exit code (:cq)
     cmrError # Command error
-
-  CommandModeHandler* = ref object ## Handler for Command mode specific commands
-    parser*: CommandLineParser
-    config*: CommandConfig
-    commandRegistry*: CommandRegistry
 
   CommandModeResult* = object ## Result of command mode execution
     case kind*: CommandModeResultKind

@@ -27,6 +27,9 @@ import std/options
 import pkg/results
 
 import ../[buffer, config, modes, motion, types, key_bindings, command_registry]
+import ../editor_types
+import handler_types
+export handler_types
 
 type
   VisualModeResultKind* = enum
@@ -35,12 +38,6 @@ type
     vmrWaitingForInput ## Waiting for additional input (e.g., replace char)
     vmrLspSelectionRange ## Execute LSP selection range
     vmrError
-
-  VisualModeHandler* = ref object ## Handler for Visual mode operations
-    keyBindingRegistry*: KeyBindingRegistry
-    commandRegistry*: CommandRegistry
-    motionController*: MotionController
-    notificationConfig*: NotificationConfig
 
   VisualModeResult* = object ## Result of visual mode command execution
     case kind*: VisualModeResultKind
@@ -174,14 +171,13 @@ proc executeCommand*(
     return VisualModeResult(kind: vmrError, errorMessage: r.error)
 
 proc handleVisualModeKey*(
-    handler: VisualModeHandler,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    keyCombo: KeyCombo,
+    handler: VisualModeHandler, editor: Editor, keyCombo: KeyCombo
 ): VisualModeResult =
   ## Main entry point for handling Visual mode key presses
   ## Works for Visual, VisualBlock, and VisualLine modes
+  let buffer = editor.activeBuffer
+  let state = editor.state
+  let viewport = editor.viewport
 
   # Record key for macro if recording is active
   if state.macroState.isRecording:

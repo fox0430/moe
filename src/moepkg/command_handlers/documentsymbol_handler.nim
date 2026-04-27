@@ -25,6 +25,8 @@
 import std/options
 
 import ../[types, key_bindings, documentsymbol_viewer]
+import handler_types
+export handler_types
 
 type
   DocumentSymbolResultKind* = enum
@@ -43,10 +45,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  DocumentSymbolHandler* = ref object
-    ## Handler for Document Symbol Viewer mode specific commands
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newDocumentSymbolHandler*(): DocumentSymbolHandler =
   ## Create a new Document Symbol Viewer mode handler

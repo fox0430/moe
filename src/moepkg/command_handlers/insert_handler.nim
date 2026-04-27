@@ -36,23 +36,15 @@ import
     types, buffer, config, modes, key_bindings, motion, command_registry, unicode_utils,
     completion, signature_help, lsp_integration,
   ]
-import insert_commands
+import handler_types, insert_commands
+import ../editor_types
+export handler_types
 
 type
   InsertModeResultKind* = enum
     imrHandled
     imrUnhandled
     imrError
-
-  InsertModeHandler* = ref object ## Handler for Insert mode specific commands
-    keyBindingRegistry*: KeyBindingRegistry
-    motionController*: MotionController
-    commandRegistry*: CommandRegistry
-    completionManager*: CompletionManager
-    signatureHelpManager*: SignatureHelpManager
-    lsp*: LspIntegration ## LSP integration for completions
-    autocompleteEnabled*: bool ## Whether autocomplete is enabled
-    notificationConfig*: NotificationConfig
 
   InsertModeResult* = object ## Result of insert mode command execution
     case kind*: InsertModeResultKind
@@ -572,12 +564,11 @@ proc shouldRetriggerSignatureHelp*(keyCombo: KeyCombo): bool =
     isRetriggerChar(keyCombo.char[0])
 
 proc handleInsertModeKey*(
-    handler: InsertModeHandler,
-    buffer: TextBuffer,
-    state: EditorState,
-    keyCombo: KeyCombo,
+    handler: InsertModeHandler, editor: Editor, keyCombo: KeyCombo
 ): InsertModeResult =
   ## Main entry point for handling Insert mode key presses
+  let buffer = editor.activeBuffer
+  let state = editor.state
 
   # Record key for macro if recording is active
   if state.macroState.isRecording:

@@ -23,6 +23,8 @@
 ## The help viewer displays editor help information.
 
 import ../[key_bindings, help_viewer]
+import handler_types
+export handler_types
 
 type
   HelpViewerResultKind* = enum
@@ -41,10 +43,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  HelpViewerHandler* = ref object ## Handler for Help Viewer mode specific commands
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
-    lastKeyWasEscape*: bool # Waiting for second Escape for highlight clear
 
 proc newHelpViewerHandler*(): HelpViewerHandler =
   ## Create a new Help Viewer mode handler

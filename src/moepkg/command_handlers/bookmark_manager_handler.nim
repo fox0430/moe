@@ -25,6 +25,8 @@
 import std/options
 
 import ../[types, bookmark_manager, key_bindings]
+import handler_types
+export handler_types
 
 type
   BookmarkManagerResultKind* = enum
@@ -47,10 +49,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  BookmarkManagerHandler* = ref object
-    ## Handler for Bookmark Manager mode specific commands
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newBookmarkManagerHandler*(): BookmarkManagerHandler =
   ## Create a new Bookmark Manager mode handler

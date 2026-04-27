@@ -33,19 +33,22 @@ import
     logger,
   ]
 import ../lsp/protocol/types as lspTypes
+import ../editor_types
 import
-  normal_handler, insert_handler, insert_commands, command_handler, visual_handler,
-  replace_handler, filer_handler, filetree_handler, log_viewer_handler, help_handler,
-  buffer_manager_handler, bookmark_manager_handler, backup_manager_handler,
-  diff_viewer_handler, recent_file_mode_handler, debug_handler, config_handler,
-  references_handler, documentsymbol_handler, callhierarchy_handler, terminal_handler
+  handler_types, normal_handler, insert_handler, insert_commands, command_handler,
+  visual_handler, replace_handler, filer_handler, filetree_handler, log_viewer_handler,
+  help_handler, buffer_manager_handler, bookmark_manager_handler,
+  backup_manager_handler, diff_viewer_handler, recent_file_mode_handler, debug_handler,
+  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler,
+  terminal_handler
 
 export
-  normal_handler, insert_handler, insert_commands, command_handler, visual_handler,
-  replace_handler, filer_handler, filetree_handler, log_viewer_handler, help_handler,
-  buffer_manager_handler, bookmark_manager_handler, backup_manager_handler,
-  diff_viewer_handler, recent_file_mode_handler, debug_handler, config_handler,
-  references_handler, documentsymbol_handler, callhierarchy_handler, terminal_handler
+  handler_types, normal_handler, insert_handler, insert_commands, command_handler,
+  visual_handler, replace_handler, filer_handler, filetree_handler, log_viewer_handler,
+  help_handler, buffer_manager_handler, bookmark_manager_handler,
+  backup_manager_handler, diff_viewer_handler, recent_file_mode_handler, debug_handler,
+  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler,
+  terminal_handler
 
 type
   HandlerResultKind* = enum
@@ -169,32 +172,6 @@ type
     hrOpenUri # Open URI/file under cursor
     hrUnhandled # Command was not handled
     hrError # Error occurred
-
-  HandlerManager* = ref object ## Unified manager for all mode handlers
-    normalHandler*: NormalModeHandler
-    insertHandler*: InsertModeHandler
-    commandHandler*: CommandModeHandler
-    visualHandler*: VisualModeHandler
-    replaceHandler*: ReplaceModeHandler
-    filerHandler*: FilerHandler
-    logViewerHandler*: LogViewerHandler
-    helpViewerHandler*: HelpViewerHandler
-    bufferManagerHandler*: BufferManagerHandler
-    bookmarkManagerHandler*: BookmarkManagerHandler
-    backupManagerHandler*: BackupManagerHandler
-    diffViewerHandler*: DiffViewerHandler
-    recentFileModeHandler*: RecentFileModeHandler
-    configModeHandler*: ConfigModeHandler
-    referencesHandler*: ReferencesHandler
-    documentSymbolHandler*: DocumentSymbolHandler
-    callHierarchyHandler*: CallHierarchyHandler
-    terminalHandler*: TerminalHandler
-    fileTreeHandler*: FileTreeHandler
-    motionController*: MotionController
-    keyBindingRegistry*: KeyBindingRegistry
-    commandLineParser*: CommandLineParser
-    commandConfig*: CommandConfig
-    commandRegistry*: CommandRegistry
 
   HandlerResult* = object ## Unified result type for all handlers
     case kind*: HandlerResultKind
@@ -577,14 +554,13 @@ proc handleKeyCombo*(
 ): HandlerResult
 
 proc handleNormalMode*(
-    manager: HandlerManager,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    keyCombo: KeyCombo,
+    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
   ## Handle Normal mode input
-  let r = manager.normalHandler.handleNormalModeKey(buffer, state, viewport, keyCombo)
+  let buffer = editor.activeBuffer
+  let state = editor.state
+  let viewport = editor.viewport
+  let r = manager.normalHandler.handleNormalModeKey(editor, keyCombo)
   case r.kind
   of nmrHandled:
     # Check if we're entering Insert or Replace mode
@@ -733,10 +709,12 @@ proc handleNormalMode*(
     return HandlerResult(kind: hrOpenUri, openUri: r.openUri)
 
 proc handleInsertMode*(
-    manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
+    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
   ## Handle Insert mode input
-  let r = manager.insertHandler.handleInsertModeKey(buffer, state, keyCombo)
+  let buffer = editor.activeBuffer
+  let state = editor.state
+  let r = manager.insertHandler.handleInsertModeKey(editor, keyCombo)
   case r.kind
   of imrHandled:
     # Check if we're leaving Insert mode
@@ -1175,15 +1153,32 @@ proc handleSearchMode*(
     else:
       return HandlerResult(kind: hrUnhandled)
 
-proc handleVisualMode*(
-    manager: HandlerManager,
+proc legacyEditor(
     buffer: TextBuffer,
     state: EditorState,
     viewport: ViewPort,
-    keyCombo: KeyCombo,
+    window: Option[EditorWindow] = none(EditorWindow),
+): Editor =
+  ## Construct a minimal Editor from buffer/state/viewport for legacy buffer/state
+  ## dispatch paths that still need to delegate into Editor-based handlers.
+  ## Ensures the active window's buffer is set so that `editor.activeBuffer`
+  ## returns the supplied buffer rather than whatever was previously stored.
+  let win = if window.isSome: window.get else: state.activeWindow
+  win.buffer = buffer
+  Editor(
+    textBuffer: buffer,
+    state: state,
+    viewport: viewport,
+    windowManager: EditorWindowManager(windows: @[win], activeWindowIndex: 0),
+  )
+
+proc handleVisualMode*(
+    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
   ## Handle Visual mode input
-  let r = manager.visualHandler.handleVisualModeKey(buffer, state, viewport, keyCombo)
+  let buffer = editor.activeBuffer
+  let state = editor.state
+  let r = manager.visualHandler.handleVisualModeKey(editor, keyCombo)
   case r.kind
   of vmrHandled:
     # Check if we're entering Insert mode (e.g., visual block I command)
@@ -1217,10 +1212,11 @@ proc handleVisualMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleReplaceMode*(
-    manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
+    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
   ## Handle Replace mode input
-  let r = manager.replaceHandler.handleReplaceModeKey(buffer, state, keyCombo)
+  let buffer = editor.activeBuffer
+  let r = manager.replaceHandler.handleReplaceModeKey(editor, keyCombo)
   case r.kind
   of rmrHandled:
     # Check if we're leaving Replace mode
@@ -2036,7 +2032,8 @@ proc handleKeyCombo*(
   # Delegate to appropriate mode handler
   case state.mode
   of EditorMode.Normal:
-    let normalResult = manager.handleNormalMode(buffer, state, viewport, keyCombo)
+    let normalResult =
+      manager.handleNormalMode(legacyEditor(buffer, state, viewport, window), keyCombo)
     # Insert-Normal mode (Ctrl-o): return to Insert after one complete Normal command
     if state.insertNormalMode and normalResult.kind == hrHandled:
       # Don't return to Insert while an overlay (command/search) is opening
@@ -2090,11 +2087,14 @@ proc handleKeyCombo*(
       state.editState.substituteContext = none(types.SubstituteContext)
     return normalResult
   of EditorMode.Insert:
-    return manager.handleInsertMode(buffer, state, keyCombo)
+    return
+      manager.handleInsertMode(legacyEditor(buffer, state, viewport, window), keyCombo)
   of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
-    return manager.handleVisualMode(buffer, state, viewport, keyCombo)
+    return
+      manager.handleVisualMode(legacyEditor(buffer, state, viewport, window), keyCombo)
   of EditorMode.Replace:
-    return manager.handleReplaceMode(buffer, state, keyCombo)
+    return
+      manager.handleReplaceMode(legacyEditor(buffer, state, viewport, window), keyCombo)
   of EditorMode.Filer:
     if window.isSome and window.get.filerState.isSome:
       return manager.handleFilerMode(
@@ -2292,6 +2292,90 @@ proc handleEvent*(
     return HandlerResult(kind: hrUnhandled)
 
   return manager.handleKeyCombo(buffer, state, viewport, keyComboOpt.get, window)
+
+proc handleEvent*(manager: HandlerManager, e: Editor, event: Event): HandlerResult =
+  manager.handleEvent(e.activeBuffer, e.state, e.viewport, event, some(e.activeWindow))
+
+proc handleKeyCombo*(
+    manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+): HandlerResult =
+  ## Editor-based dispatch. Migrated modes go through Editor-only paths;
+  ## unmigrated modes fall back to the legacy buffer/state dispatch.
+
+  # Complete any active scroll animation on key input (instant jump to target)
+  if e.state.scrollAnimation.active:
+    let (completed, cursorLine) = completeScrollAnimation(e.state.scrollAnimation)
+    if completed:
+      e.state.cursor.line = cursorLine
+
+  # Runtime key-sequence mapping precheck (noremap: skip during replay)
+  if not manager.keyBindingRegistry.isReplayingMapping:
+    let expandResult = manager.checkRuntimeKeySeqMapping(
+      e.activeBuffer, e.state, e.viewport, keyCombo, some(e.activeWindow)
+    )
+    if expandResult.isSome:
+      return expandResult.get
+
+  case e.state.mode
+  of EditorMode.Normal:
+    # Normal mode dispatch uses the same logic as the buffer/state version,
+    # delegating to handleNormalMode below.
+    return manager.handleKeyCombo(
+      e.activeBuffer, e.state, e.viewport, keyCombo, some(e.activeWindow)
+    )
+  of EditorMode.Insert:
+    return manager.handleInsertMode(e, keyCombo)
+  of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
+    return manager.handleVisualMode(e, keyCombo)
+  of EditorMode.Replace:
+    return manager.handleReplaceMode(e, keyCombo)
+  else:
+    return manager.handleKeyCombo(
+      e.activeBuffer, e.state, e.viewport, keyCombo, some(e.activeWindow)
+    )
+
+proc playbackMacro*(
+    manager: HandlerManager, editor: Editor, keys: seq[string]
+): HandlerResult =
+  ## Editor-based macro playback. Iterates keys and dispatches each through
+  ## the Editor-aware handleKeyCombo so migrated modes (Insert/Visual/Replace)
+  ## are handled correctly during playback.
+  let state = editor.state
+
+  if state.macroState.playbackDepth >= MaxMacroRecursionDepth:
+    return HandlerResult(
+      kind: hrError,
+      errorMessage:
+        "Macro recursion limit exceeded (max " & $MaxMacroRecursionDepth & ")",
+    )
+
+  state.macroState.playbackDepth += 1
+  manager.keyBindingRegistry.clearSequence()
+  let wasRecording = state.macroState.isRecording
+  state.macroState.isRecording = false
+
+  for keyStr in keys:
+    let keyComboOpt = stringToKeyCombo(keyStr)
+    if keyComboOpt.isNone:
+      state.macroState.isRecording = wasRecording
+      state.macroState.playbackDepth -= 1
+      return
+        HandlerResult(kind: hrError, errorMessage: "Invalid key in macro: " & keyStr)
+
+    let keyResult = manager.handleKeyCombo(editor, keyComboOpt.get)
+
+    if keyResult.kind == hrHandled and keyResult.modeTransition.isSome:
+      state.mode = keyResult.modeTransition.get
+
+    if keyResult.kind == hrError or keyResult.kind == hrQuit:
+      state.macroState.isRecording = wasRecording
+      state.macroState.playbackDepth -= 1
+      return keyResult
+
+  state.macroState.isRecording = wasRecording
+  state.macroState.playbackDepth -= 1
+  manager.keyBindingRegistry.clearSequence()
+  HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
 
 # Utility functions for HandlerResult
 proc wasHandled*(hrResult: HandlerResult): bool =

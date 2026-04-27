@@ -26,6 +26,8 @@
 import std/[options, unicode]
 
 import ../[types, key_bindings, buffer, search_utils]
+import handler_types
+export handler_types
 
 # Helper functions for word motion
 proc isWordChar(r: Rune): bool =
@@ -54,9 +56,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  LogViewerHandler* = ref object ## Handler for Log Viewer mode specific commands
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newLogViewerHandler*(): LogViewerHandler =
   ## Create a new Log Viewer mode handler

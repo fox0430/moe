@@ -36,6 +36,8 @@
 import std/options
 
 import ../[types, backup_manager, key_bindings]
+import handler_types
+export handler_types
 
 type
   BackupManagerResultKind* = enum
@@ -60,10 +62,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  BackupManagerHandler* = ref object
-    ## Handler for Backup Manager mode specific commands
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newBackupManagerHandler*(): BackupManagerHandler =
   ## Create a new Backup Manager mode handler

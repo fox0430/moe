@@ -28,11 +28,11 @@ import
   buffer, types, commands, command_registry, modes, command_line, command_config,
   window_manager, lsp_integration, config, persist, background_process
 import key_bindings except Command
-import command_handlers/handler_manager
+import command_handlers/handler_types
 
 export
   buffer, types, commands, command_registry, modes, command_line, command_config,
-  window_manager, lsp_integration, config, persist, handler_manager, tables, celina,
+  window_manager, lsp_integration, config, persist, handler_types, tables, celina,
   background_process
 
 type

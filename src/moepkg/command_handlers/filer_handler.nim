@@ -24,6 +24,8 @@
 import std/options
 
 import ../[filer, key_bindings]
+import handler_types
+export handler_types
 
 type
   FilerResultKind* = enum
@@ -52,9 +54,6 @@ type
       errorMessage*: string
     else:
       discard
-
-  FilerHandler* = ref object ## Handler for Filer mode specific commands
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newFilerHandler*(): FilerHandler =
   ## Create a new Filer mode handler

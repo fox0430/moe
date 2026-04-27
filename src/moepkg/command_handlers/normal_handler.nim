@@ -30,7 +30,9 @@ import
     types, buffer, modes, motion, key_bindings, command_registry, config, registers,
     render_utils, search_utils, uri_utils,
   ]
-import visual_handler, insert_commands
+import handler_types, visual_handler, insert_commands
+import ../editor_types
+export handler_types
 
 type
   NormalModeResultKind* = enum
@@ -70,14 +72,6 @@ type
     nmrEqualizeWindows # Signal to handler_manager to equalize all windows
     nmrSwapWindow # Signal to handler_manager to swap window with next
     nmrOpenUri # Signal to handler_manager to open URI/file under cursor
-
-  NormalModeHandler* = ref object ## Handler for Normal mode specific commands
-    motionController*: MotionController
-    keyBindingRegistry*: KeyBindingRegistry
-    commandRegistry*: CommandRegistry
-    clipboardConfig*: ClipboardConfig
-    smoothScrollConfig*: SmoothScrollConfig
-    notificationConfig*: NotificationConfig
 
   NormalModeResult* = object ## Result of normal mode command execution
     case kind*: NormalModeResultKind
@@ -567,13 +561,12 @@ proc requestMacroPlayback(keys: seq[string], count: int = 1): NormalModeResult =
   NormalModeResult(kind: nmrPlaybackMacro, macroKeys: keys, macroCount: count)
 
 proc handleNormalModeKey*(
-    handler: NormalModeHandler,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    keyCombo: KeyCombo,
+    handler: NormalModeHandler, editor: Editor, keyCombo: KeyCombo
 ): NormalModeResult =
   ## Main entry point for handling Normal mode key presses
+  let buffer = editor.activeBuffer
+  let state = editor.state
+  let viewport = editor.viewport
 
   # Check if we're waiting for a macro register name
   if state.macroState.waitingForRegister:

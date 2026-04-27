@@ -32,7 +32,7 @@ import
   highlight, sidebar
 
 import key_bindings except Command
-import command_handlers/insert_handler
+import command_handlers/handler_manager
 
 export
   editor_types, editor_window, editor_file, editor_lsp, editor_codelens, editor_render
