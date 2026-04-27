@@ -535,15 +535,6 @@ proc handleCommandMode*(
   currentLine: int = 0,
 ): HandlerResult
 
-proc playbackMacro*(
-  manager: HandlerManager,
-  buffer: TextBuffer,
-  state: EditorState,
-  viewport: ViewPort,
-  keys: seq[string],
-  window: Option[EditorWindow] = none(EditorWindow),
-): HandlerResult
-
 proc handleKeyCombo*(
   manager: HandlerManager,
   buffer: TextBuffer,
@@ -551,6 +542,22 @@ proc handleKeyCombo*(
   viewport: ViewPort,
   keyCombo: KeyCombo,
   window: Option[EditorWindow] = none(EditorWindow),
+): HandlerResult
+
+proc playbackMacro*(
+  manager: HandlerManager, editor: Editor, keys: seq[string]
+): HandlerResult
+
+proc handleKeyCombo*(
+  manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+): HandlerResult
+
+proc checkRuntimeKeySeqMapping(
+  manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
+): Option[HandlerResult]
+
+proc applyNormalModePostProcessing(
+  manager: HandlerManager, editor: Editor, normalResult: HandlerResult
 ): HandlerResult
 
 proc handleNormalMode*(
@@ -621,7 +628,7 @@ proc handleNormalMode*(
     # Loop for the specified count (e.g., 3@a plays macro 3 times)
     let count = if r.macroCount > 0: r.macroCount else: 1
     for i in 0 ..< count:
-      let playbackResult = manager.playbackMacro(buffer, state, viewport, r.macroKeys)
+      let playbackResult = manager.playbackMacro(editor, r.macroKeys)
       if playbackResult.kind == hrError or playbackResult.kind == hrQuit:
         return playbackResult
     return HandlerResult(
@@ -1152,25 +1159,6 @@ proc handleSearchMode*(
       )
     else:
       return HandlerResult(kind: hrUnhandled)
-
-proc legacyEditor(
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    window: Option[EditorWindow] = none(EditorWindow),
-): Editor =
-  ## Construct a minimal Editor from buffer/state/viewport for legacy buffer/state
-  ## dispatch paths that still need to delegate into Editor-based handlers.
-  ## Ensures the active window's buffer is set so that `editor.activeBuffer`
-  ## returns the supplied buffer rather than whatever was previously stored.
-  let win = if window.isSome: window.get else: state.activeWindow
-  win.buffer = buffer
-  Editor(
-    textBuffer: buffer,
-    state: state,
-    viewport: viewport,
-    windowManager: EditorWindowManager(windows: @[win], activeWindowIndex: 0),
-  )
 
 proc handleVisualMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
@@ -1901,12 +1889,7 @@ const MaxMacroRecursionDepth = 100
   ## Maximum macro recursion depth to prevent infinite loops
 
 proc checkRuntimeKeySeqMapping(
-    manager: HandlerManager,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    keyCombo: KeyCombo,
-    window: Option[EditorWindow] = none(EditorWindow),
+    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): Option[HandlerResult] =
   ## Check if current key (and accumulated keys) match a runtime mapping.
   ## For file-edit modes (Normal, Insert, Visual, Replace), only rmkKeySequence
@@ -1915,6 +1898,7 @@ proc checkRuntimeKeySeqMapping(
   ## and executed directly via executeCommandDirect.
   ## Returns Some(result) if the key was consumed (either matched or waiting for more),
   ## or None if the key should be processed normally.
+  let state = editor.state
   let mappings =
     if state.mode.isFileEditMode or state.mode == EditorMode.Command:
       manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
@@ -1961,8 +1945,7 @@ proc checkRuntimeKeySeqMapping(
     else:
       # Key-sequence mapping: replay target keys
       manager.keyBindingRegistry.isReplayingMapping = true
-      let playbackResult =
-        manager.playbackMacro(buffer, state, viewport, matched.targetKeys, window)
+      let playbackResult = manager.playbackMacro(editor, matched.targetKeys)
       manager.keyBindingRegistry.isReplayingMapping = false
       return some(playbackResult)
 
@@ -1992,7 +1975,7 @@ proc checkRuntimeKeySeqMapping(
   # Replay flushed keys with mapping expansion disabled
   manager.keyBindingRegistry.isReplayingMapping = true
   for k in keysToFlush:
-    let flushResult = manager.handleKeyCombo(buffer, state, viewport, k, window)
+    let flushResult = manager.handleKeyCombo(editor, k)
     if flushResult.kind == hrHandled and flushResult.modeTransition.isSome:
       state.mode = flushResult.modeTransition.get
     if flushResult.kind == hrError or flushResult.kind == hrQuit:
@@ -2003,6 +1986,57 @@ proc checkRuntimeKeySeqMapping(
   # Now process the current key normally (re-enter mapping check)
   return none(HandlerResult)
 
+proc applyNormalModePostProcessing(
+    manager: HandlerManager, editor: Editor, normalResult: HandlerResult
+): HandlerResult =
+  ## Insert-Normal (Ctrl-o) bookkeeping shared by both legacy and Editor dispatch paths.
+  let buffer = editor.activeBuffer
+  let state = editor.state
+
+  if state.insertNormalMode and normalResult.kind == hrHandled:
+    let hasOverlay = normalResult.overlayTransition.isSome
+    let hasPending =
+      state.editState.pendingOperator.isSome or state.editState.pendingTextObject.isSome or
+      state.pendingCommand != PendingNone or state.pendingRegister.isSome or
+      state.macroState.waitingForRegister or
+      manager.keyBindingRegistry.hasActiveSequence()
+    if not hasPending and not hasOverlay:
+      if normalResult.modeTransition.isSome and
+          normalResult.modeTransition.get == EditorMode.Insert:
+        state.insertNormalMode = false
+        return normalResult
+      elif normalResult.modeTransition.isNone or
+          normalResult.modeTransition.get == EditorMode.Normal:
+        state.insertNormalMode = false
+        return HandlerResult(
+          kind: hrHandled,
+          modeTransition: some(EditorMode.Insert),
+          statusMessage: normalResult.statusMessage,
+        )
+      else:
+        state.insertNormalMode = false
+        if buffer.inTransaction:
+          clearAutoIndentIfUnedited(buffer, state)
+          discard buffer.commitTransaction()
+        state.editState.insertModeStartPos = none(BufferPosition)
+        state.editState.substituteContext = none(types.SubstituteContext)
+        let newMode = normalResult.modeTransition.get
+        if newMode == EditorMode.Replace:
+          discard buffer.beginTransaction("Replace mode edit")
+        return normalResult
+
+  if state.insertNormalMode and normalResult.kind notin {
+    hrHandled, hrUnhandled, hrError
+  }:
+    state.insertNormalMode = false
+    if buffer.inTransaction:
+      clearAutoIndentIfUnedited(buffer, state)
+      discard buffer.commitTransaction()
+    state.editState.insertModeStartPos = none(BufferPosition)
+    state.editState.substituteContext = none(types.SubstituteContext)
+
+  return normalResult
+
 proc handleKeyCombo*(
     manager: HandlerManager,
     buffer: TextBuffer,
@@ -2011,90 +2045,13 @@ proc handleKeyCombo*(
     keyCombo: KeyCombo,
     window: Option[EditorWindow] = none(EditorWindow),
 ): HandlerResult =
-  ## Handle a KeyCombo by dispatching to the appropriate mode handler
-  ## This is used for macro playback where we have KeyCombo directly
-  ## window is required for special modes (Filer, etc.) that store state in EditorWindow
-
-  # Complete any active scroll animation on key input (instant jump to target)
-  if state.scrollAnimation.active:
-    let (completed, cursorLine) = completeScrollAnimation(state.scrollAnimation)
-    if completed:
-      state.cursor.line = cursorLine
-      # Viewport will be updated by updateViewport after cursor is set
-
-  # Runtime key-sequence mapping precheck (noremap: skip during replay)
-  if not manager.keyBindingRegistry.isReplayingMapping:
-    let expandResult =
-      manager.checkRuntimeKeySeqMapping(buffer, state, viewport, keyCombo, window)
-    if expandResult.isSome:
-      return expandResult.get
-
-  # Delegate to appropriate mode handler
+  ## Dispatch unmigrated sub-state modes (Filer, FileTree, LogViewer, Help, …).
+  ## Editor-aware modes (Normal/Insert/Visual/Replace) are handled by the
+  ## Editor-based handleKeyCombo overload directly.
   case state.mode
-  of EditorMode.Normal:
-    let normalResult =
-      manager.handleNormalMode(legacyEditor(buffer, state, viewport, window), keyCombo)
-    # Insert-Normal mode (Ctrl-o): return to Insert after one complete Normal command
-    if state.insertNormalMode and normalResult.kind == hrHandled:
-      # Don't return to Insert while an overlay (command/search) is opening
-      let hasOverlay = normalResult.overlayTransition.isSome
-      # Check if the command is complete (no pending operator/text object/sequence)
-      let hasPending =
-        state.editState.pendingOperator.isSome or
-        state.editState.pendingTextObject.isSome or state.pendingCommand != PendingNone or
-        state.pendingRegister.isSome or state.macroState.waitingForRegister or
-        manager.keyBindingRegistry.hasActiveSequence()
-      if not hasPending and not hasOverlay:
-        # If the normal command triggered a mode transition to Insert (e.g. pressing 'i'),
-        # just clear insertNormalMode and let it proceed normally
-        if normalResult.modeTransition.isSome and
-            normalResult.modeTransition.get == EditorMode.Insert:
-          state.insertNormalMode = false
-          return normalResult
-        elif normalResult.modeTransition.isNone or
-            normalResult.modeTransition.get == EditorMode.Normal:
-          # Return to Insert mode after the normal command
-          state.insertNormalMode = false
-          return HandlerResult(
-            kind: hrHandled,
-            modeTransition: some(EditorMode.Insert),
-            statusMessage: normalResult.statusMessage,
-          )
-        else:
-          # Mode changed to something other than Normal/Insert (e.g., Visual, Replace)
-          # This consumes the insert-normal command
-          state.insertNormalMode = false
-          # Commit the Insert mode transaction and clean up
-          if buffer.inTransaction:
-            clearAutoIndentIfUnedited(buffer, state)
-            discard buffer.commitTransaction()
-          state.editState.insertModeStartPos = none(BufferPosition)
-          state.editState.substituteContext = none(types.SubstituteContext)
-          # If the new mode needs a transaction (Replace), start one
-          let newMode = normalResult.modeTransition.get
-          if newMode == EditorMode.Replace:
-            discard buffer.beginTransaction("Replace mode edit")
-          return normalResult
-    # Non-hrHandled results (hrQuit, hrJumpToBuffer, hrBufferNext, etc.)
-    # during insert-normal: clean up insert-normal state before proceeding
-    if state.insertNormalMode and
-        normalResult.kind notin {hrHandled, hrUnhandled, hrError}:
-      state.insertNormalMode = false
-      if buffer.inTransaction:
-        clearAutoIndentIfUnedited(buffer, state)
-        discard buffer.commitTransaction()
-      state.editState.insertModeStartPos = none(BufferPosition)
-      state.editState.substituteContext = none(types.SubstituteContext)
-    return normalResult
-  of EditorMode.Insert:
-    return
-      manager.handleInsertMode(legacyEditor(buffer, state, viewport, window), keyCombo)
-  of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
-    return
-      manager.handleVisualMode(legacyEditor(buffer, state, viewport, window), keyCombo)
-  of EditorMode.Replace:
-    return
-      manager.handleReplaceMode(legacyEditor(buffer, state, viewport, window), keyCombo)
+  of EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
+      EditorMode.VisualLine, EditorMode.Replace:
+    return HandlerResult(kind: hrUnhandled)
   of EditorMode.Filer:
     if window.isSome and window.get.filerState.isSome:
       return manager.handleFilerMode(
@@ -2212,89 +2169,14 @@ proc handleKeyCombo*(
     # QuickRun mode is not interactive - handled through command mode
     return HandlerResult(kind: hrUnhandled)
 
-proc playbackMacro*(
-    manager: HandlerManager,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    keys: seq[string],
-    window: Option[EditorWindow] = none(EditorWindow),
-): HandlerResult =
-  ## Play back a recorded macro, handling mode transitions properly
-  ## This dispatches each key to the appropriate mode handler based on current mode
-
-  # Check for recursion depth limit
-  if state.macroState.playbackDepth >= MaxMacroRecursionDepth:
-    return HandlerResult(
-      kind: hrError,
-      errorMessage:
-        "Macro recursion limit exceeded (max " & $MaxMacroRecursionDepth & ")",
-    )
-
-  # Increment recursion depth
-  state.macroState.playbackDepth += 1
-
-  # Clear any pending key sequences before starting playback
-  manager.keyBindingRegistry.clearSequence()
-
-  # Temporarily disable macro recording to avoid recording during playback
-  let wasRecording = state.macroState.isRecording
-  state.macroState.isRecording = false
-
-  for keyStr in keys:
-    let keyComboOpt = stringToKeyCombo(keyStr)
-    if keyComboOpt.isNone:
-      state.macroState.isRecording = wasRecording
-      state.macroState.playbackDepth -= 1
-      return
-        HandlerResult(kind: hrError, errorMessage: "Invalid key in macro: " & keyStr)
-
-    let keyCombo = keyComboOpt.get
-
-    # Dispatch to appropriate mode handler based on current state.mode
-    let keyResult = manager.handleKeyCombo(buffer, state, viewport, keyCombo, window)
-
-    # Handle mode transitions from keyResult
-    if keyResult.kind == hrHandled and keyResult.modeTransition.isSome:
-      state.mode = keyResult.modeTransition.get
-
-    # If error or quit, stop playback
-    if keyResult.kind == hrError or keyResult.kind == hrQuit:
-      state.macroState.isRecording = wasRecording
-      state.macroState.playbackDepth -= 1
-      return keyResult
-
-  # Restore recording state and decrement recursion depth
-  state.macroState.isRecording = wasRecording
-  state.macroState.playbackDepth -= 1
-
-  # Clear any pending sequences after playback
-  manager.keyBindingRegistry.clearSequence()
-  return
-    HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
-
-proc handleEvent*(
-    manager: HandlerManager,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    event: Event,
-    window: Option[EditorWindow] = none(EditorWindow),
-): HandlerResult =
-  ## Main entry point for handling events across all modes
-
+proc handleEvent*(manager: HandlerManager, e: Editor, event: Event): HandlerResult =
+  ## Editor-based event entry point. Stays entirely on the Editor dispatch path.
   if event.kind != EventKind.Key:
     return HandlerResult(kind: hrUnhandled)
-
-  # Convert event to key combo
   let keyComboOpt = eventToKeyCombo(event)
   if keyComboOpt.isNone:
     return HandlerResult(kind: hrUnhandled)
-
-  return manager.handleKeyCombo(buffer, state, viewport, keyComboOpt.get, window)
-
-proc handleEvent*(manager: HandlerManager, e: Editor, event: Event): HandlerResult =
-  manager.handleEvent(e.activeBuffer, e.state, e.viewport, event, some(e.activeWindow))
+  manager.handleKeyCombo(e, keyComboOpt.get)
 
 proc handleKeyCombo*(
     manager: HandlerManager, e: Editor, keyCombo: KeyCombo
@@ -2310,19 +2192,14 @@ proc handleKeyCombo*(
 
   # Runtime key-sequence mapping precheck (noremap: skip during replay)
   if not manager.keyBindingRegistry.isReplayingMapping:
-    let expandResult = manager.checkRuntimeKeySeqMapping(
-      e.activeBuffer, e.state, e.viewport, keyCombo, some(e.activeWindow)
-    )
+    let expandResult = manager.checkRuntimeKeySeqMapping(e, keyCombo)
     if expandResult.isSome:
       return expandResult.get
 
   case e.state.mode
   of EditorMode.Normal:
-    # Normal mode dispatch uses the same logic as the buffer/state version,
-    # delegating to handleNormalMode below.
-    return manager.handleKeyCombo(
-      e.activeBuffer, e.state, e.viewport, keyCombo, some(e.activeWindow)
-    )
+    let normalResult = manager.handleNormalMode(e, keyCombo)
+    return manager.applyNormalModePostProcessing(e, normalResult)
   of EditorMode.Insert:
     return manager.handleInsertMode(e, keyCombo)
   of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
@@ -2330,6 +2207,8 @@ proc handleKeyCombo*(
   of EditorMode.Replace:
     return manager.handleReplaceMode(e, keyCombo)
   else:
+    # Unmigrated modes (Filer, FileTree, LogViewer, Help, BufferManager, …)
+    # still rely on the legacy dispatch table.
     return manager.handleKeyCombo(
       e.activeBuffer, e.state, e.viewport, keyCombo, some(e.activeWindow)
     )
