@@ -465,21 +465,33 @@ proc fillLineBackground*(
     windowRightEdge: int,
     cursorDisplayCol: int = -1,
     textBuffer: TextBuffer = nil,
+    isEmptyLine: bool = false,
+    hasSelection: bool = false,
 ) =
   ## Fill the rest of the line to the window right edge.
   ## Uses cursor line highlight for the cursor line, normal style otherwise.
   ## When `textBuffer` is provided and the line is inside a git conflict block,
   ## the conflict background takes priority over cursor-line highlight.
+  ## When `isEmptyLine` and `hasSelection` are both true and the visual
+  ## selection covers (lineIndex, 0), column 0 is rendered with the visual
+  ## selection background so that Visual mode is visible on empty lines.
   let lineConflict =
     if textBuffer != nil and e.config.highlight.gitConflict:
       textBuffer.lineConflictKind(lineIndex)
     else:
       cmkNone
   let useTwoColor = e.config.highlight.gitConflictTwoColor
+  let selectionAtStart =
+    isEmptyLine and hasSelection and
+    e.state.visualSelection.isPositionInSelection(
+      BufferPosition(line: lineIndex, column: 0)
+    )
   var displayX = 0
   while screenX + displayX < windowRightEdge:
     let fillStyle =
-      if lineConflict != cmkNone:
+      if displayX == 0 and selectionAtStart:
+        visualStyle()
+      elif lineConflict != cmkNone:
         conflictStyleFor(lineConflict, useTwoColor)
       elif e.state.display.showCursorLine and lineIndex == cursorLine:
         cursorLineHighlightStyle()

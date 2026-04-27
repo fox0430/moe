@@ -782,6 +782,108 @@ suite "renderWindow - Visual selection":
 
     e.renderWindow(buffer, window, 0, true, true, 0)
 
+suite "renderWindow - Visual selection on empty line":
+  test "Visual mode shows selection at column 0 of empty line (no-wrap)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.lineWrap = false
+    e.state.display.showSidebar = false
+    e.state.mode = EditorMode.Visual
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+
+    # Empty buffer (single empty line)
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0
+    window.cursor.column = 0
+    window.mode = EditorMode.Visual
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    # Column 0 of empty line should be highlighted with visual selection style
+    let visStyle = visualStyle()
+    check buffer[0, 0].style.bg == visStyle.bg
+
+    # Other columns should not have visual style
+    for x in 1 ..< 40:
+      check buffer[x, 0].style.bg != visStyle.bg
+
+  test "Visual mode shows selection at column 0 of empty line (wrapped)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.lineWrap = true
+    e.state.display.showSidebar = false
+    e.state.mode = EditorMode.Visual
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+
+    # Empty buffer
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.cursor.line = 0
+    window.cursor.column = 0
+    window.mode = EditorMode.Visual
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    # Column 0 of empty line should be highlighted with visual selection style
+    let visStyle = visualStyle()
+    check buffer[0, 0].style.bg == visStyle.bg
+
+    for x in 1 ..< 40:
+      check buffer[x, 0].style.bg != visStyle.bg
+
+  test "No visual style on empty line when not in Visual mode":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.display.lineWrap = false
+    e.state.display.showSidebar = false
+    e.state.mode = EditorMode.Normal
+    e.state.visualSelection.active = false
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+    window.cursor.line = 0
+    window.cursor.column = 0
+    window.mode = EditorMode.Normal
+    window.active = true
+
+    e.renderWindow(buffer, window, 0, true, true, 0)
+
+    let visStyle = visualStyle()
+    for x in 0 ..< 40:
+      check buffer[x, 0].style.bg != visStyle.bg
+
 suite "renderWindow - Scrolling":
   test "Render window with vertical scroll":
     let e = createTestEditor()

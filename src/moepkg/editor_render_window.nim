@@ -80,6 +80,8 @@ proc renderWindowLineWrapped*(
       window.viewport.x + window.viewport.width,
       cursorDisplayCol = ctx.cursorDisplayCol,
       textBuffer = window.buffer,
+      isEmptyLine = true,
+      hasSelection = ctx.hasSelection,
     )
     inc screenY
     inc lineIndex
@@ -215,6 +217,8 @@ proc renderWindowLineNoWrap*(
       window.viewport.x + window.viewport.width,
       cursorDisplayCol = ctx.cursorDisplayCol,
       textBuffer = window.buffer,
+      isEmptyLine = (line.charLen == 0),
+      hasSelection = ctx.hasSelection,
     )
 
 proc renderWindowSidebar*(
