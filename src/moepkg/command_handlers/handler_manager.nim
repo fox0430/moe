@@ -535,21 +535,16 @@ proc handleCommandMode*(
   currentLine: int = 0,
 ): HandlerResult
 
-proc handleKeyCombo*(
-  manager: HandlerManager,
-  buffer: TextBuffer,
-  state: EditorState,
-  viewport: ViewPort,
-  keyCombo: KeyCombo,
-  window: Option[EditorWindow] = none(EditorWindow),
-): HandlerResult
-
 proc playbackMacro*(
   manager: HandlerManager, editor: Editor, keys: seq[string]
 ): HandlerResult
 
 proc handleKeyCombo*(
   manager: HandlerManager, e: Editor, keyCombo: KeyCombo
+): HandlerResult
+
+proc dispatchUnmigratedMode(
+  manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult
 
 proc checkRuntimeKeySeqMapping(
@@ -1989,7 +1984,9 @@ proc checkRuntimeKeySeqMapping(
 proc applyNormalModePostProcessing(
     manager: HandlerManager, editor: Editor, normalResult: HandlerResult
 ): HandlerResult =
-  ## Insert-Normal (Ctrl-o) bookkeeping shared by both legacy and Editor dispatch paths.
+  ## Insert-Normal (Ctrl-o) bookkeeping run after a Normal mode command
+  ## completes. Decides whether to return to Insert mode, commit the pending
+  ## Insert transaction, or pass the result through unchanged.
   let buffer = editor.activeBuffer
   let state = editor.state
 
@@ -2037,20 +2034,22 @@ proc applyNormalModePostProcessing(
 
   return normalResult
 
-proc handleKeyCombo*(
-    manager: HandlerManager,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    keyCombo: KeyCombo,
-    window: Option[EditorWindow] = none(EditorWindow),
+proc dispatchUnmigratedMode(
+    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
-  ## Dispatch unmigrated sub-state modes (Filer, FileTree, LogViewer, Help, …).
-  ## Editor-aware modes (Normal/Insert/Visual/Replace) are handled by the
-  ## Editor-based handleKeyCombo overload directly.
+  ## Dispatch sub-state modes that still take their own state objects
+  ## (Filer, FileTree, LogViewer, Help, BufferManager, …). Called from the
+  ## Editor-based handleKeyCombo for any mode it does not handle directly.
+  let buffer = editor.activeBuffer
+  let state = editor.state
+  let viewport = editor.viewport
+  let window = some(editor.activeWindow)
+
   case state.mode
   of EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
       EditorMode.VisualLine, EditorMode.Replace:
+    # Migrated modes are handled by the Editor-based handleKeyCombo and
+    # never reach this dispatcher.
     return HandlerResult(kind: hrUnhandled)
   of EditorMode.Filer:
     if window.isSome and window.get.filerState.isSome:
@@ -2181,8 +2180,9 @@ proc handleEvent*(manager: HandlerManager, e: Editor, event: Event): HandlerResu
 proc handleKeyCombo*(
     manager: HandlerManager, e: Editor, keyCombo: KeyCombo
 ): HandlerResult =
-  ## Editor-based dispatch. Migrated modes go through Editor-only paths;
-  ## unmigrated modes fall back to the legacy buffer/state dispatch.
+  ## Editor-based dispatch. Migrated modes (Normal/Insert/Visual/Replace)
+  ## are handled directly here; unmigrated sub-state modes are forwarded
+  ## to dispatchUnmigratedMode.
 
   # Complete any active scroll animation on key input (instant jump to target)
   if e.state.scrollAnimation.active:
@@ -2207,11 +2207,7 @@ proc handleKeyCombo*(
   of EditorMode.Replace:
     return manager.handleReplaceMode(e, keyCombo)
   else:
-    # Unmigrated modes (Filer, FileTree, LogViewer, Help, BufferManager, …)
-    # still rely on the legacy dispatch table.
-    return manager.handleKeyCombo(
-      e.activeBuffer, e.state, e.viewport, keyCombo, some(e.activeWindow)
-    )
+    return manager.dispatchUnmigratedMode(e, keyCombo)
 
 proc playbackMacro*(
     manager: HandlerManager, editor: Editor, keys: seq[string]
