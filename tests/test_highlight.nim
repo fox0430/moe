@@ -917,6 +917,12 @@ suite "Highlight - detectLanguage":
     check detectLanguage("/repo/.git/rebase-merge/git-rebase-todo") ==
       SourceLanguage.langGitRebaseTodo
 
+  test "detectLanguage for .gitignore":
+    check detectLanguage(".gitignore") == SourceLanguage.langGitignore
+
+  test "detectLanguage for .gitignore with path":
+    check detectLanguage("/repo/.gitignore") == SourceLanguage.langGitignore
+
   test "detectLanguage for LaTeX .tex":
     check detectLanguage("main.tex") == SourceLanguage.langLatex
 

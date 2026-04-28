@@ -152,6 +152,7 @@ type
     langDockerfile
     langFish
     langGitRebaseTodo
+    langGitignore
     langHaskell
     langHtml
     langHyprland
@@ -194,7 +195,7 @@ const
 
   sourceLanguageToStr*: array[SourceLanguage, string] = [
     "none", "Astro", "C", "COMMIT_EDITMSG", "C++", "C#", "Diff", "Dockerfile", "Fish",
-    "git-rebase-todo", "Haskell", "HTML", "Hyprland", "Java", "JavaScript",
+    "git-rebase-todo", "gitignore", "Haskell", "HTML", "Hyprland", "Java", "JavaScript",
     "JavaScriptReact", "LaTeX", "Lisp", "Log", "Markdown", "Nim", "Python", "Rust",
     "Shell", "Tcl", "Toml", "Yaml", "Json", "TypeScript", "TypeScriptReact",
   ]
@@ -292,10 +293,11 @@ proc isKeyword*(x: openArray[string], y: string): int =
 
 import
   syntax_astro, syntax_c, syntax_commit_edit_msg, syntax_cpp, syntax_csharp,
-  syntax_diff, syntax_dockerfile, syntax_git_rebase_todo, syntax_haskell, syntax_html,
-  syntax_java, syntax_javascript, syntax_latex, syntax_lisp, syntax_markdown,
-  syntax_nim, syntax_python, syntax_rust, syntax_fish, syntax_hyprland, syntax_shell,
-  syntax_tcl, syntax_yaml, syntax_toml, syntax_json, syntax_typescript, syntax_log
+  syntax_diff, syntax_dockerfile, syntax_git_rebase_todo, syntax_gitignore,
+  syntax_haskell, syntax_html, syntax_java, syntax_javascript, syntax_latex,
+  syntax_lisp, syntax_markdown, syntax_nim, syntax_python, syntax_rust, syntax_fish,
+  syntax_hyprland, syntax_shell, syntax_tcl, syntax_yaml, syntax_toml, syntax_json,
+  syntax_typescript, syntax_log
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -308,6 +310,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langDockerfile: g.dockerfileNextToken
   of langFish: g.fishNextToken
   of langGitRebaseTodo: g.gitRebaseTodoNextToken
+  of langGitignore: g.gitignoreNextToken
   of langHaskell: g.haskellNextToken
   of langHtml: g.htmlNextToken
   of langHyprland: g.hyprlandNextToken
