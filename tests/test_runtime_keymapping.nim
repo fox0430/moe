@@ -1137,7 +1137,9 @@ suite "Timeout flush - exact match with longer match pending":
     # Execute the exact match via playbackMacro
     manager.keyBindingRegistry.clearRuntimeMappingState()
     manager.keyBindingRegistry.isReplayingMapping = true
-    let r = manager.playbackMacro(buffer, state, viewport, exactMatch.get.targetKeys)
+    let r = manager.playbackMacro(
+      createTestEditor(buffer, state, viewport), exactMatch.get.targetKeys
+    )
     manager.keyBindingRegistry.isReplayingMapping = false
     check r.kind == hrHandled
     # Should still be in Insert mode (mapping target was 'a', not Escape)
@@ -1175,7 +1177,9 @@ suite "Timeout flush - exact match with longer match pending":
     # Execute via playbackMacro (mirrors handleKeyMappingTimeout logic)
     manager.keyBindingRegistry.clearRuntimeMappingState()
     manager.keyBindingRegistry.isReplayingMapping = true
-    discard manager.playbackMacro(buffer, state, viewport, exactMatch.get.targetKeys)
+    discard manager.playbackMacro(
+      createTestEditor(buffer, state, viewport), exactMatch.get.targetKeys
+    )
     manager.keyBindingRegistry.isReplayingMapping = false
 
     # playbackMacro applies mode transitions internally

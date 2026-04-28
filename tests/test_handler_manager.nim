@@ -1193,11 +1193,11 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'w' (word forward)
     let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, wKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), wKey)
 
-    check result.kind == hrHandled
-    check result.modeTransition.isSome
-    check result.modeTransition.get == EditorMode.Insert
+    check r.kind == hrHandled
+    check r.modeTransition.isSome
+    check r.modeTransition.get == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
 
@@ -1213,10 +1213,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'x' (delete char)
     let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, xKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), xKey)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.Insert
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
     # 'h' was deleted (cursor at 0)
@@ -1233,10 +1233,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     manager.ctrlOToNormal(buffer, state)
 
     # Escape should return to Insert (Escape in Normal = no-op, counted as command)
-    let result = manager.handleKeyCombo(buffer, state, viewport, escKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), escKey)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.Insert
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.Insert
     check not state.insertNormalMode
 
   test "Pending operator (d) waits and does not return to Insert":
@@ -1251,7 +1251,8 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'd' (pending operator - should not return to Insert yet)
     let dKey = KeyCombo(isSpecial: false, char: "d", modifiers: {})
-    let result1 = manager.handleKeyCombo(buffer, state, viewport, dKey)
+    let result1 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), dKey)
 
     # Should stay in Normal mode with insertNormalMode still set
     check result1.kind == hrHandled
@@ -1270,12 +1271,12 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press ':' (command overlay)
     let colonKey = KeyCombo(isSpecial: false, char: ":", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, colonKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), colonKey)
 
     # Should open overlay, not return to Insert yet
-    check result.kind == hrHandled
-    check result.overlayTransition.isSome
-    check result.overlayTransition.get == okCommand
+    check r.kind == hrHandled
+    check r.overlayTransition.isSome
+    check r.overlayTransition.get == okCommand
     # insertNormalMode should still be set (overlay handles return)
     check state.insertNormalMode
 
@@ -1291,11 +1292,11 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press '/' (search overlay)
     let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, slashKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), slashKey)
 
-    check result.kind == hrHandled
-    check result.overlayTransition.isSome
-    check result.overlayTransition.get == okSearch
+    check r.kind == hrHandled
+    check r.overlayTransition.isSome
+    check r.overlayTransition.get == okSearch
     check state.insertNormalMode
 
   test "'i' during insert-normal clears flag and stays in Insert":
@@ -1310,10 +1311,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'i' (enter Insert mode)
     let iKey = KeyCombo(isSpecial: false, char: "i", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, iKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), iKey)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.Insert
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
 
@@ -1329,7 +1330,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'o' (open line below) - should not double-beginTransaction
     let oKey = KeyCombo(isSpecial: false, char: "o", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, oKey)
+    let result = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), oKey)
 
     check result.kind == hrHandled
     check result.modeTransition.get == EditorMode.Insert
@@ -1349,10 +1350,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'v' (visual mode)
     let vKey = KeyCombo(isSpecial: false, char: "v", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, vKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), vKey)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.Visual
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.Visual
     check not state.insertNormalMode
     # Transaction should be committed (insert-normal consumed)
     check not buffer.inTransaction
@@ -1370,10 +1371,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'R' (Replace mode)
     let bigRKey = KeyCombo(isSpecial: false, char: "R", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, bigRKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), bigRKey)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.Replace
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.Replace
     check not state.insertNormalMode
     # A fresh transaction should be open for Replace mode
     check buffer.inTransaction
@@ -1400,7 +1401,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # After returning from insert-normal (w motion), still preserved
     let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
-    discard manager.handleKeyCombo(buffer, state, viewport, wKey)
+    discard manager.handleKeyCombo(createTestEditor(buffer, state, viewport), wKey)
 
     check state.editState.insertModeStartPos == startPos
 
@@ -1419,8 +1420,8 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     # Ctrl-O → 'w' (move word) → back to Insert
     manager.ctrlOToNormal(buffer, state)
     let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, wKey)
-    state.mode = result.modeTransition.get # Insert
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), wKey)
+    state.mode = r.modeTransition.get # Insert
 
     # Type 'y' in Insert mode
     let yKey = KeyCombo(isSpecial: false, char: "y", modifiers: {})
@@ -1448,14 +1449,16 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press '2' (numeric prefix) - should NOT return to Insert
     let twoKey = KeyCombo(isSpecial: false, char: "2", modifiers: {})
-    let result1 = manager.handleKeyCombo(buffer, state, viewport, twoKey)
+    let result1 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), twoKey)
 
     check result1.kind == hrHandled
     check state.insertNormalMode # still in insert-normal, waiting for command
 
     # Press 'w' to complete "2w" (move 2 words)
     let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
-    let result2 = manager.handleKeyCombo(buffer, state, viewport, wKey)
+    let result2 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), wKey)
 
     check result2.kind == hrHandled
     check result2.modeTransition.get == EditorMode.Insert
@@ -1478,13 +1481,15 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'g' (first key of 'gg' sequence) - should NOT return to Insert
     let gKey = KeyCombo(isSpecial: false, char: "g", modifiers: {})
-    let result1 = manager.handleKeyCombo(buffer, state, viewport, gKey)
+    let result1 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), gKey)
 
     check result1.kind == hrHandled
     check state.insertNormalMode # still waiting for second key
 
     # Press 'g' again to complete 'gg' (go to first line)
-    let result2 = manager.handleKeyCombo(buffer, state, viewport, gKey)
+    let result2 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), gKey)
 
     check result2.kind == hrHandled
     check result2.modeTransition.get == EditorMode.Insert
@@ -1503,9 +1508,9 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press Ctrl-W (window command prefix, first key of "C-w k" sequence)
     let ctrlW = KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl})
-    let result = manager.handleKeyCombo(buffer, state, viewport, ctrlW)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), ctrlW)
 
-    check result.kind == hrHandled
+    check r.kind == hrHandled
     check state.insertNormalMode # still waiting for window subcommand
 
   test "Non-hrHandled result (hrNextWindow) clears insert-normal state":
@@ -1522,13 +1527,13 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press Ctrl-W (first key of sequence)
     let ctrlW = KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl})
-    discard manager.handleKeyCombo(buffer, state, viewport, ctrlW)
+    discard manager.handleKeyCombo(createTestEditor(buffer, state, viewport), ctrlW)
 
     # Press 'k' to complete "Ctrl-W k" (window-next → hrNextWindow)
     let kKey = KeyCombo(isSpecial: false, char: "k", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, kKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), kKey)
 
-    check result.kind == hrNextWindow
+    check r.kind == hrNextWindow
     check not state.insertNormalMode # cleaned up
     check not buffer.inTransaction # transaction committed
     check state.editState.insertModeStartPos.isNone
@@ -1545,14 +1550,14 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'g' (first key of 'gt' sequence)
     let gKey = KeyCombo(isSpecial: false, char: "g", modifiers: {})
-    discard manager.handleKeyCombo(buffer, state, viewport, gKey)
+    discard manager.handleKeyCombo(createTestEditor(buffer, state, viewport), gKey)
     check state.insertNormalMode # still waiting
 
     # Press 't' to complete 'gt' (buffer-next-tab → hrBufferNext)
     let tKey = KeyCombo(isSpecial: false, char: "t", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, tKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), tKey)
 
-    check result.kind == hrBufferNext
+    check r.kind == hrBufferNext
     check not state.insertNormalMode # cleaned up
     check not buffer.inTransaction # transaction committed
 
@@ -1568,13 +1573,13 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'Z' (first key of 'ZZ' sequence)
     let bigZKey = KeyCombo(isSpecial: false, char: "Z", modifiers: {})
-    discard manager.handleKeyCombo(buffer, state, viewport, bigZKey)
+    discard manager.handleKeyCombo(createTestEditor(buffer, state, viewport), bigZKey)
     check state.insertNormalMode # still waiting
 
     # Press 'Z' again to complete 'ZZ' (save-and-quit → hrSaveAndQuit)
-    let result = manager.handleKeyCombo(buffer, state, viewport, bigZKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), bigZKey)
 
-    check result.kind == hrSaveAndQuit
+    check r.kind == hrSaveAndQuit
     check not state.insertNormalMode # cleaned up
     check not buffer.inTransaction # transaction committed
 
@@ -1591,10 +1596,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     # Press 'u' (undo) when there's nothing to undo (only current transaction)
     # This should return hrError but NOT clear insert-normal
     let uKey = KeyCombo(isSpecial: false, char: "u", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, uKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), uKey)
 
     # Error should preserve insert-normal state so user can try another command
-    if result.kind == hrError:
+    if r.kind == hrError:
       check state.insertNormalMode
       check buffer.inTransaction
 
@@ -1612,10 +1617,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     # In moe, unbound keys in Normal mode are treated as handled (no-op),
     # so insert-normal considers the "command" complete and returns to Insert
     let ctrlQ = KeyCombo(isSpecial: false, char: "q", modifiers: {kmCtrl})
-    let result = manager.handleKeyCombo(buffer, state, viewport, ctrlQ)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), ctrlQ)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.Insert
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.Insert
     check not state.insertNormalMode
 
   test "'a' (append) during insert-normal clears flag and stays in Insert":
@@ -1630,10 +1635,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'a' (textobject-around, which enters Insert/append when no pending op)
     let aKey = KeyCombo(isSpecial: false, char: "a", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, aKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), aKey)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.Insert
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
 
@@ -1649,13 +1654,15 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'd' (pending operator)
     let dKey = KeyCombo(isSpecial: false, char: "d", modifiers: {})
-    let result1 = manager.handleKeyCombo(buffer, state, viewport, dKey)
+    let result1 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), dKey)
     check result1.kind == hrHandled
     check state.insertNormalMode
 
     # Press 'w' (motion to complete dw)
     let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
-    let result2 = manager.handleKeyCombo(buffer, state, viewport, wKey)
+    let result2 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), wKey)
 
     check result2.kind == hrHandled
     check result2.modeTransition.get == EditorMode.Insert
@@ -1679,7 +1686,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     # First Ctrl-O → 'w' → back to Insert
     manager.ctrlOToNormal(buffer, state)
     let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
-    let r1 = manager.handleKeyCombo(buffer, state, viewport, wKey)
+    let r1 = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), wKey)
     check r1.modeTransition.get == EditorMode.Insert
     state.mode = EditorMode.Insert
 
@@ -1689,7 +1696,7 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Second Ctrl-O → 'w' → back to Insert
     manager.ctrlOToNormal(buffer, state)
-    let r2 = manager.handleKeyCombo(buffer, state, viewport, wKey)
+    let r2 = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), wKey)
     check r2.modeTransition.get == EditorMode.Insert
     state.mode = EditorMode.Insert
 
@@ -1719,15 +1726,15 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'd' (pending operator)
     let dKey = KeyCombo(isSpecial: false, char: "d", modifiers: {})
-    discard manager.handleKeyCombo(buffer, state, viewport, dKey)
+    discard manager.handleKeyCombo(createTestEditor(buffer, state, viewport), dKey)
     check state.insertNormalMode
 
     # Press 'i' (textobject-inner → sets pendingTextObject)
     let iKey = KeyCombo(isSpecial: false, char: "i", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, iKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), iKey)
 
     # Should still be waiting for text object kind (w, ", (, etc.)
-    check result.kind == hrHandled
+    check r.kind == hrHandled
     check state.insertNormalMode
     check buffer.inTransaction
 
@@ -1746,10 +1753,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     manager.ctrlOToNormal(buffer, state)
 
     let bigJKey = KeyCombo(isSpecial: false, char: "J", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, bigJKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), bigJKey)
 
     # J fails because it tries beginTransaction while one is already open
-    check result.kind == hrError
+    check r.kind == hrError
     # insert-normal state is preserved so user can try another command
     check state.insertNormalMode
     check buffer.inTransaction
@@ -1766,7 +1773,8 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press '"' (register-select, ctOperatorPending - waits for char)
     let quoteKey = KeyCombo(isSpecial: false, char: "\"", modifiers: {})
-    let result1 = manager.handleKeyCombo(buffer, state, viewport, quoteKey)
+    let result1 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), quoteKey)
 
     # Should stay in insert-normal (waiting for register name char)
     check result1.kind == hrHandled
@@ -1774,7 +1782,8 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'a' to complete '"a' (register select)
     let aKey = KeyCombo(isSpecial: false, char: "a", modifiers: {})
-    let result2 = manager.handleKeyCombo(buffer, state, viewport, aKey)
+    let result2 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), aKey)
 
     # pendingRegister is now set, still waiting for the actual command
     check result2.kind == hrHandled
@@ -1794,9 +1803,9 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'q' (macro.record - sets waitingForRegister)
     let qKey = KeyCombo(isSpecial: false, char: "q", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, qKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), qKey)
 
-    check result.kind == hrHandled
+    check r.kind == hrHandled
     check state.insertNormalMode # still waiting for register name
     check state.macroState.waitingForRegister
 
@@ -1812,10 +1821,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'V' (visual-line mode)
     let bigVKey = KeyCombo(isSpecial: false, char: "V", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, bigVKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), bigVKey)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.VisualLine
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.VisualLine
     check not state.insertNormalMode
     check not buffer.inTransaction
     check state.editState.insertModeStartPos.isNone
@@ -1833,10 +1842,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press Ctrl-V (visual-block mode)
     let ctrlV = KeyCombo(isSpecial: false, char: "v", modifiers: {kmCtrl})
-    let result = manager.handleKeyCombo(buffer, state, viewport, ctrlV)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), ctrlV)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.VisualBlock
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.VisualBlock
     check not state.insertNormalMode
     check not buffer.inTransaction
     check state.editState.insertModeStartPos.isNone
@@ -1853,11 +1862,12 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press '?' (backward search overlay)
     let questionKey = KeyCombo(isSpecial: false, char: "?", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, questionKey)
+    let r =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), questionKey)
 
-    check result.kind == hrHandled
-    check result.overlayTransition.isSome
-    check result.overlayTransition.get == okSearch
+    check r.kind == hrHandled
+    check r.overlayTransition.isSome
+    check r.overlayTransition.get == okSearch
     check state.insertNormalMode
 
   test "substituteContext cleared on non-Insert mode transition":
@@ -1875,9 +1885,9 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'v' (Visual mode - triggers non-Insert transition cleanup)
     let vKey = KeyCombo(isSpecial: false, char: "v", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, vKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), vKey)
 
-    check result.modeTransition.get == EditorMode.Visual
+    check r.modeTransition.get == EditorMode.Visual
     check not state.insertNormalMode
     check state.editState.substituteContext.isNone
 
@@ -1893,20 +1903,20 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'd' (pending operator)
     let dKey = KeyCombo(isSpecial: false, char: "d", modifiers: {})
-    discard manager.handleKeyCombo(buffer, state, viewport, dKey)
+    discard manager.handleKeyCombo(createTestEditor(buffer, state, viewport), dKey)
     check state.insertNormalMode
 
     # Press 'i' (textobject-inner → sets pendingTextObject)
     let iKey = KeyCombo(isSpecial: false, char: "i", modifiers: {})
-    discard manager.handleKeyCombo(buffer, state, viewport, iKey)
+    discard manager.handleKeyCombo(createTestEditor(buffer, state, viewport), iKey)
     check state.insertNormalMode
 
     # Press 'w' (word text object) to complete "diw"
     let wKey = KeyCombo(isSpecial: false, char: "w", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, wKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), wKey)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.Insert
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
     # "hello" should be deleted
@@ -1927,11 +1937,13 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'd' twice (dd = delete line)
     let dKey = KeyCombo(isSpecial: false, char: "d", modifiers: {})
-    let result1 = manager.handleKeyCombo(buffer, state, viewport, dKey)
+    let result1 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), dKey)
     check result1.kind == hrHandled
     check state.insertNormalMode
 
-    let result2 = manager.handleKeyCombo(buffer, state, viewport, dKey)
+    let result2 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), dKey)
     # dd fails because it tries beginTransaction while one is already open
     check result2.kind == hrError
     check state.insertNormalMode # preserved for retry
@@ -1949,10 +1961,12 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'y' twice (yy = yank line)
     let yKey = KeyCombo(isSpecial: false, char: "y", modifiers: {})
-    let result1 = manager.handleKeyCombo(buffer, state, viewport, yKey)
+    let result1 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), yKey)
     check state.insertNormalMode
 
-    let result2 = manager.handleKeyCombo(buffer, state, viewport, yKey)
+    let result2 =
+      manager.handleKeyCombo(createTestEditor(buffer, state, viewport), yKey)
     check result2.kind == hrHandled
     check result2.modeTransition.get == EditorMode.Insert
     check not state.insertNormalMode
@@ -1972,10 +1986,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     manager.ctrlOToNormal(buffer, state)
 
     let bigGKey = KeyCombo(isSpecial: false, char: "G", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, bigGKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), bigGKey)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.Insert
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.Insert
     check not state.insertNormalMode
     check state.cursor.line == 2
 
@@ -1993,10 +2007,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     manager.ctrlOToNormal(buffer, state)
 
     let pKey = KeyCombo(isSpecial: false, char: "p", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, pKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), pKey)
 
-    check result.kind == hrHandled
-    check result.modeTransition.get == EditorMode.Insert
+    check r.kind == hrHandled
+    check r.modeTransition.get == EditorMode.Insert
     check not state.insertNormalMode
     check buffer.inTransaction
 
@@ -2011,10 +2025,10 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
     manager.ctrlOToNormal(buffer, state)
 
     let uKey = KeyCombo(isSpecial: false, char: "u", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, uKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), uKey)
 
     # Undo within an open transaction returns error
-    if result.kind == hrError:
+    if r.kind == hrError:
       check state.insertNormalMode # preserved for retry
       check buffer.inTransaction
 
@@ -2049,14 +2063,14 @@ suite "HandlerManager - Ctrl+O Insert-Normal mode":
 
     # Press 'Z' (first key of 'ZQ' sequence)
     let bigZKey = KeyCombo(isSpecial: false, char: "Z", modifiers: {})
-    discard manager.handleKeyCombo(buffer, state, viewport, bigZKey)
+    discard manager.handleKeyCombo(createTestEditor(buffer, state, viewport), bigZKey)
     check state.insertNormalMode
 
     # Press 'Q' to complete 'ZQ' (quit without saving → hrQuit)
     let bigQKey = KeyCombo(isSpecial: false, char: "Q", modifiers: {})
-    let result = manager.handleKeyCombo(buffer, state, viewport, bigQKey)
+    let r = manager.handleKeyCombo(createTestEditor(buffer, state, viewport), bigQKey)
 
-    check result.kind == hrQuit
+    check r.kind == hrQuit
     check not state.insertNormalMode
     check not buffer.inTransaction
 
