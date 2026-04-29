@@ -34,18 +34,8 @@ import ../src/moepkg/command_handlers/command_handler
 import ../src/moepkg/command_handlers/handler_manager {.all.}
 import ../src/moepkg/command_handlers/visual_handler {.all.}
 import ../src/moepkg/command_handlers/insert_handler {.all.}
-from ../src/moepkg/window_manager import EditorWindowManager
 from ../src/moepkg/editor_types import Editor
-
-proc createTestEditor(buf: TextBuffer, state: EditorState, viewport: ViewPort): Editor =
-  state.activeWindow.buffer = buf
-  Editor(
-    textBuffer: buf,
-    state: state,
-    viewport: viewport,
-    windowManager:
-      EditorWindowManager(windows: @[state.activeWindow], activeWindowIndex: 0),
-  )
+import editor_test_helper
 
 suite "parseKeyString":
   test "Single character key":

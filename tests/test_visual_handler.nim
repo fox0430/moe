@@ -29,9 +29,9 @@ import ../src/moepkg/motion {.all.}
 import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/config {.all.}
 import ../src/moepkg/registers {.all.}
-import ../src/moepkg/window_manager {.all.}
 import ../src/moepkg/editor_types {.all.}
 import ../src/moepkg/command_handlers/visual_handler {.all.}
+import editor_test_helper
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
@@ -92,17 +92,6 @@ proc createTestState(): EditorState =
 proc createTestViewport(): ViewPort =
   ## Create a minimal viewport for testing
   ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
-
-proc createTestEditor(buf: TextBuffer, state: EditorState, viewport: ViewPort): Editor =
-  ## Create a minimal Editor wrapping the given buffer/state/viewport for testing
-  state.activeWindow.buffer = buf
-  Editor(
-    textBuffer: buf,
-    state: state,
-    viewport: viewport,
-    windowManager:
-      EditorWindowManager(windows: @[state.activeWindow], activeWindowIndex: 0),
-  )
 
 proc createTestHandler(buf: TextBuffer): VisualModeHandler =
   ## Create a VisualModeHandler for testing

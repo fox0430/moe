@@ -32,19 +32,9 @@ import ../src/moepkg/motion {.all.}
 import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/config {.all.}
 import ../src/moepkg/registers {.all.}
-import ../src/moepkg/window_manager {.all.}
 import ../src/moepkg/editor_types except Command
 import ../src/moepkg/command_handlers/normal_handler {.all.}
-
-proc createTestEditor(buf: TextBuffer, state: EditorState, viewport: ViewPort): Editor =
-  state.activeWindow.buffer = buf
-  Editor(
-    textBuffer: buf,
-    state: state,
-    viewport: viewport,
-    windowManager:
-      EditorWindowManager(windows: @[state.activeWindow], activeWindowIndex: 0),
-  )
+import editor_test_helper
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
