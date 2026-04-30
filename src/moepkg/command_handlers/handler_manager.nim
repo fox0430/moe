@@ -19,401 +19,42 @@
 
 ## Unified handler manager
 ##
-## This module provides a unified interface for all mode-specific handlers,
-## maintaining the shared infrastructure while delegating to specialized handlers.
+## Top-level orchestrator for the dispatcher layer. Owns the HandlerManager
+## constructor, the Normal-mode dispatcher (with its post-processing helper),
+## the runtime key-sequence mapping precheck, the macro playback driver, and
+## the public Editor-based dispatch entry points (handleEvent / handleKeyCombo).
+##
+## Per-mode result translation (Insert, Visual, Replace, Command, Search and
+## the sub-state modes) lives in mode_dispatchers.nim. Variant types and small
+## getters live in handler_result.nim. Both are re-exported from this module
+## so external callers (`editor.nim`, `handler.nim`, tests) see the same
+## public surface as before.
 
-import std/[options, strutils, tables, unicode]
+import std/[options, tables]
 
 import pkg/[results, celina]
 
 import
   ../[
     types, buffer, modes, motion, key_bindings, command_line, command_config,
-    command_registry, config, string_builder, filer, recent_file_mode, lsp_integration,
-    logger,
+    command_registry, config, lsp_integration, logger,
   ]
-import ../lsp/protocol/types as lspTypes
 import ../editor_types
 import
-  handler_types, normal_handler, insert_handler, insert_commands, command_handler,
-  visual_handler, replace_handler, filer_handler, filetree_handler, log_viewer_handler,
-  help_handler, buffer_manager_handler, bookmark_manager_handler,
-  backup_manager_handler, diff_viewer_handler, recent_file_mode_handler, debug_handler,
-  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler,
-  terminal_handler
+  handler_types, handler_result, mode_dispatchers, normal_handler, insert_handler,
+  insert_commands, command_handler, visual_handler, replace_handler, filer_handler,
+  filetree_handler, log_viewer_handler, help_handler, buffer_manager_handler,
+  bookmark_manager_handler, backup_manager_handler, diff_viewer_handler,
+  recent_file_mode_handler, debug_handler, config_handler, references_handler,
+  documentsymbol_handler, callhierarchy_handler, terminal_handler
 
 export
-  handler_types, normal_handler, insert_handler, insert_commands, command_handler,
-  visual_handler, replace_handler, filer_handler, filetree_handler, log_viewer_handler,
-  help_handler, buffer_manager_handler, bookmark_manager_handler,
-  backup_manager_handler, diff_viewer_handler, recent_file_mode_handler, debug_handler,
-  config_handler, references_handler, documentsymbol_handler, callhierarchy_handler,
-  terminal_handler
-
-type
-  HandlerResultKind* = enum
-    hrHandled # Command was handled successfully
-    hrQuit # Application should quit
-    hrCquit # Application should quit with non-zero exit code
-    hrCloseWindow # Close current window
-    hrGotoLine # Jump to specific line
-    hrVSplit # Vertical split window
-    hrHSplit # Horizontal split window
-    hrNew # Create new empty buffer in horizontal split
-    hrVnew # Create new empty buffer in vertical split
-    hrEnew # Create new empty buffer
-    hrEdit # Edit/open file in current window
-    hrSetBoolOption # Set boolean option
-    hrSetIntOption # Set integer option
-    hrSetFloatOption # Set float option
-    hrClearSearchHighlight # Clear search highlighting
-    hrSave # Save file
-    hrSaveAndQuit # Save file and quit
-    hrBufferNext # Switch to next buffer
-    hrBufferPrev # Switch to previous buffer
-    hrBufferFirst # Switch to first buffer
-    hrBufferLast # Switch to last buffer
-    hrBuffer # Switch to buffer by number or name
-    hrJumpToBuffer # Jump to specific buffer and position (Ctrl-o/Ctrl-i)
-    hrBufferDelete # Delete current buffer
-    hrStripWhitespace # Remove trailing whitespace
-    hrFilerOpenFile # Open file from filer
-    hrFilerOpenFileVSplit # Open file from filer in vertical split
-    hrFilerOpenFileHSplit # Open file from filer in horizontal split
-    hrFilerDeleteFile # Delete file/directory from filer
-    hrFilerShowInfo # Show file information
-    hrFilerQuit # Close filer and return to previous mode
-    hrEnterFiler # Enter filer mode with optional path
-    hrLogViewerQuit # Close log viewer window
-    hrLogViewerRefresh # Refresh log viewer content
-    hrEnterLogViewer # Enter log viewer mode
-    hrHelpViewerQuit # Close help viewer and return to previous mode
-    hrEnterHelpViewer # Enter help viewer mode
-    hrQuickRun # Run the current buffer
-    hrBufferManagerSelectBuffer # Select and switch to a buffer
-    hrBufferManagerDeleteBuffer # Delete a buffer
-    hrBufferManagerQuit # Close buffer manager and return to previous mode
-    hrEnterBufferManager # Enter buffer manager mode
-    hrBookmarkManagerJump # Jump to selected bookmark
-    hrBookmarkManagerDelete # Delete selected bookmark
-    hrBookmarkManagerQuit # Close bookmark manager and return to previous mode
-    hrEnterBookmarkManager # Enter bookmark manager mode
-    hrBackupManagerRestore # Restore a backup file
-    hrBackupManagerDelete # Delete a backup file
-    hrBackupManagerOpenDiff # Open diff viewer for a backup
-    hrBackupManagerRefresh # Refresh backup list
-    hrBackupManagerQuit # Close backup manager and return to previous mode
-    hrEnterBackupManager # Enter backup manager mode
-    hrDiffViewerQuit # Close diff viewer and return to previous mode
-    hrEnterDiffViewer # Enter diff viewer mode
-    hrRecentFile # Enter recent file selection mode
-    hrRecentFileOpenFile # Open file from recent file mode
-    hrRecentFileQuit # Quit recent file mode
-    hrNextWindow # Move to next window
-    hrPrevWindow # Move to previous window
-    hrIncreaseWindowHeight # Increase active window height
-    hrDecreaseWindowHeight # Decrease active window height
-    hrIncreaseWindowWidth # Increase active window width
-    hrDecreaseWindowWidth # Decrease active window width
-    hrEqualizeWindows # Equalize all window sizes
-    hrSwapWindow # Swap active window with next
-    hrLspGotoDefinition # Execute LSP goto definition
-    hrLspGotoDeclaration # Execute LSP goto declaration
-    hrLspFindReferences # Execute LSP find references
-    hrLspCodeLensExecute # Execute CodeLens on current line
-    hrLspCallHierarchyIncoming # Execute LSP incoming calls
-    hrLspCallHierarchyOutgoing # Execute LSP outgoing calls
-    hrLspTypeDefinition # Execute LSP goto type definition
-    hrLspImplementation # Execute LSP goto implementation
-    hrLspHover # Execute LSP hover
-    hrLspRename # Execute LSP rename
-    hrLspSelectionRange # Execute LSP selection range
-    hrLspDocumentLink # Execute LSP document link
-    hrShellCommand # Execute shell command
-    hrBackground # Pause editor and show terminal (:bg)
-    hrJumpList # Show jump list (:ju, :jump)
-    hrChanges # Show change list (:changes)
-    hrConflictNext # Jump to next git conflict block (:conflictnext)
-    hrConflictPrev # Jump to previous git conflict block (:conflictprev)
-    hrBuild # Build current buffer (:build)
-    hrDebug # Open debug mode (:debug)
-    hrDebugViewerQuit # Close debug viewer
-    hrConfig # Open configuration mode (:conf)
-    hrConfigQuit # Close config mode and return to previous mode
-    hrConfigSaveConfig # Save configuration to file
-    hrPutConfigFile # Write sample config file (:putConfigFile)
-    hrMan # Show manual page (:man)
-    hrTheme # Change color theme (:theme)
-    hrLspLog # Open LSP log viewer (:lspLog)
-    hrLspFormat # LSP document formatting (:lspFormat)
-    hrLspRestart # Restart LSP server (:lspRestart)
-    hrLspFold # LSP folding range (:lspFold)
-    hrLspExecuteCommand # LSP execute command (:lspExeCommand)
-    hrSubstitute # Search and replace (:s)
-    hrDeleteLines # Delete lines (:d, :%d)
-    hrReferencesQuit # Close references viewer and return to previous mode
-    hrReferencesJumpTo # Jump to the selected reference
-    hrEnterReferences # Enter references viewer mode
-    hrDocumentSymbolQuit # Close document symbol viewer and return to previous mode
-    hrDocumentSymbolJumpTo # Jump to the selected symbol
-    hrEnterDocumentSymbol # Enter document symbol viewer mode
-    hrCallHierarchyQuit # Close call hierarchy viewer and return to previous mode
-    hrCallHierarchyJumpTo # Jump to the selected call hierarchy item
-    hrCallHierarchyRequestIncoming # Request incoming calls for selected item
-    hrCallHierarchyRequestOutgoing # Request outgoing calls for selected item
-    hrEnterCallHierarchy # Enter call hierarchy viewer mode
-    hrEnterTerminal # Enter terminal mode
-    hrTerminalQuit # Close terminal and return to previous mode
-    hrExecCommand # Execute a Command mode command directly (@:)
-    hrOnlyWindow # Close all other windows (:only)
-    hrEnterFileTree # Enter/toggle fileTree sidebar
-    hrFileTreeOpenFile # Open file from fileTree
-    hrFileTreeQuit # Close fileTree sidebar
-    hrOpenUri # Open URI/file under cursor
-    hrUnhandled # Command was not handled
-    hrError # Error occurred
-
-  HandlerResult* = object ## Unified result type for all handlers
-    case kind*: HandlerResultKind
-    of hrHandled:
-      modeTransition*: Option[EditorMode]
-      overlayTransition*: Option[OverlayKind]
-      statusMessage*: string
-    of hrQuit:
-      shouldQuit*: bool
-    of hrCquit:
-      discard
-    of hrCloseWindow:
-      forceClose*: bool
-    of hrGotoLine:
-      lineNumber*: int
-    of hrVSplit:
-      vsplitFilename*: Option[string]
-    of hrHSplit:
-      hsplitFilename*: Option[string]
-    of hrNew:
-      discard
-    of hrVnew:
-      discard
-    of hrEnew:
-      discard
-    of hrEdit:
-      editFilename*: Option[string]
-      forceEdit*: bool
-    of hrSetBoolOption:
-      boolOption*: BoolSettingOption
-      boolValue*: bool
-    of hrSetIntOption:
-      intOption*: IntSettingOption
-      intValue*: int
-    of hrSetFloatOption:
-      floatOption*: FloatSettingOption
-      floatValue*: float
-    of hrClearSearchHighlight:
-      discard
-    of hrSave:
-      saveFilename*: Option[string]
-      forceSave*: bool
-    of hrSaveAndQuit:
-      saveAndQuitFilename*: Option[string]
-      forceQuitAfterSave*: bool
-    of hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast:
-      discard
-    of hrBuffer:
-      bufferArg*: string # Buffer number or name
-    of hrJumpToBuffer:
-      jumpBufferIndex*: int # Target buffer index
-      jumpLine*: int # Target line number
-      jumpColumn*: int # Target column number
-    of hrBufferDelete:
-      forceBufferDelete*: bool
-    of hrStripWhitespace:
-      strippedLineCount*: int
-    of hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit:
-      filerFilePath*: string
-    of hrFilerDeleteFile:
-      filerDeletePath*: string
-    of hrFilerShowInfo:
-      filerFileInfo*: string
-    of hrFilerQuit:
-      discard
-    of hrEnterFiler:
-      enterFilerPath*: Option[string]
-    of hrLogViewerQuit:
-      discard
-    of hrLogViewerRefresh:
-      discard
-    of hrEnterLogViewer:
-      discard
-    of hrHelpViewerQuit:
-      discard
-    of hrEnterHelpViewer:
-      discard
-    of hrQuickRun:
-      discard
-    of hrBufferManagerSelectBuffer:
-      selectBufferIndex*: int
-    of hrBufferManagerDeleteBuffer:
-      deleteBufferIdx*: int
-    of hrBufferManagerQuit:
-      discard
-    of hrEnterBufferManager:
-      discard
-    of hrBookmarkManagerJump:
-      bookmarkJumpBufferIndex*: int
-      bookmarkJumpLine*: int
-    of hrBookmarkManagerDelete:
-      bookmarkDeleteEntryIndex*: int
-    of hrBookmarkManagerQuit:
-      discard
-    of hrEnterBookmarkManager:
-      discard
-    of hrBackupManagerRestore:
-      restoreBackupIndex*: int
-    of hrBackupManagerDelete:
-      deleteBackupIndex*: int
-    of hrBackupManagerOpenDiff:
-      diffBackupIndex*: int
-    of hrBackupManagerRefresh:
-      discard
-    of hrBackupManagerQuit:
-      discard
-    of hrEnterBackupManager:
-      discard
-    of hrDiffViewerQuit:
-      discard
-    of hrEnterDiffViewer:
-      diffSourcePath*: string
-      diffBackupPath*: string
-    of hrRecentFile:
-      discard
-    of hrRecentFileOpenFile:
-      recentFilePath*: string
-    of hrRecentFileQuit:
-      discard
-    of hrNextWindow, hrPrevWindow:
-      discard
-    of hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
-        hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow:
-      discard
-    of hrLspGotoDefinition:
-      discard
-    of hrLspGotoDeclaration:
-      discard
-    of hrLspFindReferences:
-      discard
-    of hrLspCodeLensExecute:
-      discard
-    of hrLspCallHierarchyIncoming:
-      discard
-    of hrLspCallHierarchyOutgoing:
-      discard
-    of hrLspTypeDefinition:
-      discard
-    of hrLspImplementation:
-      discard
-    of hrLspHover:
-      discard
-    of hrLspRename:
-      hrLspNewName*: string
-    of hrLspSelectionRange:
-      discard
-    of hrLspDocumentLink:
-      discard
-    of hrShellCommand:
-      shellCommand*: string
-    of hrBackground:
-      discard
-    of hrJumpList:
-      discard
-    of hrChanges:
-      discard
-    of hrConflictNext:
-      discard
-    of hrConflictPrev:
-      discard
-    of hrBuild:
-      discard
-    of hrDebug:
-      discard
-    of hrDebugViewerQuit:
-      discard
-    of hrConfig:
-      discard
-    of hrConfigQuit:
-      discard
-    of hrConfigSaveConfig:
-      discard
-    of hrPutConfigFile:
-      discard
-    of hrMan:
-      hrManPage*: string
-    of hrTheme:
-      hrThemeName*: string
-    of hrLspLog:
-      discard
-    of hrLspFormat:
-      discard
-    of hrLspRestart:
-      discard
-    of hrLspFold:
-      discard
-    of hrLspExecuteCommand:
-      hrLspCommand*: string
-      hrLspCommandArgs*: seq[string]
-    of hrSubstitute:
-      hrSubstituteCount*: int
-    of hrDeleteLines:
-      hrDeletedText*: string
-      hrDeletedLineCount*: int
-    of hrReferencesQuit:
-      discard
-    of hrReferencesJumpTo:
-      jumpToPath*: string
-      jumpToLine*: int
-      jumpToColumn*: int
-    of hrEnterReferences:
-      discard
-    of hrDocumentSymbolQuit:
-      discard
-    of hrDocumentSymbolJumpTo:
-      symbolLine*: int
-      symbolColumn*: int
-    of hrEnterDocumentSymbol:
-      discard
-    of hrCallHierarchyQuit:
-      discard
-    of hrCallHierarchyJumpTo:
-      callHierarchyJumpUri*: string
-      callHierarchyJumpLine*: int
-      callHierarchyJumpColumn*: int
-    of hrCallHierarchyRequestIncoming:
-      callHierarchyIncomingItem*: lspTypes.CallHierarchyItem
-    of hrCallHierarchyRequestOutgoing:
-      callHierarchyOutgoingItem*: lspTypes.CallHierarchyItem
-    of hrEnterCallHierarchy:
-      discard
-    of hrEnterTerminal:
-      enterTerminalCommand*: string # Optional command (empty = default shell)
-    of hrTerminalQuit:
-      discard
-    of hrExecCommand:
-      execCommandText*: string # Command text (without leading ":")
-      execCommandCount*: int # Number of times to execute
-    of hrOnlyWindow:
-      discard
-    of hrEnterFileTree:
-      enterFileTreePath*: Option[string]
-    of hrFileTreeOpenFile:
-      fileTreeFilePath*: string
-    of hrFileTreeQuit:
-      discard
-    of hrOpenUri:
-      openUri*: string
-    of hrUnhandled:
-      discard
-    of hrError:
-      errorMessage*: string
+  handler_types, handler_result, mode_dispatchers, normal_handler, insert_handler,
+  insert_commands, command_handler, visual_handler, replace_handler, filer_handler,
+  filetree_handler, log_viewer_handler, help_handler, buffer_manager_handler,
+  bookmark_manager_handler, backup_manager_handler, diff_viewer_handler,
+  recent_file_mode_handler, debug_handler, config_handler, references_handler,
+  documentsymbol_handler, callhierarchy_handler, terminal_handler
 
 proc newHandlerManager*(
     motionController: MotionController,
@@ -487,1285 +128,14 @@ proc newHandlerManager*(
     commandRegistry: commandRegistry,
   )
 
-proc extractInsertedText(transaction: buffer.BufferTransaction): string =
-  ## Extract net inserted text from a transaction
-  ## Handles insertions and deletions (backspace during insert mode)
-  ## Optimized with StringBuilder for O(n) instead of O(n²) performance
-  var sb = newStringBuilder()
-  for change in transaction.changes:
-    case change.kind
-    of buffer.ckInsertText:
-      sb.add(change.insertText)
-    of buffer.ckDeleteText:
-      # Backspace - remove from end of accumulated text
-      sb.removeLast(change.deletedText.len)
-    of buffer.ckInsertLine:
-      # Line insertion - add the line text
-      sb.add(change.insertLineText)
-      # Ensure it ends with newline if it doesn't already
-      if change.insertLineText.len == 0 or change.insertLineText[^1] != '\n':
-        sb.add("\n")
-    of buffer.ckDeleteLine:
-      # Line deletion during insert mode (rare, but handle it)
-      # We can't easily track which line was deleted, so clear accumulated text
-      sb.clear()
-    of buffer.ckDeleteRange:
-      # Range deletion - remove from end of accumulated text
-      sb.removeLast(change.deletedRangeText.len)
-    of buffer.ckReplaceLine:
-      discard # Line replacement doesn't contribute to inserted text tracking
-    of buffer.ckSnapshot:
-      discard # Snapshots don't contribute to inserted text tracking
-    of buffer.ckTransaction:
-      # Nested transaction - recursively extract text
-      let nestedTransaction = buffer.BufferTransaction(
-        changes: change.transactionChanges,
-        description: change.transactionDescription,
-        startSeq: 0,
-      )
-      sb.add(extractInsertedText(nestedTransaction))
-  return sb.toString()
-
-# Forward declarations
-proc handleCommandMode*(
-  manager: HandlerManager,
-  buffer: TextBuffer,
-  commandText: string,
-  isSharedBuffer: bool = false,
-  currentLine: int = 0,
+# Forward declarations for the Normal-mode recursive cluster.
+proc handleKeyCombo*(
+  manager: HandlerManager, e: Editor, keyCombo: KeyCombo
 ): HandlerResult
 
 proc playbackMacro*(
   manager: HandlerManager, editor: Editor, keys: seq[string]
 ): HandlerResult
-
-proc handleKeyCombo*(
-  manager: HandlerManager, e: Editor, keyCombo: KeyCombo
-): HandlerResult
-
-proc dispatchUnmigratedMode(
-  manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
-): HandlerResult
-
-proc checkRuntimeKeySeqMapping(
-  manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
-): Option[HandlerResult]
-
-proc applyNormalModePostProcessing(
-  manager: HandlerManager, editor: Editor, normalResult: HandlerResult
-): HandlerResult
-
-proc handleNormalMode*(
-    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
-): HandlerResult =
-  ## Handle Normal mode input
-  let buffer = editor.activeBuffer
-  let state = editor.state
-  let viewport = editor.viewport
-  let r = manager.normalHandler.handleNormalModeKey(editor, keyCombo)
-  case r.kind
-  of nmrHandled:
-    # Check if we're entering Insert or Replace mode
-    if r.modeTransition.isSome:
-      let targetMode = r.modeTransition.get
-      if targetMode == EditorMode.Insert:
-        if not buffer.inTransaction:
-          let transactionResult =
-            buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
-          if transactionResult.isErr:
-            return HandlerResult(
-              kind: hrError,
-              errorMessage: "Failed to begin transaction: " & transactionResult.error,
-            )
-        # Record insert start position for text tracking
-        # Don't reset if transaction is already active (e.g. returning from insert-normal)
-        if state.editState.insertModeStartPos.isNone:
-          state.editState.insertModeStartPos = some(state.cursor)
-      elif targetMode == EditorMode.Replace:
-        # Begin a transaction when entering Replace mode
-        # Guard: during insert-normal mode a transaction is already open
-        if not buffer.inTransaction:
-          let transactionResult =
-            buffer.beginTransaction("Replace mode edit", cursorPos = some(state.cursor))
-          if transactionResult.isErr:
-            return HandlerResult(
-              kind: hrError,
-              errorMessage: "Failed to begin transaction: " & transactionResult.error,
-            )
-        # Clear replace history when entering Replace mode
-        state.editState.replaceHistory = @[]
-    return HandlerResult(
-      kind: hrHandled,
-      modeTransition: r.modeTransition,
-      overlayTransition: r.overlayTransition,
-      statusMessage: "",
-    )
-  of nmrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of nmrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-  of nmrSave:
-    # Save file
-    return HandlerResult(kind: hrSave, saveFilename: none(string), forceSave: false)
-  of nmrSaveAndQuit:
-    # ZZ command - Save and quit
-    return HandlerResult(
-      kind: hrSaveAndQuit, saveAndQuitFilename: none(string), forceQuitAfterSave: false
-    )
-  of nmrQuitWithoutSave:
-    # ZQ command - Quit without saving (force quit)
-    return HandlerResult(kind: hrQuit, shouldQuit: true)
-  of nmrCloseWindow:
-    # Ctrl-W c command - Close current window
-    return HandlerResult(kind: hrCloseWindow, forceClose: false)
-  of nmrPlaybackMacro:
-    # Playback the macro through handler_manager which can dispatch to any mode
-    # Loop for the specified count (e.g., 3@a plays macro 3 times)
-    let count = if r.macroCount > 0: r.macroCount else: 1
-    for i in 0 ..< count:
-      let playbackResult = manager.playbackMacro(editor, r.macroKeys)
-      if playbackResult.kind == hrError or playbackResult.kind == hrQuit:
-        return playbackResult
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of nmrExecCommand:
-    # @: - repeat last Command mode command
-    # Pass through to handler.nim which has access to Editor for full result processing
-    return HandlerResult(
-      kind: hrExecCommand,
-      execCommandText: r.execCommandText,
-      execCommandCount: if r.execCommandCount > 0: r.execCommandCount else: 1,
-    )
-  of nmrLspGotoDefinition:
-    # Signal to editor to execute LSP goto definition
-    return HandlerResult(kind: hrLspGotoDefinition)
-  of nmrLspGotoDeclaration:
-    # Signal to editor to execute LSP goto declaration
-    return HandlerResult(kind: hrLspGotoDeclaration)
-  of nmrLspFindReferences:
-    # Signal to editor to execute LSP find references
-    return HandlerResult(kind: hrLspFindReferences)
-  of nmrLspCodeLensExecute:
-    # Signal to editor to execute CodeLens on current line
-    return HandlerResult(kind: hrLspCodeLensExecute)
-  of nmrLspCallHierarchyIncoming:
-    # Signal to editor to execute LSP incoming calls
-    return HandlerResult(kind: hrLspCallHierarchyIncoming)
-  of nmrLspCallHierarchyOutgoing:
-    # Signal to editor to execute LSP outgoing calls
-    return HandlerResult(kind: hrLspCallHierarchyOutgoing)
-  of nmrLspTypeDefinition:
-    # Signal to editor to execute LSP goto type definition
-    return HandlerResult(kind: hrLspTypeDefinition)
-  of nmrLspImplementation:
-    # Signal to editor to execute LSP goto implementation
-    return HandlerResult(kind: hrLspImplementation)
-  of nmrLspHover:
-    # Signal to editor to execute LSP hover
-    return HandlerResult(kind: hrLspHover)
-  of nmrLspRename:
-    # Signal to editor to execute LSP rename
-    return HandlerResult(kind: hrLspRename, hrLspNewName: r.nmrLspNewName)
-  of nmrLspSelectionRange:
-    # Signal to editor to execute LSP selection range
-    return HandlerResult(kind: hrLspSelectionRange)
-  of nmrLspDocumentLink:
-    # Signal to editor to execute LSP document link
-    return HandlerResult(kind: hrLspDocumentLink)
-  of nmrJumpToBuffer:
-    # Signal to editor to jump to a specific buffer and position
-    return HandlerResult(
-      kind: hrJumpToBuffer,
-      jumpBufferIndex: r.nmrJumpBufferIndex,
-      jumpLine: r.nmrJumpLine,
-      jumpColumn: r.nmrJumpColumn,
-    )
-  of nmrBufferNext:
-    return HandlerResult(kind: hrBufferNext)
-  of nmrBufferPrev:
-    return HandlerResult(kind: hrBufferPrev)
-  of nmrBufferDelete:
-    return HandlerResult(kind: hrBufferDelete)
-  of nmrNewFile:
-    return HandlerResult(kind: hrEnew)
-  of nmrEnterFiler:
-    return HandlerResult(kind: hrEnterFiler, enterFilerPath: none(string))
-  of nmrNextWindow:
-    return HandlerResult(kind: hrNextWindow)
-  of nmrPrevWindow:
-    return HandlerResult(kind: hrPrevWindow)
-  of nmrIncreaseWindowHeight:
-    return HandlerResult(kind: hrIncreaseWindowHeight)
-  of nmrDecreaseWindowHeight:
-    return HandlerResult(kind: hrDecreaseWindowHeight)
-  of nmrIncreaseWindowWidth:
-    return HandlerResult(kind: hrIncreaseWindowWidth)
-  of nmrDecreaseWindowWidth:
-    return HandlerResult(kind: hrDecreaseWindowWidth)
-  of nmrEqualizeWindows:
-    return HandlerResult(kind: hrEqualizeWindows)
-  of nmrSwapWindow:
-    return HandlerResult(kind: hrSwapWindow)
-  of nmrOpenUri:
-    return HandlerResult(kind: hrOpenUri, openUri: r.openUri)
-
-proc handleInsertMode*(
-    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
-): HandlerResult =
-  ## Handle Insert mode input
-  let buffer = editor.activeBuffer
-  let state = editor.state
-  let r = manager.insertHandler.handleInsertModeKey(editor, keyCombo)
-  case r.kind
-  of imrHandled:
-    # Check if we're leaving Insert mode
-    if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Insert:
-      # Ctrl-o (insert-normal mode): skip transaction commit/cleanup,
-      # keep insert state intact so we can resume after one Normal command
-      if state.insertNormalMode:
-        return HandlerResult(
-          kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
-        )
-
-      clearAutoIndentIfUnedited(buffer, state)
-
-      # Extract inserted text before committing transaction
-      if buffer.currentTransaction.isSome and state.editState.insertModeStartPos.isSome:
-        let transaction = buffer.currentTransaction.get
-        let insertedText = extractInsertedText(transaction)
-
-        # Visual Block insert replication: replicate inserted text to all block lines
-        if state.editState.visualBlockInsertContext.isSome:
-          if insertedText.len > 0:
-            let ctx = state.editState.visualBlockInsertContext.get
-            for lineNum in (ctx.startLine + 1) .. min(ctx.endLine, buffer.len - 1):
-              let lineCharLen = buffer.getLine(lineNum).runeLen
-              let col = ctx.insertColumn
-              # Pad with spaces if line is shorter than the target column
-              if col > lineCharLen:
-                let padding = ' '.repeat(col - lineCharLen)
-                discard buffer.insertText(
-                  BufferPosition(line: lineNum, column: lineCharLen), padding
-                )
-              discard buffer.insertText(
-                BufferPosition(line: lineNum, column: col), insertedText
-              )
-          # Always clear context when leaving insert mode
-          state.editState.visualBlockInsertContext =
-            none(types.VisualBlockInsertContext)
-
-        # Record the insert command for repeat (.) if text was actually inserted
-        if insertedText.len > 0:
-          # Check if we entered Insert mode via substitute command (s/S/cc)
-          if state.editState.substituteContext.isSome:
-            let subCtx = state.editState.substituteContext.get
-            state.editState.lastEditCommand = some(
-              types.LastEditCommand(
-                kind: types.lecSubstitute,
-                substituteText: insertedText,
-                substituteCount: subCtx.deleteCount,
-                substituteKind: subCtx.kind,
-              )
-            )
-          else:
-            # Normal insert (i, a, o, O)
-            state.editState.lastEditCommand = some(
-              types.LastEditCommand(
-                kind: types.lecInsertText,
-                insertedText: insertedText,
-                insertPosition: state.editState.insertModeStartPos.get,
-              )
-            )
-
-        # Clear insert position tracking and substitute context
-        state.editState.insertModeStartPos = none(BufferPosition)
-        state.editState.substituteContext = none(types.SubstituteContext)
-
-      # Commit the transaction when leaving Insert mode
-      let transactionResult = buffer.commitTransaction()
-      if transactionResult.isErr:
-        # Even if commit fails, allow mode transition so user isn't stuck in Insert mode
-        return HandlerResult(
-          kind: hrHandled,
-          modeTransition: r.modeTransition,
-          statusMessage: "Failed to commit transaction: " & transactionResult.error,
-        )
-    return HandlerResult(
-      kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
-    )
-  of imrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of imrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleCommandMode*(
-    manager: HandlerManager,
-    buffer: TextBuffer,
-    commandText: string,
-    isSharedBuffer: bool = false,
-    currentLine: int = 0,
-): HandlerResult =
-  ## Handle Command mode input (when Enter is pressed)
-  ## isSharedBuffer: true if the buffer is shared across multiple windows
-  ## currentLine: current cursor line (0-based), used for range substitution with '.'
-  let r = manager.commandHandler.handleCommandModeInput(
-    buffer, commandText, isSharedBuffer, currentLine
-  )
-
-  case r.kind
-  of cmrQuit:
-    return HandlerResult(kind: hrQuit, shouldQuit: true)
-  of cmrCquit:
-    return HandlerResult(kind: hrCquit)
-  of cmrCloseWindow:
-    return HandlerResult(kind: hrCloseWindow, forceClose: r.forceClose)
-  of cmrModeSwitch:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(r.targetMode), statusMessage: ""
-    )
-  of cmrMessage:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: r.message
-    )
-  of cmrGotoLine:
-    return HandlerResult(kind: hrGotoLine, lineNumber: r.lineNumber)
-  of cmrVSplit:
-    return HandlerResult(kind: hrVSplit, vsplitFilename: r.vsplitFilename)
-  of cmrHSplit:
-    return HandlerResult(kind: hrHSplit, hsplitFilename: r.hsplitFilename)
-  of cmrNew:
-    return HandlerResult(kind: hrNew)
-  of cmrVnew:
-    return HandlerResult(kind: hrVnew)
-  of cmrEnew:
-    return HandlerResult(kind: hrEnew)
-  of cmrEdit:
-    return
-      HandlerResult(kind: hrEdit, editFilename: r.editFilename, forceEdit: r.forceEdit)
-  of cmrSetBoolOption:
-    return HandlerResult(
-      kind: hrSetBoolOption, boolOption: r.boolOption, boolValue: r.boolValue
-    )
-  of cmrSetIntOption:
-    return
-      HandlerResult(kind: hrSetIntOption, intOption: r.intOption, intValue: r.intValue)
-  of cmrSetFloatOption:
-    return HandlerResult(
-      kind: hrSetFloatOption, floatOption: r.floatOption, floatValue: r.floatValue
-    )
-  of cmrClearSearchHighlight:
-    return HandlerResult(kind: hrClearSearchHighlight)
-  of cmrShellCommand:
-    return HandlerResult(kind: hrShellCommand, shellCommand: r.shellCommand)
-  of cmrBackground:
-    return HandlerResult(kind: hrBackground)
-  of cmrSave:
-    return
-      HandlerResult(kind: hrSave, saveFilename: r.saveFilename, forceSave: r.forceSave)
-  of cmrSaveAndQuit:
-    return HandlerResult(
-      kind: hrSaveAndQuit,
-      saveAndQuitFilename: r.saveAndQuitFilename,
-      forceQuitAfterSave: r.forceSaveAndQuit,
-    )
-  of cmrBufferNext:
-    return HandlerResult(kind: hrBufferNext)
-  of cmrBufferPrev:
-    return HandlerResult(kind: hrBufferPrev)
-  of cmrBufferFirst:
-    return HandlerResult(kind: hrBufferFirst)
-  of cmrBufferLast:
-    return HandlerResult(kind: hrBufferLast)
-  of cmrBufferDelete:
-    return HandlerResult(kind: hrBufferDelete, forceBufferDelete: r.forceBufferDelete)
-  of cmrBuffer:
-    return HandlerResult(kind: hrBuffer, bufferArg: r.bufferArg)
-  of cmrStripWhitespace:
-    return
-      HandlerResult(kind: hrStripWhitespace, strippedLineCount: r.strippedLineCount)
-  of cmrFiler:
-    # Switch to Filer mode with optional path
-    return HandlerResult(kind: hrEnterFiler, enterFilerPath: r.filerPath)
-  of cmrLogViewer:
-    # Switch to LogViewer mode
-    return HandlerResult(kind: hrEnterLogViewer)
-  of cmrHelpViewer:
-    # Switch to HelpViewer mode
-    return HandlerResult(kind: hrEnterHelpViewer)
-  of cmrQuickRun:
-    return HandlerResult(kind: hrQuickRun)
-  of cmrBufferManager:
-    return HandlerResult(kind: hrEnterBufferManager)
-  of cmrBackupManager:
-    return HandlerResult(kind: hrEnterBackupManager)
-  of cmrRecentFile:
-    return HandlerResult(kind: hrRecentFile)
-  of cmrJumpList:
-    return HandlerResult(kind: hrJumpList)
-  of cmrChanges:
-    return HandlerResult(kind: hrChanges)
-  of cmrBookmarks:
-    return HandlerResult(kind: hrEnterBookmarkManager)
-  of cmrConflictNext:
-    return HandlerResult(kind: hrConflictNext)
-  of cmrConflictPrev:
-    return HandlerResult(kind: hrConflictPrev)
-  of cmrBuild:
-    return HandlerResult(kind: hrBuild)
-  of cmrDebug:
-    return HandlerResult(kind: hrDebug)
-  of cmrConfig:
-    return HandlerResult(kind: hrConfig)
-  of cmrPutConfigFile:
-    return HandlerResult(kind: hrPutConfigFile)
-  of cmrMan:
-    return HandlerResult(kind: hrMan, hrManPage: r.manPage)
-  of cmrTheme:
-    return HandlerResult(kind: hrTheme, hrThemeName: r.themeName)
-  of cmrLspLog:
-    return HandlerResult(kind: hrLspLog)
-  of cmrLspFormat:
-    return HandlerResult(kind: hrLspFormat)
-  of cmrLspRestart:
-    return HandlerResult(kind: hrLspRestart)
-  of cmrLspFold:
-    return HandlerResult(kind: hrLspFold)
-  of cmrLspExecuteCommand:
-    return HandlerResult(
-      kind: hrLspExecuteCommand,
-      hrLspCommand: r.lspCommand,
-      hrLspCommandArgs: r.lspCommandArgs,
-    )
-  of cmrLspCallHierarchyIncoming:
-    return HandlerResult(kind: hrLspCallHierarchyIncoming)
-  of cmrLspCallHierarchyOutgoing:
-    return HandlerResult(kind: hrLspCallHierarchyOutgoing)
-  of cmrSubstitute:
-    return HandlerResult(kind: hrSubstitute, hrSubstituteCount: r.substituteCount)
-  of cmrDeleteLines:
-    return HandlerResult(
-      kind: hrDeleteLines,
-      hrDeletedText: r.deletedText,
-      hrDeletedLineCount: r.deletedLineCount,
-    )
-  of cmrTerminal:
-    return HandlerResult(kind: hrEnterTerminal, enterTerminalCommand: r.terminalCommand)
-  of cmrMapList:
-    var lines: seq[string] = @[]
-    for mode in r.mapListModes:
-      let mappings = manager.keyBindingRegistry.listRuntimeMappings(mode)
-      for m in mappings:
-        lines.add(modeLabel(mode) & "  " & m)
-    let msg =
-      if lines.len > 0:
-        lines.join("\n")
-      else:
-        "No mapping"
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
-    )
-  of cmrMapAdd:
-    var firstError = ""
-    var modeNames: seq[string] = @[]
-    for mode in r.mapAddModes:
-      let err =
-        manager.keyBindingRegistry.addRuntimeMapping(mode, r.mapAddLhs, r.mapAddRhs)
-      if err.len > 0:
-        if firstError.len == 0:
-          firstError = err
-      else:
-        modeNames.add(modeLabel(mode))
-    if firstError.len > 0:
-      return HandlerResult(kind: hrError, errorMessage: firstError)
-    let msg =
-      "Mapped in " & modeNames.join(", ") & ": " & r.mapAddLhs & " -> " & r.mapAddRhs
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
-    )
-  of cmrMapRemove:
-    var firstError = ""
-    var modeNames: seq[string] = @[]
-    for mode in r.mapRemoveModes:
-      let err = manager.keyBindingRegistry.removeRuntimeMapping(mode, r.mapRemoveLhs)
-      if err.len > 0:
-        if firstError.len == 0:
-          firstError = err
-      else:
-        modeNames.add(modeLabel(mode))
-    if firstError.len > 0:
-      return HandlerResult(kind: hrError, errorMessage: firstError)
-    let msg = "Unmapped in " & modeNames.join(", ") & ": " & r.mapRemoveLhs
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
-    )
-  of cmrMapClear:
-    var modeNames: seq[string] = @[]
-    for mode in r.mapClearModes:
-      manager.keyBindingRegistry.clearRuntimeMappings(mode)
-      modeNames.add(modeLabel(mode))
-    let msg = "Cleared " & modeNames.join(", ") & " mode mappings"
-    return HandlerResult(
-      kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: msg
-    )
-  of cmrOnlyWindow:
-    return HandlerResult(kind: hrOnlyWindow)
-  of cmrFileTree:
-    return HandlerResult(kind: hrEnterFileTree, enterFileTreePath: r.fileTreePath)
-  of cmrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleCommandMode*(
-    manager: HandlerManager,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Command mode key events (for macro playback)
-  ## This builds up the command text character by character
-
-  # Record key for macro if recording is active
-  if state.macroState.isRecording:
-    state.macroState.recordedKeys.add(keyComboToString(keyCombo))
-
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skEscape:
-      # Cancel command mode
-      state.commandText = ""
-      state.commandCursor = 0
-      return HandlerResult(
-        kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
-      )
-    of skEnter:
-      # Execute the command
-      let commandText = state.commandText
-      state.commandText = ""
-      state.commandCursor = 0
-      return manager.handleCommandMode(buffer, commandText, false, state.cursor.line)
-    of skBackspace:
-      # Delete character (rune) before cursor - handles unicode properly
-      if state.commandCursor > 1: # Keep the ":" prefix
-        let beforeCursor = state.commandText[0 ..< state.commandCursor]
-        let afterCursor = state.commandText[state.commandCursor ..^ 1]
-        # Convert to runes and remove last one
-        var runes = beforeCursor.toRunes
-        if runes.len > 1: # Keep the ":" prefix
-          runes.setLen(runes.len - 1)
-          let newBefore = $runes
-          state.commandText = newBefore & afterCursor
-          state.commandCursor = newBefore.len
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    of skLeft:
-      # Move cursor left by one rune (handles unicode properly)
-      if state.commandCursor > 1:
-        let beforeCursor = state.commandText[0 ..< state.commandCursor]
-        let runes = beforeCursor.toRunes
-        if runes.len > 1: # Keep cursor after ":"
-          state.commandCursor = ($runes[0 ..< runes.len - 1]).len
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    of skRight:
-      # Move cursor right by one rune (handles unicode properly)
-      if state.commandCursor < state.commandText.len:
-        let afterCursor = state.commandText[state.commandCursor ..^ 1]
-        let runes = afterCursor.toRunes
-        if runes.len > 0:
-          state.commandCursor += ($runes[0]).len
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    of skHome:
-      state.commandCursor = 1 # After ":"
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    of skEnd:
-      state.commandCursor = state.commandText.len
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    else:
-      return HandlerResult(kind: hrUnhandled)
-  else:
-    # Regular character - insert at cursor position
-    if keyCombo.modifiers == {} and keyCombo.char.len > 0:
-      state.commandText =
-        state.commandText[0 ..< state.commandCursor] & keyCombo.char &
-        state.commandText[state.commandCursor ..^ 1]
-      state.commandCursor += keyCombo.char.len
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    else:
-      return HandlerResult(kind: hrUnhandled)
-
-proc handleSearchMode*(
-    manager: HandlerManager,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Search mode key events (for macro playback)
-  ## This builds up the search text character by character
-
-  # Record key for macro if recording is active
-  if state.macroState.isRecording:
-    state.macroState.recordedKeys.add(keyComboToString(keyCombo))
-
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skEscape:
-      # Cancel search mode and restore cursor
-      state.search.text = ""
-      state.cursor = state.search.startPos
-      return HandlerResult(
-        kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
-      )
-    of skEnter:
-      # Confirm search and switch to Normal mode
-      # The search result is already applied via incremental search
-      return HandlerResult(
-        kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
-      )
-    of skBackspace:
-      # Delete last character (rune) - handles unicode properly
-      if state.search.text.len > 0:
-        var runes = state.search.text.toRunes
-        if runes.len > 0:
-          runes.setLen(runes.len - 1)
-          state.search.text = $runes
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    else:
-      return HandlerResult(kind: hrUnhandled)
-  else:
-    # Regular character - append to search text
-    if keyCombo.modifiers == {} and keyCombo.char.len > 0:
-      state.search.text.add(keyCombo.char)
-      return HandlerResult(
-        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-      )
-    else:
-      return HandlerResult(kind: hrUnhandled)
-
-proc handleVisualMode*(
-    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
-): HandlerResult =
-  ## Handle Visual mode input
-  let buffer = editor.activeBuffer
-  let state = editor.state
-  let r = manager.visualHandler.handleVisualModeKey(editor, keyCombo)
-  case r.kind
-  of vmrHandled:
-    # Check if we're entering Insert mode (e.g., visual block I command)
-    if r.modeTransition.isSome and r.modeTransition.get == EditorMode.Insert:
-      # Begin a transaction so commitTransaction() succeeds when leaving Insert mode
-      # Guard: visualChange already commits its delete transaction, so don't double-begin
-      if not buffer.inTransaction:
-        let transactionResult = buffer.beginTransaction(
-          "Visual to insert mode", cursorPos = some(state.cursor)
-        )
-        if transactionResult.isErr:
-          return HandlerResult(
-            kind: hrError,
-            errorMessage: "Failed to begin transaction: " & transactionResult.error,
-          )
-      state.editState.insertModeStartPos = some(state.cursor)
-    return HandlerResult(
-      kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
-    )
-  of vmrWaitingForInput:
-    # Waiting for additional character input (e.g., visual replace char)
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of vmrLspSelectionRange:
-    # Execute LSP selection range
-    return HandlerResult(kind: hrLspSelectionRange)
-  of vmrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of vmrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleReplaceMode*(
-    manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
-): HandlerResult =
-  ## Handle Replace mode input
-  let buffer = editor.activeBuffer
-  let r = manager.replaceHandler.handleReplaceModeKey(editor, keyCombo)
-  case r.kind
-  of rmrHandled:
-    # Check if we're leaving Replace mode
-    if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Replace:
-      # Commit the transaction when leaving Replace mode
-      let transactionResult = buffer.commitTransaction()
-      if transactionResult.isErr:
-        # Even if commit fails, allow mode transition so user isn't stuck in Replace mode
-        return HandlerResult(
-          kind: hrHandled,
-          modeTransition: r.modeTransition,
-          statusMessage: "Failed to commit transaction: " & transactionResult.error,
-        )
-    return HandlerResult(
-      kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
-    )
-  of rmrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of rmrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleFilerMode*(
-    manager: HandlerManager,
-    filerState: FilerState,
-    state: EditorState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Filer mode input
-  let r = manager.filerHandler.handleFilerModeKey(filerState, viewportHeight, keyCombo)
-  case r.kind
-  of frHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of frOpenFile:
-    return HandlerResult(kind: hrFilerOpenFile, filerFilePath: r.filePath)
-  of frOpenFileVSplit:
-    return HandlerResult(kind: hrFilerOpenFileVSplit, filerFilePath: r.filePath)
-  of frOpenFileHSplit:
-    return HandlerResult(kind: hrFilerOpenFileHSplit, filerFilePath: r.filePath)
-  of frOpenDirectory:
-    # Directory navigation is handled within the filer state
-    discard filerState.enterDirectory(r.dirPath)
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of frEnterCommand:
-    # Enter command mode from filer
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of frDeleteFile:
-    return HandlerResult(kind: hrFilerDeleteFile, filerDeletePath: r.deletePath)
-  of frShowInfo:
-    return HandlerResult(kind: hrFilerShowInfo, filerFileInfo: r.fileInfo)
-  of frUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of frError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleFileTreeMode*(
-    manager: HandlerManager,
-    fileTreeState: FileTreeState,
-    state: EditorState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle FileTree mode input
-  let r = manager.fileTreeHandler.handleFileTreeModeKey(
-    fileTreeState, viewportHeight, keyCombo
-  )
-
-  # Transfer any error from fileTree operations to the status message
-  if fileTreeState.lastError.len > 0:
-    state.statusMessage = fileTreeState.lastError
-    fileTreeState.lastError = ""
-
-  # Display search prompt or status message
-  if manager.fileTreeHandler.isSearching:
-    state.statusMessage = "/" & manager.fileTreeHandler.searchBuffer
-  else:
-    state.statusMessage = r.statusMessage
-
-  case r.kind
-  of ftrHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of ftrOpenFile:
-    return HandlerResult(kind: hrFileTreeOpenFile, fileTreeFilePath: r.filePath)
-  of ftrEnterCommand:
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of ftrNextWindow:
-    return HandlerResult(kind: hrNextWindow)
-  of ftrPrevWindow:
-    return HandlerResult(kind: hrPrevWindow)
-  of ftrIncreaseWindowWidth:
-    return HandlerResult(kind: hrIncreaseWindowWidth)
-  of ftrDecreaseWindowWidth:
-    return HandlerResult(kind: hrDecreaseWindowWidth)
-  of ftrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of ftrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleLogViewerMode*(
-    manager: HandlerManager,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Log Viewer mode input
-  let r = manager.logViewerHandler.handleLogViewerModeKey(
-    buffer, state, viewportHeight, keyCombo
-  )
-  case r.kind
-  of lvrHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of lvrEnterCommand:
-    # Enter command mode from log viewer
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of lvrEnterSearchForward:
-    # Enter search overlay (forward) from log viewer
-    state.enterSearchOverlay(Forward)
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of lvrEnterSearchBackward:
-    # Enter search overlay (backward) from log viewer
-    state.enterSearchOverlay(Backward)
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of lvrQuit:
-    return HandlerResult(kind: hrLogViewerQuit)
-  of lvrRefresh:
-    return HandlerResult(kind: hrLogViewerRefresh)
-  of lvrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of lvrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleReferencesMode*(
-    manager: HandlerManager,
-    refState: ReferencesViewerState,
-    state: EditorState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle References Viewer mode input
-  let r = manager.referencesHandler.handleReferencesModeKey(
-    refState, viewportHeight, keyCombo
-  )
-  case r.kind
-  of rvrHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of rvrEnterCommand:
-    # Enter command mode from references viewer
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of rvrJumpToReference:
-    return HandlerResult(
-      kind: hrReferencesJumpTo,
-      jumpToPath: r.targetItem.path,
-      jumpToLine: r.targetItem.line,
-      jumpToColumn: r.targetItem.column,
-    )
-  of rvrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of rvrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleDocumentSymbolMode*(
-    manager: HandlerManager,
-    symState: DocumentSymbolViewerState,
-    state: EditorState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Document Symbol Viewer mode input
-  let r = manager.documentSymbolHandler.handleDocumentSymbolModeKey(
-    symState, viewportHeight, keyCombo
-  )
-  case r.kind
-  of dsvrHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of dsvrEnterCommand:
-    # Enter command mode from document symbol viewer
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of dsvrQuit:
-    return HandlerResult(kind: hrDocumentSymbolQuit)
-  of dsvrJumpToSymbol:
-    return HandlerResult(
-      kind: hrDocumentSymbolJumpTo,
-      symbolLine: r.targetItem.line,
-      symbolColumn: r.targetItem.column,
-    )
-  of dsvrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of dsvrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleCallHierarchyMode*(
-    manager: HandlerManager,
-    chState: CallHierarchyViewerState,
-    state: EditorState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Call Hierarchy Viewer mode input
-  let r = manager.callHierarchyHandler.handleCallHierarchyModeKey(
-    chState, viewportHeight, keyCombo
-  )
-  case r.kind
-  of chvrHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of chvrEnterCommand:
-    # Enter command mode from call hierarchy viewer
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of chvrQuit:
-    return HandlerResult(kind: hrCallHierarchyQuit)
-  of chvrJumpToItem:
-    return HandlerResult(
-      kind: hrCallHierarchyJumpTo,
-      callHierarchyJumpUri: r.targetItem.uri,
-      callHierarchyJumpLine: r.targetItem.selectionRange.start.line,
-      callHierarchyJumpColumn: r.targetItem.selectionRange.start.character,
-    )
-  of chvrRequestIncoming:
-    return HandlerResult(
-      kind: hrCallHierarchyRequestIncoming, callHierarchyIncomingItem: r.targetItem
-    )
-  of chvrRequestOutgoing:
-    return HandlerResult(
-      kind: hrCallHierarchyRequestOutgoing, callHierarchyOutgoingItem: r.targetItem
-    )
-  of chvrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of chvrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleHelpViewerMode*(
-    manager: HandlerManager,
-    helpState: HelpViewerState,
-    state: EditorState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Help Viewer mode input
-  let r = manager.helpViewerHandler.handleHelpViewerModeKey(
-    helpState, viewportHeight, keyCombo
-  )
-  case r.kind
-  of hvrHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of hvrEnterCommand:
-    # Enter command mode from help viewer
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of hvrEnterSearch:
-    # Enter search mode (forward) from help viewer
-    state.search.direction = Forward
-    state.search.historyIndex = -1
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
-    )
-  of hvrEnterSearchBackward:
-    # Enter search mode (backward) from help viewer
-    state.search.direction = Backward
-    state.search.historyIndex = -1
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
-    )
-  of hvrClearSearchHighlight:
-    # Double-Escape: clear search highlight in help viewer
-    state.search.hlsearchTempDisabled = true
-    state.needsFullRedraw = true
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of hvrQuit:
-    return HandlerResult(kind: hrHelpViewerQuit)
-  of hvrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of hvrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleBufferManagerMode*(
-    manager: HandlerManager,
-    bmState: BufferManagerState,
-    state: EditorState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Buffer Manager mode input
-  let r = manager.bufferManagerHandler.handleBufferManagerModeKey(
-    bmState, viewportHeight, keyCombo
-  )
-  case r.kind
-  of bmrHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of bmrSelectBuffer:
-    return
-      HandlerResult(kind: hrBufferManagerSelectBuffer, selectBufferIndex: r.bufferIndex)
-  of bmrDeleteBuffer:
-    return HandlerResult(
-      kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: r.deleteBufferIndex
-    )
-  of bmrEnterCommand:
-    # Enter command mode from buffer manager
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of bmrQuit:
-    return HandlerResult(kind: hrBufferManagerQuit)
-  of bmrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of bmrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleBookmarkManagerMode*(
-    manager: HandlerManager,
-    bmState: BookmarkManagerState,
-    state: EditorState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Bookmark Manager mode input
-  let r = manager.bookmarkManagerHandler.handleBookmarkManagerModeKey(
-    bmState, viewportHeight, keyCombo
-  )
-  case r.kind
-  of bkmrHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of bkmrJumpToBookmark:
-    return HandlerResult(
-      kind: hrBookmarkManagerJump,
-      bookmarkJumpBufferIndex: r.jumpBufferIndex,
-      bookmarkJumpLine: r.jumpLine,
-    )
-  of bkmrDeleteBookmark:
-    return HandlerResult(
-      kind: hrBookmarkManagerDelete, bookmarkDeleteEntryIndex: r.deleteEntryIndex
-    )
-  of bkmrEnterCommand:
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of bkmrQuit:
-    return HandlerResult(kind: hrBookmarkManagerQuit)
-  of bkmrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of bkmrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleBackupManagerMode*(
-    manager: HandlerManager,
-    bkState: BackupManagerState,
-    state: EditorState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Backup Manager mode input
-  let r = manager.backupManagerHandler.handleBackupManagerModeKey(
-    bkState, viewportHeight, keyCombo
-  )
-  case r.kind
-  of bkmrHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of bkmrRestore:
-    return
-      HandlerResult(kind: hrBackupManagerRestore, restoreBackupIndex: r.restoreIndex)
-  of bkmrDelete:
-    return HandlerResult(kind: hrBackupManagerDelete, deleteBackupIndex: r.deleteIndex)
-  of bkmrOpenDiff:
-    return HandlerResult(kind: hrBackupManagerOpenDiff, diffBackupIndex: r.diffIndex)
-  of bkmrRefresh:
-    return HandlerResult(kind: hrBackupManagerRefresh)
-  of bkmrEnterCommand:
-    # Enter command mode from backup manager
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of bkmrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of bkmrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleDiffViewerMode*(
-    manager: HandlerManager,
-    diffState: DiffViewerState,
-    state: EditorState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Diff Viewer mode input
-  let r = manager.diffViewerHandler.handleDiffViewerModeKey(
-    diffState, viewportHeight, keyCombo
-  )
-  case r.kind
-  of dvrHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of dvrEnterCommand:
-    # Enter command mode from diff viewer
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of dvrQuit:
-    return HandlerResult(kind: hrDiffViewerQuit)
-  of dvrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of dvrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleConfigMode*(
-    manager: HandlerManager,
-    configState: ConfigModeState,
-    state: EditorState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Configuration mode input
-  let r =
-    manager.configModeHandler.handleConfigModeKey(configState, viewportHeight, keyCombo)
-  case r.kind
-  of cmrHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of cmrEnterCommand:
-    # Enter command mode from config mode
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of cmrSaveConfig:
-    return HandlerResult(kind: hrConfigSaveConfig)
-  of cmrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of cmrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleRecentFileMode*(
-    manager: HandlerManager,
-    state: RecentFileModeState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
-): HandlerResult =
-  ## Handle Recent File mode input
-  let r = manager.recentFileModeHandler.handleRecentFileModeKey(
-    state, viewportHeight, keyCombo
-  )
-  case r.kind
-  of rfmrHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
-    )
-  of rfmrOpenFile:
-    return HandlerResult(kind: hrRecentFileOpenFile, recentFilePath: r.filePath)
-  of rfmrEnterCommand:
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of rfmrUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of rfmrError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-
-proc handleTerminalMode*(
-    manager: HandlerManager,
-    termState: TerminalState,
-    state: EditorState,
-    keyCombo: KeyCombo,
-    window: EditorWindow,
-): HandlerResult =
-  ## Handle Terminal mode input
-  let r = manager.terminalHandler.handleTerminalModeKey(termState, keyCombo)
-  case r.kind
-  of trHandled:
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of trSwitchToNormal:
-    # Switch to Terminal-Normal sub-mode: snapshot grid to TextBuffer
-    let snapshotBuffer = termState.enterNormalSubMode()
-    window.buffer = snapshotBuffer
-    window.cursor = BufferPosition(line: max(0, snapshotBuffer.len - 1), column: 0)
-    window.viewport.topLine = max(0, snapshotBuffer.len - window.viewport.height)
-    return HandlerResult(
-      kind: hrHandled,
-      modeTransition: none(EditorMode),
-      statusMessage: "-- TERMINAL NORMAL --",
-    )
-  of trReturnToInput:
-    # Return to Terminal-Input sub-mode: restore placeholder buffer
-    termState.exitNormalSubMode()
-    window.buffer = newTextBuffer("")
-    window.cursor = BufferPosition(line: 0, column: 0)
-    return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
-    )
-  of trEnterCommand:
-    state.commandText = ":"
-    state.commandCursor = 0
-    return HandlerResult(
-      kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
-    )
-  of trQuit:
-    return HandlerResult(kind: hrTerminalQuit)
-  of trUnhandled:
-    return HandlerResult(kind: hrUnhandled)
-  of trError:
-    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc executeCommandDirect*(
     manager: HandlerManager, commandName: string
@@ -2034,139 +404,160 @@ proc applyNormalModePostProcessing(
 
   return normalResult
 
-proc dispatchUnmigratedMode(
+proc handleNormalMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
-  ## Dispatch sub-state modes that still take their own state objects
-  ## (Filer, FileTree, LogViewer, Help, BufferManager, …). Called from the
-  ## Editor-based handleKeyCombo for any mode it does not handle directly.
+  ## Handle Normal mode input
   let buffer = editor.activeBuffer
   let state = editor.state
   let viewport = editor.viewport
-  let window = some(editor.activeWindow)
-
-  case state.mode
-  of EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
-      EditorMode.VisualLine, EditorMode.Replace:
-    # Migrated modes are handled by the Editor-based handleKeyCombo and
-    # never reach this dispatcher.
+  let r = manager.normalHandler.handleNormalModeKey(editor, keyCombo)
+  case r.kind
+  of nmrHandled:
+    # Check if we're entering Insert or Replace mode
+    if r.modeTransition.isSome:
+      let targetMode = r.modeTransition.get
+      if targetMode == EditorMode.Insert:
+        if not buffer.inTransaction:
+          let transactionResult =
+            buffer.beginTransaction("Insert mode edit", cursorPos = some(state.cursor))
+          if transactionResult.isErr:
+            return HandlerResult(
+              kind: hrError,
+              errorMessage: "Failed to begin transaction: " & transactionResult.error,
+            )
+        # Record insert start position for text tracking
+        # Don't reset if transaction is already active (e.g. returning from insert-normal)
+        if state.editState.insertModeStartPos.isNone:
+          state.editState.insertModeStartPos = some(state.cursor)
+      elif targetMode == EditorMode.Replace:
+        # Begin a transaction when entering Replace mode
+        # Guard: during insert-normal mode a transaction is already open
+        if not buffer.inTransaction:
+          let transactionResult =
+            buffer.beginTransaction("Replace mode edit", cursorPos = some(state.cursor))
+          if transactionResult.isErr:
+            return HandlerResult(
+              kind: hrError,
+              errorMessage: "Failed to begin transaction: " & transactionResult.error,
+            )
+        # Clear replace history when entering Replace mode
+        state.editState.replaceHistory = @[]
+    return HandlerResult(
+      kind: hrHandled,
+      modeTransition: r.modeTransition,
+      overlayTransition: r.overlayTransition,
+      statusMessage: "",
+    )
+  of nmrUnhandled:
     return HandlerResult(kind: hrUnhandled)
-  of EditorMode.Filer:
-    if window.isSome and window.get.filerState.isSome:
-      return manager.handleFilerMode(
-        window.get.filerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(kind: hrError, errorMessage: "Filer state not initialized")
-  of EditorMode.FileTree:
-    if window.isSome and window.get.fileTreeState.isSome:
-      return manager.handleFileTreeMode(
-        window.get.fileTreeState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return
-        HandlerResult(kind: hrError, errorMessage: "FileTree state not initialized")
-  of EditorMode.LogViewer:
-    return manager.handleLogViewerMode(buffer, state, viewport.height, keyCombo)
-  of EditorMode.Help:
-    if window.isSome and window.get.helpViewerState.isSome:
-      return manager.handleHelpViewerMode(
-        window.get.helpViewerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return
-        HandlerResult(kind: hrError, errorMessage: "Help viewer state not initialized")
-  of EditorMode.BufferManager:
-    if window.isSome and window.get.bufferManagerState.isSome:
-      return manager.handleBufferManagerMode(
-        window.get.bufferManagerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(
-        kind: hrError, errorMessage: "Buffer manager state not initialized"
-      )
-  of EditorMode.BookmarkManager:
-    if window.isSome and window.get.bookmarkManagerState.isSome:
-      return manager.handleBookmarkManagerMode(
-        window.get.bookmarkManagerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(
-        kind: hrError, errorMessage: "Bookmark manager state not initialized"
-      )
-  of EditorMode.BackupManager:
-    if window.isSome and window.get.backupManagerState.isSome:
-      return manager.handleBackupManagerMode(
-        window.get.backupManagerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(
-        kind: hrError, errorMessage: "Backup manager state not initialized"
-      )
-  of EditorMode.DiffViewer:
-    if window.isSome and window.get.diffViewerState.isSome:
-      return manager.handleDiffViewerMode(
-        window.get.diffViewerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return
-        HandlerResult(kind: hrError, errorMessage: "Diff viewer state not initialized")
-  of EditorMode.Config:
-    if window.isSome and window.get.configModeState.isSome:
-      return manager.handleConfigMode(
-        window.get.configModeState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return
-        HandlerResult(kind: hrError, errorMessage: "Config mode state not initialized")
-  of EditorMode.References:
-    if window.isSome and window.get.referencesViewerState.isSome:
-      return manager.handleReferencesMode(
-        window.get.referencesViewerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(
-        kind: hrError, errorMessage: "References viewer state not initialized"
-      )
-  of EditorMode.DocumentSymbol:
-    if window.isSome and window.get.documentSymbolViewerState.isSome:
-      return manager.handleDocumentSymbolMode(
-        window.get.documentSymbolViewerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(
-        kind: hrError, errorMessage: "Document symbol viewer state not initialized"
-      )
-  of EditorMode.CallHierarchy:
-    if window.isSome and window.get.callHierarchyViewerState.isSome:
-      return manager.handleCallHierarchyMode(
-        window.get.callHierarchyViewerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(
-        kind: hrError, errorMessage: "Call hierarchy viewer state not initialized"
-      )
-  of EditorMode.Terminal:
-    if window.isSome and window.get.terminalState.isSome:
-      return manager.handleTerminalMode(
-        window.get.terminalState.get, state, keyCombo, window.get
-      )
-    else:
-      return
-        HandlerResult(kind: hrError, errorMessage: "Terminal state not initialized")
-  of EditorMode.Command:
-    # Command mode is handled via overlay in handler.nim, not here
-    return HandlerResult(kind: hrUnhandled)
-  of EditorMode.RecentFile:
-    # Recent File mode requires its own state, not EditorState
-    # This should be handled at a higher level with RecentFileModeState
-    return HandlerResult(kind: hrUnhandled)
-  of EditorMode.Debug:
-    # Debug mode is handled at a higher level in handler.nim
-    return HandlerResult(kind: hrUnhandled)
-  of EditorMode.QuickRun:
-    # QuickRun mode is not interactive - handled through command mode
-    return HandlerResult(kind: hrUnhandled)
+  of nmrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+  of nmrSave:
+    # Save file
+    return HandlerResult(kind: hrSave, saveFilename: none(string), forceSave: false)
+  of nmrSaveAndQuit:
+    # ZZ command - Save and quit
+    return HandlerResult(
+      kind: hrSaveAndQuit, saveAndQuitFilename: none(string), forceQuitAfterSave: false
+    )
+  of nmrQuitWithoutSave:
+    # ZQ command - Quit without saving (force quit)
+    return HandlerResult(kind: hrQuit, shouldQuit: true)
+  of nmrCloseWindow:
+    # Ctrl-W c command - Close current window
+    return HandlerResult(kind: hrCloseWindow, forceClose: false)
+  of nmrPlaybackMacro:
+    # Playback the macro through handler_manager which can dispatch to any mode
+    # Loop for the specified count (e.g., 3@a plays macro 3 times)
+    let count = if r.macroCount > 0: r.macroCount else: 1
+    for i in 0 ..< count:
+      let playbackResult = manager.playbackMacro(editor, r.macroKeys)
+      if playbackResult.kind == hrError or playbackResult.kind == hrQuit:
+        return playbackResult
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of nmrExecCommand:
+    # @: - repeat last Command mode command
+    # Pass through to handler.nim which has access to Editor for full result processing
+    return HandlerResult(
+      kind: hrExecCommand,
+      execCommandText: r.execCommandText,
+      execCommandCount: if r.execCommandCount > 0: r.execCommandCount else: 1,
+    )
+  of nmrLspGotoDefinition:
+    # Signal to editor to execute LSP goto definition
+    return HandlerResult(kind: hrLspGotoDefinition)
+  of nmrLspGotoDeclaration:
+    # Signal to editor to execute LSP goto declaration
+    return HandlerResult(kind: hrLspGotoDeclaration)
+  of nmrLspFindReferences:
+    # Signal to editor to execute LSP find references
+    return HandlerResult(kind: hrLspFindReferences)
+  of nmrLspCodeLensExecute:
+    # Signal to editor to execute CodeLens on current line
+    return HandlerResult(kind: hrLspCodeLensExecute)
+  of nmrLspCallHierarchyIncoming:
+    # Signal to editor to execute LSP incoming calls
+    return HandlerResult(kind: hrLspCallHierarchyIncoming)
+  of nmrLspCallHierarchyOutgoing:
+    # Signal to editor to execute LSP outgoing calls
+    return HandlerResult(kind: hrLspCallHierarchyOutgoing)
+  of nmrLspTypeDefinition:
+    # Signal to editor to execute LSP goto type definition
+    return HandlerResult(kind: hrLspTypeDefinition)
+  of nmrLspImplementation:
+    # Signal to editor to execute LSP goto implementation
+    return HandlerResult(kind: hrLspImplementation)
+  of nmrLspHover:
+    # Signal to editor to execute LSP hover
+    return HandlerResult(kind: hrLspHover)
+  of nmrLspRename:
+    # Signal to editor to execute LSP rename
+    return HandlerResult(kind: hrLspRename, hrLspNewName: r.nmrLspNewName)
+  of nmrLspSelectionRange:
+    # Signal to editor to execute LSP selection range
+    return HandlerResult(kind: hrLspSelectionRange)
+  of nmrLspDocumentLink:
+    # Signal to editor to execute LSP document link
+    return HandlerResult(kind: hrLspDocumentLink)
+  of nmrJumpToBuffer:
+    # Signal to editor to jump to a specific buffer and position
+    return HandlerResult(
+      kind: hrJumpToBuffer,
+      jumpBufferIndex: r.nmrJumpBufferIndex,
+      jumpLine: r.nmrJumpLine,
+      jumpColumn: r.nmrJumpColumn,
+    )
+  of nmrBufferNext:
+    return HandlerResult(kind: hrBufferNext)
+  of nmrBufferPrev:
+    return HandlerResult(kind: hrBufferPrev)
+  of nmrBufferDelete:
+    return HandlerResult(kind: hrBufferDelete)
+  of nmrNewFile:
+    return HandlerResult(kind: hrEnew)
+  of nmrEnterFiler:
+    return HandlerResult(kind: hrEnterFiler, enterFilerPath: none(string))
+  of nmrNextWindow:
+    return HandlerResult(kind: hrNextWindow)
+  of nmrPrevWindow:
+    return HandlerResult(kind: hrPrevWindow)
+  of nmrIncreaseWindowHeight:
+    return HandlerResult(kind: hrIncreaseWindowHeight)
+  of nmrDecreaseWindowHeight:
+    return HandlerResult(kind: hrDecreaseWindowHeight)
+  of nmrIncreaseWindowWidth:
+    return HandlerResult(kind: hrIncreaseWindowWidth)
+  of nmrDecreaseWindowWidth:
+    return HandlerResult(kind: hrDecreaseWindowWidth)
+  of nmrEqualizeWindows:
+    return HandlerResult(kind: hrEqualizeWindows)
+  of nmrSwapWindow:
+    return HandlerResult(kind: hrSwapWindow)
+  of nmrOpenUri:
+    return HandlerResult(kind: hrOpenUri, openUri: r.openUri)
 
 proc handleEvent*(manager: HandlerManager, e: Editor, event: Event): HandlerResult =
   ## Editor-based event entry point. Stays entirely on the Editor dispatch path.
@@ -2251,57 +642,3 @@ proc playbackMacro*(
   state.macroState.playbackDepth -= 1
   manager.keyBindingRegistry.clearSequence()
   HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
-
-# Utility functions for HandlerResult
-proc wasHandled*(hrResult: HandlerResult): bool =
-  ## Check if the event was handled
-  hrResult.kind in {
-    hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrNew, hrVnew,
-    hrEnew, hrSave, hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst,
-    hrBufferLast, hrBuffer, hrJumpToBuffer, hrBufferDelete, hrStripWhitespace,
-    hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerDeleteFile,
-    hrFilerShowInfo, hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrEnterLogViewer,
-    hrHelpViewerQuit, hrEnterHelpViewer, hrReferencesQuit, hrReferencesJumpTo,
-    hrEnterReferences, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
-    hrEnterDocumentSymbol, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
-    hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
-    hrEnterCallHierarchy, hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer,
-    hrBufferManagerQuit, hrEnterBufferManager, hrBookmarkManagerJump,
-    hrBookmarkManagerDelete, hrBookmarkManagerQuit, hrEnterBookmarkManager,
-    hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
-    hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit,
-    hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
-    hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
-    hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow, hrEnterDiffViewer,
-    hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
-    hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
-    hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
-    hrLspSelectionRange, hrLspDocumentLink, hrJumpList, hrChanges, hrLspLog,
-    hrOnlyWindow, hrEnterFileTree, hrFileTreeOpenFile, hrFileTreeQuit, hrConflictNext,
-    hrConflictPrev,
-  }
-
-proc hasError*(hrResult: HandlerResult): bool =
-  ## Check if there was an error
-  hrResult.kind == hrError
-
-proc getModeTransition*(hrResult: HandlerResult): Option[EditorMode] =
-  ## Get mode transition if any
-  if hrResult.kind == hrHandled:
-    hrResult.modeTransition
-  else:
-    none(EditorMode)
-
-proc getOverlayTransition*(hrResult: HandlerResult): Option[OverlayKind] =
-  ## Get overlay transition if any
-  if hrResult.kind == hrHandled:
-    hrResult.overlayTransition
-  else:
-    none(OverlayKind)
-
-proc getStatusMessage*(hrResult: HandlerResult): string =
-  ## Get status message if any
-  case hrResult.kind
-  of hrHandled: hrResult.statusMessage
-  of hrError: hrResult.errorMessage
-  else: ""
