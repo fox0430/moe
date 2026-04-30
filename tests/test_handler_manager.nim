@@ -32,13 +32,13 @@ import ../src/moepkg/registers {.all.}
 import ../src/moepkg/command_line {.all.}
 import ../src/moepkg/command_config {.all.}
 import ../src/moepkg/filetree {.all.}
-import ../src/moepkg/window_manager {.all.}
 import ../src/moepkg/editor_types except Command
 import ../src/moepkg/command_handlers/handler_manager {.all.}
 import ../src/moepkg/command_handlers/command_handler {.all.}
 import ../src/moepkg/command_handlers/visual_handler {.all.}
 import ../src/moepkg/command_handlers/insert_handler {.all.}
 import ../src/moepkg/command_handlers/filetree_handler {.all.}
+import editor_test_helper
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
@@ -52,17 +52,6 @@ proc createTestState(): EditorState =
 
 proc createTestViewport(): ViewPort =
   ViewPort(topLine: 0, leftColumn: 0, height: 24, width: 80)
-
-proc createTestEditor(buf: TextBuffer, state: EditorState, viewport: ViewPort): Editor =
-  ## Create a minimal Editor wrapping the given buffer/state/viewport for testing
-  state.activeWindow.buffer = buf
-  Editor(
-    textBuffer: buf,
-    state: state,
-    viewport: viewport,
-    windowManager:
-      EditorWindowManager(windows: @[state.activeWindow], activeWindowIndex: 0),
-  )
 
 proc createTestManager(): HandlerManager =
   ## Create a HandlerManager for testing
