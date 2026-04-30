@@ -412,7 +412,7 @@ suite "executeCommand - Operator + Motion":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world" # Buffer unchanged
-    check ctx.state.yankRegister == "hello "
+    check ctx.state.registers.getNoNamedRegister().getContent() == "hello "
 
   test "change word (cw)":
     let buffer = newTextBuffer("hello world")
@@ -811,8 +811,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4)
-    ctx.state.yankRegister = "XYZ"
-    ctx.state.yankIsLine = false
+    ctx.state.registers.setYankedRegister("XYZ", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -822,8 +821,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.yankRegister = "new line"
-    ctx.state.yankIsLine = true
+    ctx.state.registers.setYankedRegister("new line", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -834,8 +832,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.yankRegister = "  indented"
-    ctx.state.yankIsLine = true
+    ctx.state.registers.setYankedRegister("  indented", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -848,8 +845,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.yankRegister = "no indent"
-    ctx.state.yankIsLine = true
+    ctx.state.registers.setYankedRegister("no indent", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -862,8 +858,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.yankRegister = "   "
-    ctx.state.yankIsLine = true
+    ctx.state.registers.setYankedRegister("   ", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -876,8 +871,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4)
-    ctx.state.yankRegister = "X"
-    ctx.state.yankIsLine = false
+    ctx.state.registers.setYankedRegister("X", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after"), @["3"]).isOk
@@ -887,8 +881,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.yankRegister = ""
-    ctx.state.yankIsLine = false
+    ctx.state.registers.setYankedRegister("", false)
     let registry = createTestRegistry()
 
     let result = registry.execute(ctx, custom("paste.after"))
@@ -899,8 +892,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 5)
-    ctx.state.yankRegister = "XYZ"
-    ctx.state.yankIsLine = false
+    ctx.state.registers.setYankedRegister("XYZ", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before")).isOk
@@ -910,8 +902,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 0)
-    ctx.state.yankRegister = "\tindented"
-    ctx.state.yankIsLine = true
+    ctx.state.registers.setYankedRegister("\tindented", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before")).isOk
@@ -924,8 +915,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 0)
-    ctx.state.yankRegister = "no indent"
-    ctx.state.yankIsLine = true
+    ctx.state.registers.setYankedRegister("no indent", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before")).isOk
@@ -938,8 +928,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("line1\nline2")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 1, column: 0)
-    ctx.state.yankRegister = "  "
-    ctx.state.yankIsLine = true
+    ctx.state.registers.setYankedRegister("  ", true)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before")).isOk
@@ -952,8 +941,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 4)
-    ctx.state.yankRegister = "あいう"
-    ctx.state.yankIsLine = false
+    ctx.state.registers.setYankedRegister("あいう", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.after")).isOk
@@ -965,8 +953,7 @@ suite "Handler - Paste operations":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.cursor = BufferPosition(line: 0, column: 5)
-    ctx.state.yankRegister = "あいう"
-    ctx.state.yankIsLine = false
+    ctx.state.registers.setYankedRegister("あいう", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, custom("paste.before")).isOk
@@ -983,7 +970,7 @@ suite "Handler - Delete char operations":
 
     check registry.execute(ctx, custom("delete.char")).isOk
     check buffer[0] == "ello"
-    check ctx.state.yankRegister == "h"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "h"
 
   test "delete multiple chars (3x)":
     let buffer = newTextBuffer("hello")
@@ -993,7 +980,7 @@ suite "Handler - Delete char operations":
 
     check registry.execute(ctx, custom("delete.char"), @["3"]).isOk
     check buffer[0] == "lo"
-    check ctx.state.yankRegister == "hel"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "hel"
 
   test "delete char at end of line stays in bounds":
     let buffer = newTextBuffer("hi")
@@ -1376,8 +1363,8 @@ suite "Handler - Yank line operations":
 
     check registry.execute(ctx, custom("yank.line")).isOk
     check buffer.len == 3 # Buffer unchanged
-    check "line2" in ctx.state.yankRegister
-    check ctx.state.yankIsLine == true
+    check "line2" in ctx.state.registers.getNoNamedRegister().getContent()
+    check ctx.state.registers.getNoNamedRegister().isLine == true
     # Register system must also be updated
     let reg = ctx.state.registers.getNoNamedRegister()
     check "line2" in reg.getContent()
@@ -1391,9 +1378,9 @@ suite "Handler - Yank line operations":
 
     check registry.execute(ctx, custom("yank.line"), @["3"]).isOk
     check buffer.len == 4 # Buffer unchanged
-    check "line1" in ctx.state.yankRegister
-    check "line2" in ctx.state.yankRegister
-    check "line3" in ctx.state.yankRegister
+    check "line1" in ctx.state.registers.getNoNamedRegister().getContent()
+    check "line2" in ctx.state.registers.getNoNamedRegister().getContent()
+    check "line3" in ctx.state.registers.getNoNamedRegister().getContent()
     # Register system must also be updated
     let reg = ctx.state.registers.getNoNamedRegister()
     check "line1" in reg.getContent()
@@ -1649,7 +1636,7 @@ suite "Handler - Visual mode operations":
 
     check registry.execute(ctx, builtin(bcVisualYank)).isOk
     check buffer[0] == "hello world" # Buffer unchanged
-    check "hello" in ctx.state.yankRegister
+    check "hello" in ctx.state.registers.getNoNamedRegister().getContent()
     check ctx.state.mode == EditorMode.Normal
 
   test "visual indent":
@@ -2141,7 +2128,7 @@ suite "Handler - Operator commands":
     # Second y - completes yy (yank line)
     check registry.execute(ctx, custom("operator.yank")).isOk
     check buffer.len == 3 # Buffer unchanged
-    check "line2" in ctx.state.yankRegister
+    check "line2" in ctx.state.registers.getNoNamedRegister().getContent()
     # Register system must also be updated
     let reg = ctx.state.registers.getNoNamedRegister()
     check "line2" in reg.getContent()
@@ -2235,8 +2222,7 @@ suite "Handler - Visual mode extended operations":
       current: BufferPosition(line: 0, column: 4),
     )
     ctx.setCursor(0, 4)
-    ctx.state.yankRegister = "XYZ"
-    ctx.state.yankIsLine = false
+    ctx.state.registers.setYankedRegister("XYZ", false)
     let registry = createTestRegistry()
 
     check registry.execute(ctx, builtin(bcVisualPaste)).isOk
@@ -3127,8 +3113,7 @@ suite "Cursor clamping - Visual operations sync ctx.cursor":
     let buffer = newTextBuffer("hello world")
     let ctx = createTestContext(buffer)
     ctx.setupVisual(0, 0, 0, 4)
-    ctx.state.yankRegister = "XYZ"
-    ctx.state.yankIsLine = false
+    ctx.state.registers.setYankedRegister("XYZ", false)
     ctx.state.registers.setDeletedRegister("XYZ", false)
     let registry = createTestRegistry()
 
@@ -3986,7 +3971,7 @@ suite "Operator + Find/Till - yank and change till":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world" # Buffer unchanged
-    check ctx.state.yankRegister == "hello"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "hello"
 
   test "yank till character (yt)":
     let buffer = newTextBuffer("hello world")
@@ -4008,7 +3993,7 @@ suite "Operator + Find/Till - yank and change till":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world" # Buffer unchanged
-    check ctx.state.yankRegister == "hell"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "hell"
 
   test "change till character (ct)":
     let buffer = newTextBuffer("hello world")
@@ -4139,7 +4124,7 @@ suite "Operator + Backward Find/Till":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world" # Buffer unchanged
-    check ctx.state.yankRegister == "orl"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "orl"
 
   test "yank till backward (yT)":
     let buffer = newTextBuffer("hello world")
@@ -4161,7 +4146,7 @@ suite "Operator + Backward Find/Till":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world" # Buffer unchanged
-    check ctx.state.yankRegister == "rl"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "rl"
 
 suite "Operator + Word End/Backward motions":
   test "delete word end (de)":
@@ -4209,7 +4194,7 @@ suite "Operator + Word End/Backward motions":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world test" # Buffer unchanged
-    check ctx.state.yankRegister == "hello"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "hello"
 
   test "delete word end from middle of word (de)":
     let buffer = newTextBuffer("hello world test")
@@ -4255,7 +4240,7 @@ suite "Operator + Word End/Backward motions":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world test" # Buffer unchanged
-    check ctx.state.yankRegister == "llo"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "llo"
 
   test "delete word end to end of current word (de)":
     let buffer = newTextBuffer("hello\nworld test")
@@ -4336,7 +4321,7 @@ suite "Operator + Word End/Backward motions":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world test" # Buffer unchanged
-    check ctx.state.yankRegister == "hello "
+    check ctx.state.registers.getNoNamedRegister().getContent() == "hello "
 
 suite "Operator + Word End Backward (ge) motions":
   test "ge motion basic":
@@ -4583,7 +4568,7 @@ suite "Operator + Line start/end motions":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world" # Buffer unchanged
-    check ctx.state.yankRegister == "hello "
+    check ctx.state.registers.getNoNamedRegister().getContent() == "hello "
 
   test "delete to first non-blank (d^)":
     let buffer = newTextBuffer("   hello world")
@@ -4614,7 +4599,7 @@ suite "Operator + Line start/end motions":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "hello world" # Buffer unchanged
-    check ctx.state.yankRegister == "world"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "world"
 
 suite "Operator + Paragraph/File motions":
   test "delete paragraph forward (d})":
@@ -4665,7 +4650,7 @@ suite "Operator + Paragraph/File motions":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer.len == 4 # Buffer unchanged
-    check ctx.state.yankRegister == "line1\nline2\n\n"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "line1\nline2\n\n"
 
   test "delete to first line (dgg)":
     let buffer = newTextBuffer("line1\nline2\nline3\nline4")
@@ -4713,7 +4698,8 @@ suite "Operator + Paragraph/File motions":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer.len == 3 # Buffer unchanged
-    check ctx.state.yankRegister == "line1\nline2\nline3\n"
+    check ctx.state.registers.getNoNamedRegister().getContent() ==
+      "line1\nline2\nline3\n"
 
   test "yank to last line (yG)":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -4729,7 +4715,8 @@ suite "Operator + Paragraph/File motions":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer.len == 3 # Buffer unchanged
-    check ctx.state.yankRegister == "line1\nline2\nline3\n"
+    check ctx.state.registers.getNoNamedRegister().getContent() ==
+      "line1\nline2\nline3\n"
 
 suite "Operator + Case operators with motions":
   test "lowercase word (guw)":
@@ -4838,7 +4825,7 @@ suite "Operator + Matching bracket":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "foo(bar)baz" # Buffer unchanged
-    check ctx.state.yankRegister == "(bar)"
+    check ctx.state.registers.getNoNamedRegister().getContent() == "(bar)"
 
 suite "Operator with compound counts":
   test "count before operator (2dw via operatorCount)":

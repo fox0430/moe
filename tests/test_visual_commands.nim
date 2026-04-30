@@ -306,8 +306,8 @@ suite "Visual Commands - visualYank":
 
     visualYank(buf, state)
 
-    check state.yankRegister == "hello"
-    check state.yankIsLine == false
+    check state.registers.getNoNamedRegister().getContent() == "hello"
+    check state.registers.getNoNamedRegister().isLine == false
     check state.visualSelection.active == false
     check state.cursor.column == 0 # cursor moves to start of selection
     check state.mode == EditorMode.Normal
@@ -328,8 +328,8 @@ suite "Visual Commands - visualYank":
 
     visualYank(buf, state)
 
-    check state.yankRegister == "line 1\nline 2"
-    check state.yankIsLine == true
+    check state.registers.getNoNamedRegister().getContent() == "line 1\nline 2"
+    check state.registers.getNoNamedRegister().isLine == true
     check state.visualSelection.active == false
 
   test "Yank to named register":
@@ -404,7 +404,7 @@ suite "Visual Commands - visualDelete":
     visualDelete(buf, state)
 
     check buf.getLine(0) == " world"
-    check state.yankRegister == "hello"
+    check state.registers.getNoNamedRegister().getContent() == "hello"
     check state.visualSelection.active == false
     check state.cursor.column == 0
     check state.mode == EditorMode.Normal
@@ -427,7 +427,7 @@ suite "Visual Commands - visualDelete":
 
     check buf.len == 1
     check buf.getLine(0) == "line 3"
-    check state.yankIsLine == true
+    check state.registers.getNoNamedRegister().isLine == true
 
   test "Delete inactive selection (no-op)":
     let buf = newTextBuffer()
@@ -1133,7 +1133,7 @@ suite "Visual Commands - Block Selection":
 
     # Block selection from column 0 to 2 (inclusive) gives 3 characters per line
     # substr(startCol, endCol - startCol + 1) = substr(0, 3) = 4 chars due to LineBuffer.substr behavior
-    check state.yankRegister == "hell\nworl"
+    check state.registers.getNoNamedRegister().getContent() == "hell\nworl"
     check state.visualSelection.active == false
 
   test "Lowercase block selection":
@@ -1279,11 +1279,11 @@ suite "Visual Commands - Edge Cases":
     discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
     let state = createTestState()
     state.visualSelection.active = false
-    state.yankRegister = ""
+    state.registers.setYankedRegister("", false)
 
     visualYank(buf, state)
 
-    check state.yankRegister == ""
+    check state.registers.getNoNamedRegister().getContent() == ""
 
   test "Indent inactive selection (no-op)":
     let buf = newTextBuffer()
@@ -1403,7 +1403,7 @@ suite "Visual Commands - Edge Cases":
 
     # Second line "hi" is shorter than column 5, so it contributes empty string
     # The result should have 3 lines (one per selected line)
-    check state.yankRegister.split('\n').len == 3
+    check state.registers.getNoNamedRegister().getContent().split('\n').len == 3
 
   test "visualMoveRight at exact line length":
     let buf = newTextBuffer()

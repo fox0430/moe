@@ -2577,7 +2577,7 @@ suite "NormalModeHandler - dgn (delete search match forward)":
 
     let result = pressDgn(handler, buf, state, viewport)
     check result.kind == nmrHandled
-    check state.yankRegister == "world"
+    check state.registers.getNoNamedRegister().getContent() == "world"
 
   test "dgn stays in Normal mode":
     let buf = newTextBuffer()

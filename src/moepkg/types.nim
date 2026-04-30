@@ -587,9 +587,6 @@ type
     timing*: TimingState # Timing and debounce state
     lastKeyWasEscape*: bool
       # Track if last key was Escape (for double-Escape to clear highlight)
-    # Yank register (internal clipboard) - DEPRECATED: use registers instead
-    yankRegister*: string # Content yanked with yy, y, etc.
-    yankIsLine*: bool # Whether the yank was linewise (yy) or characterwise
     # Full register system (vim-style)
     registers*: Registers # All registers (", 0-9, a-z, -, *, +)
     pendingRegister*: Option[char]
