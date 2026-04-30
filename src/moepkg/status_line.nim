@@ -387,7 +387,7 @@ proc parseSetupText(
     encoding = encodingToString(textBuffer.encoding)
     modeStr =
       if state.overlay.isSome:
-        overlayLabel(state.overlay.get().kind)
+        overlayLabel(state.overlay.get())
       else:
         modeLabel(state.mode, state.insertNormalMode)
     filePath =
@@ -505,12 +505,12 @@ proc renderStatusLine*(
   # Use overlay styles if an overlay is active, otherwise use mode styles
   let (modeLabelStyle, statusLineStyle, modeLabelText) =
     if state.overlay.isSome:
-      let overlay = state.overlay.get()
-      let labelStyle = getOverlayLabelStyle(overlay.kind)
-      let lineStyle = getOverlayStyle(overlay.kind)
+      let overlayKind = state.overlay.get()
+      let labelStyle = getOverlayLabelStyle(overlayKind)
+      let lineStyle = getOverlayStyle(overlayKind)
       let labelText =
         if config.mode:
-          fmt" {overlayLabel(overlay.kind)} "
+          fmt" {overlayLabel(overlayKind)} "
         else:
           ""
       (labelStyle, lineStyle, labelText)
@@ -603,12 +603,12 @@ proc renderWindowStatusLine*(
   # Use overlay styles if an overlay is active, otherwise use mode styles
   let (modeLabelStyle, statusLineStyle, modeLabelText) =
     if isActiveWindow and state.overlay.isSome:
-      let overlay = state.overlay.get()
-      let labelStyle = getOverlayLabelStyle(overlay.kind)
-      let lineStyle = getOverlayStyle(overlay.kind)
+      let overlayKind = state.overlay.get()
+      let labelStyle = getOverlayLabelStyle(overlayKind)
+      let lineStyle = getOverlayStyle(overlayKind)
       let labelText =
         if showMode:
-          fmt" {overlayLabel(overlay.kind)} "
+          fmt" {overlayLabel(overlayKind)} "
         else:
           ""
       (labelStyle, lineStyle, labelText)

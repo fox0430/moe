@@ -101,25 +101,10 @@ type
     Forward # Search forward (/)
     Backward # Search backward (?)
 
-  OverlayState* = object
-    ## State for overlay modes (Command, Search, Rename)
-    ## These are transient modes that sit on top of a base mode
-    case kind*: OverlayKind
-    of okCommand:
-      commandText*: string # Text being typed (includes ":" prefix)
-      commandCursor*: int # Cursor position within text (0-based after ":")
-    of okSearch:
-      searchDirection*: SearchDirection # / or ?
-    of okRename:
-      renameText*: string # New name being typed
-      renameOriginalWord*: string # Original word being renamed
-      renameCursorLine*: int # Line where rename was initiated
-      renameCursorColumn*: int # Column where rename was initiated
-
   SearchState* = object ## Search-related state grouped together for better organization
-    text*: string # Text being typed in search mode (was: searchText)
+    text*: string # Text being typed in search mode
     cursor*: int # Cursor position within text (0-based character index)
-    lastText*: string # Last executed search text for n/N commands (was: lastSearchText)
+    lastText*: string # Last executed search text for n/N commands
     direction*: SearchDirection # Direction of current search (/ or ?)
     history*: seq[string] # Search history (most recent first)
     historyIndex*: int # Current position in search history (-1 when not navigating)
@@ -137,17 +122,16 @@ type
     historyIndex*: int # Current position in command history (-1 when not navigating)
 
   MacroState* = object ## Macro recording and playback state grouped together
-    isRecording*: bool # Whether currently recording a macro (was: isRecordingMacro)
-    register*: char # Which register (a-z) is being recorded to (was: macroRegister)
+    isRecording*: bool # Whether currently recording a macro
+    register*: char # Which register (a-z) is being recorded to
     recordedKeys*: seq[string] # Keys being recorded in current macro session
-    registers*: Table[char, seq[string]] # Saved macros by register (was: macroRegisters)
-    lastRegister*: Option[char]
-      # Last executed macro register for @@ (was: lastMacroRegister)
+    registers*: Table[char, seq[string]] # Saved macros by register
+    lastRegister*: Option[char] # Last executed macro register for @@
     waitingForRegister*: bool # Waiting for register name after q or @
-    commandType*: string # "record" or "playback" (was: macroCommandType)
+    commandType*: string # "record" or "playback"
     recordStartKey*: string # Key string that started recording (for stop detection)
-    pendingCount*: int # Numeric prefix for macro playback (was: pendingMacroCount)
-    playbackDepth*: int # Current macro recursion depth (was: macroPlaybackDepth)
+    pendingCount*: int # Numeric prefix for macro playback
+    playbackDepth*: int # Current macro recursion depth
 
   EditState* = object ## Edit operation state grouped together
     lastMotion*: Option[Motion] # Last motion for repeat
@@ -632,7 +616,7 @@ type
     renameState*: RenameState # State for LSP rename mode
     # Overlay state for transient modes (Command, Search, Rename)
     # When set, the editor displays an overlay on top of the base mode
-    overlay*: Option[OverlayState]
+    overlay*: Option[OverlayKind]
     # f/F/t/T command match highlight
     findCharMatches*: seq[int] # Matched column positions on cursor line
     findCharMatchLine*: int # Line number of the matches
@@ -736,29 +720,24 @@ proc hasOverlay*(state: EditorState): bool =
 
 proc overlayKind*(state: EditorState): Option[OverlayKind] =
   ## Get the kind of active overlay, if any
-  if state.overlay.isSome:
-    some(state.overlay.get.kind)
-  else:
-    none(OverlayKind)
+  state.overlay
 
 proc isCommandOverlay*(state: EditorState): bool =
   ## Check if command overlay is active
-  state.overlay.isSome and state.overlay.get.kind == okCommand
+  state.overlay == some(okCommand)
 
 proc isSearchOverlay*(state: EditorState): bool =
   ## Check if search overlay is active
-  state.overlay.isSome and state.overlay.get.kind == okSearch
+  state.overlay == some(okSearch)
 
 proc isRenameOverlay*(state: EditorState): bool =
   ## Check if rename overlay is active
-  state.overlay.isSome and state.overlay.get.kind == okRename
+  state.overlay == some(okRename)
 
 proc enterCommandOverlay*(state: EditorState) =
   ## Enter command mode overlay
   ## The base mode (Normal, Filer, etc.) is preserved
-  state.overlay =
-    some(OverlayState(kind: okCommand, commandText: ":", commandCursor: 0))
-  # Initialize command text (legacy field)
+  state.overlay = some(okCommand)
   state.commandText = ":"
   state.commandCursor = 0
   state.commandState.historyIndex = -1
@@ -766,8 +745,7 @@ proc enterCommandOverlay*(state: EditorState) =
 proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
   ## Enter search mode overlay
   ## The base mode (Normal, LogViewer, etc.) is preserved
-  state.overlay = some(OverlayState(kind: okSearch, searchDirection: direction))
-  # Initialize search state
+  state.overlay = some(okSearch)
   state.search.direction = direction
   state.search.text = ""
   state.search.cursor = 0
@@ -782,16 +760,7 @@ proc enterSearchOverlay*(state: EditorState, direction: SearchDirection) =
 proc enterRenameOverlay*(state: EditorState, word: string, line, col: int) =
   ## Enter rename mode overlay
   ## The base mode (Normal) is preserved
-  state.overlay = some(
-    OverlayState(
-      kind: okRename,
-      renameText: word,
-      renameOriginalWord: word,
-      renameCursorLine: line,
-      renameCursorColumn: col,
-    )
-  )
-  # Initialize rename state (legacy field)
+  state.overlay = some(okRename)
   state.renameState.text = word
   state.renameState.originalWord = word
   state.renameState.cursorLine = line
@@ -800,7 +769,7 @@ proc enterRenameOverlay*(state: EditorState, word: string, line, col: int) =
 proc exitOverlay*(state: EditorState) =
   ## Exit the current overlay and return to the base mode
   if state.overlay.isSome:
-    state.overlay = none(OverlayState)
+    state.overlay = none(OverlayKind)
     # Clear overlay-specific state
     state.commandText = ""
     state.commandCursor = 0
