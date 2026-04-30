@@ -77,7 +77,7 @@ proc createTestState(): EditorState =
       playbackDepth: 0,
     ),
     registers: initRegisters(),
-    overlay: none(OverlayState),
+    overlay: none(OverlayKind),
   )
 
 proc createTestBuffer(): celina.Buffer =

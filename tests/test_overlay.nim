@@ -74,7 +74,7 @@ proc createTestState(): EditorState =
       playbackDepth: 0,
     ),
     registers: initRegisters(),
-    overlay: none(OverlayState),
+    overlay: none(OverlayKind),
   )
 
 suite "Overlay - hasOverlay":
@@ -186,9 +186,9 @@ suite "Overlay - enterCommandOverlay":
     state.enterCommandOverlay()
 
     check state.overlay.isSome
-    check state.overlay.get.kind == okCommand
-    check state.overlay.get.commandText == ":"
-    check state.overlay.get.commandCursor == 0
+    check state.overlay.get == okCommand
+    check state.commandText == ":"
+    check state.commandCursor == 0
 
   test "Preserves base mode when entering command overlay":
     let state = createTestState()
@@ -221,16 +221,16 @@ suite "Overlay - enterSearchOverlay":
     state.enterSearchOverlay(Forward)
 
     check state.overlay.isSome
-    check state.overlay.get.kind == okSearch
-    check state.overlay.get.searchDirection == Forward
+    check state.overlay.get == okSearch
+    check state.search.direction == Forward
 
   test "Sets overlay to search mode with Backward direction":
     let state = createTestState()
     state.enterSearchOverlay(Backward)
 
     check state.overlay.isSome
-    check state.overlay.get.kind == okSearch
-    check state.overlay.get.searchDirection == Backward
+    check state.overlay.get == okSearch
+    check state.search.direction == Backward
 
   test "Preserves base mode when entering search overlay":
     let state = createTestState()
@@ -272,11 +272,11 @@ suite "Overlay - enterRenameOverlay":
     state.enterRenameOverlay("myVariable", 10, 5)
 
     check state.overlay.isSome
-    check state.overlay.get.kind == okRename
-    check state.overlay.get.renameText == "myVariable"
-    check state.overlay.get.renameOriginalWord == "myVariable"
-    check state.overlay.get.renameCursorLine == 10
-    check state.overlay.get.renameCursorColumn == 5
+    check state.overlay.get == okRename
+    check state.renameState.text == "myVariable"
+    check state.renameState.originalWord == "myVariable"
+    check state.renameState.cursorLine == 10
+    check state.renameState.cursorColumn == 5
 
   test "Preserves base mode when entering rename overlay":
     let state = createTestState()
@@ -688,7 +688,7 @@ suite "Overlay - edge cases":
       EditorMode.Config,
     ]:
       state.mode = baseMode
-      state.overlay = none(OverlayState)
+      state.overlay = none(OverlayKind)
 
       # Command overlay
       state.enterCommandOverlay()

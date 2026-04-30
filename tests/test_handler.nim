@@ -97,7 +97,7 @@ proc createTestState(): EditorState =
       playbackDepth: 0,
     ),
     registers: initRegisters(),
-    overlay: none(OverlayState),
+    overlay: none(OverlayKind),
     search: SearchState(
       direction: Forward,
       text: "",

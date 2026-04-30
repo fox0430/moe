@@ -78,7 +78,7 @@ proc createTestState(): EditorState =
       playbackDepth: 0,
     ),
     registers: initRegisters(),
-    overlay: none(OverlayState),
+    overlay: none(OverlayKind),
   )
 
 proc createTestBuffer(): celina.Buffer =
@@ -485,8 +485,7 @@ suite "StatusLine - parseSetupText":
 
   test "Parse mode placeholder with overlay":
     var state = createTestState()
-    state.overlay =
-      some(OverlayState(kind: okCommand, commandText: ":", commandCursor: 0))
+    state.overlay = some(okCommand)
 
     let textBuffer = createTestTextBuffer("", false, "test")
 
@@ -631,8 +630,7 @@ suite "StatusLine - renderStatusLine":
   test "Renders with command overlay":
     var state = createTestState()
     state.display.showStatusLine = true
-    state.overlay =
-      some(OverlayState(kind: okCommand, commandText: ":", commandCursor: 0))
+    state.overlay = some(okCommand)
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -1003,8 +1001,7 @@ suite "StatusLine - renderStatusLine additional modes":
   test "Renders with search overlay":
     var state = createTestState()
     state.display.showStatusLine = true
-    state.overlay =
-      some(OverlayState(kind: okSearch, searchDirection: SearchDirection.Forward))
+    state.overlay = some(okSearch)
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -1019,15 +1016,7 @@ suite "StatusLine - renderStatusLine additional modes":
   test "Renders with rename overlay":
     var state = createTestState()
     state.display.showStatusLine = true
-    state.overlay = some(
-      OverlayState(
-        kind: okRename,
-        renameText: "newName",
-        renameOriginalWord: "oldName",
-        renameCursorLine: 0,
-        renameCursorColumn: 0,
-      )
-    )
+    state.overlay = some(okRename)
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -1193,8 +1182,7 @@ suite "StatusLine - renderWindowStatusLine additional":
     var state = createTestState()
     state.display.showStatusLine = true
     state.display.multiStatusLine = true
-    state.overlay =
-      some(OverlayState(kind: okSearch, searchDirection: SearchDirection.Forward))
+    state.overlay = some(okSearch)
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")

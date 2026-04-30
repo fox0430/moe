@@ -200,7 +200,7 @@ suite "executeCommand - Overlay switch commands":
 
     check registry.executeCommand(ctx, cmd).isOk
     check ctx.state.overlay.isSome
-    check ctx.state.overlay.get.kind == okCommand
+    check ctx.state.overlay.get == okCommand
 
   test "switch to search overlay (forward)":
     let buffer = newTextBuffer("hello")
@@ -216,7 +216,7 @@ suite "executeCommand - Overlay switch commands":
 
     check registry.executeCommand(ctx, cmd).isOk
     check ctx.state.overlay.isSome
-    check ctx.state.overlay.get.kind == okSearch
+    check ctx.state.overlay.get == okSearch
 
   test "switch to search overlay (backward)":
     let buffer = newTextBuffer("hello")
@@ -232,7 +232,7 @@ suite "executeCommand - Overlay switch commands":
 
     check registry.executeCommand(ctx, cmd).isOk
     check ctx.state.overlay.isSome
-    check ctx.state.overlay.get.kind == okSearch
+    check ctx.state.overlay.get == okSearch
 
 suite "executeCommand - Operator pending commands":
   test "find character (f)":
