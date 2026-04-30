@@ -154,10 +154,6 @@ proc visualYank*(buffer: TextBuffer, state: EditorState) =
       # Default: use yank register (0) and unnamed register
       state.registers.setYankedRegister(selectedText, isLine)
 
-    # Also update legacy yankRegister for backward compatibility
-    state.yankRegister = selectedText
-    state.yankIsLine = isLine
-
     # Move cursor to start of selection (Vim behavior)
     state.cursor = selStart
     # Clamp column to valid range for Normal mode (last char, not past end)
@@ -198,10 +194,6 @@ proc deleteBlockSelection(buffer: TextBuffer, state: EditorState) =
       state.registers.setDeletedRegister(deletedText, false)
   else:
     state.registers.setDeletedRegister(deletedText, false)
-
-  # Also update legacy yankRegister for backward compatibility
-  state.yankRegister = deletedText
-  state.yankIsLine = false
 
   # Delete from each line in reverse order to preserve line numbers
   for lineNum in countdown(endLine, startLine):
@@ -245,10 +237,6 @@ proc deleteLineSelection(buffer: TextBuffer, state: EditorState) =
       state.registers.setDeletedRegister(deletedText, true)
   else:
     state.registers.setDeletedRegister(deletedText, true)
-
-  # Also update legacy yankRegister for backward compatibility
-  state.yankRegister = deletedText
-  state.yankIsLine = true
 
   # Delete lines from end to start to preserve line numbers
   for lineNum in countdown(endLine, startLine):
@@ -297,10 +285,6 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
           state.registers.setDeletedRegister(selectedText, isMultiLine)
       else:
         state.registers.setDeletedRegister(selectedText, isMultiLine)
-
-      # Also update legacy yankRegister for backward compatibility
-      state.yankRegister = selectedText
-      state.yankIsLine = false
 
       let result = buffer.deleteRange(selStart, selEnd)
       if result.isErr:

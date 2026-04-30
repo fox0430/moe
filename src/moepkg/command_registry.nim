@@ -1475,9 +1475,6 @@ proc handleVisualPaste(ctx: CommandContext): Result[(), string] =
 proc storeYankedText(ctx: CommandContext, text: string, isLine: bool) =
   ## Store yanked text in the appropriate register, respecting pendingRegister.
   ## Also writes to the system clipboard when appropriate.
-  ctx.state.yankRegister = text
-  ctx.state.yankIsLine = isLine
-
   if ctx.state.registers.isNil:
     return
 
@@ -1496,9 +1493,6 @@ proc storeYankedText(ctx: CommandContext, text: string, isLine: bool) =
 proc storeDeletedText(ctx: CommandContext, text: string, isLine: bool) =
   ## Store deleted text in the appropriate register, respecting pendingRegister.
   ## Also writes to the system clipboard when appropriate.
-  ctx.state.yankRegister = text
-  ctx.state.yankIsLine = isLine
-
   if ctx.state.registers.isNil:
     return
 
@@ -1616,10 +1610,6 @@ proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
     let reg = ctx.state.registers.getNoNamedRegister()
     pasteText = reg.getContent()
     isFullLine = reg.isLine
-    # Also check legacy register for backward compatibility
-    if pasteText.len == 0:
-      pasteText = ctx.state.yankRegister
-      isFullLine = ctx.state.yankIsLine
     logDebug("paste", "Using unnamed register, length: " & $pasteText.len)
 
   logDebug(
@@ -1733,10 +1723,6 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
     let reg = ctx.state.registers.getNoNamedRegister()
     pasteText = reg.getContent()
     isFullLine = reg.isLine
-    # Also check legacy register for backward compatibility
-    if pasteText.len == 0:
-      pasteText = ctx.state.yankRegister
-      isFullLine = ctx.state.yankIsLine
     logDebug("paste", "Using unnamed register, length: " & $pasteText.len)
 
   logDebug(
@@ -2373,10 +2359,10 @@ proc handleYankLine(ctx: CommandContext, count: int = 1): Result[(), string] =
   # Store in register system (respects pendingRegister)
   storeYankedText(ctx, yankText, true)
 
+  let storedReg = ctx.state.registers.getNoNamedRegister()
   logDebug(
     "yank",
-    "Stored in register: '" & ctx.state.yankRegister & "', isLine=" &
-      $ctx.state.yankIsLine,
+    "Stored in register: '" & storedReg.getContent() & "', isLine=" & $storedReg.isLine,
   )
 
   # Yank screen notification (controlled by config)

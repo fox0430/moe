@@ -776,9 +776,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         visualBlockInsertContext: none(VisualBlockInsertContext),
       ),
       savedViewportTopLine: 0, # Saved viewport position for operators
-      # Yank register (internal clipboard) - DEPRECATED
-      yankRegister: "", # Empty initially
-      yankIsLine: false, # Not linewise initially
       # Full register system
       registers: initRegisters(),
       pendingRegister: none(char),

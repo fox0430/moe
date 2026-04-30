@@ -349,8 +349,6 @@ proc searchMatchAndOperate(
       state.registers.setDeletedRegister(selectedText, isMultiLine)
   else:
     state.registers.setDeletedRegister(selectedText, isMultiLine)
-  state.yankRegister = selectedText
-  state.yankIsLine = false
   state.pendingRegister = none(char)
 
   case op.operatorType
