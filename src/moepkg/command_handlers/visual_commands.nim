@@ -261,6 +261,8 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
       state.mode = state.previousMode
       return
 
+    var deleteError = ""
+
     case state.visualSelection.kind
     of vskBlock:
       deleteBlockSelection(buffer, state)
@@ -288,8 +290,7 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
 
       let result = buffer.deleteRange(selStart, selEnd)
       if result.isErr:
-        # TODO: Show error message to user
-        discard
+        deleteError = result.error
       else:
         # Move cursor to start of deleted range
         state.cursor = selStart
@@ -312,7 +313,10 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
 
     state.visualSelection.active = false
     state.needsFullRedraw = true
-    state.statusMessage = ""
+    if deleteError.len > 0:
+      state.statusMessage = "Error: " & deleteError
+    else:
+      state.statusMessage = ""
     # Return to previous mode (before entering Visual mode)
     state.mode = state.previousMode
 
