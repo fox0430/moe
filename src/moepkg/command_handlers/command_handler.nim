@@ -95,7 +95,9 @@ type
     cmrSetIntOption # Set integer option
     cmrSetFloatOption # Set float option
     cmrSave # Save file
+    cmrSaveAll # Save all modified buffers (:wa)
     cmrSaveAndQuit # Save file and quit
+    cmrSaveAllAndQuit # Save all modified buffers and quit (:wqa, :xa)
     cmrBufferNext # Switch to next buffer
     cmrBufferPrev # Switch to previous buffer
     cmrBufferFirst # Switch to first buffer
@@ -180,9 +182,13 @@ type
     of cmrSave:
       saveFilename*: Option[string]
       forceSave*: bool
+    of cmrSaveAll:
+      forceSaveAll*: bool
     of cmrSaveAndQuit:
       saveAndQuitFilename*: Option[string]
       forceSaveAndQuit*: bool
+    of cmrSaveAllAndQuit:
+      forceSaveAllAndQuit*: bool
     of cmrBufferNext, cmrBufferPrev, cmrBufferFirst, cmrBufferLast:
       discard
     of cmrBuffer:
@@ -312,6 +318,12 @@ proc executeSave*(
   ## The actual save operation is performed by the editor
   return CommandModeResult(kind: cmrSave, saveFilename: filename, forceSave: force)
 
+proc executeSaveAll*(handler: CommandModeHandler, force: bool): CommandModeResult =
+  ## Execute save all command (:wa, :wa!)
+  ## Returns cmrSaveAll to signal that every modified buffer should be saved.
+  ## The actual save operation is performed by the editor.
+  return CommandModeResult(kind: cmrSaveAll, forceSaveAll: force)
+
 proc executeSaveAndQuit*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
@@ -324,6 +336,15 @@ proc executeSaveAndQuit*(
   return CommandModeResult(
     kind: cmrSaveAndQuit, saveAndQuitFilename: filename, forceSaveAndQuit: force
   )
+
+proc executeSaveAllAndQuit*(
+    handler: CommandModeHandler, force: bool
+): CommandModeResult =
+  ## Execute save all and quit command (:wqa, :xa, :wqa!)
+  ## Returns cmrSaveAllAndQuit to signal that every modified buffer should be
+  ## saved and then the editor should quit. The actual save and quit operations
+  ## are performed by the editor.
+  return CommandModeResult(kind: cmrSaveAllAndQuit, forceSaveAllAndQuit: force)
 
 proc executeQuitAll*(
     handler: CommandModeHandler, buffer: TextBuffer, force: bool
@@ -1101,16 +1122,13 @@ proc handleCommandModeInput*(
   of claSave:
     return handler.executeSave(buffer, cmdResult.filename, cmdResult.forceSave)
   of claSaveAll:
-    # TODO: Handle save all (multiple buffers)
-    return handler.executeSave(buffer, none(string), cmdResult.forceSaveAll)
+    return handler.executeSaveAll(cmdResult.forceSaveAll)
   of claSaveAndQuit:
     return handler.executeSaveAndQuit(
       buffer, cmdResult.saveFilename, cmdResult.forceSaveAndQuit
     )
   of claSaveAllAndQuit:
-    # TODO: Handle save all and quit
-    return
-      handler.executeSaveAndQuit(buffer, none(string), cmdResult.forceSaveAllAndQuit)
+    return handler.executeSaveAllAndQuit(cmdResult.forceSaveAllAndQuit)
   of claEdit:
     return handler.executeEdit(buffer, cmdResult.editFilename, cmdResult.forceEdit)
   of claEnew:

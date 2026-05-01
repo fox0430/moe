@@ -49,7 +49,9 @@ type
     hrSetFloatOption # Set float option
     hrClearSearchHighlight # Clear search highlighting
     hrSave # Save file
+    hrSaveAll # Save all modified buffers (:wa)
     hrSaveAndQuit # Save file and quit
+    hrSaveAllAndQuit # Save all modified buffers and quit (:wqa, :xa)
     hrBufferNext # Switch to next buffer
     hrBufferPrev # Switch to previous buffer
     hrBufferFirst # Switch to first buffer
@@ -195,9 +197,13 @@ type
     of hrSave:
       saveFilename*: Option[string]
       forceSave*: bool
+    of hrSaveAll:
+      forceSaveAll*: bool
     of hrSaveAndQuit:
       saveAndQuitFilename*: Option[string]
       forceQuitAfterSave*: bool
+    of hrSaveAllAndQuit:
+      forceSaveAllAndQuitAfter*: bool
     of hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast:
       discard
     of hrBuffer:
@@ -401,12 +407,12 @@ proc wasHandled*(hrResult: HandlerResult): bool =
   ## Check if the event was handled
   hrResult.kind in {
     hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrNew, hrVnew,
-    hrEnew, hrSave, hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst,
-    hrBufferLast, hrBuffer, hrJumpToBuffer, hrBufferDelete, hrStripWhitespace,
-    hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerDeleteFile,
-    hrFilerShowInfo, hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrEnterLogViewer,
-    hrHelpViewerQuit, hrEnterHelpViewer, hrReferencesQuit, hrReferencesJumpTo,
-    hrEnterReferences, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
+    hrEnew, hrSave, hrSaveAll, hrSaveAndQuit, hrSaveAllAndQuit, hrBufferNext,
+    hrBufferPrev, hrBufferFirst, hrBufferLast, hrBuffer, hrJumpToBuffer, hrBufferDelete,
+    hrStripWhitespace, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,
+    hrFilerDeleteFile, hrFilerShowInfo, hrFilerQuit, hrEnterFiler, hrLogViewerQuit,
+    hrEnterLogViewer, hrHelpViewerQuit, hrEnterHelpViewer, hrReferencesQuit,
+    hrReferencesJumpTo, hrEnterReferences, hrDocumentSymbolQuit, hrDocumentSymbolJumpTo,
     hrEnterDocumentSymbol, hrCallHierarchyQuit, hrCallHierarchyJumpTo,
     hrCallHierarchyRequestIncoming, hrCallHierarchyRequestOutgoing,
     hrEnterCallHierarchy, hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer,
