@@ -27,6 +27,12 @@ import
   editor_types, logger, git_diff, git_conflict, backup, search_utils,
   editorconfig_helper, highlight
 
+type SaveAllBuffersResult* = object
+  savedCount*: int
+  savedPaths*: seq[string]
+  skippedExternal*: seq[string] ## Buffers skipped because of external changes
+  failures*: seq[tuple[path: string, error: string]]
+
 proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
   ## Refresh git diff information for the active buffer (synchronous).
   ## Used on explicit events where we want the gutter to reflect the new
@@ -192,6 +198,14 @@ proc savePersistData*(e: Editor) =
         except CatchableError as ex:
           logError("editor", "Failed to remove empty bookmark file: " & ex.msg)
 
+proc trimTrailingWhitespaceIfConfigured(buffer: TextBuffer) =
+  if shouldTrimTrailingWhitespace(buffer):
+    for i in 0 ..< buffer.len:
+      let line = buffer.getLine(i)
+      let trimmed = line.strip(leading = false, trailing = true)
+      if trimmed.len != line.len:
+        discard buffer.replaceLine(i, trimmed)
+
 proc saveFile*(
     e: Editor, path: Option[string] = none(string), force: bool = false
 ): Result[(), string] =
@@ -216,12 +230,7 @@ proc saveFile*(
     return err("File was modified externally. Use :w! to force save, or :e! to reload.")
 
   # Trim trailing whitespace if EditorConfig says so
-  if shouldTrimTrailingWhitespace(activeBuffer):
-    for i in 0 ..< activeBuffer.len:
-      let line = activeBuffer.getLine(i)
-      let trimmed = line.strip(leading = false, trailing = true)
-      if trimmed.len != line.len:
-        discard activeBuffer.replaceLine(i, trimmed)
+  trimTrailingWhitespaceIfConfigured(activeBuffer)
 
   # Save the file
   logDebug("editor", "Saving file: " & savePath)
@@ -244,6 +253,49 @@ proc saveFile*(
       )
 
   ok(())
+
+proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
+  ## Save every modified buffer that has a file path.
+  ##
+  ## Buffers without a file path are silently skipped (matches Vim's `:wa`).
+  ## When `force` is false, buffers whose underlying file was changed externally
+  ## are skipped and reported via `skippedExternal`. When true, those changes
+  ## are overwritten.
+  for buffer in e.buffers:
+    if not buffer.isModified:
+      continue
+    if buffer.filePath.isNone:
+      continue
+
+    let savePath = buffer.filePath.get
+    if not force and buffer.isExternallyModified():
+      logError("editor", "Save all skipped externally modified file: " & savePath)
+      result.skippedExternal.add(savePath)
+      continue
+
+    # Mirror saveFile: honor EditorConfig trim_trailing_whitespace per buffer.
+    trimTrailingWhitespaceIfConfigured(buffer)
+
+    let saveResult = buffer.saveFile(savePath)
+    if saveResult.isErr:
+      logError("editor", "Save all failed for " & savePath & ": " & saveResult.error)
+      result.failures.add((path: savePath, error: saveResult.error))
+      continue
+
+    result.savedCount += 1
+    result.savedPaths.add(savePath)
+    logInfo("editor", "Saved file: " & savePath)
+
+    # Refresh git diff for the saved buffer (mirrors single-file save)
+    if e.state.display.showGitDiff:
+      discard updateBufferWithGitDiff(buffer, useBuffer = false)
+
+    if e.lsp.enabled:
+      let lspResult = e.lsp.onBufferSave(buffer)
+      if lspResult.isErr:
+        logDebug(
+          "editor", "LSP onBufferSave failed for " & savePath & ": " & lspResult.error
+        )
 
 proc autoSave*(e: Editor) =
   ## Automatically save modified buffers if auto save is enabled and interval has passed

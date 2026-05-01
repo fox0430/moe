@@ -118,6 +118,36 @@ suite "CommandModeHandler - executeSave":
     check result.kind == cmrSave
     check result.forceSave == true
 
+suite "CommandModeHandler - executeSaveAll":
+  test "Save all without force":
+    let handler = setupHandler()
+
+    let result = handler.executeSaveAll(force = false)
+    check result.kind == cmrSaveAll
+    check result.forceSaveAll == false
+
+  test "Save all with force":
+    let handler = setupHandler()
+
+    let result = handler.executeSaveAll(force = true)
+    check result.kind == cmrSaveAll
+    check result.forceSaveAll == true
+
+suite "CommandModeHandler - executeSaveAllAndQuit":
+  test "Save all and quit without force":
+    let handler = setupHandler()
+
+    let result = handler.executeSaveAllAndQuit(force = false)
+    check result.kind == cmrSaveAllAndQuit
+    check result.forceSaveAllAndQuit == false
+
+  test "Save all and quit with force":
+    let handler = setupHandler()
+
+    let result = handler.executeSaveAllAndQuit(force = true)
+    check result.kind == cmrSaveAllAndQuit
+    check result.forceSaveAllAndQuit == true
+
 suite "CommandModeHandler - executeSaveAndQuit":
   test "Save and quit without filename":
     let handler = setupHandler()
@@ -1311,6 +1341,38 @@ suite "CommandModeHandler - handleCommandModeInput":
 
     let result = handler.handleCommandModeInput(buffer, ":wq")
     check result.kind == cmrSaveAndQuit
+
+  test "Handle :wa command":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":wa")
+    check result.kind == cmrSaveAll
+    check result.forceSaveAll == false
+
+  test "Handle :wa! command":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":wa!")
+    check result.kind == cmrSaveAll
+    check result.forceSaveAll == true
+
+  test "Handle :wqa command":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":wqa")
+    check result.kind == cmrSaveAllAndQuit
+    check result.forceSaveAllAndQuit == false
+
+  test "Handle :wqa! command":
+    let handler = setupHandler()
+    let buffer = setupBuffer()
+
+    let result = handler.handleCommandModeInput(buffer, ":wqa!")
+    check result.kind == cmrSaveAllAndQuit
+    check result.forceSaveAllAndQuit == true
 
   test "Handle :qa command":
     let handler = setupHandler()

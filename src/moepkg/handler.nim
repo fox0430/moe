@@ -192,26 +192,27 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
     e.state.statusMessage = r.errorMessage
   of hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrNew, hrVnew, hrEnew,
       hrEdit, hrSetBoolOption, hrSetIntOption, hrSetFloatOption, hrClearSearchHighlight,
-      hrSave, hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
-      hrBuffer, hrJumpToBuffer, hrBufferDelete, hrStripWhitespace, hrFilerOpenFile,
-      hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerDeleteFile, hrFilerShowInfo,
-      hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrLogViewerRefresh, hrEnterLogViewer,
-      hrHelpViewerQuit, hrEnterHelpViewer, hrQuickRun, hrBufferManagerSelectBuffer,
-      hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrEnterBufferManager,
-      hrBookmarkManagerJump, hrBookmarkManagerDelete, hrBookmarkManagerQuit,
-      hrEnterBookmarkManager, hrBackupManagerRestore, hrBackupManagerDelete,
-      hrBackupManagerOpenDiff, hrBackupManagerRefresh, hrBackupManagerQuit,
-      hrEnterBackupManager, hrDiffViewerQuit, hrEnterDiffViewer, hrRecentFile,
-      hrNextWindow, hrPrevWindow, hrIncreaseWindowHeight, hrDecreaseWindowHeight,
-      hrIncreaseWindowWidth, hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow,
-      hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
-      hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
-      hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
-      hrLspSelectionRange, hrLspDocumentLink, hrShellCommand, hrBackground, hrJumpList,
-      hrChanges, hrBuild, hrDebug, hrDebugViewerQuit, hrConfig, hrConfigQuit,
-      hrConfigSaveConfig, hrPutConfigFile, hrTheme, hrLspLog, hrLspFormat, hrLspRestart,
-      hrLspFold, hrLspExecuteCommand, hrSubstitute, hrDeleteLines, hrMan,
-      hrReferencesQuit, hrReferencesJumpTo, hrEnterReferences, hrDocumentSymbolQuit,
+      hrSave, hrSaveAll, hrSaveAndQuit, hrSaveAllAndQuit, hrBufferNext, hrBufferPrev,
+      hrBufferFirst, hrBufferLast, hrBuffer, hrJumpToBuffer, hrBufferDelete,
+      hrStripWhitespace, hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit,
+      hrFilerDeleteFile, hrFilerShowInfo, hrFilerQuit, hrEnterFiler, hrLogViewerQuit,
+      hrLogViewerRefresh, hrEnterLogViewer, hrHelpViewerQuit, hrEnterHelpViewer,
+      hrQuickRun, hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer,
+      hrBufferManagerQuit, hrEnterBufferManager, hrBookmarkManagerJump,
+      hrBookmarkManagerDelete, hrBookmarkManagerQuit, hrEnterBookmarkManager,
+      hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
+      hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager,
+      hrDiffViewerQuit, hrEnterDiffViewer, hrRecentFile, hrNextWindow, hrPrevWindow,
+      hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
+      hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow, hrLspGotoDefinition,
+      hrLspGotoDeclaration, hrLspFindReferences, hrLspCodeLensExecute,
+      hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing, hrLspTypeDefinition,
+      hrLspImplementation, hrLspHover, hrLspRename, hrLspSelectionRange,
+      hrLspDocumentLink, hrShellCommand, hrBackground, hrJumpList, hrChanges, hrBuild,
+      hrDebug, hrDebugViewerQuit, hrConfig, hrConfigQuit, hrConfigSaveConfig,
+      hrPutConfigFile, hrTheme, hrLspLog, hrLspFormat, hrLspRestart, hrLspFold,
+      hrLspExecuteCommand, hrSubstitute, hrDeleteLines, hrMan, hrReferencesQuit,
+      hrReferencesJumpTo, hrEnterReferences, hrDocumentSymbolQuit,
       hrDocumentSymbolJumpTo, hrEnterDocumentSymbol, hrCallHierarchyQuit,
       hrCallHierarchyJumpTo, hrCallHierarchyRequestIncoming,
       hrCallHierarchyRequestOutgoing, hrEnterCallHierarchy, hrEnterTerminal,
@@ -1136,6 +1137,8 @@ proc handleEvent*(e: Editor, event: Event): bool =
     return false # Signal app should quit with non-zero exit code
   of hrSaveAndQuit:
     return e.processSaveAndQuitResult(r)
+  of hrSaveAllAndQuit:
+    return e.processSaveAllAndQuitResult(r)
   of hrGotoLine:
     e.processGotoLineResult(r, activeBuffer)
   of hrJumpToBuffer:
@@ -1840,7 +1843,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       if not continueRunning:
         return false
   of hrVSplit, hrHSplit, hrNew, hrVnew, hrEdit, hrSetBoolOption, hrSetIntOption,
-      hrSetFloatOption, hrClearSearchHighlight, hrSave, hrStripWhitespace,
+      hrSetFloatOption, hrClearSearchHighlight, hrSave, hrSaveAll, hrStripWhitespace,
       hrShellCommand, hrBackground, hrMan, hrSubstitute, hrDeleteLines, hrQuickRun,
       hrBuild, hrDebug, hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList,
       hrChanges, hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterLogViewer,

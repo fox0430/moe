@@ -87,6 +87,67 @@ proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
     logInfo("handler", "File saved, quitting editor")
     return false
 
+proc saveAllStatusMessage(saveResult: SaveAllBuffersResult): string =
+  ## Build a status message summarising a saveAllBuffers result.
+  if saveResult.failures.len > 0:
+    let first = saveResult.failures[0]
+    if saveResult.failures.len == 1:
+      return "Save failed: " & first.path & ": " & first.error
+    return
+      "Save failed for " & $saveResult.failures.len & " files; first: " & first.path &
+      ": " & first.error
+  if saveResult.savedCount == 0:
+    if saveResult.skippedExternal.len > 0:
+      return
+        "No files saved (" & $saveResult.skippedExternal.len &
+        " externally modified, use :wa! to override)"
+    return "No modified files to save"
+  var msg =
+    if saveResult.savedCount == 1:
+      "Saved: " & saveResult.savedPaths[0]
+    else:
+      "Saved " & $saveResult.savedCount & " files"
+  if saveResult.skippedExternal.len > 0:
+    msg.add(
+      " (" & $saveResult.skippedExternal.len &
+        " skipped: externally modified, use :wa! to override)"
+    )
+  msg
+
+proc processSaveAllResult*(e: Editor, r: HandlerResult) =
+  ## Process hrSaveAll: save every modified buffer and report the outcome.
+  ## Note: buildOnSave / syntaxCheckOnSave are intentionally not run here —
+  ## :wa is a batch operation and triggering them per buffer would fan out
+  ## N builds for N saved files.
+  let saveResult = e.saveAllBuffers(r.forceSaveAll)
+  let msg = saveAllStatusMessage(saveResult)
+  # Always surface failures / skips / no-op; gate the success summary on
+  # saveScreenNotify to match single-file :w behavior.
+  if saveResult.failures.len > 0 or saveResult.skippedExternal.len > 0 or
+      saveResult.savedCount == 0:
+    e.state.statusMessage = msg
+  elif e.config.notification.screenNotifications and
+      e.config.notification.saveScreenNotify:
+    e.state.statusMessage = msg
+  if e.config.notification.logNotifications and e.config.notification.saveLogNotify and
+      saveResult.savedCount > 0:
+    if saveResult.savedCount == 1:
+      logInfo("handler", "Saved file via :wa: " & saveResult.savedPaths[0])
+    else:
+      logInfo("handler", "Saved " & $saveResult.savedCount & " files via :wa")
+
+proc processSaveAllAndQuitResult*(e: Editor, r: HandlerResult): bool =
+  ## Process hrSaveAllAndQuit: save every modified buffer and return false
+  ## (quit) on full success, true (continue) when any save failed or any
+  ## buffer was skipped due to external modification without force.
+  let saveResult = e.saveAllBuffers(r.forceSaveAllAndQuitAfter)
+  if saveResult.failures.len > 0 or saveResult.skippedExternal.len > 0:
+    e.state.statusMessage = saveAllStatusMessage(saveResult)
+    logError("handler", "Save all and quit aborted: " & e.state.statusMessage)
+    return true
+  logInfo("handler", "All files saved, quitting editor")
+  false
+
 proc processGotoLineResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer) =
   ## Process hrGotoLine: move cursor to the specified line number.
   let lineNum = r.lineNumber
@@ -864,8 +925,12 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
                 syntaxCheckCommand(savedPath, activeBuffer.language).isOk:
               e.state.pendingSyntaxCheck =
                 (path: savedPath, language: activeBuffer.language.ord)
+      of hrSaveAll:
+        e.processSaveAllResult(r)
       of hrSaveAndQuit:
         return e.processSaveAndQuitResult(r)
+      of hrSaveAllAndQuit:
+        return e.processSaveAllAndQuitResult(r)
       of hrBufferNext:
         e.switchToNextBuffer()
       of hrBufferPrev:

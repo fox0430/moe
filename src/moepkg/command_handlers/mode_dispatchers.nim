@@ -236,11 +236,17 @@ proc handleCommandMode*(
   of cmrSave:
     return
       HandlerResult(kind: hrSave, saveFilename: r.saveFilename, forceSave: r.forceSave)
+  of cmrSaveAll:
+    return HandlerResult(kind: hrSaveAll, forceSaveAll: r.forceSaveAll)
   of cmrSaveAndQuit:
     return HandlerResult(
       kind: hrSaveAndQuit,
       saveAndQuitFilename: r.saveAndQuitFilename,
       forceQuitAfterSave: r.forceSaveAndQuit,
+    )
+  of cmrSaveAllAndQuit:
+    return HandlerResult(
+      kind: hrSaveAllAndQuit, forceSaveAllAndQuitAfter: r.forceSaveAllAndQuit
     )
   of cmrBufferNext:
     return HandlerResult(kind: hrBufferNext)
