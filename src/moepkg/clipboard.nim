@@ -144,6 +144,7 @@ proc writeToPrimarySelectionSync*(
       let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
       process.inputStream.write(text)
       process.inputStream.close()
+      process.close()
       # Don't waitForExit — wl-copy exits automatically when another
       # wl-copy instance claims the selection.
       return Result[void, string].ok()
@@ -204,6 +205,7 @@ proc writeToClipboardSync*(tool: ClipboardTool, text: string): Result[void, stri
       let process = startProcess(cmd[0], args = cmd[1 ..^ 1], options = {poUsePath})
       process.inputStream.write(text)
       process.inputStream.close()
+      process.close()
       return Result[void, string].ok()
     else:
       # Other tools (xclip, xsel, pbcopy, win32yank) use stdin
