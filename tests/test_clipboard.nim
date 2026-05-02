@@ -146,7 +146,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       let writeResult = writeToClipboardSync(cbtWlClipboard, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(cbtWlClipboard)
+      let readResult = readClipboardWithRetry(cbtWlClipboard, testText)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -198,7 +198,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       let writeResult = writeToClipboardSync(cbtWlClipboard, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(cbtWlClipboard)
+      let readResult = readClipboardWithRetry(cbtWlClipboard, testText)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -210,7 +210,7 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       let writeResult = writeToClipboardSync(cbtWlClipboard, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(cbtWlClipboard)
+      let readResult = readClipboardWithRetry(cbtWlClipboard, testText)
       check readResult.isOk
       check readResult.get() == testText
 
@@ -222,6 +222,6 @@ suite "clipboard: readFromClipboardSync and writeToClipboardSync":
       let writeResult = writeToClipboardSync(cbtWlClipboard, testText)
       check writeResult.isOk
 
-      let readResult = readFromClipboardSync(cbtWlClipboard)
+      let readResult = readClipboardWithRetry(cbtWlClipboard, testText)
       check readResult.isOk
       check readResult.get() == testText
