@@ -950,6 +950,24 @@ suite "Highlight - detectLanguage":
   test "detectLanguage for Tcl .itk":
     check detectLanguage("widget.itk") == SourceLanguage.langTcl
 
+  test "detectLanguage for Zsh .zsh":
+    check detectLanguage("script.zsh") == SourceLanguage.langZsh
+
+  test "detectLanguage for Zsh .zshrc":
+    check detectLanguage("custom.zshrc") == SourceLanguage.langZsh
+
+  test "detectLanguage for Zsh .zshenv":
+    check detectLanguage("env.zshenv") == SourceLanguage.langZsh
+
+  test "detectLanguage for Zsh .zlogin":
+    check detectLanguage("login.zlogin") == SourceLanguage.langZsh
+
+  test "detectLanguage for Zsh .zlogout":
+    check detectLanguage("logout.zlogout") == SourceLanguage.langZsh
+
+  test "detectLanguage for Zsh .zprofile":
+    check detectLanguage("profile.zprofile") == SourceLanguage.langZsh
+
 suite "Highlight - getSegmentModifiers":
   test "Empty highlight returns empty modifiers":
     let h = Highlight(colorSegments: @[])

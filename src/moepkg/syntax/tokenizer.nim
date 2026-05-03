@@ -173,6 +173,7 @@ type
     langJson
     langTypeScript
     langTsx
+    langZsh
 
 const
   ## Characters ending a line.
@@ -197,7 +198,7 @@ const
     "none", "Astro", "C", "COMMIT_EDITMSG", "C++", "C#", "Diff", "Dockerfile", "Fish",
     "git-rebase-todo", "gitignore", "Haskell", "HTML", "Hyprland", "Java", "JavaScript",
     "JavaScriptReact", "LaTeX", "Lisp", "Log", "Markdown", "Nim", "Python", "Rust",
-    "Shell", "Tcl", "Toml", "Yaml", "Json", "TypeScript", "TypeScriptReact",
+    "Shell", "Tcl", "Toml", "Yaml", "Json", "TypeScript", "TypeScriptReact", "Zsh",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
@@ -297,7 +298,7 @@ import
   syntax_haskell, syntax_html, syntax_java, syntax_javascript, syntax_latex,
   syntax_lisp, syntax_markdown, syntax_nim, syntax_python, syntax_rust, syntax_fish,
   syntax_hyprland, syntax_shell, syntax_tcl, syntax_yaml, syntax_toml, syntax_json,
-  syntax_typescript, syntax_log
+  syntax_typescript, syntax_log, syntax_zsh
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -329,4 +330,5 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langYaml: g.yamlNextToken
   of langJson: g.jsonNextToken
   of langTypeScript, langTsx: g.typescriptNextToken
+  of langZsh: g.zshNextToken
   else: discard
