@@ -1158,6 +1158,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langShell
   of ".fish":
     return SourceLanguage.langFish
+  of ".zsh", ".zshrc", ".zshenv", ".zlogin", ".zlogout", ".zprofile":
+    return SourceLanguage.langZsh
   of ".tcl", ".tk", ".itcl", ".itk":
     return SourceLanguage.langTcl
   of ".toml":

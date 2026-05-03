@@ -43,6 +43,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
   - Shell languages:
     - Bash
     - Fish
+    - Zsh
   - TOML
   - YAML
   - JSON
@@ -195,7 +196,8 @@ Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md
 [Documents (Ncurses base)](https://github.com/fox0430/moe/blob/v0.4.0/documents/index.md)
 
 ## The origin of the name
-moe is a recursive acronym for "moe is an optimal editor".    
+moe is a recursive acronym for "moe is an optimal editor".
+
 And one more, it comes from the Japanese slang 萌え(moe).
 
 ## Contributing, bug reports, feature request
