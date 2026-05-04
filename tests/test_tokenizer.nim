@@ -34,7 +34,7 @@ suite "tokenizer - TokenClass enum":
 suite "tokenizer - SourceLanguage enum":
   test "SourceLanguage has expected values":
     check langNone == low(SourceLanguage)
-    check langTsx == high(SourceLanguage)
+    check langZsh == high(SourceLanguage)
 
   test "SourceLanguage includes all supported languages":
     check langNim in {langNone .. langTsx}
