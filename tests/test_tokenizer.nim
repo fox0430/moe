@@ -880,8 +880,10 @@ suite "tokenizer - multi-line token handling":
 
     g.getNextToken(langRust)
     check g.kind == gtStringLit
-    # Rust strings don't span lines, state resets
-    check g.state in {gtNone, gtEof, gtStringLit}
+    # Rust strings can span lines, so state parks at gtLongStringLit so
+    # the next call resumes the same string.
+    check g.state == gtLongStringLit
+    check g.rustRawStringHashCount == 0
 
   test "multi-line comment in C":
     var g: GeneralTokenizer
