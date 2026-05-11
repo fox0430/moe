@@ -960,7 +960,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
       )
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
-    check buffer.getLineMarker(1) == some(SidebarItemKind.SyntaxError)
+    check buffer.getLineMarker(1) == some(LineMarkerKind.SyntaxError)
 
   test "applyDiagnosticsToBuffer sets warning markers":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -980,7 +980,7 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
       )
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
-    check buffer.getLineMarker(0) == some(SidebarItemKind.SyntaxWarning)
+    check buffer.getLineMarker(0) == some(LineMarkerKind.SyntaxWarning)
 
   test "applyDiagnosticsToBuffer error takes precedence over warning":
     let buffer = newTextBuffer("line1\nline2")
@@ -1013,12 +1013,12 @@ suite "LspIntegration - applyDiagnosticsToBuffer":
       ),
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
-    check buffer.getLineMarker(0) == some(SidebarItemKind.SyntaxError)
+    check buffer.getLineMarker(0) == some(LineMarkerKind.SyntaxError)
 
   test "applyDiagnosticsToBuffer clears existing markers":
     let buffer = newTextBuffer("line1\nline2")
-    buffer.setLineMarker(0, SidebarItemKind.SyntaxError)
-    buffer.setLineMarker(1, SidebarItemKind.SyntaxWarning)
+    buffer.setLineMarker(0, LineMarkerKind.SyntaxError)
+    buffer.setLineMarker(1, LineMarkerKind.SyntaxWarning)
 
     let diagnostics: seq[Diagnostic] = @[]
     applyDiagnosticsToBuffer(buffer, diagnostics)

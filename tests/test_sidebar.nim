@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[options, unittest]
 
 import pkg/celina
 
@@ -32,7 +32,7 @@ suite "Sidebar - initSidebar":
     for y in 0 ..< 10:
       check sidebar.buffer[y].len == DefaultSidebarWidth
       for x in 0 ..< DefaultSidebarWidth:
-        check sidebar.buffer[y][x].kind == Empty
+        check sidebar.buffer[y][x].kind.isNone
         check sidebar.buffer[y][x].text == " "
 
   test "Initialize sidebar with custom width":
@@ -59,7 +59,7 @@ suite "Sidebar - clearSidebar":
 
     for y in 0 ..< 5:
       for x in 0 ..< sidebar.width:
-        check sidebar.buffer[y][x].kind == Empty
+        check sidebar.buffer[y][x].kind.isNone
         check sidebar.buffer[y][x].text == " "
 
 suite "Sidebar - resizeSidebar":
@@ -71,10 +71,10 @@ suite "Sidebar - resizeSidebar":
 
     check sidebar.buffer.len == 5
     # Original content preserved
-    check sidebar.buffer[0][0].kind == GitAdded
+    check sidebar.buffer[0][0].kind == some(GitAdded)
     # New lines are empty
-    check sidebar.buffer[3][0].kind == Empty
-    check sidebar.buffer[4][0].kind == Empty
+    check sidebar.buffer[3][0].kind.isNone
+    check sidebar.buffer[4][0].kind.isNone
 
   test "Resize sidebar to smaller height":
     var sidebar = initSidebar(5)
@@ -85,7 +85,7 @@ suite "Sidebar - resizeSidebar":
 
     check sidebar.buffer.len == 3
     # Original content preserved within bounds
-    check sidebar.buffer[0][0].kind == GitAdded
+    check sidebar.buffer[0][0].kind == some(GitAdded)
 
   test "Resize sidebar to same height":
     var sidebar = initSidebar(5)
@@ -94,7 +94,7 @@ suite "Sidebar - resizeSidebar":
     sidebar.resizeSidebar(5)
 
     check sidebar.buffer.len == 5
-    check sidebar.buffer[2][0].kind == GitAdded
+    check sidebar.buffer[2][0].kind == some(GitAdded)
 
 suite "Sidebar - setSidebarItem":
   test "Set single sidebar item":
@@ -102,11 +102,11 @@ suite "Sidebar - setSidebarItem":
 
     sidebar.setSidebarItem(2, 0, "+", GitAdded)
 
-    check sidebar.buffer[2][0].kind == GitAdded
+    check sidebar.buffer[2][0].kind == some(GitAdded)
     check sidebar.buffer[2][0].text == "+"
     # Other cells unchanged
-    check sidebar.buffer[2][1].kind == Empty
-    check sidebar.buffer[0][0].kind == Empty
+    check sidebar.buffer[2][1].kind.isNone
+    check sidebar.buffer[0][0].kind.isNone
 
   test "Set item out of bounds (negative line) does nothing":
     var sidebar = initSidebar(5)
@@ -116,7 +116,7 @@ suite "Sidebar - setSidebarItem":
     # All cells should remain empty
     for y in 0 ..< 5:
       for x in 0 ..< sidebar.width:
-        check sidebar.buffer[y][x].kind == Empty
+        check sidebar.buffer[y][x].kind.isNone
 
   test "Set item out of bounds (line too large) does nothing":
     var sidebar = initSidebar(5)
@@ -126,7 +126,7 @@ suite "Sidebar - setSidebarItem":
     # All cells should remain empty
     for y in 0 ..< 5:
       for x in 0 ..< sidebar.width:
-        check sidebar.buffer[y][x].kind == Empty
+        check sidebar.buffer[y][x].kind.isNone
 
   test "Set item out of bounds (negative col) does nothing":
     var sidebar = initSidebar(5)
@@ -135,7 +135,7 @@ suite "Sidebar - setSidebarItem":
 
     for y in 0 ..< 5:
       for x in 0 ..< sidebar.width:
-        check sidebar.buffer[y][x].kind == Empty
+        check sidebar.buffer[y][x].kind.isNone
 
   test "Set item out of bounds (col too large) does nothing":
     var sidebar = initSidebar(5)
@@ -144,7 +144,7 @@ suite "Sidebar - setSidebarItem":
 
     for y in 0 ..< 5:
       for x in 0 ..< sidebar.width:
-        check sidebar.buffer[y][x].kind == Empty
+        check sidebar.buffer[y][x].kind.isNone
 
 suite "Sidebar - setSidebarLine":
   test "Set entire sidebar line":
@@ -152,9 +152,9 @@ suite "Sidebar - setSidebarLine":
 
     sidebar.setSidebarLine(2, "+ ", GitAdded)
 
-    check sidebar.buffer[2][0].kind == GitAdded
+    check sidebar.buffer[2][0].kind == some(GitAdded)
     check sidebar.buffer[2][0].text == "+"
-    check sidebar.buffer[2][1].kind == GitAdded
+    check sidebar.buffer[2][1].kind == some(GitAdded)
     check sidebar.buffer[2][1].text == " "
 
   test "Set line with short text pads with spaces":
@@ -167,7 +167,7 @@ suite "Sidebar - setSidebarLine":
     check sidebar.buffer[1][2].text == " "
     check sidebar.buffer[1][3].text == " "
     for x in 0 ..< 4:
-      check sidebar.buffer[1][x].kind == GitAdded
+      check sidebar.buffer[1][x].kind == some(GitAdded)
 
   test "Set line out of bounds (negative) does nothing":
     var sidebar = initSidebar(5)
@@ -176,7 +176,7 @@ suite "Sidebar - setSidebarLine":
 
     for y in 0 ..< 5:
       for x in 0 ..< sidebar.width:
-        check sidebar.buffer[y][x].kind == Empty
+        check sidebar.buffer[y][x].kind.isNone
 
   test "Set line out of bounds (too large) does nothing":
     var sidebar = initSidebar(5)
@@ -185,7 +185,7 @@ suite "Sidebar - setSidebarLine":
 
     for y in 0 ..< 5:
       for x in 0 ..< sidebar.width:
-        check sidebar.buffer[y][x].kind == Empty
+        check sidebar.buffer[y][x].kind.isNone
 
 suite "Sidebar - clearSidebarLine":
   test "Clear specific sidebar line":
@@ -197,12 +197,12 @@ suite "Sidebar - clearSidebarLine":
     sidebar.clearSidebarLine(2)
 
     # Line 0 unchanged
-    check sidebar.buffer[0][0].kind == GitAdded
+    check sidebar.buffer[0][0].kind == some(GitAdded)
     # Line 2 cleared
-    check sidebar.buffer[2][0].kind == Empty
-    check sidebar.buffer[2][1].kind == Empty
+    check sidebar.buffer[2][0].kind.isNone
+    check sidebar.buffer[2][1].kind.isNone
     # Line 4 unchanged
-    check sidebar.buffer[4][0].kind == SyntaxError
+    check sidebar.buffer[4][0].kind == some(SyntaxError)
 
   test "Clear line out of bounds does nothing":
     var sidebar = initSidebar(5)
@@ -212,7 +212,7 @@ suite "Sidebar - clearSidebarLine":
     sidebar.clearSidebarLine(10)
 
     # Original content preserved
-    check sidebar.buffer[2][0].kind == GitAdded
+    check sidebar.buffer[2][0].kind == some(GitAdded)
 
 suite "Sidebar - Git markers":
   test "updateSidebarForGitAdded":
@@ -220,7 +220,7 @@ suite "Sidebar - Git markers":
 
     sidebar.updateSidebarForGitAdded(2)
 
-    check sidebar.buffer[2][0].kind == GitAdded
+    check sidebar.buffer[2][0].kind == some(GitAdded)
     check sidebar.buffer[2][0].text == "+"
     check sidebar.buffer[2][1].text == " "
 
@@ -229,7 +229,7 @@ suite "Sidebar - Git markers":
 
     sidebar.updateSidebarForGitChanged(3)
 
-    check sidebar.buffer[3][0].kind == GitChanged
+    check sidebar.buffer[3][0].kind == some(GitChanged)
     check sidebar.buffer[3][0].text == "~"
     check sidebar.buffer[3][1].text == " "
 
@@ -238,7 +238,7 @@ suite "Sidebar - Git markers":
 
     sidebar.updateSidebarForGitDeleted(1)
 
-    check sidebar.buffer[1][0].kind == GitDeleted
+    check sidebar.buffer[1][0].kind == some(GitDeleted)
     check sidebar.buffer[1][0].text == "_"
     check sidebar.buffer[1][1].text == " "
 
@@ -247,7 +247,7 @@ suite "Sidebar - Git markers":
 
     sidebar.updateSidebarForGitChangedAndDeleted(4)
 
-    check sidebar.buffer[4][0].kind == GitChangedAndDeleted
+    check sidebar.buffer[4][0].kind == some(GitChangedAndDeleted)
     check sidebar.buffer[4][0].text == "~"
     check sidebar.buffer[4][1].text == "_"
 
@@ -257,7 +257,7 @@ suite "Sidebar - Syntax markers":
 
     sidebar.updateSidebarForSyntaxError(0)
 
-    check sidebar.buffer[0][0].kind == SyntaxError
+    check sidebar.buffer[0][0].kind == some(SyntaxError)
     check sidebar.buffer[0][0].text == ">"
     check sidebar.buffer[0][1].text == ">"
 
@@ -266,7 +266,7 @@ suite "Sidebar - Syntax markers":
 
     sidebar.updateSidebarForSyntaxWarning(2)
 
-    check sidebar.buffer[2][0].kind == SyntaxWarning
+    check sidebar.buffer[2][0].kind == some(SyntaxWarning)
 
 suite "Sidebar - generateSidebarFromBuffer":
   test "Generate sidebar from buffer with no markers":
@@ -278,7 +278,7 @@ suite "Sidebar - generateSidebarFromBuffer":
     check sidebar.buffer.len == 3
     for y in 0 ..< 3:
       for x in 0 ..< sidebar.width:
-        check sidebar.buffer[y][x].kind == Empty
+        check sidebar.buffer[y][x].kind.isNone
 
   test "Generate sidebar from buffer with GitAdded marker":
     let buf = newTextBuffer()
@@ -287,10 +287,10 @@ suite "Sidebar - generateSidebarFromBuffer":
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 3)
 
-    check sidebar.buffer[0][0].kind == Empty
-    check sidebar.buffer[1][0].kind == GitAdded
+    check sidebar.buffer[0][0].kind.isNone
+    check sidebar.buffer[1][0].kind == some(GitAdded)
     check sidebar.buffer[1][0].text == "+"
-    check sidebar.buffer[2][0].kind == Empty
+    check sidebar.buffer[2][0].kind.isNone
 
   test "Generate sidebar from buffer with multiple markers":
     let buf = newTextBuffer()
@@ -303,11 +303,11 @@ suite "Sidebar - generateSidebarFromBuffer":
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 5)
 
-    check sidebar.buffer[0][0].kind == GitAdded
-    check sidebar.buffer[1][0].kind == Empty
-    check sidebar.buffer[2][0].kind == GitChanged
-    check sidebar.buffer[3][0].kind == Empty
-    check sidebar.buffer[4][0].kind == SyntaxError
+    check sidebar.buffer[0][0].kind == some(GitAdded)
+    check sidebar.buffer[1][0].kind.isNone
+    check sidebar.buffer[2][0].kind == some(GitChanged)
+    check sidebar.buffer[3][0].kind.isNone
+    check sidebar.buffer[4][0].kind == some(SyntaxError)
 
   test "Generate sidebar with topLine offset":
     let buf = newTextBuffer()
@@ -323,11 +323,11 @@ suite "Sidebar - generateSidebarFromBuffer":
 
     check sidebar.buffer.len == 3
     # Screen line 0 = buffer line 2
-    check sidebar.buffer[0][0].kind == GitChanged
+    check sidebar.buffer[0][0].kind == some(GitChanged)
     # Screen line 1 = buffer line 3
-    check sidebar.buffer[1][0].kind == Empty
+    check sidebar.buffer[1][0].kind.isNone
     # Screen line 2 = buffer line 4
-    check sidebar.buffer[2][0].kind == SyntaxError
+    check sidebar.buffer[2][0].kind == some(SyntaxError)
 
   test "Generate sidebar with height larger than buffer":
     let buf = newTextBuffer()
@@ -337,12 +337,12 @@ suite "Sidebar - generateSidebarFromBuffer":
     let sidebar = generateSidebarFromBuffer(buf, 0, 5)
 
     check sidebar.buffer.len == 5
-    check sidebar.buffer[0][0].kind == GitAdded
-    check sidebar.buffer[1][0].kind == Empty
+    check sidebar.buffer[0][0].kind == some(GitAdded)
+    check sidebar.buffer[1][0].kind.isNone
     # Lines beyond buffer remain empty
-    check sidebar.buffer[2][0].kind == Empty
-    check sidebar.buffer[3][0].kind == Empty
-    check sidebar.buffer[4][0].kind == Empty
+    check sidebar.buffer[2][0].kind.isNone
+    check sidebar.buffer[3][0].kind.isNone
+    check sidebar.buffer[4][0].kind.isNone
 
   test "Generate sidebar with custom width":
     let buf = newTextBuffer()
@@ -353,7 +353,7 @@ suite "Sidebar - generateSidebarFromBuffer":
 
     check sidebar.width == 4
     check sidebar.buffer[0].len == 4
-    check sidebar.buffer[0][0].kind == GitAdded
+    check sidebar.buffer[0][0].kind == some(GitAdded)
 
 suite "Sidebar - Style functions":
   test "gitAddedStyle has green foreground":
@@ -404,7 +404,7 @@ suite "Sidebar - resizeSidebar edge cases":
     for y in 0 ..< 3:
       check sidebar.buffer[y].len == sidebar.width
       for x in 0 ..< sidebar.width:
-        check sidebar.buffer[y][x].kind == Empty
+        check sidebar.buffer[y][x].kind.isNone
 
 suite "Sidebar - globalMarkerConfig":
   test "Custom marker config affects git markers":
@@ -450,7 +450,7 @@ suite "Sidebar - generateSidebarFromBuffer edge cases":
     check sidebar.buffer.len == 3
     for y in 0 ..< 3:
       for x in 0 ..< sidebar.width:
-        check sidebar.buffer[y][x].kind == Empty
+        check sidebar.buffer[y][x].kind.isNone
 
   test "Generate sidebar with GitDeleted marker":
     let buf = newTextBuffer()
@@ -459,9 +459,9 @@ suite "Sidebar - generateSidebarFromBuffer edge cases":
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 2)
 
-    check sidebar.buffer[0][0].kind == GitDeleted
+    check sidebar.buffer[0][0].kind == some(GitDeleted)
     check sidebar.buffer[0][0].text == "_"
-    check sidebar.buffer[1][0].kind == Empty
+    check sidebar.buffer[1][0].kind.isNone
 
   test "Generate sidebar with GitChangedAndDeleted marker":
     let buf = newTextBuffer()
@@ -470,7 +470,7 @@ suite "Sidebar - generateSidebarFromBuffer edge cases":
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 1)
 
-    check sidebar.buffer[0][0].kind == GitChangedAndDeleted
+    check sidebar.buffer[0][0].kind == some(GitChangedAndDeleted)
     check sidebar.buffer[0][0].text == "~"
     check sidebar.buffer[0][1].text == "_"
 
@@ -481,7 +481,7 @@ suite "Sidebar - generateSidebarFromBuffer edge cases":
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 1)
 
-    check sidebar.buffer[0][0].kind == SyntaxWarning
+    check sidebar.buffer[0][0].kind == some(SyntaxWarning)
 
   test "Generate sidebar with topLine beyond buffer":
     let buf = newTextBuffer()
@@ -493,7 +493,7 @@ suite "Sidebar - generateSidebarFromBuffer edge cases":
     check sidebar.buffer.len == 3
     for y in 0 ..< 3:
       for x in 0 ..< sidebar.width:
-        check sidebar.buffer[y][x].kind == Empty
+        check sidebar.buffer[y][x].kind.isNone
 
   test "Generate sidebar with zero height":
     let buf = newTextBuffer()
@@ -518,12 +518,12 @@ suite "Sidebar - generateSidebarFromBuffer edge cases":
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 6)
 
-    check sidebar.buffer[0][0].kind == GitAdded
-    check sidebar.buffer[1][0].kind == GitChanged
-    check sidebar.buffer[2][0].kind == GitDeleted
-    check sidebar.buffer[3][0].kind == GitChangedAndDeleted
-    check sidebar.buffer[4][0].kind == SyntaxError
-    check sidebar.buffer[5][0].kind == SyntaxWarning
+    check sidebar.buffer[0][0].kind == some(GitAdded)
+    check sidebar.buffer[1][0].kind == some(GitChanged)
+    check sidebar.buffer[2][0].kind == some(GitDeleted)
+    check sidebar.buffer[3][0].kind == some(GitChangedAndDeleted)
+    check sidebar.buffer[4][0].kind == some(SyntaxError)
+    check sidebar.buffer[5][0].kind == some(SyntaxWarning)
 
 suite "Sidebar - Bookmark display":
   test "bookmarkStyle has cyan foreground and bold":
@@ -539,9 +539,9 @@ suite "Sidebar - Bookmark display":
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 3, bookmarks = buf.bookmarks)
 
-    check sidebar.buffer[0][0].kind == Empty
-    check sidebar.buffer[1][0].kind == Bookmark
-    check sidebar.buffer[2][0].kind == Empty
+    check sidebar.buffer[0][0].kind.isNone
+    check sidebar.buffer[1][0].kind == some(Bookmark)
+    check sidebar.buffer[2][0].kind.isNone
 
   test "Bookmark overrides git marker":
     let buf = newTextBuffer()
@@ -551,7 +551,7 @@ suite "Sidebar - Bookmark display":
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 3, bookmarks = buf.bookmarks)
 
-    check sidebar.buffer[1][0].kind == Bookmark
+    check sidebar.buffer[1][0].kind == some(Bookmark)
 
   test "SyntaxError overrides bookmark":
     let buf = newTextBuffer()
@@ -561,7 +561,7 @@ suite "Sidebar - Bookmark display":
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 3, bookmarks = buf.bookmarks)
 
-    check sidebar.buffer[1][0].kind == SyntaxError
+    check sidebar.buffer[1][0].kind == some(SyntaxError)
 
   test "SyntaxWarning overrides bookmark":
     let buf = newTextBuffer()
@@ -571,7 +571,7 @@ suite "Sidebar - Bookmark display":
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 2, bookmarks = buf.bookmarks)
 
-    check sidebar.buffer[0][0].kind == SyntaxWarning
+    check sidebar.buffer[0][0].kind == some(SyntaxWarning)
 
   test "Multiple bookmarks displayed correctly":
     let buf = newTextBuffer()
@@ -582,11 +582,11 @@ suite "Sidebar - Bookmark display":
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 5, bookmarks = buf.bookmarks)
 
-    check sidebar.buffer[0][0].kind == Bookmark
-    check sidebar.buffer[1][0].kind == Empty
-    check sidebar.buffer[2][0].kind == Bookmark
-    check sidebar.buffer[3][0].kind == Empty
-    check sidebar.buffer[4][0].kind == Bookmark
+    check sidebar.buffer[0][0].kind == some(Bookmark)
+    check sidebar.buffer[1][0].kind.isNone
+    check sidebar.buffer[2][0].kind == some(Bookmark)
+    check sidebar.buffer[3][0].kind.isNone
+    check sidebar.buffer[4][0].kind == some(Bookmark)
 
   test "Bookmark with topLine offset":
     let buf = newTextBuffer()
@@ -596,11 +596,11 @@ suite "Sidebar - Bookmark display":
     let sidebar = generateSidebarFromBuffer(buf, 2, 3, bookmarks = buf.bookmarks)
 
     # Screen line 0 = buffer line 2 (no bookmark)
-    check sidebar.buffer[0][0].kind == Empty
+    check sidebar.buffer[0][0].kind.isNone
     # Screen line 1 = buffer line 3 (bookmarked)
-    check sidebar.buffer[1][0].kind == Bookmark
+    check sidebar.buffer[1][0].kind == some(Bookmark)
     # Screen line 2 = buffer line 4 (no bookmark)
-    check sidebar.buffer[2][0].kind == Empty
+    check sidebar.buffer[2][0].kind.isNone
 
   test "Bookmark uses default marker text":
     let buf = newTextBuffer()
@@ -610,7 +610,7 @@ suite "Sidebar - Bookmark display":
     let sidebar = generateSidebarFromBuffer(buf, 0, 1, bookmarks = buf.bookmarks)
 
     # Default bookmark marker is "♥ " (multi-byte, first char is ♥)
-    check sidebar.buffer[0][0].kind == Bookmark
+    check sidebar.buffer[0][0].kind == some(Bookmark)
 
   test "setBookmarkMarker changes marker text":
     # Use ASCII marker to avoid multi-byte splitting issues in sidebar cells
@@ -622,7 +622,7 @@ suite "Sidebar - Bookmark display":
 
     let sidebar = generateSidebarFromBuffer(buf, 0, 1, bookmarks = buf.bookmarks)
 
-    check sidebar.buffer[0][0].kind == Bookmark
+    check sidebar.buffer[0][0].kind == some(Bookmark)
     check sidebar.buffer[0][0].text == "B"
     check sidebar.buffer[0][1].text == " "
 

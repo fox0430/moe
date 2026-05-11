@@ -1023,8 +1023,8 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
     let marker = buffer.lineMarkers[i]
     if marker.isSome:
       let kind = marker.get
-      if kind in {SidebarItemKind.SyntaxError, SidebarItemKind.SyntaxWarning}:
-        buffer.lineMarkers[i] = none(SidebarItemKind)
+      if kind in {LineMarkerKind.SyntaxError, LineMarkerKind.SyntaxWarning}:
+        buffer.lineMarkers[i] = none(LineMarkerKind)
 
   # Apply new diagnostics
   for diag in diagnostics:
@@ -1033,18 +1033,17 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
       let kind =
         if diag.severity.isSome:
           case diag.severity.get
-          of dsError: SidebarItemKind.SyntaxError
-          of dsWarning: SidebarItemKind.SyntaxWarning
-          of dsInformation: SidebarItemKind.SyntaxWarning
-          of dsHint: SidebarItemKind.SyntaxWarning
+          of dsError: LineMarkerKind.SyntaxError
+          of dsWarning: LineMarkerKind.SyntaxWarning
+          of dsInformation: LineMarkerKind.SyntaxWarning
+          of dsHint: LineMarkerKind.SyntaxWarning
         else:
-          SidebarItemKind.SyntaxError
+          LineMarkerKind.SyntaxError
 
       # Only set if no marker or lower priority marker exists
       let existing = buffer.getLineMarker(line)
       if existing.isNone or (
-        existing.get != SidebarItemKind.SyntaxError and
-        kind == SidebarItemKind.SyntaxError
+        existing.get != LineMarkerKind.SyntaxError and kind == LineMarkerKind.SyntaxError
       ):
         buffer.setLineMarker(line, kind)
 

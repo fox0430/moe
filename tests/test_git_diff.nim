@@ -317,9 +317,9 @@ suite "GitDiff - applyGitDiffToBuffer":
     buf.applyGitDiffToBuffer(diffInfo)
 
     check buf.getLineMarker(0) == some(GitAdded)
-    check buf.getLineMarker(1) == none(SidebarItemKind)
+    check buf.getLineMarker(1) == none(LineMarkerKind)
     check buf.getLineMarker(2) == some(GitChanged)
-    check buf.getLineMarker(3) == none(SidebarItemKind)
+    check buf.getLineMarker(3) == none(LineMarkerKind)
     check buf.getLineMarker(4) == some(GitDeleted)
 
   test "Apply empty diff clears markers":
@@ -332,8 +332,8 @@ suite "GitDiff - applyGitDiffToBuffer":
 
     buf.applyGitDiffToBuffer(diffInfo)
 
-    check buf.getLineMarker(0) == none(SidebarItemKind)
-    check buf.getLineMarker(1) == none(SidebarItemKind)
+    check buf.getLineMarker(0) == none(LineMarkerKind)
+    check buf.getLineMarker(1) == none(LineMarkerKind)
 
   test "Apply diff ignores out of bounds lines":
     let buf = newTextBuffer()
@@ -350,7 +350,7 @@ suite "GitDiff - applyGitDiffToBuffer":
     buf.applyGitDiffToBuffer(diffInfo)
 
     check buf.getLineMarker(0) == some(GitAdded)
-    check buf.getLineMarker(1) == none(SidebarItemKind)
+    check buf.getLineMarker(1) == none(LineMarkerKind)
 
   test "Apply diff preserves LSP diagnostics and non-git markers":
     let buf = newTextBuffer()
@@ -381,7 +381,7 @@ suite "GitDiff - applyGitDiffToBuffer":
     # New git marker applied.
     check buf.getLineMarker(2) == some(GitChanged)
     # Old git marker cleared.
-    check buf.getLineMarker(0) == none(SidebarItemKind)
+    check buf.getLineMarker(0) == none(LineMarkerKind)
     # Non-git markers preserved.
     check buf.getLineMarker(1) == some(SyntaxError)
     check buf.getLineMarker(3) == some(Bookmark)

@@ -1,0 +1,453 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+## Undo / Redo system: transaction grouping, ckSnapshot fast path for
+## PieceTable, and the inverse-application helpers used by both undo()
+## and redo().
+
+import std/[deques, options]
+
+import pkg/results
+
+import ../[primitives, unicode_utils, logger]
+import ../buffer_backends/piece_table
+import ./[core, internal_mutations]
+
+proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
+  ## Apply the inverse of a single change (internal helper)
+  ## Returns error if the operation fails
+  try:
+    case change.kind
+    of ckInsertText:
+      # Undo insert by deleting the inserted text (all bytes at once)
+      let line = b.getLine(change.insertPos.line)
+      let bytePos = charToBytePosCached(
+        line, change.insertPos.column, b.cursorCache, change.insertPos.line, b.changeSeq
+      )
+      b.backendDeleteAtLineCol(change.insertPos.line, bytePos, change.insertText.len)
+    of ckDeleteText:
+      # Undo delete by inserting the deleted text
+      let line = b.getLine(change.deletePos.line)
+      let bytePos = charToBytePosCached(
+        line, change.deletePos.column, b.cursorCache, change.deletePos.line, b.changeSeq
+      )
+      b.backendInsertIntoLine(change.deletePos.line, bytePos, change.deletedText)
+    of ckInsertLine:
+      # Undo insert line by deleting it
+      b.backendDeleteLine(change.insertLineIdx)
+      b.foldState.adjustFoldsAfterDelete(change.insertLineIdx, 1)
+      b.adjustBookmarksForDelete(change.insertLineIdx)
+    of ckDeleteLine:
+      # Undo delete line by inserting it
+      b.backendInsertLine(change.deleteLineIdx, change.deletedLineText)
+      b.foldState.adjustFoldsAfterInsert(change.deleteLineIdx, 1)
+      b.adjustBookmarksForInsert(change.deleteLineIdx)
+    of ckDeleteRange:
+      # Undo delete range by inserting the deleted text
+      # Handle both single-line and multi-line deletions correctly
+      b.insertTextWithNewlines(change.deleteStartPos, change.deletedRangeText)
+    of ckReplaceLine:
+      b.backendReplaceLine(change.replaceLineIdx, change.replaceLineOldText)
+    of ckTransaction:
+      # Undo all changes in transaction in reverse order
+      for i in countdown(change.transactionChanges.len - 1, 0):
+        let r = b.undoChange(change.transactionChanges[i])
+        if r.isErr:
+          return r
+    of ckSnapshot:
+      b.pieceTable.restoreSnapshot(change.snapshotData)
+      b.lineMarkers = change.snapshotLineMarkers
+      b.modifiedLines = change.snapshotModifiedLines
+      b.foldState = change.snapshotFoldState
+      b.lastChangedLines = 0
+
+    # For non-snapshot: restore modifiedLines from pre-mutation snapshot
+    if change.kind != ckSnapshot and change.savedModifiedLines.len > 0:
+      b.modifiedLines = change.savedModifiedLines
+
+    # Ensure lineMarkers and modifiedLines stay in sync after undo operations
+    b.ensureMarkersSize()
+    b.ensureModifiedLinesSize()
+    return ok(())
+  except CatchableError as e:
+    logError("buffer", "Undo operation failed: " & e.msg)
+    return err("Failed to undo change: " & e.msg)
+
+proc beginTransaction*(
+    b: TextBuffer,
+    description: string = "",
+    cursorPos: Option[BufferPosition] = none(BufferPosition),
+): Result[(), string] =
+  ## Begin a transaction to group multiple changes
+  ## If cursorPos is provided, it will be used as the cursor position when undoing
+  ## Returns error if a transaction is already in progress
+  if b.inTransaction:
+    let currentDesc =
+      if b.currentTransaction.isSome:
+        b.currentTransaction.get.description
+      else:
+        "(unknown)"
+    return err("Transaction already in progress: " & currentDesc)
+
+  b.captureSnapshotIfNeeded()
+  b.inTransaction = true
+  b.currentTransaction = some(
+    BufferTransaction(
+      changes: @[],
+      description: description,
+      startSeq: b.changeSeq,
+      cursorPos: cursorPos,
+    )
+  )
+  return ok(())
+
+proc commitTransaction*(b: TextBuffer): Result[(), string] =
+  ## Commit the current transaction
+  ## Returns error if no transaction is in progress
+  if not b.inTransaction or b.currentTransaction.isNone:
+    return err("No transaction in progress")
+
+  let transaction = b.currentTransaction.get
+  b.inTransaction = false
+  b.currentTransaction = none(BufferTransaction)
+
+  # Add transaction as a single undo entry if it has changes
+  if transaction.changes.len > 0:
+    if b.pendingSnapshot.isSome:
+      # PieceTable: single O(1) snapshot undo entry for entire transaction
+      b.undoStack.addLast(
+        BufferChange(
+          kind: ckSnapshot,
+          snapshotData: b.pendingSnapshot.get,
+          snapshotCursorPos:
+            if transaction.cursorPos.isSome:
+              transaction.cursorPos.get
+            else:
+              getChangePosition(transaction.changes[0]),
+          snapshotLineMarkers: b.pendingSnapshotMarkers,
+          snapshotModifiedLines: b.pendingSnapshotModifiedLines,
+          snapshotFoldState: b.pendingSnapshotFolds,
+        )
+      )
+      b.pendingSnapshot = none(PieceTableSnapshot)
+      b.hasPendingModifiedLinesSnapshot = false
+    else:
+      let transactionChange = BufferChange(
+        kind: ckTransaction,
+        transactionChanges: transaction.changes,
+        transactionDescription: transaction.description,
+        transactionCursorPos: transaction.cursorPos,
+      )
+      b.undoStack.addLast(transactionChange)
+    # Note: changeSeq was already incremented by each change in pushUndoChange
+    # Note: redoStack was already cleared by the first change in pushUndoChange
+
+    # Record transaction position in changelist
+    b.recordChangePosition(getChangePosition(transaction.changes[0]))
+
+    # Recompute lastChangedLines as the minimum across all changes.
+    # Each individual change in pushUndoChange overwrites lastChangedLines,
+    # so after the transaction only the last change's line remains.
+    var minLine = int.high
+    for ch in transaction.changes:
+      minLine = min(minLine, getChangePosition(ch).line)
+    if minLine != int.high:
+      b.lastChangedLines = minLine
+
+  return ok(())
+
+proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
+  ## Rollback the current transaction by undoing all changes
+  ## Restores changeSeq to its value at transaction start
+  ## Returns error if no transaction is in progress
+  if not b.inTransaction or b.currentTransaction.isNone:
+    return err("No transaction in progress")
+
+  # Undo all changes in transaction in reverse order
+  let transaction = b.currentTransaction.get
+
+  if b.pendingSnapshot.isSome:
+    # PieceTable: O(1) restore from snapshot
+    b.pieceTable.restoreSnapshot(b.pendingSnapshot.get)
+    b.lineMarkers = b.pendingSnapshotMarkers
+    b.modifiedLines = b.pendingSnapshotModifiedLines
+    b.foldState = b.pendingSnapshotFolds
+    b.pendingSnapshot = none(PieceTableSnapshot)
+  else:
+    for i in countdown(transaction.changes.len - 1, 0):
+      let r = b.undoChange(transaction.changes[i])
+      if r.isErr:
+        # Clean up transaction state even if rollback partially fails
+        b.inTransaction = false
+        b.currentTransaction = none(BufferTransaction)
+        return err("Failed to rollback transaction: " & r.error)
+
+  # Restore changeSeq to its value at transaction start
+  b.changeSeq = transaction.startSeq
+
+  # Mark highlight as needing update after rollback
+  if transaction.changes.len > 0:
+    b.highlightNeedsUpdate = true
+    var minLine = int.high
+    for change in transaction.changes:
+      minLine = min(minLine, getChangePosition(change).line)
+    if minLine != int.high:
+      b.lastChangedLines = minLine
+
+  b.inTransaction = false
+  b.currentTransaction = none(BufferTransaction)
+  return ok(())
+
+proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
+  ## Undo the last 'count' changes (or all changes in a transaction group)
+  ## Returns the suggested cursor position for the first undone change
+  ## Returns error if nothing to undo or if the undo operation fails
+  if b.undoStack.len == 0:
+    return Result[BufferPosition, string].err "Nothing to undo"
+
+  var undoneChanges: seq[BufferChange] = @[]
+
+  # Undo 'count' changes
+  for i in 0 ..< count:
+    if b.undoStack.len == 0:
+      break
+
+    let change = b.undoStack.popLast()
+
+    # Capture current modifiedLines before undo (for redo to restore)
+    let currentModifiedLines = b.modifiedLines
+
+    # For snapshot undo: capture current state before restoring
+    var redoEntry =
+      if change.kind == ckSnapshot:
+        BufferChange(
+          kind: ckSnapshot,
+          snapshotData: b.pieceTable.takeSnapshot(),
+          snapshotCursorPos: change.snapshotCursorPos,
+          snapshotLineMarkers: b.lineMarkers,
+          snapshotModifiedLines: currentModifiedLines,
+          snapshotFoldState: b.foldState,
+        )
+      else:
+        change
+    # For non-snapshot: save current modifiedLines so redo can undo back
+    if change.kind != ckSnapshot:
+      redoEntry.savedModifiedLines = currentModifiedLines
+
+    let r = b.undoChange(change)
+    if r.isErr:
+      # Restore the change to undo stack if undo failed
+      b.undoStack.addLast(change)
+      # Restore previously undone changes to undo stack
+      for j in countdown(undoneChanges.len - 1, 0):
+        b.undoStack.addLast(undoneChanges[j])
+      return err("Undo failed: " & r.error)
+
+    undoneChanges.add(redoEntry)
+
+    # Decrement change sequence for each undo
+    b.changeSeq.dec
+
+    # Adjust changelist index
+    if b.changeListIndex > 0:
+      b.changeListIndex.dec
+
+  # Add all undone changes to redo stack in the order they were undone
+  # This ensures redo applies them in the correct reverse order
+  for change in undoneChanges:
+    b.redoStack.addLast(change)
+
+  # Mark highlight as needing update after undo
+  if undoneChanges.len > 0:
+    b.highlightNeedsUpdate = true
+
+    # Compute first changed line from undone changes for incremental highlighting
+    var minLine = int.high
+
+    proc findMinLine(change: BufferChange) =
+      case change.kind
+      of ckTransaction:
+        for innerChange in change.transactionChanges:
+          findMinLine(innerChange)
+      else:
+        minLine = min(minLine, getChangePosition(change).line)
+
+    for change in undoneChanges:
+      findMinLine(change)
+
+    if minLine != int.high:
+      b.lastChangedLines = minLine
+
+  # If undo brought us back to saved state, clear all modification markers
+  if b.changeSeq == b.savedSeq:
+    for i in 0 ..< b.modifiedLines.len:
+      b.modifiedLines[i] = lmkUnmodified
+
+  # Return suggested cursor position for the last undone change (Vim behavior)
+  if undoneChanges.len > 0:
+    return ok(getChangePosition(undoneChanges[^1]))
+  else:
+    return ok(BufferPosition(line: 0, column: 0))
+
+proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
+  ## Re-apply a single change (internal helper)
+  ## Returns error if the operation fails
+  try:
+    case change.kind
+    of ckInsertText:
+      # Use insertTextWithNewlines to handle newlines correctly during redo
+      b.insertTextWithNewlines(change.insertPos, change.insertText)
+    of ckDeleteText:
+      let line = b.getLine(change.deletePos.line)
+      let bytePos = charToBytePosCached(
+        line, change.deletePos.column, b.cursorCache, change.deletePos.line, b.changeSeq
+      )
+      b.backendDeleteAtLineCol(change.deletePos.line, bytePos, change.deletedText.len)
+    of ckInsertLine:
+      b.backendInsertLine(change.insertLineIdx, change.insertLineText)
+      b.foldState.adjustFoldsAfterInsert(change.insertLineIdx, 1)
+      b.adjustBookmarksForInsert(change.insertLineIdx)
+    of ckDeleteLine:
+      b.backendDeleteLine(change.deleteLineIdx)
+      b.foldState.adjustFoldsAfterDelete(change.deleteLineIdx, 1)
+      b.adjustBookmarksForDelete(change.deleteLineIdx)
+    of ckDeleteRange:
+      # Re-apply delete range using the same logic as the original deleteRange
+      # Handle both single-line and multi-line deletions correctly
+      let startPos = change.deleteStartPos
+      let endPos = change.deleteEndPos
+
+      if startPos.line == endPos.line:
+        b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
+      else:
+        b.deleteRangeMultiLine(startPos, endPos)
+        # Adjust fold and bookmark positions for multi-line delete
+        b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
+        b.adjustBookmarksForDelete(startPos.line, endPos.line - startPos.line)
+    of ckReplaceLine:
+      b.backendReplaceLine(change.replaceLineIdx, change.replaceLineNewText)
+    of ckTransaction:
+      # Redo all changes in transaction in forward order
+      for change in change.transactionChanges:
+        let r = b.redoChange(change)
+        if r.isErr:
+          return r
+    of ckSnapshot:
+      b.pieceTable.restoreSnapshot(change.snapshotData)
+      b.lineMarkers = change.snapshotLineMarkers
+      b.modifiedLines = change.snapshotModifiedLines
+      b.foldState = change.snapshotFoldState
+      b.lastChangedLines = 0
+
+    # For non-snapshot: restore modifiedLines from pre-mutation snapshot
+    if change.kind != ckSnapshot and change.savedModifiedLines.len > 0:
+      b.modifiedLines = change.savedModifiedLines
+
+    # Ensure lineMarkers and modifiedLines stay in sync after redo operations
+    b.ensureMarkersSize()
+    b.ensureModifiedLinesSize()
+    return ok(())
+  except CatchableError as e:
+    logError("buffer", "Redo operation failed: " & e.msg)
+    return err("Failed to redo change: " & e.msg)
+
+proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
+  ## Redo the last 'count' undone changes
+  ## Returns the suggested cursor position for the first redone change
+  ## Returns error if nothing to redo or if the redo operation fails
+  if b.redoStack.len == 0:
+    return Result[BufferPosition, string].err "Nothing to redo"
+
+  var redoneChanges: seq[BufferChange] = @[]
+
+  # Redo 'count' changes
+  for i in 0 ..< count:
+    if b.redoStack.len == 0:
+      break
+
+    let change = b.redoStack.popLast()
+
+    # Capture current modifiedLines before redo (for undo to restore)
+    let currentModifiedLines = b.modifiedLines
+
+    # For snapshot redo: capture current state before restoring
+    var undoEntry =
+      if change.kind == ckSnapshot:
+        BufferChange(
+          kind: ckSnapshot,
+          snapshotData: b.pieceTable.takeSnapshot(),
+          snapshotCursorPos: change.snapshotCursorPos,
+          snapshotLineMarkers: b.lineMarkers,
+          snapshotModifiedLines: currentModifiedLines,
+          snapshotFoldState: b.foldState,
+        )
+      else:
+        change
+    # For non-snapshot: save current modifiedLines so undo can restore
+    if change.kind != ckSnapshot:
+      undoEntry.savedModifiedLines = currentModifiedLines
+
+    let r = b.redoChange(change)
+    if r.isErr:
+      # Restore the change to redo stack if redo failed
+      b.redoStack.addLast(change)
+      # Restore previously redone changes to redo stack
+      for j in countdown(redoneChanges.len - 1, 0):
+        b.redoStack.addLast(redoneChanges[j])
+      return err("Redo failed: " & r.error)
+
+    redoneChanges.add(undoEntry)
+
+    # Increment change sequence for each redo
+    b.changeSeq.inc
+
+    # Adjust changelist index
+    if b.changeListIndex < b.changeList.len - 1:
+      b.changeListIndex.inc
+
+  # Add redone changes back to undo stack in reverse order
+  # This restores the original undo stack order after redo
+  for i in countdown(redoneChanges.len - 1, 0):
+    b.undoStack.addLast(redoneChanges[i])
+
+  # Mark highlight as needing update after redo
+  if redoneChanges.len > 0:
+    b.highlightNeedsUpdate = true
+
+    # Compute first changed line from redone changes for incremental highlighting
+    var minLine = int.high
+
+    proc findMinLine(change: BufferChange) =
+      case change.kind
+      of ckTransaction:
+        for innerChange in change.transactionChanges:
+          findMinLine(innerChange)
+      else:
+        minLine = min(minLine, getChangePosition(change).line)
+
+    for change in redoneChanges:
+      findMinLine(change)
+    if minLine != int.high:
+      b.lastChangedLines = minLine
+
+  # Return suggested cursor position for the last redone change (Vim behavior)
+  if redoneChanges.len > 0:
+    return ok(getChangePosition(redoneChanges[^1]))
+  else:
+    return ok(BufferPosition(line: 0, column: 0))

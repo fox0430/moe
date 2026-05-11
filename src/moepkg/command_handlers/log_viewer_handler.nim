@@ -29,12 +29,6 @@ import ../[types, key_bindings, buffer, search_utils]
 import handler_types
 export handler_types
 
-# Helper functions for word motion
-proc isWordChar(r: Rune): bool =
-  let c = r.int32
-  (c >= 'a'.ord and c <= 'z'.ord) or (c >= 'A'.ord and c <= 'Z'.ord) or
-    (c >= '0'.ord and c <= '9'.ord) or c == '_'.ord
-
 proc isWhitespace(r: Rune): bool =
   let c = r.int32
   c == ' '.ord or c == '\t'.ord or c == '\n'.ord or c == '\r'.ord

@@ -637,7 +637,7 @@ suite "Diagnostics Application":
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
     check buffer.getLineMarker(0).isNone
-    check buffer.getLineMarker(1) == some(SidebarItemKind.SyntaxError)
+    check buffer.getLineMarker(1) == some(LineMarkerKind.SyntaxError)
     check buffer.getLineMarker(2).isNone
 
   test "applyDiagnosticsToBuffer - warning diagnostic":
@@ -656,7 +656,7 @@ suite "Diagnostics Application":
       )
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
-    check buffer.getLineMarker(0) == some(SidebarItemKind.SyntaxWarning)
+    check buffer.getLineMarker(0) == some(LineMarkerKind.SyntaxWarning)
 
   test "applyDiagnosticsToBuffer - error takes precedence over warning":
     let buffer = newTextBuffer("line1\nline2\nline3")
@@ -685,13 +685,13 @@ suite "Diagnostics Application":
       ),
     ]
     applyDiagnosticsToBuffer(buffer, diagnostics)
-    check buffer.getLineMarker(1) == some(SidebarItemKind.SyntaxError)
+    check buffer.getLineMarker(1) == some(LineMarkerKind.SyntaxError)
 
   test "applyDiagnosticsToBuffer - clears existing syntax markers":
     let buffer = newTextBuffer("line1\nline2\nline3")
     # Add initial marker
-    buffer.setLineMarker(0, SidebarItemKind.SyntaxError)
-    check buffer.getLineMarker(0) == some(SidebarItemKind.SyntaxError)
+    buffer.setLineMarker(0, LineMarkerKind.SyntaxError)
+    check buffer.getLineMarker(0) == some(LineMarkerKind.SyntaxError)
 
     # Apply empty diagnostics - should clear
     applyDiagnosticsToBuffer(buffer, @[])

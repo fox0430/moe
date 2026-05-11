@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[options, unittest]
 
 import pkg/celina
 
@@ -373,9 +373,9 @@ suite "Sidebar - Session Modified/Inserted Markers":
       buf, 0, 3, modifiedLines = buf.modifiedLines, showModifiedLines = true
     )
 
-    check sidebar.buffer[0][0].kind == Empty
-    check sidebar.buffer[1][0].kind == SessionModified
-    check sidebar.buffer[2][0].kind == Empty
+    check sidebar.buffer[0][0].kind.isNone
+    check sidebar.buffer[1][0].kind == some(SessionModified)
+    check sidebar.buffer[2][0].kind.isNone
 
   test "generateSidebarFromBuffer shows SessionInserted fallback":
     let buf = newTextBuffer("line1")
@@ -385,8 +385,8 @@ suite "Sidebar - Session Modified/Inserted Markers":
       buf, 0, 2, modifiedLines = buf.modifiedLines, showModifiedLines = true
     )
 
-    check sidebar.buffer[0][0].kind == Empty
-    check sidebar.buffer[1][0].kind == SessionInserted
+    check sidebar.buffer[0][0].kind.isNone
+    check sidebar.buffer[1][0].kind == some(SessionInserted)
 
   test "generateSidebarFromBuffer shows both Modified and Inserted":
     let buf = newTextBuffer("hello world")
@@ -396,8 +396,8 @@ suite "Sidebar - Session Modified/Inserted Markers":
       buf, 0, 2, modifiedLines = buf.modifiedLines, showModifiedLines = true
     )
 
-    check sidebar.buffer[0][0].kind == SessionModified
-    check sidebar.buffer[1][0].kind == SessionInserted
+    check sidebar.buffer[0][0].kind == some(SessionModified)
+    check sidebar.buffer[1][0].kind == some(SessionInserted)
 
   test "generateSidebarFromBuffer hides session markers when showModifiedLines is false":
     let buf = newTextBuffer("line1\nline2")
@@ -407,8 +407,8 @@ suite "Sidebar - Session Modified/Inserted Markers":
       buf, 0, 2, modifiedLines = buf.modifiedLines, showModifiedLines = false
     )
 
-    check sidebar.buffer[0][0].kind == Empty
-    check sidebar.buffer[1][0].kind == Empty
+    check sidebar.buffer[0][0].kind.isNone
+    check sidebar.buffer[1][0].kind.isNone
 
   test "Git marker takes priority over session modified marker":
     let buf = newTextBuffer("line1\nline2")
@@ -424,8 +424,8 @@ suite "Sidebar - Session Modified/Inserted Markers":
     )
 
     # Git marker should win
-    check sidebar.buffer[0][0].kind == GitAdded
-    check sidebar.buffer[1][0].kind == Empty
+    check sidebar.buffer[0][0].kind == some(GitAdded)
+    check sidebar.buffer[1][0].kind.isNone
 
   test "Syntax marker takes priority over session modified marker":
     let buf = newTextBuffer("line1\nline2")
@@ -436,7 +436,7 @@ suite "Sidebar - Session Modified/Inserted Markers":
       buf, 0, 2, modifiedLines = buf.modifiedLines, showModifiedLines = true
     )
 
-    check sidebar.buffer[0][0].kind == SyntaxError
+    check sidebar.buffer[0][0].kind == some(SyntaxError)
 
   test "Session markers with topLine offset":
     let buf = newTextBuffer("line1\nline2\nline3\nline4")
@@ -447,11 +447,11 @@ suite "Sidebar - Session Modified/Inserted Markers":
     )
 
     # Screen line 0 = buffer line 1 (unmodified)
-    check sidebar.buffer[0][0].kind == Empty
+    check sidebar.buffer[0][0].kind.isNone
     # Screen line 1 = buffer line 2 (modified)
-    check sidebar.buffer[1][0].kind == SessionModified
+    check sidebar.buffer[1][0].kind == some(SessionModified)
     # Screen line 2 = buffer line 3 (unmodified)
-    check sidebar.buffer[2][0].kind == Empty
+    check sidebar.buffer[2][0].kind.isNone
 
   test "Session marker text matches config":
     let buf = newTextBuffer("line1\nline2")
@@ -476,4 +476,4 @@ suite "Sidebar - Session Modified/Inserted Markers":
       buf, 0, 1, modifiedLines = @[], showModifiedLines = true
     )
 
-    check sidebar.buffer[0][0].kind == Empty
+    check sidebar.buffer[0][0].kind.isNone

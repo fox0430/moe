@@ -1,0 +1,252 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2026 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+## Internal mutation helpers: backend-dispatch primitives and multi-line
+## text mutation helpers used by edit.nim / undo.nim. These do NOT record
+## undo entries — they are the lowest layer above the backend backends.
+
+import std/[strutils, unicode]
+
+import ../[primitives, unicode_utils]
+import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
+import ./core
+
+# Backend dispatch helpers for internal use (no undo recording)
+proc backendInsertIntoLine*(b: TextBuffer, line, col: int, text: string) =
+  case b.backendKind
+  of GapBuffer:
+    b.gapBuffer.insertIntoLine(line, col, text)
+  of SqrtDecomp:
+    b.sqrtDecomp.insertIntoLine(line, col, text)
+  of Rope:
+    b.rope.insertIntoLine(line, col, text)
+  of PieceTable:
+    b.pieceTable.insertIntoLine(line, col, text)
+
+proc backendDeleteLine*(b: TextBuffer, lineNumber: int) =
+  case b.backendKind
+  of GapBuffer:
+    b.gapBuffer.deleteLine(lineNumber)
+  of SqrtDecomp:
+    b.sqrtDecomp.deleteLine(lineNumber)
+  of Rope:
+    b.rope.deleteLine(lineNumber)
+  of PieceTable:
+    b.pieceTable.deleteLine(lineNumber)
+
+proc backendInsertLine*(b: TextBuffer, lineNumber: int, content: string) =
+  case b.backendKind
+  of GapBuffer:
+    b.gapBuffer.insertLine(lineNumber, content)
+  of SqrtDecomp:
+    b.sqrtDecomp.insertLine(lineNumber, content)
+  of Rope:
+    b.rope.insertLine(lineNumber, content)
+  of PieceTable:
+    b.pieceTable.insertLine(lineNumber, content)
+
+proc backendReplaceLine*(b: TextBuffer, lineNumber: int, content: string) =
+  case b.backendKind
+  of GapBuffer:
+    b.gapBuffer.replaceLine(lineNumber, content)
+  of SqrtDecomp:
+    b.sqrtDecomp.replaceLine(lineNumber, content)
+  of Rope:
+    b.rope.replaceLine(lineNumber, content)
+  of PieceTable:
+    b.pieceTable.replaceLine(lineNumber, content)
+
+proc backendDeleteAtLineCol*(b: TextBuffer, line, col, count: int) =
+  case b.backendKind
+  of GapBuffer:
+    b.gapBuffer.deleteAtLineCol(line, col, count)
+  of SqrtDecomp:
+    b.sqrtDecomp.deleteAtLineCol(line, col, count)
+  of Rope:
+    b.rope.deleteAtLineCol(line, col, count)
+  of PieceTable:
+    b.pieceTable.deleteAtLineCol(line, col, count)
+
+proc insertTextWithNewlines*(b: TextBuffer, pos: BufferPosition, text: string) =
+  ## Insert text that may contain newlines, properly splitting into multiple lines
+  ## This is used internally for undo/redo operations
+  if '\n' notin text:
+    # Simple case: no newlines, just insert into current line
+    let line = b.getLine(pos.line)
+    let bytePos =
+      charToBytePosCached(line, pos.column, b.cursorCache, pos.line, b.changeSeq)
+    b.backendInsertIntoLine(pos.line, bytePos, text)
+  else:
+    # Complex case: text contains newlines, need to split current line and insert multiple lines
+    let
+      currentLine = b.getLine(pos.line)
+      currentLineLen = currentLine.charLen
+
+    # Split current line at insertion position
+    let
+      prefix =
+        if pos.column < currentLineLen:
+          currentLine.runeSubStr(0, pos.column)
+        else:
+          currentLine
+      suffix =
+        if pos.column < currentLineLen:
+          currentLine.runeSubStr(pos.column)
+        else:
+          ""
+
+    # Split text to insert by newlines
+    let insertedLines = text.split('\n')
+
+    # Build new lines
+    var newLines: seq[string] = @[]
+
+    if insertedLines.len == 1:
+      # Should not happen (we checked for \n above), but handle it
+      newLines.add(prefix & insertedLines[0] & suffix)
+    else:
+      # First line: prefix + first inserted line
+      newLines.add(prefix & insertedLines[0])
+
+      # Middle lines: just the inserted lines
+      for i in 1 ..< insertedLines.len - 1:
+        newLines.add(insertedLines[i])
+
+      # Last line: last inserted line + suffix
+      newLines.add(insertedLines[^1] & suffix)
+
+    # Replace current line with new lines
+    b.backendDeleteLine(pos.line)
+    for i, newLine in newLines:
+      b.backendInsertLine(pos.line + i, newLine)
+
+    # Adjust fold and bookmark positions for newly inserted lines
+    if newLines.len > 1:
+      b.foldState.adjustFoldsAfterInsert(pos.line, newLines.len - 1)
+      b.adjustBookmarksForInsert(pos.line, newLines.len - 1)
+
+  # Ensure lineMarkers and modifiedLines stay in sync after backend operations
+  b.ensureMarkersSize()
+  b.ensureModifiedLinesSize()
+
+  # Mark affected lines: original line as modified, new lines as inserted
+  if '\n' in text:
+    let insertedLineCount = text.count('\n')
+    # Original line was modified (split)
+    if pos.line < b.modifiedLines.len:
+      if b.modifiedLines[pos.line] != lmkInserted:
+        b.modifiedLines[pos.line] = lmkModified
+    # New lines were inserted
+    for i in 1 .. insertedLineCount:
+      let line = pos.line + i
+      if line < b.modifiedLines.len:
+        b.modifiedLines[line] = lmkInserted
+
+proc buildMergedLine*(prefix: string, suffix: string): string {.inline.} =
+  ## Helper to build a merged line from prefix and suffix
+  prefix & suffix
+
+proc deleteRangeSingleLine*(
+    b: TextBuffer, line: string, startPos, endPos: BufferPosition
+) =
+  ## Handle single-line deletion
+  let lineLen = line.charLen
+
+  # Check if selection extends to or past line end (includes newline)
+  if endPos.column >= lineLen:
+    # Delete from startPos to end of line, then join with next line
+    if endPos.line < b.len - 1:
+      # Multi-line: join with next line
+      let nextLine = b.getLine(endPos.line + 1)
+      let prefix =
+        if startPos.column < lineLen:
+          line.runeSubStr(0, startPos.column)
+        else:
+          ""
+      let newLine = buildMergedLine(prefix, nextLine)
+
+      # Delete current and next line, insert combined
+      b.backendDeleteLine(endPos.line + 1)
+      b.backendDeleteLine(startPos.line)
+      b.backendInsertLine(startPos.line, newLine)
+    else:
+      # Last line: just delete to end
+      let newLine =
+        if startPos.column < lineLen:
+          line.runeSubStr(0, startPos.column)
+        else:
+          ""
+      b.backendDeleteLine(startPos.line)
+      b.backendInsertLine(startPos.line, newLine)
+  elif startPos.column < lineLen and endPos.column < lineLen:
+    # Normal single-line deletion within bounds
+    # Build new line by concatenating prefix and suffix using Unicode-safe substring
+    let prefix = line.runeSubStr(0, startPos.column)
+    let suffix = line.runeSubStr(endPos.column + 1)
+    let newLine = buildMergedLine(prefix, suffix)
+
+    b.backendDeleteLine(startPos.line)
+    b.backendInsertLine(startPos.line, newLine)
+
+  # Ensure lineMarkers and modifiedLines stay in sync after backend operations
+  b.ensureMarkersSize()
+  b.ensureModifiedLinesSize()
+
+proc deleteRangeMultiLine*(b: TextBuffer, startPos, endPos: BufferPosition) =
+  ## Handle multi-line deletion
+  let
+    startLine = b.getLine(startPos.line)
+    endLine = b.getLine(endPos.line)
+    endLineLen = endLine.charLen
+
+  # Build prefix (chars before selection start)
+  let prefix =
+    if startPos.column <= startLine.charLen:
+      startLine.runeSubStr(0, startPos.column)
+    else:
+      ""
+
+  # Build suffix (chars after selection end)
+  var suffix = ""
+  var extraLineToDelete = -1
+
+  if endPos.column < endLineLen:
+    # Selection ends within the line - keep remaining chars
+    suffix = endLine.runeSubStr(endPos.column + 1)
+  elif endPos.line < b.len - 1:
+    # Selection extends to/past line end - join with next line instead
+    suffix = b.getLine(endPos.line + 1)
+    extraLineToDelete = endPos.line + 1
+
+  # Delete extra line if needed
+  if extraLineToDelete >= 0:
+    b.backendDeleteLine(extraLineToDelete)
+
+  # Replace startPos.line with the merged line
+  b.backendDeleteLine(startPos.line)
+  b.backendInsertLine(startPos.line, buildMergedLine(prefix, suffix))
+
+  # Delete lines between startPos and endPos (if any)
+  if endPos.line > startPos.line:
+    for i in countdown(endPos.line, startPos.line + 1):
+      b.backendDeleteLine(i)
+
+  # Ensure lineMarkers and modifiedLines stay in sync after backend operations
+  b.ensureMarkersSize()
+  b.ensureModifiedLinesSize()

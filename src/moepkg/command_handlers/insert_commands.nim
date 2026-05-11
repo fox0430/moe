@@ -264,14 +264,6 @@ proc dedentLine*(buffer: TextBuffer, state: EditorState, count: int = 1) =
   else:
     state.cursor.column = 0
 
-# Helper functions for word detection (same as motion.nim)
-proc isWordChar(r: Rune): bool =
-  ## Check if a character is part of a word (alphanumeric or underscore)
-  let c = r.int32
-  return
-    (c >= 'a'.ord and c <= 'z'.ord) or (c >= 'A'.ord and c <= 'Z'.ord) or
-    (c >= '0'.ord and c <= '9'.ord) or c == '_'.ord
-
 proc isWhitespace(r: Rune): bool =
   ## Check if a character is whitespace
   let c = r.int32

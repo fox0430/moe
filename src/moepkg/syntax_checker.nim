@@ -125,8 +125,8 @@ proc clearSyntaxMarkers*(b: TextBuffer) =
   for i in 0 ..< b.lineMarkers.len:
     if b.lineMarkers[i].isSome:
       let kind = b.lineMarkers[i].get
-      if kind == SidebarItemKind.SyntaxError or kind == SidebarItemKind.SyntaxWarning:
-        b.lineMarkers[i] = none(SidebarItemKind)
+      if kind == LineMarkerKind.SyntaxError or kind == LineMarkerKind.SyntaxWarning:
+        b.lineMarkers[i] = none(LineMarkerKind)
 
 proc applySyntaxCheckToBuffer*(b: TextBuffer, errors: seq[SyntaxCheckError]) =
   ## Apply syntax check errors to buffer line markers.
@@ -136,9 +136,9 @@ proc applySyntaxCheckToBuffer*(b: TextBuffer, errors: seq[SyntaxCheckError]) =
     if err.position.line >= 0 and err.position.line < b.len:
       case err.messageType
       of SyntaxCheckMessageType.error:
-        b.setLineMarker(err.position.line, SidebarItemKind.SyntaxError)
+        b.setLineMarker(err.position.line, LineMarkerKind.SyntaxError)
       of SyntaxCheckMessageType.warning:
-        b.setLineMarker(err.position.line, SidebarItemKind.SyntaxWarning)
+        b.setLineMarker(err.position.line, LineMarkerKind.SyntaxWarning)
       of SyntaxCheckMessageType.hint, SyntaxCheckMessageType.info:
         discard # Don't show hints/info in sidebar
 

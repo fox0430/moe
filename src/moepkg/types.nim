@@ -29,7 +29,7 @@ import
   primitives, syntax_checker, recent_file_mode, terminal_mode
 
 export
-  buffer.SidebarItemKind, registers, command_completion, filer, filetree, log_viewer,
+  buffer.LineMarkerKind, registers, command_completion, filer, filetree, log_viewer,
   help_viewer, buffer_manager, bookmark_manager, backup_manager, diff_viewer,
   debug_viewer, config_mode, references_viewer, documentsymbol_viewer,
   callhierarchy_viewer, hover_popup, notification_popup, primitives, syntax_checker,
@@ -38,7 +38,7 @@ export
 type
   SidebarItem* = object ## Single cell in the sidebar
     text*: string ## Display text (e.g., "+", "~", ">>")
-    kind*: SidebarItemKind
+    kind*: Option[LineMarkerKind] ## none = empty cell
     style*: Style ## Rendering style
 
   Sidebar* = object

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, times, options]
+import std/[unittest, os, strutils, times, options, unicode]
 import pkg/[results, celina]
 import ../src/moepkg/buffer
 import ../src/moepkg/highlight
@@ -445,6 +445,44 @@ suite "Buffer - Search":
       true
 
 suite "Buffer - Word Detection":
+  test "isWordChar - ASCII alphanumeric and underscore":
+    check 'a'.Rune.isWordChar
+    check 'Z'.Rune.isWordChar
+    check '0'.Rune.isWordChar
+    check '9'.Rune.isWordChar
+    check '_'.Rune.isWordChar
+
+  test "isWordChar - non-word ASCII":
+    check not ' '.Rune.isWordChar
+    check not '\t'.Rune.isWordChar
+    check not '.'.Rune.isWordChar
+    check not ','.Rune.isWordChar
+    check not '-'.Rune.isWordChar
+    check not '('.Rune.isWordChar
+
+  test "isWordChar - Unicode letters are word chars":
+    # CJK ideographs
+    check "日".runeAt(0).isWordChar
+    check "本".runeAt(0).isWordChar
+    check "語".runeAt(0).isWordChar
+    # Hiragana / Katakana
+    check "あ".runeAt(0).isWordChar
+    check "ア".runeAt(0).isWordChar
+    # Accented Latin
+    check "é".runeAt(0).isWordChar
+    check "ü".runeAt(0).isWordChar
+    # Cyrillic / Greek
+    check "Я".runeAt(0).isWordChar
+    check "λ".runeAt(0).isWordChar
+
+  test "isWordChar - non-ASCII digits stay non-word":
+    # Digits are intentionally ASCII-only to match source-code conventions.
+    # Arabic-Indic digit ٥ (U+0665) and Devanagari digit ५ (U+096B) are
+    # Unicode digits but not Unicode letters, so they should NOT be word
+    # characters under the current contract.
+    check not "٥".runeAt(0).isWordChar
+    check not "५".runeAt(0).isWordChar
+
   test "getWordAtPosition":
     let buf = newTextBuffer("Hello World")
     check buf.getWordAtPosition(BufferPosition(line: 0, column: 0)) == "Hello"
@@ -533,13 +571,20 @@ suite "Buffer - Word Detection":
     check buf.isPositionInWord(BufferPosition(line: 0, column: 2), "b") == true
     check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "b") == false
 
-  test "isPositionInWord - Unicode (CJK not word chars)":
+  test "isPositionInWord - Unicode (CJK are word chars)":
     let buf = newTextBuffer("hello世界world")
-    # CJK characters are not word characters (isWordChar checks alphanumeric + underscore)
-    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "hello") == true
+    # CJK characters are word characters via Unicode-aware isAlpha,
+    # so the entire "hello世界world" is treated as a single word.
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "hello") == false
     check buf.isPositionInWord(BufferPosition(line: 0, column: 5), "hello") == false
       # '世'
-    check buf.isPositionInWord(BufferPosition(line: 0, column: 7), "world") == true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 7), "world") == false
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 0), "hello世界world") ==
+      true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 5), "hello世界world") ==
+      true
+    check buf.isPositionInWord(BufferPosition(line: 0, column: 9), "hello世界world") ==
+      true
 
   test "isPositionInWord - tabs and special whitespace":
     let buf = newTextBuffer("hello\tworld")
@@ -610,9 +655,9 @@ suite "Buffer - Folding":
 
     let fold = buf.foldState.getFoldAt(2)
     check fold.isSome
-    check fold.get[].startLine == 1
-    check fold.get[].endLine == 3
-    check fold.get[].collapsed == true
+    check fold.get.startLine == 1
+    check fold.get.endLine == 3
+    check fold.get.collapsed == true
 
   test "addFold overlapping fails":
     let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
@@ -675,24 +720,24 @@ suite "Buffer - Folding":
 suite "Buffer - Sidebar Markers":
   test "setLineMarker and getLineMarker":
     let buf = newTextBuffer("Line1\nLine2\nLine3")
-    buf.setLineMarker(1, SidebarItemKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.GitAdded)
 
     check buf.getLineMarker(0).isNone
     check buf.getLineMarker(1).isSome
-    check buf.getLineMarker(1).get == SidebarItemKind.GitAdded
+    check buf.getLineMarker(1).get == LineMarkerKind.GitAdded
     check buf.getLineMarker(2).isNone
 
   test "clearLineMarker":
     let buf = newTextBuffer("Line1\nLine2")
-    buf.setLineMarker(0, SidebarItemKind.GitChanged)
+    buf.setLineMarker(0, LineMarkerKind.GitChanged)
     buf.clearLineMarker(0)
     check buf.getLineMarker(0).isNone
 
   test "clearAllMarkers":
     let buf = newTextBuffer("Line1\nLine2\nLine3")
-    buf.setLineMarker(0, SidebarItemKind.GitAdded)
-    buf.setLineMarker(1, SidebarItemKind.GitChanged)
-    buf.setLineMarker(2, SidebarItemKind.GitDeleted)
+    buf.setLineMarker(0, LineMarkerKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.GitChanged)
+    buf.setLineMarker(2, LineMarkerKind.GitDeleted)
 
     buf.clearAllMarkers()
     check buf.getLineMarker(0).isNone
@@ -716,9 +761,11 @@ suite "Buffer - Unicode":
 
   test "getWordAtPosition Unicode":
     let buf = newTextBuffer("hello世界test")
-    # Note: Japanese characters are not word characters by default
-    check buf.getWordAtPosition(BufferPosition(line: 0, column: 0)) == "hello"
-    check buf.getWordAtPosition(BufferPosition(line: 0, column: 7)) == "test"
+    # Japanese characters ARE word characters via Unicode-aware isAlpha,
+    # so the whole "hello世界test" is a single word.
+    check buf.getWordAtPosition(BufferPosition(line: 0, column: 0)) == "hello世界test"
+    check buf.getWordAtPosition(BufferPosition(line: 0, column: 5)) == "hello世界test"
+    check buf.getWordAtPosition(BufferPosition(line: 0, column: 7)) == "hello世界test"
 
   test "findNext Unicode":
     let buf = newTextBuffer("日本語テスト日本語")

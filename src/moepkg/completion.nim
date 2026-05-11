@@ -120,10 +120,6 @@ proc isDigitRune(r: Rune): bool =
   let code = int(r)
   code >= ord('0') and code <= ord('9')
 
-proc isWordChar(r: Rune): bool =
-  ## Check if a rune is part of a word (alphanumeric or underscore)
-  r.isAlpha or r.isDigitRune or r == '_'.Rune
-
 proc extractWords*(line: string): seq[string] =
   ## Extract all words from a line
   result = @[]

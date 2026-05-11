@@ -202,25 +202,25 @@ suite "SyntaxChecker - applySyntaxCheckToBuffer":
       ),
     ]
     applySyntaxCheckToBuffer(buf, errors)
-    check buf.getLineMarker(0) == none(SidebarItemKind)
-    check buf.getLineMarker(1) == some(SidebarItemKind.SyntaxError)
-    check buf.getLineMarker(2) == none(SidebarItemKind)
-    check buf.getLineMarker(3) == some(SidebarItemKind.SyntaxWarning)
-    check buf.getLineMarker(4) == none(SidebarItemKind)
+    check buf.getLineMarker(0) == none(LineMarkerKind)
+    check buf.getLineMarker(1) == some(LineMarkerKind.SyntaxError)
+    check buf.getLineMarker(2) == none(LineMarkerKind)
+    check buf.getLineMarker(3) == some(LineMarkerKind.SyntaxWarning)
+    check buf.getLineMarker(4) == none(LineMarkerKind)
 
   test "Apply clears previous syntax markers":
     let buf = newTextBuffer("line1\nline2\nline3")
-    buf.setLineMarker(0, SidebarItemKind.SyntaxError)
-    buf.setLineMarker(2, SidebarItemKind.SyntaxWarning)
+    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(2, LineMarkerKind.SyntaxWarning)
     # Apply with empty errors should clear syntax markers
     applySyntaxCheckToBuffer(buf, @[])
-    check buf.getLineMarker(0) == none(SidebarItemKind)
-    check buf.getLineMarker(2) == none(SidebarItemKind)
+    check buf.getLineMarker(0) == none(LineMarkerKind)
+    check buf.getLineMarker(2) == none(LineMarkerKind)
 
   test "Apply preserves git markers":
     let buf = newTextBuffer("line1\nline2\nline3")
-    buf.setLineMarker(0, SidebarItemKind.GitAdded)
-    buf.setLineMarker(1, SidebarItemKind.SyntaxError)
+    buf.setLineMarker(0, LineMarkerKind.GitAdded)
+    buf.setLineMarker(1, LineMarkerKind.SyntaxError)
     let errors = @[
       SyntaxCheckError(
         position: BufferPosition(line: 2, column: 0),
@@ -230,11 +230,11 @@ suite "SyntaxChecker - applySyntaxCheckToBuffer":
     ]
     applySyntaxCheckToBuffer(buf, errors)
     # Git marker should be preserved
-    check buf.getLineMarker(0) == some(SidebarItemKind.GitAdded)
+    check buf.getLineMarker(0) == some(LineMarkerKind.GitAdded)
     # Old syntax marker cleared
-    check buf.getLineMarker(1) == none(SidebarItemKind)
+    check buf.getLineMarker(1) == none(LineMarkerKind)
     # New syntax marker set
-    check buf.getLineMarker(2) == some(SidebarItemKind.SyntaxError)
+    check buf.getLineMarker(2) == some(LineMarkerKind.SyntaxError)
 
   test "Hints and info are not shown in sidebar":
     let buf = newTextBuffer("line1\nline2\nline3")
@@ -251,8 +251,8 @@ suite "SyntaxChecker - applySyntaxCheckToBuffer":
       ),
     ]
     applySyntaxCheckToBuffer(buf, errors)
-    check buf.getLineMarker(0) == none(SidebarItemKind)
-    check buf.getLineMarker(1) == none(SidebarItemKind)
+    check buf.getLineMarker(0) == none(LineMarkerKind)
+    check buf.getLineMarker(1) == none(LineMarkerKind)
 
   test "Errors on out-of-range lines are ignored":
     let buf = newTextBuffer("line1\nline2")
@@ -264,25 +264,25 @@ suite "SyntaxChecker - applySyntaxCheckToBuffer":
       )
     ]
     applySyntaxCheckToBuffer(buf, errors)
-    check buf.getLineMarker(0) == none(SidebarItemKind)
-    check buf.getLineMarker(1) == none(SidebarItemKind)
+    check buf.getLineMarker(0) == none(LineMarkerKind)
+    check buf.getLineMarker(1) == none(LineMarkerKind)
 
 suite "SyntaxChecker - clearSyntaxMarkers":
   test "Clears syntax error and warning markers":
     let buf = newTextBuffer("line1\nline2\nline3")
-    buf.setLineMarker(0, SidebarItemKind.SyntaxError)
-    buf.setLineMarker(1, SidebarItemKind.SyntaxWarning)
-    buf.setLineMarker(2, SidebarItemKind.GitAdded)
+    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
+    buf.setLineMarker(1, LineMarkerKind.SyntaxWarning)
+    buf.setLineMarker(2, LineMarkerKind.GitAdded)
     clearSyntaxMarkers(buf)
-    check buf.getLineMarker(0) == none(SidebarItemKind)
-    check buf.getLineMarker(1) == none(SidebarItemKind)
-    check buf.getLineMarker(2) == some(SidebarItemKind.GitAdded)
+    check buf.getLineMarker(0) == none(LineMarkerKind)
+    check buf.getLineMarker(1) == none(LineMarkerKind)
+    check buf.getLineMarker(2) == some(LineMarkerKind.GitAdded)
 
   test "Clears nothing when no syntax markers exist":
     let buf = newTextBuffer("line1\nline2")
-    buf.setLineMarker(0, SidebarItemKind.GitChanged)
+    buf.setLineMarker(0, LineMarkerKind.GitChanged)
     clearSyntaxMarkers(buf)
-    check buf.getLineMarker(0) == some(SidebarItemKind.GitChanged)
+    check buf.getLineMarker(0) == some(LineMarkerKind.GitChanged)
 
 suite "SyntaxChecker - formattedMessage":
   test "Returns error message for matching line":
