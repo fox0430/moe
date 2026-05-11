@@ -45,37 +45,271 @@ const
     "while", "yield",
   ]
 
-  rustBooleans = ["false", "true"]
+  rustBooleans* = ["false", "true"]
 
   rustBuiltins* = [
     "AsMut", "AsRef", "Box", "Clone", "Copy", "Default", "DoubleEndedIterator", "Drop",
-    "Eq", "ErrSliceConcatExt", "Error", "ExactSizeIterator", "Extend", "Fn", "FnMut",
-    "FnOnce", "From", "Into", "IntoIterator", "Iterator", "None", "Ok", "Option", "Ord",
-    "PartialEq", "PartialOrd", "Result", "Self", "Send", "Sized", "Some", "String",
-    "Sync", "ToOwned", "ToString", "Variant", "Vec", "bool", "char", "f32", "f64",
+    "Eq", "Err", "Error", "ExactSizeIterator", "Extend", "Fn", "FnMut", "FnOnce",
+    "From", "Into", "IntoIterator", "Iterator", "None", "Ok", "Option", "Ord",
+    "PartialEq", "PartialOrd", "Result", "Send", "Sized", "SliceConcatExt", "Some",
+    "String", "Sync", "ToOwned", "ToString", "Vec", "bool", "char", "f32", "f64",
     "i128", "i16", "i32", "i64", "i8", "isize", "str", "u128", "u16", "u32", "u64",
     "u8", "usize",
   ]
 
-proc rustGetKeyword(id: string): TokenClass =
+  rustAttributes* = [
+    "allow", "automatically_derived", "bench", "cfg", "cfg_attr", "cold", "crate_name",
+    "crate_type", "deny", "derive", "doc", "export_name", "feature", "forbid",
+    "global_allocator", "inline", "link", "link_name", "macro_export", "macro_use",
+    "must_use", "no_main", "no_mangle", "no_std", "non_exhaustive", "panic_handler",
+    "path", "proc_macro", "proc_macro_attribute", "proc_macro_derive", "repr",
+    "should_panic", "target_feature", "test", "track_caller", "used", "warn",
+  ]
+
+  rustHexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
+  rustOctChars = {'0' .. '7'}
+  rustBinChars = {'0' .. '1'}
+  rustSymChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
+  rustNumSuffixChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}
+
+static:
+  # rustGetKeyword relies on binarySearch, so the tables must stay sorted.
+  doAssert rustKeywords.isSorted
+  doAssert rustBooleans.isSorted
+  doAssert rustBuiltins.isSorted
+  doAssert rustAttributes.isSorted
+
+proc rustGetKeyword(id: string, attrDepth: int): TokenClass =
+  # `rustAttributes` only resolves to `gtPreprocessor` when we are inside
+  # an open `#[...]` / `#![...]` bracket. Outside, names like `path`,
+  # `test`, `derive`, `inline` are common identifiers and must not be
+  # forcibly highlighted as preprocessor.
   if binarySearch(rustKeywords, id) > -1:
     return gtKeyword
   if binarySearch(rustBooleans, id) > -1:
     return gtBoolean
   if binarySearch(rustBuiltins, id) > -1:
     return gtBuiltin
-  else:
-    gtIdentifier
+  if attrDepth > 0 and binarySearch(rustAttributes, id) > -1:
+    return gtPreprocessor
+  return gtIdentifier
 
-template isCharLit*(g: var GeneralTokenizer, position: int): bool =
-  (g.buf.high > pos + 1) and (g.buf[position + 2] == '\'')
+proc rustNormalString(g: var GeneralTokenizer, pos: var int) =
+  # Consume a regular `"..."` string. Multi-line content is supported via
+  # state parking: the closing `"` terminates the token, `\` yields control
+  # via `g.state = gtStringLit` so the next call can produce an escape
+  # token, and a buffer-end `\0` parks `g.state = gtLongStringLit` so the
+  # next line continues as the same string.
+  g.rustInRawString = false
+  inc(pos)
+  g.kind = gtStringLit
+  while true:
+    case g.buf[pos]
+    of '\0':
+      g.state = gtLongStringLit
+      g.rustRawStringHashCount = 0
+      break
+    of '\"':
+      inc(pos)
+      g.rustInByteString = false
+      break
+    of '\\':
+      g.state = gtStringLit
+      break
+    else:
+      inc(pos)
+
+proc rustRawString(g: var GeneralTokenizer, pos: var int) =
+  # `pos` points at the first `#` (or `"`) right after the `r` / `br` prefix.
+  # Counts the leading `#`s, then scans until a closing `"` followed by the
+  # same number of `#`s. Raw strings have no escape processing. If the
+  # buffer ends mid-string, parks `g.state = gtLongStringLit` along with
+  # the hash count and `g.rustInRawString = true` so the next line resumes
+  # the same raw string (the flag distinguishes raw-with-0-hashes from a
+  # non-raw multi-line string).
+  var hashCount = 0
+  while g.buf[pos] == '#':
+    inc(hashCount)
+    inc(pos)
+  inc(pos) # past opening "
+  g.kind = gtStringLit
+  g.rustInRawString = true
+  while g.buf[pos] != '\0':
+    if g.buf[pos] == '"':
+      var look = pos + 1
+      var matched = 0
+      while matched < hashCount and g.buf[look] == '#':
+        inc(matched)
+        inc(look)
+      if matched == hashCount:
+        pos = look
+        g.rustInRawString = false
+        return
+    inc(pos)
+  g.state = gtLongStringLit
+  g.rustRawStringHashCount = hashCount
+
+proc isRustRawStringStart(buf: cstring, pos: int): bool =
+  # Looks at `r` (or the `r` of `br`) at `pos` and returns true iff the
+  # following bytes form a raw-string opener: zero or more `#` then `"`.
+  var p = pos + 1
+  while buf[p] == '#':
+    inc(p)
+  result = buf[p] == '\"'
+
+proc rustCharOrLifetime(g: var GeneralTokenizer, pos: var int) =
+  # Disambiguates char literal vs lifetime. Char literals: `'x'`, `'\\n'`,
+  # `'\\xFF'`, `'\\u{1F600}'`. Anything else after `'` is a lifetime such as
+  # `'a` or `'static`, consumed as a single identifier token.
+  inc(pos)
+  if g.buf[pos] == '\\':
+    inc(pos)
+    case g.buf[pos]
+    of 'x':
+      inc(pos)
+      if g.buf[pos] in rustHexChars:
+        inc(pos)
+      if g.buf[pos] in rustHexChars:
+        inc(pos)
+    of 'u':
+      inc(pos)
+      if g.buf[pos] == '{':
+        inc(pos)
+        while g.buf[pos] in rustHexChars:
+          inc(pos)
+        if g.buf[pos] == '}':
+          inc(pos)
+    of '\0':
+      discard
+    else:
+      inc(pos)
+    # `\` after `'` rules out a lifetime, so any trailing identifier-like
+    # bytes belong to a (malformed) char literal — consume them and the
+    # closing `'` if present so the token boundary is sensible.
+    if g.buf[pos] != '\'':
+      while g.buf[pos] in rustSymChars:
+        inc(pos)
+    if g.buf[pos] == '\'':
+      inc(pos)
+    g.kind = gtCharLit
+  elif g.buf[pos] != '\0' and g.buf[pos] != '\'':
+    # UTF-8 lead byte → infer width, then check for closing `'`. Treats
+    # malformed continuation/invalid leads as 1 byte so a stray high byte
+    # falls back to the lifetime path instead of overshooting the buffer.
+    let lead = g.buf[pos].uint8
+    let width =
+      if lead < 0x80'u8:
+        1
+      elif lead < 0xC0'u8:
+        1
+      elif lead < 0xE0'u8:
+        2
+      elif lead < 0xF0'u8:
+        3
+      elif lead < 0xF8'u8:
+        4
+      else:
+        1
+    var look = pos + 1
+    var consumed = 1
+    var valid = true
+    while consumed < width:
+      let cont = g.buf[look].uint8
+      # Valid UTF-8 continuation bytes are 0x80..0xBF. A null byte (EOF)
+      # or any byte outside that range means we mis-judged the lead and
+      # must fall back to the lifetime path.
+      if cont == 0'u8 or cont < 0x80'u8 or cont >= 0xC0'u8:
+        valid = false
+        break
+      inc(look)
+      inc(consumed)
+    if valid and consumed == width and g.buf[look] == '\'':
+      pos = look + 1
+      g.kind = gtCharLit
+    else:
+      while g.buf[pos] in rustSymChars:
+        inc(pos)
+      g.kind = gtIdentifier
+  else:
+    while g.buf[pos] in rustSymChars:
+      inc(pos)
+    g.kind = gtIdentifier
+
+proc rustReadEscape(g: var GeneralTokenizer, pos: var int) =
+  # Consumes one `\X` escape and emits a `gtEscapeSequence` token. Caller
+  # must ensure `g.buf[pos] == '\\'` on entry. Sets `g.state = gtLongStringLit`
+  # when the buffer ends mid-escape so the next line resumes the string.
+  g.kind = gtEscapeSequence
+  inc(pos)
+  case g.buf[pos]
+  of 'x':
+    inc(pos)
+    if g.buf[pos] in rustHexChars:
+      inc(pos)
+    if g.buf[pos] in rustHexChars:
+      inc(pos)
+  of 'u':
+    if g.rustInByteString:
+      # `\u{...}` is invalid in byte strings. Emit only the `\` itself
+      # (length 1) as a broken-escape signal so the highlighter does not
+      # lie about validity; `u{...}` flows on as ordinary string text.
+      discard
+    else:
+      inc(pos)
+      if g.buf[pos] == '{':
+        inc(pos)
+        while g.buf[pos] in rustHexChars:
+          inc(pos)
+        if g.buf[pos] == '}':
+          inc(pos)
+  of '\0':
+    g.state = gtLongStringLit
+  else:
+    inc(pos)
+
+proc rustConsumeDecSuffix(g: var GeneralTokenizer, pos: var int) =
+  # Consumes the type suffix on a decimal-shaped literal. Promotes the
+  # token kind to `gtFloatNumber` when the suffix is exactly `f32` or
+  # `f64`, so `1f64` and `1.5f32` are colored as floats.
+  let suffixStart = pos
+  while g.buf[pos] in rustNumSuffixChars:
+    inc(pos)
+  if pos - suffixStart == 3 and g.buf[suffixStart] == 'f':
+    let c1 = g.buf[suffixStart + 1]
+    let c2 = g.buf[suffixStart + 2]
+    if (c1 == '3' and c2 == '2') or (c1 == '6' and c2 == '4'):
+      g.kind = gtFloatNumber
+
+proc rustGeneralNumber(g: var GeneralTokenizer, position: int): int =
+  # Rust-specific decimal/float parser. Unlike `generalNumber`, the `.` is
+  # only consumed when followed by another decimal digit, so range
+  # expressions like `1..2` and method calls like `1.method()` tokenize
+  # correctly instead of being mis-read as a float `1.`.
+  # `_` is allowed inside digit runs (e.g. `1_000`, `1.000_5`, `1e1_0`)
+  # but never as the lookahead after `.` so `1._method()` still splits.
+  const
+    decChars = {'0' .. '9', '_'}
+    digitLookahead = {'0' .. '9'}
+  var pos = position
+  g.kind = gtDecNumber
+  while g.buf[pos] in decChars:
+    inc(pos)
+  if g.buf[pos] == '.' and g.buf[pos + 1] in digitLookahead:
+    g.kind = gtFloatNumber
+    inc(pos)
+    while g.buf[pos] in decChars:
+      inc(pos)
+  if g.buf[pos] in {'e', 'E'}:
+    g.kind = gtFloatNumber
+    inc(pos)
+    if g.buf[pos] in {'+', '-'}:
+      inc(pos)
+    while g.buf[pos] in decChars:
+      inc(pos)
+  result = pos
 
 proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
-  const
-    hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
-    octChars = {'0' .. '7'}
-    binChars = {'0' .. '1'}
-    symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
+  discard flags # reserved; kept for getNextToken dispatch signature
   var pos = g.pos
   g.start = g.pos
   if g.state == gtStringLit:
@@ -83,37 +317,67 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
     while true:
       case g.buf[pos]
       of '\\':
-        g.kind = gtEscapeSequence
-        inc(pos)
-        case g.buf[pos]
-        of 'x', 'X':
-          inc(pos)
-          if g.buf[pos] in hexChars:
-            inc(pos)
-          if g.buf[pos] in hexChars:
-            inc(pos)
-        of '0' .. '9':
-          while g.buf[pos] in {'0' .. '9'}:
-            inc(pos)
-        of '\0':
-          g.state = gtNone
-        else:
-          inc(pos)
+        rustReadEscape(g, pos)
         break
-      of '\0', '\r', '\n':
-        g.state = gtNone
+      of '\0':
+        g.state = gtLongStringLit
+        g.rustRawStringHashCount = 0
         break
       of '\"':
         inc(pos)
         g.state = gtNone
+        g.rustInByteString = false
         break
       else:
         inc(pos)
-  elif g.state == gtLongComment:
+  elif g.state == gtLongStringLit:
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+    elif g.rustInRawString:
+      let hashCount = g.rustRawStringHashCount
+      g.kind = gtLongStringLit
+      while g.buf[pos] != '\0':
+        if g.buf[pos] == '"':
+          var look = pos + 1
+          var matched = 0
+          while matched < hashCount and g.buf[look] == '#':
+            inc(matched)
+            inc(look)
+          if matched == hashCount:
+            pos = look
+            g.state = gtNone
+            g.rustRawStringHashCount = 0
+            g.rustInRawString = false
+            break
+        inc(pos)
+    elif g.buf[pos] == '\\':
+      # Bug fix: a non-raw multi-line string can resume with a backslash
+      # as the very first character. Without this branch the loop below
+      # would `break` immediately without advancing `pos`, producing an
+      # empty token and tripping the safety check in `rustNextToken`.
+      rustReadEscape(g, pos)
+    else:
+      g.kind = gtLongStringLit
+      while true:
+        case g.buf[pos]
+        of '\0':
+          break
+        of '\"':
+          inc(pos)
+          g.state = gtNone
+          g.rustInByteString = false
+          break
+        of '\\':
+          g.state = gtStringLit
+          break
+        else:
+          inc(pos)
+  elif g.state == gtLongComment or g.state == gtDocLongComment:
+    let resumeKind = g.state
     if g.buf[pos] == '\0':
       g.kind = gtEof
     else:
-      g.kind = gtLongComment
+      g.kind = resumeKind
     var nested = g.commentDepth
     while g.kind != gtEof:
       case g.buf[pos]
@@ -154,7 +418,13 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
         while not (g.buf[pos] in {'\0', '\n', '\r'}):
           inc(pos)
       elif g.buf[pos] == '*':
-        g.kind = gtLongComment
+        # /** outer doc, but /**/ (empty) and /*** (3+ stars) are not doc.
+        # /*! is inner doc.
+        let isDocBlock =
+          (g.buf[pos + 1] == '*' and g.buf[pos + 2] != '*' and g.buf[pos + 2] != '/') or
+          g.buf[pos + 1] == '!'
+        let blockState = if isDocBlock: gtDocLongComment else: gtLongComment
+        g.kind = blockState
         var nested = 0
         inc(pos)
         while true:
@@ -165,14 +435,15 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
               inc(pos)
               if nested == 0:
                 break
+              else:
+                dec(nested)
           of '/':
             inc(pos)
             if g.buf[pos] == '*':
               inc(pos)
-              if hasNestedComments in flags:
-                inc(nested)
+              inc(nested)
           of '\0':
-            g.state = gtLongComment
+            g.state = blockState
             g.commentDepth = nested
             break
           else:
@@ -182,86 +453,108 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
         while g.buf[pos] in opChars:
           inc(pos)
     of '#':
-      inc(pos)
-      if hasPreprocessor in flags:
+      if g.buf[pos + 1] == '[':
+        # `#[...]` outer attribute. Highlight just the opener; the body
+        # tokenizes normally with `rustAttrBracketDepth` letting the
+        # identifier path resolve attribute names to gtPreprocessor.
+        inc(pos, 2)
+        inc(g.rustAttrBracketDepth)
         g.kind = gtPreprocessor
-        while g.buf[pos] in {' ', '\t'}:
-          inc(pos)
-        while g.buf[pos] in symChars:
-          inc(pos)
+      elif g.buf[pos + 1] == '!' and g.buf[pos + 2] == '[':
+        # `#![...]` inner attribute.
+        inc(pos, 3)
+        inc(g.rustAttrBracketDepth)
+        g.kind = gtPreprocessor
       else:
+        inc(pos)
         g.kind = gtOperator
     of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
-      var id = ""
-      while g.buf[pos] in symChars:
-        add(id, g.buf[pos])
-        inc(pos)
-      g.kind = rustGetKeyword(id)
+      if g.buf[pos] == 'r' and isRustRawStringStart(g.buf, pos):
+        inc(pos) # past 'r'
+        rustRawString(g, pos)
+      elif g.buf[pos] == 'r' and g.buf[pos + 1] == '#' and
+          g.buf[pos + 2] in {'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF'}:
+        # `r#ident` raw identifier — escape for using a reserved word as a
+        # name (e.g. `r#fn`). Consumed as a single identifier token.
+        inc(pos, 2) # past 'r#'
+        while g.buf[pos] in rustSymChars:
+          inc(pos)
+        g.kind = gtIdentifier
+      elif g.buf[pos] == 'b' and g.buf[pos + 1] == 'r' and
+          isRustRawStringStart(g.buf, pos + 1):
+        inc(pos, 2) # past 'br'
+        rustRawString(g, pos)
+      elif g.buf[pos] == 'b' and g.buf[pos + 1] == '\"':
+        inc(pos) # past 'b'
+        g.rustInByteString = true
+        rustNormalString(g, pos)
+      elif g.buf[pos] == 'b' and g.buf[pos + 1] == '\'':
+        inc(pos) # past 'b'
+        rustCharOrLifetime(g, pos)
+      else:
+        var id = ""
+        while g.buf[pos] in rustSymChars:
+          add(id, g.buf[pos])
+          inc(pos)
+        g.kind = rustGetKeyword(id, g.rustAttrBracketDepth)
     of '0':
       inc(pos)
       case g.buf[pos]
-      of 'b', 'B':
+      of 'b':
         g.kind = gtBinNumber
         inc(pos)
-        while g.buf[pos] in binChars:
+        while g.buf[pos] in rustBinChars + {'_'}:
           inc(pos)
-        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
+        while g.buf[pos] in rustNumSuffixChars:
           inc(pos)
-      of 'x', 'X':
+      of 'x':
         g.kind = gtHexNumber
         inc(pos)
-        while g.buf[pos] in hexChars:
+        while g.buf[pos] in rustHexChars + {'_'}:
           inc(pos)
-        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
+        while g.buf[pos] in rustNumSuffixChars:
           inc(pos)
-      of 'o', 'O':
+      of 'o':
         g.kind = gtOctNumber
         inc(pos)
-        while g.buf[pos] in octChars:
+        while g.buf[pos] in rustOctChars + {'_'}:
           inc(pos)
-        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
-          inc(pos)
-      of '0' .. '7':
-        g.kind = gtOctNumber
-        inc(pos)
-        while g.buf[pos] in octChars:
-          inc(pos)
-        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
+        while g.buf[pos] in rustNumSuffixChars:
           inc(pos)
       else:
-        pos = generalNumber(g, pos)
-        while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
-          inc(pos)
+        # Rust has no implicit-octal; a leading `0` is just decimal.
+        pos = rustGeneralNumber(g, pos)
+        rustConsumeDecSuffix(g, pos)
     of '1' .. '9':
-      pos = generalNumber(g, pos)
-      while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_'}:
-        inc(pos)
+      pos = rustGeneralNumber(g, pos)
+      rustConsumeDecSuffix(g, pos)
     of '\'':
-      # TODO: Maybe need to fix Rust lifetime.
-      if isCharLit(g, pos):
-        # Common char
-        pos = pos + 3
-        g.kind = gtCharLit
-      else:
-        # Rust Lifetime
-        inc(pos)
-        g.kind = gtIdentifier
+      rustCharOrLifetime(g, pos)
     of '\"':
+      rustNormalString(g, pos)
+    of '[':
       inc(pos)
-      g.kind = gtStringLit
-      while true:
-        case g.buf[pos]
-        of '\0':
-          break
-        of '\"':
-          inc(pos)
-          break
-        of '\\':
-          g.state = g.kind
-          break
+      if g.rustAttrBracketDepth > 0:
+        # Nested `[` inside an open attribute (e.g. array literal in attr
+        # value) needs to track depth so the matching `]` doesn't close
+        # the outer attribute prematurely.
+        inc(g.rustAttrBracketDepth)
+      g.kind = gtPunctuation
+    of ']':
+      inc(pos)
+      if g.rustAttrBracketDepth > 0:
+        dec(g.rustAttrBracketDepth)
+        # When this `]` closes the outermost attribute (depth back to 0),
+        # color it the same as the opening `#[` so the bracket pair stays
+        # visually balanced. Inner `]` (e.g. closing an array literal
+        # inside the attribute body) keeps punctuation color.
+        if g.rustAttrBracketDepth == 0:
+          g.kind = gtPreprocessor
         else:
-          inc(pos)
-    of '(', ')', '[', ']', '{', '}', ',', ';':
+          g.kind = gtPunctuation
+      else:
+        g.kind = gtPunctuation
+    of '(', ')', '{', '}', ',', ';':
       inc(pos)
       g.kind = gtPunctuation
     of ':':
@@ -297,5 +590,12 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
         g.kind = gtNone
   g.length = pos - g.pos
   if g.kind != gtEof and g.length <= 0:
-    assert false, "rustNextToken: produced an empty token"
+    # Defensive recovery: never let the highlighter return an empty
+    # non-EOF token. That would either loop forever in the caller or
+    # crash it. Surfacing the bug in debug builds keeps the regression
+    # visible without taking the editor down in release builds.
+    when defined(debug):
+      doAssert false, "rustNextToken: produced an empty token"
+    inc(pos)
+    g.length = pos - g.pos
   g.pos = pos

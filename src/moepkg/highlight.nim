@@ -70,6 +70,10 @@ type
     mdInDisplayMath*: bool
     latexInMathMode*: bool
     latexInDisplayMath*: bool
+    rustRawStringHashCount*: int
+    rustInByteString*: bool
+    rustInRawString*: bool
+    rustAttrBracketDepth*: int
 
   LineStateCache* = object ## Cache of tokenizer states for each line
     states*: seq[TokenizerState]
@@ -111,6 +115,10 @@ proc captureTokenizerState*(g: GeneralTokenizer): TokenizerState =
     mdInDisplayMath: g.mdInDisplayMath,
     latexInMathMode: g.latexInMathMode,
     latexInDisplayMath: g.latexInDisplayMath,
+    rustRawStringHashCount: g.rustRawStringHashCount,
+    rustInByteString: g.rustInByteString,
+    rustInRawString: g.rustInRawString,
+    rustAttrBracketDepth: g.rustAttrBracketDepth,
   )
 
 proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
@@ -134,6 +142,10 @@ proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
   g.mdInDisplayMath = state.mdInDisplayMath
   g.latexInMathMode = state.latexInMathMode
   g.latexInDisplayMath = state.latexInDisplayMath
+  g.rustRawStringHashCount = state.rustRawStringHashCount
+  g.rustInByteString = state.rustInByteString
+  g.rustInRawString = state.rustInRawString
+  g.rustAttrBracketDepth = state.rustAttrBracketDepth
 
 proc `$`*(highlight: Highlight): string =
   result = "Highlight: ["

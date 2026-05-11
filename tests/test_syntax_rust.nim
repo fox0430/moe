@@ -70,6 +70,15 @@ suite "syntax_rust - rustKeywords constant":
     for i in 0 ..< rustKeywords.len - 1:
       check rustKeywords[i] < rustKeywords[i + 1]
 
+suite "syntax_rust - rustBooleans constant":
+  test "rustBooleans contains true and false":
+    check "true" in rustBooleans
+    check "false" in rustBooleans
+
+  test "rustBooleans is sorted":
+    for i in 0 ..< rustBooleans.len - 1:
+      check rustBooleans[i] < rustBooleans[i + 1]
+
 suite "syntax_rust - rustBuiltins constant":
   test "rustBuiltins contains primitive types":
     check "bool" in rustBuiltins
@@ -130,6 +139,154 @@ suite "syntax_rust - rustBuiltins constant":
   test "rustBuiltins is sorted":
     for i in 0 ..< rustBuiltins.len - 1:
       check rustBuiltins[i] < rustBuiltins[i + 1]
+
+suite "syntax_rust - rustAttributes constant":
+  test "rustAttributes contains common derive/repr attributes":
+    check "derive" in rustAttributes
+    check "repr" in rustAttributes
+
+  test "rustAttributes contains conditional compilation attributes":
+    check "cfg" in rustAttributes
+    check "cfg_attr" in rustAttributes
+    check "feature" in rustAttributes
+
+  test "rustAttributes contains lint attributes":
+    check "allow" in rustAttributes
+    check "deny" in rustAttributes
+    check "warn" in rustAttributes
+    check "forbid" in rustAttributes
+
+  test "rustAttributes contains code generation attributes":
+    check "inline" in rustAttributes
+    check "must_use" in rustAttributes
+    check "no_mangle" in rustAttributes
+    check "non_exhaustive" in rustAttributes
+    check "track_caller" in rustAttributes
+
+  test "rustAttributes contains test attributes":
+    check "test" in rustAttributes
+    check "bench" in rustAttributes
+    check "should_panic" in rustAttributes
+
+  test "rustAttributes is sorted":
+    for i in 0 ..< rustAttributes.len - 1:
+      check rustAttributes[i] < rustAttributes[i + 1]
+
+suite "syntax_rust - rustNextToken attributes":
+  test "derive inside #[]":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#[derive]")
+    g.rustNextToken() # #[
+    g.rustNextToken() # derive
+    check g.kind == gtPreprocessor
+    check g.length == 6
+
+  test "repr inside #[]":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#[repr]")
+    g.rustNextToken()
+    g.rustNextToken()
+    check g.kind == gtPreprocessor
+    check g.length == 4
+
+  test "cfg inside #[]":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#[cfg]")
+    g.rustNextToken()
+    g.rustNextToken()
+    check g.kind == gtPreprocessor
+    check g.length == 3
+
+  test "inline inside #[]":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#[inline]")
+    g.rustNextToken()
+    g.rustNextToken()
+    check g.kind == gtPreprocessor
+    check g.length == 6
+
+  test "attribute name outside #[] is plain identifier":
+    # Regression guard for the pre-fix behavior where `rustGetKeyword`
+    # returned gtPreprocessor unconditionally, mis-coloring bare uses
+    # of common names like `path`, `test`, `derive` in regular code.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("derive")
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 6
+
+  test "attribute name regains identifier color after closing ]":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#[derive] derive")
+    g.rustNextToken() # #[
+    g.rustNextToken() # derive (inside attr)
+    check g.kind == gtPreprocessor
+    g.rustNextToken() # ]
+    g.rustNextToken() # whitespace
+    g.rustNextToken() # derive (outside)
+    check g.kind == gtIdentifier
+
+  test "attribute bracket depth balances to 0":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#[cfg(any(a = \"b\"))]")
+    while g.kind != gtEof:
+      g.rustNextToken()
+    check g.rustAttrBracketDepth == 0
+
+  test "Clone inside #[derive] stays gtBuiltin":
+    # Names that resolve to gtBuiltin (e.g. `Clone`) must keep that color
+    # even inside an attribute, because rustGetKeyword consults the
+    # builtins table before the attributes table.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#[derive(Clone)]")
+    g.rustNextToken() # #[
+    g.rustNextToken() # derive
+    g.rustNextToken() # (
+    g.rustNextToken() # Clone
+    check g.kind == gtBuiltin
+
+  test "inner #![] also enables attribute context":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#![allow]")
+    g.rustNextToken() # #![
+    g.rustNextToken() # allow
+    check g.kind == gtPreprocessor
+
+  test "closing ] of attribute is highlighted as preprocessor":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#[derive]")
+    g.rustNextToken() # #[
+    g.rustNextToken() # derive
+    g.rustNextToken() # ]
+    check g.kind == gtPreprocessor
+    check g.length == 1
+
+  test "inner ] of nested bracket stays punctuation":
+    # In `#[foo([1,2,3])]`, the inner `]` closes the array literal and
+    # must NOT be preprocessor-colored; only the outer `]` that closes
+    # the attribute itself is.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#[foo([1,2,3])]")
+    g.rustNextToken() # #[
+    g.rustNextToken() # foo
+    g.rustNextToken() # (
+    g.rustNextToken() # [
+    g.rustNextToken() # 1
+    g.rustNextToken() # ,
+    g.rustNextToken() # 2
+    g.rustNextToken() # ,
+    g.rustNextToken() # 3
+    g.rustNextToken() # ]  ← inner, array close
+    check g.kind == gtPunctuation
+    g.rustNextToken() # )
+    g.rustNextToken() # ]  ← outer, attribute close
+    check g.kind == gtPreprocessor
+
+  test "stray ] outside attribute stays punctuation":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("]")
+    g.rustNextToken()
+    check g.kind == gtPunctuation
 
 suite "syntax_rust - rustNextToken keywords":
   test "fn keyword":
@@ -333,11 +490,14 @@ suite "syntax_rust - rustNextToken hex numbers":
     check g.kind == gtHexNumber
     check g.length == 4
 
-  test "hex number capital X":
+  test "capital X is not a hex prefix":
+    # Rust only accepts lowercase `0x`. `0XAB` is decimal `0` with the
+    # malformed suffix `XAB` consumed greedily — same as `0u32`-style suffixes
+    # at the lexer level.
     var g: GeneralTokenizer
     g.initGeneralTokenizer("0XAB")
     g.rustNextToken()
-    check g.kind == gtHexNumber
+    check g.kind == gtDecNumber
     check g.length == 4
 
 suite "syntax_rust - rustNextToken binary numbers":
@@ -348,11 +508,13 @@ suite "syntax_rust - rustNextToken binary numbers":
     check g.kind == gtBinNumber
     check g.length == 6
 
-  test "binary number uppercase":
+  test "capital B is not a binary prefix":
+    # Rust only accepts lowercase `0b`. `0B1111` becomes decimal `0` with the
+    # malformed suffix `B1111`.
     var g: GeneralTokenizer
     g.initGeneralTokenizer("0B1111")
     g.rustNextToken()
-    check g.kind == gtBinNumber
+    check g.kind == gtDecNumber
     check g.length == 6
 
 suite "syntax_rust - rustNextToken octal numbers":
@@ -363,12 +525,20 @@ suite "syntax_rust - rustNextToken octal numbers":
     check g.kind == gtOctNumber
     check g.length == 5
 
-  test "octal number legacy style":
+  test "leading zero is not implicit octal":
+    # Rust does not have C-style implicit octal: `0755` is decimal.
     var g: GeneralTokenizer
     g.initGeneralTokenizer("0755")
     g.rustNextToken()
-    check g.kind == gtOctNumber
+    check g.kind == gtDecNumber
     check g.length == 4
+
+  test "capital O is not an octal prefix":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0O7")
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 3
 
 suite "syntax_rust - rustNextToken float numbers":
   test "float with decimal point":
@@ -398,6 +568,130 @@ suite "syntax_rust - rustNextToken float numbers":
     g.rustNextToken()
     check g.kind == gtFloatNumber
     check g.length == 10
+
+suite "syntax_rust - rustNextToken digit separators":
+  test "decimal with underscore":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1_000")
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 5
+
+  test "double underscore in decimal":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1__000")
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 6
+
+  test "float with underscore in integer part":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1_000.5")
+    g.rustNextToken()
+    check g.kind == gtFloatNumber
+    check g.length == 7
+
+  test "float with underscore in fraction part":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1.000_5")
+    g.rustNextToken()
+    check g.kind == gtFloatNumber
+    check g.length == 7
+
+  test "float with underscore in exponent":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1_0e1_0")
+    g.rustNextToken()
+    check g.kind == gtFloatNumber
+    check g.length == 7
+
+  test "hex with underscore":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0xFF_FF")
+    g.rustNextToken()
+    check g.kind == gtHexNumber
+    check g.length == 7
+
+  test "binary with underscore":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0b1010_1010")
+    g.rustNextToken()
+    check g.kind == gtBinNumber
+    check g.length == 11
+
+  test "octal with underscore":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0o7_77")
+    g.rustNextToken()
+    check g.kind == gtOctNumber
+    check g.length == 6
+
+  test "range still tokenizes after digit (no `_` in `.` lookahead)":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1..2")
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 1
+
+  test "method call still tokenizes after digit":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1.method()")
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 1
+
+suite "syntax_rust - rustNextToken range expressions":
+  test "exclusive range 1..2":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1..2")
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 1
+    g.rustNextToken()
+    check g.kind == gtOperator
+    check g.length == 2
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 1
+
+  test "inclusive range 1..=5":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1..=5")
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 1
+    g.rustNextToken()
+    check g.kind == gtOperator
+    check g.length == 3
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 1
+
+  test "range with leading zero 0..10":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0..10")
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 1
+    g.rustNextToken()
+    check g.kind == gtOperator
+    check g.length == 2
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 2
+
+  test "method call on integer 1.method":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1.method")
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 1
+    g.rustNextToken()
+    check g.kind == gtPunctuation
+    check g.length == 1
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 6
 
 suite "syntax_rust - rustNextToken string literals":
   test "simple string":
@@ -436,13 +730,82 @@ suite "syntax_rust - rustNextToken character literals":
     check g.kind == gtCharLit
     check g.length == 3
 
+  test "2-byte UTF-8 char (Latin small letter e with acute)":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'é'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 4
+
+  test "3-byte UTF-8 char (Hiragana)":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'あ'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 5
+
+  test "4-byte UTF-8 char (emoji)":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'😀'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 6
+
+  test "escape char regression":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\n'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 4
+
+  test "invalid UTF-8 continuation falls back to lifetime":
+    # `'\xE0a'` — lead byte 0xE0 expects two 0x80..0xBF continuation
+    # bytes, but `a` (0x61) is not one. The tokenizer must not consume
+    # the bytes as a 3-byte char literal; it should fall back to the
+    # lifetime/identifier path instead of overshooting.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\xE0a'")
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+
+  test "truncated UTF-8 lead at buffer end is not a char literal":
+    # `'\xE0` alone (no continuation, no closing quote) — must not be
+    # mis-tokenized as a valid char lit and overrun the buffer.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\xE0")
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+
 suite "syntax_rust - rustNextToken lifetimes":
   test "lifetime annotation":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("'a")
     g.rustNextToken()
     check g.kind == gtIdentifier
-    check g.length == 1
+    check g.length == 2
+
+  test "static lifetime":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'static")
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 7
+
+  test "underscore lifetime placeholder":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'_")
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 2
+
+  test "lifetime followed by punctuation":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'a>")
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 2
+    g.rustNextToken()
+    check g.kind == gtOperator
 
 suite "syntax_rust - rustNextToken comments":
   test "line comment":
@@ -861,6 +1224,50 @@ suite "syntax_rust - rustNextToken number suffixes":
     check g.kind == gtFloatNumber
     check g.length == 7
 
+  test "integer with f32 suffix promotes to gtFloatNumber":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1f32")
+    g.rustNextToken()
+    check g.kind == gtFloatNumber
+    check g.length == 4
+
+  test "integer with f64 suffix promotes to gtFloatNumber":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1f64")
+    g.rustNextToken()
+    check g.kind == gtFloatNumber
+    check g.length == 4
+
+  test "leading-zero literal with f64 suffix promotes to gtFloatNumber":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("0f64")
+    g.rustNextToken()
+    check g.kind == gtFloatNumber
+    check g.length == 4
+
+  test "integer with f32 suffix and digit separators stays gtFloatNumber":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1_000f32")
+    g.rustNextToken()
+    check g.kind == gtFloatNumber
+    check g.length == 8
+
+  test "integer with non-float suffix stays gtDecNumber":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1isize")
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 6
+
+  test "f-prefixed but not f32/f64 suffix stays gtDecNumber":
+    # `1f16` is not a valid Rust suffix; we keep it as gtDecNumber rather
+    # than promoting on any `f...` to avoid mis-coloring exotic suffixes.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("1f16")
+    g.rustNextToken()
+    check g.kind == gtDecNumber
+    check g.length == 4
+
 suite "syntax_rust - rustNextToken string continuation":
   test "multiple escapes in string":
     var g: GeneralTokenizer
@@ -924,7 +1331,9 @@ suite "syntax_rust - rustNextToken string continuation":
 
     g.rustNextToken()
     check g.kind == gtEscapeSequence
-    check g.state == gtNone
+    # Trailing `\` before buffer end parks state for line continuation.
+    check g.state == gtLongStringLit
+    check g.rustRawStringHashCount == 0
 
 suite "syntax_rust - rustNextToken compound operators":
   test "increment-like operator":
@@ -1106,27 +1515,46 @@ suite "syntax_rust - rustNextToken special cases":
     check gtPunctuation in tokens # ;
     check gtComment in tokens # // comment
 
-  test "attribute macro":
+  test "outer attribute opener":
+    # `#[` is recognized as a preprocessor-style opener; the body tokenizes
+    # normally afterwards.
     var g: GeneralTokenizer
     g.initGeneralTokenizer("#[derive(Debug)]")
-
     g.rustNextToken()
-    # Hash is treated as operator (preprocessor not enabled by default in Rust)
-    check g.kind == gtOperator
+    check g.kind == gtPreprocessor
+    check g.length == 2
+    g.rustNextToken()
+    check g.kind == gtPreprocessor # derive
 
-  test "raw string literal prefix":
+  test "inner attribute opener":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("#![allow(dead_code)]")
+    g.rustNextToken()
+    check g.kind == gtPreprocessor
+    check g.length == 3
+    g.rustNextToken()
+    check g.kind == gtPreprocessor # allow
+
+  test "bare hash is operator":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("# x")
+    g.rustNextToken()
+    check g.kind == gtOperator
+    check g.length == 1
+
+  test "raw string literal":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("r\"raw\"")
     g.rustNextToken()
-    check g.kind == gtIdentifier
-    check g.length == 1
+    check g.kind == gtStringLit
+    check g.length == 6
 
-  test "byte string literal prefix":
+  test "byte string literal":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("b\"bytes\"")
     g.rustNextToken()
-    check g.kind == gtIdentifier
-    check g.length == 1
+    check g.kind == gtStringLit
+    check g.length == 8
 
 suite "syntax_rust - rustNextToken doc comments":
   test "outer doc comment":
@@ -1152,3 +1580,489 @@ suite "syntax_rust - rustNextToken doc comments":
     g.initGeneralTokenizer("//// not doc")
     g.rustNextToken()
     check g.kind == gtComment
+
+suite "syntax_rust - rustBuiltins sorting and membership":
+  test "rustBuiltins is sorted (binarySearch precondition)":
+    for i in 0 ..< rustBuiltins.len - 1:
+      check rustBuiltins[i] < rustBuiltins[i + 1]
+
+  test "Err and Ok are both builtins":
+    check "Ok" in rustBuiltins
+    check "Err" in rustBuiltins
+
+  test "SliceConcatExt is a builtin":
+    check "SliceConcatExt" in rustBuiltins
+
+  test "Self is a keyword and not duplicated as builtin":
+    check "Self" in rustKeywords
+    check "Self" notin rustBuiltins
+
+  test "Variant is not a Rust builtin":
+    check "Variant" notin rustBuiltins
+
+suite "syntax_rust - rustNextToken raw string literals":
+  test "raw string with hash delimiter":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r#\"raw\"#")
+    g.rustNextToken()
+    check g.kind == gtStringLit
+    check g.length == 8
+
+  test "raw string with double hash":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r##\"raw\"##")
+    g.rustNextToken()
+    check g.kind == gtStringLit
+    check g.length == 10
+
+  test "raw string can contain inner quote":
+    # r#"a "b" c"# — the inner unescaped quote does not close the string.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r#\"a \"b\" c\"#")
+    g.rustNextToken()
+    check g.kind == gtStringLit
+    check g.length == 12
+
+  test "raw string ignores backslash":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r\"\\n\"")
+    g.rustNextToken()
+    check g.kind == gtStringLit
+    check g.length == 5
+
+  test "unterminated raw string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r\"unterm")
+    g.rustNextToken()
+    check g.kind == gtStringLit
+
+  test "r followed by identifier char is not raw string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r2d2")
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 4
+
+  test "r alone is identifier":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r ")
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 1
+
+suite "syntax_rust - rustNextToken byte literals":
+  test "byte char literal":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("b'A'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 4
+
+  test "byte char with escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("b'\\n'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 5
+
+  test "byte raw string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("br\"raw\"")
+    g.rustNextToken()
+    check g.kind == gtStringLit
+    check g.length == 7
+
+  test "byte raw string with hash":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("br#\"raw\"#")
+    g.rustNextToken()
+    check g.kind == gtStringLit
+    check g.length == 9
+
+  test "b followed by identifier char is not byte literal":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("bar")
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 3
+
+suite "syntax_rust - rustNextToken char escape sequences":
+  test "newline char escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\n'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 4
+
+  test "backslash char escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\\\'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 4
+
+  test "null char escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\0'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 4
+
+  test "hex char escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\xFF'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 6
+
+  test "unicode char escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\u{1F600}'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 11
+
+  test "single quote char escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\''")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 4
+
+suite "syntax_rust - rustNextToken nested block comments":
+  test "single level nested block comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/* outer /* inner */ outer */")
+    g.rustNextToken()
+    check g.kind == gtLongComment
+    check g.length == 29
+
+  test "deeply nested block comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/* a /* b /* c */ b */ a */")
+    g.rustNextToken()
+    check g.kind == gtLongComment
+    check g.length == 27
+
+suite "syntax_rust - rustNextToken unicode escape in strings":
+  test "unicode escape sequence in string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\u{1F600}\"")
+    g.rustNextToken()
+    check g.state == gtStringLit
+    g.rustNextToken()
+    check g.kind == gtEscapeSequence
+    check g.length == 9
+
+suite "syntax_rust - byte string escape handling":
+  test "byte string with \\x escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("b\"\\x41\"")
+    g.rustNextToken()
+    check g.kind == gtStringLit # b" + nothing yet
+    check g.state == gtStringLit
+    g.rustNextToken()
+    check g.kind == gtEscapeSequence
+    check g.length == 4 # \x41
+
+  test "byte string with \\u is not a unicode escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("b\"\\u{61}\"")
+    g.rustNextToken()
+    check g.kind == gtStringLit # b" prefix and body up to backslash
+    check g.state == gtStringLit
+    g.rustNextToken()
+    check g.kind == gtEscapeSequence
+    # Only the `\` itself is emitted as a broken-escape signal (length 1);
+    # `u{61}` flows on as ordinary string text. This avoids the highlighter
+    # claiming `\u{...}` is a valid escape in a byte-string context.
+    check g.length == 1
+
+  test "byte string clears flag on close":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("b\"x\"")
+    g.rustNextToken()
+    check g.kind == gtStringLit
+    check g.rustInByteString == false
+
+  test "regular string still highlights \\u escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"\\u{61}\"")
+    g.rustNextToken()
+    check g.state == gtStringLit
+    check g.rustInByteString == false
+    g.rustNextToken()
+    check g.kind == gtEscapeSequence
+    check g.length == 6 # \u{61}
+
+suite "syntax_rust - rustNextToken raw identifiers":
+  test "raw identifier r#fn":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r#fn")
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 4
+
+  test "raw identifier r#type":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r#type")
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 6
+
+  test "raw identifier with underscore start":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r#_internal")
+    g.rustNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 11
+
+  test "r# followed by digit is not a raw identifier":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r#1")
+    g.rustNextToken()
+    check g.kind == gtIdentifier # "r"
+    check g.length == 1
+    g.rustNextToken()
+    check g.kind == gtOperator # "#"
+    g.rustNextToken()
+    check g.kind == gtDecNumber # "1"
+
+suite "syntax_rust - multi-line string continuation":
+  test "unterminated normal string parks gtLongStringLit":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"line1")
+    g.rustNextToken()
+    check g.kind == gtStringLit
+    check g.state == gtLongStringLit
+    check g.rustRawStringHashCount == 0
+
+  test "unterminated raw string parks hash count":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r##\"line1")
+    g.rustNextToken()
+    check g.state == gtLongStringLit
+    check g.rustRawStringHashCount == 2
+    check g.rustInRawString
+
+  test "raw string continuation closes on matching hashes":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("line2\"##rest")
+    g.state = gtLongStringLit
+    g.rustRawStringHashCount = 2
+    g.rustInRawString = true
+    g.rustNextToken()
+    check g.kind == gtLongStringLit
+    check g.state == gtNone
+    check g.rustRawStringHashCount == 0
+    check not g.rustInRawString
+    check g.length == 8 # "line2\"##"
+
+  test "raw string continuation that does not close keeps state":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("still inside")
+    g.state = gtLongStringLit
+    g.rustRawStringHashCount = 1
+    g.rustInRawString = true
+    g.rustNextToken()
+    check g.kind == gtLongStringLit
+    check g.state == gtLongStringLit
+    check g.rustRawStringHashCount == 1
+    check g.rustInRawString
+
+  test "non-raw continuation starting with backslash does not raise":
+    # Regression: previously emitted an empty token of kind gtLongStringLit
+    # and tripped the rustNextToken safety raise.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\\nrest\"")
+    g.state = gtLongStringLit
+    g.rustRawStringHashCount = 0
+    g.rustInRawString = false
+    g.rustNextToken()
+    check g.kind == gtEscapeSequence
+    check g.length == 2 # `\n`
+    g.rustNextToken()
+    check g.kind == gtLongStringLit
+    check g.state == gtNone
+
+  test "raw string with zero hashes parks rustInRawString":
+    # Bug fix: distinguishes `r"..."` (hash 0) from non-raw `"..."` when
+    # the buffer ends mid-string.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("r\"hello")
+    g.rustNextToken()
+    check g.state == gtLongStringLit
+    check g.rustRawStringHashCount == 0
+    check g.rustInRawString
+
+  test "raw string with zero hashes continues across buffers":
+    # Regression: previously the `\\n` would be treated as an escape because
+    # `(state=gtLongStringLit, hashCount=0)` collided with the non-raw case.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("backslash \\n still raw\"")
+    g.state = gtLongStringLit
+    g.rustRawStringHashCount = 0
+    g.rustInRawString = true
+    g.rustNextToken()
+    check g.kind == gtLongStringLit
+    check g.state == gtNone
+    check not g.rustInRawString
+
+  test "non-raw continuation parks rustInRawString as false":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"hello")
+    g.rustNextToken()
+    check g.state == gtLongStringLit
+    check not g.rustInRawString
+
+  test "normal string continuation closes on quote":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("rest\"")
+    g.state = gtLongStringLit
+    g.rustRawStringHashCount = 0
+    g.rustNextToken()
+    check g.kind == gtLongStringLit
+    check g.state == gtNone
+    check g.length == 5
+
+  test "normal string continuation hits backslash and yields to escape":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("rest\\nmore\"")
+    g.state = gtLongStringLit
+    g.rustRawStringHashCount = 0
+    g.rustNextToken()
+    check g.kind == gtLongStringLit
+    check g.state == gtStringLit
+    check g.length == 4 # "rest"
+    g.rustNextToken()
+    check g.kind == gtEscapeSequence # \n
+    g.rustNextToken()
+    check g.kind == gtStringLit # "more"
+    g.rustNextToken()
+    # closing " consumed as part of the trailing string token
+    check g.state == gtNone
+
+  test "empty continuation line returns gtEof":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("")
+    g.state = gtLongStringLit
+    g.rustRawStringHashCount = 0
+    g.rustNextToken()
+    check g.kind == gtEof
+
+suite "syntax_rust - rustNextToken malformed char literals":
+  test "malformed hex escape consumes trailing digits and closing quote":
+    # `\` after `'` rules out a lifetime, so `'\xZZ'` is a malformed char lit
+    # rather than two adjacent identifier tokens.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\xZZ'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 6
+
+  test "malformed unicode escape with bad body":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\u{XX'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 7
+
+  test "unterminated escape char literal consumes through symbol chars":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\xAB; ")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    # `'\xAB` — stops at `;` since it's not a sym char and not `'`.
+    check g.length == 5
+
+  test "well-formed hex escape still tokenizes correctly":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\xAB'")
+    g.rustNextToken()
+    check g.kind == gtCharLit
+    check g.length == 6
+
+suite "syntax_rust - rustNextToken block doc comments":
+  test "outer block doc comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** outer */")
+    g.rustNextToken()
+    check g.kind == gtDocLongComment
+    check g.length == 12
+
+  test "inner block doc comment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/*! inner */")
+    g.rustNextToken()
+    check g.kind == gtDocLongComment
+    check g.length == 12
+
+  test "empty /**/ is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/**/")
+    g.rustNextToken()
+    check g.kind == gtLongComment
+    check g.length == 4
+
+  test "/***/ is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/***/")
+    g.rustNextToken()
+    check g.kind == gtLongComment
+    check g.length == 5
+
+  test "/*** ... */ (3+ stars) is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/*** decorative */")
+    g.rustNextToken()
+    check g.kind == gtLongComment
+    check g.length == 18
+
+  test "regular block comment is not doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/* regular */")
+    g.rustNextToken()
+    check g.kind == gtLongComment
+    check g.length == 13
+
+  test "block doc with nested non-doc stays doc":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** outer /* inner */ outer */")
+    g.rustNextToken()
+    check g.kind == gtDocLongComment
+    check g.length == 30
+
+  test "unterminated block doc parks state as gtDocLongComment":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("/** start ")
+    g.rustNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtDocLongComment
+
+  test "block doc continuation closes via gtDocLongComment state":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("more text */")
+    g.state = gtDocLongComment
+    g.commentDepth = 0
+    g.rustNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtNone
+    check g.length == 12
+
+  test "block doc continuation EOF preserves state":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("still inside")
+    g.state = gtDocLongComment
+    g.commentDepth = 0
+    g.rustNextToken()
+    check g.kind == gtDocLongComment
+    check g.state == gtDocLongComment
+
+  test "non-doc block continuation still works":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("rest */")
+    g.state = gtLongComment
+    g.commentDepth = 0
+    g.rustNextToken()
+    check g.kind == gtLongComment
+    check g.state == gtNone

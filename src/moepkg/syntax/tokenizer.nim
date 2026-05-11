@@ -140,6 +140,10 @@ type
     mdInDisplayMath*: bool
     latexInMathMode*: bool
     latexInDisplayMath*: bool
+    rustRawStringHashCount*: int
+    rustInByteString*: bool
+    rustInRawString*: bool
+    rustAttrBracketDepth*: int
 
   SourceLanguage* = enum
     langNone
@@ -231,6 +235,10 @@ proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.mdInDisplayMath = false
   g.latexInMathMode = false
   g.latexInDisplayMath = false
+  g.rustRawStringHashCount = 0
+  g.rustInByteString = false
+  g.rustInRawString = false
+  g.rustAttrBracketDepth = 0
   g.pos = 0
 
 proc generalNumber*(g: var GeneralTokenizer, position: int): int =
