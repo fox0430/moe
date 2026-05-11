@@ -147,7 +147,7 @@ proc bookmarkStyle*(): Style =
 proc emptyStyle*(): Style =
   Style(fg: ColorValue(kind: Default), bg: themeBackground(), modifiers: {})
 
-proc getStyleForKind(kind: SidebarItemKind): Style =
+proc getStyleForKind(kind: LineMarkerKind): Style =
   ## Get the appropriate style for a sidebar item kind
   case kind
   of GitAdded:
@@ -170,12 +170,10 @@ proc getStyleForKind(kind: SidebarItemKind): Style =
     sessionInsertedStyle()
   of Bookmark:
     bookmarkStyle()
-  of Empty:
-    emptyStyle()
 
 proc emptySidebarItem(): SidebarItem =
   ## Create an empty sidebar item
-  SidebarItem(text: " ", kind: Empty, style: emptyStyle())
+  SidebarItem(text: " ", kind: none(LineMarkerKind), style: emptyStyle())
 
 proc initSidebar*(height: int, width: int = DefaultSidebarWidth): Sidebar =
   ## Initialize a new sidebar with the given dimensions
@@ -208,15 +206,15 @@ proc resizeSidebar*(sidebar: var Sidebar, newHeight: int) =
     sidebar.buffer.setLen(newHeight)
 
 proc setSidebarItem*(
-    sidebar: var Sidebar, line: int, col: int, text: string, kind: SidebarItemKind
+    sidebar: var Sidebar, line: int, col: int, text: string, kind: LineMarkerKind
 ) =
   ## Set a single sidebar cell
   if line >= 0 and line < sidebar.buffer.len and col >= 0 and col < sidebar.width:
     let style = getStyleForKind(kind)
-    sidebar.buffer[line][col] = SidebarItem(text: text, kind: kind, style: style)
+    sidebar.buffer[line][col] = SidebarItem(text: text, kind: some(kind), style: style)
 
 proc setSidebarLine*(
-    sidebar: var Sidebar, line: int, text: string, kind: SidebarItemKind
+    sidebar: var Sidebar, line: int, text: string, kind: LineMarkerKind
 ) =
   ## Set an entire sidebar line with the same indicator
   if line >= 0 and line < sidebar.buffer.len:
@@ -230,7 +228,8 @@ proc setSidebarLine*(
           $runes[col]
         else:
           " "
-      sidebar.buffer[line][col] = SidebarItem(text: char, kind: kind, style: style)
+      sidebar.buffer[line][col] =
+        SidebarItem(text: char, kind: some(kind), style: style)
 
 proc clearSidebarLine*(sidebar: var Sidebar, line: int) =
   ## Clear a single sidebar line (set to empty)
@@ -323,7 +322,6 @@ proc generateSidebarFromBuffer*(
             of SessionModified: globalMarkerConfig.sessionModified
             of SessionInserted: globalMarkerConfig.sessionInserted
             of Bookmark: globalMarkerConfig.bookmark
-            of Empty: " "
           setSidebarLine(result, screenLine, text, kind)
       elif b.hasBookmark(bufferLine):
         # No marker but has bookmark

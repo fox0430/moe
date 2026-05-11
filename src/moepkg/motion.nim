@@ -342,13 +342,6 @@ proc tillCharBackward(
   if result.x < currentPos.x:
     result.x = result.x + 1
 
-# Helper functions for word motion
-proc isWordChar(r: Rune): bool =
-  ## Check if a character is part of a word (alphanumeric or underscore)
-  ## Uses Unicode-aware isAlpha to support Japanese, accented Latin, etc.
-  let c = r.int32
-  return r.isAlpha or (c >= '0'.ord and c <= '9'.ord) or c == '_'.ord
-
 proc isWhitespace(r: Rune): bool =
   ## Check if a character is whitespace
   let c = r.int32

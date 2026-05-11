@@ -21,7 +21,7 @@
 ##
 ## Scans a buffer for conflict markers (`<<<<<<<`, `|||||||`, `=======`,
 ## `>>>>>>>`), pairs them into `ConflictBlock` values, and applies
-## `SidebarItemKind.GitConflict` markers to the affected lines so the
+## `LineMarkerKind.GitConflict` markers to the affected lines so the
 ## sidebar and the editor view can render them distinctly.
 
 import std/options
@@ -203,7 +203,7 @@ proc applyConflictsToBuffer*(buffer: TextBuffer, blocks: seq[ConflictBlock]) =
     if shouldMark:
       buffer.setLineMarker(line, GitConflict)
     elif existing.isSome and existing.get == GitConflict:
-      buffer.lineMarkers[line] = none(SidebarItemKind)
+      buffer.lineMarkers[line] = none(LineMarkerKind)
 
 proc refreshConflicts*(buffer: TextBuffer) =
   ## Rescan the buffer and reapply conflict markers. Safe to call repeatedly.

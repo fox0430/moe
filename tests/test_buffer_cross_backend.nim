@@ -630,8 +630,8 @@ suite "PieceTable - Snapshot Undo/Redo Integration":
     check b[0] == "CHANGED"
 
     # Clear marker after edit
-    b.setLineMarker(1, Empty)
-    check b.lineMarkers[1] == some(Empty)
+    b.clearLineMarker(1)
+    check b.lineMarkers[1].isNone
 
     # Undo should restore the snapshot (which had SyntaxError on line 1)
     discard b.undo()

@@ -736,6 +736,25 @@ suite "Buffer Search - Regex findSearchMatchRanges":
     check ranges[0].startCol == 7
     check ranges[0].endCol == 10
 
+  test "findSearchMatchRanges wholeWord with CJK respects Unicode word boundaries":
+    # "日本" appears standalone at col 5 and as a prefix of "日本語" at col 12.
+    # Because CJK ideographs are now word characters, the "日本語" occurrence
+    # must NOT count as a whole-word match: the trailing '語' extends the word
+    # past the search term.
+    let buf = newTextBuffer("test 日本 foo 日本語 bar")
+    let ranges = buf.findSearchMatchRanges(0, "日本", wholeWord = true)
+    check ranges.len == 1
+    check ranges[0].startCol == 5
+    check ranges[0].endCol == 7
+
+  test "findSearchMatchRanges wholeWord matches CJK between non-word boundaries":
+    # "日本語" surrounded by ASCII spaces is a complete word.
+    let buf = newTextBuffer("abc 日本語 xyz")
+    let ranges = buf.findSearchMatchRanges(0, "日本語", wholeWord = true)
+    check ranges.len == 1
+    check ranges[0].startCol == 4
+    check ranges[0].endCol == 7
+
   test "findSearchMatchRanges wholeWord=false treats as regex":
     let buf = newTextBuffer("foobar foo bar")
     # wholeWord=false: "foo" as regex matches "foobar" and "foo"
