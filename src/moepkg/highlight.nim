@@ -882,11 +882,12 @@ proc initHighlightIncrementalFromStr*(
           colorSegments.add(cs)
 
         # Capture tokenizer state at line boundary.
-        # For multi-line tokens (long strings, block comments), temporarily
-        # set the state to the token kind so incremental re-parsing can
-        # correctly resume from inside the multi-line construct.
+        # For multi-line tokens (long strings, long/doc block comments),
+        # temporarily set the state to the token kind so incremental
+        # re-parsing can correctly resume from inside the multi-line
+        # construct via the backward-scan in `updateHighlightIncremental`.
         let savedState = token.state
-        if token.kind in {gtLongStringLit, gtLongComment}:
+        if token.kind in {gtLongStringLit, gtLongComment, gtDocLongComment}:
           token.state = token.kind
         lineStates.add(captureTokenizerState(token))
         token.state = savedState
