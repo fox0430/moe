@@ -1146,12 +1146,19 @@ suite "syntax_rust - rustNextToken edge cases":
     check g.kind == gtStringLit
 
   test "string with newline continues":
-    # Rust string literals can span multiple lines
+    # Rust string literals can span multiple lines, emitted as one sub-token
+    # per source line so per-line tokenizer-state captures stay accurate for
+    # incremental re-highlighting.
     var g: GeneralTokenizer
     g.initGeneralTokenizer("\"hello\nworld\"")
     g.rustNextToken()
     check g.kind == gtStringLit
-    check g.length == 13
+    check g.length == 7 # "hello\n
+    check g.state == gtLongStringLit
+    g.rustNextToken()
+    check g.kind == gtLongStringLit
+    check g.length == 6 # world"
+    check g.state == gtNone
 
   test "string with carriage return continues":
     # Rust string literals can contain carriage returns

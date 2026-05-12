@@ -98,16 +98,22 @@ proc rustNormalString(g: var GeneralTokenizer, pos: var int) =
   # Consume a regular `"..."` string. Multi-line content is supported via
   # state parking: the closing `"` terminates the token, `\` yields control
   # via `g.state = gtStringLit` so the next call can produce an escape
-  # token, and a buffer-end `\0` parks `g.state = gtLongStringLit` so the
-  # next line continues as the same string.
+  # token, and a newline or buffer-end parks `g.state = gtLongStringLit` so
+  # the next line continues as the same string. Splitting at `\n` is also
+  # what makes per-line state captures record the mid-string context (see
+  # the rationale on `rustRawString`).
   g.rustInRawString = false
+  g.rustRawStringHashCount = 0
   inc(pos)
   g.kind = gtStringLit
   while true:
     case g.buf[pos]
     of '\0':
       g.state = gtLongStringLit
-      g.rustRawStringHashCount = 0
+      break
+    of '\n':
+      inc(pos)
+      g.state = gtLongStringLit
       break
     of '\"':
       inc(pos)
@@ -122,11 +128,12 @@ proc rustNormalString(g: var GeneralTokenizer, pos: var int) =
 proc rustRawString(g: var GeneralTokenizer, pos: var int) =
   # `pos` points at the first `#` (or `"`) right after the `r` / `br` prefix.
   # Counts the leading `#`s, then scans until a closing `"` followed by the
-  # same number of `#`s. Raw strings have no escape processing. If the
-  # buffer ends mid-string, parks `g.state = gtLongStringLit` along with
-  # the hash count and `g.rustInRawString = true` so the next line resumes
-  # the same raw string (the flag distinguishes raw-with-0-hashes from a
-  # non-raw multi-line string).
+  # same number of `#`s. Raw strings have no escape processing. Yields one
+  # sub-token per source line so that per-line tokenizer-state captures (used
+  # by incremental re-highlighting) record the mid-string context with the
+  # correct hash count and `rustInRawString = true`; without this split,
+  # captures inside a multi-line raw string read the post-close state and
+  # restart parsing as if the buffer were not inside any string.
   var hashCount = 0
   while g.buf[pos] == '#':
     inc(hashCount)
@@ -134,7 +141,12 @@ proc rustRawString(g: var GeneralTokenizer, pos: var int) =
   inc(pos) # past opening "
   g.kind = gtStringLit
   g.rustInRawString = true
+  g.rustRawStringHashCount = hashCount
   while g.buf[pos] != '\0':
+    if g.buf[pos] == '\n':
+      inc(pos)
+      g.state = gtLongStringLit
+      return
     if g.buf[pos] == '"':
       var look = pos + 1
       var matched = 0
@@ -144,10 +156,10 @@ proc rustRawString(g: var GeneralTokenizer, pos: var int) =
       if matched == hashCount:
         pos = look
         g.rustInRawString = false
+        g.rustRawStringHashCount = 0
         return
     inc(pos)
   g.state = gtLongStringLit
-  g.rustRawStringHashCount = hashCount
 
 proc isRustRawStringStart(buf: cstring, pos: int): bool =
   # Looks at `r` (or the `r` of `br`) at `pos` and returns true iff the
@@ -323,6 +335,14 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
         g.state = gtLongStringLit
         g.rustRawStringHashCount = 0
         break
+      of '\n':
+        # End the sub-token at the newline and park state so the next line
+        # resumes inside the same string. Routing through gtLongStringLit
+        # (not gtStringLit) signals "no escape pending" to the resume path.
+        inc(pos)
+        g.state = gtLongStringLit
+        g.rustRawStringHashCount = 0
+        break
       of '\"':
         inc(pos)
         g.state = gtNone
@@ -337,6 +357,12 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
       let hashCount = g.rustRawStringHashCount
       g.kind = gtLongStringLit
       while g.buf[pos] != '\0':
+        if g.buf[pos] == '\n':
+          # End the sub-token at the newline; state stays gtLongStringLit
+          # and `rustInRawString` / hash count persist so the next line
+          # resumes inside the same raw string.
+          inc(pos)
+          break
         if g.buf[pos] == '"':
           var look = pos + 1
           var matched = 0
@@ -361,6 +387,10 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
       while true:
         case g.buf[pos]
         of '\0':
+          break
+        of '\n':
+          inc(pos)
+          # Stay in gtLongStringLit; the next line resumes the same string.
           break
         of '\"':
           inc(pos)

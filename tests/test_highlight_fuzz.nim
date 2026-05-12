@@ -31,7 +31,7 @@
 ## the truth. This test catches that class of regression.
 ##
 ## Tuning via env vars:
-##   MOE_FUZZ_HIGHLIGHT_ITERS   default 50  (per language)
+##   MOE_FUZZ_HIGHLIGHT_ITERS   default 100 (per language)
 ##   MOE_FUZZ_HIGHLIGHT_SEED    default 0   (base seed; iteration N uses seed+N)
 
 import std/[unittest, unicode, os, random, strformat, strutils]
@@ -324,7 +324,7 @@ proc runFuzz(
 # Test suite
 
 suite "Incremental Highlight Fuzz":
-  const DefaultIters = 50
+  const DefaultIters = 100
   let iters = parseInt(getEnv("MOE_FUZZ_HIGHLIGHT_ITERS", $DefaultIters))
   let baseSeed = parseInt(getEnv("MOE_FUZZ_HIGHLIGHT_SEED", "0"))
 
