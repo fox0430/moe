@@ -374,66 +374,62 @@ proc handleCommandModeEvent*(e: Editor, event: Event): bool =
 
 proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
   ## Handle a KeyCombo in command-line mode, with runtime mapping support.
-
-  # Runtime key mapping check for command-line mode
+  ##
+  ## Runtime-mapping routing is delegated to `KeyRouter.feedKey`. Command
+  ## overlay execution differs from base mode in two ways:
+  ## 1. On no-match flush we replay *all* accumulated keys (including the
+  ##    current one) and return without falling through.
+  ## 2. When the mappings table is empty but the accumulator still holds
+  ##    keys (mappings were removed mid-sequence), we flush the leftovers
+  ##    first, then fall through to handle the current key normally.
   if not e.keyBindingRegistry.isReplayingMapping:
-    let registry = e.keyBindingRegistry
-    let mappings = registry.getRuntimeKeySeqMappings(EditorMode.Command)
-    if mappings.len > 0:
-      registry.runtimeMappingState.keys.add(keyCombo)
-      let accKeys = registry.runtimeMappingState.keys
-      var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
-      var hasLongerMatch = false
-      for m in mappings:
-        if m.triggerKeys == accKeys:
-          exactMatch = some(m)
-        elif m.triggerKeys.len > accKeys.len and
-            m.triggerKeys[0 ..< accKeys.len] == accKeys:
-          hasLongerMatch = true
-
-      if exactMatch.isSome and not hasLongerMatch:
-        # Exact match: execute mapping
-        registry.clearRuntimeMappingState()
-        registry.isReplayingMapping = true
-        var replayResult = true
-        for targetKeyStr in exactMatch.get.targetKeys:
-          let targetKeyOpt = stringToKeyCombo(targetKeyStr)
-          if targetKeyOpt.isSome:
-            if not e.handleCommandModeKeyCombo(targetKeyOpt.get):
-              replayResult = false
-              break
-        registry.isReplayingMapping = false
-        return replayResult
-
-      if hasLongerMatch:
-        # Wait for more keys or timeout
-        return true
-
-      # No match: flush accumulated keys
-      let keysToFlush = registry.runtimeMappingState.keys
-      registry.clearRuntimeMappingState()
-      registry.isReplayingMapping = true
+    # Case: mappings table is empty but accumulator has leftover keys
+    # (mappings were removed mid-sequence). Replay the leftovers first, then
+    # fall through to process the current key normally.
+    let leftover = e.keyRouter.flushPendingAccumulator(EditorMode.Command)
+    if leftover.len > 0:
       var flushResult = true
-      for k in keysToFlush:
-        if not e.handleCommandModeKeyCombo(k):
-          flushResult = false
-          break
-      registry.isReplayingMapping = false
-      return flushResult
-    elif registry.runtimeMappingState.keys.len > 0:
-      # No command-line mappings but keys accumulated (mappings removed) - flush
-      let keysToFlush = registry.runtimeMappingState.keys
-      registry.clearRuntimeMappingState()
-      registry.isReplayingMapping = true
-      var flushResult = true
-      for k in keysToFlush:
-        if not e.handleCommandModeKeyCombo(k):
-          flushResult = false
-          break
-      registry.isReplayingMapping = false
+      e.keyRouter.withReplay:
+        for k in leftover:
+          if not e.handleCommandModeKeyCombo(k):
+            flushResult = false
+            break
       if not flushResult:
         return false
       # Fall through to process current key normally
+    else:
+      let route = e.keyRouter.feedKey(EditorMode.Command, keyCombo)
+      case route.kind
+      of rrUnhandled, rrCancelled:
+        discard # Fall through to normal handling
+      of rrExecuteRuntimeCommand:
+        # Unreachable: the Command overlay's mappings table is filtered to
+        # key-seq only (see `KeyRouter.mappingsFor`), so `feedKey` never
+        # returns rrExecuteRuntimeCommand for `EditorMode.Command`. Guarded
+        # for case exhaustiveness; keep the historical no-op for safety.
+        return true
+      of rrExecuteRuntimeKeySequence:
+        var replayResult = true
+        e.keyRouter.withReplay:
+          for targetKeyStr in route.targetKeys:
+            let targetKeyOpt = stringToKeyCombo(targetKeyStr)
+            if targetKeyOpt.isSome:
+              if not e.handleCommandModeKeyCombo(targetKeyOpt.get):
+                replayResult = false
+                break
+        return replayResult
+      of rrWaiting:
+        return true
+      of rrUnhandledBatch:
+        # Command overlay style: replay *all* accumulated keys (including the
+        # current one) and return without falling through.
+        var flushResult = true
+        e.keyRouter.withReplay:
+          for k in route.keys:
+            if not e.handleCommandModeKeyCombo(k):
+              flushResult = false
+              break
+        return flushResult
 
   # Handle Escape to exit Command mode and return to previous (base) mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:

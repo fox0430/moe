@@ -805,6 +805,10 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     screenSize: ScreenSize(width: 80, height: 20),
     commandRegistry: cmdRegistry,
     keyBindingRegistry: keyRegistry,
+    keyRouter: newKeyRouter(
+      keyRegistry,
+      TimeoutPolicy(timeoutlen: editorConfig.standard.timeoutlen, enabled: true),
+    ),
     commandLineParser: cmdLineParser,
     commandConfig: cmdConfig,
     handlerManager: nil, # Will be set after executer is created
@@ -1101,6 +1105,12 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
     e.state.notificationPopup.position = nppBottomLeft
   else:
     e.state.notificationPopup.position = nppBottomRight
+
+  # Propagate timeout policy to the key router so live reload and
+  # config-mode edits take effect for runtime-mapping timeouts.
+  e.keyRouter.updatePolicy(
+    TimeoutPolicy(timeoutlen: newConfig.standard.timeoutlen, enabled: true)
+  )
 
   # Store the new config
   e.config = newConfig
