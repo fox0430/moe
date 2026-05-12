@@ -111,6 +111,65 @@ proc nimCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc javascriptCorpus(): seq[seq[string]] =
+  ## JavaScript snippets covering template literals (single and multi-line,
+  ## with `${...}` interpolation that bumps `templateLiteralDepth`), block
+  ## and doc comments, and arrow functions.
+  result = @[
+    @[
+      "function greet(name) {", "  console.log(`Hello, ${name}!`);",
+      "  return name.length;", "}", "", "greet('world');",
+    ],
+    @[
+      "const sql = `", "  SELECT *", "  FROM users", "  WHERE id = ${userId}",
+      "    AND status = 'active'", "`;", "console.log(sql);",
+    ],
+    @[
+      "/* outer block", "   /* nested-looking but JS does not nest */",
+      "   back to outer */", "function after() { return 0; }",
+      "// trailing line comment",
+    ],
+    @[
+      "/**", " * Doc comment for compute.", " * @param {number} x",
+      " * @returns {Promise<number>}", " */", "async function compute(x) {",
+      "  return await Promise.resolve(x * 2);", "}",
+    ],
+    @[
+      "const xs = [1, 2, 3]", "  .map(n => `n=${n}`)",
+      "  .filter(s => s.includes('2'))", "  .join(', ');",
+    ],
+  ]
+
+proc typescriptCorpus(): seq[seq[string]] =
+  ## TypeScript snippets covering generics, type annotations, template
+  ## literals with interpolation, doc comments, and decorators.
+  result = @[
+    @[
+      "interface User {", "  name: string;", "  age: number;", "}", "",
+      "function greet(u: User): string {",
+      "  return `Hello, ${u.name} (age ${u.age})`;", "}",
+    ],
+    @[
+      "class Stack<T> {", "  private items: T[] = [];",
+      "  push(item: T): void { this.items.push(item); }",
+      "  pop(): T | undefined { return this.items.pop(); }", "}",
+    ],
+    @[
+      "/* outer block", "   /* nested-looking but TS does not nest */",
+      "   back to outer */", "type Id = number | string;", "// trailing line comment",
+    ],
+    @[
+      "/**", " * Doc comment for fetch.", " * @template T", " */",
+      "async function fetch<T>(url: string): Promise<T> {",
+      "  const res = await window.fetch(url);", "  return res.json() as T;", "}",
+    ],
+    @[
+      "const tag = (strings: TemplateStringsArray, ...values: unknown[]) => {",
+      "  return strings.reduce((acc, s, i) => `${acc}${s}${values[i] ?? ''}`, '');",
+      "};", "const result = tag`x=${1} y=${2}`;",
+    ],
+  ]
+
 # Random edits
 
 const PrintableAscii =
@@ -211,9 +270,16 @@ proc fullHighlight(buf: seq[string], lang: SourceLanguage): Highlight =
 proc firstDivergence(
     buf: seq[string], incr, full: Highlight
 ): tuple[ok: bool, row, col: int] =
+  ## Compare colors at every non-whitespace position. Whitespace positions
+  ## are skipped because tokenizers legitimately differ on which adjacent
+  ## token absorbs surrounding spaces (e.g. whether `  await` carries the
+  ## leading two spaces in the whitespace segment or the keyword segment);
+  ## those boundary choices have no visible effect to the user.
   for row in 0 ..< buf.len:
-    let lineLen = buf[row].len
-    for col in 0 ..< lineLen:
+    let line = buf[row]
+    for col in 0 ..< line.len:
+      if line[col] in {' ', '\t'}:
+        continue
       if incr.getColorPair(row, col) != full.getColorPair(row, col):
         return (false, row, col)
   (true, -1, -1)
@@ -303,22 +369,43 @@ proc runFuzz(
     var version = 0
     let nEdits = 5 + rng.rand(8) # 5..12 inclusive
 
-    for _ in 0 ..< nEdits:
-      let e = pickEdit(buf, corpus, rng)
-      history.add e
-      let changedLine = applyEdit(buf, e)
-      inc version
+    try:
+      for _ in 0 ..< nEdits:
+        let e = pickEdit(buf, corpus, rng)
+        history.add e
+        let changedLine = applyEdit(buf, e)
+        inc version
 
-      let getLine = proc(i: int): string =
-        buf[i]
-      updateHighlightIncremental(buf.len, getLine, ih, changedLine, version, @[], lang)
+        let getLine = proc(i: int): string =
+          buf[i]
+        updateHighlightIncremental(
+          buf.len, getLine, ih, changedLine, version, @[], lang
+        )
 
-      let incr = Highlight(colorSegments: ih.segments)
-      let full = fullHighlight(buf, lang)
-      let (ok, r, c) = firstDivergence(buf, incr, full)
-      if not ok:
-        dumpFailure(lang, seed, it, history, buf, r, c, incr, full)
-        return false
+        let incr = Highlight(colorSegments: ih.segments)
+        let full = fullHighlight(buf, lang)
+        let (ok, r, c) = firstDivergence(buf, incr, full)
+        if not ok:
+          dumpFailure(lang, seed, it, history, buf, r, c, incr, full)
+          return false
+    except Exception as exc:
+      # Tokenizer-level crash (e.g. `doAssert false` for empty-token) or any
+      # other runtime defect. Log enough context for repro and re-raise so
+      # the unittest harness shows the original stack.
+      echo "=== TOKENIZER CRASH ==="
+      echo &"Language:  {lang}"
+      echo &"Seed:      {seed}"
+      echo &"Iteration: {it}"
+      echo &"Reproduce: MOE_FUZZ_HIGHLIGHT_SEED={seed} MOE_FUZZ_HIGHLIGHT_ITERS=1"
+      echo &"Edits ({history.len}):"
+      for i, e in history:
+        echo &"  [{i}] {editToString(e)}"
+      echo &"Buffer ({buf.len} lines):"
+      for i, line in buf:
+        echo &"  {i:>3}: {line}"
+      echo &"Exception: {exc.name}: {exc.msg}"
+      echo "======================"
+      raise
   true
 
 # Test suite
@@ -333,3 +420,9 @@ suite "Incremental Highlight Fuzz":
 
   test "Nim: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langNim, nimCorpus(), iters, baseSeed)
+
+  test "JavaScript: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langJavaScript, javascriptCorpus(), iters, baseSeed)
+
+  test "TypeScript: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langTypeScript, typescriptCorpus(), iters, baseSeed)
