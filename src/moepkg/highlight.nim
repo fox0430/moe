@@ -1016,7 +1016,7 @@ proc updateHighlightIncremental*(
 
   # Start re-parsing from the changed line.
   # A small backward margin accounts for tokens that may span the boundary.
-  let reparseStart = max(0, changedStartLine - 2)
+  var reparseStart = max(0, changedStartLine - 2)
 
   # Get initial state for the re-parse range
   var initialState: TokenizerState
@@ -1024,6 +1024,21 @@ proc updateHighlightIncremental*(
     initialState = incrHighlight.lineStates.states[reparseStart - 1]
   else:
     initialState = TokenizerState()
+
+  # Per-line state captures inside a single multi-line token (long comment or
+  # long string) all read the same `commentDepth` / hash count — the value at
+  # the moment the token completes, not the per-line value. Restarting parse
+  # from mid-token therefore restores a stale depth and can confuse nested
+  # constructs (Rust `/* /* */ */`, Nim `#[ #[ ]# ]#`). To stay correct,
+  # rewind to the line where the multi-line token actually opens, which is
+  # the first line whose preceding state is NOT a multi-line continuation.
+  const MultiLineKinds = {gtLongComment, gtDocLongComment, gtLongStringLit}
+  while reparseStart > 0 and initialState.state in MultiLineKinds:
+    dec reparseStart
+    if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
+      initialState = incrHighlight.lineStates.states[reparseStart - 1]
+    else:
+      initialState = TokenizerState()
 
   # State convergence detection is only valid when the line count has not
   # changed; otherwise cached states at the same index refer to different lines.
