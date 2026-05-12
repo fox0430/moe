@@ -28,12 +28,13 @@ import
   buffer, types, commands, command_registry, modes, command_line, command_config,
   window_manager, lsp_integration, config, persist, background_process
 import key_bindings except Command
+import key_router
 import command_handlers/handler_types
 
 export
   buffer, types, commands, command_registry, modes, command_line, command_config,
   window_manager, lsp_integration, config, persist, handler_types, tables, celina,
-  background_process
+  background_process, key_router
 
 type
   ScreenSize* = object
@@ -48,6 +49,10 @@ type
     executer*: CommandExecutor
     commandRegistry*: CommandRegistry
     keyBindingRegistry*: KeyBindingRegistry
+    keyRouter*: KeyRouter
+      ## Single entry point for key-dispatch decisions. Borrows the
+      ## accumulator state from `keyBindingRegistry`; a future phase may
+      ## move that physical storage into the router itself.
     commandLineParser*: CommandLineParser
     commandConfig*: CommandConfig
     handlerManager*: HandlerManager

@@ -256,100 +256,53 @@ const MaxMacroRecursionDepth = 100
 proc checkRuntimeKeySeqMapping(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): Option[HandlerResult] =
-  ## Check if current key (and accumulated keys) match a runtime mapping.
-  ## For file-edit modes (Normal, Insert, Visual, Replace), only rmkKeySequence
-  ## mappings are checked (rmkCommand is handled by findBinding in mode handlers).
-  ## For special modes (Filer, LogViewer, etc.), rmkCommand mappings are also checked
-  ## and executed directly via executeCommandDirect.
-  ## Returns Some(result) if the key was consumed (either matched or waiting for more),
-  ## or None if the key should be processed normally.
+  ## Ask the KeyRouter whether `keyCombo` is part of a runtime mapping. The
+  ## router picks the right mapping table for the current mode and returns a
+  ## `RouteResult` telling us what to do. Built-in command resolution happens
+  ## *after* this proc returns `none`, inside the mode-specific dispatcher.
+  ##
+  ## Flush semantics here are the "base mode" variant: when no match exists
+  ## we replay all accumulated keys *except the current one* and let the
+  ## caller re-process the current key. The Command overlay path lives in
+  ## `command_mode_handler.handleCommandModeKeyCombo` and uses the full-flush
+  ## variant.
   let state = editor.state
-  let mappings =
-    if state.mode.isFileEditMode or state.mode == EditorMode.Command:
-      manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
-    else:
-      manager.keyBindingRegistry.getAllRuntimeMappings(state.mode)
-  if mappings.len == 0:
-    # No mappings for this mode, also flush any accumulated keys
-    if manager.keyBindingRegistry.runtimeMappingState.keys.len > 0:
-      manager.keyBindingRegistry.clearRuntimeMappingState()
+  let route = editor.keyRouter.feedKey(state.mode, keyCombo)
+  case route.kind
+  of rrUnhandled, rrCancelled:
     return none(HandlerResult)
-
-  # Add current key to accumulator
-  manager.keyBindingRegistry.runtimeMappingState.keys.add(keyCombo)
-  let accKeys = manager.keyBindingRegistry.runtimeMappingState.keys
-
-  # Check for exact match and prefix match
-  var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
-  var hasLongerMatch = false
-
-  for m in mappings:
-    if m.triggerKeys == accKeys:
-      exactMatch = some(m)
-    elif m.triggerKeys.len > accKeys.len:
-      # Check if accKeys is a prefix of this mapping's trigger
-      var isPrefix = true
-      for i in 0 ..< accKeys.len:
-        if m.triggerKeys[i] != accKeys[i]:
-          isPrefix = false
-          break
-      if isPrefix:
-        hasLongerMatch = true
-
-  if exactMatch.isSome and not hasLongerMatch:
-    # Exact match with no longer alternatives: execute the mapping
-    manager.keyBindingRegistry.clearRuntimeMappingState()
-    let matched = exactMatch.get
-    if matched.kind == rmkCommand:
-      # Command mapping: execute the command directly
-      let cmdResult = manager.executeCommandDirect(matched.commandName)
-      if cmdResult.isSome:
-        return cmdResult
-      # If command not directly executable, fall through to normal handling
-      return none(HandlerResult)
-    else:
-      # Key-sequence mapping: replay target keys
-      manager.keyBindingRegistry.isReplayingMapping = true
-      let playbackResult = manager.playbackMacro(editor, matched.targetKeys)
-      manager.keyBindingRegistry.isReplayingMapping = false
-      return some(playbackResult)
-
-  if hasLongerMatch:
-    # Prefix match exists: wait for more keys
-    if exactMatch.isSome:
-      # Both exact and longer match possible: wait for more keys.
-      # If no key arrives within timeoutlen, handleKeyMappingTimeout
-      # will flush and execute the exact match.
-      discard
+  of rrExecuteRuntimeCommand:
+    let cmdResult = manager.executeCommandDirect(route.commandName)
+    if cmdResult.isSome:
+      return cmdResult
+    return none(HandlerResult)
+  of rrExecuteRuntimeKeySequence:
+    var playbackResult: HandlerResult
+    editor.keyRouter.withReplay:
+      playbackResult = manager.playbackMacro(editor, route.targetKeys)
+    return some(playbackResult)
+  of rrWaiting:
     return some(
       HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
     )
-
-  # No match at all
-  if accKeys.len == 1:
-    # Only the current key was accumulated, no match: pass through normally
-    manager.keyBindingRegistry.clearRuntimeMappingState()
+  of rrUnhandledBatch:
+    # Replay all accumulated keys except the current one, then let the
+    # caller re-process the current key normally.
+    let keysToFlush = route.keys[0 ..< route.keys.len - 1]
+    var earlyExit = none(HandlerResult)
+    editor.keyRouter.withReplay:
+      for k in keysToFlush:
+        let flushResult = manager.handleKeyCombo(editor, k)
+        if flushResult.kind == hrHandled and flushResult.modeTransition.isSome:
+          state.mode = flushResult.modeTransition.get
+        if flushResult.kind == hrError or flushResult.kind == hrQuit:
+          earlyExit = some(flushResult)
+          break
+    if earlyExit.isSome:
+      return earlyExit
     return none(HandlerResult)
-
-  # Multiple keys accumulated but no match: flush accumulated keys by replaying them
-  let keysToFlush = accKeys[0 ..< accKeys.len - 1] # All except the last one
-  manager.keyBindingRegistry.clearRuntimeMappingState()
-
-  # Replay flushed keys with mapping expansion disabled
-  manager.keyBindingRegistry.isReplayingMapping = true
-  for k in keysToFlush:
-    let flushResult = manager.handleKeyCombo(editor, k)
-    if flushResult.kind == hrHandled and flushResult.modeTransition.isSome:
-      state.mode = flushResult.modeTransition.get
-    if flushResult.kind == hrError or flushResult.kind == hrQuit:
-      manager.keyBindingRegistry.isReplayingMapping = false
-      return some(flushResult)
-  manager.keyBindingRegistry.isReplayingMapping = false
-
-  # Now process the current key normally (re-enter mapping check)
-  return none(HandlerResult)
 
 proc applyNormalModePostProcessing(
     manager: HandlerManager, editor: Editor, normalResult: HandlerResult
@@ -365,8 +318,7 @@ proc applyNormalModePostProcessing(
     let hasPending =
       state.editState.pendingOperator.isSome or state.editState.pendingTextObject.isSome or
       state.pendingCommand != PendingNone or state.pendingRegister.isSome or
-      state.macroState.waitingForRegister or
-      manager.keyBindingRegistry.hasActiveSequence()
+      state.macroState.waitingForRegister or editor.keyRouter.hasActiveBuiltinSequence()
     if not hasPending and not hasOverlay:
       if normalResult.modeTransition.isSome and
           normalResult.modeTransition.get == EditorMode.Insert:
@@ -616,7 +568,7 @@ proc playbackMacro*(
     )
 
   state.macroState.playbackDepth += 1
-  manager.keyBindingRegistry.clearSequence()
+  editor.keyRouter.clearBuiltinSequence()
   let wasRecording = state.macroState.isRecording
   state.macroState.isRecording = false
 
@@ -640,5 +592,5 @@ proc playbackMacro*(
 
   state.macroState.isRecording = wasRecording
   state.macroState.playbackDepth -= 1
-  manager.keyBindingRegistry.clearSequence()
+  editor.keyRouter.clearBuiltinSequence()
   HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")

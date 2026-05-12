@@ -187,12 +187,12 @@ proc runEditor(
           except Exception as e:
             logError("moe", "handlePendingAsyncOperations failed: " & e.msg)
 
-        if editor.keyBindingRegistry.runtimeMappingState.keys.len > 0:
-          # Key mapping timeout control
-          let tl = editor.config.standard.timeoutlen
-          if tl > 0 and app.getApplicationTimeout() == 0:
-            app.setApplicationTimeout(tl)
-        elif app.getApplicationTimeout() > 0:
+        # Key mapping timeout control — delegated to KeyRouter so policy
+        # (enabled/timeoutlen) and accumulator state are queried in one place.
+        let routerTimeout = editor.keyRouter.nextTimeoutMs()
+        if routerTimeout > 0 and app.getApplicationTimeout() == 0:
+          app.setApplicationTimeout(routerTimeout)
+        elif routerTimeout == 0 and app.getApplicationTimeout() > 0:
           app.setApplicationTimeout(0)
 
         return shouldContinue

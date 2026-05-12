@@ -133,6 +133,52 @@ type
   RuntimeMappingState* = object
     keys*: seq[KeyCombo] ## Keys accumulated so far
 
+  ## Result of matching a single key against the runtime mapping table.
+  ## `routeRuntimeMapping` returns this; the caller executes the decision.
+  RuntimeMappingDecisionKind* = enum
+    rmdExecuteCommand ## Exact match, rmkCommand: execute named command
+    rmdExecuteKeySequence ## Exact match, rmkKeySequence: replay target keys
+    rmdWaitForMore ## Prefix of one or more mappings; wait for next key
+    rmdNoMatchPassThrough
+      ## Either the table is empty, or the only key accumulated has no match.
+      ## Caller should process the current key as if no mapping existed.
+    rmdNoMatchFlush
+      ## Two or more keys accumulated and none match. Caller must replay
+      ## the accumulated keys (with `isReplayingMapping = true`); whether the
+      ## current key is part of the replay or processed separately is up to
+      ## the caller (base mode and Command overlay differ here historically).
+
+  RuntimeMappingDecision* = object
+    case kind*: RuntimeMappingDecisionKind
+    of rmdExecuteCommand:
+      commandName*: string
+    of rmdExecuteKeySequence:
+      targetKeys*: seq[string]
+    of rmdWaitForMore, rmdNoMatchPassThrough:
+      discard
+    of rmdNoMatchFlush:
+      accumulatedKeys*: seq[KeyCombo]
+
+  ## Plan returned by `flushRuntimeMapping` when the key-mapping timeout fires
+  ## with a non-empty accumulator. The caller is responsible for executing the
+  ## plan (Command overlay and base mode use different executors).
+  RuntimeMappingFlushKind* = enum
+    rmfNothing ## Accumulator was already empty
+    rmfExecuteCommand ## Exact match with rmkCommand
+    rmfExecuteKeySequence ## Exact match with rmkKeySequence
+    rmfReplayPerKey ## No exact match: replay each accumulated key individually
+
+  RuntimeMappingFlushPlan* = object
+    case kind*: RuntimeMappingFlushKind
+    of rmfNothing:
+      discard
+    of rmfExecuteCommand:
+      commandName*: string
+    of rmfExecuteKeySequence:
+      targetKeys*: seq[string]
+    of rmfReplayPerKey:
+      keysToReplay*: seq[KeyCombo]
+
   ## Registry for all key_bindings
   KeyBindingRegistry* = ref object
     bindings*: Table[EditorMode, seq[KeyBinding]]
@@ -525,6 +571,19 @@ proc hasActiveSequence*(registry: KeyBindingRegistry): bool =
   registry.sequenceState.keys.len > 0 or registry.sequenceState.waitingForChar or
     registry.sequenceState.hasNumericPrefix
 
+proc clearAllPending*(registry: KeyBindingRegistry): bool {.discardable.} =
+  ## Clear all key-dispatch pending state that Escape should cancel. Currently
+  ## this only covers the built-in multi-key sequence accumulator; the runtime
+  ## mapping accumulator is intentionally left untouched so that Escape inside
+  ## a `:nmap` prefix retains today's behaviour (the timeout path flushes it).
+  ## Returns true iff something was cleared. Centralising this call lets
+  ## handler.nim stop reaching into registry internals; future phases extend
+  ## the body without revisiting handler.nim.
+  if registry.hasActiveSequence():
+    registry.clearSequence()
+    return true
+  return false
+
 proc parseKeyString*(s: string): seq[KeyCombo] =
   ## Parse a key string into a sequence of KeyCombos.
   ## Supports space-separated tokens (e.g., "C-s Enter", "g g") and
@@ -729,6 +788,103 @@ proc getAllRuntimeMappings*(
   if mode notin registry.runtimeMappings:
     return @[]
   return registry.runtimeMappings[mode]
+
+proc routeRuntimeMapping*(
+    registry: KeyBindingRegistry, keyCombo: KeyCombo, mappings: seq[RuntimeKeyMapping]
+): RuntimeMappingDecision =
+  ## Decide what to do with `keyCombo` given the runtime mapping table for the
+  ## current mode. The accumulator (`registry.runtimeMappingState`) is mutated
+  ## as appropriate:
+  ## - on exact match or no-match flush: cleared before returning
+  ## - on prefix match: extended with `keyCombo`
+  ## - on empty `mappings` with no prior accumulation: untouched
+  ##
+  ## This is a pure routing decision; the caller executes the result.
+  ## Historically there are two execution styles — base mode (handler_manager)
+  ## replays accumulatedKeys[0..^2] and re-processes the current key, while
+  ## the Command overlay replays the full accumulatedKeys and stops. Both can
+  ## be expressed from the same decision.
+
+  if mappings.len == 0:
+    if registry.runtimeMappingState.keys.len > 0:
+      registry.clearRuntimeMappingState()
+    return RuntimeMappingDecision(kind: rmdNoMatchPassThrough)
+
+  registry.runtimeMappingState.keys.add(keyCombo)
+  let accKeys = registry.runtimeMappingState.keys
+
+  var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
+  var hasLongerMatch = false
+  for m in mappings:
+    if m.triggerKeys == accKeys:
+      exactMatch = some(m)
+    elif m.triggerKeys.len > accKeys.len:
+      var isPrefix = true
+      for i in 0 ..< accKeys.len:
+        if m.triggerKeys[i] != accKeys[i]:
+          isPrefix = false
+          break
+      if isPrefix:
+        hasLongerMatch = true
+
+  if exactMatch.isSome and not hasLongerMatch:
+    let matched = exactMatch.get
+    registry.clearRuntimeMappingState()
+    case matched.kind
+    of rmkCommand:
+      return RuntimeMappingDecision(
+        kind: rmdExecuteCommand, commandName: matched.commandName
+      )
+    of rmkKeySequence:
+      return RuntimeMappingDecision(
+        kind: rmdExecuteKeySequence, targetKeys: matched.targetKeys
+      )
+
+  if hasLongerMatch:
+    # Both exact and longer match possible: wait for next key. If no key
+    # arrives within timeoutlen, the timeout path will flush the accumulator
+    # and execute the exact match.
+    return RuntimeMappingDecision(kind: rmdWaitForMore)
+
+  if accKeys.len == 1:
+    registry.clearRuntimeMappingState()
+    return RuntimeMappingDecision(kind: rmdNoMatchPassThrough)
+
+  let flushed = accKeys
+  registry.clearRuntimeMappingState()
+  return RuntimeMappingDecision(kind: rmdNoMatchFlush, accumulatedKeys: flushed)
+
+proc flushRuntimeMapping*(
+    registry: KeyBindingRegistry, mappings: seq[RuntimeKeyMapping]
+): RuntimeMappingFlushPlan =
+  ## When the key-mapping timeout fires, decide how to flush the accumulator.
+  ## Caller passes the appropriate mappings table for the current mode/overlay.
+  ## The accumulator is cleared before returning (unless it was already empty).
+  if registry.runtimeMappingState.keys.len == 0:
+    return RuntimeMappingFlushPlan(kind: rmfNothing)
+
+  let accKeys = registry.runtimeMappingState.keys
+  var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
+  for m in mappings:
+    if m.triggerKeys == accKeys:
+      exactMatch = some(m)
+      break
+
+  registry.clearRuntimeMappingState()
+
+  if exactMatch.isSome:
+    let matched = exactMatch.get
+    case matched.kind
+    of rmkCommand:
+      return RuntimeMappingFlushPlan(
+        kind: rmfExecuteCommand, commandName: matched.commandName
+      )
+    of rmkKeySequence:
+      return RuntimeMappingFlushPlan(
+        kind: rmfExecuteKeySequence, targetKeys: matched.targetKeys
+      )
+
+  return RuntimeMappingFlushPlan(kind: rmfReplayPerKey, keysToReplay: accKeys)
 
 proc isDigitKey*(combo: KeyCombo): bool =
   ## Check if the key combination is a digit (0-9)
