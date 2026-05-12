@@ -98,12 +98,13 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
   var pos = g.pos
   g.start = g.pos
 
-  # Reset state when starting fresh (pos = 0 and not in template literal state)
-  if g.pos == 0 and g.state != gtLongStringLit:
-    g.templateLiteralDepth = 0
-    g.braceDepthStack = @[]
-    g.inJsxMode = false
-    g.jsxTagDepth = 0
+  # On a truly fresh tokenization (pos == 0 with no carried context) all
+  # state fields are already at their zero defaults via GeneralTokenizer's
+  # default object initialization. On a resumed tokenization (incremental
+  # re-highlight) the caller has restored these fields via
+  # `restoreTokenizerState`; resetting them here would silently lose the
+  # JSX / template-literal / brace-depth context and cause downstream
+  # tokens to diverge from a fresh full reparse.
 
   # If we're in JSX/TSX mode, delegate to HTML tokenizer
   if g.inJsxMode and g.state != gtLongStringLit:
@@ -176,13 +177,26 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
 
   # Handle template literal state
   if g.state == gtLongStringLit:
-    # We're inside a template literal
+    # We're inside a template literal. Mirror the block-comment EOF guard
+    # above: when the buffer ends mid-string the loop below would set
+    # `kind = gtLongStringLit` without advancing `pos`, producing a
+    # zero-length token and tripping the safety assert. Return `gtEof`
+    # directly so `state` stays parked for the next chunk.
+    if g.buf[pos] == '\0':
+      g.kind = gtEof
+      g.length = 0
+      return
     let startPos = pos
     while true:
       case g.buf[pos]
       of '\0':
         g.kind = gtLongStringLit
         # Keep state as gtLongStringLit for continuation on next line
+        break
+      of '\n':
+        inc(pos)
+        g.kind = gtLongStringLit
+        # State stays gtLongStringLit; next line resumes the template literal.
         break
       of '`':
         # End of template literal
@@ -465,10 +479,10 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
       of '\0':
         break
       of '\r', '\n':
-        if quote == '\"':
-          break
-        else:
-          inc(pos)
+        # Treat both `"..."` and `'...'` as line-bounded so per-line state
+        # captures don't see a multi-line token; an unterminated string just
+        # ends at the newline and the next line tokenizes fresh.
+        break
       of '\"', '\'':
         if g.buf[pos] == quote:
           inc(pos)
@@ -487,11 +501,18 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
     g.kind = gtLongStringLit
     g.state = gtLongStringLit
     inc(g.templateLiteralDepth)
-    # Only consume until first ${
+    # Only consume until first ${ or the next newline. Splitting at `\n`
+    # keeps per-line state captures accurate so an incremental re-parse
+    # from any line in the middle of the template literal sees the same
+    # `state=gtLongStringLit` as a fresh full reparse would.
     while true:
       case g.buf[pos]
       of '\0':
         # Keep state for continuation
+        break
+      of '\n':
+        inc(pos)
+        # State stays gtLongStringLit; next line resumes the template literal.
         break
       of '`':
         inc(pos)

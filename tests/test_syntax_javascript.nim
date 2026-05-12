@@ -1386,21 +1386,25 @@ suite "syntaxjavascript - javaScriptNextToken gtNone handling":
     g.javaScriptNextToken()
     check g.kind == gtOperator
 
-suite "syntaxjavascript - javaScriptNextToken state reset":
-  test "state reset at position 0":
+suite "syntaxjavascript - javaScriptNextToken state preservation":
+  test "preserves restored state on resumed tokenization at position 0":
+    # When `restoreTokenizerState` (used by incremental re-highlight) has
+    # pre-loaded JSX / template-literal / brace-depth context for a new
+    # chunk, the tokenizer must NOT clear those fields just because
+    # `g.pos == 0`. The bug previously silently lost JSX mode across chunk
+    # boundaries, making incremental output diverge from a full reparse.
     var g: GeneralTokenizer
     g.initGeneralTokenizer("test")
-    # Manually set some state
+    # Simulate a caller-restored mid-stream state.
     g.templateLiteralDepth = 5
     g.braceDepthStack = @[1, 2, 3]
     g.inJsxMode = true
 
     g.javaScriptNextToken()
 
-    # State should be reset since pos was 0 and state was not gtLongStringLit
-    check g.templateLiteralDepth == 0
-    check g.braceDepthStack.len == 0
-    check g.inJsxMode == false
+    check g.templateLiteralDepth == 5
+    check g.braceDepthStack == @[1, 2, 3]
+    check g.inJsxMode == true
 
 suite "syntaxjavascript - javaScriptNextToken complete JavaScript code":
   test "ES6 module syntax":
