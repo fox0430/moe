@@ -208,9 +208,11 @@ currentWordBg = "#808080"
 findCharMatch = "#ffffff"
 findCharMatchBg = "#ff5500"
 
-highlightFullWidthSpace = "#ff0000"
+highlightFullWidthSpace = "#ffffff"
+highlightFullWidthSpaceBg = "#ff0000"
 
-highlightTrailingSpaces = "#ff0000"
+highlightTrailingSpaces = "#ffffff"
+highlightTrailingSpacesBg = "#ff0000"
 
 reservedWord = "#ff0087"
 reservedWordBg = "#808080"

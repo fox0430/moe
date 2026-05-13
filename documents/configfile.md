@@ -1380,8 +1380,10 @@ And, `termDefault` can be used for both foreground and background to use the ter
 | currentWordBg | Current word highlighting |
 | findCharMatch | f/F/t/T match highlighting |
 | findCharMatchBg | f/F/t/T match highlighting |
-| highlightFullWidthSpace | Full-width space color |
-| highlightTrailingSpaces | Trailing space color |
+| highlightFullWidthSpace | Full-width space text color |
+| highlightFullWidthSpaceBg | Full-width space background color |
+| highlightTrailingSpaces | Trailing space text color |
+| highlightTrailingSpacesBg | Trailing space background color |
 | reservedWord | Reserved word text color |
 | reservedWordBg | Reserved word text color |
 | syntaxCheckInfo | A info color of syntax checker result highlighting |
