@@ -220,7 +220,7 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
 
   let ftWindow = EditorWindow(
     buffer: ftBuffer,
-    bufferList: @[ftBuffer],
+    bufferIds: @[ftBuffer.id], # FileTree pane has its own single-tab list
     viewport: ViewPort(
       topLine: 0, leftColumn: 0, width: ftWidth, height: fullHeight, x: startX, y: minY
     ),
@@ -591,10 +591,11 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         if not e.state.mode.isFileEditMode:
           # For special modes with split windows, remove the temporary buffer
           if e.windowManager.windows.len > 1:
-            let idx = e.buffers.find(splitBuf)
+            let idx = e.bufferIndexById(splitBuf.id)
             if idx >= 0:
               evictGitCacheForBuffer(splitBuf)
-              e.buffers.delete(idx)
+              e.deleteBufferAt(idx)
+              e.pruneBufferIdFromAllWindows(splitBuf.id)
 
         # Reset mode before closing
         e.state.previousMode = EditorMode.Normal
@@ -1173,7 +1174,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
             debugLines,
             i,
             i == e.windowManager.activeWindowIndex,
-            e.buffers.find(window.buffer),
+            e.bufferIndexById(window.buffer.id),
             window.viewport.x,
             window.viewport.y,
             window.viewport.width,
@@ -1279,10 +1280,11 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
             let jumpNum = e.state.jumpList.len - i
             let lineNum = pos.line + 1 # 1-based for display
             let colNum = pos.column + 1 # 1-based for display
-            # Get file name from buffer index
+            # Get file name from BufferId
+            let bufOpt = e.bufferById(pos.bufferId)
             let fileName =
-              if pos.bufferIndex >= 0 and pos.bufferIndex < e.buffers.len:
-                let buf = e.buffers[pos.bufferIndex]
+              if bufOpt.isSome:
+                let buf = bufOpt.get
                 if buf.filePath.isSome:
                   buf.filePath.get.extractFilename
                 else:

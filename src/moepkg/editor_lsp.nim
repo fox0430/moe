@@ -123,13 +123,13 @@ proc switchToBufferForLsp(e: Editor, index: int) =
   e.executer.buffer = targetBuffer
   e.executer.motionController.executor.buffer = targetBuffer
 
-  e.state.currentBufferIndex = index
+  e.state.currentBufferId = targetBuffer.id
   e.state.needsFullRedraw = true
 
 proc addToJumpList(e: Editor) =
   ## Add current cursor position to jump list before a jump
   let jumpPos = JumpPosition(
-    bufferIndex: e.state.currentBufferIndex,
+    bufferId: e.state.currentBufferId,
     line: e.activeWindow.cursor.line,
     column: e.activeWindow.cursor.column,
   )
@@ -137,7 +137,7 @@ proc addToJumpList(e: Editor) =
   # Don't add if same as last position (same buffer, line, and column)
   if e.state.jumpList.len > 0:
     let lastPos = e.state.jumpList[^1]
-    if lastPos.bufferIndex == jumpPos.bufferIndex and lastPos.line == jumpPos.line and
+    if lastPos.bufferId == jumpPos.bufferId and lastPos.line == jumpPos.line and
         lastPos.column == jumpPos.column:
       return
 
@@ -192,7 +192,7 @@ proc jumpToLspLocation(e: Editor, loc: lspTypes.Location, resultKind: string): b
       if loadResult.isErr:
         e.state.statusMessage = "Failed to open file: " & loadResult.error
         return false
-      e.buffers.add(newBuffer)
+      e.addBuffer(newBuffer)
       e.switchToBufferForLsp(e.buffers.high)
 
     # Set cursor with boundary checks
@@ -1172,7 +1172,7 @@ proc jumpToDocumentLink(e: Editor, link: lspTypes.DocumentLink): bool =
       if loadResult.isErr:
         e.state.statusMessage = "Failed to open file: " & loadResult.error
         return false
-      e.buffers.add(newBuffer)
+      e.addBuffer(newBuffer)
       e.switchToBufferForLsp(e.buffers.high)
 
       # Notify LSP about the newly opened file

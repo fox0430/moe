@@ -128,14 +128,17 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       e.state.display.lineWrap, window.buffer, e.state.display.tabStop,
     )
 
-    # Render tab line for this window if enabled
-    # Use window-local buffer list (per-window tabs)
+    # Render tab line for this window if enabled.
+    # Resolve the window's per-window tab list (BufferIds) to TextBuffer refs.
+    # Stale ids (deleted buffers) are skipped silently.
     if e.state.display.showTabLine:
-      let buffersToShow =
-        if window.bufferList.len > 0:
-          window.bufferList
-        else:
-          @[window.buffer]
+      var buffersToShow: seq[TextBuffer] = @[]
+      for id in window.bufferIds:
+        let bufOpt = e.bufferById(id)
+        if bufOpt.isSome:
+          buffersToShow.add(bufOpt.get)
+      if buffersToShow.len == 0:
+        buffersToShow = @[window.buffer]
       renderWindowTabLine(
         buffersToShow, window.buffer, window.mode, buffer, window.viewport.y,
         window.viewport.x, window.viewport.width, e.state.display.showTabLine,

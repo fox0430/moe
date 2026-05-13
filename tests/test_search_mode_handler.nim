@@ -44,7 +44,7 @@ proc createTestEditorWithBuffer(content: string): Editor =
   result = newEditor(config)
   result.textBuffer = newTextBuffer(content)
   result.windowManager.windows[0].buffer = result.textBuffer
-  result.windowManager.windows[0].bufferList = @[result.textBuffer]
+  result.windowManager.windows[0].bufferIds = @[result.textBuffer.id]
   result.viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
   result.windowManager.windows[0].viewport = result.viewport
@@ -59,7 +59,7 @@ proc createTestEditorInHelpMode(): Editor =
   result = createTestEditorWithBuffer("")
   result.textBuffer = helpBuffer
   result.windowManager.windows[0].buffer = helpBuffer
-  result.windowManager.windows[0].bufferList = @[helpBuffer]
+  result.windowManager.windows[0].bufferIds = @[helpBuffer.id]
   result.windowManager.windows[0].helpViewerState = some(helpState)
   result.state.mode = EditorMode.Help
 

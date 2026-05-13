@@ -996,7 +996,7 @@ proc createTestEditorWithBuffer(content: string): Editor =
   result = newEditor(config)
   result.textBuffer = newTextBuffer(content)
   result.windowManager.windows[0].buffer = result.textBuffer
-  result.windowManager.windows[0].bufferList = @[result.textBuffer]
+  result.windowManager.windows[0].bufferIds = @[result.textBuffer.id]
   result.viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
   result.windowManager.windows[0].viewport = result.viewport
@@ -1217,7 +1217,7 @@ suite "handleMouseEvent - Wheel Scroll Multi-Window":
     let buf2 = newTextBuffer("a0\na1\na2\na3\na4\na5\na6\na7\na8\na9")
     let win2 = EditorWindow(
       buffer: buf2,
-      bufferList: @[buf2],
+      bufferIds: @[buf2.id],
       viewport: ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
       cursor: BufferPosition(line: 0, column: 0),
       active: false,
@@ -2266,7 +2266,7 @@ proc createTestEditorForMiddleClick(content: string): Editor =
   result = newEditor(config)
   result.textBuffer = newTextBuffer(content)
   result.windowManager.windows[0].buffer = result.textBuffer
-  result.windowManager.windows[0].bufferList = @[result.textBuffer]
+  result.windowManager.windows[0].bufferIds = @[result.textBuffer.id]
   result.viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
   result.windowManager.windows[0].viewport = result.viewport
@@ -2443,7 +2443,6 @@ suite "handlePasteEvent":
     result = newEditor(config)
     result.textBuffer = newTextBuffer(content)
     result.windowManager.windows[0].buffer = result.textBuffer
-    result.windowManager.windows[0].bufferList = @[result.textBuffer]
     result.viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
     result.windowManager.windows[0].viewport = result.viewport
@@ -2548,7 +2547,6 @@ suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
     result = newEditor(config)
     result.textBuffer = newTextBuffer(content)
     result.windowManager.windows[0].buffer = result.textBuffer
-    result.windowManager.windows[0].bufferList = @[result.textBuffer]
     result.viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
     result.windowManager.windows[0].viewport = result.viewport
@@ -2631,7 +2629,6 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
     result = newEditor(config)
     result.textBuffer = newTextBuffer(content)
     result.windowManager.windows[0].buffer = result.textBuffer
-    result.windowManager.windows[0].bufferList = @[result.textBuffer]
     result.viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
     result.windowManager.windows[0].viewport = result.viewport

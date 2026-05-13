@@ -27,7 +27,7 @@
 
 import std/options
 
-import ../modes
+import ../[modes, buffer]
 import ../lsp/protocol/types as lspTypes
 import command_handler
 
@@ -209,7 +209,7 @@ type
     of hrBuffer:
       bufferArg*: string # Buffer number or name
     of hrJumpToBuffer:
-      jumpBufferIndex*: int # Target buffer index
+      jumpBufferId*: BufferId # Target BufferId
       jumpLine*: int # Target line number
       jumpColumn*: int # Target column number
     of hrBufferDelete:

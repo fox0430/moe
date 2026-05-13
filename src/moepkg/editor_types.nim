@@ -20,7 +20,7 @@
 ## Editor type definitions
 ## This module contains the core Editor type and related types used across editor modules.
 
-import std/tables
+import std/[options, tables]
 
 import pkg/celina
 
@@ -58,6 +58,10 @@ type
     handlerManager*: HandlerManager
     windowManager*: EditorWindowManager
     buffers*: seq[TextBuffer]
+    bufferIdIndex*: Table[BufferId, TextBuffer]
+      ## O(1) lookup table from BufferId to TextBuffer, kept in sync with
+      ## `buffers` via `addBuffer` / `deleteBufferAt`. Treat as derived state —
+      ## never mutate directly.
     config*: EditorConfig
     lsp*: LspIntegration
     lastLspChangeSeq*: int
@@ -93,6 +97,51 @@ proc activeBuffer*(e: Editor): TextBuffer {.inline.} =
 proc activeWindow*(e: Editor): EditorWindow {.inline.} =
   ## Get the currently active window
   e.windowManager.windows[e.windowManager.activeWindowIndex]
+
+proc bufferById*(e: Editor, id: BufferId): Option[TextBuffer] =
+  ## Look up a buffer by its BufferId. O(1) via `bufferIdIndex`.
+  if e.bufferIdIndex.hasKey(id):
+    some(e.bufferIdIndex[id])
+  else:
+    none(TextBuffer)
+
+proc bufferIndexById*(e: Editor, id: BufferId): int =
+  ## Get the index of the buffer with the given BufferId in e.buffers.
+  ## Returns -1 if not found.
+  ## O(1) on miss (early-out via `bufferIdIndex`), O(n) on hit — positions in
+  ## `e.buffers` are unstable across deletes so we don't cache them; callers
+  ## that only need the buffer ref should use `bufferById` instead.
+  if not e.bufferIdIndex.hasKey(id):
+    return -1
+  for i, buf in e.buffers:
+    if buf.id == id:
+      return i
+  return -1
+
+proc addBuffer*(e: Editor, buf: TextBuffer) =
+  ## Append `buf` to `e.buffers` and register it in `bufferIdIndex`.
+  ## Use this instead of `e.buffers.add` so the lookup table stays in sync.
+  e.buffers.add(buf)
+  e.bufferIdIndex[buf.id] = buf
+
+proc deleteBufferAt*(e: Editor, idx: int) =
+  ## Remove the buffer at `idx` from `e.buffers` and drop it from
+  ## `bufferIdIndex`. Use this instead of `e.buffers.delete`.
+  let id = e.buffers[idx].id
+  e.buffers.delete(idx)
+  e.bufferIdIndex.del(id)
+
+proc pruneBufferIdFromAllWindows*(e: Editor, id: BufferId) =
+  ## Remove `id` from every window's per-window tab list (`bufferIds`).
+  ## Call after removing a buffer from `e.buffers` so per-window tabs don't
+  ## hold stale references.
+  for w in e.windowManager.windows:
+    var i = 0
+    while i < w.bufferIds.len:
+      if w.bufferIds[i] == id:
+        w.bufferIds.delete(i)
+      else:
+        inc i
 
 proc currentMode*(e: Editor): EditorMode {.inline.} =
   ## Get the current mode from the active window

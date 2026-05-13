@@ -143,10 +143,11 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
     # Close the split window
     activeWin.clearModeState(EditorMode.RecentFile)
     let buf = activeWin.buffer
-    let idx = e.buffers.find(buf)
+    let idx = e.bufferIndexById(buf.id)
     if idx >= 0:
       evictGitCacheForBuffer(buf)
-      e.buffers.delete(idx)
+      e.deleteBufferAt(idx)
+      e.pruneBufferIdFromAllWindows(buf.id)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     discard e.closeWindow
@@ -163,10 +164,11 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
     # Close the split window first
     activeWin.clearModeState(EditorMode.RecentFile)
     let buf = activeWin.buffer
-    let idx = e.buffers.find(buf)
+    let idx = e.bufferIndexById(buf.id)
     if idx >= 0:
       evictGitCacheForBuffer(buf)
-      e.buffers.delete(idx)
+      e.deleteBufferAt(idx)
+      e.pruneBufferIdFromAllWindows(buf.id)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     discard e.closeWindow
@@ -585,11 +587,14 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
         for i, window in e.windowManager.windows:
           let vp = window.viewport
           if mouse.y == vp.y and mouse.x >= vp.x and mouse.x < vp.x + vp.width:
-            let buffersToShow =
-              if window.bufferList.len > 0:
-                window.bufferList
-              else:
-                @[window.buffer]
+            # Resolve this window's per-window tab list to TextBuffer refs.
+            var buffersToShow: seq[TextBuffer] = @[]
+            for id in window.bufferIds:
+              let bufOpt = e.bufferById(id)
+              if bufOpt.isSome:
+                buffersToShow.add(bufOpt.get)
+            if buffersToShow.len == 0:
+              buffersToShow = @[window.buffer]
             let tabIdx =
               hitTestTabLine(buffersToShow, window.mode, vp.x, vp.width, mouse.x)
             if tabIdx >= 0:
@@ -643,11 +648,13 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
     # Single window mode
     # Check tab line click first
     if e.state.display.showTabLine and mouse.y == 0:
-      let buffersToShow =
-        if e.activeWindow.bufferList.len > 0:
-          e.activeWindow.bufferList
-        else:
-          @[e.activeBuffer()]
+      var buffersToShow: seq[TextBuffer] = @[]
+      for id in e.activeWindow.bufferIds:
+        let bufOpt = e.bufferById(id)
+        if bufOpt.isSome:
+          buffersToShow.add(bufOpt.get)
+      if buffersToShow.len == 0:
+        buffersToShow = @[e.activeBuffer()]
       let tabIdx =
         hitTestTabLine(buffersToShow, e.state.mode, 0, e.viewport.width, mouse.x)
       if tabIdx >= 0:

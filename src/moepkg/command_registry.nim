@@ -1168,7 +1168,7 @@ proc recordJump*(state: EditorState) =
   ## Record current cursor position as a jump point
   ## This should be called before jumping to a different location
   let currentPos = JumpPosition(
-    bufferIndex: state.currentBufferIndex,
+    bufferId: state.currentBufferId,
     line: state.cursor.line,
     column: state.cursor.column,
   )
@@ -1176,7 +1176,7 @@ proc recordJump*(state: EditorState) =
   # Don't record if the position is the same as the last jump in the list
   if state.jumpList.len > 0:
     let lastPos = state.jumpList[^1]
-    if lastPos.bufferIndex == currentPos.bufferIndex and lastPos.line == currentPos.line and
+    if lastPos.bufferId == currentPos.bufferId and lastPos.line == currentPos.line and
         lastPos.column == currentPos.column:
       # Same position as last jump - don't record duplicate
       return

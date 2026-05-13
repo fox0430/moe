@@ -478,7 +478,7 @@ proc handleNormalMode*(
     # Signal to editor to jump to a specific buffer and position
     return HandlerResult(
       kind: hrJumpToBuffer,
-      jumpBufferIndex: r.nmrJumpBufferIndex,
+      jumpBufferId: r.nmrJumpBufferId,
       jumpLine: r.nmrJumpLine,
       jumpColumn: r.nmrJumpColumn,
     )

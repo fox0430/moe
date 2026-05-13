@@ -47,92 +47,64 @@ proc findBufferByPath*(e: Editor, path: string): int =
   return -1
 
 proc addBufferToWindowList*(e: Editor, buffer: TextBuffer) =
-  ## Add a buffer to the active window's bufferList if not already present
-  var found = false
-  for buf in e.activeWindow.bufferList:
-    if buf == buffer:
-      found = true
-      break
-  if not found:
-    e.activeWindow.bufferList.add(buffer)
-    logDebug(
-      "editor",
-      "Added buffer to window bufferList, len: " & $e.activeWindow.bufferList.len,
-    )
+  ## Append `buffer.id` to the active window's per-window tab list if absent.
+  if buffer.id notin e.activeWindow.bufferIds:
+    e.activeWindow.bufferIds.add(buffer.id)
 
 proc switchToBufferByIndex*(e: Editor, index: int) =
-  ## Switch the current window to display the buffer at the given index
-  logDebug("editor", "switchToBufferByIndex called with index: " & $index)
-  logDebug("editor", "windows.len: " & $e.windowManager.windows.len)
-
+  ## Switch the current window to display the buffer at the given index in e.buffers.
+  ## Also registers the target buffer in the active window's per-window tab list.
   if index < 0 or index >= e.buffers.len:
-    logDebug("editor", "Invalid index, returning")
     return
 
   let targetBuffer = e.buffers[index]
-  let targetPath =
-    if targetBuffer.filePath.isSome: targetBuffer.filePath.get else: "No Name"
-  logDebug("editor", "Target buffer path: " & targetPath)
 
-  # Don't switch if already on this buffer
-  if e.activeWindow.buffer == targetBuffer:
-    logDebug("editor", "Already on this buffer")
-    return
-
-  # Add buffer to window's bufferList if not already there
+  # Register in window-local tab list regardless (so :b <name> from another tab
+  # makes the buffer show up in this window's tabs).
   e.addBufferToWindowList(targetBuffer)
+
+  # Don't reset viewport/cursor if already on this buffer
+  if e.activeWindow.buffer == targetBuffer:
+    return
 
   e.activeWindow.buffer = targetBuffer
   e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
   e.activeWindow.viewport.topLine = 0
   e.activeWindow.viewport.leftColumn = 0
 
-  # Sync the executor and motion controller
+  # syncActiveWindow also updates state.currentBufferId for the Jump List anchor.
   e.syncActiveWindow()
-
-  # Update screen cursor
   e.setActiveWindowScreenCursor(e.activeWindow)
-  logDebug("editor", "Switched buffer in window")
-
-  # Update current buffer index in state (for jump list)
-  e.state.currentBufferIndex = index
 
 proc currentBufferIndex*(e: Editor): int =
-  ## Get the index of the current buffer in the buffer list
-  ## Returns -1 if not found
-  logDebug(
-    "editor",
-    "currentBufferIndex: windows.len=" & $e.windowManager.windows.len &
-      " activeWindowIndex=" & $e.windowManager.activeWindowIndex,
-  )
-  let currentBuffer = e.activeBuffer()
-  let currentPath =
-    if currentBuffer.filePath.isSome: currentBuffer.filePath.get else: "[No Name]"
-  logDebug("editor", "currentBufferIndex: activeBuffer path=" & currentPath)
-  for i, buf in e.buffers:
-    if buf == currentBuffer:
-      logDebug("editor", "currentBufferIndex: found match at index " & $i)
-      return i
-  logDebug("editor", "currentBufferIndex: no match found, returning -1")
-  return -1
+  ## Get the position of the active buffer in e.buffers.
+  ## Returns -1 if not found.
+  e.bufferIndexById(e.activeBuffer().id)
 
 proc windowBufferIndex*(e: Editor): int =
-  ## Get the index of the current buffer in the window's bufferList
-  ## Returns -1 if not found
-  let currentBuffer = e.activeWindow.buffer
-  for i, buf in e.activeWindow.bufferList:
-    if buf == currentBuffer:
+  ## Index of the active buffer inside the active window's tab list.
+  ## Returns -1 if the active buffer is not registered with this window.
+  let id = e.activeWindow.buffer.id
+  for i, bid in e.activeWindow.bufferIds:
+    if bid == id:
       return i
   return -1
 
 proc switchToWindowBuffer*(e: Editor, windowIndex: int) =
-  ## Switch to a buffer in the window's bufferList by index
-  if windowIndex < 0 or windowIndex >= e.activeWindow.bufferList.len:
+  ## Switch to a buffer in the active window's tab list by tab position.
+  ## Silently drops the call if the entry is stale (buffer was deleted).
+  if windowIndex < 0 or windowIndex >= e.activeWindow.bufferIds.len:
     return
 
-  let targetBuffer = e.activeWindow.bufferList[windowIndex]
+  let id = e.activeWindow.bufferIds[windowIndex]
+  let bufOpt = e.bufferById(id)
+  if bufOpt.isNone:
+    # Stale entry — buffer was bdelete'd; drop it.
+    e.activeWindow.bufferIds.delete(windowIndex)
+    return
 
-  # Don't switch if already on this buffer
+  let targetBuffer = bufOpt.get
+
   if e.activeWindow.buffer == targetBuffer:
     return
 
@@ -141,47 +113,52 @@ proc switchToWindowBuffer*(e: Editor, windowIndex: int) =
   e.activeWindow.viewport.topLine = 0
   e.activeWindow.viewport.leftColumn = 0
 
-  # Sync the executor and motion controller
+  # syncActiveWindow also updates state.currentBufferId for the Jump List anchor.
   e.syncActiveWindow()
-
-  # Update screen cursor
   e.setActiveWindowScreenCursor(e.activeWindow)
-  logDebug("editor", "Switched to window buffer at index: " & $windowIndex)
 
 proc switchToNextBuffer*(e: Editor) =
-  ## Switch to the next buffer in the window's bufferList (:bnext)
-  if e.activeWindow.bufferList.len <= 1:
-    e.state.statusMessage = "No more buffers"
+  ## Switch to the next buffer in the active window's tab list (:bnext).
+  if e.activeWindow.bufferIds.len <= 1:
+    e.state.statusMessage = "E88: There is only one buffer"
     return
 
-  let currentIdx = e.windowBufferIndex()
-  let nextIdx = (currentIdx + 1) mod e.activeWindow.bufferList.len
+  # If the active buffer isn't registered in this window's tab list (-1),
+  # treat "next" as a jump to the first tab. Mirrors prev's wrap behavior for
+  # the orphan (curIdx<0) case — prev wraps to last, next wraps to first.
+  let curIdx = e.windowBufferIndex()
+  let nextIdx =
+    if curIdx < 0:
+      0
+    else:
+      (curIdx + 1) mod e.activeWindow.bufferIds.len
   e.switchToWindowBuffer(nextIdx)
   e.state.statusMessage = ""
 
 proc switchToPrevBuffer*(e: Editor) =
-  ## Switch to the previous buffer in the window's bufferList (:bprev)
-  if e.activeWindow.bufferList.len <= 1:
-    e.state.statusMessage = "No more buffers"
+  ## Switch to the previous buffer in the active window's tab list (:bprev).
+  if e.activeWindow.bufferIds.len <= 1:
+    e.state.statusMessage = "E88: There is only one buffer"
     return
 
-  let currentIdx = e.windowBufferIndex()
+  # curIdx < 0 (active buffer not in tab list) also falls into this branch and
+  # wraps to the last tab — symmetric with switchToNextBuffer's curIdx<0 path.
+  let curIdx = e.windowBufferIndex()
   let prevIdx =
-    if currentIdx == 0:
-      e.activeWindow.bufferList.len - 1
+    if curIdx <= 0:
+      e.activeWindow.bufferIds.len - 1
     else:
-      currentIdx - 1
+      curIdx - 1
   e.switchToWindowBuffer(prevIdx)
   e.state.statusMessage = ""
 
 proc switchToFirstBuffer*(e: Editor) =
-  ## Switch to the first buffer in the window's bufferList (:bfirst)
-  if e.activeWindow.bufferList.len <= 1:
+  ## Switch to the first buffer in the active window's tab list (:bfirst).
+  if e.activeWindow.bufferIds.len <= 1:
     e.state.statusMessage = "Already at first buffer"
     return
 
-  let currentIdx = e.windowBufferIndex()
-  if currentIdx == 0:
+  if e.windowBufferIndex() == 0:
     e.state.statusMessage = "Already at first buffer"
     return
 
@@ -189,14 +166,13 @@ proc switchToFirstBuffer*(e: Editor) =
   e.state.statusMessage = ""
 
 proc switchToLastBuffer*(e: Editor) =
-  ## Switch to the last buffer in the window's bufferList (:blast)
-  if e.activeWindow.bufferList.len <= 1:
+  ## Switch to the last buffer in the active window's tab list (:blast).
+  if e.activeWindow.bufferIds.len <= 1:
     e.state.statusMessage = "Already at last buffer"
     return
 
-  let lastIdx = e.activeWindow.bufferList.len - 1
-  let currentIdx = e.windowBufferIndex()
-  if currentIdx == lastIdx:
+  let lastIdx = e.activeWindow.bufferIds.len - 1
+  if e.windowBufferIndex() == lastIdx:
     e.state.statusMessage = "Already at last buffer"
     return
 
@@ -411,7 +387,7 @@ proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
 
   applyEditorConfigToBuffer(newBuffer, e.config)
   newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
-  e.buffers.add(newBuffer)
+  e.addBuffer(newBuffer)
   ok(newBuffer)
 
 proc editFile*(e: Editor, path: string): Result[(), string] =
@@ -469,7 +445,7 @@ proc openFileInNewRightWindow*(e: Editor, path: string): Result[(), string] =
 
   let newWindow = EditorWindow(
     buffer: newBuffer,
-    bufferList: @[newBuffer],
+    bufferIds: @[newBuffer.id],
     viewport: ViewPort(
       topLine: 0, leftColumn: 0, width: newWidth, height: origHeight, x: newX, y: origY
     ),
@@ -846,7 +822,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     result.state.notificationPopup.position = nppBottomRight
 
   # Add initial buffer to buffer list
-  result.buffers.add(result.textBuffer)
+  result.addBuffer(result.textBuffer)
   logDebug("editor", "Initial buffer added, buffers.len: " & $result.buffers.len)
 
   # Set reserved words for syntax highlighting on initial buffer
@@ -858,7 +834,8 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   result.windowManager.windows.add(
     EditorWindow(
       buffer: result.textBuffer,
-      bufferList: @[result.textBuffer], # Initialize with initial buffer
+      bufferIds: @[result.textBuffer.id],
+        # Initialize per-window tabs with the initial buffer
       viewport: result.viewport,
       cursor: BufferPosition(line: 0, column: 0),
       mode: EditorMode.Normal,
@@ -870,6 +847,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   )
   result.windowManager.activeWindowIndex = 0
   result.state.activeWindow = result.windowManager.windows[0]
+  result.state.currentBufferId = result.textBuffer.id
   logDebug(
     "editor",
     "Default window created, windows.len: " & $result.windowManager.windows.len,
@@ -1360,7 +1338,7 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
       debugLines,
       i,
       i == e.windowManager.activeWindowIndex,
-      e.buffers.find(window.buffer),
+      e.bufferIndexById(window.buffer.id),
       window.viewport.x,
       window.viewport.y,
       window.viewport.width,

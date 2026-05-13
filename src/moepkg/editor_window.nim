@@ -47,6 +47,10 @@ proc syncActiveWindow*(e: Editor) =
   e.executer.motionController.executor.buffer = e.activeWindow.buffer
   e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
   e.viewport = e.activeWindow.viewport
+  # Keep state.currentBufferId aligned with the active window's buffer so that
+  # window-switch / split / close paths automatically refresh the Jump List
+  # anchor without each call site having to remember to update it.
+  e.state.currentBufferId = e.activeWindow.buffer.id
   e.state.needsFullRedraw = true
 
   # Apply per-buffer EditorConfig overrides to display settings
@@ -305,15 +309,12 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
       found = true
       break
   if not found:
-    e.buffers.add(newBuffer)
+    e.addBuffer(newBuffer)
     # Set reserved words for syntax highlighting on new buffer
     newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
     # Apply EditorConfig settings to the new buffer
     applyEditorConfigToBuffer(newBuffer, e.config)
     logDebug("editor", "vsplit: buffer added, buffers.len: " & $e.buffers.len)
-
-  # Note: New window's bufferList is initialized in window_manager.vsplit
-  # with only the new buffer (per-window tabs)
 
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
@@ -348,7 +349,7 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
       found = true
       break
   if not found:
-    e.buffers.add(newBuffer)
+    e.addBuffer(newBuffer)
     # Set reserved words for syntax highlighting on new buffer
     newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
     logDebug("editor", "vsplitWithBuffer: buffer added, buffers.len: " & $e.buffers.len)
@@ -387,7 +388,7 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
       found = true
       break
   if not found:
-    e.buffers.add(newBuffer)
+    e.addBuffer(newBuffer)
     # Set reserved words for syntax highlighting on new buffer
     newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
     # Apply EditorConfig settings to the new buffer
@@ -434,7 +435,7 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
       found = true
       break
   if not found:
-    e.buffers.add(newBuffer)
+    e.addBuffer(newBuffer)
     # Set reserved words for syntax highlighting on new buffer
     newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
     logDebug("editor", "hsplitWithBuffer: buffer added, buffers.len: " & $e.buffers.len)
@@ -458,17 +459,13 @@ proc enew*(e: Editor): Result[(), string] =
   let newBuffer = newTextBuffer()
 
   # Add the new buffer to the global buffer list
-  e.buffers.add(newBuffer)
+  e.addBuffer(newBuffer)
+  # Register in active window's per-window tab list
+  if newBuffer.id notin e.activeWindow.bufferIds:
+    e.activeWindow.bufferIds.add(newBuffer.id)
   # Set reserved words for syntax highlighting on new buffer
   newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
   logDebug("editor", "enew: buffer added, buffers.len: " & $e.buffers.len)
-
-  # Add the new buffer to the active window's bufferList
-  e.activeWindow.bufferList.add(newBuffer)
-  logDebug(
-    "editor",
-    "enew: buffer added to window bufferList, len: " & $e.activeWindow.bufferList.len,
-  )
 
   # Replace the buffer in the active window
   e.activeWindow.buffer = newBuffer
