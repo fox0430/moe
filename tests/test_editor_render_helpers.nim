@@ -32,6 +32,7 @@ import ../src/moepkg/editor_render_helpers as renderHelpers
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
   let config = newEditorConfig()
+  config.theme.kind = tkDefault
   let vr = newValidationResult()
   result = newEditor(config, vr)
 
@@ -955,6 +956,7 @@ suite "IndentInfo structure":
 suite "renderLineSegmentWithSelection - trailing space highlight":
   test "Normal mode highlights trailing spaces":
     let config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
@@ -982,6 +984,7 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
 
   test "Current line does not highlight trailing spaces":
     let config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
@@ -1009,6 +1012,7 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
 
   test "Help mode does not highlight trailing spaces":
     let config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
@@ -1036,6 +1040,7 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
 
   test "BufferManager mode does not highlight trailing spaces":
     let config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
@@ -1060,6 +1065,7 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
 
   test "DiffViewer mode does not highlight trailing spaces":
     let config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
@@ -1085,6 +1091,7 @@ suite "renderLineSegmentWithSelection - trailing space highlight":
 suite "renderLineSegmentWithSelection - full-width space highlight":
   test "Normal mode highlights full-width space":
     let config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.fullWidthSpace = true
@@ -1111,6 +1118,7 @@ suite "renderLineSegmentWithSelection - full-width space highlight":
 
   test "Help mode does not highlight full-width space":
     let config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.fullWidthSpace = true
@@ -1136,6 +1144,7 @@ suite "renderLineSegmentWithSelection - full-width space highlight":
 
   test "Debug mode does not highlight full-width space":
     let config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.fullWidthSpace = true
@@ -1162,6 +1171,7 @@ suite "renderLineSegmentWithSelection - full-width space highlight":
 suite "renderLineSegmentWithSelection - tab trailing space highlight":
   test "Normal mode highlights trailing tab":
     let config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
@@ -1189,6 +1199,7 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
 
   test "Current line does not highlight trailing tab":
     let config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
@@ -1216,6 +1227,7 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
 
   test "Help mode does not highlight trailing tab":
     let config = newEditorConfig()
+    config.theme.kind = tkDefault
     let vr = newValidationResult()
     var e = newEditor(config, vr)
     e.config.highlight.trailingSpaces = true
