@@ -939,14 +939,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
       of hrBuffer:
         discard e.switchToBuffer(r.bufferArg)
       of hrBufferDelete:
-        # Handle buffer delete (close window)
-        let shouldQuit = e.closeWindow()
-        if shouldQuit:
-          # Last buffer deleted, create a new empty buffer instead of quitting
-          let enewResult = e.enew()
-          if enewResult.isErr:
-            logError("handler", "Enew failed after buffer delete: " & enewResult.error)
-            e.state.statusMessage = "Error: " & enewResult.error
+        e.deleteCurrentBuffer()
       of hrStripWhitespace:
         # Handle strip trailing whitespace
         let count = r.strippedLineCount
