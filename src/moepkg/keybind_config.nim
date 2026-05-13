@@ -354,20 +354,39 @@ proc loadKeybindingsFromToml*(
           entryName & ".command", "(missing)", "command string (e.g. \"file.save\")"
         )
       else:
-        let commandId = binding["command"].getStr()
-        # Check command existence when registry has been populated
-        if registry.commandRegistry.len > 0 and commandId notin registry.commandRegistry:
-          vr.addError(entryName & ".command", commandId, "registered command name")
+        let commandName = binding["command"].getStr()
+        if registry.commandRegistry.hasKey(commandName):
+          # Reuse the registered Command so its real commandId/kind is preserved.
+          # Without this, the # dispatcher would look up the user-supplied name as commandId
+          # and fail to match any handler.
+          var cmd = registry.commandRegistry[commandName]
+          if cmd.kind != cmdType:
+            vr.addError(
+              entryName & ".command_type",
+              binding["command_type"].getStr(),
+              "command_type matching registered command \"" & commandName & "\"",
+            )
+          else:
+            if binding.hasKey("args"):
+              var args: seq[string] = @[]
+              for arg in binding["args"].getElems():
+                args.add(arg.getStr())
+              cmd.args = args
+            cmdOpt = some(cmd)
+        elif registry.commandRegistry.len > 0:
+          vr.addError(entryName & ".command", commandName, "registered command name")
         else:
+          # commandRegistry is empty (e.g. unit tests) — fall back to creating a
+          # Command from the user-supplied name.
           var args: seq[string] = @[]
           if binding.hasKey("args"):
             for arg in binding["args"].getElems():
               args.add(arg.getStr())
           let cmd = Command(
             kind: cmdType,
-            name: commandId,
-            description: commandId,
-            commandId: commandId,
+            name: commandName,
+            description: commandName,
+            commandId: commandName,
             args: args,
           )
           cmdOpt = some(cmd)
