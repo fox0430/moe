@@ -813,6 +813,133 @@ suite "KeybindConfig - Undo/Redo keybindings":
     check binding.isSome
     check binding.get.name == "redo"
 
+suite "KeybindConfig - resolves command name via commandRegistry":
+  test "registered alias preserves real commandId (bnext -> buffer.next.tab)":
+    let registry = newKeyBindingRegistry()
+    var vr = newValidationResult()
+    registry.setupDefaultBindings()
+
+    let tomlContent = """
+[[keybinding]]
+mode = "normal"
+key = "J"
+command_type = "action"
+command = "bnext"
+"""
+    let testPath = getTempDir() / "test_keybind_bnext.toml"
+    writeFile(testPath, tomlContent)
+    defer:
+      removeFile(testPath)
+
+    registry.loadKeybindingsFromToml(testPath, vr)
+
+    check not vr.hasErrors
+    let jKey = toKeyCombo('J')
+    let binding = registry.findBinding(EditorMode.Normal, jKey)
+    check binding.isSome
+    check binding.get.name == "bnext"
+    check binding.get.commandId == "buffer.next.tab"
+
+  test "registered alias preserves real commandId (bprev -> buffer.prev.tab)":
+    let registry = newKeyBindingRegistry()
+    var vr = newValidationResult()
+    registry.setupDefaultBindings()
+
+    let tomlContent = """
+[[keybinding]]
+mode = "normal"
+key = "K"
+command_type = "action"
+command = "bprev"
+"""
+    let testPath = getTempDir() / "test_keybind_bprev.toml"
+    writeFile(testPath, tomlContent)
+    defer:
+      removeFile(testPath)
+
+    registry.loadKeybindingsFromToml(testPath, vr)
+
+    check not vr.hasErrors
+    let kKey = toKeyCombo('K')
+    let binding = registry.findBinding(EditorMode.Normal, kKey)
+    check binding.isSome
+    check binding.get.commandId == "buffer.prev.tab"
+
+  test "args from toml override registered command args":
+    let registry = newKeyBindingRegistry()
+    var vr = newValidationResult()
+    registry.setupDefaultBindings()
+
+    # "bnext" is registered with args=@[]; verify TOML args win.
+    let tomlContent = """
+[[keybinding]]
+mode = "normal"
+key = "C-q"
+command_type = "action"
+command = "bnext"
+args = ["one", "two"]
+"""
+    let testPath = getTempDir() / "test_keybind_args_override.toml"
+    writeFile(testPath, tomlContent)
+    defer:
+      removeFile(testPath)
+
+    registry.loadKeybindingsFromToml(testPath, vr)
+
+    check not vr.hasErrors
+    let combo = toKeyCombo('q', ctrl = true)
+    let binding = registry.findBinding(EditorMode.Normal, combo)
+    check binding.isSome
+    check binding.get.commandId == "buffer.next.tab"
+    check binding.get.args == @["one", "two"]
+
+  test "unknown command name produces validation error":
+    let registry = newKeyBindingRegistry()
+    var vr = newValidationResult()
+    registry.setupDefaultBindings()
+
+    let tomlContent = """
+[[keybinding]]
+mode = "normal"
+key = "C-y"
+command_type = "action"
+command = "no.such.command"
+"""
+    let testPath = getTempDir() / "test_keybind_unknown.toml"
+    writeFile(testPath, tomlContent)
+    defer:
+      removeFile(testPath)
+
+    registry.loadKeybindingsFromToml(testPath, vr)
+
+    check vr.hasErrors
+    let combo = toKeyCombo('y', ctrl = true)
+    check registry.findBinding(EditorMode.Normal, combo).isNone
+
+  test "command_type mismatch with registered command produces error":
+    let registry = newKeyBindingRegistry()
+    var vr = newValidationResult()
+    registry.setupDefaultBindings()
+
+    # "find-char" is registered as ctOperatorPending, not ctAction
+    let tomlContent = """
+[[keybinding]]
+mode = "normal"
+key = "C-y"
+command_type = "action"
+command = "find-char"
+"""
+    let testPath = getTempDir() / "test_keybind_kind_mismatch.toml"
+    writeFile(testPath, tomlContent)
+    defer:
+      removeFile(testPath)
+
+    registry.loadKeybindingsFromToml(testPath, vr)
+
+    check vr.hasErrors
+    let combo = toKeyCombo('y', ctrl = true)
+    check registry.findBinding(EditorMode.Normal, combo).isNone
+
 suite "KeybindConfig - loadDefaultKeybindings":
   test "Does not crash":
     let registry = newKeyBindingRegistry()
