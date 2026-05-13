@@ -58,10 +58,10 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     e.processGotoLineResult(r, activeBuffer)
   of hrJumpToBuffer:
     # Handle jump to buffer with position (Ctrl-o/Ctrl-i across files)
-    let targetIdx = r.jumpBufferIndex
+    let targetIdx = e.bufferIndexById(r.jumpBufferId)
     let targetLine = r.jumpLine
     let targetCol = r.jumpColumn
-    if targetIdx >= 0 and targetIdx < e.buffers.len:
+    if targetIdx >= 0:
       e.switchToBufferByIndex(targetIdx)
       # Update cursor position after buffer switch
       let buf = e.activeBuffer()
@@ -76,8 +76,11 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
             min(targetCol, max(0, lineCharLen - 1))
       e.state.needsFullRedraw = true
       e.updateViewportForCursor(e.cursor)
+    else:
+      # Buffer was deleted since the jump was recorded
+      e.state.statusMessage = "Buffer no longer available"
   of hrFilerOpenFile:
-    # Open file from filer (Adds to window's bufferList as new tab)
+    # Open file from filer (Adds to the active window's per-window tab list)
     let activeWin = e.activeWindow
     activeWin.restoreOriginalBuffer(EditorMode.Filer)
     let editResult = e.editFile(r.filerFilePath)
@@ -219,10 +222,11 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     # Remove the split buffer from the buffer list and close the window
     if e.windowManager.windows.len > 1:
       let buf = activeWin.buffer
-      let idx = e.buffers.find(buf)
+      let idx = e.bufferIndexById(buf.id)
       if idx >= 0:
         evictGitCacheForBuffer(buf)
-        e.buffers.delete(idx)
+        e.deleteBufferAt(idx)
+        e.pruneBufferIdFromAllWindows(buf.id)
       discard e.closeWindow()
     return true
   of hrLogViewerRefresh:
@@ -260,10 +264,11 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     # Remove the split buffer from the buffer list and close the window
     if e.windowManager.windows.len > 1:
       let buf = activeWin.buffer
-      let idx = e.buffers.find(buf)
+      let idx = e.bufferIndexById(buf.id)
       if idx >= 0:
         evictGitCacheForBuffer(buf)
-        e.buffers.delete(idx)
+        e.deleteBufferAt(idx)
+        e.pruneBufferIdFromAllWindows(buf.id)
       discard e.closeWindow()
     return true
   of hrReferencesQuit:
@@ -358,14 +363,21 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         # and the buffer's pointer address won't alias a future buffer
         # via leftover Table entries.
         evictGitCacheForBuffer(deletedBuffer)
-        e.buffers.delete(bufferIndex)
+        let deletedId = deletedBuffer.id
+        e.deleteBufferAt(bufferIndex)
+        e.pruneBufferIdFromAllWindows(deletedId)
 
-        # If deleted buffer was shown in any window, switch to another buffer
+        # If deleted buffer was shown in any window, switch to another buffer.
+        # The outer `if e.buffers.len > 1` guarantees `e.buffers.len >= 1` here,
+        # so `e.buffers.len - 1 >= 0` and the index math below is always valid.
         for window in e.windowManager.windows:
           if window.buffer == deletedBuffer:
             # Switch to the first available buffer
             let newIdx = min(bufferIndex, e.buffers.len - 1)
-            window.buffer = e.buffers[newIdx]
+            let newBuf = e.buffers[newIdx]
+            window.buffer = newBuf
+            if newBuf.id notin window.bufferIds:
+              window.bufferIds.add(newBuf.id)
             window.cursor = BufferPosition(line: 0, column: 0)
             window.viewport.topLine = 0
             window.viewport.leftColumn = 0
@@ -374,6 +386,16 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         if e.activeBuffer() != e.executer.buffer:
           e.executer.buffer = e.activeBuffer()
           e.executer.motionController.executor.buffer = e.activeBuffer()
+
+        # Keep state.currentBufferId off the deleted buffer so subsequent
+        # Jump List (Ctrl-o/Ctrl-i) compares don't false-match a dead id.
+        # We don't go through syncActiveWindow here because the BufferManager
+        # overlay is about to replace activeWindow.buffer with its own listing
+        # TextBuffer right below — pointing currentBufferId at the underlying
+        # replacement buffer is what we want for the post-exit state.
+        if e.state.currentBufferId == deletedId:
+          let newIdx = min(bufferIndex, e.buffers.len - 1)
+          e.state.currentBufferId = e.buffers[newIdx].id
 
         # Update buffer manager entries and regenerate TextBuffer
         let activeWin = e.activeWindow
@@ -429,10 +451,11 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     # Remove the split buffer from the buffer list and close the window
     if e.windowManager.windows.len > 1:
       let buf = activeWin.buffer
-      let idx = e.buffers.find(buf)
+      let idx = e.bufferIndexById(buf.id)
       if idx >= 0:
         evictGitCacheForBuffer(buf)
-        e.buffers.delete(idx)
+        e.deleteBufferAt(idx)
+        e.pruneBufferIdFromAllWindows(buf.id)
       discard e.closeWindow()
     return true
   of hrDiffViewerQuit:
@@ -450,10 +473,11 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     # Remove the split buffer from the buffer list and close the window
     if e.windowManager.windows.len > 1:
       let buf = activeWin.buffer
-      let idx = e.buffers.find(buf)
+      let idx = e.bufferIndexById(buf.id)
       if idx >= 0:
         evictGitCacheForBuffer(buf)
-        e.buffers.delete(idx)
+        e.deleteBufferAt(idx)
+        e.pruneBufferIdFromAllWindows(buf.id)
       discard e.closeWindow()
     return true
   of hrConfigSaveConfig:

@@ -1462,7 +1462,7 @@ suite "Help viewer - split window open and close":
     let buf = activeWin.buffer
     let idx = e.buffers.find(buf)
     if idx >= 0:
-      e.buffers.delete(idx)
+      e.deleteBufferAt(idx)
     discard e.closeWindow()
 
     check e.windowManager.windows.len == 1

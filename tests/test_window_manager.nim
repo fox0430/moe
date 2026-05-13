@@ -30,7 +30,7 @@ proc createTestWindow(x, y, width, height: int, active = false): EditorWindow =
   discard buf.insertText(BufferPosition(line: 0, column: 0), "Test content")
   EditorWindow(
     buffer: buf,
-    bufferList: @[buf], # Initialize with buffer (per-window tabs)
+    bufferIds: @[buf.id],
     viewport:
       ViewPort(topLine: 0, leftColumn: 0, width: width, height: height, x: x, y: y),
     cursor: BufferPosition(line: 0, column: 0),
@@ -588,8 +588,8 @@ suite "EditorWindowManager - Integration":
     wm.switchToPrevWindow()
     check wm.activeWindowIndex == 2 # Wrapped back
 
-suite "EditorWindowManager - bufferList in splits":
-  test "vsplit initializes new window with single buffer in bufferList":
+suite "EditorWindowManager - bufferIds in splits":
+  test "vsplit initializes new window with single buffer in bufferIds":
     let wm = createSingleWindowManager(80, 24)
 
     let splitResult = wm.vsplit(
@@ -598,11 +598,11 @@ suite "EditorWindowManager - bufferList in splits":
 
     check splitResult.isOk
     check wm.windows.len == 2
-    # New window (index 0) should have bufferList with only the split buffer
-    check wm.windows[0].bufferList.len == 1
-    check wm.windows[0].bufferList[0] == wm.windows[0].buffer
+    # New window (index 0) should have bufferIds with only the split buffer's id
+    check wm.windows[0].bufferIds.len == 1
+    check wm.windows[0].bufferIds[0] == wm.windows[0].buffer.id
 
-  test "hsplit initializes new window with single buffer in bufferList":
+  test "hsplit initializes new window with single buffer in bufferIds":
     let wm = createSingleWindowManager(80, 24)
 
     let splitResult = wm.hsplit(
@@ -614,11 +614,10 @@ suite "EditorWindowManager - bufferList in splits":
 
     check splitResult.isOk
     check wm.windows.len == 2
-    # New window (index 0) should have bufferList with only the split buffer
-    check wm.windows[0].bufferList.len == 1
-    check wm.windows[0].bufferList[0] == wm.windows[0].buffer
+    check wm.windows[0].bufferIds.len == 1
+    check wm.windows[0].bufferIds[0] == wm.windows[0].buffer.id
 
-  test "vsplitWithBuffer initializes new window with provided buffer in bufferList":
+  test "vsplitWithBuffer initializes new window with provided buffer in bufferIds":
     let wm = createSingleWindowManager(80, 24)
     let newBuffer = newTextBuffer()
     discard
@@ -634,10 +633,10 @@ suite "EditorWindowManager - bufferList in splits":
     check splitResult.isOk
     check wm.windows.len == 2
     check wm.windows[0].buffer == newBuffer
-    check wm.windows[0].bufferList.len == 1
-    check wm.windows[0].bufferList[0] == newBuffer
+    check wm.windows[0].bufferIds.len == 1
+    check wm.windows[0].bufferIds[0] == newBuffer.id
 
-  test "hsplitWithBuffer initializes new window with provided buffer in bufferList":
+  test "hsplitWithBuffer initializes new window with provided buffer in bufferIds":
     let wm = createSingleWindowManager(80, 24)
     let newBuffer = newTextBuffer()
     discard
@@ -654,19 +653,19 @@ suite "EditorWindowManager - bufferList in splits":
     check splitResult.isOk
     check wm.windows.len == 2
     check wm.windows[0].buffer == newBuffer
-    check wm.windows[0].bufferList.len == 1
-    check wm.windows[0].bufferList[0] == newBuffer
+    check wm.windows[0].bufferIds.len == 1
+    check wm.windows[0].bufferIds[0] == newBuffer.id
 
-  test "Original window bufferList unchanged after split":
+  test "Original window bufferIds unchanged after split":
     let wm = createSingleWindowManager(80, 24)
-    let originalBufferListLen = wm.windows[0].bufferList.len
+    let originalLen = wm.windows[0].bufferIds.len
 
     discard wm.vsplit(
       wm.windows[0].buffer, wm.windows[0].viewport, BufferPosition(line: 0, column: 0)
     )
 
-    # Original window (now at index 1) bufferList should be unchanged
-    check wm.windows[1].bufferList.len == originalBufferListLen
+    # Original window (now at index 1) bufferIds should be unchanged
+    check wm.windows[1].bufferIds.len == originalLen
 
 suite "EditorWindowManager - Split Size Proportions":
   # vsplit size checks
@@ -1232,7 +1231,6 @@ suite "EditorWindowManager - swapWindows":
     wm.windows.add(
       EditorWindow(
         buffer: buf0,
-        bufferList: @[buf0],
         viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 3),
         active: true,
@@ -1241,7 +1239,6 @@ suite "EditorWindowManager - swapWindows":
     wm.windows.add(
       EditorWindow(
         buffer: buf1,
-        bufferList: @[buf1],
         viewport:
           ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 5),
@@ -1275,7 +1272,6 @@ suite "EditorWindowManager - swapWindows":
     wm.windows.add(
       EditorWindow(
         buffer: buf0,
-        bufferList: @[buf0],
         viewport: ViewPort(x: 0, y: 0, width: 80, height: 11, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: true,
@@ -1284,7 +1280,6 @@ suite "EditorWindowManager - swapWindows":
     wm.windows.add(
       EditorWindow(
         buffer: buf1,
-        bufferList: @[buf1],
         viewport:
           ViewPort(x: 0, y: 12, width: 80, height: 12, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),
@@ -1315,7 +1310,6 @@ suite "EditorWindowManager - swapWindows":
     wm.windows.add(
       EditorWindow(
         buffer: buf0,
-        bufferList: @[buf0],
         viewport: ViewPort(x: 0, y: 0, width: 26, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: false,
@@ -1324,7 +1318,6 @@ suite "EditorWindowManager - swapWindows":
     wm.windows.add(
       EditorWindow(
         buffer: buf1,
-        bufferList: @[buf1],
         viewport:
           ViewPort(x: 27, y: 0, width: 26, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),
@@ -1334,7 +1327,6 @@ suite "EditorWindowManager - swapWindows":
     wm.windows.add(
       EditorWindow(
         buffer: buf2,
-        bufferList: @[buf2],
         viewport:
           ViewPort(x: 54, y: 0, width: 26, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),
@@ -1368,7 +1360,6 @@ suite "EditorWindowManager - swapWindows":
     wm.windows.add(
       EditorWindow(
         buffer: buf0,
-        bufferList: @[buf0],
         viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 2, leftColumn: 3),
         cursor: BufferPosition(line: 2, column: 4),
         active: true,
@@ -1377,7 +1368,6 @@ suite "EditorWindowManager - swapWindows":
     wm.windows.add(
       EditorWindow(
         buffer: buf1,
-        bufferList: @[buf1],
         viewport:
           ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 7),
@@ -1408,7 +1398,6 @@ suite "EditorWindowManager - swapWindows":
     wm.windows.add(
       EditorWindow(
         buffer: buf0,
-        bufferList: @[buf0],
         viewport: ViewPort(x: 0, y: 0, width: 39, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),
         active: true,
@@ -1417,7 +1406,6 @@ suite "EditorWindowManager - swapWindows":
     wm.windows.add(
       EditorWindow(
         buffer: buf1,
-        bufferList: @[buf1],
         viewport:
           ViewPort(x: 40, y: 0, width: 40, height: 24, topLine: 0, leftColumn: 0),
         cursor: BufferPosition(line: 0, column: 0),

@@ -554,7 +554,7 @@ proc vsplit*(
   # Create new window for left half
   let newWindow = EditorWindow(
     buffer: newBuffer,
-    bufferList: @[newBuffer], # Initialize with current buffer only
+    bufferIds: @[newBuffer.id], # Per-window tabs start with the split buffer only
     viewport: ViewPort(
       topLine: newTopLine,
       leftColumn: newLeftColumn,
@@ -630,7 +630,7 @@ proc vsplitWithBuffer*(
   # Create new window for left half with the provided buffer
   let newWindow = EditorWindow(
     buffer: newBuffer,
-    bufferList: @[newBuffer], # Initialize with current buffer only
+    bufferIds: @[newBuffer.id], # Per-window tabs start with the provided buffer only
     viewport: ViewPort(
       topLine: newTopLine,
       leftColumn: newLeftColumn,
@@ -739,7 +739,7 @@ proc hsplit*(
   # In single status line mode, top window has no status line
   let newWindow = EditorWindow(
     buffer: newBuffer,
-    bufferList: @[newBuffer], # Initialize with current buffer only
+    bufferIds: @[newBuffer.id], # Per-window tabs start with the split buffer only
     viewport: ViewPort(
       topLine: newTopLine,
       leftColumn: newLeftColumn,
@@ -828,7 +828,7 @@ proc hsplitWithBuffer*(
   # Create new window for top half with the provided buffer
   let newWindow = EditorWindow(
     buffer: newBuffer,
-    bufferList: @[newBuffer], # Initialize with current buffer only
+    bufferIds: @[newBuffer.id], # Per-window tabs start with the provided buffer only
     viewport: ViewPort(
       topLine: newTopLine,
       leftColumn: newLeftColumn,

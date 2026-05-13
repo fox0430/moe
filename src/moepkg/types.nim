@@ -70,7 +70,10 @@ type
   EditorWindow* = ref object
     ## Represents a split window with its own buffer and viewport
     buffer*: TextBuffer
-    bufferList*: seq[TextBuffer] # Window-local buffer list
+    bufferIds*: seq[BufferId]
+      # Window-local tab list, stored as stable BufferIds.
+      # Resolve via Editor.bufferById; entries pointing at deleted buffers
+      # are pruned in the bdelete path.
     viewport*: ViewPort
     cursor*: BufferPosition # Window-local cursor position
     active*: bool # Whether this is the active window
@@ -275,7 +278,7 @@ type
       # Minimum milliseconds between debug buffer updates (default: 500)
 
   JumpPosition* = object ## Represents a position in the jump list
-    bufferIndex*: int # Buffer index in the buffer list
+    bufferId*: BufferId # BufferId of the target buffer (stable across buffer deletes)
     line*: int # Line number
     column*: int # Column position
 
@@ -580,7 +583,7 @@ type
     # Jump list (Ctrl-o / Ctrl-i)
     jumpList*: seq[JumpPosition] # List of jump positions
     jumpListIndex*: int # Current position in jump list (-1 when not navigating)
-    currentBufferIndex*: int # Index of the current buffer (for jump list)
+    currentBufferId*: BufferId # BufferId of the current buffer (for jump list)
     # Debug buffer tracking for auto-refresh
     debugBuffer*: TextBuffer
       # Reference to the debug buffer for auto-refresh (nil if none)

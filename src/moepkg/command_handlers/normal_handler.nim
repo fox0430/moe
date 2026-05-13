@@ -121,7 +121,7 @@ type
     of nmrLspDocumentLink:
       discard
     of nmrJumpToBuffer:
-      nmrJumpBufferIndex*: int # Target buffer index
+      nmrJumpBufferId*: BufferId # Target BufferId
       nmrJumpLine*: int # Target line number
       nmrJumpColumn*: int # Target column number
     of nmrBufferNext:
@@ -860,7 +860,7 @@ proc handleNormalModeKey*(
       let pos = buffer.changeList[buffer.changeListIndex]
       buffer.changeListIndex = max(0, buffer.changeListIndex - 1)
       let jumpPos = JumpPosition(
-        bufferIndex: state.currentBufferIndex, line: pos.line, column: pos.column
+        bufferId: state.currentBufferId, line: pos.line, column: pos.column
       )
       return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
     of "changelist.next":
@@ -875,7 +875,7 @@ proc handleNormalModeKey*(
       buffer.changeListIndex += 1
       let pos = buffer.changeList[buffer.changeListIndex]
       let jumpPos = JumpPosition(
-        bufferIndex: state.currentBufferIndex, line: pos.line, column: pos.column
+        bufferId: state.currentBufferId, line: pos.line, column: pos.column
       )
       return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
     of "bookmark.toggle":
@@ -886,14 +886,14 @@ proc handleNormalModeKey*(
       if next.isNone:
         return NormalModeResult(kind: nmrError, errorMessage: "No bookmarks")
       let jumpPos =
-        JumpPosition(bufferIndex: state.currentBufferIndex, line: next.get, column: 0)
+        JumpPosition(bufferId: state.currentBufferId, line: next.get, column: 0)
       return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
     of "bookmark.prev":
       let prev = buffer.findPrevBookmark(state.cursor.line)
       if prev.isNone:
         return NormalModeResult(kind: nmrError, errorMessage: "No bookmarks")
       let jumpPos =
-        JumpPosition(bufferIndex: state.currentBufferIndex, line: prev.get, column: 0)
+        JumpPosition(bufferId: state.currentBufferId, line: prev.get, column: 0)
       return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
     of "bookmark.clear":
       buffer.clearBookmarks()
@@ -906,7 +906,7 @@ proc handleNormalModeKey*(
       # If this is the first jump back, record current position and start from end
       if state.jumpListIndex < 0:
         let currentPos = JumpPosition(
-          bufferIndex: state.currentBufferIndex,
+          bufferId: state.currentBufferId,
           line: state.cursor.line,
           column: state.cursor.column,
         )
@@ -918,10 +918,10 @@ proc handleNormalModeKey*(
       let pos = state.jumpList[state.jumpListIndex]
 
       # Check if we need to switch buffers
-      if pos.bufferIndex != state.currentBufferIndex:
+      if pos.bufferId != state.currentBufferId:
         return NormalModeResult(
           kind: nmrJumpToBuffer,
-          nmrJumpBufferIndex: pos.bufferIndex,
+          nmrJumpBufferId: pos.bufferId,
           nmrJumpLine: pos.line,
           nmrJumpColumn: pos.column,
         )
@@ -942,10 +942,10 @@ proc handleNormalModeKey*(
       let pos = state.jumpList[state.jumpListIndex]
 
       # Check if we need to switch buffers
-      if pos.bufferIndex != state.currentBufferIndex:
+      if pos.bufferId != state.currentBufferId:
         return NormalModeResult(
           kind: nmrJumpToBuffer,
-          nmrJumpBufferIndex: pos.bufferIndex,
+          nmrJumpBufferId: pos.bufferId,
           nmrJumpLine: pos.line,
           nmrJumpColumn: pos.column,
         )

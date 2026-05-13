@@ -19,7 +19,7 @@
 
 ## Core buffer types: TextBuffer, BufferChange, FoldState, and supporting enums.
 
-import std/[algorithm, deques, options, times, unicode]
+import std/[algorithm, deques, hashes, options, times, unicode]
 
 import ../[encoding, highlight, primitives, unicode_utils]
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
@@ -29,6 +29,13 @@ export
   ColumnRange
 
 type
+  BufferId* = distinct int
+    ## Unique identifier for a TextBuffer.
+    ## Stable for the lifetime of a process (not persisted across restarts).
+    ## `BufferId(0)` is reserved as the "unassigned" sentinel — `genBufferId`
+    ## starts handing out ids from 1 so that the zero-initialized default of
+    ## `state.currentBufferId` can't accidentally collide with a real buffer.
+
   LineMarkerKind* = enum
     ## Per-line marker classification stored in `TextBuffer.lineMarkers`.
     ## Renderer-side "empty" is represented by Option[LineMarkerKind] = none.
@@ -159,7 +166,7 @@ type
     cursorPos*: Option[BufferPosition] # Cursor position before the transaction
 
   TextBuffer* = ref object
-    id*: int # Unique buffer identifier
+    id*: BufferId # Unique buffer identifier
     backend*: BufferBackend
     filePath*: Option[string]
     readOnly*: bool
@@ -245,14 +252,26 @@ type
 
 const AutoBackendLargeFileThreshold* = 10 * 1024 * 1024 # 10 MB
 
-var nextBufferId = 0
-
-proc genBufferId(): int =
-  result = nextBufferId
-  inc nextBufferId
+var nextBufferId = 1
+  ## Starts at 1 so `BufferId(0)` is reserved as a sentinel for the
+  ## zero-initialized default of `state.currentBufferId`. See `BufferId`.
 
 var configuredBackend: BufferBackend = GapBuffer
 var autoBackendMode: bool = false
+
+proc `==`*(a, b: BufferId): bool {.borrow.}
+proc `$`*(id: BufferId): string {.borrow.}
+proc hash*(id: BufferId): Hash {.borrow.}
+
+proc genBufferId(): BufferId =
+  result = BufferId(nextBufferId)
+  inc nextBufferId
+
+proc resetBufferIdCounterForTests*() =
+  ## Reset the global `nextBufferId` counter back to its initial value.
+  ## Intended for tests that want deterministic ids across runs; production
+  ## code must never call this — recycled ids would alias live buffers.
+  nextBufferId = 1
 
 proc setConfiguredBackend*(backend: BufferBackend) =
   configuredBackend = backend
