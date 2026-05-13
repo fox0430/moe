@@ -165,6 +165,28 @@ suite "parseKeyString":
     check vjj[0] == sjj[0]
     check vjj[1] == sjj[1]
 
+  test "Shift+lowercase letter normalizes to uppercase without Shift (#2597)":
+    # Terminals deliver Shift+j as bare 'J' without a Shift modifier, so the
+    # parsed form has to match that representation.
+    let keys = parseKeyString("S-j")
+    check keys.len == 1
+    check keys[0].isSpecial == false
+    check keys[0].char == "J"
+    check kmShift notin keys[0].modifiers
+
+  test "Shift+uppercase letter equals uppercase letter alone (#2597)":
+    let sj = parseKeyString("S-J")
+    let j = parseKeyString("J")
+    check sj.len == 1
+    check sj[0] == j[0]
+
+  test "Shift+lowercase equals Shift+uppercase equals uppercase (#2597)":
+    let sLower = parseKeyString("S-k")
+    let sUpper = parseKeyString("S-K")
+    let upper = parseKeyString("K")
+    check sLower[0] == sUpper[0]
+    check sUpper[0] == upper[0]
+
 suite "keySeqToDisplayString":
   test "Single key":
     let keys = parseKeyString("a")
@@ -220,6 +242,32 @@ suite "addRuntimeMapping - key to command":
     check registry.runtimeMappings[Normal].len == 1
     check registry.runtimeMappings[Normal][0].kind == rmkCommand
     check registry.runtimeMappings[Normal][0].commandName == "file.save"
+
+  test "Map S-j to bnext resolves as command, not key sequence (#2597)":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    let err = registry.addRuntimeMapping(Normal, "S-j", "bnext")
+    check err == ""
+    check registry.runtimeMappings[Normal].len == 1
+    let m = registry.runtimeMappings[Normal][0]
+    check m.kind == rmkCommand
+    check m.commandName == "bnext"
+    # S-j must normalize to 'J' (no Shift modifier) so it matches actual
+    # terminal events for Shift+j.
+    check m.triggerKeys.len == 1
+    check m.triggerKeys[0].char == "J"
+    check kmShift notin m.triggerKeys[0].modifiers
+
+  test "Map J to bprev resolves as command (#2597)":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    let err = registry.addRuntimeMapping(Normal, "K", "bprev")
+    check err == ""
+    let m = registry.runtimeMappings[Normal][^1]
+    check m.kind == rmkCommand
+    check m.commandName == "bprev"
 
   test "Map overwrites existing":
     var registry = newKeyBindingRegistry()

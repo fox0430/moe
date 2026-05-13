@@ -2274,6 +2274,49 @@ number = true
     check not vr.hasErrors
     check config.keyMapping.insert["jj"] == "Escape"
 
+  test "S-j to bnext passes validation (#2597)":
+    let toml = """
+[KeyMapping.Normal]
+"S-j" = "bnext"
+"S-k" = "bprev"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.normal["S-j"] == "bnext"
+    check config.keyMapping.normal["S-k"] == "bprev"
+
+  test "J to bnext passes validation (#2597)":
+    let toml = """
+[KeyMapping.Normal]
+"J" = "bnext"
+"K" = "bprev"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.normal["J"] == "bnext"
+    check config.keyMapping.normal["K"] == "bprev"
+
+  test "Unknown identifier-like RHS reports error (#2597)":
+    # "bnxt" looks like a command name but is not registered; previously
+    # silently fell through to a key sequence of b,n,x,t.
+    let toml = """
+[KeyMapping.Normal]
+"S-j" = "bnxt"
+"""
+    let (_, vr) = loadFromTomlString(toml)
+    check vr.hasErrors
+    let errorNames = vr.errors.mapIt(it.name)
+    check "KeyMapping.Normal.S-j" in errorNames
+
+  test "Vim-style 2-char concat (jj/gd) still allowed as key sequence":
+    let toml = """
+[KeyMapping.Insert]
+"C-a" = "jj"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.insert["C-a"] == "jj"
+
   test "All key mappings":
     let toml = """
 [KeyMapping.All]
@@ -2318,13 +2361,13 @@ number = true
     let toml = """
 [KeyMapping.VisualLine]
 "C-c" = "Escape"
-"C-y" = "yank"
+"C-y" = "visual-yank"
 """
     let (config, vr) = loadFromTomlString(toml)
     check not vr.hasErrors
     check config.keyMapping.visualLine.len == 2
     check config.keyMapping.visualLine["C-c"] == "Escape"
-    check config.keyMapping.visualLine["C-y"] == "yank"
+    check config.keyMapping.visualLine["C-y"] == "visual-yank"
 
   test "VisualBlock key mappings":
     let toml = """
@@ -2340,13 +2383,13 @@ number = true
     let toml = """
 [KeyMapping.VisualAll]
 "C-c" = "Escape"
-"C-y" = "yank"
+"C-y" = "visual-yank"
 """
     let (config, vr) = loadFromTomlString(toml)
     check not vr.hasErrors
     check config.keyMapping.visualAll.len == 2
     check config.keyMapping.visualAll["C-c"] == "Escape"
-    check config.keyMapping.visualAll["C-y"] == "yank"
+    check config.keyMapping.visualAll["C-y"] == "visual-yank"
 
   test "VisualAll with mode-specific coexistence":
     let toml = """
