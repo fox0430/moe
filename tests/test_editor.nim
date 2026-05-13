@@ -1894,3 +1894,166 @@ suite "Editor - BufferManager delete keeps state.currentBufferId fresh":
 
     check e.bufferById(f1Id).isNone
     check e.state.currentBufferId == f2Id # unchanged
+
+suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
+  test "switches the active window to a survivor when other buffers exist":
+    # Regression: :bd used to call closeWindow, closing the window even when
+    # other buffers were still in the buffer list.
+    let e = createTestEditor()
+    let f1 = "/tmp/moe_test_bd_multi_1.txt"
+    let f2 = "/tmp/moe_test_bd_multi_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    discard e.editFile(f2)
+    # e.buffers = [initial, f1, f2], active window shows f2
+    check e.buffers.len == 3
+    let f2Id = e.activeBuffer().id
+    let windowCountBefore = e.windowManager.windows.len
+
+    e.deleteCurrentBuffer()
+
+    check e.windowManager.windows.len == windowCountBefore # window stays open
+    check e.buffers.len == 2 # f2 removed from the buffer list
+    check e.bufferById(f2Id).isNone
+    check e.activeBuffer().id != f2Id # active window moved to another buffer
+
+  test "replaces the last buffer with a fresh [No Name] enew buffer":
+    let e = createTestEditor()
+    # The initial editor has exactly one buffer
+    check e.buffers.len == 1
+    let originalId = e.activeBuffer().id
+
+    e.deleteCurrentBuffer()
+
+    check e.windowManager.windows.len == 1 # window stays open
+    check e.buffers.len == 1 # enew added a replacement
+    check e.bufferById(originalId).isNone
+    check e.activeBuffer().id != originalId
+    check e.activeBuffer().filePath.isNone # [No Name]
+
+  test "leaves other windows showing different buffers untouched":
+    let e = createTestEditor()
+    let f1 = "/tmp/moe_test_bd_otherwin_1.txt"
+    let f2 = "/tmp/moe_test_bd_otherwin_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    discard e.vsplit() # active becomes a new window
+    discard e.editFile(f2) # active window switches to f2
+    check e.windowManager.windows.len == 2
+    let f2Id = e.activeBuffer().id
+
+    # Find the non-active window; it must not be on f2 for this test to mean
+    # anything.
+    let activeIdx = e.windowManager.activeWindowIndex
+    let otherIdx = if activeIdx == 0: 1 else: 0
+    let otherBufferRef = e.windowManager.windows[otherIdx].buffer
+    check otherBufferRef.id != f2Id
+
+    e.deleteCurrentBuffer()
+
+    check e.windowManager.windows.len == 2
+    check e.bufferById(f2Id).isNone
+    check e.windowManager.windows[otherIdx].buffer == otherBufferRef # untouched
+
+  test "switches every window showing the deleted buffer to a survivor":
+    let e = createTestEditor()
+    let f1 = "/tmp/moe_test_bd_shared_1.txt"
+    let f2 = "/tmp/moe_test_bd_shared_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    discard e.editFile(f2)
+    discard e.vsplit()
+    discard e.editFile(f2)
+    # After this sequence both windows display the same f2 TextBuffer
+    # (`editFile` reuses the existing buffer entry by path).
+    check e.windowManager.windows.len == 2
+    let f2Id = e.activeBuffer().id
+    check e.windowManager.windows[0].buffer.id == f2Id
+    check e.windowManager.windows[1].buffer.id == f2Id
+
+    e.deleteCurrentBuffer()
+
+    check e.bufferById(f2Id).isNone
+    for w in e.windowManager.windows:
+      check w.buffer.id != f2Id # every window moved off f2
+
+  test "prunes the deleted buffer's id from every window's bufferIds":
+    let e = createTestEditor()
+    let f1 = "/tmp/moe_test_bd_prune_1.txt"
+    let f2 = "/tmp/moe_test_bd_prune_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    discard e.editFile(f2)
+    let f2Id = e.activeBuffer().id
+    check f2Id in e.activeWindow.bufferIds
+
+    e.deleteCurrentBuffer()
+
+    for w in e.windowManager.windows:
+      check f2Id notin w.bufferIds
+
+  test "moves state.currentBufferId off the deleted buffer's id":
+    # Mirrors the BufferManager-delete regression: a stale currentBufferId
+    # silently mis-routes the Jump List (Ctrl-o/Ctrl-i).
+    let e = createTestEditor()
+    let f1 = "/tmp/moe_test_bd_currentid_1.txt"
+    let f2 = "/tmp/moe_test_bd_currentid_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    discard e.editFile(f2)
+    let f2Id = e.activeBuffer().id
+    check e.state.currentBufferId == f2Id
+
+    e.deleteCurrentBuffer()
+
+    check e.bufferById(f2Id).isNone
+    check e.state.currentBufferId != f2Id
+    check e.bufferById(e.state.currentBufferId).isSome
+
+  test "processResult(hrBufferDelete) routes through deleteCurrentBuffer":
+    # Regression: hrBufferDelete used to call closeWindow() directly.
+    let e = createTestEditor()
+    let f1 = "/tmp/moe_test_bd_wired_1.txt"
+    let f2 = "/tmp/moe_test_bd_wired_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    discard e.editFile(f2)
+    let f2Id = e.activeBuffer().id
+    let windowCountBefore = e.windowManager.windows.len
+
+    let r = HandlerResult(kind: hrBufferDelete, forceBufferDelete: false)
+    discard e.processResult(r, e.activeBuffer())
+
+    check e.windowManager.windows.len == windowCountBefore # window NOT closed
+    check e.bufferById(f2Id).isNone
+    check e.activeBuffer().id != f2Id

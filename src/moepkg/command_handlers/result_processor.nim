@@ -357,30 +357,12 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     if e.buffers.len > 1:
       # Can only delete if there's more than one buffer
       if bufferIndex >= 0 and bufferIndex < e.buffers.len:
-        let deletedBuffer = e.buffers[bufferIndex]
-        # Drop this buffer's git diff / branch cache entries before the
-        # buffer is removed, so a pending async `git diff` is terminated
-        # and the buffer's pointer address won't alias a future buffer
-        # via leftover Table entries.
-        evictGitCacheForBuffer(deletedBuffer)
+        let deletedBuffer = e.removeBufferAt(bufferIndex)
         let deletedId = deletedBuffer.id
-        e.deleteBufferAt(bufferIndex)
-        e.pruneBufferIdFromAllWindows(deletedId)
 
-        # If deleted buffer was shown in any window, switch to another buffer.
-        # The outer `if e.buffers.len > 1` guarantees `e.buffers.len >= 1` here,
-        # so `e.buffers.len - 1 >= 0` and the index math below is always valid.
-        for window in e.windowManager.windows:
-          if window.buffer == deletedBuffer:
-            # Switch to the first available buffer
-            let newIdx = min(bufferIndex, e.buffers.len - 1)
-            let newBuf = e.buffers[newIdx]
-            window.buffer = newBuf
-            if newBuf.id notin window.bufferIds:
-              window.bufferIds.add(newBuf.id)
-            window.cursor = BufferPosition(line: 0, column: 0)
-            window.viewport.topLine = 0
-            window.viewport.leftColumn = 0
+        # The outer `if e.buffers.len > 1` guarantees `e.buffers.len >= 1` here.
+        let newBuf = e.buffers[min(bufferIndex, e.buffers.len - 1)]
+        e.redirectWindowsFromBuffer(deletedBuffer, newBuf)
 
         # Update executor if current buffer was deleted
         if e.activeBuffer() != e.executer.buffer:
@@ -394,8 +376,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         # TextBuffer right below — pointing currentBufferId at the underlying
         # replacement buffer is what we want for the post-exit state.
         if e.state.currentBufferId == deletedId:
-          let newIdx = min(bufferIndex, e.buffers.len - 1)
-          e.state.currentBufferId = e.buffers[newIdx].id
+          e.state.currentBufferId = newBuf.id
 
         # Update buffer manager entries and regenerate TextBuffer
         let activeWin = e.activeWindow
@@ -763,12 +744,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     let activeBufLocal = e.activeBuffer()
     e.toggleFileTree(r.enterFileTreePath, activeBufLocal)
   of hrBufferDelete:
-    let shouldQuit = e.closeWindow()
-    if shouldQuit:
-      let enewResult = e.enew()
-      if enewResult.isErr:
-        logError("handler", "Enew failed after buffer delete: " & enewResult.error)
-        e.state.statusMessage = "Error: " & enewResult.error
+    e.deleteCurrentBuffer()
   of hrExecCommand:
     # @: - repeat last Command mode command
     # Execute via handleCommandModeKeyCombo which has full result processing

@@ -254,6 +254,76 @@ proc isBufferShared*(e: Editor, buffer: TextBuffer): bool =
   # Buffer is not shared across multiple windows (0 or 1 window)
   return false
 
+proc removeBufferAt*(e: Editor, idx: int): TextBuffer =
+  ## Drop the buffer at `idx` from `e.buffers`, evict its git diff/branch cache
+  ## entries, and prune its id from every window's per-window tab list. Returns
+  ## the deleted `TextBuffer` ref so callers can still use it to identify which
+  ## windows were displaying it.
+  ##
+  ## Caller is responsible for repointing those windows at a survivor buffer
+  ## (see `redirectWindowsFromBuffer`); this proc does not touch
+  ## `window.buffer`.
+  result = e.buffers[idx]
+  # Evict before removal so any in-flight async `git diff` is terminated and
+  # the buffer's pointer can't alias a future buffer via leftover Table entries.
+  evictGitCacheForBuffer(result)
+  e.deleteBufferAt(idx)
+  e.pruneBufferIdFromAllWindows(result.id)
+
+proc redirectWindowsFromBuffer*(
+    e: Editor, deletedBuffer: TextBuffer, newBuf: TextBuffer
+) =
+  ## Switch every window currently showing `deletedBuffer` to `newBuf`,
+  ## register `newBuf.id` in those windows' tab lists, and reset their cursor
+  ## and viewport.
+  for window in e.windowManager.windows:
+    if window.buffer == deletedBuffer:
+      window.buffer = newBuf
+      if newBuf.id notin window.bufferIds:
+        window.bufferIds.add(newBuf.id)
+      window.cursor = BufferPosition(line: 0, column: 0)
+      window.viewport.topLine = 0
+      window.viewport.leftColumn = 0
+
+proc deleteCurrentBuffer*(e: Editor) =
+  ## Delete the active buffer from the buffer list (Vim `:bd` semantics).
+  ## Every window that was showing it switches to another buffer — windows
+  ## themselves stay open. If this was the only buffer, a fresh empty
+  ## `[No Name]` buffer takes its place.
+  ##
+  ## The modified-buffer check is the caller's responsibility (handled in
+  ## `executeBufferDelete`).
+  let bufferIndex = e.bufferIndexById(e.activeBuffer().id)
+  if bufferIndex < 0:
+    return
+  let deletedBuffer = e.removeBufferAt(bufferIndex)
+
+  let newBuf =
+    if e.buffers.len == 0:
+      # Last buffer just went away — give the active window a fresh `[No Name]`
+      # buffer. If `enew` fails here we're past the irreversible removal:
+      # windows keep their refs to the deleted buffer alive but it's no longer
+      # reachable via id. Surface the error and bail; subsequent input will
+      # operate on the orphan buffer until the user reloads.
+      let enewResult = e.enew()
+      if enewResult.isErr:
+        logError("editor", "Enew failed after buffer delete: " & enewResult.error)
+        e.state.statusMessage = "Error: " & enewResult.error
+        return
+      # `enew` has already pointed the active window at the new buffer, so the
+      # redirect below is a no-op for it but still catches any other windows
+      # that were on the deleted buffer.
+      e.activeBuffer()
+    else:
+      # Same index now refers to what used to be the next buffer, clamped.
+      e.buffers[min(bufferIndex, e.buffers.len - 1)]
+
+  e.redirectWindowsFromBuffer(deletedBuffer, newBuf)
+  # `syncActiveWindow` realigns `state.currentBufferId` to the active window's
+  # buffer, so no explicit currentBufferId reassignment is needed here.
+  e.syncActiveWindow()
+  e.setActiveWindowScreenCursor(e.activeWindow)
+
 proc addCommandAlias*(
     e: Editor, alias: string, action: CommandLineAction
 ): Result[(), string] =
