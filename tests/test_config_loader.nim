@@ -1392,6 +1392,66 @@ suite "Config - loadThemeFromToml":
     let result = loadThemeFromToml(testFile)
     check result.isOk
 
+  test "Unknown color key is reported in ValidationResult":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_unk_vr_" & $testFileCounter & ".toml"
+    writeFile(
+      testFile, "[Colors]\nforeground = \"#ffffff\"\nnonExistentKey = \"#123456\"\n"
+    )
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let result = loadThemeFromToml(testFile, vr)
+    check result.isOk
+    check vr.hasErrors
+    check vr.errors.len == 1
+    check vr.errors[0].kind == iikUnknownKey
+    check "nonExistentKey" in vr.errors[0].name
+
+  test "Invalid color value is reported in ValidationResult":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_badcolor_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nkeyword = \"notacolor\"\n")
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let result = loadThemeFromToml(testFile, vr)
+    check result.isOk
+    check vr.hasErrors
+    check vr.errors.len == 1
+    check vr.errors[0].kind == iikInvalidValue
+    check "keyword" in vr.errors[0].name
+    check vr.errors[0].val == "notacolor"
+
+  test "Invalid foreground/background values are reported":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_badfgbg_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nforeground = \"badfg\"\nbackground = \"badbg\"\n")
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let result = loadThemeFromToml(testFile, vr)
+    check result.isOk
+    check vr.errors.len == 2
+    let names = vr.errors.mapIt(it.name)
+    check names.anyIt("foreground" in it)
+    check names.anyIt("background" in it)
+
+  test "Valid theme produces no validation errors":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_valid_vr_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nforeground = \"#ffffff\"\nkeyword = \"#0000ff\"\n")
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let result = loadThemeFromToml(testFile, vr)
+    check result.isOk
+    check not vr.hasErrors
+
 suite "Config - loadTheme":
   test "tkDefault returns DefaultColors":
     var config = newEditorConfig()
@@ -1432,6 +1492,30 @@ suite "Config - initTheme":
     config.theme.kind = tkConfig
     config.theme.path = "/nonexistent/theme.toml"
     initTheme(config)
+
+  test "Non-existent theme file is reported in ValidationResult":
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = "/nonexistent/theme.toml"
+    var vr = newValidationResult()
+    initTheme(config, vr)
+    check vr.hasErrors
+    check vr.errors.anyIt("Theme.path" in it.name)
+
+  test "Invalid keys in theme file are reported via initTheme":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_inittheme_bad_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nforeground = \"#ffffff\"\nbogusKey = \"#abcdef\"\n")
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.theme.kind = tkConfig
+    config.theme.path = testFile
+    var vr = newValidationResult()
+    initTheme(config, vr)
+    check vr.hasErrors
+    check vr.errors.anyIt(it.kind == iikUnknownKey and "bogusKey" in it.name)
     # Should not crash; falls back to default theme
 
 suite "Config - saveConfigToToml":

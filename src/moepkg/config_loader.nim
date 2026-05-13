@@ -52,6 +52,9 @@ proc addError*(vr: var ValidationResult, name, val, expected: string) =
     InvalidItem(kind: iikInvalidValue, name: name, val: val, expected: expected)
   )
 
+proc addUnknownKey*(vr: var ValidationResult, name: string) =
+  vr.errors.add(InvalidItem(kind: iikUnknownKey, name: name))
+
 proc hasErrors*(vr: ValidationResult): bool =
   vr.errors.len > 0
 
@@ -143,7 +146,7 @@ proc checkUnknownKeys(
   ## Report unknown keys in a TOML table section.
   for key, _ in table:
     if key notin validKeys:
-      vr.errors.add(InvalidItem(kind: iikUnknownKey, name: fullKey(section, key)))
+      vr.addUnknownKey(fullKey(section, key))
 
 proc loadBool(
     table: TomlTableRef,
@@ -1044,7 +1047,7 @@ proc loadLspConfig(
       if value.kind == TomlValueKind.Table:
         config.servers[key] = loadLspServerConfig(value.getTable(), vr, "Lsp." & key)
       else:
-        vr.errors.add(InvalidItem(kind: iikUnknownKey, name: fullKey(section, key)))
+        vr.addUnknownKey(fullKey(section, key))
 
 proc loadKeyMappingModeConfig(
     table: TomlTableRef,
@@ -1851,9 +1854,19 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
   else:
     return none(EditorColorPairIndex)
 
-proc loadThemeFromToml*(path: string): Result[ThemeColors, string] =
-  ## Load theme colors from a TOML file
-  ## Returns ThemeColors based on DefaultColors with overrides from the file
+const themeColorExpected = "color hex (\"#RRGGBB\") or \"termDefault\""
+
+proc loadThemeFromToml*(
+    path: string, vr: var ValidationResult
+): Result[ThemeColors, string] =
+  ## Load theme colors from a TOML file.
+  ## Returns ThemeColors based on DefaultColors with overrides from the file.
+  ## Invalid keys/values inside the [Colors] section are recorded in `vr`
+  ## (and skipped) instead of aborting the load.
+  ## File-level errors (file not found, parse failure, missing [Colors]
+  ## section) are returned as `Result.err` and are NOT recorded in `vr`.
+  ## Callers that want those errors surfaced should record them themselves
+  ## (e.g. `initTheme` records them under `Theme.path`).
 
   let expandedPath = path.expandTilde
   if not fileExists(expandedPath):
@@ -1873,20 +1886,27 @@ proc loadThemeFromToml*(path: string): Result[ThemeColors, string] =
     return Result[ThemeColors, string].err("Theme file missing [Colors] section")
 
   let colorsTable = toml["Colors"].getTable()
+  const section = "Theme.Colors"
 
   # Get default foreground/background for syntax colors
   var defaultFg = colors[EditorColorPairIndex.default].foreground.rgb
   var defaultBg = colors[EditorColorPairIndex.default].background.rgb
 
   if colorsTable.hasKey("foreground"):
-    let fgResult = parseThemeColor(colorsTable["foreground"].getStr())
+    let raw = colorsTable["foreground"].getStr()
+    let fgResult = parseThemeColor(raw)
     if fgResult.isOk:
       defaultFg = fgResult.get
+    else:
+      vr.addError(fullKey(section, "foreground"), raw, themeColorExpected)
 
   if colorsTable.hasKey("background"):
-    let bgResult = parseThemeColor(colorsTable["background"].getStr())
+    let raw = colorsTable["background"].getStr()
+    let bgResult = parseThemeColor(raw)
     if bgResult.isOk:
       defaultBg = bgResult.get
+    else:
+      vr.addError(fullKey(section, "background"), raw, themeColorExpected)
 
   # Update default color pair
   colors[EditorColorPairIndex.default] = ColorPair(
@@ -1910,6 +1930,7 @@ proc loadThemeFromToml*(path: string): Result[ThemeColors, string] =
     let colorStr = value.getStr()
     let rgbResult = parseThemeColor(colorStr)
     if rgbResult.isErr:
+      vr.addError(fullKey(section, key), colorStr, themeColorExpected)
       continue
 
     let rgb = rgbResult.get
@@ -1917,6 +1938,7 @@ proc loadThemeFromToml*(path: string): Result[ThemeColors, string] =
     let indexOpt = toEditorColorPairIndex(key)
 
     if indexOpt.isNone:
+      vr.addUnknownKey(fullKey(section, key))
       continue
 
     let index = indexOpt.get
@@ -1931,27 +1953,54 @@ proc loadThemeFromToml*(path: string): Result[ThemeColors, string] =
 
   return Result[ThemeColors, string].ok(colors)
 
-proc loadTheme*(config: EditorConfig): Result[ThemeColors, string] =
-  ## Load theme based on config settings
+proc loadThemeFromToml*(path: string): Result[ThemeColors, string] =
+  ## Backwards-compatible wrapper that discards validation errors.
+  var vr = newValidationResult()
+  loadThemeFromToml(path, vr)
+
+proc loadTheme*(
+    config: EditorConfig, vr: var ValidationResult
+): Result[ThemeColors, string] =
+  ## Load theme based on config settings.
+  ## Invalid keys/values from user theme files are recorded in `vr`.
 
   case config.theme.kind
   of tkDefault:
     return Result[ThemeColors, string].ok(DefaultColors)
   of tkConfig:
-    return loadThemeFromToml(config.theme.path)
+    return loadThemeFromToml(config.theme.path, vr)
   of tkVscode:
     return loadVSCodeTheme()
 
-proc initTheme*(config: EditorConfig) =
-  ## Initialize the theme based on configuration
-  ## Falls back to default theme on error
+proc loadTheme*(config: EditorConfig): Result[ThemeColors, string] =
+  ## Backwards-compatible wrapper that discards validation errors.
+  var vr = newValidationResult()
+  loadTheme(config, vr)
 
-  let themeResult = loadTheme(config)
+proc initTheme*(config: EditorConfig, vr: var ValidationResult) =
+  ## Initialize the theme based on configuration.
+  ## Falls back to default theme on error; both file-level errors and any
+  ## invalid keys/values within the theme file are recorded in `vr`.
+  ## For `tkVscode`, the underlying error message is recorded under
+  ## `Theme.kind`. `tkDefault` never fails.
+
+  let themeResult = loadTheme(config, vr)
   if themeResult.isOk:
     setThemeColors(themeResult.get)
   else:
-    # Log error and use default
+    case config.theme.kind
+    of tkConfig:
+      vr.addError("Theme.path", config.theme.path, themeResult.error)
+    of tkVscode:
+      vr.addError("Theme.kind", "vscode", themeResult.error)
+    of tkDefault:
+      discard
     initDefaultTheme()
+
+proc initTheme*(config: EditorConfig) =
+  ## Backwards-compatible wrapper that discards validation errors.
+  var vr = newValidationResult()
+  initTheme(config, vr)
 
 # Configuration saving
 
