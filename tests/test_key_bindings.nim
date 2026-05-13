@@ -835,23 +835,27 @@ suite "KeyCombo - parseKeyCombo additional cases":
     check result.isSome
     check result.get.special == skEscape
 
-  test "Parse Shift modifier":
+  test "Parse Shift modifier normalizes to uppercase (#2597)":
+    # Terminals deliver Shift+a as bare 'A' without a Shift modifier, so the
+    # parsed form is normalized to match.
     let result = parseKeyCombo("S-a")
     check result.isSome
-    check kmShift in result.get.modifiers
-    check result.get.char == "a"
+    check result.get.char == "A"
+    check kmShift notin result.get.modifiers
 
-  test "Parse SHIFT long form":
+  test "Parse SHIFT long form normalizes to uppercase (#2597)":
     let result = parseKeyCombo("SHIFT-x")
     check result.isSome
-    check kmShift in result.get.modifiers
+    check result.get.char == "X"
+    check kmShift notin result.get.modifiers
 
-  test "Parse all three modifiers":
+  test "Parse all three modifiers normalizes Shift (#2597)":
     let result = parseKeyCombo("C-M-S-x")
     check result.isSome
     check kmCtrl in result.get.modifiers
     check kmAlt in result.get.modifiers
-    check kmShift in result.get.modifiers
+    check kmShift notin result.get.modifiers
+    check result.get.char == "X"
 
   test "Parse empty string returns none":
     check parseKeyCombo("").isNone

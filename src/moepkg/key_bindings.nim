@@ -326,6 +326,13 @@ proc parseKeyCombo*(s: string): Option[KeyCombo] =
     if combo.char[0] notin {'a' .. 'z', 'A' .. 'Z'}:
       return none(KeyCombo)
 
+  # Normalize Shift+<letter>: terminals deliver the uppercase character without
+  # a separate Shift modifier (see `eventToKeyCombo`).
+  if kmShift in combo.modifiers and not combo.isSpecial and combo.char.len == 1:
+    if combo.char[0] in {'a' .. 'z', 'A' .. 'Z'}:
+      combo.char = combo.char.toUpperAscii
+      combo.modifiers.excl(kmShift)
+
   return some(combo)
 
 proc keyComboToString*(keyCombo: KeyCombo): string =
@@ -2716,6 +2723,34 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     Command(
       name: "buffer-prev-tab",
       description: "Switch to previous buffer tab",
+      kind: ctAction,
+      commandId: "buffer.prev.tab",
+      args: @[],
+    )
+  )
+  # Vim-style :bnext / :bprev aliases so they can be used as KeyMapping targets
+  registry.registerCommand(
+    Command(
+      name: "bnext",
+      description: "Switch to next buffer (:bnext)",
+      kind: ctAction,
+      commandId: "buffer.next.tab",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "bprev",
+      description: "Switch to previous buffer (:bprev)",
+      kind: ctAction,
+      commandId: "buffer.prev.tab",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "bprevious",
+      description: "Switch to previous buffer (:bprevious)",
       kind: ctAction,
       commandId: "buffer.prev.tab",
       args: @[],

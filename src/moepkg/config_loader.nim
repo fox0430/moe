@@ -1066,11 +1066,30 @@ proc loadKeyMappingModeConfig(
       )
       continue
 
-    # RHS (target) validation: command name or key sequence
+    # RHS (target) validation: command name or key sequence.
+    # An identifier-like token (e.g. "bnext") that is not a known command would
+    # otherwise silently fall through to Vim-style concatenated parsing
+    # (b,n,e,x,t). Reject that explicitly so the user notices the typo.
     let rhs = value.getStr()
     let rhsKeys = parseKeyString(rhs)
-    if rhsKeys.len == 0 and rhs notin validCommands:
+    if rhs in validCommands:
+      discard
+    elif rhsKeys.len == 0:
       vr.addError(fullKey(section, key), rhs, "valid command name or key sequence")
+      continue
+    elif rhsKeys.len == rhs.len and rhs.len >= 3 and
+        rhs.allCharsInSet({'a' .. 'z', 'A' .. 'Z', '0' .. '9', '_'}):
+      # Vim-concat fallback was used: every char in rhs became its own KeyCombo.
+      # For 3+ char identifier-like tokens this almost always means the user
+      # typed an unknown command name rather than a multi-key sequence (2-char
+      # Vim sequences like "jj"/"gd" fall below the len >= 3 gate and stay
+      # accepted as key sequences).
+      vr.addError(
+        fullKey(section, key),
+        rhs,
+        "known command name (single identifier-like targets are treated as commands; " &
+          "use space-separated keys like \"b n e x t\" for a key sequence)",
+      )
       continue
 
     target[key] = rhs
