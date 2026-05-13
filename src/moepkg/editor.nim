@@ -560,8 +560,12 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       of cmk24bit: cm24bit
       of cmkNone: cmNone
 
-  # Initialize theme from configuration
-  initTheme(editorConfig)
+  # Accumulator for validation errors discovered during initialization.
+  var configVr = vr
+
+  # Initialize theme from configuration. Invalid keys/values in the user theme
+  # file are recorded in configVr so they surface in the startup status message.
+  initTheme(editorConfig, configVr)
 
   # Create registries and configuration first
   let
@@ -575,7 +579,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   keyRegistry.setupDefaultBindings
 
   # Load custom key_bindings from TOML
-  var configVr = vr
   keyRegistry.loadDefaultKeybindings(configVr)
 
   # Apply key mappings from config (moerc.toml [KeyMapping] section)
