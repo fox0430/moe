@@ -498,77 +498,279 @@ Special mode sections (`Filer`, `LogViewer`, `Help`, `BufferManager`, `BackupMan
 
 #### Available commands
 
+Commands are grouped by category below. Any command name listed here can be used as the right-hand side of a `[KeyMapping]` entry.
+
+##### File / buffer / window
+
 | Command | Description |
 |:----|:----|
 | save | Save file |
-| save-and-quit | Save and quit |
+| save-and-quit | Save file and quit |
 | quit-force | Quit without saving |
 | close-window | Close current window |
 | file-new | Create new empty buffer |
 | file-open | Open file (enter filer) |
 | file-close | Close current buffer |
 | filer-open | Open file explorer |
-| undo | Undo |
-| redo | Redo |
+| buffer-next-tab | Switch to next buffer tab |
+| buffer-prev-tab | Switch to previous buffer tab |
+| window-next | Switch to next window |
+| window-prev | Switch to previous window |
+| window-increase-height | Increase window height |
+| window-decrease-height | Decrease window height |
+| window-increase-width | Increase window width |
+| window-decrease-width | Decrease window width |
+| window-equalize | Equalize all window sizes |
+| window-swap | Swap window with next window |
+
+##### Mode switching
+
+| Command | Description |
+|:----|:----|
+| switch-to-normal | Switch to normal mode |
+| switch-to-insert | Switch to insert mode |
+| switch-to-visual | Switch to visual mode |
+| switch-to-visual-line | Switch to visual line mode |
+| switch-to-visual-block | Switch to visual block mode |
+| switch-to-replace | Switch to replace mode |
+| switch-to-command | Switch to command mode |
+| switch-to-search | Switch to search mode (forward) |
+| switch-to-search-backward | Switch to search mode (backward) |
+
+##### Entering insert mode
+
+| Command | Description |
+|:----|:----|
+| append | Append after cursor |
+| append-end | Append at end of line |
+| insert-first-non-blank | Insert at first non-blank character |
+| open-line-below | Open new line below and enter insert mode |
+| open-line-above | Open new line above and enter insert mode |
+
+##### Cursor motion
+
+| Command | Description |
+|:----|:----|
 | move-left | Move cursor left |
 | move-right | Move cursor right |
 | move-up | Move cursor up |
 | move-down | Move cursor down |
-| page-up | Page up |
-| page-down | Page down |
-| half-page-up | Half page up |
-| half-page-down | Half page down |
-| line-home | Move to line start |
-| line-end | Move to line end |
-| line-first-non-blank | Move to first non-blank |
+| page-up | Scroll page up |
+| page-down | Scroll page down |
+| half-page-up | Scroll half page up |
+| half-page-down | Scroll half page down |
+| line-home | Move to beginning of line |
+| line-end | Move to end of line |
+| line-first-non-blank | Move to first non-whitespace character |
+| line-last-non-blank | Move to last non-whitespace character |
+| next-line-first-non-blank | Move to next line's first non-whitespace character |
+| previous-line-first-non-blank | Move to previous line's first non-whitespace character |
 | goto-first-line | Go to first line |
 | goto-last-line | Go to last line |
-| word-forward | Move to next word |
-| word-backward | Move to previous word |
-| word-end | Move to end of word |
+| viewport-high | Move to top of viewport |
+| viewport-middle | Move to middle of viewport |
+| viewport-low | Move to bottom of viewport |
+| word-forward | Move to start of next word |
+| word-backward | Move to start of previous word |
+| word-end | Move to end of next word |
+| word-end-backward | Move to end of previous word |
 | paragraph-forward | Move to next paragraph |
 | paragraph-backward | Move to previous paragraph |
-| search-next | Next search match |
-| search-prev | Previous search match |
+| match-bracket | Jump to matching bracket (%) |
+| jump-back | Jump to previous position in jump list |
+| jump-forward | Jump to next position in jump list |
+| changelist-prev | Jump to previous change position |
+| changelist-next | Jump to next change position |
+| find-char | Find character forward |
+| find-char-backward | Find character backward |
+| till-char | Till character forward |
+| till-char-backward | Till character backward |
+
+##### Scroll
+
+| Command | Description |
+|:----|:----|
+| scroll-cursor-top | Scroll cursor to top of screen |
+| scroll-cursor-center | Scroll cursor to center of screen |
+| scroll-cursor-bottom | Scroll cursor to bottom of screen |
+
+##### Editing
+
+| Command | Description |
+|:----|:----|
+| undo | Undo last change |
+| redo | Redo last undone change |
+| delete-char | Delete character at cursor |
+| delete-char-before | Delete character before cursor |
+| delete-word | Delete word |
 | delete-line | Delete line |
-| yank-line | Yank line |
+| delete-to-end | Delete to end of line |
+| change-word | Change word |
+| change-to-end | Change to end of line |
+| replace-char | Replace character |
+| substitute-char | Substitute character at cursor |
+| substitute-line | Substitute line |
+| toggle-case | Toggle case of character at cursor |
+| autoindent-line | Auto indent current line |
+| repeat-last-change | Repeat last change |
+| join-lines | Join current line with next line |
+| increment-number | Increment number at or after cursor |
+| decrement-number | Decrement number at or after cursor |
+
+##### Operators (require a motion or text object)
+
+| Command | Description |
+|:----|:----|
+| operator-change | Change operator |
+| operator-delete | Delete operator |
+| operator-yank | Yank operator |
+| operator-indent | Indent operator |
+| operator-outdent | Outdent operator |
+| operator-uppercase | Uppercase operator |
+| operator-lowercase | Lowercase operator |
+
+##### Text objects (used after an operator)
+
+| Command | Description |
+|:----|:----|
+| textobject-inner | Inner text object |
+| textobject-around | Around text object |
+| textobject-word | Word text object |
+| textobject-paren | Parenthesis text object |
+| textobject-brace | Brace text object |
+| textobject-bracket | Bracket text object |
+| textobject-quote-single | Single quote text object |
+| textobject-quote-double | Double quote text object |
+
+##### Yank / paste / clipboard
+
+| Command | Description |
+|:----|:----|
+| yank-line | Yank (copy) line |
 | paste-after | Paste after cursor |
 | paste-before | Paste before cursor |
 | clipboard-copy | Copy selected text to system clipboard |
 | clipboard-paste | Paste text from system clipboard |
 | clipboard-cut | Cut selected text to system clipboard |
-| join-lines | Join lines |
-| indent-line | Indent line |
-| dedent-line | Dedent line |
-| fold-open | Open fold |
-| fold-close | Close fold |
-| fold-toggle | Toggle fold |
-| increment-number | Increment number |
-| decrement-number | Decrement number |
+
+##### Search
+
+| Command | Description |
+|:----|:----|
+| search-next | Find next search result |
+| search-prev | Find previous search result |
+| search-next-select | Select next search match (gn) |
+| search-prev-select | Select previous search match (gN) |
+| search-word-forward | Search for word under cursor forward (*) |
+| search-word-backward | Search for word under cursor backward (#) |
+
+##### Bookmarks
+
+| Command | Description |
+|:----|:----|
+| bookmark-toggle | Toggle bookmark on current line |
+| bookmark-next | Jump to next bookmark |
+| bookmark-prev | Jump to previous bookmark |
+| bookmark-clear | Clear all bookmarks in current buffer |
+
+##### Folds
+
+| Command | Description |
+|:----|:----|
+| fold-open | Open fold at cursor |
+| fold-close | Close fold at cursor |
+| fold-toggle | Toggle fold at cursor |
+| fold-open-all | Open all folds |
+| fold-close-all | Close all folds |
+| fold-create | Create fold from selection |
+| fold-delete | Delete fold at cursor |
+| fold-delete-all | Delete all folds |
+
+##### Visual mode
+
+| Command | Description |
+|:----|:----|
+| visual-move-left | Move left in visual mode |
+| visual-move-right | Move right in visual mode |
+| visual-move-up | Move up in visual mode |
+| visual-move-down | Move down in visual mode |
+| visual-move-home | Move to beginning of line in visual mode |
+| visual-move-end | Move to end of line in visual mode |
+| visual-move-firstnonblank | Move to first non-blank character in visual mode |
+| visual-move-firstline | Move to first line in visual mode |
+| visual-move-lastline | Move to last line in visual mode |
+| visual-move-word | Move to next word in visual mode |
+| visual-move-word-back | Move to previous word in visual mode |
+| visual-move-word-end | Move to end of word in visual mode |
+| visual-move-word-end-backward | Move to end of previous word in visual mode |
+| visual-move-paragraph-forward | Move to next paragraph in visual mode |
+| visual-move-paragraph-backward | Move to previous paragraph in visual mode |
+| visual-yank | Yank visual selection |
+| visual-delete | Delete visual selection |
+| visual-change | Delete selection and enter insert mode |
+| visual-paste | Delete selection and paste register content |
+| visual-indent | Indent visual selection |
+| visual-dedent | Dedent visual selection |
+| visual-joinlines | Join lines in visual selection |
+| visual-uppercase | Convert visual selection to uppercase |
+| visual-lowercase | Convert visual selection to lowercase |
+| visual-toggle-case | Toggle case of visual selection |
+| visual-replace-char | Replace visual selection with character |
+| visual-surround-char | Surround visual selection with character |
+| visual-swap-selection | Swap cursor to other end of selection |
+| visual-to-insert | Enter insert mode from visual selection |
+| visual-block-append | Append after visual block selection |
+
+##### LSP
+
+| Command | Description |
+|:----|:----|
+| lsp-goto-definition | Go to definition (LSP) |
+| lsp-goto-declaration | Go to declaration (LSP) |
+| lsp-goto-type-definition | Go to type definition (LSP) |
+| lsp-goto-implementation | Go to implementation (LSP) |
+| lsp-find-references | Find all references (LSP) |
+| lsp-hover | Show hover information (LSP) |
+| lsp-rename | Rename symbol (LSP) |
+| lsp-document-symbol | Show document symbols (LSP) |
+| lsp-document-link | Follow document link at cursor (LSP) |
+| lsp-selection-range | Expand selection range (LSP) |
+| lsp-codelens-execute | Execute CodeLens on current line (LSP) |
+| lsp-call-hierarchy | Show call hierarchy (LSP) |
+| lsp-call-hierarchy-outgoing | Show outgoing call hierarchy (LSP) |
+
+##### Git navigation
+
+| Command | Description |
+|:----|:----|
+| navigate-git-next | Next git change |
+| navigate-git-prev | Previous git change |
+| navigate-conflict-next | Next git merge conflict |
+| navigate-conflict-prev | Previous git merge conflict |
+
+##### Macro / register
+
+| Command | Description |
+|:----|:----|
 | macro-record | Start/stop macro recording |
 | macro-play | Play macro from register |
 | register-select | Select register for next command |
-| window-next | Switch to next window |
-| window-prev | Switch to previous window |
-| quickrun | Run QuickRun |
-| lsp-goto-definition | LSP go to definition |
-| lsp-goto-declaration | LSP go to declaration |
-| lsp-goto-type-definition | LSP go to type definition |
-| lsp-goto-implementation | LSP go to implementation |
-| lsp-find-references | LSP find references |
-| lsp-hover | LSP hover info |
-| lsp-rename | LSP rename symbol |
-| lsp-document-symbol | LSP document symbols |
-| lsp-document-link | LSP follow document link |
-| lsp-selection-range | LSP selection range |
-| lsp-codelens-execute | LSP execute CodeLens |
-| lsp-call-hierarchy | LSP incoming call hierarchy |
-| lsp-call-hierarchy-outgoing | LSP outgoing call hierarchy |
-| buffer-next-tab | Next buffer tab |
-| buffer-prev-tab | Previous buffer tab |
-| insert-backspace | Delete character before cursor (Insert mode) |
-| insert-delete | Delete character at cursor (Insert mode) |
-| insert-newline | Insert newline (Insert mode) |
+
+##### Insert-mode keys
+
+| Command | Description |
+|:----|:----|
+| insert-backspace | Delete character before cursor (insert mode) |
+| insert-delete | Delete character at cursor (insert mode) |
+| insert-newline | Insert newline (insert mode) |
+
+##### Miscellaneous
+
+| Command | Description |
+|:----|:----|
+| quickrun | Run current buffer |
+| show-char-info | Show ASCII/Unicode value of character under cursor |
+| open-uri | Open URI/file under cursor |
 
 #### Application order
 
