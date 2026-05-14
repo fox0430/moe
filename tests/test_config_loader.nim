@@ -914,29 +914,29 @@ suite "Config Validation - Persist section":
   test "Valid Persist config passes validation":
     let tomlStr = """
 [Persist]
-exCommand = true
-exCommandHistoryLimit = 500
+commandHistory = true
+commandHistoryLimit = 500
 search = true
 searchHistoryLimit = 500
 cursorPosition = true
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check not vr.hasErrors
-    check config.persist.exCommand == true
-    check config.persist.exCommandHistoryLimit == 500
+    check config.persist.commandHistory == true
+    check config.persist.commandHistoryLimit == 500
     check config.persist.search == true
     check config.persist.searchHistoryLimit == 500
     check config.persist.cursorPosition == true
 
-  test "Invalid exCommandHistoryLimit (zero) is detected":
+  test "Invalid commandHistoryLimit (zero) is detected":
     let tomlStr = """
 [Persist]
-exCommandHistoryLimit = 0
+commandHistoryLimit = 0
 """
     let (config, vr) = loadFromTomlString(tomlStr)
     check vr.hasErrors
-    check "Persist.exCommandHistoryLimit" in vr.errors[0].name
-    check config.persist.exCommandHistoryLimit == 1000 # Default value
+    check "Persist.commandHistoryLimit" in vr.errors[0].name
+    check config.persist.commandHistoryLimit == 1000 # Default value
 
   test "Invalid searchHistoryLimit (negative) is detected":
     let tomlStr = """
@@ -2400,6 +2400,37 @@ number = true
     let (config, vr) = loadFromTomlString(toml)
     check not vr.hasErrors
     check config.keyMapping.insert["C-a"] == "jj"
+
+  test "Short Command mode command aliases bd/q/wq pass validation (#2597)":
+    # PR #2598 had registered only bnext/bprev/bprevious, so 1-2 char aliases
+    # like `bd`, `q`, `wq` silently fell through to Vim concat. They are now
+    # registered as Commands and must be accepted as command-name targets.
+    let toml = """
+[KeyMapping.Normal]
+"D" = "bd"
+"Q" = "q"
+"F2" = "wq"
+"X" = "bdelete"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.normal["D"] == "bd"
+    check config.keyMapping.normal["Q"] == "q"
+    check config.keyMapping.normal["F2"] == "wq"
+    check config.keyMapping.normal["X"] == "bdelete"
+
+  test "Unknown 2-char RHS is still accepted as key sequence (#2597 policy)":
+    # Policy decision: 2-char Vim concat (`jj`, `gd` etc.) is preserved for
+    # backwards compat. Unknown 2-char tokens like `bx` therefore still pass
+    # validation as a key sequence (`b` then `x`). Only 3+ char identifier-
+    # like unknown tokens are rejected so users notice command typos.
+    let toml = """
+[KeyMapping.Normal]
+"K" = "bx"
+"""
+    let (config, vr) = loadFromTomlString(toml)
+    check not vr.hasErrors
+    check config.keyMapping.normal["K"] == "bx"
 
   test "All key mappings":
     let toml = """

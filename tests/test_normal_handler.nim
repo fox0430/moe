@@ -1616,6 +1616,45 @@ suite "NormalModeHandler - Macro Edge Cases":
     check r.kind == nmrHandled
     check state.statusMessage == "No previous Command mode command"
 
+suite "NormalModeHandler - Command mode command alias dispatch (#2597)":
+  test "K mapped to bdelete dispatches via exec.cmdline.* bridge":
+    # Issue #2597 follow-up: a key mapped to `bdelete` must reach the
+    # command-line parser (which performs the modified-buffer safety check)
+    # rather than being parsed as a key sequence.
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    discard
+      handler.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "K", "bdelete")
+
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let editor = createTestEditor(buf, state, viewport, handler.keyBindingRegistry)
+    let keyCombo = KeyCombo(isSpecial: false, char: "K", modifiers: {})
+
+    let r = handler.handleNormalModeKey(editor, keyCombo)
+
+    check r.kind == nmrExecCommand
+    check r.execCommandText == "bdelete"
+    check r.execCommandCount == 1
+
+  test "D mapped to bd dispatches the short alias verbatim":
+    # `bd` is a single short alias (no pre-existing Command shadow), so the
+    # bridge must forward "bd" — not "b" or "bdelete" — to the command-line
+    # parser.
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    discard handler.keyBindingRegistry.addRuntimeMapping(EditorMode.Normal, "D", "bd")
+
+    let state = createTestState()
+    let viewport = createTestViewport()
+    let editor = createTestEditor(buf, state, viewport, handler.keyBindingRegistry)
+    let keyCombo = KeyCombo(isSpecial: false, char: "D", modifiers: {})
+
+    let r = handler.handleNormalModeKey(editor, keyCombo)
+
+    check r.kind == nmrExecCommand
+    check r.execCommandText == "bd"
+
 suite "NormalModeHandler - updateCursorToJumpPosition":
   test "Jump to buffer with single empty line":
     let buf = newTextBuffer()

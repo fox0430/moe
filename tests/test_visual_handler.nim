@@ -680,3 +680,44 @@ suite "VisualModeHandler - Error Handling":
 
     # Should handle gracefully
     check result.kind == vmrHandled or result.kind == vmrError
+
+suite "VisualModeHandler - Command mode command alias bridge":
+  test "xmap K to bdelete dispatches via exec.cmdline.* bridge":
+    # The bridge must fire from Visual mode too — without it,
+    # `xnoremap K = "bdelete"` would route through commandRegistry.execute
+    # with an unregistered `exec.cmdline.bdelete` commandId and error out.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    discard
+      handler.keyBindingRegistry.addRuntimeMapping(EditorMode.Visual, "K", "bdelete")
+
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    initSelection(state, buf, vskChar)
+    let viewport = createTestViewport()
+    let keyCombo = KeyCombo(isSpecial: false, char: "K", modifiers: {})
+
+    let r =
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+
+    check r.kind == vmrExecCommand
+    check r.execCommandText == "bdelete"
+
+  test "xmap D to bd preserves the short alias verbatim":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let handler = createTestHandler(buf)
+    discard handler.keyBindingRegistry.addRuntimeMapping(EditorMode.Visual, "D", "bd")
+
+    let state = createTestState()
+    state.mode = EditorMode.Visual
+    initSelection(state, buf, vskChar)
+    let viewport = createTestViewport()
+    let keyCombo = KeyCombo(isSpecial: false, char: "D", modifiers: {})
+
+    let r =
+      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+
+    check r.kind == vmrExecCommand
+    check r.execCommandText == "bd"

@@ -22,7 +22,7 @@
 ## This module handles visual selection and provides the core selection
 ## functionality for Visual mode
 
-import std/options
+import std/[options, strutils]
 
 import pkg/results
 
@@ -37,6 +37,9 @@ type
     vmrUnhandled
     vmrWaitingForInput ## Waiting for additional input (e.g., replace char)
     vmrLspSelectionRange ## Execute LSP selection range
+    vmrExecCommand
+      ## Command mode command alias bridge — run `:<alias>` via the
+      ## command-line parser
     vmrError
 
   VisualModeResult* = object ## Result of visual mode command execution
@@ -49,6 +52,10 @@ type
       discard
     of vmrLspSelectionRange:
       discard
+    of vmrExecCommand:
+      execCommandText*: string
+        ## Visual mode has no count prefix, so the dispatcher always
+        ## forwards count = 1 to the command-line parser.
     of vmrError:
       errorMessage*: string
 
@@ -247,7 +254,23 @@ proc handleVisualModeKey*(
 
   let cmd = binding.get
 
-  # Check for LSP commands that need special handling
+  # Special-case action dispatch — mirrors the `of ctAction` arm in
+  # `normal_handler.handleNormalModeKey` so all three mode handlers funnel
+  # the exec.cmdline.* bridge (and other action-only commandIds like
+  # `lsp.selection.range`) through one place.
+  if cmd.kind == ctAction:
+    # Command mode command alias bridge: `exec.cmdline.<alias>` runs
+    # `:<alias>` via the full command-line parser so safety checks
+    # (modified-buffer guard etc.) fire. Visual mode has no in-progress
+    # buffer transaction to commit, so just forward the alias to the
+    # dispatcher.
+    if cmd.commandId.startsWith(ExecCmdlinePrefix):
+      let aliasText = cmd.commandId[ExecCmdlinePrefix.len ..^ 1]
+      return VisualModeResult(kind: vmrExecCommand, execCommandText: aliasText)
+
+  # LSP selection range can also be reached via ctTextObject / ctOperator /
+  # ctCustom bindings, so the check is kept separate from the ctAction arm
+  # above.
   if cmd.kind in {ctAction, ctTextObject, ctOperator, ctCustom}:
     if cmd.commandId == "lsp.selection.range":
       return VisualModeResult(kind: vmrLspSelectionRange)

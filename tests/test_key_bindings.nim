@@ -290,6 +290,78 @@ suite "KeyCombo - stringToKeyCombo":
     check parsed.isSome
     check parsed.get == original
 
+  test "stringToKeyCombo <S-Tab> resolves to BackTab (#2597)":
+    let result = stringToKeyCombo("<S-Tab>")
+    check result.isSome
+    check result.get.isSpecial
+    check result.get.special == skBackTab
+    check kmShift notin result.get.modifiers
+
+  test "stringToKeyCombo <C-Up> resolves to skUp + Ctrl (#2597)":
+    let result = stringToKeyCombo("<C-Up>")
+    check result.isSome
+    check result.get.isSpecial
+    check result.get.special == skUp
+    check kmCtrl in result.get.modifiers
+
+  test "stringToKeyCombo <M-F3> resolves to F3 + Alt (#2597)":
+    let result = stringToKeyCombo("<M-F3>")
+    check result.isSome
+    check result.get.isSpecial
+    check result.get.special == skFunction
+    check result.get.fnNum == 3
+    check kmAlt in result.get.modifiers
+
+  test "keyComboToString emits modifiers on special keys (#2597)":
+    let ctrlUp = KeyCombo(isSpecial: true, special: skUp, fnNum: 0, modifiers: {kmCtrl})
+    check keyComboToString(ctrlUp) == "<C-Up>"
+    let altF3 =
+      KeyCombo(isSpecial: true, special: skFunction, fnNum: 3, modifiers: {kmAlt})
+    check keyComboToString(altF3) == "<M-F3>"
+
+  test "keyComboToString skBackTab serializes as <S-Tab> (#2597)":
+    let bt = KeyCombo(isSpecial: true, special: skBackTab, fnNum: 0, modifiers: {})
+    check keyComboToString(bt) == "<S-Tab>"
+
+  test "stringToKeyCombo round-trip preserves modifier+special (#2597)":
+    let cases =
+      @["<S-Tab>", "<C-Up>", "<M-F3>", "<C-M-Right>", "<S-PageDown>", "<C-Enter>"]
+    for s in cases:
+      let parsed = stringToKeyCombo(s)
+      check parsed.isSome
+      check keyComboToString(parsed.get) == s
+
+  test "stringToKeyCombo <Space> resolves to literal space (#2597)":
+    # parseKeyCombo accepts SPACE; parseAngleBracketBody must as well so
+    # `<Space>` parses to the same combo as a bare " ".
+    let result = stringToKeyCombo("<Space>")
+    check result.isSome
+    check not result.get.isSpecial
+    check result.get.char == " "
+
+  test "stringToKeyCombo rejects out-of-range function keys (#2597)":
+    # parseKeyCombo limits to F1..F12. parseAngleBracketBody must follow suit
+    # so both parsers agree on what counts as a valid function key.
+    check stringToKeyCombo("<F0>").isNone
+    check stringToKeyCombo("<F13>").isNone
+    check stringToKeyCombo("<F99>").isNone
+    check stringToKeyCombo("<F1>").isSome
+    check stringToKeyCombo("<F12>").isSome
+
+  test "stringToKeyCombo rejects <S-Space>/<C-Space> like parseKeyCombo":
+    # Symmetry: terminals deliver shifted space without a Shift modifier, and
+    # Ctrl+non-letter is not detectable at all. `parseKeyCombo` rejects both
+    # — `stringToKeyCombo` must too, otherwise these silently never match.
+    check stringToKeyCombo("<S-Space>").isNone
+    check parseKeyCombo("S-Space").isNone
+    check stringToKeyCombo("<C-Space>").isNone
+    check parseKeyCombo("C-Space").isNone
+    # `<Space>` (no modifier) and `<M-Space>` are reliably reported and stay
+    # accepted by both parsers.
+    check stringToKeyCombo("<Space>").isSome
+    check stringToKeyCombo("<M-Space>").isSome
+    check parseKeyCombo("M-Space").isSome
+
 suite "KeyBindingRegistry - basic operations":
   test "Create new registry":
     let registry = newKeyBindingRegistry()
@@ -639,6 +711,34 @@ suite "KeyBindingRegistry - setupDefaultBindings":
     check t.get.kind == ctOperatorPending
     check t.get.operatorType == "till"
 
+  test "Command mode command aliases are registered as Commands (#2597)":
+    # Each alias from keyMappableCommandModeAliases must be a registered
+    # Command so keymap RHS like `K = "bdelete"` resolves correctly. Aliases
+    # whose names collide with a pre-existing registered Command (e.g. "save")
+    # are intentionally left untouched so they keep their original commandId.
+    let registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    let aliases = @[
+      "bn", "bnext", "bp", "bprev", "bprevious", "bf", "bfirst", "bl", "blast", "bd",
+      "bdelete", "q", "qa", "quit", "quitall", "w", "wa", "save", "saveall", "wq", "wqa",
+    ]
+    for alias in aliases:
+      check registry.commandRegistry.hasKey(alias)
+      check registry.commandRegistry[alias].kind == ctAction
+
+    # Fresh registrations (no pre-existing collision) route through the
+    # exec.cmdline.* bridge.
+    let freshAliases = @[
+      "bn", "bnext", "bp", "bprev", "bprevious", "bf", "bfirst", "bl", "blast", "bd",
+      "bdelete", "q", "qa", "quit", "quitall", "w", "wa", "saveall", "wq", "wqa",
+    ]
+    for alias in freshAliases:
+      check registry.commandRegistry[alias].commandId == "exec.cmdline." & alias
+
+    # "save" predates the alias loop and keeps its original commandId.
+    check registry.commandRegistry["save"].commandId == "file.save"
+
 suite "Command types":
   test "Motion command":
     let cmd = Command(
@@ -856,6 +956,24 @@ suite "KeyCombo - parseKeyCombo additional cases":
     check kmAlt in result.get.modifiers
     check kmShift notin result.get.modifiers
     check result.get.char == "X"
+
+  test "Parse Shift+Tab collapses to BackTab (#2597)":
+    # Terminals report Shift+Tab as the dedicated BackTab keycode, so
+    # `parseKeyCombo("S-Tab")` must produce skBackTab without a Shift modifier.
+    let result = parseKeyCombo("S-Tab")
+    check result.isSome
+    check result.get.isSpecial
+    check result.get.special == skBackTab
+    check kmShift notin result.get.modifiers
+
+  test "Parse Shift+digit is rejected (#2597)":
+    # Shift+digit is layout-dependent; terminals deliver the shifted character
+    # without a Shift modifier, so accepting "S-1" would silently never match.
+    check parseKeyCombo("S-1").isNone
+    check parseKeyCombo("S-9").isNone
+
+  test "Parse Shift+symbol is rejected (#2597)":
+    check parseKeyCombo("S-/").isNone
 
   test "Parse empty string returns none":
     check parseKeyCombo("").isNone
@@ -1605,3 +1723,78 @@ suite "hasActiveSequence":
 # Note: eventToKeyCombo tests are omitted due to celina.KeyModifier namespace
 # conflicts with key_bindings.KeyModifier. The function is tested indirectly
 # through integration tests when the editor processes keyboard events.
+
+import pkg/celina
+
+suite "eventToKeyCombo - special key normalization (#2597)":
+  test "Shift+Tab event collapses to skBackTab without kmShift":
+    # Terminals deliver Shift+Tab as a dedicated BackTab keycode and may set
+    # the Shift modifier redundantly. The event path must drop kmShift so
+    # parsed `S-Tab` (`parseKeyCombo`) and event-derived combos match.
+    let ev = celina.Event(
+      kind: celina.EventKind.Key,
+      key: celina.KeyEvent(
+        code: celina.KeyCode.BackTab, char: "", modifiers: {celina.KeyModifier.Shift}
+      ),
+    )
+    let combo = eventToKeyCombo(ev)
+    check combo.isSome
+    check combo.get.isSpecial
+    check combo.get.special == skBackTab
+    check kmShift notin combo.get.modifiers
+
+  test "Shift+Tab event without Shift modifier still resolves to skBackTab":
+    # Some terminals deliver BackTab keycode but omit the Shift modifier.
+    let ev = celina.Event(
+      kind: celina.EventKind.Key,
+      key: celina.KeyEvent(code: celina.KeyCode.BackTab, char: "", modifiers: {}),
+    )
+    let combo = eventToKeyCombo(ev)
+    check combo.isSome
+    check combo.get.special == skBackTab
+    check kmShift notin combo.get.modifiers
+
+  test "Shift+Arrow event preserves kmShift (non-Tab specials)":
+    # Other special keys keep Shift because event.char doesn't reflect it.
+    let ev = celina.Event(
+      kind: celina.EventKind.Key,
+      key: celina.KeyEvent(
+        code: celina.KeyCode.ArrowUp, char: "", modifiers: {celina.KeyModifier.Shift}
+      ),
+    )
+    let combo = eventToKeyCombo(ev)
+    check combo.isSome
+    check combo.get.special == skUp
+    check kmShift in combo.get.modifiers
+
+  test "parseKeyCombo(\"S-Tab\") matches eventToKeyCombo(Shift+BackTab)":
+    # End-to-end consistency: the keymap LHS `S-Tab` must produce the same
+    # KeyCombo as the event from a Shift+Tab keypress, otherwise the binding
+    # never fires.
+    let parsed = parseKeyCombo("S-Tab")
+    let ev = celina.Event(
+      kind: celina.EventKind.Key,
+      key: celina.KeyEvent(
+        code: celina.KeyCode.BackTab, char: "", modifiers: {celina.KeyModifier.Shift}
+      ),
+    )
+    let evCombo = eventToKeyCombo(ev)
+    check parsed.isSome
+    check evCombo.isSome
+    check parsed.get == evCombo.get
+
+  test "Tab+Shift event (non-BackTab keycode) also normalizes to skBackTab":
+    # Some terminals deliver Shift+Tab as `KeyCode.Tab + Shift modifier`
+    # instead of the dedicated BackTab keycode. The event path must collapse
+    # this to skBackTab so it still matches `parseKeyCombo("S-Tab")`.
+    let ev = celina.Event(
+      kind: celina.EventKind.Key,
+      key: celina.KeyEvent(
+        code: celina.KeyCode.Tab, char: "", modifiers: {celina.KeyModifier.Shift}
+      ),
+    )
+    let combo = eventToKeyCombo(ev)
+    check combo.isSome
+    check combo.get.isSpecial
+    check combo.get.special == skBackTab
+    check kmShift notin combo.get.modifiers

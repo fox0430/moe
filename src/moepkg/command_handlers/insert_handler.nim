@@ -44,6 +44,9 @@ type
   InsertModeResultKind* = enum
     imrHandled
     imrUnhandled
+    imrExecCommand
+      ## Command mode command alias bridge — run `:<alias>` via the
+      ## command-line parser
     imrError
 
   InsertModeResult* = object ## Result of insert mode command execution
@@ -53,6 +56,10 @@ type
       overlayTransition*: Option[OverlayKind]
     of imrUnhandled:
       discard
+    of imrExecCommand:
+      execCommandText*: string
+        ## Insert mode has no count prefix, so the dispatcher always
+        ## forwards count = 1 to the command-line parser.
     of imrError:
       errorMessage*: string
 
@@ -762,6 +769,14 @@ proc handleInsertModeKey*(
     of ctAction, ctCustom:
       # Handle action commands (e.g., from :imap)
       handler.completionManager.cancelCompletion()
+      # Command mode command alias bridge: `exec.cmdline.<alias>` runs
+      # `:<alias>` via the full command-line parser, so safety checks
+      # (modified-buffer guard etc.) fire. Caller
+      # (`mode_dispatchers.handleInsertMode`) is responsible for committing
+      # the in-progress insert transaction before dispatching.
+      if cmd.commandId.startsWith(ExecCmdlinePrefix):
+        let aliasText = cmd.commandId[ExecCmdlinePrefix.len ..^ 1]
+        return InsertModeResult(kind: imrExecCommand, execCommandText: aliasText)
       case cmd.commandId
       of "insert.backspace":
         return handler.handleBackspace(buffer, state)

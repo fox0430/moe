@@ -30,7 +30,7 @@
 ## so external callers (`editor.nim`, `handler.nim`, tests) see the same
 ## public surface as before.
 
-import std/[options, tables]
+import std/[options, tables, strutils]
 
 import pkg/[results, celina]
 
@@ -149,6 +149,16 @@ proc executeCommandDirect*(
     return none(HandlerResult)
 
   let command = manager.keyBindingRegistry.commandRegistry[commandName]
+  # Command mode command alias bridge: `exec.cmdline.<alias>` routes through
+  # the full command-line parser so `:bd`-style safety checks fire even in
+  # special modes.
+  if command.kind == ctAction and command.commandId.startsWith(ExecCmdlinePrefix):
+    let aliasText = command.commandId[ExecCmdlinePrefix.len ..^ 1]
+    return some(
+      HandlerResult(
+        kind: hrExecCommand, execCommandText: aliasText, execCommandCount: 1
+      )
+    )
   case command.kind
   of ctAction:
     case command.commandId

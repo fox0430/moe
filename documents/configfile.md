@@ -271,8 +271,8 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| exCommand | bool | true | Saving command history |
-| exCommandHistoryLimit | integer | 1000 | The maximum entries of command history to save |
+| commandHistory | bool | true | Saving Command mode command history |
+| commandHistoryLimit | integer | 1000 | The maximum entries of Command mode command history to save |
 | search | bool | true | Saving search history |
 | searchHistoryLimit | integer | 1000 | The maximum entries of search history to save |
 | cursorPosition | bool | true | Saving last cursor position |
@@ -771,6 +771,35 @@ Commands are grouped by category below. Any command name listed here can be used
 | quickrun | Run current buffer |
 | show-char-info | Show ASCII/Unicode value of character under cursor |
 | open-uri | Open URI/file under cursor |
+
+##### Command mode command aliases
+
+The following Vim-style short names are also accepted as the right-hand side of a
+`[KeyMapping]` (and `keybindings.toml` `command`) entry. They are dispatched
+through the full Command mode (`:`) parser, so safety checks like the
+modified-buffer guard for `:bdelete` / `:quit` apply automatically.
+
+| Alias | Description |
+|:----|:----|
+| bn / bnext | Switch to next buffer |
+| bp / bprev / bprevious | Switch to previous buffer |
+| bf / bfirst | Switch to first buffer |
+| bl / blast | Switch to last buffer |
+| bd / bdelete | Delete current buffer |
+| q / quit | Quit |
+| qa / quitall | Quit all |
+| w / save | Save current buffer |
+| wa / saveall | Save all buffers |
+| wq | Save and quit |
+| wqa | Save all and quit |
+
+Example:
+
+```toml
+[KeyMapping.Normal]
+"K" = "bdelete"
+"F2" = "wq"
+```
 
 #### Application order
 

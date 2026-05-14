@@ -260,9 +260,9 @@ interval = 5                           # Auto-save interval in minutes
 
 [Persist]
 
-exCommand = true                       # Persist command history
+commandHistory = true                  # Persist Command mode command history
 
-exCommandHistoryLimit = 1000           # History limit
+commandHistoryLimit = 1000             # History limit
 
 search = true                          # Persist search history
 
@@ -303,6 +303,13 @@ enable = false                         # Open fileTree sidebar on startup
 # Key mapping settings - persistent key remappings per mode
 # Same key notation as :nmap/:imap commands
 # Values can be command names (e.g., "save") or key sequences (e.g., "Escape")
+#
+# Vim-style Command mode command aliases are also accepted as values:
+# "bd"/"bdelete", "q"/"qa"/"quit"/"quitall", "w"/"wa", "wq"/"wqa",
+# "bn"/"bnext", "bp"/"bprev" etc. They are dispatched through the full
+# Command mode (:) parser, so safety checks (modified-buffer guard, etc.)
+# apply. See documents/configfile.md "Command mode command aliases" for the
+# full list.
 #
 # [KeyMapping.All] applies to all modes (except QuickRun).
 # Mode-specific sections override All.

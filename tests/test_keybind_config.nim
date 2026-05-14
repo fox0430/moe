@@ -814,7 +814,7 @@ suite "KeybindConfig - Undo/Redo keybindings":
     check binding.get.name == "redo"
 
 suite "KeybindConfig - resolves command name via commandRegistry":
-  test "registered alias preserves real commandId (bnext -> buffer.next.tab)":
+  test "registered alias preserves real commandId (bnext -> exec.cmdline.bnext)":
     let registry = newKeyBindingRegistry()
     var vr = newValidationResult()
     registry.setupDefaultBindings()
@@ -838,9 +838,9 @@ command = "bnext"
     let binding = registry.findBinding(EditorMode.Normal, jKey)
     check binding.isSome
     check binding.get.name == "bnext"
-    check binding.get.commandId == "buffer.next.tab"
+    check binding.get.commandId == "exec.cmdline.bnext"
 
-  test "registered alias preserves real commandId (bprev -> buffer.prev.tab)":
+  test "registered alias preserves real commandId (bprev -> exec.cmdline.bprev)":
     let registry = newKeyBindingRegistry()
     var vr = newValidationResult()
     registry.setupDefaultBindings()
@@ -863,7 +863,7 @@ command = "bprev"
     let kKey = toKeyCombo('K')
     let binding = registry.findBinding(EditorMode.Normal, kKey)
     check binding.isSome
-    check binding.get.commandId == "buffer.prev.tab"
+    check binding.get.commandId == "exec.cmdline.bprev"
 
   test "args from toml override registered command args":
     let registry = newKeyBindingRegistry()
@@ -890,7 +890,7 @@ args = ["one", "two"]
     let combo = toKeyCombo('q', ctrl = true)
     let binding = registry.findBinding(EditorMode.Normal, combo)
     check binding.isSome
-    check binding.get.commandId == "buffer.next.tab"
+    check binding.get.commandId == "exec.cmdline.bnext"
     check binding.get.args == @["one", "two"]
 
   test "unknown command name produces validation error":
@@ -939,6 +939,61 @@ command = "find-char"
     check vr.hasErrors
     let combo = toKeyCombo('y', ctrl = true)
     check registry.findBinding(EditorMode.Normal, combo).isNone
+
+  test "kind mismatch without explicit command_type reports default (#2597)":
+    # Regression: omitting command_type used to make the kind-mismatch branch
+    # access binding["command_type"] and raise KeyError. The error should
+    # surface as a validation error instead.
+    let registry = newKeyBindingRegistry()
+    var vr = newValidationResult()
+    registry.setupDefaultBindings()
+
+    # "find-char" is ctOperatorPending; no command_type defaults to ctAction.
+    let tomlContent = """
+[[keybinding]]
+mode = "normal"
+key = "C-y"
+command = "find-char"
+"""
+    let testPath = getTempDir() / "test_keybind_kind_mismatch_default.toml"
+    writeFile(testPath, tomlContent)
+    defer:
+      removeFile(testPath)
+
+    registry.loadKeybindingsFromToml(testPath, vr)
+
+    check vr.hasErrors
+    let combo = toKeyCombo('y', ctrl = true)
+    check registry.findBinding(EditorMode.Normal, combo).isNone
+
+  test "default command_type=action binds registered ctAction command (#2597)":
+    # Positive counterpart to the previous test: when command_type is omitted
+    # and the registered Command kind matches the default (ctAction), the
+    # binding should be added without errors.
+    let registry = newKeyBindingRegistry()
+    var vr = newValidationResult()
+    registry.setupDefaultBindings()
+
+    # "save" is registered as ctAction in setupDefaultBindings.
+    let tomlContent = """
+[[keybinding]]
+mode = "normal"
+key = "C-s"
+command = "save"
+"""
+    let testPath = getTempDir() / "test_keybind_default_action.toml"
+    writeFile(testPath, tomlContent)
+    defer:
+      removeFile(testPath)
+
+    registry.loadKeybindingsFromToml(testPath, vr)
+
+    check not vr.hasErrors
+    let combo = toKeyCombo('s', ctrl = true)
+    let binding = registry.findBinding(EditorMode.Normal, combo)
+    check binding.isSome
+    check binding.get.name == "save"
+    check binding.get.commandId == "file.save"
 
 suite "KeybindConfig - loadDefaultKeybindings":
   test "Does not crash":

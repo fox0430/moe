@@ -794,8 +794,8 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       # Command state (grouped in CommandState)
       commandState: CommandState(
         history:
-          if editorConfig.persist.exCommand:
-            loadCommandHistory(editorConfig.persist.exCommandHistoryLimit)
+          if editorConfig.persist.commandHistory:
+            loadCommandHistory(editorConfig.persist.commandHistoryLimit)
           else:
             @[],
         historyIndex: -1,

@@ -269,6 +269,41 @@ suite "addRuntimeMapping - key to command":
     check m.kind == rmkCommand
     check m.commandName == "bprev"
 
+  test "Map D to bdelete resolves as command (#2597)":
+    # Issue #2597 follow-up: `bdelete` must be a registered alias so it stops
+    # silently falling through to the Vim concat `b,d,e,l,e,t,e` sequence.
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    let err = registry.addRuntimeMapping(Normal, "D", "bdelete")
+    check err == ""
+    let m = registry.runtimeMappings[Normal][^1]
+    check m.kind == rmkCommand
+    check m.commandName == "bdelete"
+
+  test "Map Q to q resolves as command (#2597)":
+    # Single-letter alias `q` is registered so `Q = "q"` reaches the
+    # command-line parser's modified-buffer safety check instead of being
+    # recorded as a 1-key sequence target.
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    let err = registry.addRuntimeMapping(Normal, "Q", "q")
+    check err == ""
+    let m = registry.runtimeMappings[Normal][^1]
+    check m.kind == rmkCommand
+    check m.commandName == "q"
+
+  test "Map F2 to wq resolves as command (#2597)":
+    var registry = newKeyBindingRegistry()
+    registry.setupDefaultBindings()
+
+    let err = registry.addRuntimeMapping(Normal, "F2", "wq")
+    check err == ""
+    let m = registry.runtimeMappings[Normal][^1]
+    check m.kind == rmkCommand
+    check m.commandName == "wq"
+
   test "Map overwrites existing":
     var registry = newKeyBindingRegistry()
     let cmd1 = Command(
@@ -516,7 +551,7 @@ suite "clearRuntimeMappingState":
     registry.clearRuntimeMappingState()
     check registry.runtimeMappingState.keys.len == 0
 
-suite "Ex command parsing - map commands":
+suite "Command mode command parsing - map commands":
   setup:
     let parser = newCommandLineParser()
     let config = newCommandConfig()
@@ -622,7 +657,7 @@ suite "Ex command parsing - map commands":
     check result.mapLhs == "d"
     check result.mapRhs == "Escape"
 
-suite "Ex command parsing - unmap commands":
+suite "Command mode command parsing - unmap commands":
   setup:
     let parser = newCommandLineParser()
     let config = newCommandConfig()
@@ -659,7 +694,7 @@ suite "Ex command parsing - unmap commands":
     check result.kind == claRunmap
     check result.unmapLhs == "C-a"
 
-suite "Ex command parsing - mapclear commands":
+suite "Command mode command parsing - mapclear commands":
   setup:
     let parser = newCommandLineParser()
     let config = newCommandConfig()
@@ -1343,7 +1378,7 @@ suite "All mapping commands are valid":
       # Clean up by removing the mapping for the next iteration
       discard registry.removeRuntimeMapping(Normal, "C-t")
 
-suite "Ex command parsing - cmap commands":
+suite "Command mode command parsing - cmap commands":
   setup:
     let parser = newCommandLineParser()
     let config = newCommandConfig()

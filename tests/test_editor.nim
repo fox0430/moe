@@ -2057,3 +2057,74 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     check e.windowManager.windows.len == windowCountBefore # window NOT closed
     check e.bufferById(f2Id).isNone
     check e.activeBuffer().id != f2Id
+
+suite "Editor - Command mode command alias bridge end-to-end (#2597)":
+  # Regression: the `keyMappableCommandModeAliases` bridge in
+  # `command_handlers/handler_manager.nim` rewrites a `K = "bdelete"` keymap
+  # dispatch into `HandlerResult(kind: hrExecCommand, execCommandText:
+  # "bdelete")`. `handleKeyMappingTimeout` then forwards that result to
+  # `processResult`, which is supposed to drive the full `:bdelete`
+  # command-line parser (so the modified-buffer guard fires). These tests
+  # exercise the processResult half of that pipeline with the exact result the
+  # bridge produces — guarding both the bridge contract (text == "bdelete")
+  # and the command-line parser dispatch wiring.
+  test "processResult(hrExecCommand bdelete) deletes a clean buffer":
+    let e = createTestEditor()
+    let f1 = "/tmp/moe_test_bridge_clean_1.txt"
+    let f2 = "/tmp/moe_test_bridge_clean_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    discard e.editFile(f2)
+    let f2Id = e.activeBuffer().id
+    let windowCountBefore = e.windowManager.windows.len
+    check not e.activeBuffer().isModified
+
+    # The bridge in handler_manager.nim/normal_handler.nim builds exactly this
+    # HandlerResult for an alias like "bdelete".
+    let r = HandlerResult(
+      kind: hrExecCommand, execCommandText: "bdelete", execCommandCount: 1
+    )
+    discard e.processResult(r, e.activeBuffer())
+
+    check e.windowManager.windows.len == windowCountBefore
+    check e.bufferById(f2Id).isNone
+    check e.activeBuffer().id != f2Id
+
+  test "processResult(hrExecCommand bdelete) refuses to delete a dirty buffer":
+    # The whole reason the bridge routes through `:bdelete` (instead of
+    # invoking deleteCurrentBuffer directly) is to inherit the parser-side
+    # modified-buffer guard. This test would silently regress to
+    # "buffer destroyed despite unsaved edits" if a future refactor short-
+    # circuited the command-line parser path.
+    let e = createTestEditor()
+    let f1 = "/tmp/moe_test_bridge_dirty_1.txt"
+    let f2 = "/tmp/moe_test_bridge_dirty_2.txt"
+    writeFile(f1, "1")
+    writeFile(f2, "2")
+    defer:
+      removeFile(f1)
+      removeFile(f2)
+
+    discard e.editFile(f1)
+    discard e.editFile(f2)
+    let f2Id = e.activeBuffer().id
+    let bufferCountBefore = e.buffers.len
+
+    # Dirty the active buffer so :bdelete should reject.
+    discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "X")
+    check e.activeBuffer().isModified
+
+    let r = HandlerResult(
+      kind: hrExecCommand, execCommandText: "bdelete", execCommandCount: 1
+    )
+    discard e.processResult(r, e.activeBuffer())
+
+    check e.bufferById(f2Id).isSome # buffer survived the guard
+    check e.activeBuffer().id == f2Id # still focused on the dirty buffer
+    check e.buffers.len == bufferCountBefore
+    check "No write since last change" in e.state.statusMessage

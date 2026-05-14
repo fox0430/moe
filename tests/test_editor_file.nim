@@ -353,7 +353,8 @@ suite "Editor - saveBufferCursorPosition":
 suite "Editor - addCommandToHistory":
   test "Add command to history":
     var config = newEditorConfig()
-    config.persist.exCommand = false # Disable persistence to start with empty history
+    # Disable persistence to start with empty history
+    config.persist.commandHistory = false
     let e = createTestEditorWithConfig(config)
 
     # Clear any existing history
@@ -365,7 +366,7 @@ suite "Editor - addCommandToHistory":
 
   test "Add multiple commands to history":
     var config = newEditorConfig()
-    config.persist.exCommand = false
+    config.persist.commandHistory = false
     let e = createTestEditorWithConfig(config)
 
     # Clear any existing history
@@ -383,7 +384,7 @@ suite "Editor - addCommandToHistory":
 
   test "Skip empty command":
     var config = newEditorConfig()
-    config.persist.exCommand = false
+    config.persist.commandHistory = false
     let e = createTestEditorWithConfig(config)
 
     # Clear any existing history
@@ -394,7 +395,7 @@ suite "Editor - addCommandToHistory":
 
   test "Skip duplicate of last command":
     var config = newEditorConfig()
-    config.persist.exCommand = false
+    config.persist.commandHistory = false
     let e = createTestEditorWithConfig(config)
 
     # Clear any existing history
@@ -407,7 +408,7 @@ suite "Editor - addCommandToHistory":
 
   test "Allow same command if not last":
     var config = newEditorConfig()
-    config.persist.exCommand = false
+    config.persist.commandHistory = false
     let e = createTestEditorWithConfig(config)
 
     # Clear any existing history
@@ -421,8 +422,8 @@ suite "Editor - addCommandToHistory":
 
   test "Trim history to limit":
     var config = newEditorConfig()
-    config.persist.exCommand = false
-    config.persist.exCommandHistoryLimit = 3
+    config.persist.commandHistory = false
+    config.persist.commandHistoryLimit = 3
     let e = createTestEditorWithConfig(config)
 
     # Clear any existing history

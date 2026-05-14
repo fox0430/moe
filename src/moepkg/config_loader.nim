@@ -630,18 +630,13 @@ proc loadPersistConfig(
 ) =
   const section = "Persist"
   const validKeys = [
-    "exCommand", "exCommandHistoryLimit", "search", "searchHistoryLimit",
+    "commandHistory", "commandHistoryLimit", "search", "searchHistoryLimit",
     "cursorPosition", "bookmarks",
   ]
   checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "exCommand", config.exCommand, vr, section)
+  loadBool(table, "commandHistory", config.commandHistory, vr, section)
   loadInt(
-    table,
-    "exCommandHistoryLimit",
-    config.exCommandHistoryLimit,
-    vr,
-    section,
-    minVal = 1,
+    table, "commandHistoryLimit", config.commandHistoryLimit, vr, section, minVal = 1
   )
   loadBool(table, "search", config.search, vr, section)
   loadInt(
@@ -2265,8 +2260,8 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
 
   # Persist section
   lines.add "[Persist]"
-  lines.add "exCommand = " & toTomlBool(config.persist.exCommand)
-  lines.add "exCommandHistoryLimit = " & $config.persist.exCommandHistoryLimit
+  lines.add "commandHistory = " & toTomlBool(config.persist.commandHistory)
+  lines.add "commandHistoryLimit = " & $config.persist.commandHistoryLimit
   lines.add "search = " & toTomlBool(config.persist.search)
   lines.add "searchHistoryLimit = " & $config.persist.searchHistoryLimit
   lines.add "cursorPosition = " & toTomlBool(config.persist.cursorPosition)

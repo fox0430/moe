@@ -218,8 +218,8 @@ type
 
   # Persist settings
   PersistConfig* = object
-    exCommand*: bool
-    exCommandHistoryLimit*: int
+    commandHistory*: bool
+    commandHistoryLimit*: int
     search*: bool
     searchHistoryLimit*: int
     cursorPosition*: bool
@@ -606,8 +606,8 @@ proc newEditorConfig*(): EditorConfig =
     autocomplete: AutocompleteConfig(enable: true, windowBorder: true),
     autoSave: AutoSaveConfig(enable: true, interval: 5),
     persist: PersistConfig(
-      exCommand: true,
-      exCommandHistoryLimit: 1000,
+      commandHistory: true,
+      commandHistoryLimit: 1000,
       search: true,
       searchHistoryLimit: 1000,
       cursorPosition: true,

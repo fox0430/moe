@@ -21,70 +21,133 @@
 ##
 ## This module handles configuration of command line commands, allowing users
 ## to customize command aliases and behavior through configuration files.
+##
+## Also re-exports `keyMappableCommandModeAliases` — the curated set of
+## Command mode command aliases (`:bd`, `:q`, `:w`, ...) that may appear as
+## RHS targets in a keymap config. `key_bindings.setupDefaultBindings`
+## registers each entry as a Command with commandId `exec.cmdline.<alias>` so
+## the keymap loader can resolve it; at dispatch time the bridge in
+## `command_handlers/*_handler.nim` rewrites the commandId back into
+## `:<alias>` so the full command-line parser (and its modified-buffer safety
+## checks) runs.
 
 import std/[tables, sequtils, options, strutils]
 
 import command_line
 
+type
+  CommandConfig* = ref object ## Configuration for command line commands
+    aliases*: Table[string, CommandLineAction]
+    aliasDescriptions*: Table[string, string] ## Custom descriptions for aliases
+    shellCommands*: Table[string, ShellCommandEntry] ## Shell command definitions
+    disabledCommands*: seq[CommandLineAction] ## Disabled built-in commands
+
+  KeyMappableCommandAlias* = tuple[name, description: string]
+    ## (alias name, human-readable description) pair used when registering a
+    ## Command mode command alias as a keymap RHS target.
+
 # Mapping from canonical command names to CommandLineAction.
 # Used for resolving user-defined aliases in [CommandAliases] config.
-const CommandNameTable* = {
-  "quit": claQuit,
-  "quitall": claQuitAll,
-  "save": claSave,
-  "saveall": claSaveAll,
-  "saveandquit": claSaveAndQuit,
-  "saveallandquit": claSaveAllAndQuit,
-  "edit": claEdit,
-  "enew": claEnew,
-  "set": claSet,
-  "help": claHelp,
-  "substitute": claSubstitute,
-  "delete": claDeleteLines,
-  "vsplit": claVSplit,
-  "hsplit": claHSplit,
-  "new": claNew,
-  "vnew": claVnew,
-  "buffernext": claBufferNext,
-  "bufferprev": claBufferPrev,
-  "bufferfirst": claBufferFirst,
-  "bufferlast": claBufferLast,
-  "bufferdelete": claBufferDelete,
-  "buffer": claBuffer,
-  "stripwhitespace": claStripWhitespace,
-  "filer": claFiler,
-  "log": claLogViewer,
-  "quickrun": claQuickRun,
-  "buffermanager": claBufferManager,
-  "backup": claBackupManager,
-  "recent": claRecentFile,
-  "noh": claClearSearchHighlight,
-  "shell": claShellCommand,
-  "background": claBackground,
-  "jumplist": claJumpList,
-  "changes": claChanges,
-  "bookmarks": claBookmarks,
-  "conflictnext": claConflictNext,
-  "conflictprev": claConflictPrev,
-  "build": claBuild,
-  "debug": claDebug,
-  "config": claConfig,
-  "putconfigfile": claPutConfigFile,
-  "man": claMan,
-  "theme": claTheme,
-  "lsplog": claLspLog,
-  "lspformat": claLspFormat,
-  "lsprestart": claLspRestart,
-  "lspfold": claLspFold,
-  "lspexecommand": claLspExecuteCommand,
-  "lspcallhierarchyincoming": claLspCallHierarchyIncoming,
-  "lspcallhierarchyoutgoing": claLspCallHierarchyOutgoing,
-  "terminal": claTerminal,
-  "only": claOnlyWindow,
-  "editconfigfile": claEditConfigFile,
-  "filetree": claFileTree,
-  "cquit": claCquit,
-}.toTable
+const
+  CommandNameTable* = {
+    "quit": claQuit,
+    "quitall": claQuitAll,
+    "save": claSave,
+    "saveall": claSaveAll,
+    "saveandquit": claSaveAndQuit,
+    "saveallandquit": claSaveAllAndQuit,
+    "edit": claEdit,
+    "enew": claEnew,
+    "set": claSet,
+    "help": claHelp,
+    "substitute": claSubstitute,
+    "delete": claDeleteLines,
+    "vsplit": claVSplit,
+    "hsplit": claHSplit,
+    "new": claNew,
+    "vnew": claVnew,
+    "buffernext": claBufferNext,
+    "bufferprev": claBufferPrev,
+    "bufferfirst": claBufferFirst,
+    "bufferlast": claBufferLast,
+    "bufferdelete": claBufferDelete,
+    "buffer": claBuffer,
+    "stripwhitespace": claStripWhitespace,
+    "filer": claFiler,
+    "log": claLogViewer,
+    "quickrun": claQuickRun,
+    "buffermanager": claBufferManager,
+    "backup": claBackupManager,
+    "recent": claRecentFile,
+    "noh": claClearSearchHighlight,
+    "shell": claShellCommand,
+    "background": claBackground,
+    "jumplist": claJumpList,
+    "changes": claChanges,
+    "bookmarks": claBookmarks,
+    "conflictnext": claConflictNext,
+    "conflictprev": claConflictPrev,
+    "build": claBuild,
+    "debug": claDebug,
+    "config": claConfig,
+    "putconfigfile": claPutConfigFile,
+    "man": claMan,
+    "theme": claTheme,
+    "lsplog": claLspLog,
+    "lspformat": claLspFormat,
+    "lsprestart": claLspRestart,
+    "lspfold": claLspFold,
+    "lspexecommand": claLspExecuteCommand,
+    "lspcallhierarchyincoming": claLspCallHierarchyIncoming,
+    "lspcallhierarchyoutgoing": claLspCallHierarchyOutgoing,
+    "terminal": claTerminal,
+    "only": claOnlyWindow,
+    "editconfigfile": claEditConfigFile,
+    "filetree": claFileTree,
+    "cquit": claCquit,
+  }.toTable
+
+  keyMappableCommandModeAliases*: seq[KeyMappableCommandAlias] = @[
+    ## Command mode command aliases registrable as keymap RHS targets.
+    ## Each is dispatched at runtime through `hrExecCommand` / `nmrExecCommand`,
+    ## so the full command-line parser runs (inheriting modified-buffer safety
+    ## checks like `:bd` / `:q`). Curated to argumentless Command mode commands
+    ## — `:vs`, `:e`, `:ls`, `:set` etc. need arguments to be useful and are
+    ## intentionally excluded.
+    ##
+    ## Names that collide with a pre-existing registered Command (e.g. "save")
+    ## are intentionally listed here too: the registration loop in
+    ## `setupDefaultBindings` skips collisions so the original handler keeps its
+    ## real `commandId`. The list therefore acts as the authoritative "valid
+    ## keymap RHS alias" set even though some entries are registered elsewhere.
+
+    # Buffer switching
+    ("bn", "Switch to next buffer (:bn)"),
+    ("bnext", "Switch to next buffer (:bnext)"),
+    ("bp", "Switch to previous buffer (:bp)"),
+    ("bprev", "Switch to previous buffer (:bprev)"),
+    ("bprevious", "Switch to previous buffer (:bprevious)"),
+    ("bf", "Switch to first buffer (:bf)"),
+    ("bfirst", "Switch to first buffer (:bfirst)"),
+    ("bl", "Switch to last buffer (:bl)"),
+    ("blast", "Switch to last buffer (:blast)"),
+    # Buffer delete (modified-buffer check via :bd)
+    ("bd", "Delete current buffer (:bd)"),
+    ("bdelete", "Delete current buffer (:bdelete)"),
+    # Quit (modified-buffer check via :q)
+    ("q", "Quit (:q)"),
+    ("qa", "Quit all (:qa)"),
+    ("quit", "Quit (:quit)"),
+    ("quitall", "Quit all (:quitall)"),
+    # Save
+    ("w", "Save current buffer (:w)"),
+    ("wa", "Save all buffers (:wa)"),
+    ("save", "Save current buffer (:save)"),
+    ("saveall", "Save all buffers (:saveall)"),
+    # Save and quit
+    ("wq", "Save and quit (:wq)"),
+    ("wqa", "Save all and quit (:wqa)"),
+  ]
 
 proc resolveCommandName*(name: string): Option[CommandLineAction] =
   ## Resolve a command name string to a CommandLineAction.
@@ -93,12 +156,6 @@ proc resolveCommandName*(name: string): Option[CommandLineAction] =
   if lower in CommandNameTable:
     return some(CommandNameTable[lower])
   return none(CommandLineAction)
-
-type CommandConfig* = ref object ## Configuration for command line commands
-  aliases*: Table[string, CommandLineAction]
-  aliasDescriptions*: Table[string, string] ## Custom descriptions for aliases
-  shellCommands*: Table[string, ShellCommandEntry] ## Shell command definitions
-  disabledCommands*: seq[CommandLineAction] ## Disabled built-in commands
 
 proc newCommandConfig*(): CommandConfig =
   ## Create a new command configuration with defaults
