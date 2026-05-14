@@ -461,6 +461,14 @@ suite "Registers clipboard integration":
       r.setClipboardTool(tool)
       r.setYankedRegister("old internal", false)
 
+      # setYankedRegister spawns async writes to both CLIPBOARD and PRIMARY.
+      # Wait for them to land before our explicit sync write below, otherwise
+      # the lingering "old internal" write can race and overwrite testText.
+      let clipSeeded = readClipboardWithRetry(tool, "old internal")
+      check clipSeeded.isOk and clipSeeded.get() == "old internal"
+      let primarySeeded = readPrimaryWithRetry(tool, "old internal")
+      check primarySeeded.isOk and primarySeeded.get() == "old internal"
+
       # Write directly to system clipboard (simulating external app copy)
       let testText = "external clipboard content"
       let writeResult = writeToClipboardSync(tool, testText)
@@ -468,7 +476,7 @@ suite "Registers clipboard integration":
 
       # Wait for clipboard to be readable before testing getNoNamedRegister
       let clipReady = readClipboardWithRetry(tool, testText)
-      check clipReady.isOk
+      check clipReady.isOk and clipReady.get() == testText
 
       # getNoNamedRegister should pick up the external clipboard content
       let reg = r.getNoNamedRegister()
@@ -485,6 +493,14 @@ suite "Registers clipboard integration":
       r.setClipboardTool(tool)
       r.setYankedRegister("old internal", false)
 
+      # setYankedRegister spawns async writes to both CLIPBOARD and PRIMARY.
+      # Wait for them to land before our explicit sync write below, otherwise
+      # the lingering "old internal" write can race and overwrite testText.
+      let clipSeeded = readClipboardWithRetry(tool, "old internal")
+      check clipSeeded.isOk and clipSeeded.get() == "old internal"
+      let primarySeeded = readPrimaryWithRetry(tool, "old internal")
+      check primarySeeded.isOk and primarySeeded.get() == "old internal"
+
       # Write directly to PRIMARY selection (simulating mouse selection in browser)
       let testText = "mouse selected text"
       let writeResult = writeToPrimarySelectionSync(tool, testText)
@@ -492,7 +508,7 @@ suite "Registers clipboard integration":
 
       # Wait for PRIMARY selection to be readable
       let primaryReady = readPrimaryWithRetry(tool, testText)
-      check primaryReady.isOk
+      check primaryReady.isOk and primaryReady.get() == testText
 
       # getNoNamedRegister should pick up the PRIMARY selection content
       let reg = r.getNoNamedRegister()
