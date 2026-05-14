@@ -169,6 +169,23 @@ proc handleInsertMode*(
     )
   of imrUnhandled:
     return HandlerResult(kind: hrUnhandled)
+  of imrExecCommand:
+    # Command mode command alias bridge fired from Insert mode (e.g.
+    # `imap K = "bdelete"`). Commit any in-progress insert transaction first
+    # so the Command mode command sees a consistent buffer state — otherwise
+    # an open transaction could be left dangling across buffer switches
+    # performed by `:bdelete` / `:bnext`.
+    if buffer.inTransaction:
+      let transactionResult = buffer.commitTransaction()
+      if transactionResult.isErr:
+        return HandlerResult(
+          kind: hrError,
+          errorMessage: "Failed to commit transaction: " & transactionResult.error,
+        )
+      state.editState.insertModeStartPos = none(BufferPosition)
+    return HandlerResult(
+      kind: hrExecCommand, execCommandText: r.execCommandText, execCommandCount: 1
+    )
   of imrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -570,6 +587,13 @@ proc handleVisualMode*(
     return HandlerResult(kind: hrLspSelectionRange)
   of vmrUnhandled:
     return HandlerResult(kind: hrUnhandled)
+  of vmrExecCommand:
+    # Command mode command alias bridge fired from a Visual mode
+    # (`xnoremap K = "bdelete"`). Visual mode has no buffer transaction; just
+    # forward the alias.
+    return HandlerResult(
+      kind: hrExecCommand, execCommandText: r.execCommandText, execCommandCount: 1
+    )
   of vmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 

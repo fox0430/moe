@@ -21,7 +21,7 @@
 ##
 ## This module handles commands specific to Normal mode.
 
-import std/[options, tables]
+import std/[options, tables, strutils]
 
 import pkg/results
 
@@ -754,6 +754,14 @@ proc handleNormalModeKey*(
   of ctOverlaySwitch:
     return handler.handleModeSwitchToOverlay(cmd.targetOverlay, state, cmd.name)
   of ctAction:
+    # Command mode command alias bridge: `exec.cmdline.<alias>` runs
+    # `:<alias>` via the full command-line parser, so safety checks
+    # (modified-buffer guard etc.) fire.
+    if cmd.commandId.startsWith(ExecCmdlinePrefix):
+      let aliasText = cmd.commandId[ExecCmdlinePrefix.len ..^ 1]
+      return NormalModeResult(
+        kind: nmrExecCommand, execCommandText: aliasText, execCommandCount: 1
+      )
     # Handle various actions based on command ID
     case cmd.commandId
     of "insert.append":

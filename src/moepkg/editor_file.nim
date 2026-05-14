@@ -145,7 +145,7 @@ proc addCommandToHistory*(e: Editor, command: string) =
   # Add to beginning (most recent first)
   e.state.commandState.history.insert(command, 0)
   # Trim to limit
-  let limit = e.config.persist.exCommandHistoryLimit
+  let limit = e.config.persist.commandHistoryLimit
   if e.state.commandState.history.len > limit:
     e.state.commandState.history.setLen(limit)
 
@@ -160,10 +160,10 @@ proc savePersistData*(e: Editor) =
     if r.isErr:
       logError("editor", "Failed to save search history: " & r.error)
 
-  if e.config.persist.exCommand:
+  if e.config.persist.commandHistory:
     # Save command history
     let r = saveCommandHistory(
-      e.state.commandState.history, e.config.persist.exCommandHistoryLimit
+      e.state.commandState.history, e.config.persist.commandHistoryLimit
     )
     if r.isErr:
       logError("editor", "Failed to save command history: " & r.error)

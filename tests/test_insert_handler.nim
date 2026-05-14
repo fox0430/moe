@@ -1938,6 +1938,36 @@ suite "InsertModeHandler - imap action commands":
     check buf.getLine(0) == "Hel"
     check buf.getLine(1) == "lo"
 
+suite "InsertModeHandler - Command mode command alias bridge":
+  test "imap K to bdelete dispatches via exec.cmdline.* bridge":
+    # The bridge must fire even from Insert mode so e.g. `imap K = "bdelete"`
+    # reaches the command-line parser (and its modified-buffer guard) instead
+    # of silently returning imrUnhandled.
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    let err =
+      handler.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
+    check err == ""
+
+    let state = createTestState()
+    let keyCombo = KeyCombo(isSpecial: false, char: "K")
+    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+
+    check r.kind == imrExecCommand
+    check r.execCommandText == "bdelete"
+
+  test "imap D to bd preserves the short alias verbatim":
+    let buf = newTextBuffer()
+    let handler = createTestHandler(buf)
+    discard handler.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "D", "bd")
+
+    let state = createTestState()
+    let keyCombo = KeyCombo(isSpecial: false, char: "D")
+    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+
+    check r.kind == imrExecCommand
+    check r.execCommandText == "bd"
+
 suite "InsertModeHandler - Ctrl+O (Insert-Normal mode)":
   test "Ctrl+O switches to Normal mode and sets insertNormalMode":
     let buf = newTextBuffer()

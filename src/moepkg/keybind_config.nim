@@ -361,9 +361,14 @@ proc loadKeybindingsFromToml*(
           # and fail to match any handler.
           var cmd = registry.commandRegistry[commandName]
           if cmd.kind != cmdType:
+            let typeStr =
+              if binding.hasKey("command_type"):
+                binding["command_type"].getStr()
+              else:
+                "(default: action)"
             vr.addError(
               entryName & ".command_type",
-              binding["command_type"].getStr(),
+              typeStr,
               "command_type matching registered command \"" & commandName & "\"",
             )
           else:

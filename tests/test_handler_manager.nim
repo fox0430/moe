@@ -879,6 +879,28 @@ suite "HandlerManager - executeCommandDirect":
     check r.isSome
     check r.get.kind == hrQuickRun
 
+  # Command mode command alias bridge (#2597)
+  test "exec.cmdline.* alias returns hrExecCommand with alias text (#2597)":
+    # `bdelete` is registered with commandId `exec.cmdline.bdelete`. The
+    # bridge in executeCommandDirect must strip the prefix and forward the
+    # alias to the command-line parser via hrExecCommand.
+    let manager = createTestManager()
+    let r = manager.executeCommandDirect("bdelete")
+    check r.isSome
+    check r.get.kind == hrExecCommand
+    check r.get.execCommandText == "bdelete"
+    check r.get.execCommandCount == 1
+
+  test "exec.cmdline.* alias preserves the alias name (short alias)":
+    # Short aliases (bd, q, wq, ...) used to silently become key sequences.
+    # Verify the bridge forwards the verbatim alias.
+    let manager = createTestManager()
+    for alias in ["bd", "bn", "bp", "q", "qa", "w", "wa", "wq", "wqa"]:
+      let r = manager.executeCommandDirect(alias)
+      check r.isSome
+      check r.get.kind == hrExecCommand
+      check r.get.execCommandText == alias
+
   # Unsupported commands (context-dependent) return none
   test "motion command returns none":
     let manager = createTestManager()
@@ -2356,3 +2378,61 @@ suite "HandlerManager - FileTree search statusMessage":
     check manager.fileTreeHandler.isSearching == false
     # After cancel, statusMessage should be empty (clearSearch returns "")
     check state.statusMessage == ""
+
+suite "HandlerManager - Insert mode exec.cmdline.* bridge commits transaction":
+  ## Regression: `imap K = "bdelete"` fires while an Insert-mode transaction
+  ## is open. The dispatcher must commit that transaction before producing
+  ## `hrExecCommand`, otherwise `:bdelete` runs while the buffer is still
+  ## mid-edit and a dangling transaction is carried across the buffer switch.
+  test "Open Insert transaction is committed before hrExecCommand is returned":
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.mode = EditorMode.Insert
+    let viewport = createTestViewport()
+
+    # Simulate having entered Insert mode: open a transaction.
+    check buffer.beginTransaction("test insert").isOk
+    check buffer.inTransaction
+    state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
+
+    # `imap K = "bdelete"` — RHS resolves to the exec.cmdline.* bridge.
+    let err =
+      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
+    check err == ""
+
+    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
+    let r = manager.handleInsertMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
+    )
+
+    check r.kind == hrExecCommand
+    check r.execCommandText == "bdelete"
+    # The open transaction must be committed before forwarding the alias.
+    check not buffer.inTransaction
+    check state.editState.insertModeStartPos.isNone
+
+  test "Bridge works when no Insert transaction is open":
+    # Sanity-check: the commit branch is a no-op when there's nothing to
+    # commit (e.g. the bridge fires on the very first key after entering
+    # Insert mode, before any text was typed).
+    let manager = createTestManager()
+    let buffer = newTextBuffer()
+    discard buffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    let state = createTestState()
+    state.mode = EditorMode.Insert
+    let viewport = createTestViewport()
+    check not buffer.inTransaction
+
+    discard
+      manager.keyBindingRegistry.addRuntimeMapping(EditorMode.Insert, "K", "bdelete")
+
+    let kKey = KeyCombo(isSpecial: false, char: "K", modifiers: {})
+    let r = manager.handleInsertMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), kKey
+    )
+
+    check r.kind == hrExecCommand
+    check r.execCommandText == "bdelete"
+    check not buffer.inTransaction

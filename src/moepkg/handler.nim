@@ -1349,11 +1349,11 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
     if not inCommandOverlay:
       let cmdResult = e.handlerManager.executeCommandDirect(route.commandName)
       if cmdResult.isSome:
-        let r = cmdResult.get
-        if r.kind == hrHandled and r.modeTransition.isSome:
-          e.state.mode = r.modeTransition.get
-        if r.kind == hrQuit:
-          shouldContinue = false
+        # Route through `processResult` so bridge-produced `hrExecCommand`
+        # (and other non-trivial kinds) are dispatched the same way as in the
+        # main feedKey path. Without this, `K = "bdelete"` would silently no-op
+        # when fired via timeout flush.
+        shouldContinue = e.processResult(cmdResult.get, e.activeBuffer)
   of rrExecuteRuntimeKeySequence:
     if inCommandOverlay:
       e.keyRouter.withReplay:

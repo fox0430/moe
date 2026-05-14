@@ -207,8 +207,8 @@ suite "Config - newEditorConfig defaults":
   test "Persist config defaults":
     let config = newEditorConfig()
 
-    check config.persist.exCommand == true
-    check config.persist.exCommandHistoryLimit == 1000
+    check config.persist.commandHistory == true
+    check config.persist.commandHistoryLimit == 1000
     check config.persist.search == true
     check config.persist.searchHistoryLimit == 1000
     check config.persist.cursorPosition == true
@@ -574,8 +574,8 @@ suite "Config - Numeric field boundaries":
   test "Persist history limits":
     let config = newEditorConfig()
 
-    config.persist.exCommandHistoryLimit = 100
-    check config.persist.exCommandHistoryLimit == 100
+    config.persist.commandHistoryLimit = 100
+    check config.persist.commandHistoryLimit == 100
 
     config.persist.searchHistoryLimit = 500
     check config.persist.searchHistoryLimit == 500

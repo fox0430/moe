@@ -26,7 +26,14 @@ import std/[tables, sets, strutils, options, sequtils, hashes]
 
 import pkg/celina
 
-import types, modes, logger
+import types, modes, logger, command_config
+
+const ExecCmdlinePrefix* = "exec.cmdline."
+  ## commandId prefix for Command mode command alias bridge entries (see
+  ## `keyMappableCommandModeAliases`). At dispatch time, a Command with
+  ## `commandId = ExecCmdlinePrefix & <alias>` is rewritten into an
+  ## `hrExecCommand` / `nmrExecCommand` carrying `<alias>` as the command-line
+  ## text, so the full `:`-parser (and its safety checks) runs.
 
 type
   ## Key modifiers that can be combined
@@ -332,46 +339,86 @@ proc parseKeyCombo*(s: string): Option[KeyCombo] =
     if combo.char[0] in {'a' .. 'z', 'A' .. 'Z'}:
       combo.char = combo.char.toUpperAscii
       combo.modifiers.excl(kmShift)
+    else:
+      # Shift+<digit/symbol> is layout-dependent — terminals deliver the
+      # shifted character without a Shift modifier (e.g. Shift+1 -> '!').
+      # Accepting "S-1" here would silently never match. Reject so the user
+      # writes the literal shifted character.
+      return none(KeyCombo)
+
+  # Normalize Shift+Tab: terminals report it as the dedicated BackTab keycode
+  # (see `eventToKeyCombo`), so "S-Tab" must map to skBackTab without Shift.
+  if kmShift in combo.modifiers and combo.isSpecial and combo.special == skTab:
+    combo.special = skBackTab
+    combo.modifiers.excl(kmShift)
+
+  # Note: `S-<other special>` (e.g. `S-Enter`, `S-Backspace`, `S-Up`) is
+  # accepted here, but most terminals do *not* distinguish the shifted form
+  # from the unshifted one (only Shift+Arrow and Shift+Function keys are
+  # widely reported with the Shift modifier). Such bindings may silently never
+  # fire depending on the terminal. We accept them rather than rejecting like
+  # `S-<digit/symbol>` because for arrows/function keys the Shift modifier
+  # *is* genuinely available via `eventToKeyCombo`.
 
   return some(combo)
+
+proc specialKeyBodyString(keyCombo: KeyCombo): string =
+  ## Body portion of `keyComboToString` for special keys (without modifier
+  ## prefix or angle brackets). `skNone` returns the empty string.
+  ## Note: skBackTab returns "Tab" here; the caller (`keyComboToString`) adds
+  ## the `S-` prefix to distinguish it from skTab.
+  case keyCombo.special
+  of skEnter:
+    "Enter"
+  of skTab:
+    "Tab"
+  of skBackTab:
+    "Tab"
+  of skBackspace:
+    "Backspace"
+  of skDelete:
+    "Delete"
+  of skEscape:
+    "Escape"
+  of skUp:
+    "Up"
+  of skDown:
+    "Down"
+  of skLeft:
+    "Left"
+  of skRight:
+    "Right"
+  of skPageUp:
+    "PageUp"
+  of skPageDown:
+    "PageDown"
+  of skHome:
+    "Home"
+  of skEnd:
+    "End"
+  of skFunction:
+    "F" & $keyCombo.fnNum
+  of skNone:
+    ""
 
 proc keyComboToString*(keyCombo: KeyCombo): string =
   ## Convert a KeyCombo to a string representation for macro recording
   ## This is the inverse of stringToKeyCombo
   if keyCombo.isSpecial:
-    case keyCombo.special
-    of skEnter:
-      return "<Enter>"
-    of skTab:
-      return "<Tab>"
-    of skBackTab:
-      return "<S-Tab>"
-    of skBackspace:
-      return "<Backspace>"
-    of skDelete:
-      return "<Delete>"
-    of skEscape:
-      return "<Escape>"
-    of skUp:
-      return "<Up>"
-    of skDown:
-      return "<Down>"
-    of skLeft:
-      return "<Left>"
-    of skRight:
-      return "<Right>"
-    of skPageUp:
-      return "<PageUp>"
-    of skPageDown:
-      return "<PageDown>"
-    of skHome:
-      return "<Home>"
-    of skEnd:
-      return "<End>"
-    of skFunction:
-      return "<F" & $keyCombo.fnNum & ">"
-    of skNone:
+    if keyCombo.special == skNone:
       return ""
+    var prefix = ""
+    if kmCtrl in keyCombo.modifiers:
+      prefix.add("C-")
+    if kmAlt in keyCombo.modifiers:
+      prefix.add("M-")
+    # skBackTab serializes as `<S-Tab>` regardless of explicit kmShift; for the
+    # other specials kmShift is preserved (e.g. shift+arrow).
+    if keyCombo.special == skBackTab:
+      prefix.add("S-")
+    elif kmShift in keyCombo.modifiers:
+      prefix.add("S-")
+    return "<" & prefix & specialKeyBodyString(keyCombo) & ">"
   else:
     # Handle modifiers
     var prefix = ""
@@ -385,6 +432,60 @@ proc keyComboToString*(keyCombo: KeyCombo): string =
       return "<" & prefix & keyCombo.char & ">"
     else:
       return keyCombo.char
+
+proc parseAngleBracketBody(key: string): Option[KeyCombo] =
+  ## Parse the body inside `<...>` (modifier prefix already stripped) into a
+  ## KeyCombo. Most names map to special keys (`Enter`, `Tab`, `F3`...), but
+  ## `Space` is intentionally returned as a non-special char-combo so the
+  ## resulting KeyCombo equals a literal space keypress. Returns `none` for
+  ## unknown names.
+  ##
+  ## Kept in sync with the special-key table in `parseKeyCombo`: function key
+  ## range is `F1..F12`, and `Space` round-trips with `keyComboToString`/event
+  ## paths that emit the same form. Note: BackTab is intentionally NOT accepted
+  ## here — write `<S-Tab>` instead, which `parseKeyCombo` also handles and
+  ## which is what `keyComboToString(skBackTab)` emits.
+  case key
+  of "Space":
+    some(KeyCombo(isSpecial: false, char: " ", modifiers: {}))
+  of "Enter":
+    some(KeyCombo(isSpecial: true, special: skEnter, fnNum: 0))
+  of "Tab":
+    some(KeyCombo(isSpecial: true, special: skTab, fnNum: 0))
+  of "Backspace":
+    some(KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0))
+  of "Delete":
+    some(KeyCombo(isSpecial: true, special: skDelete, fnNum: 0))
+  of "Escape":
+    some(KeyCombo(isSpecial: true, special: skEscape, fnNum: 0))
+  of "Up":
+    some(KeyCombo(isSpecial: true, special: skUp, fnNum: 0))
+  of "Down":
+    some(KeyCombo(isSpecial: true, special: skDown, fnNum: 0))
+  of "Left":
+    some(KeyCombo(isSpecial: true, special: skLeft, fnNum: 0))
+  of "Right":
+    some(KeyCombo(isSpecial: true, special: skRight, fnNum: 0))
+  of "PageUp":
+    some(KeyCombo(isSpecial: true, special: skPageUp, fnNum: 0))
+  of "PageDown":
+    some(KeyCombo(isSpecial: true, special: skPageDown, fnNum: 0))
+  of "Home":
+    some(KeyCombo(isSpecial: true, special: skHome, fnNum: 0))
+  of "End":
+    some(KeyCombo(isSpecial: true, special: skEnd, fnNum: 0))
+  else:
+    if key.len >= 2 and key.startsWith("F"):
+      try:
+        let num = parseInt(key[1 ..^ 1])
+        if num >= 1 and num <= 12:
+          some(KeyCombo(isSpecial: true, special: skFunction, fnNum: num))
+        else:
+          none(KeyCombo)
+      except ValueError:
+        none(KeyCombo)
+    else:
+      none(KeyCombo)
 
 proc stringToKeyCombo*(s: string): Option[KeyCombo] =
   ## Convert a string back to a KeyCombo for macro playback
@@ -411,48 +512,35 @@ proc stringToKeyCombo*(s: string): Option[KeyCombo] =
       else:
         break
 
-    # If we have modifiers, return a modified character key
+    # Try special key names first so `<C-Up>` / `<S-Tab>` round-trip with the
+    # right keycode rather than collapsing to a `char: "Up"` text combo.
+    # Note: `parseAngleBracketBody("Space")` returns a non-special combo
+    # (`char: " "`), so guard `.special` access with `isSpecial`.
+    let specialOpt = parseAngleBracketBody(key)
+    if specialOpt.isSome:
+      var combo = specialOpt.get
+      combo.modifiers = modifiers
+      # `<S-Tab>` (and the redundant `<Tab>` + Shift) collapses to skBackTab to
+      # match `parseKeyCombo` and `eventToKeyCombo`.
+      if combo.isSpecial and combo.special == skTab and kmShift in combo.modifiers:
+        combo.special = skBackTab
+        combo.modifiers.excl(kmShift)
+      # Reject unreliable Space combinations to stay aligned with
+      # `parseKeyCombo`:
+      # - `<S-Space>` is layout-dependent — terminals deliver shifted space
+      #   as plain space without a Shift modifier.
+      # - `<C-Space>` is not detectable in terminals at all (Ctrl + non-letter
+      #   collapses to NUL or similar).
+      # `<M-Space>` is fine because Alt+Space is reliably reported.
+      if not combo.isSpecial and combo.char == " " and
+          (kmShift in combo.modifiers or kmCtrl in combo.modifiers):
+        return none(KeyCombo)
+      return some(combo)
+
+    # Fall back to modifier + character key (e.g. `<C-a>`, `<M-w>`).
     if modifiers != {}:
       return some(KeyCombo(isSpecial: false, char: key, modifiers: modifiers))
-
-    # Handle special keys
-    case key
-    of "Enter":
-      return some(KeyCombo(isSpecial: true, special: skEnter, fnNum: 0))
-    of "Tab":
-      return some(KeyCombo(isSpecial: true, special: skTab, fnNum: 0))
-    of "Backspace":
-      return some(KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0))
-    of "Delete":
-      return some(KeyCombo(isSpecial: true, special: skDelete, fnNum: 0))
-    of "Escape":
-      return some(KeyCombo(isSpecial: true, special: skEscape, fnNum: 0))
-    of "Up":
-      return some(KeyCombo(isSpecial: true, special: skUp, fnNum: 0))
-    of "Down":
-      return some(KeyCombo(isSpecial: true, special: skDown, fnNum: 0))
-    of "Left":
-      return some(KeyCombo(isSpecial: true, special: skLeft, fnNum: 0))
-    of "Right":
-      return some(KeyCombo(isSpecial: true, special: skRight, fnNum: 0))
-    of "PageUp":
-      return some(KeyCombo(isSpecial: true, special: skPageUp, fnNum: 0))
-    of "PageDown":
-      return some(KeyCombo(isSpecial: true, special: skPageDown, fnNum: 0))
-    of "Home":
-      return some(KeyCombo(isSpecial: true, special: skHome, fnNum: 0))
-    of "End":
-      return some(KeyCombo(isSpecial: true, special: skEnd, fnNum: 0))
-    else:
-      # Check for function keys
-      if key.startsWith("F"):
-        try:
-          let num = parseInt(key[1 ..^ 1])
-          return some(KeyCombo(isSpecial: true, special: skFunction, fnNum: num))
-        except ValueError:
-          return none(KeyCombo)
-      else:
-        return none(KeyCombo)
+    return none(KeyCombo)
   else:
     # Regular character
     return some(KeyCombo(isSpecial: false, char: s, modifiers: {}))
@@ -2728,34 +2816,24 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       args: @[],
     )
   )
-  # Vim-style :bnext / :bprev aliases so they can be used as KeyMapping targets
-  registry.registerCommand(
-    Command(
-      name: "bnext",
-      description: "Switch to next buffer (:bnext)",
-      kind: ctAction,
-      commandId: "buffer.next.tab",
-      args: @[],
+  # Register Command mode command aliases (`:bd`, `:q`, `:w`, `:bnext` ...)
+  # as keymap targets. Each is dispatched at runtime via `hrExecCommand` /
+  # `nmrExecCommand`, routing through the full command-line parser so safety
+  # checks (modified-buffer guard etc.) are inherited automatically. Names
+  # that already exist as registered Commands (e.g. "save") are skipped — the
+  # pre-existing handler already covers them with the right commandId.
+  for alias in keyMappableCommandModeAliases:
+    if registry.commandRegistry.hasKey(alias.name):
+      continue
+    registry.registerCommand(
+      Command(
+        name: alias.name,
+        description: alias.description,
+        kind: ctAction,
+        commandId: ExecCmdlinePrefix & alias.name,
+        args: @[],
+      )
     )
-  )
-  registry.registerCommand(
-    Command(
-      name: "bprev",
-      description: "Switch to previous buffer (:bprev)",
-      kind: ctAction,
-      commandId: "buffer.prev.tab",
-      args: @[],
-    )
-  )
-  registry.registerCommand(
-    Command(
-      name: "bprevious",
-      description: "Switch to previous buffer (:bprevious)",
-      kind: ctAction,
-      commandId: "buffer.prev.tab",
-      args: @[],
-    )
-  )
   registry.bindKey(EditorMode.Normal, "g t", "buffer-next-tab")
   registry.bindKey(EditorMode.Normal, "g T", "buffer-prev-tab")
   registry.bindKey(EditorMode.Normal, "g n", "search-next-select")
@@ -3469,8 +3547,17 @@ proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
     # For character keys, the shift state is already reflected in the character
     # itself (e.g., 'T' vs 't', '!' vs '1'). Only include Shift modifier for
     # special keys (arrows, function keys, etc.) where shift changes behavior.
-    if combo.isSpecial:
+    # skBackTab already encodes Shift+Tab in the keycode, so suppress the
+    # redundant kmShift to match `parseKeyCombo("S-Tab")` -> skBackTab.
+    if combo.isSpecial and combo.special != skBackTab:
       combo.modifiers.incl(kmShift)
+
+  # Some terminals deliver Shift+Tab as `KeyCode.Tab + Shift modifier` instead
+  # of the dedicated `KeyCode.BackTab`. Normalize that to skBackTab here so it
+  # matches `parseKeyCombo("S-Tab")`, which already collapses to skBackTab.
+  if combo.isSpecial and combo.special == skTab and kmShift in combo.modifiers:
+    combo.special = skBackTab
+    combo.modifiers.excl(kmShift)
 
   logDebug(
     "keybind",
