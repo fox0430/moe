@@ -83,8 +83,9 @@ proc createTestState(): EditorState =
       autoCloseParen: false,
       autoDeleteParen: false,
     ),
-    needsFullRedraw: false,
-    viewportReservedLines: StatusAndCommandReserve,
+    windowDisplay: WindowDisplayState(
+      needsFullRedraw: false, viewportReservedLines: StatusAndCommandReserve
+    ),
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -1110,12 +1111,12 @@ suite "handleMouseEvent - Wheel Scroll":
   test "Wheel event sets needsFullRedraw":
     let e =
       createTestEditorWithBuffer("line0\nline1\nline2\nline3\nline4\nline5\nline6")
-    e.state.needsFullRedraw = false
+    e.state.windowDisplay.needsFullRedraw = false
 
     let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 5)
     discard e.handleMouseEvent(event)
 
-    check e.state.needsFullRedraw == true
+    check e.state.windowDisplay.needsFullRedraw == true
 
   test "WheelDown updates viewport topLine when cursor goes below viewport":
     # Create a buffer with many lines and a small viewport (height=5)

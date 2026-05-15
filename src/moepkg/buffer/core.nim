@@ -34,7 +34,7 @@ type
     ## Stable for the lifetime of a process (not persisted across restarts).
     ## `BufferId(0)` is reserved as the "unassigned" sentinel — `genBufferId`
     ## starts handing out ids from 1 so that the zero-initialized default of
-    ## `state.currentBufferId` can't accidentally collide with a real buffer.
+    ## `state.windowDisplay.currentBufferId` can't accidentally collide with a real buffer.
 
   LineMarkerKind* = enum
     ## Per-line marker classification stored in `TextBuffer.lineMarkers`.
@@ -254,7 +254,7 @@ const AutoBackendLargeFileThreshold* = 10 * 1024 * 1024 # 10 MB
 
 var nextBufferId = 1
   ## Starts at 1 so `BufferId(0)` is reserved as a sentinel for the
-  ## zero-initialized default of `state.currentBufferId`. See `BufferId`.
+  ## zero-initialized default of `state.windowDisplay.currentBufferId`. See `BufferId`.
 
 var configuredBackend: BufferBackend = GapBuffer
 var autoBackendMode: bool = false

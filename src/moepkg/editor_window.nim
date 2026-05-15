@@ -47,11 +47,11 @@ proc syncActiveWindow*(e: Editor) =
   e.executer.motionController.executor.buffer = e.activeWindow.buffer
   e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
   e.viewport = e.activeWindow.viewport
-  # Keep state.currentBufferId aligned with the active window's buffer so that
+  # Keep state.windowDisplay.currentBufferId aligned with the active window's buffer so that
   # window-switch / split / close paths automatically refresh the Jump List
   # anchor without each call site having to remember to update it.
-  e.state.currentBufferId = e.activeWindow.buffer.id
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.currentBufferId = e.activeWindow.buffer.id
+  e.state.windowDisplay.needsFullRedraw = true
 
   # Apply per-buffer EditorConfig overrides to display settings
   applyBufferEditorConfig(e.state.display, e.activeWindow.buffer, e.config)
@@ -481,7 +481,7 @@ proc enew*(e: Editor): Result[(), string] =
   # Reset cursor
   e.cursor = BufferPosition(line: 0, column: 0)
 
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
   ok(())
 
 proc new*(e: Editor): Result[(), string] =

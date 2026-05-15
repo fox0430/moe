@@ -61,8 +61,7 @@ proc createTestState(): EditorState =
       autoCloseParen: false,
       autoDeleteParen: false,
     ),
-    needsFullRedraw: false,
-    viewportReservedLines: 2,
+    windowDisplay: WindowDisplayState(needsFullRedraw: false, viewportReservedLines: 2),
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -174,7 +173,7 @@ suite "Visual Commands - visualMoveLeft":
 
     check state.cursor.column == 4
     check state.visualSelection.current.column == 4
-    check state.needsFullRedraw == true
+    check state.windowDisplay.needsFullRedraw == true
 
   test "Move left from beginning of line (no-op)":
     let buf = newTextBuffer()
@@ -200,7 +199,7 @@ suite "Visual Commands - visualMoveRight":
 
     check state.cursor.column == 6
     check state.visualSelection.current.column == 6
-    check state.needsFullRedraw == true
+    check state.windowDisplay.needsFullRedraw == true
 
   test "Move right at end of line (no-op)":
     let buf = newTextBuffer()
@@ -226,7 +225,7 @@ suite "Visual Commands - visualMoveUp":
 
     check state.cursor.line == 0
     check state.visualSelection.current.line == 0
-    check state.needsFullRedraw == true
+    check state.windowDisplay.needsFullRedraw == true
 
   test "Move up from first line (no-op)":
     let buf = newTextBuffer()
@@ -265,7 +264,7 @@ suite "Visual Commands - visualMoveDown":
 
     check state.cursor.line == 1
     check state.visualSelection.current.line == 1
-    check state.needsFullRedraw == true
+    check state.windowDisplay.needsFullRedraw == true
 
   test "Move down from last line (no-op)":
     let buf = newTextBuffer()

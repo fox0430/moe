@@ -915,7 +915,7 @@ proc handleHelpViewerMode*(
   of hvrClearSearchHighlight:
     # Double-Escape: clear search highlight in help viewer
     state.search.hlsearchTempDisabled = true
-    state.needsFullRedraw = true
+    state.windowDisplay.needsFullRedraw = true
     return HandlerResult(
       kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )

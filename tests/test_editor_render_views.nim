@@ -504,7 +504,7 @@ suite "renderTempMessages - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.tempMessages = @[]
+    e.state.ui.tempMessages = @[]
 
     # Should return early without crashing
     e.renderTempMessages(buffer)
@@ -515,7 +515,7 @@ suite "renderTempMessages - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.tempMessages = @["Jump list entry 1"]
+    e.state.ui.tempMessages = @["Jump list entry 1"]
 
     e.renderTempMessages(buffer)
 
@@ -529,7 +529,7 @@ suite "renderTempMessages - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.tempMessages = @[
+    e.state.ui.tempMessages = @[
       " jump line  col file/text", "   1    10    5 /path/to/file1.nim",
       "   2    20   10 /path/to/file2.nim", "   3    30   15 /path/to/file3.nim",
     ]
@@ -550,7 +550,7 @@ suite "renderTempMessages - Basic behavior":
     var messages: seq[string]
     for i in 1 .. 20:
       messages.add("Message " & $i)
-    e.state.tempMessages = messages
+    e.state.ui.tempMessages = messages
 
     e.renderTempMessages(buffer)
 
@@ -562,7 +562,7 @@ suite "renderTempMessages - Basic behavior":
 
     e.viewport.width = 80
     e.viewport.height = 24
-    e.state.tempMessages =
+    e.state.ui.tempMessages =
       @["File: /home/user/file.nim", "Unicode: こんにちは", "Symbols: <>&\"'"]
 
     e.renderTempMessages(buffer)
@@ -767,7 +767,7 @@ suite "Integration - Full render cycle":
     e.viewport.width = 80
     e.viewport.height = 24
     e.state.mode = EditorMode.Normal
-    e.state.tempMessages = @["Message 1", "Message 2"]
+    e.state.ui.tempMessages = @["Message 1", "Message 2"]
 
     discard e.updateViewportSize(buffer)
     e.renderSplitView(buffer, false)

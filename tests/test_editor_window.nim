@@ -854,11 +854,11 @@ suite "syncActiveWindow":
 
   test "sets needsFullRedraw":
     let e = createTestEditor()
-    e.state.needsFullRedraw = false
+    e.state.windowDisplay.needsFullRedraw = false
 
     e.syncActiveWindow()
 
-    check e.state.needsFullRedraw
+    check e.state.windowDisplay.needsFullRedraw
 
 suite "calculateWindowCursor - wrap mode edge cases":
   test "wrap mode with empty line":

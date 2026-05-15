@@ -213,8 +213,8 @@ proc getSelectionStyle*(
     not e.state.isSearchOverlay and wordMatchRanges.isColumnInRanges(pos.column)
 
   let isInFindCharMatch =
-    e.config.highlight.findCharHighlight and e.state.findCharMatches.len > 0 and
-    pos.line == e.state.findCharMatchLine and pos.column in e.state.findCharMatches
+    e.config.highlight.findCharHighlight and e.state.ui.findCharMatches.len > 0 and
+    pos.line == e.state.ui.findCharMatchLine and pos.column in e.state.ui.findCharMatches
 
   if hasSelection and e.state.visualSelection.isPositionInSelection(pos):
     # Keep original foreground color (syntax highlight), override only background

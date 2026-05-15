@@ -519,8 +519,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
-    e.state.findCharMatches = @[0, 2, 4, 6]
-    e.state.findCharMatchLine = 0
+    e.state.ui.findCharMatches = @[0, 2, 4, 6]
+    e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyle(
       e.textBuffer,
@@ -537,8 +537,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
-    e.state.findCharMatches = @[0, 2, 4, 6]
-    e.state.findCharMatchLine = 0
+    e.state.ui.findCharMatches = @[0, 2, 4, 6]
+    e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyle(
       e.textBuffer,
@@ -556,8 +556,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.display.showSyntax = false
     discard
       e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada\nabacada")
-    e.state.findCharMatches = @[0, 2, 4, 6]
-    e.state.findCharMatchLine = 0
+    e.state.ui.findCharMatches = @[0, 2, 4, 6]
+    e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyle(
       e.textBuffer,
@@ -574,8 +574,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
-    e.state.findCharMatches = @[]
-    e.state.findCharMatchLine = 0
+    e.state.ui.findCharMatches = @[]
+    e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyle(
       e.textBuffer,
@@ -596,8 +596,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
     e.state.visualSelection.current = BufferPosition(line: 0, column: 6)
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
-    e.state.findCharMatches = @[0, 2, 4, 6]
-    e.state.findCharMatchLine = 0
+    e.state.ui.findCharMatches = @[0, 2, 4, 6]
+    e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyle(
       e.textBuffer,
@@ -617,8 +617,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.display.showSyntax = false
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "(abacada)")
     e.state.matchingParenPos = some(BufferPosition(line: 0, column: 8))
-    e.state.findCharMatches = @[1, 3, 5, 7]
-    e.state.findCharMatchLine = 0
+    e.state.ui.findCharMatches = @[1, 3, 5, 7]
+    e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyle(
       e.textBuffer,
@@ -636,8 +636,8 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
-    e.state.findCharMatches = @[0, 2, 4, 6]
-    e.state.findCharMatchLine = 0
+    e.state.ui.findCharMatches = @[0, 2, 4, 6]
+    e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyle(
       e.textBuffer,

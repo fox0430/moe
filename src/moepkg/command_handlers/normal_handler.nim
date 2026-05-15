@@ -172,8 +172,9 @@ proc updateCursorToJumpPosition(
       state.display.scrollbar, state.display.scrollbarWidth,
     )
   handler.motionController.viewportManager.updateViewport(
-    cursorPos, buffer.len, state.display.showStatusLine, state.viewportReservedLines,
-    state.display.lineWrap, buffer, lineNumOffset, state.display.tabStop,
+    cursorPos, buffer.len, state.display.showStatusLine,
+    state.windowDisplay.viewportReservedLines, state.display.lineWrap, buffer,
+    lineNumOffset, state.display.tabStop,
   )
   return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
@@ -302,7 +303,7 @@ proc searchMatchAndSelect(
   state.visualSelection.start = pos
   state.visualSelection.current = matchEnd
   state.cursor = matchEnd
-  state.needsFullRedraw = true
+  state.windowDisplay.needsFullRedraw = true
   return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Visual))
 
 proc searchMatchAndOperate(
@@ -378,7 +379,7 @@ proc searchMatchAndOperate(
       else:
         state.cursor.column = 0
 
-    state.needsFullRedraw = true
+    state.windowDisplay.needsFullRedraw = true
 
     if op.operatorType == OpChange:
       return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
@@ -386,7 +387,7 @@ proc searchMatchAndOperate(
   of OpYank:
     # Yank only - no deletion, move cursor to match start
     state.cursor = pos
-    state.needsFullRedraw = true
+    state.windowDisplay.needsFullRedraw = true
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
   else:
     # Unsupported operator for search match
@@ -868,7 +869,9 @@ proc handleNormalModeKey*(
       let pos = buffer.changeList[buffer.changeListIndex]
       buffer.changeListIndex = max(0, buffer.changeListIndex - 1)
       let jumpPos = JumpPosition(
-        bufferId: state.currentBufferId, line: pos.line, column: pos.column
+        bufferId: state.windowDisplay.currentBufferId,
+        line: pos.line,
+        column: pos.column,
       )
       return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
     of "changelist.next":
@@ -883,7 +886,9 @@ proc handleNormalModeKey*(
       buffer.changeListIndex += 1
       let pos = buffer.changeList[buffer.changeListIndex]
       let jumpPos = JumpPosition(
-        bufferId: state.currentBufferId, line: pos.line, column: pos.column
+        bufferId: state.windowDisplay.currentBufferId,
+        line: pos.line,
+        column: pos.column,
       )
       return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
     of "bookmark.toggle":
@@ -893,15 +898,17 @@ proc handleNormalModeKey*(
       let next = buffer.findNextBookmark(state.cursor.line)
       if next.isNone:
         return NormalModeResult(kind: nmrError, errorMessage: "No bookmarks")
-      let jumpPos =
-        JumpPosition(bufferId: state.currentBufferId, line: next.get, column: 0)
+      let jumpPos = JumpPosition(
+        bufferId: state.windowDisplay.currentBufferId, line: next.get, column: 0
+      )
       return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
     of "bookmark.prev":
       let prev = buffer.findPrevBookmark(state.cursor.line)
       if prev.isNone:
         return NormalModeResult(kind: nmrError, errorMessage: "No bookmarks")
-      let jumpPos =
-        JumpPosition(bufferId: state.currentBufferId, line: prev.get, column: 0)
+      let jumpPos = JumpPosition(
+        bufferId: state.windowDisplay.currentBufferId, line: prev.get, column: 0
+      )
       return handler.updateCursorToJumpPosition(buffer, state, jumpPos)
     of "bookmark.clear":
       buffer.clearBookmarks()
@@ -914,7 +921,7 @@ proc handleNormalModeKey*(
       # If this is the first jump back, record current position and start from end
       if state.jumpListIndex < 0:
         let currentPos = JumpPosition(
-          bufferId: state.currentBufferId,
+          bufferId: state.windowDisplay.currentBufferId,
           line: state.cursor.line,
           column: state.cursor.column,
         )
@@ -926,7 +933,7 @@ proc handleNormalModeKey*(
       let pos = state.jumpList[state.jumpListIndex]
 
       # Check if we need to switch buffers
-      if pos.bufferId != state.currentBufferId:
+      if pos.bufferId != state.windowDisplay.currentBufferId:
         return NormalModeResult(
           kind: nmrJumpToBuffer,
           nmrJumpBufferId: pos.bufferId,
@@ -950,7 +957,7 @@ proc handleNormalModeKey*(
       let pos = state.jumpList[state.jumpListIndex]
 
       # Check if we need to switch buffers
-      if pos.bufferId != state.currentBufferId:
+      if pos.bufferId != state.windowDisplay.currentBufferId:
         return NormalModeResult(
           kind: nmrJumpToBuffer,
           nmrJumpBufferId: pos.bufferId,

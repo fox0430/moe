@@ -74,7 +74,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
             0
           else:
             min(targetCol, max(0, lineCharLen - 1))
-      e.state.needsFullRedraw = true
+      e.state.windowDisplay.needsFullRedraw = true
       e.updateViewportForCursor(e.cursor)
     else:
       # Buffer was deleted since the jump was recorded
@@ -177,7 +177,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         e.state.statusMessage = "Error: " & openResult.error
       else:
         e.state.statusMessage = "Opened: " & r.fileTreeFilePath
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
     return true
   of hrFileTreeQuit:
     # Close file tree window
@@ -189,7 +189,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       if enewResult.isErr:
         logError("handler", "Enew failed after file tree quit: " & enewResult.error)
         e.state.statusMessage = "Error: " & enewResult.error
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
     return true
   of hrFilerDeleteFile:
     # Delete file/directory from filer
@@ -369,14 +369,14 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
           e.executer.buffer = e.activeBuffer()
           e.executer.motionController.executor.buffer = e.activeBuffer()
 
-        # Keep state.currentBufferId off the deleted buffer so subsequent
+        # Keep state.windowDisplay.currentBufferId off the deleted buffer so subsequent
         # Jump List (Ctrl-o/Ctrl-i) compares don't false-match a dead id.
         # We don't go through syncActiveWindow here because the BufferManager
         # overlay is about to replace activeWindow.buffer with its own listing
         # TextBuffer right below — pointing currentBufferId at the underlying
         # replacement buffer is what we want for the post-exit state.
-        if e.state.currentBufferId == deletedId:
-          e.state.currentBufferId = newBuf.id
+        if e.state.windowDisplay.currentBufferId == deletedId:
+          e.state.windowDisplay.currentBufferId = newBuf.id
 
         # Update buffer manager entries and regenerate TextBuffer
         let activeWin = e.activeWindow
@@ -645,7 +645,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       word, e.activeWindow.cursor.line, e.activeWindow.cursor.column
     )
     e.state.statusMessage = ""
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
     return true
   of hrLspSelectionRange:
     discard e.requestLspSelectionRange()

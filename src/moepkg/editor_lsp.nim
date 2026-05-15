@@ -123,13 +123,13 @@ proc switchToBufferForLsp(e: Editor, index: int) =
   e.executer.buffer = targetBuffer
   e.executer.motionController.executor.buffer = targetBuffer
 
-  e.state.currentBufferId = targetBuffer.id
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.currentBufferId = targetBuffer.id
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc addToJumpList(e: Editor) =
   ## Add current cursor position to jump list before a jump
   let jumpPos = JumpPosition(
-    bufferId: e.state.currentBufferId,
+    bufferId: e.state.windowDisplay.currentBufferId,
     line: e.activeWindow.cursor.line,
     column: e.activeWindow.cursor.column,
   )
@@ -212,7 +212,7 @@ proc jumpToLspLocation(e: Editor, loc: lspTypes.Location, resultKind: string): b
     e.state.statusMessage = resultKind & " in " & path
 
   # Update viewport to follow cursor
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
   return true
 
 proc handleLspLocations(
@@ -300,7 +300,7 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
     e.activeWindow.cursor.column = max(0, targetCol)
 
   # Update viewport to follow cursor
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
   return true
 
 proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =
@@ -1039,7 +1039,7 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
 
       e.state.statusMessage =
         "Formatted (" & $edits.len & " edit" & (if edits.len > 1: "s" else: "") & ")"
-      e.state.needsFullRedraw = true
+      e.state.windowDisplay.needsFullRedraw = true
       return true
 
 proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
@@ -1058,7 +1058,7 @@ proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
       return
 
     e.state.statusMessage = "Updated fold markers"
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
   except CancelledError:
     discard
 
@@ -1100,7 +1100,7 @@ proc requestLspRename*(
         e.state.statusMessage =
           "Renamed '" & e.state.renameState.originalWord & "' to '" & newName & "' (" &
           $modifiedCount & " file" & (if modifiedCount > 1: "s" else: "") & " modified)"
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
       except CancelledError:
         discard
 

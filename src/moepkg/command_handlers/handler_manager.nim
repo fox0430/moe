@@ -538,8 +538,9 @@ proc handleKeyCombo*(
   ## to dispatchUnmigratedMode.
 
   # Complete any active scroll animation on key input (instant jump to target)
-  if e.state.scrollAnimation.active:
-    let (completed, cursorLine) = completeScrollAnimation(e.state.scrollAnimation)
+  if e.state.windowDisplay.scrollAnimation.active:
+    let (completed, cursorLine) =
+      completeScrollAnimation(e.state.windowDisplay.scrollAnimation)
     if completed:
       e.state.cursor.line = cursorLine
 
