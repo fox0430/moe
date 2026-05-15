@@ -27,6 +27,7 @@ import std/[os, options, uri, strutils]
 import pkg/results
 
 import buffer
+import picker/nav
 
 type
   RecentFileEntry* = object
@@ -112,29 +113,23 @@ proc selectedFile*(state: RecentFileModeState): Option[string] =
 
 proc moveUp*(state: RecentFileModeState) =
   ## Move selection up
-  if state.selectedIndex > 0:
-    state.selectedIndex.dec
+  pickerMoveUp(state.selectedIndex)
 
 proc moveDown*(state: RecentFileModeState) =
   ## Move selection down
-  if state.selectedIndex < state.files.high:
-    state.selectedIndex.inc
+  pickerMoveDown(state.selectedIndex, state.files.len)
 
 proc moveToFirst*(state: RecentFileModeState) =
   ## Move to first file
-  state.selectedIndex = 0
+  pickerMoveToFirst(state.selectedIndex)
 
 proc moveToLast*(state: RecentFileModeState) =
   ## Move to last file
-  if state.files.len > 0:
-    state.selectedIndex = state.files.high
+  pickerMoveToLast(state.selectedIndex, state.files.len)
 
 proc adjustViewport*(state: RecentFileModeState, viewportHeight: int) =
   ## Adjust topLine to keep selected item visible
-  if state.selectedIndex < state.topLine:
-    state.topLine = state.selectedIndex
-  elif state.selectedIndex >= state.topLine + viewportHeight:
-    state.topLine = state.selectedIndex - viewportHeight + 1
+  pickerEnsureVisible(state.selectedIndex, state.topLine, viewportHeight)
 
 proc getVisibleFiles*(
     state: RecentFileModeState, viewportHeight: int

@@ -23,6 +23,7 @@
 import std/options
 
 import buffer
+import picker/nav
 
 type
   BufferEntry* = object ## Represents a buffer entry in the buffer manager list
@@ -70,17 +71,13 @@ proc updateEntries*(state: BufferManagerState, bufferInfos: seq[BufferInfo]) =
 
 proc moveUp*(state: BufferManagerState) =
   ## Move selection up
-  if state.selectedIndex > 0:
-    state.selectedIndex.dec
-    # Adjust scroll position if needed
-    if state.selectedIndex < state.topLine:
-      state.topLine = state.selectedIndex
+  pickerMoveUp(state.selectedIndex)
+  if state.selectedIndex < state.topLine:
+    state.topLine = state.selectedIndex
 
 proc moveDown*(state: BufferManagerState) =
   ## Move selection down
-  if state.selectedIndex < state.entries.len - 1:
-    state.selectedIndex.inc
-    # Note: scroll adjustment for moving down is handled during rendering
+  pickerMoveDown(state.selectedIndex, state.entries.len)
 
 proc getSelectedEntry*(state: BufferManagerState): Option[BufferEntry] =
   ## Get the currently selected buffer entry

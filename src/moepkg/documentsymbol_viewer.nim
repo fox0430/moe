@@ -26,6 +26,7 @@ import std/[strformat, strutils, options]
 
 import lsp/protocol/[types, enums]
 import buffer
+import picker/nav
 
 type
   SymbolItem* = object
@@ -167,45 +168,31 @@ proc getLine*(state: DocumentSymbolViewerState, index: int): string =
 
 proc moveUp*(state: DocumentSymbolViewerState) =
   ## Move selection up
-  if state.selectedIndex > 0:
-    state.selectedIndex.dec
+  pickerMoveUp(state.selectedIndex)
 
 proc moveDown*(state: DocumentSymbolViewerState) =
   ## Move selection down
-  if state.selectedIndex < state.items.high:
-    state.selectedIndex.inc
+  pickerMoveDown(state.selectedIndex, state.items.len)
 
 proc moveToFirst*(state: DocumentSymbolViewerState) =
   ## Move to first item
-  state.selectedIndex = 0
+  pickerMoveToFirst(state.selectedIndex)
 
 proc moveToLast*(state: DocumentSymbolViewerState) =
   ## Move to last item
-  if state.items.len > 0:
-    state.selectedIndex = state.items.high
-  else:
-    state.selectedIndex = 0
+  pickerMoveToLast(state.selectedIndex, state.items.len)
 
 proc halfPageUp*(state: DocumentSymbolViewerState, viewportHeight: int) =
   ## Move up by half a page
-  let halfPage = viewportHeight div 2
-  state.selectedIndex = max(0, state.selectedIndex - halfPage)
+  pickerHalfPageUp(state.selectedIndex, viewportHeight)
 
 proc halfPageDown*(state: DocumentSymbolViewerState, viewportHeight: int) =
   ## Move down by half a page
-  let halfPage = viewportHeight div 2
-  if state.items.len > 0:
-    state.selectedIndex = min(state.items.high, state.selectedIndex + halfPage)
+  pickerHalfPageDown(state.selectedIndex, state.items.len, viewportHeight)
 
 proc ensureSelectedVisible*(state: DocumentSymbolViewerState, viewportHeight: int) =
   ## Ensure the selected item is visible in the viewport
-  if state.selectedIndex < state.topLine:
-    state.topLine = state.selectedIndex
-  elif state.selectedIndex >= state.topLine + viewportHeight:
-    state.topLine = state.selectedIndex - viewportHeight + 1
-
-  if state.topLine < 0:
-    state.topLine = 0
+  pickerEnsureVisible(state.selectedIndex, state.topLine, viewportHeight)
 
 proc createDocumentSymbolTextBuffer*(state: DocumentSymbolViewerState): TextBuffer =
   ## Create a TextBuffer from document symbols for rendering via the normal view path
