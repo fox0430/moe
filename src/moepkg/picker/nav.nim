@@ -40,15 +40,11 @@ proc pickerMoveToLast*(selectedIndex: var int, itemCount: int) =
 proc pickerHalfPageUp*(selectedIndex: var int, viewportHeight: int) =
   selectedIndex = max(0, selectedIndex - viewportHeight div 2)
 
-proc pickerHalfPageDown*(
-    selectedIndex: var int, itemCount: int, viewportHeight: int
-) =
+proc pickerHalfPageDown*(selectedIndex: var int, itemCount: int, viewportHeight: int) =
   if itemCount > 0:
     selectedIndex = min(itemCount - 1, selectedIndex + viewportHeight div 2)
 
-proc pickerEnsureVisible*(
-    selectedIndex: int, topLine: var int, viewportHeight: int
-) =
+proc pickerEnsureVisible*(selectedIndex: int, topLine: var int, viewportHeight: int) =
   if selectedIndex < topLine:
     topLine = selectedIndex
   elif viewportHeight > 0 and selectedIndex >= topLine + viewportHeight:
