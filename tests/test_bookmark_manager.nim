@@ -231,14 +231,14 @@ suite "BookmarkManagerState - Navigation":
     state.moveDown()
     check state.selectedIndex == 2
 
-suite "BookmarkManagerState - getSelectedEntry":
+suite "BookmarkManagerState - getSelectedItem":
   test "Get selected entry returns correct entry":
     let state = newBookmarkManagerState()
     let buffers = createTestBuffers()
     state.updateEntries(buffers)
     state.selectedIndex = 1
 
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
 
     check entry.isSome
     check entry.get.filePath == "/path/file1.nim"
@@ -247,7 +247,7 @@ suite "BookmarkManagerState - getSelectedEntry":
   test "Get selected entry from empty state returns none":
     let state = newBookmarkManagerState()
 
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
 
     check entry.isNone
 
@@ -257,7 +257,7 @@ suite "BookmarkManagerState - getSelectedEntry":
     state.updateEntries(buffers)
     state.selectedIndex = 10
 
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
 
     check entry.isNone
 
@@ -267,17 +267,17 @@ suite "BookmarkManagerState - getSelectedEntry":
     state.updateEntries(buffers)
     state.selectedIndex = -1
 
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
 
     check entry.isNone
 
-suite "BookmarkEntry - formatEntry":
+suite "BookmarkEntry - formatLine":
   test "Format entry with file path and line":
     let entry = BookmarkEntry(
       bufferIndex: 0, filePath: "/path/file.nim", line: 41, text: "proc hello"
     )
 
-    let formatted = formatEntry(entry)
+    let formatted = formatLine(entry)
 
     check formatted == "  /path/file.nim:42  proc hello"
 
@@ -285,14 +285,14 @@ suite "BookmarkEntry - formatEntry":
     let entry =
       BookmarkEntry(bufferIndex: 0, filePath: "No Name", line: 0, text: "first line")
 
-    let formatted = formatEntry(entry)
+    let formatted = formatLine(entry)
 
     check formatted == "  No Name:1  first line"
 
   test "Format entry with empty text":
     let entry = BookmarkEntry(bufferIndex: 0, filePath: "/file.nim", line: 5, text: "")
 
-    let formatted = formatEntry(entry)
+    let formatted = formatLine(entry)
 
     check formatted == "  /file.nim:6  "
 
@@ -309,7 +309,7 @@ suite "BookmarkManagerState - createBookmarkManagerTextBuffer":
     check buf.len == 4
     check buf.getLine(0) == "-- Bookmark Manager --"
 
-  test "Create text buffer content matches formatEntry":
+  test "Create text buffer content matches formatLine":
     let state = newBookmarkManagerState()
     var buf = newTextBuffer("hello\nworld")
     buf.filePath = some("test.nim")
@@ -320,8 +320,8 @@ suite "BookmarkManagerState - createBookmarkManagerTextBuffer":
     let textBuf = state.createBookmarkManagerTextBuffer()
 
     check textBuf.len == 3
-    check textBuf.getLine(1) == formatEntry(state.entries[0])
-    check textBuf.getLine(2) == formatEntry(state.entries[1])
+    check textBuf.getLine(1) == formatLine(state.entries[0])
+    check textBuf.getLine(2) == formatLine(state.entries[1])
 
   test "Create text buffer with no entries":
     let state = newBookmarkManagerState()
@@ -457,7 +457,7 @@ suite "BookmarkManagerState - Integration":
     check state.selectedIndex == 1
 
     # Get selected entry
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
     check entry.isSome
     check entry.get.line == 3
 

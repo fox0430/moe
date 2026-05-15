@@ -307,7 +307,7 @@ suite "backup_manager - moveToLast":
     state.moveToLast()
     check state.selectedIndex == 0
 
-suite "backup_manager - getSelectedEntry":
+suite "backup_manager - getSelectedItem":
   test "Get selected entry returns correct entry":
     let state = newBackupManagerState()
     let t = now()
@@ -317,7 +317,7 @@ suite "backup_manager - getSelectedEntry":
     ]
     state.selectedIndex = 1
 
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
     check entry.isSome
     check entry.get().filename == "b"
     check entry.get().fullPath == "/b"
@@ -325,7 +325,7 @@ suite "backup_manager - getSelectedEntry":
   test "Get selected entry returns none with empty entries":
     let state = newBackupManagerState()
 
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
     check entry.isNone
 
   test "Get selected entry returns none with invalid index":
@@ -333,7 +333,7 @@ suite "backup_manager - getSelectedEntry":
     state.entries = @[BackupEntry(filename: "a", timestamp: now(), fullPath: "/a")]
     state.selectedIndex = 5
 
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
     check entry.isNone
 
   test "Get selected entry returns none with negative index":
@@ -341,7 +341,7 @@ suite "backup_manager - getSelectedEntry":
     state.entries = @[BackupEntry(filename: "a", timestamp: now(), fullPath: "/a")]
     state.selectedIndex = -1
 
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
     check entry.isNone
 
 suite "backup_manager - formatTimestamp":
@@ -350,11 +350,11 @@ suite "backup_manager - formatTimestamp":
     let formatted = formatTimestamp(dt)
     check formatted == "2025-01-15 10:30:45"
 
-suite "backup_manager - formatEntry":
+suite "backup_manager - formatLine":
   test "Format entry uses formatTimestamp":
     let dt = dateTime(2025, mJan, 15, 10, 30, 45, zone = utc())
     let entry = BackupEntry(filename: "test", timestamp: dt, fullPath: "/test")
-    let formatted = formatEntry(entry)
+    let formatted = formatLine(entry)
     check formatted == "2025-01-15 10:30:45"
 
 suite "backup_manager - deleteBackup":

@@ -79,14 +79,14 @@ proc moveDown*(state: BookmarkManagerState) =
   ## Move selection down
   pickerMoveDown(state.selectedIndex, state.entries.len)
 
-proc getSelectedEntry*(state: BookmarkManagerState): Option[BookmarkEntry] =
+proc getSelectedItem*(state: BookmarkManagerState): Option[BookmarkEntry] =
   ## Get the currently selected bookmark entry
   if state.selectedIndex >= 0 and state.selectedIndex < state.entries.len:
     some(state.entries[state.selectedIndex])
   else:
     none(BookmarkEntry)
 
-proc formatEntry*(entry: BookmarkEntry): string =
+proc formatLine*(entry: BookmarkEntry): string =
   ## Format a bookmark entry for display
   let lineNum = $(entry.line + 1)
   result = "  " & entry.filePath & ":" & lineNum & "  " & entry.text
@@ -99,13 +99,13 @@ proc createBookmarkManagerTextBuffer*(state: BookmarkManagerState): TextBuffer =
   else:
     for entry in state.entries:
       content.add('\n')
-      content.add(formatEntry(entry))
+      content.add(formatLine(entry))
   result = newTextBuffer(content)
   result.readOnly = true
 
 proc deleteSelectedBookmark*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
   ## Delete the currently selected bookmark and refresh entries
-  let entry = state.getSelectedEntry()
+  let entry = state.getSelectedItem()
   if entry.isSome:
     let e = entry.get
     if e.bufferIndex >= 0 and e.bufferIndex < buffers.len:

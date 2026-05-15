@@ -81,7 +81,7 @@ proc handleBufferManagerModeKey*(
     case keyCombo.special
     of skEnter:
       # Select the buffer
-      let entry = bmState.getSelectedEntry()
+      let entry = bmState.getSelectedItem()
       if entry.isSome:
         return BufferManagerResult(kind: bmrSelectBuffer, bufferIndex: entry.get.index)
       return BufferManagerResult(kind: bmrHandled)
@@ -139,13 +139,13 @@ proc handleBufferManagerModeKey*(
       return BufferManagerResult(kind: bmrHandled)
     of "o":
       # Open in new window (same as Enter for now)
-      let entry = bmState.getSelectedEntry()
+      let entry = bmState.getSelectedItem()
       if entry.isSome:
         return BufferManagerResult(kind: bmrSelectBuffer, bufferIndex: entry.get.index)
       return BufferManagerResult(kind: bmrHandled)
     of "D":
       # Delete the selected buffer
-      let entry = bmState.getSelectedEntry()
+      let entry = bmState.getSelectedItem()
       if entry.isSome:
         return
           BufferManagerResult(kind: bmrDeleteBuffer, deleteBufferIndex: entry.get.index)

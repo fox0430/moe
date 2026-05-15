@@ -90,7 +90,7 @@ proc handleBackupManagerModeKey*(
     case keyCombo.special
     of skEnter:
       # Open diff viewer for selected backup
-      let entry = bkState.getSelectedEntry()
+      let entry = bkState.getSelectedItem()
       if entry.isSome:
         return BackupManagerResult(kind: bkmrOpenDiff, diffIndex: bkState.selectedIndex)
       return BackupManagerResult(kind: bkmrHandled)
@@ -146,14 +146,14 @@ proc handleBackupManagerModeKey*(
       return BackupManagerResult(kind: bkmrHandled)
     of "R":
       # Restore the selected backup
-      let entry = bkState.getSelectedEntry()
+      let entry = bkState.getSelectedItem()
       if entry.isSome:
         return
           BackupManagerResult(kind: bkmrRestore, restoreIndex: bkState.selectedIndex)
       return BackupManagerResult(kind: bkmrHandled)
     of "D":
       # Delete the selected backup
-      let entry = bkState.getSelectedEntry()
+      let entry = bkState.getSelectedItem()
       if entry.isSome:
         return BackupManagerResult(kind: bkmrDelete, deleteIndex: bkState.selectedIndex)
       return BackupManagerResult(kind: bkmrHandled)

@@ -78,7 +78,7 @@ proc handleRecentFileModeKey*(
   if keyCombo.isSpecial:
     case keyCombo.special
     of skEnter:
-      let selectedFile = state.selectedFile()
+      let selectedFile = state.getSelectedItem()
       if selectedFile.isSome:
         return RecentFileModeResult(
           kind: rfmrOpenFile,
@@ -93,11 +93,11 @@ proc handleRecentFileModeKey*(
         )
     of skUp:
       state.moveUp()
-      state.adjustViewport(viewportHeight)
+      state.ensureSelectedVisible(viewportHeight)
       return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
     of skDown:
       state.moveDown()
-      state.adjustViewport(viewportHeight)
+      state.ensureSelectedVisible(viewportHeight)
       return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
     of skLeft, skRight, skBackspace:
       # No-op for horizontal movement keys (vim compatibility)
@@ -110,15 +110,15 @@ proc handleRecentFileModeKey*(
     case keyCombo.char
     of "j":
       state.moveDown()
-      state.adjustViewport(viewportHeight)
+      state.ensureSelectedVisible(viewportHeight)
       return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
     of "k":
       state.moveUp()
-      state.adjustViewport(viewportHeight)
+      state.ensureSelectedVisible(viewportHeight)
       return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
     of "G":
       state.moveToLast()
-      state.adjustViewport(viewportHeight)
+      state.ensureSelectedVisible(viewportHeight)
       return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
     of "g":
       handler.waitingForG = true

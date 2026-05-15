@@ -213,7 +213,7 @@ suite "BufferManagerState - Navigation":
     state.moveDown()
     check state.selectedIndex == 2
 
-suite "BufferManagerState - getSelectedEntry":
+suite "BufferManagerState - getSelectedItem":
   test "Get selected entry returns correct entry":
     let state = newBufferManagerState()
     let bufferInfos = @[
@@ -223,7 +223,7 @@ suite "BufferManagerState - getSelectedEntry":
     state.updateEntries(bufferInfos)
     state.selectedIndex = 1
 
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
 
     check entry.isSome
     check entry.get.name == "/file2.nim"
@@ -233,7 +233,7 @@ suite "BufferManagerState - getSelectedEntry":
   test "Get selected entry from empty state returns none":
     let state = newBufferManagerState()
 
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
 
     check entry.isNone
 
@@ -244,7 +244,7 @@ suite "BufferManagerState - getSelectedEntry":
     state.updateEntries(bufferInfos)
     state.selectedIndex = 10 # Invalid index
 
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
 
     check entry.isNone
 
@@ -255,16 +255,16 @@ suite "BufferManagerState - getSelectedEntry":
     state.updateEntries(bufferInfos)
     state.selectedIndex = -1
 
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
 
     check entry.isNone
 
-suite "BufferEntry - formatEntry":
+suite "BufferEntry - formatLine":
   test "Format active unmodified entry":
     let entry =
       BufferEntry(index: 0, name: "/path/to/file.nim", modified: false, active: true)
 
-    let formatted = formatEntry(entry)
+    let formatted = formatLine(entry)
 
     check formatted == "* 0:     /path/to/file.nim"
 
@@ -272,7 +272,7 @@ suite "BufferEntry - formatEntry":
     let entry =
       BufferEntry(index: 1, name: "/path/to/file.nim", modified: true, active: false)
 
-    let formatted = formatEntry(entry)
+    let formatted = formatLine(entry)
 
     check formatted == "  1: [+] /path/to/file.nim"
 
@@ -280,7 +280,7 @@ suite "BufferEntry - formatEntry":
     let entry =
       BufferEntry(index: 2, name: "/path/to/file.nim", modified: true, active: true)
 
-    let formatted = formatEntry(entry)
+    let formatted = formatLine(entry)
 
     check formatted == "* 2: [+] /path/to/file.nim"
 
@@ -288,14 +288,14 @@ suite "BufferEntry - formatEntry":
     let entry =
       BufferEntry(index: 3, name: "/path/to/file.nim", modified: false, active: false)
 
-    let formatted = formatEntry(entry)
+    let formatted = formatLine(entry)
 
     check formatted == "  3:     /path/to/file.nim"
 
   test "Format entry with No Name":
     let entry = BufferEntry(index: 0, name: "No Name", modified: false, active: true)
 
-    let formatted = formatEntry(entry)
+    let formatted = formatLine(entry)
 
     check formatted == "* 0:     No Name"
 
@@ -322,7 +322,7 @@ suite "BufferManagerState - Integration":
     check state.selectedIndex == 1
 
     # Get selected entry
-    let entry = state.getSelectedEntry()
+    let entry = state.getSelectedItem()
     check entry.isSome
     check entry.get.name == "/file2.nim"
 
