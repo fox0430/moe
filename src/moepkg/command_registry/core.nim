@@ -23,7 +23,7 @@ import std/[tables, options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, buffer, motion, key_bindings, modes, clipboard, config, logger]
+import ../[types, buffer, motion, key_bindings, config, logger]
 
 type
   ## Built-in command identifiers
