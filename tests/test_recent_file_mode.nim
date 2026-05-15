@@ -145,26 +145,26 @@ suite "RecentFileMode - XBEL parsing":
     check files[0] == "/home/user/file.txt"
 
 suite "RecentFileMode - Selection":
-  test "selectedFile returns none for empty state":
+  test "getSelectedItem returns none for empty state":
     let state = newRecentFileModeState()
-    check state.selectedFile.isNone
+    check state.getSelectedItem.isNone
 
-  test "selectedFile returns selected file path":
+  test "getSelectedItem returns selected file path":
     let state = newRecentFileModeState()
     state.files.add RecentFileEntry(path: "/path/to/file1.txt")
     state.files.add RecentFileEntry(path: "/path/to/file2.txt")
     state.selectedIndex = 1
 
-    let selected = state.selectedFile
+    let selected = state.getSelectedItem
     check selected.isSome
     check selected.get == "/path/to/file2.txt"
 
-  test "selectedFile returns none for out of range index":
+  test "getSelectedItem returns none for out of range index":
     let state = newRecentFileModeState()
     state.files.add RecentFileEntry(path: "/path/to/file.txt")
     state.selectedIndex = 5
 
-    check state.selectedFile.isNone
+    check state.getSelectedItem.isNone
 
 suite "RecentFileMode - Navigation":
   test "moveUp decreases selectedIndex":
@@ -247,34 +247,34 @@ suite "RecentFileMode - Navigation":
     check state.selectedIndex == 0
 
 suite "RecentFileMode - Viewport":
-  test "adjustViewport scrolls up when selection above viewport":
+  test "ensureSelectedVisible scrolls up when selection above viewport":
     let state = newRecentFileModeState()
     for i in 0 ..< 10:
       state.files.add RecentFileEntry(path: "/file" & $i & ".txt")
     state.topLine = 5
     state.selectedIndex = 2
 
-    state.adjustViewport(5)
+    state.ensureSelectedVisible(5)
     check state.topLine == 2
 
-  test "adjustViewport scrolls down when selection below viewport":
+  test "ensureSelectedVisible scrolls down when selection below viewport":
     let state = newRecentFileModeState()
     for i in 0 ..< 10:
       state.files.add RecentFileEntry(path: "/file" & $i & ".txt")
     state.topLine = 0
     state.selectedIndex = 7
 
-    state.adjustViewport(5)
+    state.ensureSelectedVisible(5)
     check state.topLine == 3
 
-  test "adjustViewport does not change when selection is visible":
+  test "ensureSelectedVisible does not change when selection is visible":
     let state = newRecentFileModeState()
     for i in 0 ..< 10:
       state.files.add RecentFileEntry(path: "/file" & $i & ".txt")
     state.topLine = 2
     state.selectedIndex = 4
 
-    state.adjustViewport(5)
+    state.ensureSelectedVisible(5)
     check state.topLine == 2
 
   test "getVisibleFiles returns correct slice":

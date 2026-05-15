@@ -105,7 +105,7 @@ proc isEmpty*(state: RecentFileModeState): bool =
   ## Check if file list is empty
   state.files.len == 0
 
-proc selectedFile*(state: RecentFileModeState): Option[string] =
+proc getSelectedItem*(state: RecentFileModeState): Option[string] =
   ## Get currently selected file path
   if state.isEmpty or state.selectedIndex >= state.files.len:
     return none(string)
@@ -127,7 +127,7 @@ proc moveToLast*(state: RecentFileModeState) =
   ## Move to last file
   pickerMoveToLast(state.selectedIndex, state.files.len)
 
-proc adjustViewport*(state: RecentFileModeState, viewportHeight: int) =
+proc ensureSelectedVisible*(state: RecentFileModeState, viewportHeight: int) =
   ## Adjust topLine to keep selected item visible
   pickerEnsureVisible(state.selectedIndex, state.topLine, viewportHeight)
 
@@ -135,7 +135,7 @@ proc getVisibleFiles*(
     state: RecentFileModeState, viewportHeight: int
 ): seq[RecentFileEntry] =
   ## Get files visible in current viewport
-  ## Note: Call adjustViewport before this if needed
+  ## Note: Call ensureSelectedVisible before this if needed
   let endIndex = min(state.topLine + viewportHeight, state.files.len)
   if state.topLine < state.files.len:
     return state.files[state.topLine ..< endIndex]
@@ -143,7 +143,7 @@ proc getVisibleFiles*(
 
 proc selectedFileExists*(state: RecentFileModeState): bool =
   ## Check if the currently selected file exists on disk
-  let selected = state.selectedFile()
+  let selected = state.getSelectedItem()
   if selected.isNone:
     return false
   return fileExists(selected.get)

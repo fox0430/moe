@@ -78,7 +78,7 @@ proc handleBookmarkManagerModeKey*(
   if keyCombo.isSpecial:
     case keyCombo.special
     of skEnter:
-      let entry = bmState.getSelectedEntry()
+      let entry = bmState.getSelectedItem()
       if entry.isSome:
         return BookmarkManagerResult(
           kind: bkmrJumpToBookmark,
@@ -135,7 +135,7 @@ proc handleBookmarkManagerModeKey*(
       bmState.selectedIndex = max(0, bmState.entries.len - 1)
       return BookmarkManagerResult(kind: bkmrHandled)
     of "D":
-      let entry = bmState.getSelectedEntry()
+      let entry = bmState.getSelectedItem()
       if entry.isSome:
         return BookmarkManagerResult(
           kind: bkmrDeleteBookmark, deleteEntryIndex: bmState.selectedIndex

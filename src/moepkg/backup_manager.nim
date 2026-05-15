@@ -126,7 +126,7 @@ proc moveToLast*(state: BackupManagerState) =
   ## Move to last entry
   pickerMoveToLast(state.selectedIndex, state.entries.len)
 
-proc getSelectedEntry*(state: BackupManagerState): Option[BackupEntry] =
+proc getSelectedItem*(state: BackupManagerState): Option[BackupEntry] =
   ## Get the currently selected backup entry
   if state.selectedIndex >= 0 and state.selectedIndex < state.entries.len:
     some(state.entries[state.selectedIndex])
@@ -137,7 +137,7 @@ proc formatTimestamp*(dt: DateTime): string =
   ## Format a DateTime for display
   dt.format("yyyy-MM-dd HH:mm:ss")
 
-proc formatEntry*(entry: BackupEntry): string =
+proc formatLine*(entry: BackupEntry): string =
   ## Format a backup entry for display
   formatTimestamp(entry.timestamp)
 
@@ -179,6 +179,6 @@ proc createBackupManagerTextBuffer*(state: BackupManagerState): TextBuffer =
   else:
     for entry in state.entries:
       content.add('\n')
-      content.add(formatEntry(entry))
+      content.add(formatLine(entry))
   result = newTextBuffer(content)
   result.readOnly = true

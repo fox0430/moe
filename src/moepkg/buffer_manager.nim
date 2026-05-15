@@ -79,14 +79,14 @@ proc moveDown*(state: BufferManagerState) =
   ## Move selection down
   pickerMoveDown(state.selectedIndex, state.entries.len)
 
-proc getSelectedEntry*(state: BufferManagerState): Option[BufferEntry] =
+proc getSelectedItem*(state: BufferManagerState): Option[BufferEntry] =
   ## Get the currently selected buffer entry
   if state.selectedIndex >= 0 and state.selectedIndex < state.entries.len:
     some(state.entries[state.selectedIndex])
   else:
     none(BufferEntry)
 
-proc formatEntry*(entry: BufferEntry): string =
+proc formatLine*(entry: BufferEntry): string =
   ## Format a buffer entry for display
   let
     modifiedMark = if entry.modified: "[+] " else: "    "
@@ -99,6 +99,6 @@ proc createBufferManagerTextBuffer*(state: BufferManagerState): TextBuffer =
   var content = "-- Buffer Manager --"
   for entry in state.entries:
     content.add('\n')
-    content.add(formatEntry(entry))
+    content.add(formatLine(entry))
   result = newTextBuffer(content)
   result.readOnly = true
