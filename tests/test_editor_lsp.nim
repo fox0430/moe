@@ -756,19 +756,19 @@ suite "editor_lsp - handleLspLocations":
 suite "editor_lsp - switchToBufferForLsp":
   test "Does nothing for invalid negative index":
     let e = createTestEditor()
-    let initialBufferId = e.state.currentBufferId
+    let initialBufferId = e.state.windowDisplay.currentBufferId
 
     e.switchToBufferForLsp(-1)
 
-    check e.state.currentBufferId == initialBufferId
+    check e.state.windowDisplay.currentBufferId == initialBufferId
 
   test "Does nothing for out of bounds index":
     let e = createTestEditor()
-    let initialBufferId = e.state.currentBufferId
+    let initialBufferId = e.state.windowDisplay.currentBufferId
 
     e.switchToBufferForLsp(999)
 
-    check e.state.currentBufferId == initialBufferId
+    check e.state.windowDisplay.currentBufferId == initialBufferId
 
   test "Switches to valid buffer index":
     let e = createTestEditor()
@@ -781,16 +781,16 @@ suite "editor_lsp - switchToBufferForLsp":
     discard e.editFile(testFile)
     e.switchToBufferForLsp(0)
 
-    check e.state.currentBufferId == e.buffers[0].id
+    check e.state.windowDisplay.currentBufferId == e.buffers[0].id
 
   test "Does nothing when already on target buffer":
     let e = createTestEditor()
-    let initialBufferId = e.state.currentBufferId
+    let initialBufferId = e.state.windowDisplay.currentBufferId
     let initialIndex = e.currentBufferIndex()
 
     e.switchToBufferForLsp(initialIndex)
 
-    check e.state.currentBufferId == initialBufferId
+    check e.state.windowDisplay.currentBufferId == initialBufferId
 
 suite "editor_lsp - addToJumpList":
   test "Adds position to jump list":

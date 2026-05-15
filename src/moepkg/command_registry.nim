@@ -412,7 +412,7 @@ proc executeOperatorOnRange(
     # Restore viewport position to where it was before the operator started
     # Use savedViewportTopLine which was saved when operator (d/c/y) was pressed
     let newBufferLen = ctx.buffer.len
-    let restoredTopLine = ctx.state.savedViewportTopLine
+    let restoredTopLine = ctx.state.windowDisplay.savedViewportTopLine
     let cursorLine = ctx.cursor.line
 
     # Restore viewport, but ensure cursor remains visible
@@ -431,7 +431,7 @@ proc executeOperatorOnRange(
       # Restore to saved position
       ctx.motionController.viewportManager.viewport.topLine = restoredTopLine
 
-    ctx.state.needsFullRedraw = true
+    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   of OpChange:
     # Change the range (delete and enter insert mode)
@@ -463,7 +463,7 @@ proc executeOperatorOnRange(
 
     # Restore viewport position (same logic as OpDelete)
     let newBufferLen = ctx.buffer.len
-    let restoredTopLine = ctx.state.savedViewportTopLine
+    let restoredTopLine = ctx.state.windowDisplay.savedViewportTopLine
     let cursorLine = ctx.cursor.line
 
     # Restore viewport, but ensure cursor remains visible
@@ -480,7 +480,7 @@ proc executeOperatorOnRange(
 
     # Enter insert mode (transaction remains open for insert mode input)
     ctx.state.mode = EditorMode.Insert
-    ctx.state.needsFullRedraw = true
+    ctx.state.windowDisplay.needsFullRedraw = true
 
     return ok(())
   of OpIndent:
@@ -521,7 +521,7 @@ proc executeOperatorOnRange(
         else:
           break
 
-    ctx.state.needsFullRedraw = true
+    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   of OpOutdent:
     # Dedent lines in the range (same line adjustment as indent)
@@ -563,7 +563,7 @@ proc executeOperatorOnRange(
         else:
           break
 
-    ctx.state.needsFullRedraw = true
+    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   of OpLowerCase:
     # Convert text in range to lowercase
@@ -591,7 +591,7 @@ proc executeOperatorOnRange(
     discard ctx.buffer.commitTransaction()
 
     ctx.cursor = range.start
-    ctx.state.needsFullRedraw = true
+    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   of OpUpperCase:
     # Convert text in range to uppercase
@@ -619,7 +619,7 @@ proc executeOperatorOnRange(
     discard ctx.buffer.commitTransaction()
 
     ctx.cursor = range.start
-    ctx.state.needsFullRedraw = true
+    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   of OpSwapCase:
     return err("Operator " & $operatorType & " not yet implemented")
@@ -645,8 +645,8 @@ proc executeCommand*(
 
   # Clear f/F/t/T match highlight when executing a non-find/till command
   if cmd.kind != ctOperatorPending or cmd.operatorType notin ["find", "till"]:
-    ctx.state.findCharMatches = @[]
-    ctx.state.findCharMatchLine = 0
+    ctx.state.ui.findCharMatches = @[]
+    ctx.state.ui.findCharMatchLine = 0
 
   case cmd.kind
   of ctMotion:
@@ -769,7 +769,7 @@ proc executeCommand*(
           # Restore original cursor position - animation will interpolate from here
           ctx.cursor.line = prevCursorLine
           startScrollAnimation(
-            ctx.state.scrollAnimation, prevCursorLine, targetCursorLine,
+            ctx.state.windowDisplay.scrollAnimation, prevCursorLine, targetCursorLine,
             ctx.smoothScrollConfig,
           )
         else:
@@ -883,8 +883,8 @@ proc executeCommand*(
         ctx.cursor = r.value
 
         # Highlight all matching characters on cursor line
-        ctx.state.findCharMatchLine = ctx.cursor.line
-        ctx.state.findCharMatches =
+        ctx.state.ui.findCharMatchLine = ctx.cursor.line
+        ctx.state.ui.findCharMatches =
           findAllCharPositions(ctx.buffer, ctx.cursor.line, cmd.targetChar)
 
         return Result[(), string].ok ()
@@ -986,8 +986,8 @@ proc executeCommand*(
         ctx.cursor = r.value
 
         # Highlight all matching characters on cursor line
-        ctx.state.findCharMatchLine = ctx.cursor.line
-        ctx.state.findCharMatches =
+        ctx.state.ui.findCharMatchLine = ctx.cursor.line
+        ctx.state.ui.findCharMatches =
           findAllCharPositions(ctx.buffer, ctx.cursor.line, cmd.targetChar)
 
         return Result[(), string].ok ()
@@ -1052,7 +1052,7 @@ proc executeCommand*(
         ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
         ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
 
-      ctx.state.needsFullRedraw = true
+      ctx.state.windowDisplay.needsFullRedraw = true
       return ok(())
     of "visual-replace":
       # Execute visual replace action (r command in visual mode)
@@ -1168,7 +1168,7 @@ proc recordJump*(state: EditorState) =
   ## Record current cursor position as a jump point
   ## This should be called before jumping to a different location
   let currentPos = JumpPosition(
-    bufferId: state.currentBufferId,
+    bufferId: state.windowDisplay.currentBufferId,
     line: state.cursor.line,
     column: state.cursor.column,
   )
@@ -1571,7 +1571,7 @@ proc handleClipboardPaste(ctx: CommandContext): Result[(), string] =
   # Note: For simplicity, we'll keep cursor at original position for now
   # A more sophisticated implementation would move cursor to end of paste
 
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
   return Result[(), string].ok ()
 
 proc firstNonBlankColumn(line: seq[Rune]): int =
@@ -1694,7 +1694,7 @@ proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
   ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecPaste, pasteCount: actualCount, pasteBefore: false))
 
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
   return Result[(), string].ok ()
 
 proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -1800,7 +1800,7 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
   ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecPaste, pasteCount: actualCount, pasteBefore: true))
 
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
   return Result[(), string].ok ()
 
 proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -1847,7 +1847,7 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
         if updatedLineLen > 0 and ctx.cursor.column >= updatedLineLen:
           ctx.cursor.column = updatedLineLen - 1
 
-        ctx.state.needsFullRedraw = true
+        ctx.state.windowDisplay.needsFullRedraw = true
         return Result[(), string].ok ()
     except CatchableError:
       # If auto-delete fails, fall through to normal delete
@@ -1906,7 +1906,7 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
   if newLineLen > 0 and ctx.cursor.column >= newLineLen:
     ctx.cursor.column = newLineLen - 1
 
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
   return Result[(), string].ok ()
 
 proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -1951,7 +1951,7 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
         storeDeletedText(ctx, $lineContent.runeAtPos(cursorCol - 1), false)
         ctx.cursor.column = cursorCol - 1
 
-        ctx.state.needsFullRedraw = true
+        ctx.state.windowDisplay.needsFullRedraw = true
         return Result[(), string].ok ()
     except CatchableError:
       # If auto-delete fails, fall through to normal delete
@@ -2011,7 +2011,7 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
     )
   )
 
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
   return Result[(), string].ok ()
 
 proc handleSubstituteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -2069,7 +2069,7 @@ proc handleSubstituteChar(ctx: CommandContext, count: int = 1): Result[(), strin
   ctx.state.editState.substituteContext =
     some(SubstituteContext(kind: skChar, deleteCount: charsToDelete))
 
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
   ctx.state.statusMessage = "-- INSERT --"
   return Result[(), string].ok ()
 
@@ -2151,7 +2151,7 @@ proc handleSubstituteLine(ctx: CommandContext, count: int = 1): Result[(), strin
   ctx.state.editState.substituteContext =
     some(SubstituteContext(kind: skLine, deleteCount: lineCount))
 
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
   ctx.state.statusMessage = "-- INSERT --"
   return Result[(), string].ok ()
 
@@ -2226,7 +2226,7 @@ proc handleToggleCase(ctx: CommandContext, count: int = 1): Result[(), string] =
   ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecToggleCase, toggleCaseCount: charsToToggle))
 
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
   return Result[(), string].ok ()
 
 proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -2299,7 +2299,7 @@ proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
   ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: actualCount))
 
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
   # Delete screen notification (controlled by config)
   if ctx.notificationConfig.screenNotifications and
       ctx.notificationConfig.deleteScreenNotify:
@@ -2393,7 +2393,7 @@ proc handleJoinLines(ctx: CommandContext, count: int = 1): Result[(), string] =
   ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecJoinLines, joinLinesCount: actualCount))
 
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
   let totalLines = actualCount + 1
   ctx.state.statusMessage = "Joined " & $totalLines & " line(s)"
   return Result[(), string].ok ()
@@ -2436,7 +2436,8 @@ proc setPendingOperator(
     ctx: CommandContext, operatorType: OperatorType, count: int, statusMsg: string
 ) =
   ## Set pending operator and save viewport position for operator+motion commands
-  ctx.state.savedViewportTopLine = ctx.motionController.viewportManager.viewport.topLine
+  ctx.state.windowDisplay.savedViewportTopLine =
+    ctx.motionController.viewportManager.viewport.topLine
   ctx.state.editState.pendingOperator = some(
     PendingOperator(
       operatorType: operatorType, operatorCount: count, startPos: ctx.cursor
@@ -2770,7 +2771,7 @@ proc handleScrollCursorBottom(
 proc handleFoldOpen(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Open fold at cursor position (zo command)
   if ctx.buffer.foldState.openFold(ctx.cursor.line):
-    ctx.state.needsFullRedraw = true
+    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   else:
     ctx.state.statusMessage = "No fold found"
@@ -2779,7 +2780,7 @@ proc handleFoldOpen(ctx: CommandContext, args: seq[string]): Result[(), string] 
 proc handleFoldClose(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Close fold at cursor position (zc command)
   if ctx.buffer.foldState.closeFold(ctx.cursor.line):
-    ctx.state.needsFullRedraw = true
+    ctx.state.windowDisplay.needsFullRedraw = true
     # Ensure cursor is not on a hidden line after closing
     if ctx.buffer.foldState.isLineInCollapsedFold(ctx.cursor.line):
       ctx.cursor.line = ctx.buffer.foldState.getPrevVisibleLine(ctx.cursor.line)
@@ -2794,7 +2795,7 @@ proc handleFoldClose(ctx: CommandContext, args: seq[string]): Result[(), string]
 proc handleFoldToggle(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Toggle fold at cursor position (za command)
   if ctx.buffer.foldState.toggleFold(ctx.cursor.line):
-    ctx.state.needsFullRedraw = true
+    ctx.state.windowDisplay.needsFullRedraw = true
     # Ensure cursor is not on a hidden line after closing
     if ctx.buffer.foldState.isLineInCollapsedFold(ctx.cursor.line):
       ctx.cursor.line = ctx.buffer.foldState.getPrevVisibleLine(ctx.cursor.line)
@@ -2808,13 +2809,13 @@ proc handleFoldToggle(ctx: CommandContext, args: seq[string]): Result[(), string
 proc handleFoldOpenAll(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Open all folds (zR command)
   ctx.buffer.foldState.openAllFolds()
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
   return ok(())
 
 proc handleFoldCloseAll(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Close all folds (zM command)
   ctx.buffer.foldState.closeAllFolds()
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
   # Ensure cursor is not on a hidden line
   if ctx.buffer.foldState.isLineInCollapsedFold(ctx.cursor.line):
     ctx.cursor.line = ctx.buffer.foldState.getPrevVisibleLine(ctx.cursor.line)
@@ -2838,7 +2839,7 @@ proc handleFoldCreate(ctx: CommandContext, args: seq[string]): Result[(), string
 
   if ctx.buffer.foldState.addFold(startLine, endLine):
     ctx.state.statusMessage = "Fold created"
-    ctx.state.needsFullRedraw = true
+    ctx.state.windowDisplay.needsFullRedraw = true
     # Exit visual mode
     ctx.state.visualSelection.active = false
     ctx.state.mode = EditorMode.Normal
@@ -2851,7 +2852,7 @@ proc handleFoldDelete(ctx: CommandContext, args: seq[string]): Result[(), string
   ## Delete fold at cursor position (zd command)
   if ctx.buffer.foldState.deleteFold(ctx.cursor.line):
     ctx.state.statusMessage = "Fold deleted"
-    ctx.state.needsFullRedraw = true
+    ctx.state.windowDisplay.needsFullRedraw = true
     return ok(())
   else:
     ctx.state.statusMessage = "No fold found"
@@ -2863,7 +2864,7 @@ proc handleFoldDeleteAll(ctx: CommandContext, args: seq[string]): Result[(), str
   if foldCount > 0:
     ctx.buffer.foldState.deleteAllFolds()
     ctx.state.statusMessage = $foldCount & " fold(s) deleted"
-    ctx.state.needsFullRedraw = true
+    ctx.state.windowDisplay.needsFullRedraw = true
   else:
     ctx.state.statusMessage = "No folds to delete"
   return ok(())
@@ -3029,13 +3030,13 @@ proc jumpCursorToLine(ctx: CommandContext, line: int) =
     CursorPosition(x: 0, y: line),
     ctx.buffer.len,
     ctx.state.display.showStatusLine,
-    ctx.state.viewportReservedLines,
+    ctx.state.windowDisplay.viewportReservedLines,
     ctx.state.display.lineWrap,
     ctx.buffer,
     lineNumOffset,
     ctx.state.display.tabStop,
   )
-  ctx.state.needsFullRedraw = true
+  ctx.state.windowDisplay.needsFullRedraw = true
 
 ## Register built-in commands
 proc registerBuiltinCommands*(registry: CommandRegistry) =
@@ -3852,7 +3853,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
 
       # Move cursor to first non-blank character
       ctx.cursor.column = prevIndent
-      ctx.state.needsFullRedraw = true
+      ctx.state.windowDisplay.needsFullRedraw = true
 
       return Result[(), string].ok (),
     0,
@@ -3990,7 +3991,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
           )
         )
         # Save viewport position for restoration after operator
-        ctx.state.savedViewportTopLine =
+        ctx.state.windowDisplay.savedViewportTopLine =
           ctx.motionController.viewportManager.viewport.topLine
 
         # Execute the motion with combined count (motionCount * operatorCount)
@@ -4096,7 +4097,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
             if ctx.cursor.column > 0:
               ctx.cursor.column -= 1 # Stay on last inserted character
 
-          ctx.state.needsFullRedraw = true
+          ctx.state.windowDisplay.needsFullRedraw = true
           return ok(())
         of skLine:
           # Repeat S or cc command - delete lines then insert text
@@ -4154,7 +4155,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
             # Position cursor on last character (or at column 0 if empty)
             ctx.cursor.column = max(0, lastCmd.substituteText.charLen - 1)
 
-          ctx.state.needsFullRedraw = true
+          ctx.state.windowDisplay.needsFullRedraw = true
           return ok(())
       of lecInsertText:
         # Repeat insert text
@@ -4181,7 +4182,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
               ctx.cursor.column -= 1
           # If empty string, cursor stays at current position
 
-        ctx.state.needsFullRedraw = true
+        ctx.state.windowDisplay.needsFullRedraw = true
         return ok(())
       of lecReplaceChar:
         # Repeat replace character (r command)
@@ -4221,7 +4222,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
 
         # Move cursor to the last replaced character
         ctx.cursor.column += charsToReplace - 1
-        ctx.state.needsFullRedraw = true
+        ctx.state.windowDisplay.needsFullRedraw = true
         return ok(())
       of lecJoinLines:
         # Repeat join lines (J command)
@@ -4520,7 +4521,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
           ctx.state.visualSelection.current = toRange.endPos
           ctx.state.visualSelection.active = true
           ctx.cursor = toRange.endPos
-          ctx.state.needsFullRedraw = true
+          ctx.state.windowDisplay.needsFullRedraw = true
           return ok(())
         else:
           return err("Text objects require an operator or Visual mode"),
@@ -4601,12 +4602,12 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
 
       ctx.motionController.viewportManager.updateViewport(
         cursorPos, lineCount, ctx.state.display.showStatusLine,
-        ctx.state.viewportReservedLines, ctx.state.display.lineWrap, ctx.buffer,
-        lineNumOffset, ctx.state.display.tabStop,
+        ctx.state.windowDisplay.viewportReservedLines, ctx.state.display.lineWrap,
+        ctx.buffer, lineNumOffset, ctx.state.display.tabStop,
       )
 
       ctx.state.statusMessage = "Found: " & searchText
-      ctx.state.needsFullRedraw = true
+      ctx.state.windowDisplay.needsFullRedraw = true
       return Result[(), string].ok ()
     else:
       ctx.state.statusMessage = "Pattern not found: " & searchText
@@ -4946,12 +4947,12 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
 
           ctx.motionController.viewportManager.updateViewport(
             cursorPos, lineCount, ctx.state.display.showStatusLine,
-            ctx.state.viewportReservedLines, ctx.state.display.lineWrap, ctx.buffer,
-            lineNumOffset, ctx.state.display.tabStop,
+            ctx.state.windowDisplay.viewportReservedLines, ctx.state.display.lineWrap,
+            ctx.buffer, lineNumOffset, ctx.state.display.tabStop,
           )
 
           ctx.state.statusMessage = "Found: " & info.word
-          ctx.state.needsFullRedraw = true
+          ctx.state.windowDisplay.needsFullRedraw = true
           return Result[(), string].ok ()
 
         # Continue searching from after this match
@@ -5030,12 +5031,12 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
 
           ctx.motionController.viewportManager.updateViewport(
             cursorPos, lineCount, ctx.state.display.showStatusLine,
-            ctx.state.viewportReservedLines, ctx.state.display.lineWrap, ctx.buffer,
-            lineNumOffset, ctx.state.display.tabStop,
+            ctx.state.windowDisplay.viewportReservedLines, ctx.state.display.lineWrap,
+            ctx.buffer, lineNumOffset, ctx.state.display.tabStop,
           )
 
           ctx.state.statusMessage = "Found: " & info.word
-          ctx.state.needsFullRedraw = true
+          ctx.state.windowDisplay.needsFullRedraw = true
           return Result[(), string].ok ()
 
         # Continue searching from before this match

@@ -122,11 +122,11 @@ suite "handleSearchBackspace":
     let e = createTestEditorWithBuffer("hello")
     e.state.enterSearchOverlay(Forward)
     e.setSearchText("test")
-    e.state.needsFullRedraw = false
+    e.state.windowDisplay.needsFullRedraw = false
 
     handleSearchBackspace(e)
 
-    check e.state.needsFullRedraw == true
+    check e.state.windowDisplay.needsFullRedraw == true
 
 suite "Search mode - Insert-Normal mode (Ctrl-O)":
   test "finalizeSearch returns to Insert when insertNormalMode is set":

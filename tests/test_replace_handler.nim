@@ -67,8 +67,7 @@ proc createTestState(): EditorState =
       autoDeleteParen: false,
     ),
     editState: EditState(replaceHistory: @[]),
-    needsFullRedraw: false,
-    viewportReservedLines: 2,
+    windowDisplay: WindowDisplayState(needsFullRedraw: false, viewportReservedLines: 2),
     macroState: MacroState(
       isRecording: false,
       register: '\0',

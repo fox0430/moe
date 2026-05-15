@@ -808,8 +808,8 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
     )
     let r = registry.executeCommand(ctx, cmd)
     check r.isOk
-    check ctx.state.findCharMatches == @[0, 2, 4, 6]
-    check ctx.state.findCharMatchLine == 0
+    check ctx.state.ui.findCharMatches == @[0, 2, 4, 6]
+    check ctx.state.ui.findCharMatchLine == 0
 
   test "find-char-backward sets highlight positions":
     let buffer = newTextBuffer("abacada")
@@ -829,8 +829,8 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
     )
     let r = registry.executeCommand(ctx, cmd)
     check r.isOk
-    check ctx.state.findCharMatches == @[0, 2, 4, 6]
-    check ctx.state.findCharMatchLine == 0
+    check ctx.state.ui.findCharMatches == @[0, 2, 4, 6]
+    check ctx.state.ui.findCharMatchLine == 0
 
   test "till-char sets highlight positions":
     let buffer = newTextBuffer("abacada")
@@ -850,8 +850,8 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
     let r = registry.executeCommand(ctx, cmd)
     check r.isOk
     # "abacada": c is at position 3
-    check ctx.state.findCharMatches == @[3]
-    check ctx.state.findCharMatchLine == 0
+    check ctx.state.ui.findCharMatches == @[3]
+    check ctx.state.ui.findCharMatchLine == 0
 
   test "till-char-backward sets highlight positions":
     let buffer = newTextBuffer("abacada")
@@ -872,14 +872,14 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
     let r = registry.executeCommand(ctx, cmd)
     check r.isOk
     # "abacada": c is at position 3
-    check ctx.state.findCharMatches == @[3]
-    check ctx.state.findCharMatchLine == 0
+    check ctx.state.ui.findCharMatches == @[3]
+    check ctx.state.ui.findCharMatchLine == 0
 
   test "Non-find/till command clears highlight":
     let buffer = newTextBuffer("abacada")
     let ctx = createFindTestContext(buffer)
-    ctx.state.findCharMatches = @[0, 2, 4, 6]
-    ctx.state.findCharMatchLine = 0
+    ctx.state.ui.findCharMatches = @[0, 2, 4, 6]
+    ctx.state.ui.findCharMatchLine = 0
     let registry = newCommandRegistry()
     registerBuiltinCommands(registry)
 
@@ -893,7 +893,7 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
     )
     let r = registry.executeCommand(ctx, cmd)
     check r.isOk
-    check ctx.state.findCharMatches.len == 0
+    check ctx.state.ui.findCharMatches.len == 0
 
   test "Operator+find does not set highlight":
     let buffer = newTextBuffer("abacada")
@@ -923,7 +923,7 @@ suite "f/F/t/T highlight - executeCommand sets findCharMatches":
     let r = registry.executeCommand(ctx, cmd)
     check r.isOk
     # With pending operator, highlight should not be set
-    check ctx.state.findCharMatches.len == 0
+    check ctx.state.ui.findCharMatches.len == 0
 
 suite "CommandRegistry - Git conflict navigation (]x / [x)":
   const ConflictContent =

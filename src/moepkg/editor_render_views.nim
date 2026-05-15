@@ -402,12 +402,12 @@ proc renderBottomLines*(e: Editor, buffer: var Buffer) =
 proc renderTempMessages*(e: Editor, buffer: var Buffer) =
   ## Render temporary messages at the bottom of screen (like Vim's :jumps output)
   ## Overwrites the buffer content from bottom up, with a border at top
-  if e.state.tempMessages.len == 0:
+  if e.state.ui.tempMessages.len == 0:
     return
 
   let
     # +2 for border line and "Press ENTER..." prompt
-    totalLines = e.state.tempMessages.len + 2
+    totalLines = e.state.ui.tempMessages.len + 2
     startY = max(0, buffer.area.height - totalLines)
     borderLine = " ".repeat(buffer.area.width)
     # White background style for border
@@ -426,7 +426,7 @@ proc renderTempMessages*(e: Editor, buffer: var Buffer) =
   buffer.setString(buffer.area.x, startY, borderLine, whiteBorderStyle)
 
   # Render each message line
-  for i, msg in e.state.tempMessages:
+  for i, msg in e.state.ui.tempMessages:
     let y = startY + 1 + i # +1 to skip border
     if y < buffer.area.height - 1: # Leave last line for prompt
       buffer.setString(buffer.area.x, y, msg, theNormalStyle)

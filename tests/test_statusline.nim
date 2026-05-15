@@ -64,8 +64,7 @@ proc createTestState(): EditorState =
       autoCloseParen: false,
       autoDeleteParen: false,
     ),
-    needsFullRedraw: false,
-    viewportReservedLines: 2,
+    windowDisplay: WindowDisplayState(needsFullRedraw: false, viewportReservedLines: 2),
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -1031,7 +1030,7 @@ suite "StatusLine - renderStatusLine additional modes":
   test "Renders with LSP progress text":
     var state = createTestState()
     state.display.showStatusLine = true
-    state.lspProgressText = "Loading..."
+    state.ui.lspProgressText = "Loading..."
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")
@@ -1200,7 +1199,7 @@ suite "StatusLine - renderWindowStatusLine additional":
     var state = createTestState()
     state.display.showStatusLine = true
     state.display.multiStatusLine = true
-    state.lspProgressText = "Loading..."
+    state.ui.lspProgressText = "Loading..."
 
     var displayBuffer = createTestBuffer()
     let textBuffer = createTestTextBuffer("/path/file.nim", false, "test content")

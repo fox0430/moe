@@ -63,6 +63,16 @@ type
     targetCursorLine*: int # Target cursor line
     lastUpdateTime*: MonoTime # Last physics update time
 
+  WindowDisplayState* = object
+    ## Editor-wide window/buffer display & redraw bookkeeping.
+    currentBufferId*: BufferId # BufferId of the current buffer (for jump list)
+    debugBuffer*: TextBuffer # Debug buffer for auto-refresh (nil if none)
+    viewportReservedLines*: int
+      # Reserved lines for viewport calculations (for split windows)
+    needsFullRedraw*: bool # Whether a full screen redraw is needed
+    scrollAnimation*: ScrollAnimation # Current scroll animation state
+    savedViewportTopLine*: int # Viewport position saved when operator starts
+
   CursorPosition* = object
     x*: int
     y*: int
@@ -544,6 +554,26 @@ type
     originalTopLine*: int # Viewport top line when preview started
     originalLeftColumn*: int # Viewport left column when preview started
 
+  PendingAsyncOps* = object
+    ## Pending async operations queued from command/key handlers, drained by
+    ## handler.handlePendingAsyncOperationsImpl in the main event loop.
+    ## Empty-value semantics: `len == 0` / `false` means "no work pending".
+    shellCommand*: string # Shell command to execute after suspend
+    background*: bool # Whether to suspend for background (:bg)
+    manPage*: string # Man page to show after suspend (:man)
+    buildOnSave*:
+      tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
+    quickRun*: tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
+    syntaxCheck*: tuple[path: string, language: int]
+
+  UiState* = object ## Transient UI display state, refreshed by render/key events.
+    substitutePreview*: SubstitutePreview
+      # Live substitute preview (like Vim's inccommand)
+    tempMessages*: seq[string] # Lines to display temporarily in command area
+    lspProgressText*: string # Current LSP progress text for status line
+    findCharMatches*: seq[int] # f/F/t/T match columns on the cursor line
+    findCharMatchLine*: int # Line number of the matches
+
   PendingCommand* = enum
     PendingNone
     PendingWindowCmd # Ctrl-W prefix: waiting for window subcommand
@@ -565,12 +595,8 @@ type
     commandState*: CommandState # Command mode (ex-mode) state (history)
     statusMessageStr: string # Internal - use statusMessage getter/setter
     editState*: EditState # Edit operation state (operators, motions, repeat, etc.)
-    savedViewportTopLine*: int # Viewport position saved when operator starts
     visualSelection*: VisualSelection # Visual mode selection state
     display*: DisplaySettings # Display and UI settings
-    needsFullRedraw*: bool # Whether a full screen redraw is needed
-    viewportReservedLines*: int
-      # Reserved lines for viewport calculations (for split windows)
     timing*: TimingState # Timing and debounce state
     lastKeyWasEscape*: bool
       # Track if last key was Escape (for double-Escape to clear highlight)
@@ -583,36 +609,13 @@ type
     # Jump list (Ctrl-o / Ctrl-i)
     jumpList*: seq[JumpPosition] # List of jump positions
     jumpListIndex*: int # Current position in jump list (-1 when not navigating)
-    currentBufferId*: BufferId # BufferId of the current buffer (for jump list)
-    # Debug buffer tracking for auto-refresh
-    debugBuffer*: TextBuffer
-      # Reference to the debug buffer for auto-refresh (nil if none)
     # QuickRun request flag
     requestQuickRun*: bool # Set by keybinding to request QuickRun execution
     # Command mode completion
     commandCompletionManager*: CommandCompletionManager
       # Command mode auto-completion manager
-    # Smooth scroll animation
-    scrollAnimation*: ScrollAnimation # Current scroll animation state
     # LSP cache state (grouped in LspCacheState)
     lspCache*: LspCacheState # LSP cache and picker state
-    # LSP progress display
-    lspProgressText*: string # Current LSP progress text for status line
-    # Temporary message display (like Vim's :jumps output)
-    tempMessages*: seq[string] # Lines to display temporarily in command area
-    # Substitute preview state (live preview like Vim's inccommand)
-    substitutePreview*: SubstitutePreview
-    # Pending async operations (for shell commands that need TUI suspend)
-    pendingShellCommand*: string # Shell command to execute after suspend
-    pendingBackground*: bool # Whether to suspend for background (:bg)
-    pendingManPage*: string # Man page to show after suspend (:man)
-    # Pending build/quickrun info (for async background processes)
-    pendingBuildOnSave*:
-      tuple[path: string, language: int, customCmd: string, workspaceRoot: string]
-    pendingQuickRun*:
-      tuple[cmd: string, args: seq[string], filePath: string, isTempFile: bool]
-    # Pending syntax check info (for async background processes)
-    pendingSyntaxCheck*: tuple[path: string, language: int]
     # Active syntax check results (for status message display)
     syntaxCheckResults*: tuple[path: string, errors: seq[SyntaxCheckError]]
     # LSP Rename state
@@ -620,9 +623,6 @@ type
     # Overlay state for transient modes (Command, Search, Rename)
     # When set, the editor displays an overlay on top of the base mode
     overlay*: Option[OverlayKind]
-    # f/F/t/T command match highlight
-    findCharMatches*: seq[int] # Matched column positions on cursor line
-    findCharMatchLine*: int # Line number of the matches
     # Insert-Normal mode (Ctrl-o): execute one Normal command then return to Insert
     insertNormalMode*: bool
     # Startup window actions completed (runs once on first render)
@@ -631,6 +631,11 @@ type
     notificationPopup*: NotificationPopupManager
     # Exit code (non-zero for :cq)
     exitCode*: int
+    # --- Sub-state groups (Phase 4 refactor) ---
+    pending*: PendingAsyncOps # Pending async operations queued for the main event loop
+    ui*: UiState # Transient UI display state (preview, progress, find char)
+    windowDisplay*: WindowDisplayState
+      # Window/buffer/redraw bookkeeping (current buf id, scroll, full-redraw)
 
 # Forwarding procs: EditorState delegates cursor/mode/etc. to activeWindow.
 # This eliminates the dual-state sync problem — EditorWindow is the single source of truth.

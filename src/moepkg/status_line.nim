@@ -555,8 +555,8 @@ proc renderStatusLine*(
 
   # Build LSP progress text (displayed in the middle section)
   let progressText =
-    if state.lspProgressText.len > 0:
-      " " & state.lspProgressText & " "
+    if state.ui.lspProgressText.len > 0:
+      " " & state.ui.lspProgressText & " "
     else:
       ""
   let progressWidth = displayWidth(progressText)
@@ -667,8 +667,8 @@ proc renderWindowStatusLine*(
 
   # Build LSP progress text (displayed in the middle section, only for active window)
   let progressText =
-    if isActiveWindow and state.lspProgressText.len > 0:
-      " " & state.lspProgressText & " "
+    if isActiveWindow and state.ui.lspProgressText.len > 0:
+      " " & state.ui.lspProgressText & " "
     else:
       ""
   let progressWidth = displayWidth(progressText)

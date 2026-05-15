@@ -48,7 +48,7 @@ proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
     let diffResult = updateBufferWithGitDiff(activeBuffer, useBuffer)
 
     if diffResult.isOk:
-      e.state.needsFullRedraw = true
+      e.state.windowDisplay.needsFullRedraw = true
 
 template isPersistCursorPositionFile(lang: SourceLanguage): bool =
   lang notin {SourceLanguage.langGitRebaseTodo, SourceLanguage.langCommitEditMsg}

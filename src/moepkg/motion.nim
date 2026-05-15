@@ -1282,8 +1282,8 @@ proc executeMotion*(
 
   # Calculate reserved lines (same logic as updateViewport)
   let actualReservedLines =
-    if controller.cursorManager.state.viewportReservedLines >= 0:
-      controller.cursorManager.state.viewportReservedLines
+    if controller.cursorManager.state.windowDisplay.viewportReservedLines >= 0:
+      controller.cursorManager.state.windowDisplay.viewportReservedLines
     else:
       (
         if controller.cursorManager.state.display.showStatusLine:
@@ -1316,7 +1316,7 @@ proc executeMotion*(
 
     controller.viewportManager.updateViewport(
       newPos, lineCount, controller.cursorManager.state.display.showStatusLine,
-      controller.cursorManager.state.viewportReservedLines, lineWrap,
+      controller.cursorManager.state.windowDisplay.viewportReservedLines, lineWrap,
       controller.executor.buffer, lineNumOffset,
       controller.cursorManager.state.display.tabStop,
     )

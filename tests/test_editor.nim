@@ -490,7 +490,7 @@ suite "Editor - Display toggle functions":
     let initial = e.state.display.lineWrap
     e.toggleLineWrap()
     check e.state.display.lineWrap == not initial
-    check e.state.needsFullRedraw == true
+    check e.state.windowDisplay.needsFullRedraw == true
 
   test "Set line wrap":
     let e = createTestEditor()
@@ -526,11 +526,11 @@ suite "Editor - Substitute preview":
   test "Start substitute preview":
     let e = createTestEditor()
 
-    check e.state.substitutePreview.isActive == false
+    check e.state.ui.substitutePreview.isActive == false
 
     e.startSubstitutePreview()
-    check e.state.substitutePreview.isActive == true
-    check e.state.substitutePreview.originalLines.len >= 0
+    check e.state.ui.substitutePreview.isActive == true
+    check e.state.ui.substitutePreview.originalLines.len >= 0
 
   test "Cancel substitute preview restores original content":
     let e = createTestEditor()
@@ -546,7 +546,7 @@ suite "Editor - Substitute preview":
 
     e.cancelSubstitutePreview()
 
-    check e.state.substitutePreview.isActive == false
+    check e.state.ui.substitutePreview.isActive == false
     check buffer.getLine(0) == "Hello World"
 
   test "Commit substitute preview keeps changes":
@@ -563,7 +563,7 @@ suite "Editor - Substitute preview":
 
     e.commitSubstitutePreview()
 
-    check e.state.substitutePreview.isActive == false
+    check e.state.ui.substitutePreview.isActive == false
     check buffer.getLine(0) == "Modified Content"
 
   test "Update substitute preview applies pattern replacement":
@@ -602,9 +602,10 @@ suite "Editor - Substitute preview":
 
     e.startSubstitutePreview()
 
-    check e.state.substitutePreview.originalCursor == BufferPosition(line: 0, column: 3)
-    check e.state.substitutePreview.originalTopLine == 2
-    check e.state.substitutePreview.originalLeftColumn == 5
+    check e.state.ui.substitutePreview.originalCursor ==
+      BufferPosition(line: 0, column: 3)
+    check e.state.ui.substitutePreview.originalTopLine == 2
+    check e.state.ui.substitutePreview.originalLeftColumn == 5
 
   test "Cancel substitute preview restores cursor and viewport":
     let e = createTestEditor()
@@ -674,8 +675,8 @@ suite "Editor - Substitute preview":
     check buffer.getLine(0) == "foo bar"
     # lastPattern/lastReplacement must be cleared so the same preview can be
     # re-applied after a restore.
-    check e.state.substitutePreview.lastPattern == ""
-    check e.state.substitutePreview.lastReplacement == ""
+    check e.state.ui.substitutePreview.lastPattern == ""
+    check e.state.ui.substitutePreview.lastReplacement == ""
 
     e.updateSubstitutePreview("foo", "baz", isGlobalFlag = true)
     check buffer.getLine(0) == "baz bar"
@@ -1844,10 +1845,10 @@ suite "Editor - bufferIdIndex synchronization":
       check opt.isSome
       check opt.get == buf
 
-suite "Editor - BufferManager delete keeps state.currentBufferId fresh":
-  test "state.currentBufferId moves off the deleted buffer's id":
+suite "Editor - BufferManager delete keeps state.windowDisplay.currentBufferId fresh":
+  test "state.windowDisplay.currentBufferId moves off the deleted buffer's id":
     # Regression: hrBufferManagerDeleteBuffer used to leave
-    # state.currentBufferId pointing at the deleted BufferId. The Jump List
+    # state.windowDisplay.currentBufferId pointing at the deleted BufferId. The Jump List
     # (Ctrl-o/Ctrl-i) compares against currentBufferId, so a stale value
     # silently mis-routes future jumps.
     let e = createTestEditor()
@@ -1863,16 +1864,16 @@ suite "Editor - BufferManager delete keeps state.currentBufferId fresh":
     discard e.editFile(f2)
     # e.buffers = [initial, f1, f2], active = f2
     let f2Id = e.buffers[2].id
-    e.state.currentBufferId = f2Id
+    e.state.windowDisplay.currentBufferId = f2Id
 
     let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: 2)
     discard e.processResult(r, e.activeBuffer())
 
     check e.bufferById(f2Id).isNone # buffer is gone
-    check e.state.currentBufferId != f2Id # and the anchor moved off it
-    check e.bufferById(e.state.currentBufferId).isSome # to a live buffer
+    check e.state.windowDisplay.currentBufferId != f2Id # and the anchor moved off it
+    check e.bufferById(e.state.windowDisplay.currentBufferId).isSome # to a live buffer
 
-  test "state.currentBufferId is left alone when a non-current buffer is deleted":
+  test "state.windowDisplay.currentBufferId is left alone when a non-current buffer is deleted":
     let e = createTestEditor()
     let f1 = "/tmp/moe_test_bmgrdel_unrelated_1.txt"
     let f2 = "/tmp/moe_test_bmgrdel_unrelated_2.txt"
@@ -1886,14 +1887,14 @@ suite "Editor - BufferManager delete keeps state.currentBufferId fresh":
     discard e.editFile(f2)
     let f1Id = e.buffers[1].id
     let f2Id = e.buffers[2].id
-    e.state.currentBufferId = f2Id
+    e.state.windowDisplay.currentBufferId = f2Id
 
     # Delete f1 (index 1), which is NOT the currentBufferId
     let r = HandlerResult(kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: 1)
     discard e.processResult(r, e.activeBuffer())
 
     check e.bufferById(f1Id).isNone
-    check e.state.currentBufferId == f2Id # unchanged
+    check e.state.windowDisplay.currentBufferId == f2Id # unchanged
 
 suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
   test "switches the active window to a survivor when other buffers exist":
@@ -2012,7 +2013,7 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     for w in e.windowManager.windows:
       check f2Id notin w.bufferIds
 
-  test "moves state.currentBufferId off the deleted buffer's id":
+  test "moves state.windowDisplay.currentBufferId off the deleted buffer's id":
     # Mirrors the BufferManager-delete regression: a stale currentBufferId
     # silently mis-routes the Jump List (Ctrl-o/Ctrl-i).
     let e = createTestEditor()
@@ -2027,13 +2028,13 @@ suite "Editor - :bdelete (deleteCurrentBuffer) keeps the window open":
     discard e.editFile(f1)
     discard e.editFile(f2)
     let f2Id = e.activeBuffer().id
-    check e.state.currentBufferId == f2Id
+    check e.state.windowDisplay.currentBufferId == f2Id
 
     e.deleteCurrentBuffer()
 
     check e.bufferById(f2Id).isNone
-    check e.state.currentBufferId != f2Id
-    check e.bufferById(e.state.currentBufferId).isSome
+    check e.state.windowDisplay.currentBufferId != f2Id
+    check e.bufferById(e.state.windowDisplay.currentBufferId).isSome
 
   test "processResult(hrBufferDelete) routes through deleteCurrentBuffer":
     # Regression: hrBufferDelete used to call closeWindow() directly.

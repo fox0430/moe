@@ -70,8 +70,7 @@ proc createTestState(): EditorState =
       autoCloseParen: false,
       autoDeleteParen: false,
     ),
-    needsFullRedraw: false,
-    viewportReservedLines: 2,
+    windowDisplay: WindowDisplayState(needsFullRedraw: false, viewportReservedLines: 2),
     macroState: MacroState(
       isRecording: false,
       register: '\0',
@@ -1000,7 +999,7 @@ suite "NormalModeHandler - Jump List":
       JumpPosition(bufferId: BufferId(0), line: 2, column: 0),
     ]
     state.jumpListIndex = -1
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
     state.cursor = BufferPosition(line: 1, column: 0)
 
     # Simulate Ctrl-o
@@ -1020,7 +1019,7 @@ suite "NormalModeHandler - Jump List":
     # Set up jump list with position in a different buffer
     state.jumpList = @[JumpPosition(bufferId: BufferId(1), line: 5, column: 10)]
     state.jumpListIndex = -1
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
     state.cursor = BufferPosition(line: 0, column: 0)
 
     # Simulate Ctrl-o
@@ -1442,7 +1441,7 @@ suite "NormalModeHandler - Jump List Edge Cases":
 
     state.jumpList = @[JumpPosition(bufferId: BufferId(0), line: 0, column: 0)]
     state.jumpListIndex = 0 # Already at end
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
 
     # Simulate Ctrl-i
     let keyCombo = KeyCombo(isSpecial: false, char: "i", modifiers: {kmCtrl})
@@ -1466,7 +1465,7 @@ suite "NormalModeHandler - Jump List Edge Cases":
       JumpPosition(bufferId: BufferId(0), line: 1, column: 0),
     ]
     state.jumpListIndex = 1 # Not first jump
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
     state.cursor = BufferPosition(line: 2, column: 0)
 
     # Simulate Ctrl-o
@@ -1489,7 +1488,7 @@ suite "NormalModeHandler - Jump List Edge Cases":
       JumpPosition(bufferId: BufferId(1), line: 5, column: 3),
     ]
     state.jumpListIndex = 0
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
 
     # Simulate Ctrl-i
     let keyCombo = KeyCombo(isSpecial: false, char: "i", modifiers: {kmCtrl})
@@ -1665,7 +1664,7 @@ suite "NormalModeHandler - updateCursorToJumpPosition":
 
     state.jumpList = @[JumpPosition(bufferId: BufferId(0), line: 5, column: 10)]
     state.jumpListIndex = -1
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
     state.cursor = BufferPosition(line: 0, column: 0)
 
     # Jump to position - cursor should be clamped
@@ -1686,7 +1685,7 @@ suite "NormalModeHandler - updateCursorToJumpPosition":
     # Jump to position beyond buffer bounds
     state.jumpList = @[JumpPosition(bufferId: BufferId(0), line: 100, column: 100)]
     state.jumpListIndex = -1
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
@@ -1709,7 +1708,7 @@ suite "NormalModeHandler - updateCursorToJumpPosition":
     # Jump to empty line with column > 0
     state.jumpList = @[JumpPosition(bufferId: BufferId(0), line: 1, column: 10)]
     state.jumpListIndex = -1
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
@@ -2054,7 +2053,7 @@ suite "NormalModeHandler - Change List Navigation":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
 
     buf.changeList = @[
       BufferPosition(line: 0, column: 3),
@@ -2075,7 +2074,7 @@ suite "NormalModeHandler - Change List Navigation":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
 
     buf.changeList =
       @[BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 2)]
@@ -2093,7 +2092,7 @@ suite "NormalModeHandler - Change List Navigation":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
 
     buf.changeList =
       @[BufferPosition(line: 0, column: 3), BufferPosition(line: 1, column: 2)]
@@ -2109,7 +2108,7 @@ suite "NormalModeHandler - Change List Navigation":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
 
     buf.changeList = @[
       BufferPosition(line: 0, column: 0),
@@ -2143,7 +2142,7 @@ suite "NormalModeHandler - Change List Navigation":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
 
     buf.changeList = @[BufferPosition(line: 0, column: 5)]
     buf.changeListIndex = 0
@@ -2245,7 +2244,7 @@ suite "NormalModeHandler - Bookmark Navigation":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
 
     buf.toggleBookmark(2)
     buf.toggleBookmark(4)
@@ -2271,7 +2270,7 @@ suite "NormalModeHandler - Bookmark Navigation":
     let handler = createTestHandler(buf)
     let state = createTestState()
     let viewport = createTestViewport()
-    state.currentBufferId = BufferId(0)
+    state.windowDisplay.currentBufferId = BufferId(0)
     state.cursor.line = 4
 
     buf.toggleBookmark(1)

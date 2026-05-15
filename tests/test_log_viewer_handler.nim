@@ -48,7 +48,8 @@ proc newTestEditorState(): EditorState =
     screenCursor: CursorPosition(x: 0, y: 0),
   )
   result = EditorState(
-    activeWindow: window, viewportReservedLines: 2 # status + command line
+    activeWindow: window,
+    windowDisplay: WindowDisplayState(viewportReservedLines: 2), # status + command line
   )
 
 proc newTestBuffer(content: string = ""): TextBuffer =
@@ -354,7 +355,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Half page and full page move
 
     check result.kind == lvrHandled
     # Half page is (viewportHeight - reservedLines) / 2
-    let contentHeight = TestViewportHeight - state.viewportReservedLines
+    let contentHeight = TestViewportHeight - state.windowDisplay.viewportReservedLines
     check state.cursor.line == contentHeight div 2
 
   test "Ctrl+u moves half page up":
@@ -364,7 +365,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Half page and full page move
         "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12\nline13\nline14\nline15\nline16\nline17\nline18\nline19\nline20\nline21\nline22\nline23\nline24\nline25\nline26\nline27\nline28\nline29\nline30\n"
       )
       state = newTestEditorState()
-    let contentHeight = TestViewportHeight - state.viewportReservedLines
+    let contentHeight = TestViewportHeight - state.windowDisplay.viewportReservedLines
     state.cursor.line = 20
 
     let result = handler.handleLogViewerModeKey(
@@ -416,7 +417,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Half page and full page move
     )
 
     check result.kind == lvrHandled
-    let contentHeight = TestViewportHeight - state.viewportReservedLines
+    let contentHeight = TestViewportHeight - state.windowDisplay.viewportReservedLines
     check state.cursor.line == contentHeight
 
   test "Ctrl+b moves full page up":
@@ -426,7 +427,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Half page and full page move
         "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12\nline13\nline14\nline15\nline16\nline17\nline18\nline19\nline20\nline21\nline22\nline23\nline24\nline25\nline26\nline27\nline28\nline29\nline30\nline31\nline32\nline33\nline34\nline35\nline36\nline37\nline38\nline39\nline40\nline41\nline42\nline43\nline44\nline45\nline46\nline47\nline48\nline49\nline50\n"
       )
       state = newTestEditorState()
-    let contentHeight = TestViewportHeight - state.viewportReservedLines
+    let contentHeight = TestViewportHeight - state.windowDisplay.viewportReservedLines
     state.cursor.line = 30
 
     let result = handler.handleLogViewerModeKey(

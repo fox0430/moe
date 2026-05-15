@@ -71,8 +71,9 @@ proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
     )
 
   e.handlerManager.motionController.viewportManager.updateViewport(
-    cursorPos, lineCount, e.state.display.showStatusLine, e.state.viewportReservedLines,
-    e.state.display.lineWrap, activeBuffer, lineNumOffset, e.state.display.tabStop,
+    cursorPos, lineCount, e.state.display.showStatusLine,
+    e.state.windowDisplay.viewportReservedLines, e.state.display.lineWrap, activeBuffer,
+    lineNumOffset, e.state.display.tabStop,
   )
 
 proc processSaveAndQuitResult*(e: Editor, r: HandlerResult): bool =
@@ -250,7 +251,7 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
     e.windowManager.equalizeWidthsInGroup(group, totalWidth, startX)
 
   e.syncActiveWindow()
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc findFirstSubstituteMatch*(
     lines: seq[string], pattern: string
@@ -269,15 +270,16 @@ proc findFirstSubstituteMatch*(
 proc jumpToFirstSubstituteMatch*(e: Editor, pattern: string) =
   ## Move cursor/viewport to the first pattern match (incsearch-like behavior).
   ## If no match is found, restore cursor to the position captured at preview start.
-  let match = findFirstSubstituteMatch(e.state.substitutePreview.originalLines, pattern)
+  let match =
+    findFirstSubstituteMatch(e.state.ui.substitutePreview.originalLines, pattern)
   if match.isSome:
     let pos = match.get
     e.cursor = pos
     e.updateViewportForCursor(pos)
   else:
-    e.cursor = e.state.substitutePreview.originalCursor
-    e.activeWindow.viewport.topLine = e.state.substitutePreview.originalTopLine
-    e.activeWindow.viewport.leftColumn = e.state.substitutePreview.originalLeftColumn
+    e.cursor = e.state.ui.substitutePreview.originalCursor
+    e.activeWindow.viewport.topLine = e.state.ui.substitutePreview.originalTopLine
+    e.activeWindow.viewport.leftColumn = e.state.ui.substitutePreview.originalLeftColumn
 
 proc updateSubstitutePreviewIfNeeded(e: Editor) =
   ## Update or cancel the live substitute preview based on the current command
@@ -294,7 +296,7 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
     let flags = extractSubstituteFlags(e.state.commandText)
     let isGlobal = "g" in flags
     if pattern.len > 0:
-      if not e.state.substitutePreview.isActive:
+      if not e.state.ui.substitutePreview.isActive:
         e.startSubstitutePreview()
       if hasReplacement and e.config.highlight.replaceText:
         e.updateSubstitutePreview(pattern, replacement, isGlobal)
@@ -302,12 +304,12 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
         # Pattern-only state: restore buffer (in case a replacement preview was
         # previously applied) but keep the preview active for cursor tracking.
         e.restoreFromPreview()
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
       e.jumpToFirstSubstituteMatch(pattern)
-    elif e.state.substitutePreview.isActive:
+    elif e.state.ui.substitutePreview.isActive:
       e.cancelSubstitutePreview()
     else:
-      e.state.needsFullRedraw = true
+      e.state.windowDisplay.needsFullRedraw = true
 
 proc enterTerminalInActiveWindow(e: Editor, command: string) =
   ## Switch the active window to Terminal mode.
@@ -358,7 +360,7 @@ proc insertPastedTextInCommand*(e: Editor, text: string) =
 
   e.state.commandCompletionManager.cancelCompletion()
   e.updateSubstitutePreviewIfNeeded()
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc handleCommandModeEvent*(e: Editor, event: Event): bool =
   ## Handle Command mode events (special handling for text input)
@@ -532,7 +534,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
     # Cancel substitute preview before executing command
     # The command handler will apply the substitute properly with undo support
-    if e.state.substitutePreview.isActive:
+    if e.state.ui.substitutePreview.isActive:
       e.cancelSubstitutePreview()
 
     if e.state.commandText.len > 1: # Must have something after :
@@ -560,7 +562,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           logError("handler", "QuickRun prepare failed: " & prepareResult.error)
         else:
           let prepared = prepareResult.get
-          e.state.pendingQuickRun = (
+          e.state.pending.quickRun = (
             cmd: prepared.command.cmd,
             args: prepared.command.args,
             filePath: prepared.filePath,
@@ -764,11 +766,11 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         of bsoHighlightGitConflict:
           e.config.highlight.gitConflict = val
           e.state.statusMessage = "highlightgitconflict = " & $val
-          e.state.needsFullRedraw = true
+          e.state.windowDisplay.needsFullRedraw = true
         of bsoHighlightGitConflictTwoColor:
           e.config.highlight.gitConflictTwoColor = val
           e.state.statusMessage = "highlightgitconflicttwocolor = " & $val
-          e.state.needsFullRedraw = true
+          e.state.windowDisplay.needsFullRedraw = true
         of bsoMultipleStatusLine:
           e.setMultiStatusLine(val)
         of bsoIgnoreCase:
@@ -801,7 +803,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.config.standard.scrollbar = val
           e.state.display.scrollbar = val
           e.state.statusMessage = "scrollbar = " & $val
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
       of hrSetIntOption:
         # Handle integer option setting
         let opt = r.intOption
@@ -823,7 +825,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.config.standard.scrollbarWidth = val
           e.state.display.scrollbarWidth = val
           e.state.statusMessage = "scrollbarwidth = " & $val
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
       of hrSetFloatOption:
         # Handle float option setting
         let opt = r.floatOption
@@ -835,20 +837,20 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         of fsoScrollAirDrag:
           e.config.smoothScroll.airDrag = val
           e.state.statusMessage = "scrollairdrag = " & $val
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
       of hrClearSearchHighlight:
         # Handle clear search highlight (:noh)
         e.state.search.hlsearch = false
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
       of hrShellCommand:
         # Set pending shell command to be executed by handleEventAsync
-        e.state.pendingShellCommand = r.shellCommand
+        e.state.pending.shellCommand = r.shellCommand
       of hrMan:
         # Set pending man page to be executed by handleEventAsync
-        e.state.pendingManPage = r.hrManPage
+        e.state.pending.manPage = r.hrManPage
       of hrBackground:
         # Set pending background flag to be handled by handleEventAsync
-        e.state.pendingBackground = true
+        e.state.pending.background = true
       of hrSave:
         if e.state.mode == EditorMode.Config:
           # In Config mode, :w saves the configuration file instead of a buffer
@@ -906,7 +908,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
                 else:
                   parentDir(savedPath)
               # Set pending build info for async processing
-              e.state.pendingBuildOnSave = (
+              e.state.pending.buildOnSave = (
                 path: savedPath,
                 language: activeBuffer.language.ord,
                 customCmd: customCmd,
@@ -920,7 +922,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
             # Syntax check on save if enabled (only for supported languages)
             if e.config.syntaxChecker.enable and
                 syntaxCheckCommand(savedPath, activeBuffer.language).isOk:
-              e.state.pendingSyntaxCheck =
+              e.state.pending.syntaxCheck =
                 (path: savedPath, language: activeBuffer.language.ord)
       of hrSaveAll:
         e.processSaveAllResult(r)
@@ -946,7 +948,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         if count > 0:
           e.state.statusMessage =
             "Stripped trailing whitespace from " & $count & " lines"
-          e.state.needsFullRedraw = true
+          e.state.windowDisplay.needsFullRedraw = true
         else:
           e.state.statusMessage = "No trailing whitespace found"
       of hrQuickRun:
@@ -959,7 +961,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
             logError("handler", "QuickRun prepare failed: " & prepareResult.error)
           else:
             let prepared = prepareResult.get
-            e.state.pendingQuickRun = (
+            e.state.pending.quickRun = (
               cmd: prepared.command.cmd,
               args: prepared.command.args,
               filePath: prepared.filePath,
@@ -982,7 +984,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           logError("handler", "Build failed: No file path")
         else:
           # Set pending build info for async processing
-          e.state.pendingBuildOnSave = (
+          e.state.pending.buildOnSave = (
             path: filePath,
             language: activeBuffer.language.ord,
             customCmd: "",
@@ -997,7 +999,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         # Handle substitute result - display count
         let count = r.hrSubstituteCount
         e.state.statusMessage = $count & " substitution" & (if count == 1: "" else: "s")
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
         # Return to Normal mode - exit overlay first
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
@@ -1009,7 +1011,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         let count = r.hrDeletedLineCount
         e.state.statusMessage =
           $count & " line" & (if count == 1: "" else: "s") & " deleted"
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
         # Clamp cursor to valid buffer range
         let maxLine = e.activeBuffer().len - 1
         if e.activeWindow.cursor.line > maxLine:
@@ -1250,7 +1252,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         else:
           e.state.statusMessage = "Debug info (auto-refresh)"
           # Store debug buffer reference for auto-refresh
-          e.state.debugBuffer = debugBuffer
+          e.state.windowDisplay.debugBuffer = debugBuffer
           e.state.timing.lastDebugUpdate = getMonoTime()
           if e.state.timing.debugUpdateInterval == 0:
             e.state.timing.debugUpdateInterval = 500 # Default: 500ms
@@ -1266,8 +1268,8 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         if e.state.jumpList.len == 0:
           e.state.statusMessage = "Jump list is empty"
         else:
-          e.state.tempMessages = @[]
-          e.state.tempMessages.add(" jump  line  col  file")
+          e.state.ui.tempMessages = @[]
+          e.state.ui.tempMessages.add(" jump  line  col  file")
           for i, pos in e.state.jumpList:
             let marker = if i == e.state.jumpListIndex: ">" else: " "
             let jumpNum = e.state.jumpList.len - i
@@ -1284,11 +1286,11 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
                   "[No Name]"
               else:
                 "[Invalid]"
-            e.state.tempMessages.add(
+            e.state.ui.tempMessages.add(
               marker & ($jumpNum).align(4) & " " & ($lineNum).align(5) & " " &
                 ($colNum).align(4) & "  " & fileName
             )
-          e.state.needsFullRedraw = true
+          e.state.windowDisplay.needsFullRedraw = true
         # Return to Normal mode (not to previous Command mode) - exit overlay first
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
@@ -1299,8 +1301,8 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         if buf.changeList.len == 0:
           e.state.statusMessage = "No changes"
         else:
-          e.state.tempMessages = @[]
-          e.state.tempMessages.add("change  line  col  text")
+          e.state.ui.tempMessages = @[]
+          e.state.ui.tempMessages.add("change  line  col  text")
           for i in 0 ..< buf.changeList.len:
             let pos = buf.changeList[i]
             let lineNum = pos.line + 1
@@ -1316,7 +1318,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
               else:
                 ""
             let changeNum = buf.changeList.len - i
-            e.state.tempMessages.add(
+            e.state.ui.tempMessages.add(
               marker & ($changeNum).align(4) & " " & ($lineNum).align(5) & " " &
                 ($colNum).align(4) & "  " & text
             )
@@ -1324,11 +1326,11 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           let w = e.activeWindow
           let curMarker =
             if buf.changeListIndex == buf.changeList.len - 1: ">" else: " "
-          e.state.tempMessages.add(
+          e.state.ui.tempMessages.add(
             curMarker & "0".align(4) & " " & ($(w.cursor.line + 1)).align(5) & " " &
               ($(w.cursor.column + 1)).align(4) & "  "
           )
-          e.state.needsFullRedraw = true
+          e.state.windowDisplay.needsFullRedraw = true
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)
       of hrConflictNext:
@@ -1396,7 +1398,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
               e.state.statusMessage = "Failed to load theme: " & themeResult.error
           else:
             e.state.statusMessage = "Theme not found: " & themeName
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
         # Exit overlay first, then set Normal mode
         e.state.exitOverlay()
         e.setMode(EditorMode.Normal)

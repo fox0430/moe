@@ -73,7 +73,7 @@ proc handleRenameModeEvent(e: Editor, event: Event): bool =
     e.state.exitOverlay()
     e.setMode(e.state.mode) # Sync window mode
     e.state.statusMessage = "Rename cancelled"
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
     return true
 
   # Enter: Execute rename
@@ -96,7 +96,7 @@ proc handleRenameModeEvent(e: Editor, event: Event): bool =
       e.state.exitOverlay()
       e.setMode(e.state.mode) # Sync window mode
       asyncSpawn e.requestLspRename(newName)
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
     return true
 
   # Backspace: Remove last character (Unicode-aware)
@@ -152,14 +152,14 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
     e.setMode(EditorMode.Normal)
     discard e.closeWindow
     e.state.statusMessage = ""
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
     return true
   of hrRecentFileOpenFile:
     let filePath = r.recentFilePath
     if not fileExists(filePath):
       logError("handler", "File not found: " & filePath)
       e.state.statusMessage = "File not found: " & filePath
-      e.state.needsFullRedraw = true
+      e.state.windowDisplay.needsFullRedraw = true
       return true
     # Close the split window first
     activeWin.clearModeState(EditorMode.RecentFile)
@@ -179,7 +179,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
       e.state.statusMessage = "Error: " & editResult.error
     else:
       e.state.statusMessage = "Opened: " & filePath
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
     return true
   of hrHandled, hrUnhandled:
     discard # Fall through to overlay/mode transition handling
@@ -235,7 +235,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
     e.state.previousMode = e.state.mode
     e.setMode(modeTransition.get)
 
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
   return true
 
 proc handleDebugModeEvent(e: Editor, event: Event): bool =
@@ -264,10 +264,10 @@ proc handleDebugModeEvent(e: Editor, event: Event): bool =
   case r.kind
   of dvrEnterCommand:
     e.state.enterCommandOverlay()
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
     return true
   of dvrHandled, dvrUnhandled, dvrError:
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
     return true
 
 proc handlePasteEvent*(e: Editor, event: Event): bool =
@@ -322,7 +322,7 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
 
     if ownTransaction:
       discard activeBuffer.commitTransaction()
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
   else:
     # For other modes, just show a message
     e.state.statusMessage = "Paste not supported in this mode"
@@ -481,7 +481,7 @@ proc middleClickPaste(e: Editor) =
 
   if ownTransaction:
     discard activeBuffer.commitTransaction()
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc handleMouseEvent(e: Editor, event: Event): bool =
   ## Handle mouse events for cursor movement
@@ -525,7 +525,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
           elif filerState.selectedIndex >= filerState.topLine + viewportHeight:
             filerState.topLine = filerState.selectedIndex - viewportHeight + 1
         e.activeWindow.filerState = some(filerState)
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
       return true
 
     # Handle text editing modes
@@ -569,7 +569,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
           elif newLine >= window.viewport.topLine + viewportHeight:
             window.viewport.topLine = newLine - viewportHeight + 1
 
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
 
       return true
 
@@ -604,7 +604,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
                 for j, w in e.windowManager.windows.mpairs:
                   w.active = (j == i)
               e.switchToWindowBuffer(tabIdx)
-              e.state.needsFullRedraw = true
+              e.state.windowDisplay.needsFullRedraw = true
               return true
 
       for i, window in e.windowManager.windows:
@@ -640,7 +640,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
           e.cursor = pos
           if mouse.button == mouse_logic.MouseButton.Middle:
             e.middleClickPaste()
-          e.state.needsFullRedraw = true
+          e.state.windowDisplay.needsFullRedraw = true
           return true
 
       return false
@@ -659,7 +659,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
         hitTestTabLine(buffersToShow, e.state.mode, 0, e.viewport.width, mouse.x)
       if tabIdx >= 0:
         e.switchToWindowBuffer(tabIdx)
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
         return true
 
     let
@@ -689,7 +689,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
     e.cursor = pos
     if mouse.button == mouse_logic.MouseButton.Middle:
       e.middleClickPaste()
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
     return true
 
   # Handle mouse click in Filer mode
@@ -710,7 +710,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       if clickedIndex >= 0 and clickedIndex < filerState.entries.len:
         filerState.selectedIndex = clickedIndex
         e.activeWindow.filerState = some(filerState)
-        e.state.needsFullRedraw = true
+        e.state.windowDisplay.needsFullRedraw = true
         return true
 
   return false
@@ -753,8 +753,8 @@ proc handleEvent*(e: Editor, event: Event): bool =
   e.updateInputTime()
 
   # Cancel smooth scroll animation on any key press
-  if event.kind == EventKind.Key and e.state.scrollAnimation.active:
-    cancelScrollAnimation(e.state.scrollAnimation)
+  if event.kind == EventKind.Key and e.state.windowDisplay.scrollAnimation.active:
+    cancelScrollAnimation(e.state.windowDisplay.scrollAnimation)
 
   # Handle Ctrl-C (Quit event from celina)
   if event.kind == EventKind.Quit:
@@ -845,12 +845,12 @@ proc handleEvent*(e: Editor, event: Event): bool =
     return e.handlePasteEvent(event)
 
   # Handle temporary messages (like :jumps output) - dismiss on any key
-  if e.state.tempMessages.len > 0 and event.kind == EventKind.Key:
+  if e.state.ui.tempMessages.len > 0 and event.kind == EventKind.Key:
     let keyComboOpt = eventToKeyCombo(event)
     if keyComboOpt.isSome:
       let keyCombo = keyComboOpt.get
-      e.state.tempMessages = @[]
-      e.state.needsFullRedraw = true
+      e.state.ui.tempMessages = @[]
+      e.state.windowDisplay.needsFullRedraw = true
 
       # If ":" was pressed, enter command overlay
       if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == ":":
@@ -1015,7 +1015,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
         if e.state.lastKeyWasEscape:
           # Second Escape press - clear highlight
           e.state.search.hlsearchTempDisabled = true
-          e.state.needsFullRedraw = true
+          e.state.windowDisplay.needsFullRedraw = true
           e.state.lastKeyWasEscape = false
         else:
           # First Escape press - just mark it
@@ -1071,7 +1071,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
     # Calculate reserved lines based on window position and status line mode
     # Status line and command line share the same row (command overlays status)
-    e.state.viewportReservedLines =
+    e.state.windowDisplay.viewportReservedLines =
       if e.state.display.showStatusLine:
         if e.state.display.multiStatusLine:
           # Multi status line mode: each window has status, bottom has command too
@@ -1085,22 +1085,22 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
     # Add tab line height if shown
     if e.state.display.showTabLine:
-      e.state.viewportReservedLines += TabLineHeight
+      e.state.windowDisplay.viewportReservedLines += TabLineHeight
 
     # Add extra lines for multi-line status messages (only for bottom window)
     if isBottomWindow:
-      e.state.viewportReservedLines += e.state.statusMessageExtraLines()
+      e.state.windowDisplay.viewportReservedLines += e.state.statusMessageExtraLines()
   else:
     # Single window mode - use default calculation
-    e.state.viewportReservedLines =
+    e.state.windowDisplay.viewportReservedLines =
       if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
 
     # Add tab line height if shown
     if e.state.display.showTabLine:
-      e.state.viewportReservedLines += TabLineHeight
+      e.state.windowDisplay.viewportReservedLines += TabLineHeight
 
     # Add extra lines for multi-line status messages
-    e.state.viewportReservedLines += e.state.statusMessageExtraLines()
+    e.state.windowDisplay.viewportReservedLines += e.state.statusMessageExtraLines()
 
   # Get active window for handleEvent (needed for special modes like Filer)
   let activeWin =
@@ -1133,9 +1133,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
 proc hasPendingAsyncOperations*(e: Editor): bool =
   ## Check if there are pending async operations
-  e.state.pendingShellCommand.len > 0 or e.state.pendingManPage.len > 0 or
-    e.state.pendingBackground or e.state.pendingBuildOnSave.path.len > 0 or
-    e.state.pendingQuickRun.cmd.len > 0 or e.state.pendingSyntaxCheck.path.len > 0
+  e.state.pending.shellCommand.len > 0 or e.state.pending.manPage.len > 0 or
+    e.state.pending.background or e.state.pending.buildOnSave.path.len > 0 or
+    e.state.pending.quickRun.cmd.len > 0 or e.state.pending.syntaxCheck.path.len > 0
 
 type
   BuildInfo =
@@ -1173,7 +1173,7 @@ proc runSyntaxCheckAsync(
             "Syntax check: " & $errorCount & " error(s), " & $warnCount & " warning(s)"
         else:
           editor.state.statusMessage = "Syntax check: OK"
-      editor.state.needsFullRedraw = true
+      editor.state.windowDisplay.needsFullRedraw = true
     except Exception as ex:
       editor.state.statusMessage = "Syntax check error: " & ex.msg
 
@@ -1204,7 +1204,7 @@ proc runBuildAsync(
           if editor.config.notification.screenNotifications and
               editor.config.notification.buildOnSaveScreenNotify:
             editor.notify("Build completed: " & info.path)
-      editor.state.needsFullRedraw = true
+      editor.state.windowDisplay.needsFullRedraw = true
     except Exception as ex:
       editor.state.statusMessage = "Build error: " & ex.msg
 
@@ -1242,7 +1242,7 @@ proc runQuickRunAsync(
             if editor.config.notification.screenNotifications and
                 editor.config.notification.quickRunScreenNotify:
               editor.notify("QuickRun completed: " & qrProcess.filePath)
-      editor.state.needsFullRedraw = true
+      editor.state.windowDisplay.needsFullRedraw = true
     except Exception as ex:
       editor.state.statusMessage = "QuickRun error: " & ex.msg
 
@@ -1254,9 +1254,9 @@ proc handlePendingAsyncOperationsImpl(
 
   {.cast(gcsafe).}:
     # Handle shell command
-    if e.state.pendingShellCommand.len > 0:
-      let cmd = e.state.pendingShellCommand
-      e.state.pendingShellCommand = ""
+    if e.state.pending.shellCommand.len > 0:
+      let cmd = e.state.pending.shellCommand
+      e.state.pending.shellCommand = ""
       await e.app.suspendAsync()
       stdout.write("\e[H\e[2J") # Clear screen
       stdout.flushFile()
@@ -1266,12 +1266,12 @@ proc handlePendingAsyncOperationsImpl(
       stdout.flushFile()
       discard stdin.readLine()
       await e.app.resumeAsync()
-      e.state.needsFullRedraw = true
+      e.state.windowDisplay.needsFullRedraw = true
 
     # Handle man page display
-    if e.state.pendingManPage.len > 0:
-      let page = e.state.pendingManPage
-      e.state.pendingManPage = ""
+    if e.state.pending.manPage.len > 0:
+      let page = e.state.pending.manPage
+      e.state.pending.manPage = ""
       await e.app.suspendAsync()
       stdout.write("\e[H\e[2J") # Clear screen
       stdout.flushFile()
@@ -1282,36 +1282,36 @@ proc handlePendingAsyncOperationsImpl(
       stdout.flushFile()
       discard stdin.readLine()
       await e.app.resumeAsync()
-      e.state.needsFullRedraw = true
+      e.state.windowDisplay.needsFullRedraw = true
 
     # Handle background suspend
-    if e.state.pendingBackground:
-      e.state.pendingBackground = false
+    if e.state.pending.background:
+      e.state.pending.background = false
       await e.app.suspendAsync()
       stdout.write("\e[H\e[2J")
       stdout.write("moe suspended. Press Enter to return to moe...")
       stdout.flushFile()
       discard stdin.readLine()
       await e.app.resumeAsync()
-      e.state.needsFullRedraw = true
+      e.state.windowDisplay.needsFullRedraw = true
 
     # Handle pending build - spawn as background task
-    if e.state.pendingBuildOnSave.path.len > 0:
-      let buildInfo = e.state.pendingBuildOnSave
-      e.state.pendingBuildOnSave =
+    if e.state.pending.buildOnSave.path.len > 0:
+      let buildInfo = e.state.pending.buildOnSave
+      e.state.pending.buildOnSave =
         (path: "", language: 0, customCmd: "", workspaceRoot: "")
       asyncSpawn runBuildAsync(e, buildInfo)
 
     # Handle pending QuickRun - spawn as background task
-    if e.state.pendingQuickRun.cmd.len > 0:
-      let qrInfo = e.state.pendingQuickRun
-      e.state.pendingQuickRun = (cmd: "", args: @[], filePath: "", isTempFile: false)
+    if e.state.pending.quickRun.cmd.len > 0:
+      let qrInfo = e.state.pending.quickRun
+      e.state.pending.quickRun = (cmd: "", args: @[], filePath: "", isTempFile: false)
       asyncSpawn runQuickRunAsync(e, qrInfo)
 
     # Handle pending syntax check - spawn as background task
-    if e.state.pendingSyntaxCheck.path.len > 0:
-      let checkInfo = e.state.pendingSyntaxCheck
-      e.state.pendingSyntaxCheck = (path: "", language: 0)
+    if e.state.pending.syntaxCheck.path.len > 0:
+      let checkInfo = e.state.pending.syntaxCheck
+      e.state.pending.syntaxCheck = (path: "", language: 0)
       asyncSpawn runSyntaxCheckAsync(e, checkInfo)
 
 proc handlePendingAsyncOperations*(
@@ -1390,5 +1390,5 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
           if r.kind == hrError:
             break
 
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
   return shouldContinue

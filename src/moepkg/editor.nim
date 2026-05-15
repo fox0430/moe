@@ -72,7 +72,7 @@ proc switchToBufferByIndex*(e: Editor, index: int) =
   e.activeWindow.viewport.topLine = 0
   e.activeWindow.viewport.leftColumn = 0
 
-  # syncActiveWindow also updates state.currentBufferId for the Jump List anchor.
+  # syncActiveWindow also updates state.windowDisplay.currentBufferId for the Jump List anchor.
   e.syncActiveWindow()
   e.setActiveWindowScreenCursor(e.activeWindow)
 
@@ -113,7 +113,7 @@ proc switchToWindowBuffer*(e: Editor, windowIndex: int) =
   e.activeWindow.viewport.topLine = 0
   e.activeWindow.viewport.leftColumn = 0
 
-  # syncActiveWindow also updates state.currentBufferId for the Jump List anchor.
+  # syncActiveWindow also updates state.windowDisplay.currentBufferId for the Jump List anchor.
   e.syncActiveWindow()
   e.setActiveWindowScreenCursor(e.activeWindow)
 
@@ -319,7 +319,7 @@ proc deleteCurrentBuffer*(e: Editor) =
       e.buffers[min(bufferIndex, e.buffers.len - 1)]
 
   e.redirectWindowsFromBuffer(deletedBuffer, newBuf)
-  # `syncActiveWindow` realigns `state.currentBufferId` to the active window's
+  # `syncActiveWindow` realigns `state.windowDisplay.currentBufferId` to the active window's
   # buffer, so no explicit currentBufferId reassignment is needed here.
   e.syncActiveWindow()
   e.setActiveWindowScreenCursor(e.activeWindow)
@@ -376,32 +376,32 @@ proc setEncodingVisible*(e: Editor, visible: bool) =
 proc toggleLineWrap*(e: Editor) =
   ## Toggle line wrapping
   e.state.display.lineWrap = not e.state.display.lineWrap
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc setLineWrap*(e: Editor, enabled: bool) =
   ## Set line wrapping
   e.state.display.lineWrap = enabled
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc toggleMultiStatusLine*(e: Editor) =
   ## Toggle between single status line (at bottom) and multi status lines (per window)
   e.state.display.multiStatusLine = not e.state.display.multiStatusLine
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc setMultiStatusLine*(e: Editor, enabled: bool) =
   ## Set multi status line mode
   e.state.display.multiStatusLine = enabled
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc toggleSidebar*(e: Editor) =
   ## Toggle the visibility of the sidebar
   e.state.display.showSidebar = not e.state.display.showSidebar
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc setSidebarVisible*(e: Editor, visible: bool) =
   ## Set the visibility of the sidebar
   e.state.display.showSidebar = visible
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc toggleGitDiff*(e: Editor) =
   ## Toggle git diff indicators in sidebar
@@ -411,7 +411,7 @@ proc toggleGitDiff*(e: Editor) =
   if e.state.display.showGitDiff:
     discard updateBufferWithGitDiff(e.textBuffer)
 
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc setGitDiffVisible*(e: Editor, visible: bool) =
   ## Set git diff indicators visibility in sidebar
@@ -421,17 +421,17 @@ proc setGitDiffVisible*(e: Editor, visible: bool) =
   if visible:
     discard updateBufferWithGitDiff(e.textBuffer)
 
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc toggleSyntaxChecker*(e: Editor) =
   ## Toggle syntax checker results in sidebar
   e.state.display.showSyntaxChecker = not e.state.display.showSyntaxChecker
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc setSyntaxCheckerVisible*(e: Editor, visible: bool) =
   ## Set syntax checker results visibility in sidebar
   e.state.display.showSyntaxChecker = visible
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 const MinNewWindowWidth* = 10
   ## Minimum width (in columns) required when spawning a new split window.
@@ -535,7 +535,7 @@ proc openFileInNewRightWindow*(e: Editor, path: string): Result[(), string] =
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
     e.setActiveWindowScreenCursor(e.activeWindow)
 
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
   ok(())
 
 proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
@@ -755,8 +755,11 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         autoCloseParen: editorConfig.standard.autoCloseParen,
         autoDeleteParen: editorConfig.standard.autoDeleteParen,
       ),
-      needsFullRedraw: true, # Initial render needs full draw
-      viewportReservedLines: StatusAndCommandReserve, # Status+command share same row
+      windowDisplay: WindowDisplayState(
+        needsFullRedraw: true, # Initial render needs full draw
+        viewportReservedLines: StatusAndCommandReserve, # Status+command share same row
+        savedViewportTopLine: 0, # Saved viewport position for operators
+      ),
       # Timing state (grouped in TimingState)
       timing: TimingState(
         lastResizeTime: getMonoTime(),
@@ -824,7 +827,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         insertModeStartPos: none(BufferPosition),
         visualBlockInsertContext: none(VisualBlockInsertContext),
       ),
-      savedViewportTopLine: 0, # Saved viewport position for operators
       # Full register system
       registers: initRegisters(),
       pendingRegister: none(char),
@@ -920,7 +922,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   )
   result.windowManager.activeWindowIndex = 0
   result.state.activeWindow = result.windowManager.windows[0]
-  result.state.currentBufferId = result.textBuffer.id
+  result.state.windowDisplay.currentBufferId = result.textBuffer.id
   logDebug(
     "editor",
     "Default window created, windows.len: " & $result.windowManager.windows.len,
@@ -1040,7 +1042,7 @@ proc maybeReloadExternallyModifiedFile*(e: Editor) =
   let reloadResult = activeBuffer.reloadFile()
   if reloadResult.isOk:
     e.state.statusMessage = "File reloaded: " & filePath
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
     # Update git diff after reload
     e.refreshGitDiff(useBuffer = false)
     # Rescan conflict markers against the newly loaded content
@@ -1062,7 +1064,7 @@ proc reloadCurrentFile*(e: Editor): Result[void, string] =
     return err(reloadResult.error)
 
   e.state.statusMessage = "File reloaded: " & filePath
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
   e.refreshGitDiff(useBuffer = false)
   activeBuffer.refreshConflicts()
   e.state.timing.lastConflictScan = getMonoTime()
@@ -1218,7 +1220,7 @@ proc maybeReloadConfig*(e: Editor) =
   e.state.timing.lastConfigModTime = currentModTime
 
   e.state.statusMessage = "Configuration reloaded"
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc maybeUpdateConflicts*(e: Editor) =
   ## Rescan the active buffer for git conflict markers when it has been
@@ -1238,7 +1240,7 @@ proc maybeUpdateConflicts*(e: Editor) =
   # Only force a full redraw when the block structure actually changed —
   # per-line edits already trigger their own redraws.
   if activeBuffer.conflictBlocks != prevBlocks:
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
 
 proc enterRecentFileMode*(e: Editor): Result[void, string] =
   ## Enter Recent File mode in a vertical split window
@@ -1255,86 +1257,86 @@ proc enterRecentFileMode*(e: Editor): Result[void, string] =
 
 proc startSubstitutePreview*(e: Editor) =
   ## Start substitute preview by saving the current buffer content
-  if e.state.substitutePreview.isActive:
+  if e.state.ui.substitutePreview.isActive:
     return
 
   let buffer = e.activeBuffer()
-  e.state.substitutePreview.originalLines = @[]
+  e.state.ui.substitutePreview.originalLines = @[]
   for i in 0 ..< buffer.len:
-    e.state.substitutePreview.originalLines.add(buffer.getLine(i))
-  e.state.substitutePreview.isActive = true
-  e.state.substitutePreview.lastPattern = ""
-  e.state.substitutePreview.lastReplacement = ""
-  e.state.substitutePreview.originalCursor = e.cursor
-  e.state.substitutePreview.originalTopLine = e.activeWindow.viewport.topLine
-  e.state.substitutePreview.originalLeftColumn = e.activeWindow.viewport.leftColumn
+    e.state.ui.substitutePreview.originalLines.add(buffer.getLine(i))
+  e.state.ui.substitutePreview.isActive = true
+  e.state.ui.substitutePreview.lastPattern = ""
+  e.state.ui.substitutePreview.lastReplacement = ""
+  e.state.ui.substitutePreview.originalCursor = e.cursor
+  e.state.ui.substitutePreview.originalTopLine = e.activeWindow.viewport.topLine
+  e.state.ui.substitutePreview.originalLeftColumn = e.activeWindow.viewport.leftColumn
 
 proc restoreFromPreview*(e: Editor) =
   ## Restore buffer content from preview snapshot without cancelling the preview.
   ## Callers that want to cancel preview entirely should use cancelSubstitutePreview.
-  if not e.state.substitutePreview.isActive:
+  if not e.state.ui.substitutePreview.isActive:
     return
 
   let buffer = e.activeBuffer()
   # Restore all lines from snapshot
-  for i in 0 ..< e.state.substitutePreview.originalLines.len:
+  for i in 0 ..< e.state.ui.substitutePreview.originalLines.len:
     if i < buffer.len:
-      buffer.replaceLineNoUndo(i, e.state.substitutePreview.originalLines[i])
+      buffer.replaceLineNoUndo(i, e.state.ui.substitutePreview.originalLines[i])
 
   # Handle line count differences
-  while buffer.len > e.state.substitutePreview.originalLines.len:
+  while buffer.len > e.state.ui.substitutePreview.originalLines.len:
     buffer.deleteLineNoUndo(buffer.len - 1)
-  while buffer.len < e.state.substitutePreview.originalLines.len:
+  while buffer.len < e.state.ui.substitutePreview.originalLines.len:
     buffer.insertLineNoUndo(
-      buffer.len, e.state.substitutePreview.originalLines[buffer.len]
+      buffer.len, e.state.ui.substitutePreview.originalLines[buffer.len]
     )
 
   buffer.highlightNeedsUpdate = true
   # Clear last-applied pattern/replacement so the next updateSubstitutePreview
   # call does not skip work when identical values are reapplied.
-  e.state.substitutePreview.lastPattern = ""
-  e.state.substitutePreview.lastReplacement = ""
+  e.state.ui.substitutePreview.lastPattern = ""
+  e.state.ui.substitutePreview.lastReplacement = ""
 
 proc cancelSubstitutePreview*(e: Editor) =
   ## Cancel substitute preview and restore original content
-  if not e.state.substitutePreview.isActive:
+  if not e.state.ui.substitutePreview.isActive:
     return
 
   e.restoreFromPreview()
-  e.cursor = e.state.substitutePreview.originalCursor
-  e.activeWindow.viewport.topLine = e.state.substitutePreview.originalTopLine
-  e.activeWindow.viewport.leftColumn = e.state.substitutePreview.originalLeftColumn
-  e.state.substitutePreview.isActive = false
-  e.state.substitutePreview.originalLines = @[]
-  e.state.needsFullRedraw = true
+  e.cursor = e.state.ui.substitutePreview.originalCursor
+  e.activeWindow.viewport.topLine = e.state.ui.substitutePreview.originalTopLine
+  e.activeWindow.viewport.leftColumn = e.state.ui.substitutePreview.originalLeftColumn
+  e.state.ui.substitutePreview.isActive = false
+  e.state.ui.substitutePreview.originalLines = @[]
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc commitSubstitutePreview*(e: Editor) =
   ## Commit substitute preview (discard snapshot, keep current changes)
-  e.state.substitutePreview.isActive = false
-  e.state.substitutePreview.originalLines = @[]
+  e.state.ui.substitutePreview.isActive = false
+  e.state.ui.substitutePreview.originalLines = @[]
 
 proc updateSubstitutePreview*(
     e: Editor, pattern: string, replacement: string, isGlobalFlag: bool = true
 ) =
   ## Update substitute preview with new pattern and replacement
   ## isGlobalFlag: if true, replace all occurrences per line; if false, only first occurrence
-  if not e.state.substitutePreview.isActive:
+  if not e.state.ui.substitutePreview.isActive:
     return
 
   # Skip if nothing changed
-  if pattern == e.state.substitutePreview.lastPattern and
-      replacement == e.state.substitutePreview.lastReplacement:
+  if pattern == e.state.ui.substitutePreview.lastPattern and
+      replacement == e.state.ui.substitutePreview.lastReplacement:
     return
 
   # Restore from snapshot first (this clears lastPattern/lastReplacement, so
   # cache the new values *after* restoring).
   e.restoreFromPreview()
 
-  e.state.substitutePreview.lastPattern = pattern
-  e.state.substitutePreview.lastReplacement = replacement
+  e.state.ui.substitutePreview.lastPattern = pattern
+  e.state.ui.substitutePreview.lastReplacement = replacement
 
   if pattern.len == 0:
-    e.state.needsFullRedraw = true
+    e.state.windowDisplay.needsFullRedraw = true
     return
 
   # Process escape sequences in replacement using common utility
@@ -1370,7 +1372,7 @@ proc updateSubstitutePreview*(
       buffer.replaceLineNoUndo(lineIdx, newLine)
 
   buffer.highlightNeedsUpdate = true
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)
@@ -1379,19 +1381,19 @@ proc shutdown*(e: Editor) =
 proc maybeUpdateDebugBuffer*(e: Editor) =
   ## Update debug buffer content periodically if it's displayed in a window
   ## This provides auto-refresh functionality for the debug viewer
-  if e.state.debugBuffer == nil:
+  if e.state.windowDisplay.debugBuffer == nil:
     return
 
   # Check if the debug buffer is still displayed in a window
   var foundWindow: EditorWindow = nil
   for window in e.windowManager.windows:
-    if window.buffer == e.state.debugBuffer:
+    if window.buffer == e.state.windowDisplay.debugBuffer:
       foundWindow = window
       break
 
   if foundWindow == nil:
     # Debug buffer is no longer displayed, clear the reference
-    e.state.debugBuffer = nil
+    e.state.windowDisplay.debugBuffer = nil
     return
 
   # Check if enough time has passed since last update
@@ -1510,9 +1512,9 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
     foundWindow.viewport.leftColumn = savedLeftColumn
 
     # Update the reference in state
-    e.state.debugBuffer = newDebugBuffer
+    e.state.windowDisplay.debugBuffer = newDebugBuffer
   e.state.timing.lastDebugUpdate = now
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc notify*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
   ## Send a notification. Routes to popup or status line based on config.
@@ -1534,9 +1536,9 @@ proc tick*(e: Editor) =
   # Update LSP progress display
   let progressOpt = e.lsp.getLatestActiveProgress()
   if progressOpt.isSome:
-    e.state.lspProgressText = getProgressText(progressOpt.get)
+    e.state.ui.lspProgressText = getProgressText(progressOpt.get)
   else:
-    e.state.lspProgressText = ""
+    e.state.ui.lspProgressText = ""
 
   # Display any pending LSP status messages
   let lspMessages = e.lsp.getAndClearMessages()
@@ -1606,21 +1608,23 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
   clearBuffer(buffer)
 
   # Update smooth scroll animation
-  if e.state.scrollAnimation.active:
+  if e.state.windowDisplay.scrollAnimation.active:
     let reservedLines =
       if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
     let bufferLen = e.activeBuffer().len
     let (_, cursorLine) = e.executer.motionController.viewportManager.updateScrollAnimation(
-      e.state.scrollAnimation, e.config.smoothScroll, reservedLines, bufferLen
+      e.state.windowDisplay.scrollAnimation, e.config.smoothScroll, reservedLines,
+      bufferLen,
     )
     e.activeWindow.cursor.line = cursorLine
 
-  if e.state.needsFullRedraw:
-    e.state.needsFullRedraw = false
+  if e.state.windowDisplay.needsFullRedraw:
+    e.state.windowDisplay.needsFullRedraw = false
 
   # Update highlight state (skip for debug buffer)
   let isDebugBuffer =
-    e.state.debugBuffer != nil and e.activeBuffer() == e.state.debugBuffer
+    e.state.windowDisplay.debugBuffer != nil and
+    e.activeBuffer() == e.state.windowDisplay.debugBuffer
 
   if e.config.highlight.pairOfParen and not isDebugBuffer:
     e.state.matchingParenPos = findMatchingParenPosition(e.activeBuffer(), e.cursor)

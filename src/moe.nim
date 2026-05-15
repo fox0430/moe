@@ -50,11 +50,11 @@ proc pollTerminalWindows*(e: Editor) =
         if expectedCols != termState.grid.cols or expectedRows != termState.grid.rows:
           if expectedCols > 0 and expectedRows > 0:
             termState.resize(expectedCols, expectedRows)
-            e.state.needsFullRedraw = true
+            e.state.windowDisplay.needsFullRedraw = true
 
         let updated = termState.pollOutput()
         if updated:
-          e.state.needsFullRedraw = true
+          e.state.windowDisplay.needsFullRedraw = true
 
         if termState.exitCode.isSome:
           if termState.command.len > 0:
@@ -83,7 +83,7 @@ proc pollTerminalWindows*(e: Editor) =
               # Last window: return to Normal mode
               window.mode = EditorMode.Normal
               e.setMode(EditorMode.Normal)
-          e.state.needsFullRedraw = true
+          e.state.windowDisplay.needsFullRedraw = true
           return
 
 proc handleStartUpWindows(e: Editor, termWidth, termHeight: int) =
@@ -130,7 +130,7 @@ proc handleResize(e: Editor) =
   # Physically clear the terminal screen to remove artifacts
   terminal.clearScreen()
   # Set the editor's full redraw flag
-  e.state.needsFullRedraw = true
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc emergencySaveAndQuit(
     editor: Editor, e: ref Exception, cmdLineConfig: CmdLineConfig, log: Logger
@@ -331,7 +331,7 @@ proc main() =
       if activeBuffer.filePath.isSome and
           activeBuffer.filePath.get.absolutePath() == path:
         applyDiagnosticsToBuffer(activeBuffer, diagnostics)
-        editor.state.needsFullRedraw = true
+        editor.state.windowDisplay.needsFullRedraw = true
   )
 
   if cmdLineConfig.filePaths.len > 0:
