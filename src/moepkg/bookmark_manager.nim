@@ -23,6 +23,7 @@
 import std/[options, unicode]
 
 import buffer
+import picker/nav
 
 type
   BookmarkEntry* = object ## Represents a bookmark entry in the bookmark manager list
@@ -70,15 +71,13 @@ proc updateEntries*(state: BookmarkManagerState, buffers: seq[TextBuffer]) =
 
 proc moveUp*(state: BookmarkManagerState) =
   ## Move selection up
-  if state.selectedIndex > 0:
-    state.selectedIndex.dec
-    if state.selectedIndex < state.topLine:
-      state.topLine = state.selectedIndex
+  pickerMoveUp(state.selectedIndex)
+  if state.selectedIndex < state.topLine:
+    state.topLine = state.selectedIndex
 
 proc moveDown*(state: BookmarkManagerState) =
   ## Move selection down
-  if state.selectedIndex < state.entries.len - 1:
-    state.selectedIndex.inc
+  pickerMoveDown(state.selectedIndex, state.entries.len)
 
 proc getSelectedEntry*(state: BookmarkManagerState): Option[BookmarkEntry] =
   ## Get the currently selected bookmark entry

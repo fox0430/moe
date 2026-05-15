@@ -23,6 +23,7 @@
 import std/[options, os, times, algorithm]
 
 import backup, buffer
+import picker/nav
 
 const BackupDateFormat = "yyyy-MM-dd'T'HH:mm:sszzz"
 
@@ -108,27 +109,22 @@ proc refresh*(state: BackupManagerState) =
 
 proc moveUp*(state: BackupManagerState) =
   ## Move selection up
-  if state.entries.len > 0 and state.selectedIndex > 0:
-    state.selectedIndex.dec
-    # Adjust scroll position if needed
-    if state.selectedIndex < state.topLine:
-      state.topLine = state.selectedIndex
+  pickerMoveUp(state.selectedIndex)
+  if state.selectedIndex < state.topLine:
+    state.topLine = state.selectedIndex
 
 proc moveDown*(state: BackupManagerState) =
   ## Move selection down
-  if state.entries.len > 0 and state.selectedIndex < state.entries.len - 1:
-    state.selectedIndex.inc
-    # Note: scroll adjustment for moving down is handled during rendering
+  pickerMoveDown(state.selectedIndex, state.entries.len)
 
 proc moveToFirst*(state: BackupManagerState) =
   ## Move to first entry
-  state.selectedIndex = 0
+  pickerMoveToFirst(state.selectedIndex)
   state.topLine = 0
 
 proc moveToLast*(state: BackupManagerState) =
   ## Move to last entry
-  if state.entries.len > 0:
-    state.selectedIndex = state.entries.len - 1
+  pickerMoveToLast(state.selectedIndex, state.entries.len)
 
 proc getSelectedEntry*(state: BackupManagerState): Option[BackupEntry] =
   ## Get the currently selected backup entry

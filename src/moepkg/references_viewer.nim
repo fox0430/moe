@@ -25,6 +25,7 @@
 import std/[strformat, strutils, options]
 
 import buffer
+import picker/nav
 
 type
   ReferenceItem* = object
@@ -74,47 +75,31 @@ proc getLine*(state: ReferencesViewerState, index: int): string =
 
 proc moveUp*(state: ReferencesViewerState) =
   ## Move selection up
-  if state.selectedIndex > 0:
-    state.selectedIndex.dec
+  pickerMoveUp(state.selectedIndex)
 
 proc moveDown*(state: ReferencesViewerState) =
   ## Move selection down
-  if state.selectedIndex < state.items.high:
-    state.selectedIndex.inc
+  pickerMoveDown(state.selectedIndex, state.items.len)
 
 proc moveToFirst*(state: ReferencesViewerState) =
   ## Move to first item
-  state.selectedIndex = 0
+  pickerMoveToFirst(state.selectedIndex)
 
 proc moveToLast*(state: ReferencesViewerState) =
   ## Move to last item
-  if state.items.len > 0:
-    state.selectedIndex = state.items.high
-  else:
-    state.selectedIndex = 0
+  pickerMoveToLast(state.selectedIndex, state.items.len)
 
 proc halfPageUp*(state: ReferencesViewerState, viewportHeight: int) =
   ## Move up by half a page
-  let halfPage = viewportHeight div 2
-  state.selectedIndex = max(0, state.selectedIndex - halfPage)
+  pickerHalfPageUp(state.selectedIndex, viewportHeight)
 
 proc halfPageDown*(state: ReferencesViewerState, viewportHeight: int) =
   ## Move down by half a page
-  let halfPage = viewportHeight div 2
-  if state.items.len > 0:
-    state.selectedIndex = min(state.items.high, state.selectedIndex + halfPage)
+  pickerHalfPageDown(state.selectedIndex, state.items.len, viewportHeight)
 
 proc ensureSelectedVisible*(state: ReferencesViewerState, viewportHeight: int) =
   ## Ensure the selected item is visible in the viewport
-  # Adjust topLine to keep selected item visible
-  if state.selectedIndex < state.topLine:
-    state.topLine = state.selectedIndex
-  elif state.selectedIndex >= state.topLine + viewportHeight:
-    state.topLine = state.selectedIndex - viewportHeight + 1
-
-  # Ensure topLine is not negative
-  if state.topLine < 0:
-    state.topLine = 0
+  pickerEnsureVisible(state.selectedIndex, state.topLine, viewportHeight)
 
 proc createReferencesTextBuffer*(state: ReferencesViewerState): TextBuffer =
   ## Create a TextBuffer from references for rendering via the normal view path
