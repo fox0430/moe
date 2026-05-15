@@ -24,7 +24,7 @@ import std/[options, strutils, unicode]
 
 import pkg/results
 
-import ../[types, buffer, motion, modes, registers, logger, unicode_utils]
+import ../[types, buffer, motion, modes, registers, logger]
 import ../command_handlers/insert_commands
 
 import core
