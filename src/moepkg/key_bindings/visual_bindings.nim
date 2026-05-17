@@ -31,7 +31,8 @@
 ## bound it via a `KeyCombo(... modifiers: {kmCtrl})` literal in each mode,
 ## which `parseKeyCombo("C-s")` handles identically.
 
-import ../[modes, key_bindings]
+import ../modes
+import ./registry
 
 const SharedVisualBindings: seq[tuple[key, cmd: string]] = @[
   # Motion (hjkl + 0/$/^)

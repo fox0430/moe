@@ -25,7 +25,8 @@
 ## Backspace / Enter / Tab / Escape / Space and Ctrl-modified keys (`C-s` etc.)
 ## via `parseKeyCombo` — so no `KeyCombo(...)` literals appear here.
 
-import ../[modes, key_bindings]
+import ../modes
+import ./registry
 
 const NormalBindings: seq[tuple[key, cmd: string]] = @[
   # Basic motion

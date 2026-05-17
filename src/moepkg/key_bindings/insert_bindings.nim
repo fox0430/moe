@@ -22,7 +22,8 @@
 ## Both modes share the same exit-to-Normal bindings, so they are applied via
 ## a single mode-list loop.
 
-import ../[modes, key_bindings]
+import ../modes
+import ./registry
 
 const InsertReplaceBindings: seq[tuple[key, cmd: string]] =
   @[("Escape", "switch-to-normal"), ("C-c", "switch-to-normal")]

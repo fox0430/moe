@@ -26,7 +26,8 @@
 
 import std/tables
 
-import ../[types, modes, command_config, key_bindings]
+import ../[types, modes, command_config]
+import ./registry
 
 const MotionCommands: seq[tuple[name, desc: string, motion: Motion]] = @[
   ("move-left", "Move cursor left", Motion.Left),
