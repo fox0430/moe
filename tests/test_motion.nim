@@ -670,3 +670,158 @@ suite "Next/Previous Line FirstNonBlank":
     let result = executor.movePreviousLineFirstNonBlank(currentPos, 1)
     check result.y == 0
     check result.x == 2 # First non-blank on line 1
+
+suite "calculateOperatorRange - linewise motions":
+  test "Motion.Down produces linewise range with column 0 start":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let startPos = BufferPosition(line: 0, column: 3)
+    let endPos = BufferPosition(line: 1, column: 2)
+    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.Down)
+
+    check range.isLinewise == true
+    check range.start.line == 0
+    check range.start.column == 0
+    check range.endPos.line == 1
+    # endPos.column extends to full line length
+    check range.endPos.column == "line2".len
+
+  test "Motion.Up swaps start/end and produces linewise range":
+    let buffer = newTextBuffer("line1\nline2\nline3")
+    let startPos = BufferPosition(line: 2, column: 4)
+    let endPos = BufferPosition(line: 0, column: 1)
+    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.Up)
+
+    check range.isLinewise == true
+    check range.start.line == 0
+    check range.start.column == 0
+    check range.endPos.line == 2
+
+  test "Motion.FirstLine produces linewise range":
+    let buffer = newTextBuffer("a\nb\nc")
+    let startPos = BufferPosition(line: 2, column: 0)
+    let endPos = BufferPosition(line: 0, column: 0)
+    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.FirstLine)
+
+    check range.isLinewise == true
+    check range.start.line == 0
+    check range.endPos.line == 2
+
+  test "Motion.LastLine produces linewise range":
+    let buffer = newTextBuffer("a\nb\nc")
+    let startPos = BufferPosition(line: 0, column: 0)
+    let endPos = BufferPosition(line: 2, column: 0)
+    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.LastLine)
+
+    check range.isLinewise == true
+    check range.start.line == 0
+    check range.endPos.line == 2
+
+  test "Motion.ParagraphForward produces linewise range":
+    let buffer = newTextBuffer("para1\n\npara2")
+    let startPos = BufferPosition(line: 0, column: 2)
+    let endPos = BufferPosition(line: 1, column: 0)
+    let range =
+      calculateOperatorRange(buffer, startPos, endPos, Motion.ParagraphForward)
+
+    check range.isLinewise == true
+    check range.start.column == 0
+
+suite "calculateOperatorRange - exclusive motions":
+  test "Motion.Home reduces endPos column by 1 (exclusive)":
+    let buffer = newTextBuffer("abcdef")
+    let startPos = BufferPosition(line: 0, column: 0)
+    let endPos = BufferPosition(line: 0, column: 4)
+    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.Home)
+
+    check range.isLinewise == false
+    # Exclusive: endPos shifted back by 1
+    check range.endPos.column == 3
+
+  test "Motion.FirstNonBlank is exclusive":
+    let buffer = newTextBuffer("  abcdef")
+    let startPos = BufferPosition(line: 0, column: 0)
+    let endPos = BufferPosition(line: 0, column: 5)
+    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.FirstNonBlank)
+
+    check range.isLinewise == false
+    check range.endPos.column == 4
+
+  test "Motion.Right (l) is exclusive":
+    let buffer = newTextBuffer("abcdef")
+    let startPos = BufferPosition(line: 0, column: 1)
+    let endPos = BufferPosition(line: 0, column: 3)
+    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.Right)
+
+    check range.endPos.column == 2
+
+  test "Motion.WordForward stays on starting line when crossing lines":
+    # `dw` should not delete the newline; it must clamp to end of start line
+    let buffer = newTextBuffer("hello\nworld")
+    let startPos = BufferPosition(line: 0, column: 0)
+    let endPos = BufferPosition(line: 1, column: 0)
+    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.WordForward)
+
+    check range.start.line == 0
+    check range.endPos.line == 0
+    # Clamped to end of "hello" (last char index)
+    check range.endPos.column == "hello".len - 1
+
+suite "calculateOperatorRange - inclusive motions":
+  test "Motion.WordEnd does NOT shift endPos (inclusive)":
+    let buffer = newTextBuffer("hello world")
+    let startPos = BufferPosition(line: 0, column: 0)
+    let endPos = BufferPosition(line: 0, column: 4)
+    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.WordEnd)
+
+    check range.isLinewise == false
+    # Inclusive: endPos preserved
+    check range.endPos.column == 4
+
+  test "Motion.TillChar is inclusive (range covers up to target)":
+    let buffer = newTextBuffer("abcxyz")
+    let startPos = BufferPosition(line: 0, column: 0)
+    let endPos = BufferPosition(line: 0, column: 2)
+    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.TillChar)
+
+    check range.endPos.column == 2
+
+  test "Motion.FindChar is inclusive":
+    let buffer = newTextBuffer("abcxyz")
+    let startPos = BufferPosition(line: 0, column: 0)
+    let endPos = BufferPosition(line: 0, column: 3)
+    let range = calculateOperatorRange(buffer, startPos, endPos, Motion.FindChar)
+
+    check range.endPos.column == 3
+
+suite "Operator motion classifier consistency (Vim parity)":
+  test "isLinewiseMotion matches LinewiseMotions set":
+    for m in LinewiseMotions:
+      check isLinewiseMotion(m)
+
+  test "isExclusiveMotion matches ExclusiveMotions set":
+    for m in ExclusiveMotions:
+      check isExclusiveMotion(m)
+
+  test "WordEnd is NOT exclusive (Vim parity)":
+    check not isExclusiveMotion(Motion.WordEnd)
+    check not isExclusiveMotion(Motion.WordEndBackward)
+
+  test "TillChar/FindChar are NOT exclusive (inclusive)":
+    check not isExclusiveMotion(Motion.TillChar)
+    check not isExclusiveMotion(Motion.FindChar)
+    check not isExclusiveMotion(Motion.TillCharBackward)
+    check not isExclusiveMotion(Motion.FindCharBackward)
+
+  test "Home/FirstNonBlank are exclusive (Vim parity)":
+    check isExclusiveMotion(Motion.Home)
+    check isExclusiveMotion(Motion.FirstNonBlank)
+
+  test "Up/Down/FirstLine/LastLine are linewise":
+    check isLinewiseMotion(Motion.Up)
+    check isLinewiseMotion(Motion.Down)
+    check isLinewiseMotion(Motion.FirstLine)
+    check isLinewiseMotion(Motion.LastLine)
+
+  test "WordForward is exclusive but NOT linewise":
+    check isExclusiveMotion(Motion.WordForward)
+    check not isLinewiseMotion(Motion.WordForward)
