@@ -351,7 +351,7 @@ proc isSymbolChar(r: Rune): bool =
   ## Check if a character is a symbol (non-word, non-whitespace)
   return not isWordChar(r) and not isWhitespace(r)
 
-proc skipWordForward(runes: seq[Rune], startCol: int): int =
+proc skipWordForward*(runes: seq[Rune], startCol: int): int =
   ## Skip current word/symbol sequence and trailing whitespace from startCol.
   ## Returns the column position after skipping.
   ## Used by both moveWordForward and calculateOperatorRange.
@@ -1342,7 +1342,60 @@ proc executeMotion*(
   # Return the new cursor position
   return ok(BufferPosition(line: newPos.y, column: newPos.x))
 
-## Operator range calculation utilities
+## Operator+motion classification.
+##
+## Linewise vs exclusive vs (default) inclusive determines how a motion
+## combines with an operator (`d`, `y`, `c`, ...). These sets are the single
+## source of truth -- `calculateOperatorRange` below and any external callers
+## should consult `isLinewiseMotion`/`isExclusiveMotion` instead of re-listing
+## the motions.
+
+const LinewiseMotions* = {
+  Motion.Up, Motion.Down, Motion.FirstLine, Motion.LastLine, Motion.PageUp,
+  Motion.PageDown, Motion.HalfPageUp, Motion.HalfPageDown, Motion.ParagraphForward,
+  Motion.ParagraphBackward, Motion.NextLineFirstNonBlank,
+  Motion.PreviousLineFirstNonBlank,
+}
+
+const ExclusiveMotions* = {
+  Motion.WordForward, # w
+  Motion.WordBackward, # b
+  Motion.Right, # l (when used with operator)
+  Motion.Left, # h (when used with operator)
+  Motion.Home, # 0
+  Motion.FirstNonBlank, # ^
+}
+
+func isLinewiseMotion*(motion: Motion): bool {.inline.} =
+  ## True if the motion operates on whole lines for operator+motion semantics
+  ## (e.g. `dj` deletes both lines fully). Vim-compatible classification.
+  motion in LinewiseMotions
+
+func isExclusiveMotion*(motion: Motion): bool {.inline.} =
+  ## True if the motion is exclusive for operator+motion semantics
+  ## (the character at endPos is NOT included). Vim-compatible classification.
+  motion in ExclusiveMotions
+
+proc lineContentNoNewline(buffer: TextBuffer, lineIdx: int): string =
+  ## Get the content of a line excluding any trailing newline.
+  ## Returns empty string when lineIdx is out of range.
+  if lineIdx < 0 or lineIdx >= buffer.len:
+    return ""
+  let line = buffer.getLine(lineIdx)
+  if line.len > 0 and line[^1] == '\n':
+    line[0 ..< ^1]
+  else:
+    line
+
+proc wordForwardReachesEol(buffer: TextBuffer, pos: BufferPosition): bool =
+  ## True if `w` from `pos` runs past the last character on its line. When
+  ## this happens, `dw` should delete through the last character instead of
+  ## applying the usual exclusive (decrement-by-1) adjustment -- this is the
+  ## "w stuck at last line of buffer" special case in Vim.
+  if pos.line < 0 or pos.line >= buffer.len:
+    return false
+  let runes = lineContentNoNewline(buffer, pos.line).toRunes()
+  skipWordForward(runes, pos.column) >= runes.len
 
 proc calculateOperatorRange*(
     buffer: TextBuffer, startPos: BufferPosition, endPos: BufferPosition, motion: Motion
@@ -1350,26 +1403,8 @@ proc calculateOperatorRange*(
   ## Calculate the range affected by an operator+motion combination
   ## Returns OperatorRange with proper start/end and linewise flag
 
-  # Determine if this is a linewise motion
-  let isLinewise =
-    motion in {
-      Motion.Up, Motion.Down, Motion.FirstLine, Motion.LastLine, Motion.PageUp,
-      Motion.PageDown, Motion.HalfPageUp, Motion.HalfPageDown, Motion.ParagraphForward,
-      Motion.ParagraphBackward, Motion.NextLineFirstNonBlank,
-      Motion.PreviousLineFirstNonBlank,
-    }
-
-  # Determine if this is an exclusive motion (Vim behavior)
-  # Exclusive motions do NOT include the character at endPos
-  let isExclusive =
-    motion in {
-      Motion.WordForward, # w
-      Motion.WordBackward, # b
-      Motion.Right, # l (when used with operator)
-      Motion.Left, # h (when used with operator)
-      Motion.Home, # 0
-      Motion.FirstNonBlank, # ^
-    }
+  let isLinewise = motion.isLinewiseMotion()
+  let isExclusive = motion.isExclusiveMotion()
 
   var range = OperatorRange(start: startPos, endPos: endPos, isLinewise: isLinewise)
 
@@ -1385,56 +1420,30 @@ proc calculateOperatorRange*(
     # For WordForward (dw), if the motion crosses lines, stop at end of current line
     # Vim's dw does NOT delete the newline - it only deletes to end of line
     if motion == Motion.WordForward and range.endPos.line > range.start.line:
-      # Clamp to end of start line (without newline)
       range.endPos.line = range.start.line
       if range.start.line < buffer.len:
-        let startLine = buffer.getLine(range.start.line)
-        let startLineContent =
-          if startLine.len > 0 and startLine[^1] == '\n':
-            startLine[0 ..< ^1]
-          else:
-            startLine
-        range.endPos.column = max(range.start.column, startLineContent.charLen - 1)
+        let endCol = lineContentNoNewline(buffer, range.start.line).charLen - 1
+        range.endPos.column = max(range.start.column, endCol)
     # Only adjust if we're not at the start of the range
     elif range.endPos.line == range.start.line and
         range.endPos.column > range.start.column:
-      if motion == Motion.WordForward:
-        # Check if w motion from startPos would reach end of line
-        # (meaning w was "stuck" at last line of buffer).
-        # In that case, delete to end of line without exclusive adjustment.
-        let line = buffer.getLine(range.start.line)
-        let lineContent =
-          if line.len > 0 and line[^1] == '\n':
-            line[0 ..< ^1]
-          else:
-            line
-        let runes = lineContent.toRunes()
-        let testPos = skipWordForward(runes, range.start.column)
-        if testPos >= runes.len:
-          # w motion reached end of line - "stuck" at last line.
-          # Delete to end of line (inclusive of last char).
-          range.endPos.column = max(range.start.column, runes.len - 1)
-        else:
-          # w motion found a real next word - normal exclusive adjustment
-          range.endPos.column -= 1
+      if motion == Motion.WordForward and wordForwardReachesEol(buffer, range.start):
+        # w "stuck" at last line - delete to EOL without exclusive adjustment
+        let endCol = lineContentNoNewline(buffer, range.start.line).charLen - 1
+        range.endPos.column = max(range.start.column, endCol)
       else:
-        # Non-WordForward motions: simple exclusive adjustment
+        # Standard exclusive adjustment (covers non-WordForward motions and
+        # WordForward with a real next word on this line)
         range.endPos.column -= 1
     elif range.endPos.line > range.start.line and range.endPos.column > 0:
       # Different line - move column back
       range.endPos.column -= 1
-    # Note: If endPos.column is 0 and we're on a different line,
-    # we need to move to the previous line's end
     elif range.endPos.line > range.start.line and range.endPos.column == 0:
+      # endPos.column == 0 on a different line: move to previous line's end
       range.endPos.line -= 1
       if range.endPos.line >= 0 and range.endPos.line < buffer.len:
-        let prevLine = buffer.getLine(range.endPos.line)
-        let prevContent =
-          if prevLine.len > 0 and prevLine[^1] == '\n':
-            prevLine[0 ..< ^1]
-          else:
-            prevLine
-        range.endPos.column = max(0, prevContent.charLen - 1)
+        let endCol = lineContentNoNewline(buffer, range.endPos.line).charLen - 1
+        range.endPos.column = max(0, endCol)
 
   # For linewise operations, extend to full lines
   if isLinewise:
