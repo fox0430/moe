@@ -742,8 +742,9 @@ proc handleWindowCommand(e: Editor, keyCombo: KeyCombo): Option[bool] =
 
   return none(bool)
 
-proc handleEvent*(e: Editor, event: Event): bool =
-  ## Main event handler using the new handler manager system
+proc prepareForEvent(e: Editor, event: Event) =
+  ## Per-event setup: clear stale status, refresh input timestamp, cancel
+  ## any in-flight scroll animation.
 
   # Clear status message from previous event cycle:
   # messages persist for one render frame, then clear on next input)
@@ -756,78 +757,345 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if event.kind == EventKind.Key and e.state.windowDisplay.scrollAnimation.active:
     cancelScrollAnimation(e.state.windowDisplay.scrollAnimation)
 
-  # Handle Ctrl-C (Quit event from celina)
-  if event.kind == EventKind.Quit:
-    # Terminal-Input mode: forward Ctrl-C to PTY as \x03
-    if e.state.mode == EditorMode.Terminal:
-      let activeWin = e.activeWindow
-      if activeWin.terminalState.isSome:
-        let termState = activeWin.terminalState.get
-        if termState.subMode == tsmInput:
-          termState.feedInput("\x03")
-          return true
+proc handleQuitEvent(e: Editor): bool =
+  ## Handle Ctrl-C (Quit event from celina). Behaviour depends on the
+  ## current mode/overlay: forward to Terminal PTY, cancel overlays, exit
+  ## Insert-Normal, or transition file-edit modes back to Normal.
 
-    # Search overlay: cancel search and exit overlay
-    if e.state.isSearchOverlay:
-      if e.state.search.incsearch:
-        e.cursor = e.state.search.startPos
-      e.state.exitOverlay()
-      e.setMode(e.state.mode)
-      # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
-      if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
-        e.state.insertNormalMode = false
-        e.setMode(EditorMode.Insert)
-      return true
-
-    # Command overlay: clear command line and exit overlay
-    if e.state.isCommandOverlay:
-      e.state.commandCompletionManager.cancelCompletion()
-      e.cancelSubstitutePreview()
-      e.state.exitOverlay()
-      e.setMode(e.state.mode)
-      # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
-      if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
-        e.state.insertNormalMode = false
-        e.setMode(EditorMode.Insert)
-      return true
-
-    if e.state.mode == EditorMode.Normal:
-      # Insert-Normal mode (Ctrl-o): Ctrl-C cancels and stays in Normal mode
-      if e.state.insertNormalMode:
-        e.state.insertNormalMode = false
-        let activeBuffer = e.activeBuffer()
-        if activeBuffer.inTransaction:
-          clearAutoIndentIfUnedited(activeBuffer, e.state)
-          discard activeBuffer.commitTransaction()
-        e.state.editState.insertModeStartPos = none(BufferPosition)
-        e.state.editState.substituteContext = none(types.SubstituteContext)
-        let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
-        adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+  # Terminal-Input mode: forward Ctrl-C to PTY as \x03
+  if e.state.mode == EditorMode.Terminal:
+    let activeWin = e.activeWindow
+    if activeWin.terminalState.isSome:
+      let termState = activeWin.terminalState.get
+      if termState.subMode == tsmInput:
+        termState.feedInput("\x03")
         return true
-      # Normal mode: show exit message like Vim
-      e.state.statusMessage = "Type :qa and press <Enter> to exit"
-    elif e.state.mode.isFileEditMode:
-      # Other file edit modes (Insert, Visual, Replace, etc.): switch to Normal mode
+
+  # Search overlay: cancel search and exit overlay
+  if e.state.isSearchOverlay:
+    if e.state.search.incsearch:
+      e.cursor = e.state.search.startPos
+    e.state.exitOverlay()
+    e.setMode(e.state.mode)
+    # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
+    if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
+      e.state.insertNormalMode = false
+      e.setMode(EditorMode.Insert)
+    return true
+
+  # Command overlay: clear command line and exit overlay
+  if e.state.isCommandOverlay:
+    e.state.commandCompletionManager.cancelCompletion()
+    e.cancelSubstitutePreview()
+    e.state.exitOverlay()
+    e.setMode(e.state.mode)
+    # Insert-Normal mode (Ctrl-o): return to Insert after overlay cancel
+    if e.state.insertNormalMode and e.state.mode == EditorMode.Normal:
+      e.state.insertNormalMode = false
+      e.setMode(EditorMode.Insert)
+    return true
+
+  if e.state.mode == EditorMode.Normal:
+    # Insert-Normal mode (Ctrl-o): Ctrl-C cancels and stays in Normal mode
+    if e.state.insertNormalMode:
+      e.state.insertNormalMode = false
       let activeBuffer = e.activeBuffer()
-
-      # Commit transaction when leaving Insert or Replace mode
-      if e.state.mode in {EditorMode.Insert, EditorMode.Replace}:
-        if activeBuffer.inTransaction:
-          clearAutoIndentIfUnedited(activeBuffer, e.state)
-          discard activeBuffer.commitTransaction()
-        # Clear insert mode tracking state
-        e.state.editState.insertModeStartPos = none(BufferPosition)
-        e.state.editState.substituteContext = none(types.SubstituteContext)
-        e.state.editState.replaceHistory = @[]
-
-      e.state.previousMode = e.state.mode
-      e.setMode(EditorMode.Normal)
-
-      # Adjust cursor: move one position left when exiting Insert mode
+      if activeBuffer.inTransaction:
+        clearAutoIndentIfUnedited(activeBuffer, e.state)
+        discard activeBuffer.commitTransaction()
+      e.state.editState.insertModeStartPos = none(BufferPosition)
+      e.state.editState.substituteContext = none(types.SubstituteContext)
       let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
       adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+      return true
+    # Normal mode: show exit message like Vim
+    e.state.statusMessage = "Type :qa and press <Enter> to exit"
+  elif e.state.mode.isFileEditMode:
+    # Other file edit modes (Insert, Visual, Replace, etc.): switch to Normal mode
+    let activeBuffer = e.activeBuffer()
 
+    # Commit transaction when leaving Insert or Replace mode
+    if e.state.mode in {EditorMode.Insert, EditorMode.Replace}:
+      if activeBuffer.inTransaction:
+        clearAutoIndentIfUnedited(activeBuffer, e.state)
+        discard activeBuffer.commitTransaction()
+      # Clear insert mode tracking state
+      e.state.editState.insertModeStartPos = none(BufferPosition)
+      e.state.editState.substituteContext = none(types.SubstituteContext)
+      e.state.editState.replaceHistory = @[]
+
+    e.state.previousMode = e.state.mode
+    e.setMode(EditorMode.Normal)
+
+    # Adjust cursor: move one position left when exiting Insert mode
+    let lineCharLen = activeBuffer.getLine(e.activeWindow.cursor.line).charLen
+    adjustCursorAfterInsertExit(e.activeWindow.cursor, lineCharLen)
+
+  return true
+
+proc dismissTempMessages(e: Editor, event: Event): bool =
+  ## Dismiss temporary messages (e.g. :jumps output) on any key.
+  ## Returns true when a message was dismissed (event consumed).
+  if e.state.ui.tempMessages.len == 0 or event.kind != EventKind.Key:
+    return false
+  let keyComboOpt = eventToKeyCombo(event)
+  if keyComboOpt.isNone:
+    return false
+  let keyCombo = keyComboOpt.get
+  e.state.ui.tempMessages = @[]
+  e.state.windowDisplay.needsFullRedraw = true
+
+  # If ":" was pressed, enter command overlay
+  if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == ":":
+    e.state.enterCommandOverlay()
+  # Otherwise just dismiss and stay in current mode
+  return true
+
+proc handleOverlayEvent(e: Editor, event: Event): Option[bool] =
+  ## Dispatch overlay modes (Command, Search, Rename) and Debug mode.
+  ## Returns some(result) if handled, none otherwise.
+  if e.state.isCommandOverlay:
+    return some(handleCommandModeEvent(e, event))
+  if e.state.isSearchOverlay:
+    return some(handleSearchModeEvent(e, event))
+  if e.state.isRenameOverlay:
+    return some(handleRenameModeEvent(e, event))
+  if e.state.mode == EditorMode.Debug:
+    return some(handleDebugModeEvent(e, event))
+  return none(bool)
+
+proc handlePopupEvent(e: Editor, event: Event): Option[bool] =
+  ## Dispatch LSP popups (CodeLens picker, Hover popup). Returns some(true)
+  ## when the event was consumed; returns none when no popup is active, or
+  ## when a popup was closed and the event should fall through to normal
+  ## key processing (e.g. auto-hover popup will reappear on next render).
+
+  # Handle CodeLens picker input when active
+  if e.state.lspCache.codeLensPicker.isActive and event.kind == EventKind.Key:
+    let keyComboOpt = eventToKeyCombo(event)
+    if keyComboOpt.isSome:
+      let keyCombo = keyComboOpt.get
+
+      # Escape - cancel picker
+      if keyCombo.isSpecial and keyCombo.special == skEscape:
+        e.hideCodeLensPicker()
+        e.state.statusMessage = ""
+        return some(true)
+
+      # Enter - confirm selection
+      if keyCombo.isSpecial and keyCombo.special == skEnter:
+        asyncSpawn e.codeLensPickerConfirm()
+        return some(true)
+
+      # j or Down - next item
+      if not keyCombo.isSpecial:
+        if keyCombo.char == "j":
+          e.codeLensPickerSelectNext()
+          return some(true)
+        # k or Up - previous item
+        if keyCombo.char == "k":
+          e.codeLensPickerSelectPrev()
+          return some(true)
+        # Number keys 1-9 - direct selection
+        if keyCombo.char.len == 1 and keyCombo.char[0] in '1' .. '9':
+          let num = ord(keyCombo.char[0]) - ord('0')
+          asyncSpawn e.codeLensPickerSelectByNumber(num)
+          return some(true)
+
+      if keyCombo.isSpecial:
+        if keyCombo.special == skDown:
+          e.codeLensPickerSelectNext()
+          return some(true)
+        if keyCombo.special == skUp:
+          e.codeLensPickerSelectPrev()
+          return some(true)
+
+      # Any other key closes picker
+      e.hideCodeLensPicker()
+      e.state.statusMessage = ""
+      # Don't return - let the key be processed normally
+
+  # Handle Hover popup input when active
+  if e.state.lspCache.hoverPopup.isActive() and event.kind == EventKind.Key:
+    let keyComboOpt = eventToKeyCombo(event)
+    if keyComboOpt.isSome:
+      let keyCombo = keyComboOpt.get
+
+      # Escape always closes the popup
+      if keyCombo.isSpecial and keyCombo.special == skEscape:
+        e.hideHoverPopup()
+        return some(true)
+
+      # Manual hover (K key): allow j/k/h/l and arrow keys for scrolling
+      if not e.state.lspCache.hoverPopup.isAutoHover:
+        if not keyCombo.isSpecial:
+          if keyCombo.char == "j":
+            e.hoverPopupScrollDown()
+            return some(true)
+          if keyCombo.char == "k":
+            e.hoverPopupScrollUp()
+            return some(true)
+          if keyCombo.char == "l":
+            e.hoverPopupScrollRight()
+            return some(true)
+          if keyCombo.char == "h":
+            e.hoverPopupScrollLeft()
+            return some(true)
+
+        if keyCombo.isSpecial:
+          if keyCombo.special == skDown:
+            e.hoverPopupScrollDown()
+            return some(true)
+          if keyCombo.special == skUp:
+            e.hoverPopupScrollUp()
+            return some(true)
+          if keyCombo.special == skRight:
+            e.hoverPopupScrollRight()
+            return some(true)
+          if keyCombo.special == skLeft:
+            e.hoverPopupScrollLeft()
+            return some(true)
+
+      # Close popup and fall through to normal key processing.
+      # Auto-hover popup will reappear if cursor is still on a diagnostic.
+      e.hideHoverPopup()
+      # Don't return - let the key be processed normally
+
+  return none(bool)
+
+proc handleEscapeCancellation(e: Editor, event: Event): bool =
+  ## In Normal mode, Escape cancels pending multi-key state (macro register,
+  ## operator, text object, register, key router, window command). Also tracks
+  ## double-Escape to clear search highlight. Returns true when Escape was
+  ## handled; non-Escape keys reset the Escape counter but are not consumed.
+  if e.state.mode != EditorMode.Normal or event.kind != EventKind.Key:
+    return false
+  let keyComboOpt = eventToKeyCombo(event)
+  if keyComboOpt.isNone:
+    return false
+  let keyCombo = keyComboOpt.get
+
+  # Handle Escape key to cancel pending multi-key commands
+  if keyCombo.isSpecial and keyCombo.special == skEscape:
+    # Check if any pending state needs to be cancelled
+    var cancelled = false
+
+    # Cancel macro register waiting (q, @)
+    if e.state.macroState.waitingForRegister:
+      e.state.macroState.waitingForRegister = false
+      e.state.macroState.commandType = ""
+      e.state.macroState.pendingCount = 0
+      cancelled = true
+
+    # Cancel pending operator (d, c, y, etc.)
+    if e.state.editState.pendingOperator.isSome:
+      e.state.editState.pendingOperator = none(PendingOperator)
+      cancelled = true
+
+    # Cancel pending text object (i, a)
+    if e.state.editState.pendingTextObject.isSome:
+      e.state.editState.pendingTextObject = none(PendingTextObject)
+      cancelled = true
+
+    # Cancel pending register (")
+    if e.state.pendingRegister.isSome:
+      e.state.pendingRegister = none(char)
+      cancelled = true
+
+    # Cancel pending key binding sequence (built-in multi-key accumulator).
+    # Runtime mapping accumulator is intentionally not cleared here; the
+    # timeout path handles that. See `KeyRouter.cancel` for details.
+    if e.keyRouter.cancel():
+      cancelled = true
+
+    # Cancel window command mode (Ctrl-w)
+    if e.state.pendingCommand != PendingNone:
+      e.state.pendingCommand = PendingNone
+      cancelled = true
+
+    if cancelled:
+      e.state.statusMessage = ""
+      return true
+
+    # No pending state - handle double-Escape to clear search highlight
+    if e.state.lastKeyWasEscape:
+      # Second Escape press - clear highlight
+      e.state.search.hlsearchTempDisabled = true
+      e.state.windowDisplay.needsFullRedraw = true
+      e.state.lastKeyWasEscape = false
+    else:
+      # First Escape press - just mark it
+      e.state.lastKeyWasEscape = true
     return true
+  else:
+    # Any other key resets the Escape counter
+    e.state.lastKeyWasEscape = false
+    return false
+
+proc handleSpecialModeWindowCommand(e: Editor, event: Event): Option[bool] =
+  ## Ctrl-W window commands for special/viewer modes (those outside the
+  ## file-edit mode set). Returns some(result) if handled, none otherwise.
+  if e.state.mode in {
+    EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
+    EditorMode.VisualLine, EditorMode.Replace,
+  } or event.kind != EventKind.Key:
+    return none(bool)
+  let keyComboOpt = eventToKeyCombo(event)
+  if keyComboOpt.isNone:
+    return none(bool)
+  let keyCombo = keyComboOpt.get
+
+  # Cancel window command mode on Escape
+  if e.state.pendingCommand == PendingWindowCmd and keyCombo.isSpecial and
+      keyCombo.special == skEscape:
+    e.state.pendingCommand = PendingNone
+    return some(true)
+
+  return e.handleWindowCommand(keyCombo)
+
+proc updateViewportReservedLines(e: Editor) =
+  ## Recompute `state.windowDisplay.viewportReservedLines` from current
+  ## status/tab line configuration and window layout. Status line and
+  ## command line share the same row (command overlays status).
+  let hasWindows =
+    e.windowManager.windows.len > 0 and
+    e.windowManager.activeWindowIndex < e.windowManager.windows.len
+
+  let isBottomWindow =
+    if hasWindows:
+      # A window is a bottom window if its bottom edge is at the maximum bottom Y
+      let
+        maxBottomY = findMaxBottomY(e.windowManager.windows)
+        windowBottomY = e.activeWindow.viewport.y + e.activeWindow.viewport.height
+      windowBottomY == maxBottomY
+    else:
+      true
+
+  # calculateReservedLines also adds extra lines for multi-line status messages
+  # on the bottom window
+  e.state.windowDisplay.viewportReservedLines =
+    calculateReservedLines(e, isBottomWindow)
+
+  # Add tab line height if shown
+  if e.state.display.showTabLine:
+    e.state.windowDisplay.viewportReservedLines += TabLineHeight
+
+proc syncCompletionOtherBuffers(e: Editor, activeBuffer: TextBuffer) =
+  ## Populate completion manager's `otherBuffers` with all FileEditMode
+  ## buffers except the active one.
+  var otherBufs: seq[TextBuffer] = @[]
+  for win in e.windowManager.windows:
+    if win.mode.isFileEditMode and win.buffer != activeBuffer:
+      otherBufs.add(win.buffer)
+  e.handlerManager.insertHandler.completionManager.otherBuffers = otherBufs
+
+proc handleEvent*(e: Editor, event: Event): bool =
+  ## Main event handler using the new handler manager system
+  prepareForEvent(e, event)
+
+  # Handle Ctrl-C (Quit event from celina)
+  if event.kind == EventKind.Quit:
+    return e.handleQuitEvent()
 
   # Handle mouse events first
   if event.kind == EventKind.Mouse:
@@ -845,204 +1113,27 @@ proc handleEvent*(e: Editor, event: Event): bool =
     return e.handlePasteEvent(event)
 
   # Handle temporary messages (like :jumps output) - dismiss on any key
-  if e.state.ui.tempMessages.len > 0 and event.kind == EventKind.Key:
-    let keyComboOpt = eventToKeyCombo(event)
-    if keyComboOpt.isSome:
-      let keyCombo = keyComboOpt.get
-      e.state.ui.tempMessages = @[]
-      e.state.windowDisplay.needsFullRedraw = true
+  if e.dismissTempMessages(event):
+    return true
 
-      # If ":" was pressed, enter command overlay
-      if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == ":":
-        e.state.enterCommandOverlay()
-      # Otherwise just dismiss and stay in current mode
-      return true
+  # Handle overlay modes (Command, Search, Rename) + Debug mode
+  let overlayResult = e.handleOverlayEvent(event)
+  if overlayResult.isSome:
+    return overlayResult.get
 
-  # Handle overlay modes (Command, Search, Rename) - these sit on top of base modes
-  if e.state.isCommandOverlay:
-    return handleCommandModeEvent(e, event)
+  # Handle LSP popups (CodeLens picker, Hover popup); some keys fall through
+  let popupResult = e.handlePopupEvent(event)
+  if popupResult.isSome:
+    return popupResult.get
 
-  if e.state.isSearchOverlay:
-    return handleSearchModeEvent(e, event)
-
-  if e.state.isRenameOverlay:
-    return handleRenameModeEvent(e, event)
-
-  # Handle Debug mode input
-  if e.state.mode == EditorMode.Debug:
-    return handleDebugModeEvent(e, event)
-
-  # Handle CodeLens picker input when active
-  if e.state.lspCache.codeLensPicker.isActive and event.kind == EventKind.Key:
-    let keyComboOpt = eventToKeyCombo(event)
-    if keyComboOpt.isSome:
-      let keyCombo = keyComboOpt.get
-
-      # Escape - cancel picker
-      if keyCombo.isSpecial and keyCombo.special == skEscape:
-        e.hideCodeLensPicker()
-        e.state.statusMessage = ""
-        return true
-
-      # Enter - confirm selection
-      if keyCombo.isSpecial and keyCombo.special == skEnter:
-        asyncSpawn e.codeLensPickerConfirm()
-        return true
-
-      # j or Down - next item
-      if not keyCombo.isSpecial:
-        if keyCombo.char == "j":
-          e.codeLensPickerSelectNext()
-          return true
-        # k or Up - previous item
-        if keyCombo.char == "k":
-          e.codeLensPickerSelectPrev()
-          return true
-        # Number keys 1-9 - direct selection
-        if keyCombo.char.len == 1 and keyCombo.char[0] in '1' .. '9':
-          let num = ord(keyCombo.char[0]) - ord('0')
-          asyncSpawn e.codeLensPickerSelectByNumber(num)
-          return true
-
-      if keyCombo.isSpecial:
-        if keyCombo.special == skDown:
-          e.codeLensPickerSelectNext()
-          return true
-        if keyCombo.special == skUp:
-          e.codeLensPickerSelectPrev()
-          return true
-
-      # Any other key closes picker
-      e.hideCodeLensPicker()
-      e.state.statusMessage = ""
-      # Don't return - let the key be processed normally
-
-  # Handle Hover popup input when active
-  if e.state.lspCache.hoverPopup.isActive() and event.kind == EventKind.Key:
-    let keyComboOpt = eventToKeyCombo(event)
-    if keyComboOpt.isSome:
-      let keyCombo = keyComboOpt.get
-
-      # Escape always closes the popup
-      if keyCombo.isSpecial and keyCombo.special == skEscape:
-        e.hideHoverPopup()
-        return true
-
-      # Manual hover (K key): allow j/k/h/l and arrow keys for scrolling
-      if not e.state.lspCache.hoverPopup.isAutoHover:
-        if not keyCombo.isSpecial:
-          if keyCombo.char == "j":
-            e.hoverPopupScrollDown()
-            return true
-          if keyCombo.char == "k":
-            e.hoverPopupScrollUp()
-            return true
-          if keyCombo.char == "l":
-            e.hoverPopupScrollRight()
-            return true
-          if keyCombo.char == "h":
-            e.hoverPopupScrollLeft()
-            return true
-
-        if keyCombo.isSpecial:
-          if keyCombo.special == skDown:
-            e.hoverPopupScrollDown()
-            return true
-          if keyCombo.special == skUp:
-            e.hoverPopupScrollUp()
-            return true
-          if keyCombo.special == skRight:
-            e.hoverPopupScrollRight()
-            return true
-          if keyCombo.special == skLeft:
-            e.hoverPopupScrollLeft()
-            return true
-
-      # Close popup and fall through to normal key processing.
-      # Auto-hover popup will reappear if cursor is still on a diagnostic.
-      e.hideHoverPopup()
-      # Don't return - let the key be processed normally
-
-  # Check for Vim-style Ctrl-w prefix for window commands
-  if e.state.mode == EditorMode.Normal and event.kind == EventKind.Key:
-    let keyComboOpt = eventToKeyCombo(event)
-    if keyComboOpt.isSome:
-      let keyCombo = keyComboOpt.get
-
-      # Handle Escape key to cancel pending multi-key commands
-      if keyCombo.isSpecial and keyCombo.special == skEscape:
-        # Check if any pending state needs to be cancelled
-        var cancelled = false
-
-        # Cancel macro register waiting (q, @)
-        if e.state.macroState.waitingForRegister:
-          e.state.macroState.waitingForRegister = false
-          e.state.macroState.commandType = ""
-          e.state.macroState.pendingCount = 0
-          cancelled = true
-
-        # Cancel pending operator (d, c, y, etc.)
-        if e.state.editState.pendingOperator.isSome:
-          e.state.editState.pendingOperator = none(PendingOperator)
-          cancelled = true
-
-        # Cancel pending text object (i, a)
-        if e.state.editState.pendingTextObject.isSome:
-          e.state.editState.pendingTextObject = none(PendingTextObject)
-          cancelled = true
-
-        # Cancel pending register (")
-        if e.state.pendingRegister.isSome:
-          e.state.pendingRegister = none(char)
-          cancelled = true
-
-        # Cancel pending key binding sequence (built-in multi-key accumulator).
-        # Runtime mapping accumulator is intentionally not cleared here; the
-        # timeout path handles that. See `KeyRouter.cancel` for details.
-        if e.keyRouter.cancel():
-          cancelled = true
-
-        # Cancel window command mode (Ctrl-w)
-        if e.state.pendingCommand != PendingNone:
-          e.state.pendingCommand = PendingNone
-          cancelled = true
-
-        if cancelled:
-          e.state.statusMessage = ""
-          return true
-
-        # No pending state - handle double-Escape to clear search highlight
-        if e.state.lastKeyWasEscape:
-          # Second Escape press - clear highlight
-          e.state.search.hlsearchTempDisabled = true
-          e.state.windowDisplay.needsFullRedraw = true
-          e.state.lastKeyWasEscape = false
-        else:
-          # First Escape press - just mark it
-          e.state.lastKeyWasEscape = true
-        return true
-      else:
-        # Any other key resets the Escape counter
-        e.state.lastKeyWasEscape = false
+  # In Normal mode, Escape cancels pending multi-key state
+  if e.handleEscapeCancellation(event):
+    return true
 
   # Ctrl-W window commands for special/viewer modes
-  if e.state.mode notin {
-    EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
-    EditorMode.VisualLine, EditorMode.Replace,
-  } and event.kind == EventKind.Key:
-    let keyComboOpt = eventToKeyCombo(event)
-    if keyComboOpt.isSome:
-      let keyCombo = keyComboOpt.get
-
-      # Cancel window command mode on Escape
-      if e.state.pendingCommand == PendingWindowCmd and keyCombo.isSpecial and
-          keyCombo.special == skEscape:
-        e.state.pendingCommand = PendingNone
-        return true
-
-      let winCmd = e.handleWindowCommand(keyCombo)
-      if winCmd.isSome:
-        return winCmd.get
+  let winResult = e.handleSpecialModeWindowCommand(event)
+  if winResult.isSome:
+    return winResult.get
 
   # Handle Recent File mode input (after Ctrl-W window commands)
   if e.state.mode == EditorMode.RecentFile:
@@ -1051,71 +1142,8 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # For other modes, use the unified handler manager with active buffer
   let activeBuffer = e.activeBuffer
 
-  # Get the active viewport (shared by reference with motionController)
-  let activeViewport = e.viewport
-
-  if e.windowManager.windows.len > 0 and
-      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    # Set reserved lines for viewport calculations
-    # Find the maximum bottom Y coordinate to determine bottom windows
-    var maxBottomY = 0
-    for window in e.windowManager.windows:
-      let bottomY = window.viewport.y + window.viewport.height
-      if bottomY > maxBottomY:
-        maxBottomY = bottomY
-
-    # A window is a bottom window if its bottom edge is at the maximum bottom Y
-    let
-      windowBottomY = e.activeWindow.viewport.y + e.activeWindow.viewport.height
-      isBottomWindow = (windowBottomY == maxBottomY)
-
-    # Calculate reserved lines based on window position and status line mode
-    # Status line and command line share the same row (command overlays status)
-    e.state.windowDisplay.viewportReservedLines =
-      if e.state.display.showStatusLine:
-        if e.state.display.multiStatusLine:
-          # Multi status line mode: each window has status, bottom has command too
-          if isBottomWindow: StatusAndCommandReserve else: StatusLineReserve
-        else:
-          # Single status line mode: only bottom has status + command
-          if isBottomWindow: StatusAndCommandReserve else: 0
-      else:
-        # No status line: only bottom has command line
-        if isBottomWindow: CommandLineReserve else: 0
-
-    # Add tab line height if shown
-    if e.state.display.showTabLine:
-      e.state.windowDisplay.viewportReservedLines += TabLineHeight
-
-    # Add extra lines for multi-line status messages (only for bottom window)
-    if isBottomWindow:
-      e.state.windowDisplay.viewportReservedLines += e.state.statusMessageExtraLines()
-  else:
-    # Single window mode - use default calculation
-    e.state.windowDisplay.viewportReservedLines =
-      if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
-
-    # Add tab line height if shown
-    if e.state.display.showTabLine:
-      e.state.windowDisplay.viewportReservedLines += TabLineHeight
-
-    # Add extra lines for multi-line status messages
-    e.state.windowDisplay.viewportReservedLines += e.state.statusMessageExtraLines()
-
-  # Get active window for handleEvent (needed for special modes like Filer)
-  let activeWin =
-    if e.windowManager.windows.len > 0 and
-        e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-      some(e.activeWindow)
-    else:
-      none(EditorWindow)
-
-  # Update completion manager's other buffers with all FileEditMode buffers
-  var otherBufs: seq[TextBuffer] = @[]
-  for win in e.windowManager.windows:
-    if win.mode.isFileEditMode and win.buffer != activeBuffer:
-      otherBufs.add(win.buffer)
-  e.handlerManager.insertHandler.completionManager.otherBuffers = otherBufs
+  e.updateViewportReservedLines()
+  e.syncCompletionOtherBuffers(activeBuffer)
 
   let r = e.handlerManager.handleEvent(e, event)
 
