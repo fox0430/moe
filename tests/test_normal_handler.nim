@@ -34,6 +34,7 @@ import ../src/moepkg/config {.all.}
 import ../src/moepkg/registers {.all.}
 import ../src/moepkg/editor_types except Command
 import ../src/moepkg/command_handlers/normal_handler {.all.}
+import ../src/moepkg/command_handlers/command_passthrough {.all.}
 import editor_test_helper
 
 proc createTestState(): EditorState =
@@ -657,17 +658,20 @@ suite "NormalModeHandler - Register Selection":
     check state.pendingRegister.isNone
 
 suite "NormalModeHandler - Special Results":
-  test "nmrSaveAndQuit result":
-    let result = NormalModeResult(kind: nmrSaveAndQuit)
-    check result.kind == nmrSaveAndQuit
+  test "nmrPassthrough(ptSaveAndQuit) result":
+    let result = NormalModeResult(kind: nmrPassthrough, passthroughKind: ptSaveAndQuit)
+    check result.kind == nmrPassthrough
+    check result.passthroughKind == ptSaveAndQuit
 
-  test "nmrQuitWithoutSave result":
-    let result = NormalModeResult(kind: nmrQuitWithoutSave)
-    check result.kind == nmrQuitWithoutSave
+  test "nmrPassthrough(ptQuitForce) result":
+    let result = NormalModeResult(kind: nmrPassthrough, passthroughKind: ptQuitForce)
+    check result.kind == nmrPassthrough
+    check result.passthroughKind == ptQuitForce
 
-  test "nmrCloseWindow result":
-    let result = NormalModeResult(kind: nmrCloseWindow)
-    check result.kind == nmrCloseWindow
+  test "nmrPassthrough(ptCloseWindow) result":
+    let result = NormalModeResult(kind: nmrPassthrough, passthroughKind: ptCloseWindow)
+    check result.kind == nmrPassthrough
+    check result.passthroughKind == ptCloseWindow
 
   test "nmrPlaybackMacro result":
     let result =
@@ -676,14 +680,16 @@ suite "NormalModeHandler - Special Results":
     check result.macroKeys == @["d", "d"]
     check result.macroCount == 3
 
-  test "nmrLspGotoDefinition result":
-    let result = NormalModeResult(kind: nmrLspGotoDefinition)
-    check result.kind == nmrLspGotoDefinition
+  test "nmrPassthrough(ptLspGotoDefinition) result":
+    let result =
+      NormalModeResult(kind: nmrPassthrough, passthroughKind: ptLspGotoDefinition)
+    check result.kind == nmrPassthrough
+    check result.passthroughKind == ptLspGotoDefinition
 
-  test "nmrLspRename result with new name":
-    let result = NormalModeResult(kind: nmrLspRename, nmrLspNewName: "newName")
-    check result.kind == nmrLspRename
-    check result.nmrLspNewName == "newName"
+  test "nmrPassthrough(ptLspRename) result":
+    let result = NormalModeResult(kind: nmrPassthrough, passthroughKind: ptLspRename)
+    check result.kind == nmrPassthrough
+    check result.passthroughKind == ptLspRename
 
   test "nmrJumpToBuffer result":
     let result = NormalModeResult(
@@ -697,13 +703,15 @@ suite "NormalModeHandler - Special Results":
     check result.nmrJumpLine == 10
     check result.nmrJumpColumn == 5
 
-  test "nmrNewFile result":
-    let result = NormalModeResult(kind: nmrNewFile)
-    check result.kind == nmrNewFile
+  test "nmrPassthrough(ptNewFile) result":
+    let result = NormalModeResult(kind: nmrPassthrough, passthroughKind: ptNewFile)
+    check result.kind == nmrPassthrough
+    check result.passthroughKind == ptNewFile
 
-  test "nmrEnterFiler result":
-    let result = NormalModeResult(kind: nmrEnterFiler)
-    check result.kind == nmrEnterFiler
+  test "nmrPassthrough(ptEnterFiler) result":
+    let result = NormalModeResult(kind: nmrPassthrough, passthroughKind: ptEnterFiler)
+    check result.kind == nmrPassthrough
+    check result.passthroughKind == ptEnterFiler
 
 suite "NormalModeHandler - All Mode Switches":
   test "Switch to Filer mode":
@@ -1050,21 +1058,24 @@ suite "NormalModeHandler - Text Object Pending State":
     check state.editState.pendingTextObject.isNone
 
 suite "NormalModeHandler - LSP Results":
-  test "All LSP result kinds":
-    # Test all LSP result variants
-    check NormalModeResult(kind: nmrLspGotoDefinition).kind == nmrLspGotoDefinition
-    check NormalModeResult(kind: nmrLspGotoDeclaration).kind == nmrLspGotoDeclaration
-    check NormalModeResult(kind: nmrLspFindReferences).kind == nmrLspFindReferences
-    check NormalModeResult(kind: nmrLspCodeLensExecute).kind == nmrLspCodeLensExecute
-    check NormalModeResult(kind: nmrLspCallHierarchyIncoming).kind ==
-      nmrLspCallHierarchyIncoming
-    check NormalModeResult(kind: nmrLspCallHierarchyOutgoing).kind ==
-      nmrLspCallHierarchyOutgoing
-    check NormalModeResult(kind: nmrLspTypeDefinition).kind == nmrLspTypeDefinition
-    check NormalModeResult(kind: nmrLspImplementation).kind == nmrLspImplementation
-    check NormalModeResult(kind: nmrLspHover).kind == nmrLspHover
-    check NormalModeResult(kind: nmrLspSelectionRange).kind == nmrLspSelectionRange
-    check NormalModeResult(kind: nmrLspDocumentLink).kind == nmrLspDocumentLink
+  test "All LSP passthrough kinds":
+    # Test all LSP passthrough variants
+    template chk(pk: PassthroughKind) =
+      let r = NormalModeResult(kind: nmrPassthrough, passthroughKind: pk)
+      check r.kind == nmrPassthrough
+      check r.passthroughKind == pk
+
+    chk(ptLspGotoDefinition)
+    chk(ptLspGotoDeclaration)
+    chk(ptLspFindReferences)
+    chk(ptLspCodeLensExecute)
+    chk(ptLspCallHierarchyIncoming)
+    chk(ptLspCallHierarchyOutgoing)
+    chk(ptLspTypeDefinition)
+    chk(ptLspImplementation)
+    chk(ptLspHover)
+    chk(ptLspSelectionRange)
+    chk(ptLspDocumentLink)
 
 suite "NormalModeHandler - Macro Key Recording":
   test "Keys recorded during macro recording":
@@ -1747,7 +1758,7 @@ suite "NormalModeHandler - Command Types":
     check result.isOk or result.isErr
 
 suite "NormalModeHandler - File operation commands":
-  test "file-new returns nmrNewFile":
+  test "file-new returns ptNewFile":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
@@ -1762,9 +1773,10 @@ suite "NormalModeHandler - File operation commands":
     let keyCombo = KeyCombo(isSpecial: false, char: "Q")
     let r =
       handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
-    check r.kind == nmrNewFile
+    check r.kind == nmrPassthrough
+    check r.passthroughKind == ptNewFile
 
-  test "file-close returns nmrBufferDelete":
+  test "file-close returns ptBufferDelete":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
@@ -1778,9 +1790,10 @@ suite "NormalModeHandler - File operation commands":
     let keyCombo = KeyCombo(isSpecial: false, char: "Q")
     let r =
       handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
-    check r.kind == nmrBufferDelete
+    check r.kind == nmrPassthrough
+    check r.passthroughKind == ptBufferDelete
 
-  test "file-open returns nmrEnterFiler":
+  test "file-open returns ptEnterFiler":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
@@ -1794,9 +1807,10 @@ suite "NormalModeHandler - File operation commands":
     let keyCombo = KeyCombo(isSpecial: false, char: "Q")
     let r =
       handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
-    check r.kind == nmrEnterFiler
+    check r.kind == nmrPassthrough
+    check r.passthroughKind == ptEnterFiler
 
-  test "filer-open returns nmrEnterFiler":
+  test "filer-open returns ptEnterFiler":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
@@ -1810,7 +1824,8 @@ suite "NormalModeHandler - File operation commands":
     let keyCombo = KeyCombo(isSpecial: false, char: "Q")
     let r =
       handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
-    check r.kind == nmrEnterFiler
+    check r.kind == nmrPassthrough
+    check r.passthroughKind == ptEnterFiler
 
 suite "NormalModeHandler - Macro/Register/Window commands":
   test "macro-record (q) sets waitingForRegister":
@@ -1867,7 +1882,7 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     check r2.kind == nmrHandled
     check state.pendingRegister == some('a')
 
-  test "quickrun (\\r) returns nmrQuickRun":
+  test "quickrun (\\r) returns ptQuickRun":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "echo hello")
     let handler = createTestHandler(buf)
@@ -1883,9 +1898,10 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     # Press r
     let rKey = KeyCombo(isSpecial: false, char: "r")
     let r2 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), rKey)
-    check r2.kind == nmrQuickRun
+    check r2.kind == nmrPassthrough
+    check r2.passthroughKind == ptQuickRun
 
-  test "window-next (C-w k) returns nmrNextWindow":
+  test "window-next (C-w k) returns ptNextWindow":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
@@ -1900,9 +1916,10 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     # Press k
     let kKey = KeyCombo(isSpecial: false, char: "k")
     let r2 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), kKey)
-    check r2.kind == nmrNextWindow
+    check r2.kind == nmrPassthrough
+    check r2.passthroughKind == ptNextWindow
 
-  test "window-prev (C-w j) returns nmrPrevWindow":
+  test "window-prev (C-w j) returns ptPrevWindow":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")
     let handler = createTestHandler(buf)
@@ -1917,7 +1934,8 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     # Press j
     let jKey = KeyCombo(isSpecial: false, char: "j")
     let r2 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), jKey)
-    check r2.kind == nmrPrevWindow
+    check r2.kind == nmrPassthrough
+    check r2.passthroughKind == ptPrevWindow
 
   test "macro recording stops on recordStartKey":
     let buf = newTextBuffer()

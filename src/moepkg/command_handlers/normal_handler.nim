@@ -39,40 +39,13 @@ type
     nmrHandled
     nmrUnhandled
     nmrError
-    nmrSave
-    nmrSaveAndQuit
-    nmrQuitWithoutSave
-    nmrCloseWindow # Signal to handler_manager to close current window (Ctrl-W c)
     nmrPlaybackMacro # Signal to handler_manager to playback a macro
-    nmrLspGotoDefinition # Signal to handler_manager to execute LSP goto definition
-    nmrLspGotoDeclaration # Signal to handler_manager to execute LSP goto declaration
-    nmrLspFindReferences # Signal to handler_manager to execute LSP find references
-    nmrLspCodeLensExecute # Signal to handler_manager to execute CodeLens on current line
-    nmrLspCallHierarchyIncoming # Signal to handler_manager to show incoming calls
-    nmrLspCallHierarchyOutgoing # Signal to handler_manager to show outgoing calls
-    nmrLspTypeDefinition # Signal to handler_manager to execute LSP goto type definition
-    nmrLspImplementation # Signal to handler_manager to execute LSP goto implementation
-    nmrLspHover # Signal to handler_manager to execute LSP hover
-    nmrLspRename # Signal to handler_manager to execute LSP rename
-    nmrLspSelectionRange # Signal to handler_manager to execute LSP selection range
-    nmrLspDocumentLink # Signal to handler_manager to execute LSP document link
-    nmrJumpToBuffer # Signal to handler_manager to jump to buffer and position
-    nmrBufferNext # Signal to handler_manager to switch to next buffer
-    nmrBufferPrev # Signal to handler_manager to switch to previous buffer
     nmrExecCommand # Signal to handler_manager to execute a Command mode command
-    nmrNewFile # Signal to handler_manager to create new empty buffer
-    nmrEnterFiler # Signal to handler_manager to enter filer mode
-    nmrBufferDelete # Signal to handler_manager to delete current buffer
-    nmrNextWindow # Signal to handler_manager to switch to next window
-    nmrPrevWindow # Signal to handler_manager to switch to previous window
-    nmrIncreaseWindowHeight # Signal to handler_manager to increase window height
-    nmrDecreaseWindowHeight # Signal to handler_manager to decrease window height
-    nmrIncreaseWindowWidth # Signal to handler_manager to increase window width
-    nmrDecreaseWindowWidth # Signal to handler_manager to decrease window width
-    nmrEqualizeWindows # Signal to handler_manager to equalize all windows
-    nmrSwapWindow # Signal to handler_manager to swap window with next
+    nmrJumpToBuffer # Signal to handler_manager to jump to buffer and position
     nmrOpenUri # Signal to handler_manager to open URI/file under cursor
-    nmrQuickRun # Signal to handler_manager to run quickrun on current buffer
+    nmrPassthrough
+      # Trivial 1:1 forward to a HandlerResult — payload is the canonical
+      # PassthroughKind from command_passthrough.nim.
 
   NormalModeResult* = object ## Result of normal mode command execution
     case kind*: NormalModeResultKind
@@ -83,69 +56,20 @@ type
       discard
     of nmrError:
       errorMessage*: string
-    of nmrSave:
-      discard
-    of nmrSaveAndQuit:
-      discard
-    of nmrQuitWithoutSave:
-      discard
-    of nmrCloseWindow:
-      discard
     of nmrPlaybackMacro:
       macroKeys*: seq[string] # Keys to playback
       macroCount*: int # Number of times to playback (default 1)
     of nmrExecCommand:
       execCommandText*: string # Command text to execute (without leading ":")
       execCommandCount*: int # Number of times to execute (default 1)
-    of nmrLspGotoDefinition:
-      discard
-    of nmrLspGotoDeclaration:
-      discard
-    of nmrLspFindReferences:
-      discard
-    of nmrLspCodeLensExecute:
-      discard
-    of nmrLspCallHierarchyIncoming:
-      discard
-    of nmrLspCallHierarchyOutgoing:
-      discard
-    of nmrLspTypeDefinition:
-      discard
-    of nmrLspImplementation:
-      discard
-    of nmrLspHover:
-      discard
-    of nmrLspRename:
-      nmrLspNewName*: string
-    of nmrLspSelectionRange:
-      discard
-    of nmrLspDocumentLink:
-      discard
     of nmrJumpToBuffer:
       nmrJumpBufferId*: BufferId # Target BufferId
       nmrJumpLine*: int # Target line number
       nmrJumpColumn*: int # Target column number
-    of nmrBufferNext:
-      discard
-    of nmrBufferPrev:
-      discard
-    of nmrBufferDelete:
-      discard
-    of nmrNewFile:
-      discard
-    of nmrEnterFiler:
-      discard
-    of nmrNextWindow:
-      discard
-    of nmrPrevWindow:
-      discard
-    of nmrIncreaseWindowHeight, nmrDecreaseWindowHeight, nmrIncreaseWindowWidth,
-        nmrDecreaseWindowWidth, nmrEqualizeWindows, nmrSwapWindow:
-      discard
     of nmrOpenUri:
       openUri*: string
-    of nmrQuickRun:
-      discard
+    of nmrPassthrough:
+      passthroughKind*: PassthroughKind
 
 proc updateCursorToJumpPosition(
     handler: NormalModeHandler,
@@ -562,71 +486,10 @@ proc requestMacroPlayback(keys: seq[string], count: int = 1): NormalModeResult =
   ## dispatch each key to the appropriate mode handler
   NormalModeResult(kind: nmrPlaybackMacro, macroKeys: keys, macroCount: count)
 
-proc fromPassthrough(k: PassthroughKind): NormalModeResult =
-  ## Translate a PassthroughKind into its canonical NormalModeResult.
-  ## Pairs with command_passthrough.toHandlerResult so the commandId list
-  ## remains in a single place.
-  case k
-  of ptNextWindow:
-    NormalModeResult(kind: nmrNextWindow)
-  of ptPrevWindow:
-    NormalModeResult(kind: nmrPrevWindow)
-  of ptIncreaseWindowHeight:
-    NormalModeResult(kind: nmrIncreaseWindowHeight)
-  of ptDecreaseWindowHeight:
-    NormalModeResult(kind: nmrDecreaseWindowHeight)
-  of ptIncreaseWindowWidth:
-    NormalModeResult(kind: nmrIncreaseWindowWidth)
-  of ptDecreaseWindowWidth:
-    NormalModeResult(kind: nmrDecreaseWindowWidth)
-  of ptEqualizeWindows:
-    NormalModeResult(kind: nmrEqualizeWindows)
-  of ptSwapWindow:
-    NormalModeResult(kind: nmrSwapWindow)
-  of ptCloseWindow:
-    NormalModeResult(kind: nmrCloseWindow)
-  of ptSave:
-    NormalModeResult(kind: nmrSave)
-  of ptSaveAndQuit:
-    NormalModeResult(kind: nmrSaveAndQuit)
-  of ptQuitForce:
-    NormalModeResult(kind: nmrQuitWithoutSave)
-  of ptBufferDelete:
-    NormalModeResult(kind: nmrBufferDelete)
-  of ptNewFile:
-    NormalModeResult(kind: nmrNewFile)
-  of ptEnterFiler:
-    NormalModeResult(kind: nmrEnterFiler)
-  of ptBufferNext:
-    NormalModeResult(kind: nmrBufferNext)
-  of ptBufferPrev:
-    NormalModeResult(kind: nmrBufferPrev)
-  of ptQuickRun:
-    NormalModeResult(kind: nmrQuickRun)
-  of ptLspGotoDefinition:
-    NormalModeResult(kind: nmrLspGotoDefinition)
-  of ptLspGotoDeclaration:
-    NormalModeResult(kind: nmrLspGotoDeclaration)
-  of ptLspFindReferences:
-    NormalModeResult(kind: nmrLspFindReferences)
-  of ptLspCodeLensExecute:
-    NormalModeResult(kind: nmrLspCodeLensExecute)
-  of ptLspCallHierarchyIncoming:
-    NormalModeResult(kind: nmrLspCallHierarchyIncoming)
-  of ptLspCallHierarchyOutgoing:
-    NormalModeResult(kind: nmrLspCallHierarchyOutgoing)
-  of ptLspTypeDefinition:
-    NormalModeResult(kind: nmrLspTypeDefinition)
-  of ptLspImplementation:
-    NormalModeResult(kind: nmrLspImplementation)
-  of ptLspHover:
-    NormalModeResult(kind: nmrLspHover)
-  of ptLspRename:
-    NormalModeResult(kind: nmrLspRename, nmrLspNewName: "")
-  of ptLspSelectionRange:
-    NormalModeResult(kind: nmrLspSelectionRange)
-  of ptLspDocumentLink:
-    NormalModeResult(kind: nmrLspDocumentLink)
+proc fromPassthrough(k: PassthroughKind): NormalModeResult {.inline.} =
+  ## Wrap a PassthroughKind in NormalModeResult. handler_manager will unwrap
+  ## it back to a HandlerResult via command_passthrough.toHandlerResult.
+  NormalModeResult(kind: nmrPassthrough, passthroughKind: k)
 
 proc handleNormalModeKey*(
     handler: NormalModeHandler, editor: Editor, keyCombo: KeyCombo
