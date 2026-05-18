@@ -19,11 +19,411 @@
 
 ## Window and line rendering procedures
 
-import std/[options, strutils, unicode]
+import std/[options, strutils, unicode, tables]
 
 import pkg/celina
 
-import editor_types, editor_window, editor_render_helpers, render_utils, sidebar
+import
+  editor_types, editor_window, editor_render_helpers, render_utils, sidebar, color,
+  unicode_utils, search_utils, highlight, modes, colorcode, git_conflict
+import command_handlers/visual_handler
+
+proc hasSyntaxHighlight(
+    e: Editor, buffer: TextBuffer, windowMode: EditorMode
+): bool {.inline.} =
+  e.state.display.showSyntax and not buffer.highlight.isNil and
+    (windowMode.isFileEditMode or buffer.language != langNone or buffer.isUtilityBuffer)
+
+proc baseStyleWithOverlay(
+    e: Editor,
+    buffer: TextBuffer,
+    pos: BufferPosition,
+    cursorLine: int,
+    windowMode: EditorMode,
+    displayCol: int,
+    cursorDisplayCol: int,
+    lineConflict: ConflictMarkerKind,
+): Style =
+  ## Compute base style (syntax highlight + document highlight / cursor line/column overlay).
+  ## Extracted to avoid 4x duplication in getSelectionStyle.
+  ## `lineConflict` is pre-computed once per line by the caller.
+  let conflictKind = lineConflict
+  let useTwoColor = e.config.highlight.gitConflictTwoColor
+
+  if e.hasSyntaxHighlight(buffer, windowMode):
+    let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
+    var style = colorIndexToStyle(colorPair)
+    style.modifiers =
+      style.modifiers + buffer.highlight.getSegmentModifiers(pos.line, pos.column)
+    let highlightKind = e.isPositionInDocumentHighlight(pos)
+    if highlightKind.isSome:
+      style.bg = getDocumentHighlightStyle(highlightKind.get).bg
+    elif conflictKind != cmkNone:
+      style.bg = conflictStyleFor(conflictKind, useTwoColor).bg
+    elif colorPair != EditorColorPairIndex.searchResult:
+      if e.state.display.showCursorLine and pos.line == cursorLine:
+        style.bg = cursorLineHighlightStyle().bg
+      elif e.state.display.showCursorColumn and displayCol >= 0 and
+          displayCol == cursorDisplayCol:
+        style.bg = cursorColumnHighlightStyle().bg
+    style
+  else:
+    let highlightKind = e.isPositionInDocumentHighlight(pos)
+    if highlightKind.isSome:
+      getDocumentHighlightStyle(highlightKind.get)
+    elif conflictKind != cmkNone:
+      conflictStyleFor(conflictKind, useTwoColor)
+    elif e.state.display.showCursorLine and pos.line == cursorLine:
+      cursorLineHighlightStyle()
+    elif e.state.display.showCursorColumn and displayCol >= 0 and
+        displayCol == cursorDisplayCol:
+      cursorColumnHighlightStyle()
+    else:
+      normalStyle()
+
+proc getSelectionStyle*(
+    e: Editor,
+    buffer: TextBuffer,
+    hasSelection: bool,
+    pos: BufferPosition,
+    cursorLine: int,
+    cursorCol: int,
+    windowMode: EditorMode,
+    displayCol: int = -1,
+    cursorDisplayCol: int = -1,
+    searchMatchRanges: seq[ColumnRange] = @[],
+    wordMatchRanges: seq[ColumnRange] = @[],
+    lineConflict: ConflictMarkerKind = cmkNone,
+): Style =
+  ## Get the appropriate style for a character based on selection state and syntax.
+  ## searchMatchRanges/wordMatchRanges: pre-computed per-line ranges for O(1) lookup.
+
+  # Check if this position is the matching paren
+  let isMatchingParen =
+    e.state.matchingParenPos.isSome and e.state.matchingParenPos.get.line == pos.line and
+    e.state.matchingParenPos.get.column == pos.column
+
+  # Check current-word highlight using pre-computed ranges
+  let isInCurrentWord =
+    not e.state.isSearchOverlay and wordMatchRanges.isColumnInRanges(pos.column)
+
+  let isInFindCharMatch =
+    e.config.highlight.findCharHighlight and e.state.ui.findCharMatches.len > 0 and
+    pos.line == e.state.ui.findCharMatchLine and pos.column in e.state.ui.findCharMatches
+
+  if hasSelection and e.state.visualSelection.isPositionInSelection(pos):
+    # Keep original foreground color (syntax highlight), override only background
+    var style =
+      if e.hasSyntaxHighlight(buffer, windowMode):
+        let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
+        var s = colorIndexToStyle(colorPair)
+        s.modifiers =
+          s.modifiers + buffer.highlight.getSegmentModifiers(pos.line, pos.column)
+        s
+      else:
+        normalStyle()
+    style.bg = visualStyle().bg
+    style
+  elif isMatchingParen:
+    parenPairStyle()
+  elif isInFindCharMatch:
+    findCharMatchStyle()
+  elif isInCurrentWord:
+    currentWordStyle()
+  elif searchMatchRanges.isColumnInRanges(pos.column):
+    searchHighlightStyle()
+  else:
+    e.baseStyleWithOverlay(
+      buffer, pos, cursorLine, windowMode, displayCol, cursorDisplayCol, lineConflict
+    )
+
+proc getVisualSelection*(
+    e: Editor, windowMode: EditorMode, windowActive: bool = true
+): tuple[hasSelection: bool, selStart, selEnd: BufferPosition] =
+  ## Get visual selection range if active
+  ## windowMode: The mode of the window being rendered
+  ## windowActive: only show selection in active window (default true for compatibility)
+  let hasSelection =
+    isVisualAllMode(windowMode) and e.state.visualSelection.active and windowActive
+
+  if hasSelection:
+    let (start, endPos) = e.state.visualSelection.getSelectionRange()
+    result = (hasSelection: true, selStart: start, selEnd: endPos)
+  else:
+    result = (
+      hasSelection: false,
+      selStart: BufferPosition(line: 0, column: 0),
+      selEnd: BufferPosition(line: 0, column: 0),
+    )
+
+proc shouldShowIndentationGuide*(
+    e: Editor, indentInfo: IndentInfo, displayX: int, charIdx: int
+): bool =
+  ## Check if an indentation guide should be shown at this position
+  ## Uses cached indentInfo to avoid O(n²) performance
+  ## displayX: the display column position (accounting for tabs)
+  ## charIdx: the character index in the line
+  if not e.state.display.showIndentationLines:
+    return false
+
+  # Don't show indentation guides in utility buffers (jumplist, log, etc.)
+  if e.activeBuffer().isUtilityBuffer:
+    return false
+
+  # Only show guides at indent levels (multiples of tabStop)
+  if displayX mod e.state.display.tabStop != 0:
+    return false
+
+  # Don't show on column 0
+  if displayX == 0:
+    return false
+
+  # Check if this position is within leading whitespace
+  if charIdx < 0:
+    return false
+
+  # Use cached indentation info: O(1) instead of O(n)
+  # Show guide only if we're within leading whitespace and line has content
+  return indentInfo.hasContent and charIdx <= indentInfo.leadingWhitespaceEnd
+
+proc fillLineBackground*(
+    e: Editor,
+    buffer: var Buffer,
+    screenX, screenY: int,
+    lineIndex, cursorLine: int,
+    windowRightEdge: int,
+    cursorDisplayCol: int = -1,
+    textBuffer: TextBuffer = nil,
+    isEmptyLine: bool = false,
+    hasSelection: bool = false,
+) =
+  ## Fill the rest of the line to the window right edge.
+  ## Uses cursor line highlight for the cursor line, normal style otherwise.
+  ## When `textBuffer` is provided and the line is inside a git conflict block,
+  ## the conflict background takes priority over cursor-line highlight.
+  ## When `isEmptyLine` and `hasSelection` are both true and the visual
+  ## selection covers (lineIndex, 0), column 0 is rendered with the visual
+  ## selection background so that Visual mode is visible on empty lines.
+  let lineConflict =
+    if textBuffer != nil and e.config.highlight.gitConflict:
+      textBuffer.lineConflictKind(lineIndex)
+    else:
+      cmkNone
+  let useTwoColor = e.config.highlight.gitConflictTwoColor
+  let selectionAtStart =
+    isEmptyLine and hasSelection and
+    e.state.visualSelection.isPositionInSelection(
+      BufferPosition(line: lineIndex, column: 0)
+    )
+  var displayX = 0
+  while screenX + displayX < windowRightEdge:
+    let fillStyle =
+      if displayX == 0 and selectionAtStart:
+        visualStyle()
+      elif lineConflict != cmkNone:
+        conflictStyleFor(lineConflict, useTwoColor)
+      elif e.state.display.showCursorLine and lineIndex == cursorLine:
+        cursorLineHighlightStyle()
+      elif e.state.display.showCursorColumn and cursorDisplayCol >= 0 and
+        displayX == cursorDisplayCol:
+        cursorColumnHighlightStyle()
+      else:
+        normalStyle()
+    buffer.setCell(screenX + displayX, screenY, " ", 1, fillStyle)
+    displayX += 1
+
+proc renderLineSegmentWithSelection*(
+    e: Editor,
+    textBuffer: TextBuffer,
+    buffer: var Buffer,
+    displayLine: string,
+    screenX, screenY: int,
+    lineIndex: int,
+    startColumn: int,
+    ctx: RenderContext,
+    useRunes: bool = true,
+) =
+  ## Render a line segment with selection highlighting and syntax highlighting
+  ## useRunes: true for wrapped mode (character-based), false for byte-based rendering
+  ## ctx: RenderContext containing cursor position and selection information
+
+  # Update syntax highlighting once per line (not per character)
+  if e.hasSyntaxHighlight(textBuffer, ctx.windowMode):
+    textBuffer.updateHighlight()
+
+  # Get the full line for indentation guide checking
+  let fullLine = textBuffer.getLine(lineIndex)
+  # Analyze indentation once (O(n)) to avoid repeated scanning (O(n²))
+  let indentInfo = analyzeIndentation(fullLine)
+  # Find where trailing spaces start (for highlighting)
+  let trailingSpaceStart = findTrailingSpaceStart(fullLine)
+
+  # Scan for inline color codes if enabled
+  let colorCodeMatches =
+    if e.config.highlight.colorCodeHighlight and ctx.windowMode.isFileEditMode:
+      scanLineForColorCodes(fullLine)
+    else:
+      @[]
+
+  # Pre-compute search match ranges for this line (O(n) once instead of O(n) per char)
+  let searchMatchRanges =
+    if e.state.search.hlsearch and not e.state.search.hlsearchTempDisabled:
+      let searchPattern =
+        if e.state.isSearchOverlay:
+          if e.state.search.text.len > 0: e.state.search.text else: ""
+        elif e.state.isCommandOverlay:
+          let subPattern = extractSubstitutePattern(e.state.commandText)
+          if subPattern.len > 0: subPattern else: e.state.search.lastText
+        else:
+          e.state.search.lastText
+      if searchPattern.len > 0:
+        let shouldIgnoreCase = shouldIgnoreCase(
+          searchPattern, e.state.search.ignorecase, e.state.search.smartcase
+        )
+        textBuffer.findSearchMatchRanges(
+          lineIndex, searchPattern, shouldIgnoreCase, e.state.search.wholeWord
+        )
+      else:
+        @[]
+    else:
+      @[]
+
+  # Pre-compute word match ranges for this line (O(n) once instead of O(n) per char)
+  let wordMatchRanges =
+    if not e.state.isSearchOverlay and e.state.currentWord.len > 0:
+      let excludeCol = if lineIndex == ctx.cursorLine: ctx.cursorCol else: -1
+      textBuffer.findWordMatchRanges(lineIndex, e.state.currentWord, excludeCol)
+    else:
+      @[]
+
+  # Pre-compute conflict kind once per line (avoids O(K) scan per character)
+  let lineConflict =
+    if e.config.highlight.gitConflict:
+      textBuffer.lineConflictKind(lineIndex)
+    else:
+      cmkNone
+
+  # Always render character by character to apply syntax highlighting
+  var displayX = 0
+
+  # Template to render a single character (eliminates code duplication)
+  # Using template instead of proc to avoid closure capture issues
+  template renderChar(rune: Rune, col: int, style: Style) =
+    # Handle tab character specially
+    if rune == TAB_CHAR:
+      # Calculate how many spaces until next tab stop
+      let spacesToNextTab =
+        e.state.display.tabStop - (displayX mod e.state.display.tabStop)
+      # Determine style for tab (trailing space highlighting takes priority)
+      let tabStyle =
+        if e.config.highlight.trailingSpaces and col >= trailingSpaceStart and
+            ctx.windowMode.isFileEditMode and lineIndex != ctx.cursorLine:
+          trailingSpacesStyle()
+        else:
+          style
+      # Render spaces instead of tab character
+      for i in 0 ..< spacesToNextTab:
+        if screenX + displayX < ctx.windowRightEdge:
+          # Check if we should show indentation guide at this position
+          if e.shouldShowIndentationGuide(indentInfo, displayX, col):
+            buffer.setCell(
+              screenX + displayX, screenY, "│", 1, indentationLineStyle()
+            )
+          else:
+            buffer.setCell(screenX + displayX, screenY, " ", 1, tabStyle)
+        displayX += 1
+    else:
+      # Normal character
+      var renderStyle = style
+      let width = runeWidth(rune)
+
+      # Check if this is a space and should show indentation guide
+      if rune == ' '.Rune and e.shouldShowIndentationGuide(indentInfo, displayX, col):
+        if screenX + displayX < ctx.windowRightEdge:
+          buffer.setCell(screenX + displayX, screenY, "│", 1, indentationLineStyle())
+        displayX += 1
+      else:
+        # Highlight full-width space if enabled (only in file edit modes)
+        if rune == FULLWIDTH_SPACE and e.config.highlight.fullWidthSpace and
+            ctx.windowMode.isFileEditMode:
+          renderStyle = fullWidthSpaceStyle()
+
+        # Highlight trailing spaces if enabled (only in file edit modes)
+        if e.config.highlight.trailingSpaces and col >= trailingSpaceStart and
+            ctx.windowMode.isFileEditMode and lineIndex != ctx.cursorLine:
+          if rune == ' '.Rune or rune == TAB_CHAR or rune == FULLWIDTH_SPACE:
+            renderStyle = trailingSpacesStyle()
+
+        # Highlight inline color codes if enabled
+        for ccm in colorCodeMatches:
+          if col >= ccm.startCol and col <= ccm.endCol:
+            renderStyle = ccm.style
+            break
+
+        if screenX + displayX < ctx.windowRightEdge:
+          buffer.setCell(screenX + displayX, screenY, rune, width, renderStyle)
+        displayX += width
+
+  if useRunes:
+    # Character-based rendering (for wrapped mode)
+    var charIdx = startColumn
+    for rune in displayLine.runes:
+      let
+        pos = BufferPosition(line: lineIndex, column: charIdx)
+        style = e.getSelectionStyle(
+          textBuffer,
+          ctx.hasSelection,
+          pos,
+          ctx.cursorLine,
+          ctx.cursorCol,
+          ctx.windowMode,
+          displayCol = displayX,
+          cursorDisplayCol = ctx.cursorDisplayCol,
+          searchMatchRanges = searchMatchRanges,
+          wordMatchRanges = wordMatchRanges,
+          lineConflict = lineConflict,
+        )
+      renderChar(rune, charIdx, style)
+      charIdx += 1
+  else:
+    # Byte-based rendering (for non-wrapped mode)
+    var charIdx = 0
+    for rune in displayLine.runes:
+      let
+        col = startColumn + charIdx
+        pos = BufferPosition(line: lineIndex, column: col)
+        style = e.getSelectionStyle(
+          textBuffer,
+          ctx.hasSelection,
+          pos,
+          ctx.cursorLine,
+          ctx.cursorCol,
+          ctx.windowMode,
+          displayCol = displayX,
+          cursorDisplayCol = ctx.cursorDisplayCol,
+          searchMatchRanges = searchMatchRanges,
+          wordMatchRanges = wordMatchRanges,
+          lineConflict = lineConflict,
+        )
+      renderChar(rune, col, style)
+      charIdx += 1
+
+  # Fill the rest of the line to the window right edge.
+  # Always fill to clear stale content (e.g. old cursor line highlight).
+  let useTwoColor = e.config.highlight.gitConflictTwoColor
+  while screenX + displayX < ctx.windowRightEdge:
+    let fillStyle =
+      if lineConflict != cmkNone:
+        conflictStyleFor(lineConflict, useTwoColor)
+      elif e.state.display.showCursorLine and lineIndex == ctx.cursorLine:
+        cursorLineHighlightStyle()
+      elif e.state.display.showCursorColumn and ctx.cursorDisplayCol >= 0 and
+        displayX == ctx.cursorDisplayCol:
+        cursorColumnHighlightStyle()
+      else:
+        normalStyle()
+    buffer.setCell(screenX + displayX, screenY, " ", 1, fillStyle)
+    displayX += 1
 
 proc fmtLineNum(e: Editor, lineIndex: int, cursorLine: int, width: int): string =
   if e.state.display.relativeLineNumbers:

@@ -20,15 +20,19 @@
 ## Tests for editor_render_window.nim functions
 ## This module tests window and line rendering procedures
 
-import std/[unittest, strutils]
+import std/[unittest, options, strutils, tables, unicode]
 import pkg/celina
-import ../src/moepkg/[editor, buffer, config, config_loader, render_utils, modes]
+import
+  ../src/moepkg/[
+    editor, buffer, config, config_loader, render_utils, modes, color, highlight, types
+  ]
 import ../src/moepkg/editor_render_window
 import ../src/moepkg/editor_render_helpers
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
   let config = newEditorConfig()
+  config.theme.kind = tkDefault
   let vr = newValidationResult()
   result = newEditor(config, vr)
 
@@ -1309,3 +1313,963 @@ suite "Cursor line highlight - Window boundary clipping":
     let nStyle = normalStyle()
     for x in 5 ..< 40:
       check buffer[x, 1].style.bg == nStyle.bg
+
+suite "getVisualSelection - Detailed":
+  test "Default hasSelection is false":
+    let e = createTestEditor()
+    let result = e.getVisualSelection(EditorMode.Normal)
+    check result.hasSelection == false
+    check result.selStart.line == 0
+    check result.selStart.column == 0
+    check result.selEnd.line == 0
+    check result.selEnd.column == 0
+
+  test "Visual mode with selection":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.Visual
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.visualSelection.start = BufferPosition(line: 1, column: 5)
+    e.state.visualSelection.current = BufferPosition(line: 3, column: 10)
+
+    let result = e.getVisualSelection(EditorMode.Visual)
+    check result.hasSelection == true
+
+  test "VisualLine mode":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.VisualLine
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskLine
+    e.state.visualSelection.start = BufferPosition(line: 2, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 5, column: 0)
+
+    let result = e.getVisualSelection(EditorMode.VisualLine)
+    check result.hasSelection == true
+
+  test "VisualBlock mode":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.VisualBlock
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskBlock
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 2)
+    e.state.visualSelection.current = BufferPosition(line: 4, column: 8)
+
+    let result = e.getVisualSelection(EditorMode.VisualBlock)
+    check result.hasSelection == true
+
+  test "windowActive=false disables selection":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.Visual
+    e.state.visualSelection.active = true
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 1, column: 5)
+
+    let result = e.getVisualSelection(EditorMode.Visual, windowActive = false)
+    check result.hasSelection == false
+
+suite "shouldShowIndentationGuide - Detailed":
+  test "Disabled when showIndentationLines is false":
+    let e = createTestEditor()
+    e.state.display.showIndentationLines = false
+    let info = IndentInfo(leadingWhitespaceEnd: 7, hasContent: true)
+
+    check e.shouldShowIndentationGuide(info, 4, 2) == false
+
+  test "No guide at displayX 0":
+    let e = createTestEditor()
+    e.state.display.showIndentationLines = true
+    e.state.display.tabStop = 2
+    let info = IndentInfo(leadingWhitespaceEnd: 7, hasContent: true)
+
+    check e.shouldShowIndentationGuide(info, 0, 0) == false
+
+  test "Guide at tabStop multiples":
+    let e = createTestEditor()
+    e.state.display.showIndentationLines = true
+    e.state.display.tabStop = 4
+    let info = IndentInfo(leadingWhitespaceEnd: 11, hasContent: true)
+
+    # displayX=4 is a multiple of 4
+    check e.shouldShowIndentationGuide(info, 4, 3) == true
+    # displayX=8 is a multiple of 4
+    check e.shouldShowIndentationGuide(info, 8, 7) == true
+
+  test "No guide at non-tabStop positions":
+    let e = createTestEditor()
+    e.state.display.showIndentationLines = true
+    e.state.display.tabStop = 4
+    let info = IndentInfo(leadingWhitespaceEnd: 11, hasContent: true)
+
+    check e.shouldShowIndentationGuide(info, 1, 0) == false
+    check e.shouldShowIndentationGuide(info, 2, 1) == false
+    check e.shouldShowIndentationGuide(info, 3, 2) == false
+    check e.shouldShowIndentationGuide(info, 5, 4) == false
+
+  test "No guide when hasContent is false":
+    let e = createTestEditor()
+    e.state.display.showIndentationLines = true
+    e.state.display.tabStop = 2
+    let info = IndentInfo(leadingWhitespaceEnd: -1, hasContent: false)
+
+    check e.shouldShowIndentationGuide(info, 2, 1) == false
+    check e.shouldShowIndentationGuide(info, 4, 3) == false
+
+  test "No guide past leadingWhitespaceEnd":
+    let e = createTestEditor()
+    e.state.display.showIndentationLines = true
+    e.state.display.tabStop = 2
+    let info = IndentInfo(leadingWhitespaceEnd: 3, hasContent: true)
+
+    # charIdx=4 is past whitespace end (3)
+    check e.shouldShowIndentationGuide(info, 4, 4) == false
+    # charIdx=5 is past whitespace end
+    check e.shouldShowIndentationGuide(info, 6, 5) == false
+
+  test "No guide for negative charIdx":
+    let e = createTestEditor()
+    e.state.display.showIndentationLines = true
+    e.state.display.tabStop = 2
+    let info = IndentInfo(leadingWhitespaceEnd: 5, hasContent: true)
+
+    check e.shouldShowIndentationGuide(info, 2, -1) == false
+
+suite "getSelectionStyle - Basic":
+  test "Returns cursor style at cursor position":
+    let e = createTestEditor()
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    discard e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 5),
+      cursorLine = 0,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+    )
+    # At cursor position, should return cursor char style
+    check true
+
+  test "Returns normal style for non-cursor position":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    discard e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 0,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+    )
+    check true
+
+  test "Returns visual selection bg with normal fg when in selection (no syntax)":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.Visual
+    e.state.display.showSyntax = false
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = true,
+      pos = BufferPosition(line: 0, column: 5),
+      cursorLine = 0,
+      cursorCol = 10,
+      windowMode = EditorMode.Visual,
+    )
+    # Background should be visual selection color
+    check style.bg == visualStyle().bg
+    # Foreground should be normal (no syntax highlight)
+    check style.fg == normalStyle().fg
+
+suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
+  test "Selection uses visual bg with syntax highlight fg":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.Visual
+    e.state.display.showSyntax = true
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
+
+    # Set up buffer with highlight
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
+    e.textBuffer.language = SourceLanguage.langNim
+    e.textBuffer.highlight =
+      initHighlight(@["let x = 42".toRunes], @[], SourceLanguage.langNim)
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = true,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 0,
+      cursorCol = 10,
+      windowMode = EditorMode.Visual,
+    )
+    # Background must be visual selection color
+    check style.bg == visualStyle().bg
+    # Foreground should come from syntax highlight, not visual selection
+    let expectedFg = colorIndexToStyle(e.textBuffer.highlight.getColorPair(0, 0)).fg
+    check style.fg == expectedFg
+
+  test "VisualLine selection preserves syntax highlight fg":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.VisualLine
+    e.state.display.showSyntax = true
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskLine
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 0)
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
+    e.textBuffer.language = SourceLanguage.langNim
+    e.textBuffer.highlight =
+      initHighlight(@["let x = 42".toRunes], @[], SourceLanguage.langNim)
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = true,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 0,
+      cursorCol = 0,
+      windowMode = EditorMode.VisualLine,
+    )
+    check style.bg == visualStyle().bg
+    let expectedFg = colorIndexToStyle(e.textBuffer.highlight.getColorPair(0, 0)).fg
+    check style.fg == expectedFg
+
+  test "Selection without syntax uses normal fg":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.Visual
+    e.state.display.showSyntax = false
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = true,
+      pos = BufferPosition(line: 0, column: 5),
+      cursorLine = 0,
+      cursorCol = 10,
+      windowMode = EditorMode.Visual,
+    )
+    check style.bg == visualStyle().bg
+    check style.fg == normalStyle().fg
+
+suite "getSelectionStyle - Matching paren":
+  test "Returns paren pair style for matching paren":
+    let e = createTestEditor()
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "(hello)")
+    e.state.matchingParenPos = some(BufferPosition(line: 0, column: 6))
+
+    discard e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 6),
+      cursorLine = 0,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+    check true
+
+suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
+  test "Returns findCharMatch style for matched position":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    e.state.ui.findCharMatches = @[0, 2, 4, 6]
+    e.state.ui.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 2),
+      cursorLine = 0,
+      cursorCol = 2,
+      windowMode = EditorMode.Normal,
+    )
+    check style == findCharMatchStyle()
+
+  test "Does not return findCharMatch style for non-matched position":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    e.state.ui.findCharMatches = @[0, 2, 4, 6]
+    e.state.ui.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 1),
+      cursorLine = 0,
+      cursorCol = 2,
+      windowMode = EditorMode.Normal,
+    )
+    check style != findCharMatchStyle()
+
+  test "Does not return findCharMatch style for different line":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard
+      e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada\nabacada")
+    e.state.ui.findCharMatches = @[0, 2, 4, 6]
+    e.state.ui.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 1, column: 2),
+      cursorLine = 0,
+      cursorCol = 2,
+      windowMode = EditorMode.Normal,
+    )
+    check style != findCharMatchStyle()
+
+  test "No findCharMatch style when matches list is empty":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    e.state.ui.findCharMatches = @[]
+    e.state.ui.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 0,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+    check style != findCharMatchStyle()
+
+  test "Visual selection takes priority over findCharMatch":
+    let e = createTestEditor()
+    e.state.mode = EditorMode.Visual
+    e.state.display.showSyntax = false
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 6)
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    e.state.ui.findCharMatches = @[0, 2, 4, 6]
+    e.state.ui.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = true,
+      pos = BufferPosition(line: 0, column: 2),
+      cursorLine = 0,
+      cursorCol = 6,
+      windowMode = EditorMode.Visual,
+    )
+    # Should have visual selection background, not findCharMatch style
+    check style.bg == visualStyle().bg
+    check style != findCharMatchStyle()
+
+  test "Matching paren takes priority over findCharMatch":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "(abacada)")
+    e.state.matchingParenPos = some(BufferPosition(line: 0, column: 8))
+    e.state.ui.findCharMatches = @[1, 3, 5, 7]
+    e.state.ui.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 8),
+      cursorLine = 0,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+    check style == parenPairStyle()
+
+  test "No findCharMatch style when findCharHighlight config is false":
+    let e = createTestEditor()
+    e.config.highlight.findCharHighlight = false
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    e.state.ui.findCharMatches = @[0, 2, 4, 6]
+    e.state.ui.findCharMatchLine = 0
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 2),
+      cursorLine = 0,
+      cursorCol = 2,
+      windowMode = EditorMode.Normal,
+    )
+    check style != findCharMatchStyle()
+
+suite "getSelectionStyle - Search highlight":
+  test "Returns search highlight style when search matches":
+    let e = createTestEditor()
+    e.state.search.hlsearch = true
+    e.state.search.hlsearchTempDisabled = false
+    e.state.search.lastText = "hello"
+    e.state.mode = EditorMode.Normal
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    discard
+      e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+
+    discard e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 5, # Cursor on different line
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+    check true
+
+  test "No search highlight when hlsearch is disabled":
+    let e = createTestEditor()
+    e.state.search.hlsearch = false
+    e.state.search.lastText = "hello"
+    e.state.mode = EditorMode.Normal
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    discard e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 5,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+    check true
+
+  test "No search highlight when hlsearchTempDisabled":
+    let e = createTestEditor()
+    e.state.search.hlsearch = true
+    e.state.search.hlsearchTempDisabled = true
+    e.state.search.lastText = "hello"
+    e.state.mode = EditorMode.Normal
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    discard e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 0),
+      cursorLine = 5,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+    )
+    check true
+
+suite "getSelectionStyle - Cursor line":
+  test "Returns cursor line style when on cursor line":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    e.state.display.showSyntax = false
+    e.state.display.showDocumentHighlight = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    discard e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 3),
+      cursorLine = 0,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+    )
+    check true
+
+  test "No cursor line style when showCursorLine is false":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    discard e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 3),
+      cursorLine = 0,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+    )
+    check true
+
+  test "searchResult highlight takes priority over cursor line bg":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    e.state.display.showSyntax = true
+    e.state.display.showDocumentHighlight = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    # Set up highlight with searchResult color on columns 0-4
+    let searchStyle = colorIndexToStyle(EditorColorPairIndex.searchResult)
+    e.textBuffer.highlight = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.searchResult,
+          style: searchStyle,
+        )
+      ]
+    )
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 3),
+      cursorLine = 0,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+    )
+    # searchResult bg should NOT be overwritten by cursorLine bg
+    check style.bg == searchStyle.bg
+    check style.bg != cursorLineHighlightStyle().bg
+
+  test "non-searchResult highlight still gets cursor line bg":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    e.state.display.showSyntax = true
+    e.state.display.showDocumentHighlight = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    # Set up highlight with a normal (non-searchResult) color
+    let defaultStyle = colorIndexToStyle(EditorColorPairIndex.default)
+    e.textBuffer.highlight = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 3),
+      cursorLine = 0,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+    )
+    # cursorLine bg should overwrite default highlight bg
+    check style.bg == cursorLineHighlightStyle().bg
+
+suite "getSelectionStyle - Cursor column":
+  test "Returns cursor column bg when on cursor column":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    e.state.display.showDocumentHighlight = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 3),
+      cursorLine = 1,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+      displayCol = 5,
+      cursorDisplayCol = 5,
+    )
+    check style.bg == cursorColumnHighlightStyle().bg
+
+  test "No cursor column style when showCursorColumn is false":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = false
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 3),
+      cursorLine = 1,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+      displayCol = 5,
+      cursorDisplayCol = 5,
+    )
+    check style.bg == normalStyle().bg
+
+  test "No cursor column style when displayCol does not match":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 3),
+      cursorLine = 1,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+      displayCol = 3,
+      cursorDisplayCol = 5,
+    )
+    check style.bg == normalStyle().bg
+
+  test "Cursor line takes priority over cursor column at intersection":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    e.state.display.showCursorLine = true
+    e.state.display.showSyntax = false
+    e.state.display.showDocumentHighlight = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    # At intersection (same line AND same column): cursorLine wins
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 5),
+      cursorLine = 0,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+      displayCol = 5,
+      cursorDisplayCol = 5,
+    )
+    check style.bg == cursorLineHighlightStyle().bg
+
+  test "No cursor column when displayCol params not provided":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    # Without displayCol/cursorDisplayCol params (default -1), no column highlight
+    let style = e.getSelectionStyle(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 5),
+      cursorLine = 1,
+      cursorCol = 5,
+      windowMode = EditorMode.Normal,
+    )
+    check style.bg == normalStyle().bg
+
+suite "renderLineSegmentWithSelection - trailing space highlight":
+  test "Normal mode highlights trailing spaces":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("hello   ")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "hello   ", 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    # Trailing spaces (columns 5, 6, 7) should have trailing space style
+    check buf[5, 0].style == trailingStyle
+    check buf[6, 0].style == trailingStyle
+    check buf[7, 0].style == trailingStyle
+
+  test "Current line does not highlight trailing spaces":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("hello   ")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "hello   ", 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    # Trailing spaces on the current line should NOT be highlighted
+    check buf[5, 0].style != trailingStyle
+    check buf[6, 0].style != trailingStyle
+    check buf[7, 0].style != trailingStyle
+
+  test "Help mode does not highlight trailing spaces":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("hello   ")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Help,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "hello   ", 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    # Trailing spaces should NOT have trailing space style in Help mode
+    check buf[5, 0].style != trailingStyle
+    check buf[6, 0].style != trailingStyle
+    check buf[7, 0].style != trailingStyle
+
+  test "BufferManager mode does not highlight trailing spaces":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("entry   ")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.BufferManager,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "entry   ", 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    check buf[5, 0].style != trailingStyle
+
+  test "DiffViewer mode does not highlight trailing spaces":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("diff   ")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.DiffViewer,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "diff   ", 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    check buf[4, 0].style != trailingStyle
+
+suite "renderLineSegmentWithSelection - full-width space highlight":
+  test "Normal mode highlights full-width space":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.fullWidthSpace = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let text = "ab" & $FULLWIDTH_SPACE & "cd"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    let fwStyle = fullWidthSpaceStyle()
+    # Full-width space at column 2 (takes 2 display cells) should be highlighted
+    check buf[2, 0].style == fwStyle
+
+  test "Help mode does not highlight full-width space":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.fullWidthSpace = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let text = "ab" & $FULLWIDTH_SPACE & "cd"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Help,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    let fwStyle = fullWidthSpaceStyle()
+    check buf[2, 0].style != fwStyle
+
+  test "Debug mode does not highlight full-width space":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.fullWidthSpace = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let text = "ab" & $FULLWIDTH_SPACE & "cd"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Debug,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    let fwStyle = fullWidthSpaceStyle()
+    check buf[2, 0].style != fwStyle
+
+suite "renderLineSegmentWithSelection - tab trailing space highlight":
+  test "Normal mode highlights trailing tab":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+    e.state.display.tabStop = 4
+
+    let text = "ab\t"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    # Tab at column 2 expands to spaces; column 2 should have trailing style
+    check buf[2, 0].style == trailingStyle
+
+  test "Current line does not highlight trailing tab":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+    e.state.display.tabStop = 4
+
+    let text = "ab\t"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    # Trailing tab on the current line should NOT be highlighted
+    check buf[2, 0].style != trailingStyle
+
+  test "Help mode does not highlight trailing tab":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.config.highlight.trailingSpaces = true
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+    e.state.display.tabStop = 4
+
+    let text = "ab\t"
+    let tb = newTextBuffer(text)
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Help,
+      windowRightEdge: 80,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, text, 0, 0, 0, 0, ctx)
+
+    let trailingStyle = trailingSpacesStyle()
+    check buf[2, 0].style != trailingStyle
