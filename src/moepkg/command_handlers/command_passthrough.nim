@@ -54,6 +54,8 @@ type PassthroughKind* = enum
   # buffer.*
   ptBufferNext
   ptBufferPrev
+  # quickrun
+  ptQuickRun
   # lsp.* (ctCustom)
   ptLspGotoDefinition
   ptLspGotoDeclaration
@@ -106,6 +108,8 @@ proc lookupPassthrough*(commandId: string): Option[PassthroughKind] =
     some(ptBufferNext)
   of "buffer.prev.tab":
     some(ptBufferPrev)
+  of "quickrun":
+    some(ptQuickRun)
   of "lsp.goto.definition":
     some(ptLspGotoDefinition)
   of "lsp.goto.declaration":
@@ -172,6 +176,8 @@ proc toHandlerResult*(k: PassthroughKind): HandlerResult =
     HandlerResult(kind: hrBufferNext)
   of ptBufferPrev:
     HandlerResult(kind: hrBufferPrev)
+  of ptQuickRun:
+    HandlerResult(kind: hrQuickRun)
   of ptLspGotoDefinition:
     HandlerResult(kind: hrLspGotoDefinition)
   of ptLspGotoDeclaration:
