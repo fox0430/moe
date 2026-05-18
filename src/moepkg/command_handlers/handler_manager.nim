@@ -46,7 +46,7 @@ import
   filetree_handler, log_viewer_handler, help_handler, buffer_manager_handler,
   bookmark_manager_handler, backup_manager_handler, diff_viewer_handler,
   recent_file_mode_handler, debug_handler, config_handler, references_handler,
-  documentsymbol_handler, callhierarchy_handler, terminal_handler
+  documentsymbol_handler, callhierarchy_handler, terminal_handler, command_passthrough
 
 export
   handler_types, handler_result, mode_dispatchers, normal_handler, insert_handler,
@@ -161,41 +161,12 @@ proc executeCommandDirect*(
     )
   case command.kind
   of ctAction:
+    # Trivial passthrough commandIds (window.*, file.*, buffer.*.tab) share
+    # their dispatch table with normal_handler via command_passthrough.
+    let pt = lookupPassthrough(command.commandId)
+    if pt.isSome:
+      return some(toHandlerResult(pt.get))
     case command.commandId
-    of "window.next":
-      return some(HandlerResult(kind: hrNextWindow))
-    of "window.prev":
-      return some(HandlerResult(kind: hrPrevWindow))
-    of "window.increase-height":
-      return some(HandlerResult(kind: hrIncreaseWindowHeight))
-    of "window.decrease-height":
-      return some(HandlerResult(kind: hrDecreaseWindowHeight))
-    of "window.increase-width":
-      return some(HandlerResult(kind: hrIncreaseWindowWidth))
-    of "window.decrease-width":
-      return some(HandlerResult(kind: hrDecreaseWindowWidth))
-    of "window.equalize":
-      return some(HandlerResult(kind: hrEqualizeWindows))
-    of "window.swap":
-      return some(HandlerResult(kind: hrSwapWindow))
-    of "window.close":
-      return some(HandlerResult(kind: hrCloseWindow, forceClose: false))
-    of "file.save":
-      return some(HandlerResult(kind: hrSave))
-    of "file.save.and.quit":
-      return some(HandlerResult(kind: hrSaveAndQuit))
-    of "file.quit.force":
-      return some(HandlerResult(kind: hrQuit))
-    of "file.close":
-      return some(HandlerResult(kind: hrBufferDelete))
-    of "file.new":
-      return some(HandlerResult(kind: hrEnew))
-    of "file.open", "filer.open":
-      return some(HandlerResult(kind: hrEnterFiler, enterFilerPath: none(string)))
-    of "buffer.next.tab":
-      return some(HandlerResult(kind: hrBufferNext))
-    of "buffer.prev.tab":
-      return some(HandlerResult(kind: hrBufferPrev))
     of "lsp.format":
       return some(HandlerResult(kind: hrLspFormat))
     of "lsp.restart":
@@ -208,31 +179,12 @@ proc executeCommandDirect*(
           "' cannot be executed directly in special modes; use key sequence mapping instead"
       return none(HandlerResult)
   of ctCustom:
+    # Trivial passthrough LSP commands share their dispatch table with
+    # normal_handler via command_passthrough.
+    let pt = lookupPassthrough(command.commandId)
+    if pt.isSome:
+      return some(toHandlerResult(pt.get))
     case command.commandId
-    of "lsp.goto.definition":
-      return some(HandlerResult(kind: hrLspGotoDefinition))
-    of "lsp.goto.declaration":
-      return some(HandlerResult(kind: hrLspGotoDeclaration))
-    of "lsp.find.references":
-      return some(HandlerResult(kind: hrLspFindReferences))
-    of "lsp.codelens.execute":
-      return some(HandlerResult(kind: hrLspCodeLensExecute))
-    of "lsp.callhierarchy.incoming":
-      return some(HandlerResult(kind: hrLspCallHierarchyIncoming))
-    of "lsp.callhierarchy.outgoing":
-      return some(HandlerResult(kind: hrLspCallHierarchyOutgoing))
-    of "lsp.goto.type.definition":
-      return some(HandlerResult(kind: hrLspTypeDefinition))
-    of "lsp.goto.implementation":
-      return some(HandlerResult(kind: hrLspImplementation))
-    of "lsp.hover":
-      return some(HandlerResult(kind: hrLspHover))
-    of "lsp.rename":
-      return some(HandlerResult(kind: hrLspRename, hrLspNewName: ""))
-    of "lsp.selection.range":
-      return some(HandlerResult(kind: hrLspSelectionRange))
-    of "lsp.document.link":
-      return some(HandlerResult(kind: hrLspDocumentLink))
     of "quickrun":
       return some(HandlerResult(kind: hrQuickRun))
     else:
@@ -366,14 +318,85 @@ proc applyNormalModePostProcessing(
 
   return normalResult
 
+proc nmrPassthroughKind(k: NormalModeResultKind): Option[PassthroughKind] =
+  ## Map a NormalModeResultKind to its passthrough counterpart. Pairs with
+  ## command_passthrough.toHandlerResult to centralize HandlerResult shapes.
+  case k
+  of nmrSave:
+    some(ptSave)
+  of nmrSaveAndQuit:
+    some(ptSaveAndQuit)
+  of nmrQuitWithoutSave:
+    some(ptQuitForce)
+  of nmrCloseWindow:
+    some(ptCloseWindow)
+  of nmrBufferNext:
+    some(ptBufferNext)
+  of nmrBufferPrev:
+    some(ptBufferPrev)
+  of nmrBufferDelete:
+    some(ptBufferDelete)
+  of nmrNewFile:
+    some(ptNewFile)
+  of nmrEnterFiler:
+    some(ptEnterFiler)
+  of nmrNextWindow:
+    some(ptNextWindow)
+  of nmrPrevWindow:
+    some(ptPrevWindow)
+  of nmrIncreaseWindowHeight:
+    some(ptIncreaseWindowHeight)
+  of nmrDecreaseWindowHeight:
+    some(ptDecreaseWindowHeight)
+  of nmrIncreaseWindowWidth:
+    some(ptIncreaseWindowWidth)
+  of nmrDecreaseWindowWidth:
+    some(ptDecreaseWindowWidth)
+  of nmrEqualizeWindows:
+    some(ptEqualizeWindows)
+  of nmrSwapWindow:
+    some(ptSwapWindow)
+  of nmrLspGotoDefinition:
+    some(ptLspGotoDefinition)
+  of nmrLspGotoDeclaration:
+    some(ptLspGotoDeclaration)
+  of nmrLspFindReferences:
+    some(ptLspFindReferences)
+  of nmrLspCodeLensExecute:
+    some(ptLspCodeLensExecute)
+  of nmrLspCallHierarchyIncoming:
+    some(ptLspCallHierarchyIncoming)
+  of nmrLspCallHierarchyOutgoing:
+    some(ptLspCallHierarchyOutgoing)
+  of nmrLspTypeDefinition:
+    some(ptLspTypeDefinition)
+  of nmrLspImplementation:
+    some(ptLspImplementation)
+  of nmrLspHover:
+    some(ptLspHover)
+  of nmrLspRename:
+    some(ptLspRename)
+  of nmrLspSelectionRange:
+    some(ptLspSelectionRange)
+  of nmrLspDocumentLink:
+    some(ptLspDocumentLink)
+  else:
+    none(PassthroughKind)
+
 proc handleNormalMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
   ## Handle Normal mode input
   let buffer = editor.activeBuffer
   let state = editor.state
-  let viewport = editor.viewport
   let r = manager.normalHandler.handleNormalModeKey(editor, keyCombo)
+
+  # Trivial passthrough variants (window.*, file.*, buffer.*.tab, lsp.*
+  # custom) collapse into a single shared translation table.
+  let pt = nmrPassthroughKind(r.kind)
+  if pt.isSome:
+    return toHandlerResult(pt.get)
+
   case r.kind
   of nmrHandled:
     # Check if we're entering Insert or Replace mode
@@ -415,20 +438,6 @@ proc handleNormalMode*(
     return HandlerResult(kind: hrUnhandled)
   of nmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
-  of nmrSave:
-    # Save file
-    return HandlerResult(kind: hrSave, saveFilename: none(string), forceSave: false)
-  of nmrSaveAndQuit:
-    # ZZ command - Save and quit
-    return HandlerResult(
-      kind: hrSaveAndQuit, saveAndQuitFilename: none(string), forceQuitAfterSave: false
-    )
-  of nmrQuitWithoutSave:
-    # ZQ command - Quit without saving (force quit)
-    return HandlerResult(kind: hrQuit, shouldQuit: true)
-  of nmrCloseWindow:
-    # Ctrl-W c command - Close current window
-    return HandlerResult(kind: hrCloseWindow, forceClose: false)
   of nmrPlaybackMacro:
     # Playback the macro through handler_manager which can dispatch to any mode
     # Loop for the specified count (e.g., 3@a plays macro 3 times)
@@ -448,42 +457,6 @@ proc handleNormalMode*(
       execCommandText: r.execCommandText,
       execCommandCount: if r.execCommandCount > 0: r.execCommandCount else: 1,
     )
-  of nmrLspGotoDefinition:
-    # Signal to editor to execute LSP goto definition
-    return HandlerResult(kind: hrLspGotoDefinition)
-  of nmrLspGotoDeclaration:
-    # Signal to editor to execute LSP goto declaration
-    return HandlerResult(kind: hrLspGotoDeclaration)
-  of nmrLspFindReferences:
-    # Signal to editor to execute LSP find references
-    return HandlerResult(kind: hrLspFindReferences)
-  of nmrLspCodeLensExecute:
-    # Signal to editor to execute CodeLens on current line
-    return HandlerResult(kind: hrLspCodeLensExecute)
-  of nmrLspCallHierarchyIncoming:
-    # Signal to editor to execute LSP incoming calls
-    return HandlerResult(kind: hrLspCallHierarchyIncoming)
-  of nmrLspCallHierarchyOutgoing:
-    # Signal to editor to execute LSP outgoing calls
-    return HandlerResult(kind: hrLspCallHierarchyOutgoing)
-  of nmrLspTypeDefinition:
-    # Signal to editor to execute LSP goto type definition
-    return HandlerResult(kind: hrLspTypeDefinition)
-  of nmrLspImplementation:
-    # Signal to editor to execute LSP goto implementation
-    return HandlerResult(kind: hrLspImplementation)
-  of nmrLspHover:
-    # Signal to editor to execute LSP hover
-    return HandlerResult(kind: hrLspHover)
-  of nmrLspRename:
-    # Signal to editor to execute LSP rename
-    return HandlerResult(kind: hrLspRename, hrLspNewName: r.nmrLspNewName)
-  of nmrLspSelectionRange:
-    # Signal to editor to execute LSP selection range
-    return HandlerResult(kind: hrLspSelectionRange)
-  of nmrLspDocumentLink:
-    # Signal to editor to execute LSP document link
-    return HandlerResult(kind: hrLspDocumentLink)
   of nmrJumpToBuffer:
     # Signal to editor to jump to a specific buffer and position
     return HandlerResult(
@@ -492,34 +465,12 @@ proc handleNormalMode*(
       jumpLine: r.nmrJumpLine,
       jumpColumn: r.nmrJumpColumn,
     )
-  of nmrBufferNext:
-    return HandlerResult(kind: hrBufferNext)
-  of nmrBufferPrev:
-    return HandlerResult(kind: hrBufferPrev)
-  of nmrBufferDelete:
-    return HandlerResult(kind: hrBufferDelete)
-  of nmrNewFile:
-    return HandlerResult(kind: hrEnew)
-  of nmrEnterFiler:
-    return HandlerResult(kind: hrEnterFiler, enterFilerPath: none(string))
-  of nmrNextWindow:
-    return HandlerResult(kind: hrNextWindow)
-  of nmrPrevWindow:
-    return HandlerResult(kind: hrPrevWindow)
-  of nmrIncreaseWindowHeight:
-    return HandlerResult(kind: hrIncreaseWindowHeight)
-  of nmrDecreaseWindowHeight:
-    return HandlerResult(kind: hrDecreaseWindowHeight)
-  of nmrIncreaseWindowWidth:
-    return HandlerResult(kind: hrIncreaseWindowWidth)
-  of nmrDecreaseWindowWidth:
-    return HandlerResult(kind: hrDecreaseWindowWidth)
-  of nmrEqualizeWindows:
-    return HandlerResult(kind: hrEqualizeWindows)
-  of nmrSwapWindow:
-    return HandlerResult(kind: hrSwapWindow)
   of nmrOpenUri:
     return HandlerResult(kind: hrOpenUri, openUri: r.openUri)
+  else:
+    # Unreachable: every other nmr* variant is captured by nmrPassthroughKind
+    # above. Kept here only to satisfy the case statement exhaustiveness check.
+    return HandlerResult(kind: hrUnhandled)
 
 proc handleEvent*(manager: HandlerManager, e: Editor, event: Event): HandlerResult =
   ## Editor-based event entry point. Stays entirely on the Editor dispatch path.

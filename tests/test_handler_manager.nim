@@ -187,7 +187,7 @@ suite "HandlerManager - getOverlayTransition helper":
     check transition.isNone
 
   test "getOverlayTransition returns none for hrQuit":
-    let result = HandlerResult(kind: hrQuit, shouldQuit: true)
+    let result = HandlerResult(kind: hrQuit)
     let transition = result.getOverlayTransition
     check transition.isNone
 

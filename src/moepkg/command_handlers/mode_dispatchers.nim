@@ -205,7 +205,7 @@ proc handleCommandMode*(
 
   case r.kind
   of cmrQuit:
-    return HandlerResult(kind: hrQuit, shouldQuit: true)
+    return HandlerResult(kind: hrQuit)
   of cmrCquit:
     return HandlerResult(kind: hrCquit)
   of cmrCloseWindow:
