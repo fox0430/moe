@@ -72,6 +72,7 @@ type
     nmrEqualizeWindows # Signal to handler_manager to equalize all windows
     nmrSwapWindow # Signal to handler_manager to swap window with next
     nmrOpenUri # Signal to handler_manager to open URI/file under cursor
+    nmrQuickRun # Signal to handler_manager to run quickrun on current buffer
 
   NormalModeResult* = object ## Result of normal mode command execution
     case kind*: NormalModeResultKind
@@ -143,6 +144,8 @@ type
       discard
     of nmrOpenUri:
       openUri*: string
+    of nmrQuickRun:
+      discard
 
 proc updateCursorToJumpPosition(
     handler: NormalModeHandler,
@@ -598,6 +601,8 @@ proc fromPassthrough(k: PassthroughKind): NormalModeResult =
     NormalModeResult(kind: nmrBufferNext)
   of ptBufferPrev:
     NormalModeResult(kind: nmrBufferPrev)
+  of ptQuickRun:
+    NormalModeResult(kind: nmrQuickRun)
   of ptLspGotoDefinition:
     NormalModeResult(kind: nmrLspGotoDefinition)
   of ptLspGotoDeclaration:

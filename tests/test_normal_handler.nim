@@ -1867,6 +1867,24 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     check r2.kind == nmrHandled
     check state.pendingRegister == some('a')
 
+  test "quickrun (\\r) returns nmrQuickRun":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "echo hello")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    let viewport = createTestViewport()
+
+    # Press \ (sequence prefix)
+    let backslashKey = KeyCombo(isSpecial: false, char: "\\")
+    let r1 =
+      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), backslashKey)
+    check r1.kind == nmrHandled # consumed as sequence prefix
+
+    # Press r
+    let rKey = KeyCombo(isSpecial: false, char: "r")
+    let r2 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), rKey)
+    check r2.kind == nmrQuickRun
+
   test "window-next (C-w k) returns nmrNextWindow":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "Hello")

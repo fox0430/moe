@@ -179,19 +179,15 @@ proc executeCommandDirect*(
           "' cannot be executed directly in special modes; use key sequence mapping instead"
       return none(HandlerResult)
   of ctCustom:
-    # Trivial passthrough LSP commands share their dispatch table with
-    # normal_handler via command_passthrough.
+    # Trivial passthrough LSP commands and quickrun share their dispatch
+    # table with normal_handler via command_passthrough.
     let pt = lookupPassthrough(command.commandId)
     if pt.isSome:
       return some(toHandlerResult(pt.get))
-    case command.commandId
-    of "quickrun":
-      return some(HandlerResult(kind: hrQuickRun))
-    else:
-      logWarn "executeCommandDirect",
-        "Command '" & command.commandId &
-          "' cannot be executed directly in special modes; use key sequence mapping instead"
-      return none(HandlerResult)
+    logWarn "executeCommandDirect",
+      "Command '" & command.commandId &
+        "' cannot be executed directly in special modes; use key sequence mapping instead"
+    return none(HandlerResult)
   of ctModeSwitch:
     return some(
       HandlerResult(
@@ -334,6 +330,8 @@ proc nmrPassthroughKind(k: NormalModeResultKind): Option[PassthroughKind] =
     some(ptBufferNext)
   of nmrBufferPrev:
     some(ptBufferPrev)
+  of nmrQuickRun:
+    some(ptQuickRun)
   of nmrBufferDelete:
     some(ptBufferDelete)
   of nmrNewFile:

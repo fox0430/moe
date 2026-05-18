@@ -34,7 +34,7 @@ import
   ../[
     editor, modes, buffer, logger, types, filer, buffer_manager, bookmark_manager,
     backup_manager, backup, diff_viewer, config_loader, message_log, uri_utils,
-    primitives, syntax_checker, status_line, cursor_util,
+    primitives, syntax_checker, status_line, cursor_util, quick_run_utils,
   ]
 import ../key_bindings except Command
 import ./[command_mode_handler, handler_result]
@@ -757,11 +757,30 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       let continueRunning = e.handleCommandModeKeyCombo(enterKey)
       if not continueRunning:
         return false
+  of hrQuickRun:
+    # Prepare QuickRun (sync) and set pending for async execution. Mirrors
+    # command_mode_handler.nim's hrQuickRun branch so Normal mode keybindings
+    # (e.g. \r) reach the same execution path as `:quickrun`.
+    let prepareResult = prepareQuickRun(activeBuffer, e.config)
+    if prepareResult.isErr:
+      e.state.statusMessage = "QuickRun error: " & prepareResult.error
+      logError("handler", "QuickRun prepare failed: " & prepareResult.error)
+    else:
+      let prepared = prepareResult.get
+      e.state.pending.quickRun = (
+        cmd: prepared.command.cmd,
+        args: prepared.command.args,
+        filePath: prepared.filePath,
+        isTempFile: prepared.isTempFile,
+      )
+      if e.config.notification.screenNotifications and
+          e.config.notification.quickRunScreenNotify:
+        e.state.statusMessage = quickRunStartupMessage(prepared.filePath)
   of hrVSplit, hrHSplit, hrNew, hrVnew, hrEdit, hrSetBoolOption, hrSetIntOption,
       hrSetFloatOption, hrClearSearchHighlight, hrSave, hrSaveAll, hrStripWhitespace,
-      hrShellCommand, hrBackground, hrMan, hrSubstitute, hrDeleteLines, hrQuickRun,
-      hrBuild, hrDebug, hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList,
-      hrChanges, hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterLogViewer,
+      hrShellCommand, hrBackground, hrMan, hrSubstitute, hrDeleteLines, hrBuild,
+      hrDebug, hrDebugViewerQuit, hrConfig, hrTheme, hrLspLog, hrJumpList, hrChanges,
+      hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrEnterLogViewer,
       hrEnterHelpViewer, hrEnterBufferManager, hrEnterBookmarkManager,
       hrEnterBackupManager, hrEnterDiffViewer, hrEnterReferences, hrEnterDocumentSymbol,
       hrEnterCallHierarchy, hrEnterTerminal, hrOnlyWindow, hrConflictNext,
