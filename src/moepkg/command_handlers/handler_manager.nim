@@ -314,73 +314,6 @@ proc applyNormalModePostProcessing(
 
   return normalResult
 
-proc nmrPassthroughKind(k: NormalModeResultKind): Option[PassthroughKind] =
-  ## Map a NormalModeResultKind to its passthrough counterpart. Pairs with
-  ## command_passthrough.toHandlerResult to centralize HandlerResult shapes.
-  case k
-  of nmrSave:
-    some(ptSave)
-  of nmrSaveAndQuit:
-    some(ptSaveAndQuit)
-  of nmrQuitWithoutSave:
-    some(ptQuitForce)
-  of nmrCloseWindow:
-    some(ptCloseWindow)
-  of nmrBufferNext:
-    some(ptBufferNext)
-  of nmrBufferPrev:
-    some(ptBufferPrev)
-  of nmrQuickRun:
-    some(ptQuickRun)
-  of nmrBufferDelete:
-    some(ptBufferDelete)
-  of nmrNewFile:
-    some(ptNewFile)
-  of nmrEnterFiler:
-    some(ptEnterFiler)
-  of nmrNextWindow:
-    some(ptNextWindow)
-  of nmrPrevWindow:
-    some(ptPrevWindow)
-  of nmrIncreaseWindowHeight:
-    some(ptIncreaseWindowHeight)
-  of nmrDecreaseWindowHeight:
-    some(ptDecreaseWindowHeight)
-  of nmrIncreaseWindowWidth:
-    some(ptIncreaseWindowWidth)
-  of nmrDecreaseWindowWidth:
-    some(ptDecreaseWindowWidth)
-  of nmrEqualizeWindows:
-    some(ptEqualizeWindows)
-  of nmrSwapWindow:
-    some(ptSwapWindow)
-  of nmrLspGotoDefinition:
-    some(ptLspGotoDefinition)
-  of nmrLspGotoDeclaration:
-    some(ptLspGotoDeclaration)
-  of nmrLspFindReferences:
-    some(ptLspFindReferences)
-  of nmrLspCodeLensExecute:
-    some(ptLspCodeLensExecute)
-  of nmrLspCallHierarchyIncoming:
-    some(ptLspCallHierarchyIncoming)
-  of nmrLspCallHierarchyOutgoing:
-    some(ptLspCallHierarchyOutgoing)
-  of nmrLspTypeDefinition:
-    some(ptLspTypeDefinition)
-  of nmrLspImplementation:
-    some(ptLspImplementation)
-  of nmrLspHover:
-    some(ptLspHover)
-  of nmrLspRename:
-    some(ptLspRename)
-  of nmrLspSelectionRange:
-    some(ptLspSelectionRange)
-  of nmrLspDocumentLink:
-    some(ptLspDocumentLink)
-  else:
-    none(PassthroughKind)
-
 proc handleNormalMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
@@ -391,9 +324,8 @@ proc handleNormalMode*(
 
   # Trivial passthrough variants (window.*, file.*, buffer.*.tab, lsp.*
   # custom) collapse into a single shared translation table.
-  let pt = nmrPassthroughKind(r.kind)
-  if pt.isSome:
-    return toHandlerResult(pt.get)
+  if r.kind == nmrPassthrough:
+    return toHandlerResult(r.passthroughKind)
 
   case r.kind
   of nmrHandled:
@@ -465,9 +397,9 @@ proc handleNormalMode*(
     )
   of nmrOpenUri:
     return HandlerResult(kind: hrOpenUri, openUri: r.openUri)
-  else:
-    # Unreachable: every other nmr* variant is captured by nmrPassthroughKind
-    # above. Kept here only to satisfy the case statement exhaustiveness check.
+  of nmrPassthrough:
+    # Unreachable: captured by the early return above. Listed to satisfy
+    # case exhaustiveness.
     return HandlerResult(kind: hrUnhandled)
 
 proc handleEvent*(manager: HandlerManager, e: Editor, event: Event): HandlerResult =
