@@ -162,9 +162,7 @@ type
       modeTransition*: Option[EditorMode]
       overlayTransition*: Option[OverlayKind]
       statusMessage*: string
-    of hrQuit:
-      shouldQuit*: bool
-    of hrCquit:
+    of hrQuit, hrCquit:
       discard
     of hrCloseWindow:
       forceClose*: bool

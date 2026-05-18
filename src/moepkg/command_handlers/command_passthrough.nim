@@ -161,7 +161,7 @@ proc toHandlerResult*(k: PassthroughKind): HandlerResult =
       kind: hrSaveAndQuit, saveAndQuitFilename: none(string), forceQuitAfterSave: false
     )
   of ptQuitForce:
-    HandlerResult(kind: hrQuit, shouldQuit: true)
+    HandlerResult(kind: hrQuit)
   of ptBufferDelete:
     HandlerResult(kind: hrBufferDelete, forceBufferDelete: false)
   of ptNewFile:
