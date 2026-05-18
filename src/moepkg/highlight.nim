@@ -21,7 +21,7 @@ import std/[sequtils, os, strutils, strformat, unicode, algorithm, options, tabl
 
 import pkg/celina
 
-import color, primitives
+import color
 import syntax/tokenizer
 import lsp/protocol/types
 
@@ -42,11 +42,6 @@ type
   ReservedWord* = object
     word*: string
     color*: EditorColorPairIndex
-
-  # Visual selection area (for compatibility with old code)
-  SelectedArea* = object
-    startLine*, endLine*: int
-    startColumn*, endColumn*: int
 
   # Incremental highlighting support
   TokenizerState* = object
@@ -341,13 +336,47 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
     )
 
 proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
-  ## Overwrite `highlight` with colorSegment
+  ## Overwrite `highlight` with colorSegment.
+  ##
+  ## Segments are sorted by (firstRow, firstColumn), so the affected window
+  ## is found via binary search on `firstRow`/`lastRow`; segments fully
+  ## before or after `colorSegment` are copied without inspection. Same
+  ## pattern as [[addModifier]] / [[addUnderlineRanges]]. This brings
+  ## per-call cost from O(N) to O(log N + affected), which matters for
+  ## large files (40k-line JSON → hundreds of thousands of segments) where
+  ## overwrite is hot: visual block selection, diagnostic application,
+  ## semantic-token apply, filetree search.
 
-  let old = highlight
-  highlight = Highlight()
-  for i in 0 ..< old.colorSegments.len:
-    let cs = old.colorSegments[i]
-    highlight.colorSegments.add(cs.overwrite(colorSegment))
+  let segs = highlight.colorSegments
+  if segs.len == 0:
+    return
+
+  # First segment that could overlap: one whose lastRow >= colorSegment.firstRow.
+  let startIdx = segs.lowerBound(colorSegment.firstRow) do(
+    seg: ColorSegment, row: int
+  ) -> int:
+    if seg.lastRow < row: -1 else: 1
+
+  # First segment fully after colorSegment: one whose firstRow > colorSegment.lastRow.
+  let endIdx = segs.lowerBound(colorSegment.lastRow) do(
+    seg: ColorSegment, row: int
+  ) -> int:
+    if seg.firstRow <= row: -1 else: 1
+
+  if startIdx >= endIdx:
+    # No segment overlaps the row range — nothing to do.
+    return
+
+  # Worst case: each affected segment splits into 3 (s contains t).
+  var newSegments = newSeqOfCap[ColorSegment](segs.len + (endIdx - startIdx) * 2)
+  for i in 0 ..< startIdx:
+    newSegments.add(segs[i])
+  for i in startIdx ..< endIdx:
+    newSegments.add(segs[i].overwrite(colorSegment))
+  for i in endIdx ..< segs.len:
+    newSegments.add(segs[i])
+
+  highlight.colorSegments = newSegments
 
 proc addModifier*(
     highlight: var Highlight,
@@ -1206,40 +1235,6 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langHyprland
   else:
     return SourceLanguage.langNone
-
-proc initSelectedAreaColorSegment*(
-    position: BufferPosition, color: EditorColorPairIndex
-): ColorSegment {.inline.} =
-  result.firstRow = position.line
-  result.firstColumn = position.column
-  result.lastRow = position.line
-  result.lastColumn = position.column
-  result.color = color
-  result.style = defaultStyle
-
-proc overwriteColorSegmentBlock*[T](
-    highlight: var Highlight, area: SelectedArea, buffer: T
-) =
-  var
-    startLine = area.startLine
-    endLine = area.endLine
-    startColumn = area.startColumn
-    endColumn = area.endColumn
-  if startLine > endLine:
-    swap(startLine, endLine)
-  if startColumn > endColumn:
-    swap(startColumn, endColumn)
-
-  for i in startLine .. endLine:
-    let colorSegment = ColorSegment(
-      firstRow: i,
-      firstColumn: startColumn,
-      lastRow: i,
-      lastColumn: min(endColumn, buffer[i].high),
-      color: EditorColorPairIndex.selectArea,
-      style: defaultStyle,
-    )
-    highlight.overwrite(colorSegment)
 
 # LSP Semantic Tokens Support
 
