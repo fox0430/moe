@@ -1279,6 +1279,274 @@ suite "Highlight - addModifier":
     check h.colorSegments[2].lastColumn == 8
     check Underline notin h.colorSegments[2].style.modifiers
 
+suite "Highlight - overwrite":
+  test "Empty highlight is unchanged":
+    var h = Highlight(colorSegments: @[])
+    h.overwrite(
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 10,
+        color: EditorColorPairIndex.keyword,
+        style: defaultStyle,
+      )
+    )
+    check h.colorSegments.len == 0
+
+  test "Non-intersecting segment is preserved":
+    # Segment on row 0, overwrite on row 5
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+    h.overwrite(
+      ColorSegment(
+        firstRow: 5,
+        firstColumn: 0,
+        lastRow: 5,
+        lastColumn: 10,
+        color: EditorColorPairIndex.keyword,
+        style: defaultStyle,
+      )
+    )
+    check h.colorSegments.len == 1
+    check h.colorSegments[0].color == EditorColorPairIndex.default
+
+  test "Overwrite segment fully contained — color replaced":
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+    # overwrite range fully contains the existing segment
+    h.overwrite(
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 20,
+        color: EditorColorPairIndex.keyword,
+        style: defaultStyle,
+      )
+    )
+    check h.colorSegments.len == 1
+    check h.colorSegments[0].color == EditorColorPairIndex.keyword
+    check h.colorSegments[0].firstColumn == 0
+    check h.colorSegments[0].lastColumn == 10
+
+  test "Overwrite in the middle splits into 3":
+    # existing 0..20, overwrite 5..10 — splits into [0..4, 5..10, 11..20]
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 20,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+    h.overwrite(
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 5,
+        lastRow: 0,
+        lastColumn: 10,
+        color: EditorColorPairIndex.keyword,
+        style: defaultStyle,
+      )
+    )
+    check h.colorSegments.len == 3
+    check h.colorSegments[0].firstColumn == 0
+    check h.colorSegments[0].lastColumn == 4
+    check h.colorSegments[0].color == EditorColorPairIndex.default
+    check h.colorSegments[1].firstColumn == 5
+    check h.colorSegments[1].lastColumn == 10
+    check h.colorSegments[1].color == EditorColorPairIndex.keyword
+    check h.colorSegments[2].firstColumn == 11
+    check h.colorSegments[2].lastColumn == 20
+    check h.colorSegments[2].color == EditorColorPairIndex.default
+
+  test "Overwrite partial overlap from the left":
+    # existing 5..15, overwrite 0..10 — yields [0..10 keyword, 11..15 default]
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 5,
+          lastRow: 0,
+          lastColumn: 15,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+    h.overwrite(
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 10,
+        color: EditorColorPairIndex.keyword,
+        style: defaultStyle,
+      )
+    )
+    check h.colorSegments.len == 2
+    check h.colorSegments[0].color == EditorColorPairIndex.keyword
+    check h.colorSegments[0].lastColumn == 10
+    check h.colorSegments[1].color == EditorColorPairIndex.default
+    check h.colorSegments[1].firstColumn == 11
+    check h.colorSegments[1].lastColumn == 15
+
+  test "Overwrite partial overlap from the right":
+    # existing 0..10, overwrite 5..15 — yields [0..4 default, 5..10 keyword]
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      ]
+    )
+    h.overwrite(
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 5,
+        lastRow: 0,
+        lastColumn: 15,
+        color: EditorColorPairIndex.keyword,
+        style: defaultStyle,
+      )
+    )
+    check h.colorSegments.len == 2
+    check h.colorSegments[0].color == EditorColorPairIndex.default
+    check h.colorSegments[0].lastColumn == 4
+    check h.colorSegments[1].color == EditorColorPairIndex.keyword
+    check h.colorSegments[1].firstColumn == 5
+    check h.colorSegments[1].lastColumn == 10
+
+  test "Overwrite preserves segments outside affected row range":
+    # 5 segments on rows 0..4, overwrite only row 2
+    var h = Highlight(colorSegments: @[])
+    for r in 0 .. 4:
+      h.colorSegments.add(
+        ColorSegment(
+          firstRow: r,
+          firstColumn: 0,
+          lastRow: r,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      )
+    h.overwrite(
+      ColorSegment(
+        firstRow: 2,
+        firstColumn: 0,
+        lastRow: 2,
+        lastColumn: 10,
+        color: EditorColorPairIndex.keyword,
+        style: defaultStyle,
+      )
+    )
+    check h.colorSegments.len == 5
+    check h.colorSegments[0].color == EditorColorPairIndex.default
+    check h.colorSegments[1].color == EditorColorPairIndex.default
+    check h.colorSegments[2].color == EditorColorPairIndex.keyword
+    check h.colorSegments[3].color == EditorColorPairIndex.default
+    check h.colorSegments[4].color == EditorColorPairIndex.default
+
+  test "Overwrite spanning multiple rows":
+    # Rows 0..3 each fully covered, overwrite spans rows 1..2 entirely.
+    var h = Highlight(colorSegments: @[])
+    for r in 0 .. 3:
+      h.colorSegments.add(
+        ColorSegment(
+          firstRow: r,
+          firstColumn: 0,
+          lastRow: r,
+          lastColumn: 10,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        )
+      )
+    h.overwrite(
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 0,
+        lastRow: 2,
+        lastColumn: 10,
+        color: EditorColorPairIndex.keyword,
+        style: defaultStyle,
+      )
+    )
+    check h.colorSegments.len == 4
+    check h.colorSegments[0].color == EditorColorPairIndex.default
+    check h.colorSegments[1].color == EditorColorPairIndex.keyword
+    check h.colorSegments[2].color == EditorColorPairIndex.keyword
+    check h.colorSegments[3].color == EditorColorPairIndex.default
+
+  test "Overwrite same-row column-only no overlap is preserved":
+    # Two segments on row 0 — left at 0..5, right at 20..30.
+    # Overwrite range 10..15 is on row 0 but doesn't intersect either.
+    var h = Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 5,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        ),
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 20,
+          lastRow: 0,
+          lastColumn: 30,
+          color: EditorColorPairIndex.default,
+          style: defaultStyle,
+        ),
+      ]
+    )
+    h.overwrite(
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 10,
+        lastRow: 0,
+        lastColumn: 15,
+        color: EditorColorPairIndex.keyword,
+        style: defaultStyle,
+      )
+    )
+    check h.colorSegments.len == 2
+    check h.colorSegments[0].lastColumn == 5
+    check h.colorSegments[0].color == EditorColorPairIndex.default
+    check h.colorSegments[1].firstColumn == 20
+    check h.colorSegments[1].color == EditorColorPairIndex.default
+
 suite "Highlight - Progressive Initial Highlighting":
   test "continueInitialHighlight parses remaining lines":
     # A buffer larger than InitialChunkSize (1000 lines) should be
