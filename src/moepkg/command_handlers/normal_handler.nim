@@ -30,7 +30,7 @@ import
     types, buffer, modes, motion, key_bindings, command_registry, config, registers,
     render_utils, search_utils, uri_utils,
   ]
-import handler_types, visual_handler, insert_commands
+import handler_types, visual_handler, insert_commands, command_passthrough
 import ../editor_types
 export handler_types
 
@@ -559,6 +559,70 @@ proc requestMacroPlayback(keys: seq[string], count: int = 1): NormalModeResult =
   ## dispatch each key to the appropriate mode handler
   NormalModeResult(kind: nmrPlaybackMacro, macroKeys: keys, macroCount: count)
 
+proc fromPassthrough(k: PassthroughKind): NormalModeResult =
+  ## Translate a PassthroughKind into its canonical NormalModeResult.
+  ## Pairs with command_passthrough.toHandlerResult so the commandId list
+  ## remains in a single place.
+  case k
+  of ptNextWindow:
+    NormalModeResult(kind: nmrNextWindow)
+  of ptPrevWindow:
+    NormalModeResult(kind: nmrPrevWindow)
+  of ptIncreaseWindowHeight:
+    NormalModeResult(kind: nmrIncreaseWindowHeight)
+  of ptDecreaseWindowHeight:
+    NormalModeResult(kind: nmrDecreaseWindowHeight)
+  of ptIncreaseWindowWidth:
+    NormalModeResult(kind: nmrIncreaseWindowWidth)
+  of ptDecreaseWindowWidth:
+    NormalModeResult(kind: nmrDecreaseWindowWidth)
+  of ptEqualizeWindows:
+    NormalModeResult(kind: nmrEqualizeWindows)
+  of ptSwapWindow:
+    NormalModeResult(kind: nmrSwapWindow)
+  of ptCloseWindow:
+    NormalModeResult(kind: nmrCloseWindow)
+  of ptSave:
+    NormalModeResult(kind: nmrSave)
+  of ptSaveAndQuit:
+    NormalModeResult(kind: nmrSaveAndQuit)
+  of ptQuitForce:
+    NormalModeResult(kind: nmrQuitWithoutSave)
+  of ptBufferDelete:
+    NormalModeResult(kind: nmrBufferDelete)
+  of ptNewFile:
+    NormalModeResult(kind: nmrNewFile)
+  of ptEnterFiler:
+    NormalModeResult(kind: nmrEnterFiler)
+  of ptBufferNext:
+    NormalModeResult(kind: nmrBufferNext)
+  of ptBufferPrev:
+    NormalModeResult(kind: nmrBufferPrev)
+  of ptLspGotoDefinition:
+    NormalModeResult(kind: nmrLspGotoDefinition)
+  of ptLspGotoDeclaration:
+    NormalModeResult(kind: nmrLspGotoDeclaration)
+  of ptLspFindReferences:
+    NormalModeResult(kind: nmrLspFindReferences)
+  of ptLspCodeLensExecute:
+    NormalModeResult(kind: nmrLspCodeLensExecute)
+  of ptLspCallHierarchyIncoming:
+    NormalModeResult(kind: nmrLspCallHierarchyIncoming)
+  of ptLspCallHierarchyOutgoing:
+    NormalModeResult(kind: nmrLspCallHierarchyOutgoing)
+  of ptLspTypeDefinition:
+    NormalModeResult(kind: nmrLspTypeDefinition)
+  of ptLspImplementation:
+    NormalModeResult(kind: nmrLspImplementation)
+  of ptLspHover:
+    NormalModeResult(kind: nmrLspHover)
+  of ptLspRename:
+    NormalModeResult(kind: nmrLspRename, nmrLspNewName: "")
+  of ptLspSelectionRange:
+    NormalModeResult(kind: nmrLspSelectionRange)
+  of ptLspDocumentLink:
+    NormalModeResult(kind: nmrLspDocumentLink)
+
 proc handleNormalModeKey*(
     handler: NormalModeHandler, editor: Editor, keyCombo: KeyCombo
 ): NormalModeResult =
@@ -763,6 +827,11 @@ proc handleNormalModeKey*(
       return NormalModeResult(
         kind: nmrExecCommand, execCommandText: aliasText, execCommandCount: 1
       )
+    # Trivial passthrough commands (window.*, file.*, buffer.*.tab) share
+    # their commandId table with executeCommandDirect via command_passthrough.
+    let ptAction = lookupPassthrough(cmd.commandId)
+    if ptAction.isSome:
+      return fromPassthrough(ptAction.get)
     # Handle various actions based on command ID
     case cmd.commandId
     of "insert.append":
@@ -810,53 +879,12 @@ proc handleNormalModeKey*(
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
-    of "file.save":
-      # Save file
-      return NormalModeResult(kind: nmrSave)
-    of "file.save.and.quit":
-      # ZZ command - Save and quit
-      return NormalModeResult(kind: nmrSaveAndQuit)
-    of "file.quit.force":
-      # ZQ command - Quit without saving
-      return NormalModeResult(kind: nmrQuitWithoutSave)
-    of "window.close":
-      # Close current window
-      return NormalModeResult(kind: nmrCloseWindow)
-    of "file.close":
-      # Close current buffer
-      return NormalModeResult(kind: nmrBufferDelete)
-    of "window.next":
-      return NormalModeResult(kind: nmrNextWindow)
-    of "window.prev":
-      return NormalModeResult(kind: nmrPrevWindow)
-    of "window.increase-height":
-      return NormalModeResult(kind: nmrIncreaseWindowHeight)
-    of "window.decrease-height":
-      return NormalModeResult(kind: nmrDecreaseWindowHeight)
-    of "window.increase-width":
-      return NormalModeResult(kind: nmrIncreaseWindowWidth)
-    of "window.decrease-width":
-      return NormalModeResult(kind: nmrDecreaseWindowWidth)
-    of "window.equalize":
-      return NormalModeResult(kind: nmrEqualizeWindows)
-    of "window.swap":
-      return NormalModeResult(kind: nmrSwapWindow)
     of "macro.record":
       state.macroState.waitingForRegister = true
       state.macroState.commandType = "record"
       state.macroState.recordStartKey = keyComboToString(keyCombo)
       state.statusMessage = "recording @"
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-    of "file.new":
-      # Create new empty buffer
-      return NormalModeResult(kind: nmrNewFile)
-    of "file.open", "filer.open":
-      # Enter filer mode to open a file
-      return NormalModeResult(kind: nmrEnterFiler)
-    of "buffer.next.tab":
-      return NormalModeResult(kind: nmrBufferNext)
-    of "buffer.prev.tab":
-      return NormalModeResult(kind: nmrBufferPrev)
     of "changelist.prev":
       # g; - Jump to older change position
       if buffer.changeList.len == 0:
@@ -1070,32 +1098,12 @@ proc handleNormalModeKey*(
       else:
         return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
   of ctCustom, ctTextObject, ctOperator:
-    # Check for LSP commands first
-    if cmd.commandId == "lsp.goto.definition":
-      return NormalModeResult(kind: nmrLspGotoDefinition)
-    elif cmd.commandId == "lsp.goto.declaration":
-      return NormalModeResult(kind: nmrLspGotoDeclaration)
-    elif cmd.commandId == "lsp.find.references":
-      return NormalModeResult(kind: nmrLspFindReferences)
-    elif cmd.commandId == "lsp.codelens.execute":
-      return NormalModeResult(kind: nmrLspCodeLensExecute)
-    elif cmd.commandId == "lsp.callhierarchy.incoming":
-      return NormalModeResult(kind: nmrLspCallHierarchyIncoming)
-    elif cmd.commandId == "lsp.callhierarchy.outgoing":
-      return NormalModeResult(kind: nmrLspCallHierarchyOutgoing)
-    elif cmd.commandId == "lsp.goto.type.definition":
-      return NormalModeResult(kind: nmrLspTypeDefinition)
-    elif cmd.commandId == "lsp.goto.implementation":
-      return NormalModeResult(kind: nmrLspImplementation)
-    elif cmd.commandId == "lsp.hover":
-      return NormalModeResult(kind: nmrLspHover)
-    elif cmd.commandId == "lsp.rename":
-      return NormalModeResult(kind: nmrLspRename, nmrLspNewName: "")
-    elif cmd.commandId == "lsp.selection.range":
-      return NormalModeResult(kind: nmrLspSelectionRange)
-    elif cmd.commandId == "lsp.document.link":
-      return NormalModeResult(kind: nmrLspDocumentLink)
-    elif cmd.commandId == "editor.open.uri":
+    # Trivial passthrough LSP commands share their commandId table with
+    # executeCommandDirect via command_passthrough.
+    let ptCustom = lookupPassthrough(cmd.commandId)
+    if ptCustom.isSome:
+      return fromPassthrough(ptCustom.get)
+    if cmd.commandId == "editor.open.uri":
       let line = buffer.getLine(state.cursor.line)
       let uriOpt = extractUriAtPosition(line, state.cursor.column)
       if uriOpt.isSome:
