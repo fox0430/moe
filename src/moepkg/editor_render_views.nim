@@ -19,7 +19,7 @@
 
 ## View rendering procedures (split view, single view, bottom lines)
 
-import std/[options, strutils]
+import std/[options, strutils, unicode]
 
 import pkg/celina
 
@@ -440,3 +440,157 @@ proc renderTempMessages*(e: Editor, buffer: var Buffer) =
   # Position cursor at the end of the prompt
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = promptY
+
+proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
+  ## Render CodeLens picker popup when multiple items are available
+  if not e.state.lspCache.codeLensPicker.isActive or
+      e.state.lspCache.codeLensPicker.items.len == 0:
+    return
+
+  let
+    items = e.state.lspCache.codeLensPicker.items
+    selectedIdx = e.state.lspCache.codeLensPicker.selectedIndex
+    scrollOffset = e.state.lspCache.codeLensPicker.scrollOffset
+    maxVisibleItems = e.state.lspCache.codeLensPicker.maxVisibleItems
+
+  # Calculate how many items to actually show
+  let visibleCount = min(maxVisibleItems, items.len - scrollOffset)
+
+  # Check if scroll indicators are needed
+  let hasMoreAbove = scrollOffset > 0
+  let hasMoreBelow = scrollOffset + visibleCount < items.len
+
+  # Calculate popup dimensions using display width for multi-byte characters
+  var maxDisplayWidth = 0
+  for item in items:
+    let w = displayWidth(item.title)
+    if w > maxDisplayWidth:
+      maxDisplayWidth = w
+  # Add padding (2 chars each side) + number prefix (3 chars: "N. ") and limit to screen width
+  let contentWidth = min(maxDisplayWidth + 2 + 3, buffer.area.width - 6)
+  let popupWidth = contentWidth + 2 # +2 for border
+
+  let popupHeight = visibleCount + 2 # +2 for border
+
+  # Position popup near cursor
+  var
+    popupX = e.state.screenCursor.x
+    popupY = e.state.screenCursor.y + 1
+
+  # Adjust if popup goes off screen
+  if popupX + popupWidth > buffer.area.width:
+    popupX = max(0, buffer.area.width - popupWidth)
+  if popupY + popupHeight > buffer.area.height - 2:
+    popupY = max(0, e.state.screenCursor.y - popupHeight)
+
+  # Define styles
+  let
+    borderStyle = Style(
+      fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
+      bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 30, g: 30, b: 30)),
+      modifiers: {},
+    )
+    popupNormalStyle = Style(
+      fg: ColorValue(kind: Default),
+      bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 30, g: 30, b: 30)),
+      modifiers: {},
+    )
+    selectedStyle = Style(
+      fg: ColorValue(kind: Indexed, indexed: Color.Black),
+      bg: ColorValue(kind: Indexed, indexed: Color.Cyan),
+      modifiers: {},
+    )
+    scrollIndicatorStyle = Style(
+      fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
+      bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 30, g: 30, b: 30)),
+      modifiers: {},
+    )
+
+  # Draw top border with scroll indicator if needed
+  if popupY >= 0 and popupY < buffer.area.height:
+    buffer.setString(popupX, popupY, "┌", borderStyle)
+    for x in 1 ..< popupWidth - 1:
+      if popupX + x < buffer.area.width:
+        buffer.setString(popupX + x, popupY, "─", borderStyle)
+    # Show scroll up indicator in top-right corner
+    if hasMoreAbove and popupX + popupWidth - 2 < buffer.area.width:
+      buffer.setString(popupX + popupWidth - 2, popupY, "▲", scrollIndicatorStyle)
+    if popupX + popupWidth - 1 < buffer.area.width:
+      buffer.setString(popupX + popupWidth - 1, popupY, "┐", borderStyle)
+
+  # Draw visible items (based on scroll offset)
+  for displayIdx in 0 ..< visibleCount:
+    let itemIdx = scrollOffset + displayIdx
+    if itemIdx >= items.len:
+      break
+
+    let item = items[itemIdx]
+    let y = popupY + 1 + displayIdx
+    if y >= buffer.area.height - 1:
+      break
+
+    let style = if itemIdx == selectedIdx: selectedStyle else: popupNormalStyle
+
+    # Left border
+    buffer.setString(popupX, y, "│", borderStyle)
+
+    # Fill background first
+    for x in 1 ..< popupWidth - 1:
+      if popupX + x < buffer.area.width:
+        buffer.setString(popupX + x, y, " ", style)
+
+    # Draw number prefix for items 1-9
+    var textX = popupX + 2
+    if itemIdx < 9:
+      let numStr = $(itemIdx + 1) & "."
+      let numStyle = Style(
+        fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
+        bg: style.bg,
+        modifiers: {},
+      )
+      buffer.setString(textX, y, numStr, numStyle)
+      textX += 2
+      buffer.setString(textX, y, " ", style)
+      textX += 1
+
+    # Draw item text with proper multi-byte character handling
+    let maxTextX = popupX + popupWidth - 2
+    var currentWidth = 0
+    # Adjust maxContentWidth for number prefix (3 chars: "N. ")
+    let prefixWidth = if itemIdx < 9: 3 else: 0
+    let maxContentWidth = contentWidth - 2 - prefixWidth
+      # Leave space for padding and prefix
+
+    for rune in item.title.runes:
+      let runeW = runeWidth(rune)
+      # Check if we need to truncate (leave space for ellipsis)
+      if currentWidth + runeW > maxContentWidth - 1 and
+          currentWidth + runeW < displayWidth(item.title):
+        # Add ellipsis and stop
+        if textX < maxTextX and textX < buffer.area.width:
+          buffer.setString(textX, y, "…", style)
+        break
+
+      if textX + runeW <= maxTextX and textX < buffer.area.width:
+        buffer.setString(textX, y, $rune, style)
+        textX += runeW
+        currentWidth += runeW
+      else:
+        break
+
+    # Right border
+    if popupX + popupWidth - 1 < buffer.area.width:
+      buffer.setString(popupX + popupWidth - 1, y, "│", borderStyle)
+
+  # Draw bottom border with scroll indicator if needed
+  let bottomY = popupY + visibleCount + 1
+  if bottomY < buffer.area.height:
+    buffer.setString(popupX, bottomY, "└", borderStyle)
+    for x in 1 ..< popupWidth - 1:
+      if popupX + x < buffer.area.width:
+        buffer.setString(popupX + x, bottomY, "─", borderStyle)
+    # Show scroll down indicator in bottom-right corner
+    if hasMoreBelow and popupX + popupWidth - 2 < buffer.area.width:
+      buffer.setString(popupX + popupWidth - 2, bottomY, "▼", scrollIndicatorStyle)
+    if popupX + popupWidth - 1 < buffer.area.width:
+      buffer.setString(popupX + popupWidth - 1, bottomY, "┘", borderStyle)
