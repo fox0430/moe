@@ -23,9 +23,9 @@ import pkg/[celina, results, chronos]
 from pkg/celina/core/mouse_logic import MouseButton
 
 import
-  editor, key_bindings, modes, buffer, logger, types, motion, filer, quick_run_utils,
-  command_completion, build, render_utils, tab_line, terminal_mode, clipboard,
-  status_line, cursor_util
+  editor, editor_window_layout, editor_window_state, key_bindings, modes, buffer,
+  logger, types, motion, filer, quick_run_utils, command_completion, build,
+  render_utils, tab_line, terminal_mode, clipboard, status_line, cursor_util
 import
   command_handlers/[
     handler_manager, command_mode_handler, search_mode_handler, insert_commands,

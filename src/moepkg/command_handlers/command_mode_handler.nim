@@ -28,11 +28,12 @@ import pkg/[celina, results, chronos]
 
 import
   ../[
-    editor, key_bindings, modes, buffer, logger, types, motion, filer, filetree,
-    quick_run_utils, help_viewer, buffer_manager, bookmark_manager, backup_manager,
-    backup, debug_viewer, config_loader, message_log, command_line, color, theme,
-    terminal_mode, command_completion, render_utils, config_mode, log_viewer,
-    syntax_checker, window_manager, registers, unicode_utils, git_conflict, status_line,
+    editor, editor_window_layout, editor_window_state, key_bindings, modes, buffer,
+    logger, types, motion, filer, filetree, quick_run_utils, help_viewer,
+    buffer_manager, bookmark_manager, backup_manager, backup, debug_viewer,
+    config_loader, message_log, command_line, color, theme, terminal_mode,
+    command_completion, render_utils, config_mode, log_viewer, syntax_checker,
+    window_manager, registers, unicode_utils, git_conflict, status_line,
   ]
 import handler_manager
 

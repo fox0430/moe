@@ -24,8 +24,8 @@ import std/[options, strutils, unicode, tables]
 import pkg/celina
 
 import
-  editor_types, editor_window, editor_render_helpers, render_utils, sidebar, color,
-  unicode_utils, search_utils, highlight, modes, colorcode, git_conflict
+  editor_types, editor_window_layout, editor_render_helpers, render_utils, sidebar,
+  color, unicode_utils, search_utils, highlight, modes, colorcode, git_conflict
 import command_handlers/visual_handler
 
 proc hasSyntaxHighlight(
