@@ -23,8 +23,8 @@ import pkg/[celina, results, chronos]
 
 import
   moepkg/[
-    editor, handler, modes, logger, cmdline, filer, lsp_integration, config,
-    config_loader, emergency, status_line,
+    editor, editor_window_layout, editor_window_state, handler, modes, logger, cmdline,
+    filer, lsp_integration, config, config_loader, emergency, status_line,
   ]
 import moepkg/command_handlers/command_mode_handler
 
