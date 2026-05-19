@@ -26,7 +26,7 @@
 ## handleKeyCombo + playbackMacro + checkRuntimeKeySeqMapping) lives in
 ## handler_manager.nim.
 ##
-## dispatchUnmigratedMode is also kept here because it only forwards to the
+## dispatchSubStateMode is also kept here because it only forwards to the
 ## sub-state-mode dispatchers in this file.
 
 import std/[options, strutils, unicode]
@@ -1170,16 +1170,40 @@ proc handleTerminalMode*(
   of trError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
-proc dispatchUnmigratedMode*(
+template dispatchSubState(
+    stateField: untyped, handlerProc: untyped, modeName: string
+): untyped {.dirty.} =
+  ## Sub-state mode dispatcher helper. Expands to an early-return in the
+  ## caller: forwards to `manager.handlerProc(...)` when the per-window
+  ## state is initialized, otherwise returns an `hrError` HandlerResult
+  ## with the message "<modeName> state not initialized".
+  ## Requires `manager`, `activeWindow`, `state`, `viewport`, `keyCombo`
+  ## to be bound in the caller's scope. Marked `{.dirty.}` so that those
+  ## names are resolved at the call site (avoids clashes with same-named
+  ## procs such as `editor_types.activeWindow` and `worker.state`).
+  if activeWindow.stateField.isSome:
+    return
+      manager.handlerProc(activeWindow.stateField.get, state, viewport.height, keyCombo)
+  else:
+    return
+      HandlerResult(kind: hrError, errorMessage: modeName & " state not initialized")
+
+proc dispatchSubStateMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
-  ## Dispatch sub-state modes that still take their own state objects
-  ## (Filer, FileTree, LogViewer, Help, BufferManager, …). Called from the
-  ## Editor-based handleKeyCombo for any mode it does not handle directly.
+  ## Dispatch sub-state modes — modes that carry their own per-window state
+  ## object on `EditorWindow` (filerState, fileTreeState, etc.). Called from
+  ## the Editor-based handleKeyCombo for any mode it does not handle directly.
+  ##
+  ## 11 sub-state modes (Filer, FileTree, Help, BufferManager, BookmarkManager,
+  ## BackupManager, DiffViewer, Config, References, DocumentSymbol,
+  ## CallHierarchy) share the same dispatch shape and use the
+  ## `dispatchSubState` template. LogViewer and Terminal have non-standard
+  ## handler signatures and remain as explicit branches.
   let buffer = editor.activeBuffer
   let state = editor.state
   let viewport = editor.viewport
-  let window = some(editor.activeWindow)
+  let activeWindow = editor.activeWindow
 
   case state.mode
   of EditorMode.Normal, EditorMode.Insert, EditorMode.Visual, EditorMode.VisualBlock,
@@ -1188,118 +1212,50 @@ proc dispatchUnmigratedMode*(
     # never reach this dispatcher.
     return HandlerResult(kind: hrUnhandled)
   of EditorMode.Filer:
-    if window.isSome and window.get.filerState.isSome:
-      return manager.handleFilerMode(
-        window.get.filerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(kind: hrError, errorMessage: "Filer state not initialized")
+    dispatchSubState(filerState, handleFilerMode, "Filer")
   of EditorMode.FileTree:
-    if window.isSome and window.get.fileTreeState.isSome:
-      return manager.handleFileTreeMode(
-        window.get.fileTreeState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return
-        HandlerResult(kind: hrError, errorMessage: "FileTree state not initialized")
+    dispatchSubState(fileTreeState, handleFileTreeMode, "FileTree")
   of EditorMode.LogViewer:
+    # Non-standard handler signature: takes the buffer directly because log
+    # content lives in the TextBuffer; LogViewerState only carries contentKind
+    # and is not threaded through the handler.
     return manager.handleLogViewerMode(buffer, state, viewport.height, keyCombo)
   of EditorMode.Help:
-    if window.isSome and window.get.helpViewerState.isSome:
-      return manager.handleHelpViewerMode(
-        window.get.helpViewerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return
-        HandlerResult(kind: hrError, errorMessage: "Help viewer state not initialized")
+    dispatchSubState(helpViewerState, handleHelpViewerMode, "Help viewer")
   of EditorMode.BufferManager:
-    if window.isSome and window.get.bufferManagerState.isSome:
-      return manager.handleBufferManagerMode(
-        window.get.bufferManagerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(
-        kind: hrError, errorMessage: "Buffer manager state not initialized"
-      )
+    dispatchSubState(bufferManagerState, handleBufferManagerMode, "Buffer manager")
   of EditorMode.BookmarkManager:
-    if window.isSome and window.get.bookmarkManagerState.isSome:
-      return manager.handleBookmarkManagerMode(
-        window.get.bookmarkManagerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(
-        kind: hrError, errorMessage: "Bookmark manager state not initialized"
-      )
+    dispatchSubState(
+      bookmarkManagerState, handleBookmarkManagerMode, "Bookmark manager"
+    )
   of EditorMode.BackupManager:
-    if window.isSome and window.get.backupManagerState.isSome:
-      return manager.handleBackupManagerMode(
-        window.get.backupManagerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(
-        kind: hrError, errorMessage: "Backup manager state not initialized"
-      )
+    dispatchSubState(backupManagerState, handleBackupManagerMode, "Backup manager")
   of EditorMode.DiffViewer:
-    if window.isSome and window.get.diffViewerState.isSome:
-      return manager.handleDiffViewerMode(
-        window.get.diffViewerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return
-        HandlerResult(kind: hrError, errorMessage: "Diff viewer state not initialized")
+    dispatchSubState(diffViewerState, handleDiffViewerMode, "Diff viewer")
   of EditorMode.Config:
-    if window.isSome and window.get.configModeState.isSome:
-      return manager.handleConfigMode(
-        window.get.configModeState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return
-        HandlerResult(kind: hrError, errorMessage: "Config mode state not initialized")
+    dispatchSubState(configModeState, handleConfigMode, "Config mode")
   of EditorMode.References:
-    if window.isSome and window.get.referencesViewerState.isSome:
-      return manager.handleReferencesMode(
-        window.get.referencesViewerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(
-        kind: hrError, errorMessage: "References viewer state not initialized"
-      )
+    dispatchSubState(referencesViewerState, handleReferencesMode, "References viewer")
   of EditorMode.DocumentSymbol:
-    if window.isSome and window.get.documentSymbolViewerState.isSome:
-      return manager.handleDocumentSymbolMode(
-        window.get.documentSymbolViewerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(
-        kind: hrError, errorMessage: "Document symbol viewer state not initialized"
-      )
+    dispatchSubState(
+      documentSymbolViewerState, handleDocumentSymbolMode, "Document symbol viewer"
+    )
   of EditorMode.CallHierarchy:
-    if window.isSome and window.get.callHierarchyViewerState.isSome:
-      return manager.handleCallHierarchyMode(
-        window.get.callHierarchyViewerState.get, state, viewport.height, keyCombo
-      )
-    else:
-      return HandlerResult(
-        kind: hrError, errorMessage: "Call hierarchy viewer state not initialized"
-      )
+    dispatchSubState(
+      callHierarchyViewerState, handleCallHierarchyMode, "Call hierarchy viewer"
+    )
   of EditorMode.Terminal:
-    if window.isSome and window.get.terminalState.isSome:
+    # Non-standard handler signature: takes `window` instead of viewport height.
+    if activeWindow.terminalState.isSome:
       return manager.handleTerminalMode(
-        window.get.terminalState.get, state, keyCombo, window.get
+        activeWindow.terminalState.get, state, keyCombo, activeWindow
       )
     else:
       return
         HandlerResult(kind: hrError, errorMessage: "Terminal state not initialized")
-  of EditorMode.Command:
-    # Command mode is handled via overlay in handler.nim, not here
-    return HandlerResult(kind: hrUnhandled)
-  of EditorMode.RecentFile:
-    # Recent File mode requires its own state, not EditorState
-    # This should be handled at a higher level with RecentFileModeState
-    return HandlerResult(kind: hrUnhandled)
-  of EditorMode.Debug:
-    # Debug mode is handled at a higher level in handler.nim
-    return HandlerResult(kind: hrUnhandled)
-  of EditorMode.QuickRun:
-    # QuickRun mode is not interactive - handled through command mode
+  of EditorMode.Command, EditorMode.RecentFile, EditorMode.Debug, EditorMode.QuickRun:
+    # Command: handled via overlay in handler.nim.
+    # RecentFile: requires its own state, handled at a higher level.
+    # Debug: handled at a higher level in handler.nim.
+    # QuickRun: not interactive, handled through command mode.
     return HandlerResult(kind: hrUnhandled)

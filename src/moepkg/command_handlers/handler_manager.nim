@@ -415,8 +415,8 @@ proc handleKeyCombo*(
     manager: HandlerManager, e: Editor, keyCombo: KeyCombo
 ): HandlerResult =
   ## Editor-based dispatch. Migrated modes (Normal/Insert/Visual/Replace)
-  ## are handled directly here; unmigrated sub-state modes are forwarded
-  ## to dispatchUnmigratedMode.
+  ## are handled directly here; sub-state modes are forwarded
+  ## to dispatchSubStateMode.
 
   # Complete any active scroll animation on key input (instant jump to target)
   if e.state.windowDisplay.scrollAnimation.active:
@@ -442,7 +442,7 @@ proc handleKeyCombo*(
   of EditorMode.Replace:
     return manager.handleReplaceMode(e, keyCombo)
   else:
-    return manager.dispatchUnmigratedMode(e, keyCombo)
+    return manager.dispatchSubStateMode(e, keyCombo)
 
 proc playbackMacro*(
     manager: HandlerManager, editor: Editor, keys: seq[string]
