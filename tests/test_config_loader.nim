@@ -1368,6 +1368,68 @@ suite "Config - loadThemeFromToml":
     check colors[EditorColorPairIndex.keyword].background.rgb.green == 0x22
     check colors[EditorColorPairIndex.keyword].background.rgb.blue == 0x33
 
+  test "currentLineBg sets the background of currentLineBg":
+    # Regression: bundled themes write `currentLineBg = "..."` to set the
+    # cursor-line background. The enum name itself ends in "Bg" because the
+    # entity has no separate foreground.
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_curlnbg_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\ncurrentLineBg = \"#3e4452\"\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isOk
+    let colors = result.get
+    check colors[EditorColorPairIndex.currentLineBg].background.rgb.red == 0x3e
+    check colors[EditorColorPairIndex.currentLineBg].background.rgb.green == 0x44
+    check colors[EditorColorPairIndex.currentLineBg].background.rgb.blue == 0x52
+
+  test "currentColumnBg sets the background of currentColumnBg":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_curcolbg_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\ncurrentColumnBg = \"#3e4452\"\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isOk
+    let colors = result.get
+    check colors[EditorColorPairIndex.currentColumnBg].background.rgb.red == 0x3e
+    check colors[EditorColorPairIndex.currentColumnBg].background.rgb.green == 0x44
+    check colors[EditorColorPairIndex.currentColumnBg].background.rgb.blue == 0x52
+
+  test "configModePopupBg exact match still sets foreground":
+    # configModePopupBg has both fg/bg; the key convention is:
+    #   configModePopupBg   -> foreground
+    #   configModePopupBgBg -> background
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_cmpopbg_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nconfigModePopupBg = \"#ffffff\"\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isOk
+    let colors = result.get
+    check colors[EditorColorPairIndex.configModePopupBg].foreground.rgb.red == 0xff
+    check colors[EditorColorPairIndex.configModePopupBg].foreground.rgb.green == 0xff
+    check colors[EditorColorPairIndex.configModePopupBg].foreground.rgb.blue == 0xff
+
+  test "configModePopupBgBg sets background of configModePopupBg":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_cmpopbgbg_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nconfigModePopupBgBg = \"#323232\"\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isOk
+    let colors = result.get
+    check colors[EditorColorPairIndex.configModePopupBg].background.rgb.red == 0x32
+    check colors[EditorColorPairIndex.configModePopupBg].background.rgb.green == 0x32
+    check colors[EditorColorPairIndex.configModePopupBg].background.rgb.blue == 0x32
+
   test "termDefault color is processed (rgb.red == -1)":
     inc testFileCounter
     let testFile = "/tmp/moe_test_theme_td_" & $testFileCounter & ".toml"

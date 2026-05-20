@@ -1613,9 +1613,14 @@ proc loadThemeFromToml*(
     # again -> background. This two-step approach correctly handles enum names
     # that themselves end in "Bg" (e.g. configModePopupBgBg sets the background
     # of EditorColorPairIndex.configModePopupBg).
+    # Exception: currentLineBg and currentColumnBg are background-only entities
+    # (no separate foreground), so an exact match on those keys sets the
+    # background, matching the convention used by the bundled themes.
     var indexOpt = toEditorColorPairIndex(key)
     var isBackground = false
-    if indexOpt.isNone and key.endsWith("Bg"):
+    if indexOpt.isSome and key in ["currentLineBg", "currentColumnBg"]:
+      isBackground = true
+    elif indexOpt.isNone and key.endsWith("Bg"):
       indexOpt = toEditorColorPairIndex(key[0 ..< key.len - 2])
       if indexOpt.isSome:
         isBackground = true
