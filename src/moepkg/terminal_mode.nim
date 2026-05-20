@@ -36,7 +36,6 @@ type
     pty*: PtyHandle
     grid*: TerminalGrid
     subMode*: TerminalSubMode
-    originalBuffer*: TextBuffer
     scrollbackSnapshot*: TextBuffer # Snapshot for Terminal-Normal mode
     command*: string
     exitCode*: Option[int]
@@ -55,7 +54,6 @@ proc newTerminalState*(
     pty: ptyResult.get,
     grid: newTerminalGrid(cols, rows),
     subMode: tsmInput,
-    originalBuffer: nil,
     scrollbackSnapshot: nil,
     command: command,
     exitCode: none(int),

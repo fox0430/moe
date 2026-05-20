@@ -1171,19 +1171,24 @@ proc handleTerminalMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 template dispatchSubState(
-    stateField: untyped, handlerProc: untyped, modeName: string
+    variantKind: ModeStateKind,
+    variantField: untyped,
+    handlerProc: untyped,
+    modeName: string,
 ): untyped {.dirty.} =
   ## Sub-state mode dispatcher helper. Expands to an early-return in the
-  ## caller: forwards to `manager.handlerProc(...)` when the per-window
-  ## state is initialized, otherwise returns an `hrError` HandlerResult
-  ## with the message "<modeName> state not initialized".
+  ## caller: forwards to `manager.handlerProc(...)` when the active
+  ## window's ModeState variant matches `variantKind`, otherwise returns
+  ## an `hrError` HandlerResult with the message
+  ## "<modeName> state not initialized".
   ## Requires `manager`, `activeWindow`, `state`, `viewport`, `keyCombo`
   ## to be bound in the caller's scope. Marked `{.dirty.}` so that those
   ## names are resolved at the call site (avoids clashes with same-named
   ## procs such as `editor_types.activeWindow` and `worker.state`).
-  if activeWindow.stateField.isSome:
-    return
-      manager.handlerProc(activeWindow.stateField.get, state, viewport.height, keyCombo)
+  if activeWindow.modeState.kind == variantKind:
+    return manager.handlerProc(
+      activeWindow.modeState.variantField, state, viewport.height, keyCombo
+    )
   else:
     return
       HandlerResult(kind: hrError, errorMessage: modeName & " state not initialized")
@@ -1192,8 +1197,8 @@ proc dispatchSubStateMode*(
     manager: HandlerManager, editor: Editor, keyCombo: KeyCombo
 ): HandlerResult =
   ## Dispatch sub-state modes — modes that carry their own per-window state
-  ## object on `EditorWindow` (filerState, fileTreeState, etc.). Called from
-  ## the Editor-based handleKeyCombo for any mode it does not handle directly.
+  ## object on `EditorWindow` (via the `modeState` variant). Called from the
+  ## Editor-based handleKeyCombo for any mode it does not handle directly.
   ##
   ## 11 sub-state modes (Filer, FileTree, Help, BufferManager, BookmarkManager,
   ## BackupManager, DiffViewer, Config, References, DocumentSymbol,
@@ -1212,43 +1217,50 @@ proc dispatchSubStateMode*(
     # never reach this dispatcher.
     return HandlerResult(kind: hrUnhandled)
   of EditorMode.Filer:
-    dispatchSubState(filerState, handleFilerMode, "Filer")
+    dispatchSubState(mskFiler, filer, handleFilerMode, "Filer")
   of EditorMode.FileTree:
-    dispatchSubState(fileTreeState, handleFileTreeMode, "FileTree")
+    dispatchSubState(mskFileTree, fileTree, handleFileTreeMode, "FileTree")
   of EditorMode.LogViewer:
     # Non-standard handler signature: takes the buffer directly because log
     # content lives in the TextBuffer; LogViewerState only carries contentKind
     # and is not threaded through the handler.
     return manager.handleLogViewerMode(buffer, state, viewport.height, keyCombo)
   of EditorMode.Help:
-    dispatchSubState(helpViewerState, handleHelpViewerMode, "Help viewer")
+    dispatchSubState(mskHelp, help, handleHelpViewerMode, "Help viewer")
   of EditorMode.BufferManager:
-    dispatchSubState(bufferManagerState, handleBufferManagerMode, "Buffer manager")
+    dispatchSubState(
+      mskBufferManager, bufferManager, handleBufferManagerMode, "Buffer manager"
+    )
   of EditorMode.BookmarkManager:
     dispatchSubState(
-      bookmarkManagerState, handleBookmarkManagerMode, "Bookmark manager"
+      mskBookmarkManager, bookmarkManager, handleBookmarkManagerMode, "Bookmark manager"
     )
   of EditorMode.BackupManager:
-    dispatchSubState(backupManagerState, handleBackupManagerMode, "Backup manager")
+    dispatchSubState(
+      mskBackupManager, backupManager, handleBackupManagerMode, "Backup manager"
+    )
   of EditorMode.DiffViewer:
-    dispatchSubState(diffViewerState, handleDiffViewerMode, "Diff viewer")
+    dispatchSubState(mskDiffViewer, diffViewer, handleDiffViewerMode, "Diff viewer")
   of EditorMode.Config:
-    dispatchSubState(configModeState, handleConfigMode, "Config mode")
+    dispatchSubState(mskConfig, config, handleConfigMode, "Config mode")
   of EditorMode.References:
-    dispatchSubState(referencesViewerState, handleReferencesMode, "References viewer")
+    dispatchSubState(
+      mskReferences, references, handleReferencesMode, "References viewer"
+    )
   of EditorMode.DocumentSymbol:
     dispatchSubState(
-      documentSymbolViewerState, handleDocumentSymbolMode, "Document symbol viewer"
+      mskDocumentSymbol, documentSymbol, handleDocumentSymbolMode,
+      "Document symbol viewer",
     )
   of EditorMode.CallHierarchy:
     dispatchSubState(
-      callHierarchyViewerState, handleCallHierarchyMode, "Call hierarchy viewer"
+      mskCallHierarchy, callHierarchy, handleCallHierarchyMode, "Call hierarchy viewer"
     )
   of EditorMode.Terminal:
     # Non-standard handler signature: takes `window` instead of viewport height.
-    if activeWindow.terminalState.isSome:
+    if activeWindow.modeState.kind == mskTerminal:
       return manager.handleTerminalMode(
-        activeWindow.terminalState.get, state, keyCombo, activeWindow
+        activeWindow.modeState.terminal, state, keyCombo, activeWindow
       )
     else:
       return

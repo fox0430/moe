@@ -34,7 +34,7 @@ proc renderConfig*(
     tabLineOffset: int,
 ) =
   ## Render the configuration mode view within a window's viewport
-  if window.configModeState.isNone:
+  if window.modeState.kind != mskConfig:
     return
 
   # Calculate reserved lines at bottom for bottom windows only
@@ -47,7 +47,7 @@ proc renderConfig*(
       0
 
   let
-    configState = window.configModeState.get
+    configState = window.modeState.config
     listStartY = window.viewport.y + tabLineOffset
     listEndY = window.viewport.y + window.viewport.height - reservedBottom
     width = window.viewport.width
@@ -228,7 +228,7 @@ proc renderTerminal*(
     tabLineOffset: int,
 ) =
   ## Render the terminal emulator grid within a window's viewport.
-  if window.terminalState.isNone:
+  if window.modeState.kind != mskTerminal:
     return
 
   let reservedBottom =
@@ -240,7 +240,7 @@ proc renderTerminal*(
       0
 
   let
-    termState = window.terminalState.get
+    termState = window.modeState.terminal
     grid = termState.grid
     startX = window.viewport.x
     startY = window.viewport.y + tabLineOffset

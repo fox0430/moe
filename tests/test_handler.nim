@@ -1246,13 +1246,13 @@ suite "handleMouseEvent - Wheel Scroll Filer Mode":
     # Add dummy entries
     for i in 0 ..< 20:
       filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
-    e.windowManager.windows[0].filerState = some(filerState)
+    e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
 
     let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 5)
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].filerState.get.selectedIndex == 3
+    check e.windowManager.windows[0].modeState.filer.selectedIndex == 3
 
   test "WheelUp scrolls filer selection up":
     let e = createTestEditorWithBuffer("")
@@ -1263,13 +1263,13 @@ suite "handleMouseEvent - Wheel Scroll Filer Mode":
     )
     for i in 0 ..< 20:
       filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
-    e.windowManager.windows[0].filerState = some(filerState)
+    e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
 
     let event = makeWheelEvent(mouse_logic.MouseButton.WheelUp, 10, 5)
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].filerState.get.selectedIndex == 2
+    check e.windowManager.windows[0].modeState.filer.selectedIndex == 2
 
   test "WheelUp clamps filer selection to 0":
     let e = createTestEditorWithBuffer("")
@@ -1280,13 +1280,13 @@ suite "handleMouseEvent - Wheel Scroll Filer Mode":
     )
     for i in 0 ..< 10:
       filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
-    e.windowManager.windows[0].filerState = some(filerState)
+    e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
 
     let event = makeWheelEvent(mouse_logic.MouseButton.WheelUp, 10, 5)
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].filerState.get.selectedIndex == 0
+    check e.windowManager.windows[0].modeState.filer.selectedIndex == 0
 
   test "WheelDown clamps filer selection to last entry":
     let e = createTestEditorWithBuffer("")
@@ -1297,13 +1297,13 @@ suite "handleMouseEvent - Wheel Scroll Filer Mode":
     )
     for i in 0 ..< 10:
       filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
-    e.windowManager.windows[0].filerState = some(filerState)
+    e.windowManager.windows[0].modeState = ModeState(kind: mskFiler, filer: filerState)
 
     let event = makeWheelEvent(mouse_logic.MouseButton.WheelDown, 10, 5)
     let handled = e.handleMouseEvent(event)
 
     check handled == true
-    check e.windowManager.windows[0].filerState.get.selectedIndex == 9
+    check e.windowManager.windows[0].modeState.filer.selectedIndex == 9
 
 proc makeLeftClickEvent(x, y: int): Event =
   Event(
@@ -1328,7 +1328,8 @@ proc createFilerEditor(
   )
   for i in 0 ..< entryCount:
     filerState.entries.add(FileEntry(name: "file" & $i, kind: fekFile))
-  result.windowManager.windows[0].filerState = some(filerState)
+  result.windowManager.windows[0].modeState =
+    ModeState(kind: mskFiler, filer: filerState)
 
 suite "handleMouseEvent - Left Click Filer Mode":
   test "Click selects correct entry (no tab line)":
@@ -1340,7 +1341,7 @@ suite "handleMouseEvent - Left Click Filer Mode":
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 3))
 
     check handled == true
-    check e.windowManager.windows[0].filerState.get.selectedIndex == 3
+    check e.windowManager.windows[0].modeState.filer.selectedIndex == 3
 
   test "Click selects correct entry with tab line offset":
     let e = createFilerEditor(20)
@@ -1351,7 +1352,7 @@ suite "handleMouseEvent - Left Click Filer Mode":
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 3))
 
     check handled == true
-    check e.windowManager.windows[0].filerState.get.selectedIndex == 2
+    check e.windowManager.windows[0].modeState.filer.selectedIndex == 2
 
   test "Click selects correct entry with topLine offset":
     let e = createFilerEditor(20, topLine = 5)
@@ -1362,7 +1363,7 @@ suite "handleMouseEvent - Left Click Filer Mode":
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 2))
 
     check handled == true
-    check e.windowManager.windows[0].filerState.get.selectedIndex == 7
+    check e.windowManager.windows[0].modeState.filer.selectedIndex == 7
 
   test "Click selects correct entry with both tab line and topLine":
     let e = createFilerEditor(20, topLine = 5)
@@ -1373,7 +1374,7 @@ suite "handleMouseEvent - Left Click Filer Mode":
     let handled = e.handleMouseEvent(makeLeftClickEvent(5, 4))
 
     check handled == true
-    check e.windowManager.windows[0].filerState.get.selectedIndex == 8
+    check e.windowManager.windows[0].modeState.filer.selectedIndex == 8
 
   test "Click on tab line area is ignored":
     let e = createFilerEditor(20)
@@ -1576,7 +1577,7 @@ suite "enterFilerInActiveWindow":
 
     check e.state.mode == EditorMode.Filer
     check e.activeWindow.mode == EditorMode.Filer
-    check e.activeWindow.filerState.isSome
+    check e.activeWindow.modeState.kind == mskFiler
     check e.activeWindow.cursor == BufferPosition(line: 0, column: 0)
     check e.activeWindow.viewport.topLine == 0
     check e.activeWindow.viewport.leftColumn == 0
@@ -1586,7 +1587,7 @@ suite "enterFilerInActiveWindow":
     let originalBuf = e.activeWindow.buffer
     e.enterFilerInActiveWindow("/tmp")
 
-    check e.activeWindow.filerState.get.originalBuffer == originalBuf
+    check e.activeWindow.originalBuffer == originalBuf
 
   test "Vsplit with directory opens Filer in new split window":
     let e = createTestEditorWithBuffer("hello")
@@ -1598,7 +1599,7 @@ suite "enterFilerInActiveWindow":
     e.enterFilerInActiveWindow("/tmp")
     check e.state.mode == EditorMode.Filer
     check e.activeWindow.mode == EditorMode.Filer
-    check e.activeWindow.filerState.isSome
+    check e.activeWindow.modeState.kind == mskFiler
 
 suite "handleCommandModeEvent - :putconfigfile":
   test "Overlay exited and config written":

@@ -37,7 +37,6 @@ type
     selectedIndex*: int # Currently selected entry index
     topLine*: int # Scroll position (first visible line)
     previousWindowIndex*: int # Window index to return to when closing
-    originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
 
   BufferInfo* = object ## Information about a buffer for initializing buffer manager
     filePath*: Option[string]

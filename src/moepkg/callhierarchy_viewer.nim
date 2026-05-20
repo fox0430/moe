@@ -40,7 +40,6 @@ type
     topLine*: int ## Scroll position (first visible line)
     viewKind*: CallHierarchyViewKind ## Type of view (prepare/incoming/outgoing)
     title*: string ## Title for the list
-    originalBuffer*: TextBuffer ## Saved original buffer (restored on exit)
 
 proc newCallHierarchyViewerState*(
     items: seq[lspTypes.CallHierarchyItem], viewKind: CallHierarchyViewKind

@@ -40,8 +40,9 @@ suite "renderConfig - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    # ConfigModeState is None by default
-    check e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState.isNone
+    # ConfigModeState is mskNone by default
+    check e.windowManager.windows[e.windowManager.activeWindowIndex].modeState.kind ==
+      mskNone
 
     # Should not crash
     e.renderConfig(buffer, e.activeWindow, true, 0)
@@ -52,8 +53,8 @@ suite "renderConfig - Basic behavior":
 
     # Set up config mode state
     let configState = newConfigModeState(e.config)
-    e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState =
-      some(configState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+      ModeState(kind: mskConfig, config: configState)
 
     # Should not crash
     e.renderConfig(buffer, e.activeWindow, true, 0)
@@ -64,8 +65,8 @@ suite "renderConfig - Basic behavior":
 
     let configState = newConfigModeState(e.config)
     configState.selectedIndex = 1
-    e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState =
-      some(configState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+      ModeState(kind: mskConfig, config: configState)
 
     e.renderConfig(buffer, e.activeWindow, true, 0)
 
@@ -77,8 +78,8 @@ suite "renderConfig - Basic behavior":
     var buffer = createTestBuffer()
 
     let configState = newConfigModeState(e.config)
-    e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState =
-      some(configState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+      ModeState(kind: mskConfig, config: configState)
 
     e.renderConfig(buffer, e.activeWindow, true, 0)
 
@@ -90,7 +91,7 @@ suite "renderConfig - Basic behavior":
     var buffer = createTestBuffer()
 
     let configState = newConfigModeState(e.config)
-    e.windowManager.windows[e.windowManager.activeWindowIndex].configModeState =
-      some(configState)
+    e.windowManager.windows[e.windowManager.activeWindowIndex].modeState =
+      ModeState(kind: mskConfig, config: configState)
 
     e.renderConfig(buffer, e.activeWindow, true, 0)

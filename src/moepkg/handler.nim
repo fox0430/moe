@@ -131,11 +131,11 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
   let viewportHeight = max(0, e.viewport.height - StatusAndCommandReserve - 1)
 
   let activeWin = e.activeWindow
-  if activeWin.recentFileModeState.isNone:
+  if activeWin.modeState.kind != mskRecentFile:
     return true
 
   let r = e.handlerManager.handleRecentFileMode(
-    activeWin.recentFileModeState.get, viewportHeight, keyCombo
+    activeWin.modeState.recentFile, viewportHeight, keyCombo
   )
 
   case r.kind
@@ -255,11 +255,11 @@ proc handleDebugModeEvent(e: Editor, event: Event): bool =
   let viewportHeight = max(0, e.viewport.height - StatusAndCommandReserve - 1)
 
   let activeWin = e.activeWindow
-  if activeWin.debugViewerState.isNone:
+  if activeWin.modeState.kind != mskDebug:
     e.state.statusMessage = "Debug viewer state not initialized"
     return true
 
-  let r = handleDebugModeKey(activeWin.debugViewerState.get, viewportHeight, keyCombo)
+  let r = handleDebugModeKey(activeWin.modeState.debug, viewportHeight, keyCombo)
 
   case r.kind
   of dvrEnterCommand:
@@ -509,8 +509,8 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
     const scrollLines = 3
 
     # Handle Filer mode scroll
-    if e.state.mode == EditorMode.Filer and e.activeWindow.filerState.isSome:
-      var filerState = e.activeWindow.filerState.get
+    if e.state.mode == EditorMode.Filer and e.activeWindow.modeState.kind == mskFiler:
+      let filerState = e.activeWindow.modeState.filer
       if filerState.entries.len > 0:
         if mouse.button == mouse_logic.MouseButton.WheelUp:
           filerState.selectedIndex = max(0, filerState.selectedIndex - scrollLines)
@@ -524,7 +524,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
             filerState.topLine = filerState.selectedIndex
           elif filerState.selectedIndex >= filerState.topLine + viewportHeight:
             filerState.topLine = filerState.selectedIndex - viewportHeight + 1
-        e.activeWindow.filerState = some(filerState)
         e.state.windowDisplay.needsFullRedraw = true
       return true
 
@@ -693,8 +692,8 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
     return true
 
   # Handle mouse click in Filer mode
-  if e.state.mode == EditorMode.Filer and e.activeWindow.filerState.isSome:
-    var filerState = e.activeWindow.filerState.get
+  if e.state.mode == EditorMode.Filer and e.activeWindow.modeState.kind == mskFiler:
+    let filerState = e.activeWindow.modeState.filer
     let
       tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
       reservedLines =
@@ -709,7 +708,6 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       let clickedIndex = filerState.topLine + adjustedMouseY
       if clickedIndex >= 0 and clickedIndex < filerState.entries.len:
         filerState.selectedIndex = clickedIndex
-        e.activeWindow.filerState = some(filerState)
         e.state.windowDisplay.needsFullRedraw = true
         return true
 
@@ -765,8 +763,8 @@ proc handleQuitEvent(e: Editor): bool =
   # Terminal-Input mode: forward Ctrl-C to PTY as \x03
   if e.state.mode == EditorMode.Terminal:
     let activeWin = e.activeWindow
-    if activeWin.terminalState.isSome:
-      let termState = activeWin.terminalState.get
+    if activeWin.modeState.kind == mskTerminal:
+      let termState = activeWin.modeState.terminal
       if termState.subMode == tsmInput:
         termState.feedInput("\x03")
         return true

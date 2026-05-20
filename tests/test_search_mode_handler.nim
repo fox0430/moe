@@ -60,7 +60,7 @@ proc createTestEditorInHelpMode(): Editor =
   result.textBuffer = helpBuffer
   result.windowManager.windows[0].buffer = helpBuffer
   result.windowManager.windows[0].bufferIds = @[helpBuffer.id]
-  result.windowManager.windows[0].helpViewerState = some(helpState)
+  result.windowManager.windows[0].modeState = ModeState(kind: mskHelp, help: helpState)
   result.state.mode = EditorMode.Help
 
 suite "handleSearchBackspace":
@@ -215,7 +215,7 @@ suite "Search mode - Help mode incremental search sync":
 
     performIncrementalSearch(e)
 
-    let helpState = e.activeWindow.helpViewerState.get
+    let helpState = e.activeWindow.modeState.help
     # selectedIndex should be updated to the matched line
     check helpState.selectedIndex == e.cursor.line
     check helpState.selectedIndex > 0
@@ -229,7 +229,7 @@ suite "Search mode - Help mode incremental search sync":
 
     performIncrementalSearch(e)
 
-    let helpState = e.activeWindow.helpViewerState.get
+    let helpState = e.activeWindow.modeState.help
     # selectedIndex should be restored to startPos line
     check helpState.selectedIndex == 5
 
@@ -243,7 +243,7 @@ suite "Search mode - Help mode incremental search sync":
     for ch in "Replace":
       handleSearchCharacterInput(e, $ch)
 
-    let helpState = e.activeWindow.helpViewerState.get
+    let helpState = e.activeWindow.modeState.help
     # selectedIndex should match cursor
     check helpState.selectedIndex == e.cursor.line
     check helpState.selectedIndex > 0
@@ -261,7 +261,7 @@ suite "Search mode - Help mode incremental search sync":
 
     finalizeSearch(e)
 
-    let helpState = e.activeWindow.helpViewerState.get
+    let helpState = e.activeWindow.modeState.help
     # selectedIndex should match cursor position, not reset to first match
     check helpState.selectedIndex == cursorLineAfterSearch
     check helpState.searchQuery == "Visual"
@@ -275,7 +275,7 @@ suite "Search mode - Help mode incremental search sync":
 
     finalizeSearch(e)
 
-    let helpState = e.activeWindow.helpViewerState.get
+    let helpState = e.activeWindow.modeState.help
     check helpState.selectedIndex == e.cursor.line
     check helpState.searchQuery == "Insert"
 
@@ -300,7 +300,7 @@ suite "Search mode - Help mode incremental search sync":
     handleSearchBackspace(e)
     handleSearchBackspace(e)
 
-    let helpState = e.activeWindow.helpViewerState.get
+    let helpState = e.activeWindow.modeState.help
     # Should be back to same position as first match
     check helpState.selectedIndex == firstMatchLine
 
@@ -314,7 +314,7 @@ suite "Search mode - Help mode incremental search sync":
 
     # Move selectedIndex away from startPos via incremental search
     performIncrementalSearch(e)
-    let helpState = e.activeWindow.helpViewerState.get
+    let helpState = e.activeWindow.modeState.help
     check helpState.selectedIndex != 10
 
     # Cancel should restore selectedIndex to startPos

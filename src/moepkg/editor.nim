@@ -1252,7 +1252,7 @@ proc enterRecentFileMode*(e: Editor): Result[void, string] =
   let splitResult = e.vsplitWithBuffer(recentBuffer)
   if splitResult.isErr:
     return err(splitResult.error)
-  e.activeWindow.recentFileModeState = some(state)
+  e.activeWindow.modeState = ModeState(kind: mskRecentFile, recentFile: state)
   ok()
 
 proc startSubstitutePreview*(e: Editor) =
@@ -1495,8 +1495,8 @@ proc maybeUpdateDebugBuffer*(e: Editor) =
   )
 
   # Update debug viewer state and create new buffer
-  if foundWindow.debugViewerState.isSome:
-    let debugState = foundWindow.debugViewerState.get
+  if foundWindow.modeState.kind == mskDebug:
+    let debugState = foundWindow.modeState.debug
     debugState.lines = debugLines
     let newDebugBuffer = debugState.createDebugTextBuffer()
 

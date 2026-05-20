@@ -42,8 +42,8 @@ proc pollTerminalWindows*(e: Editor) =
   ## Called on every render frame to ensure terminal output is up-to-date.
   ## Also handles automatic cleanup when the shell process exits.
   for i, window in e.windowManager.windows:
-    if window.mode == EditorMode.Terminal and window.terminalState.isSome:
-      let termState = window.terminalState.get
+    if window.mode == EditorMode.Terminal and window.modeState.kind == mskTerminal:
+      let termState = window.modeState.terminal
       if termState.subMode == tsmInput:
         # Resize terminal if window dimensions changed
         let (expectedCols, expectedRows) = e.calculateTerminalAreaDimensions(window)
@@ -344,8 +344,8 @@ proc main() =
         editor.windowManager.windows[editor.windowManager.activeWindowIndex]
       activeWin.mode = EditorMode.Filer
       let filerState = newFilerState(dirPath)
-      filerState.originalBuffer = activeWin.buffer
-      activeWin.filerState = some(filerState)
+      activeWin.saveOriginalBuffer()
+      activeWin.modeState = ModeState(kind: mskFiler, filer: filerState)
       activeWin.buffer = filerState.createFilerTextBuffer(editor.config.filer.showIcons)
       activeWin.cursor = BufferPosition(line: 0, column: 0)
       activeWin.viewport.topLine = 0

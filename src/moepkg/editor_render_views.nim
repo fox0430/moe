@@ -158,8 +158,8 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     case renderMode
     of EditorMode.Filer:
       # Filer uses virtual buffer pattern (like BufferManager)
-      if window.filerState.isSome:
-        window.cursor.line = window.filerState.get.selectedIndex
+      if window.modeState.kind == mskFiler:
+        window.cursor.line = window.modeState.filer.selectedIndex
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
@@ -169,80 +169,80 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       e.renderConfig(buffer, window, isBottomWindow, tabLineOffset)
     of EditorMode.Help:
       # Sync help viewer selection to window cursor
-      if window.helpViewerState.isSome:
-        window.cursor.line = window.helpViewerState.get.selectedIndex
+      if window.modeState.kind == mskHelp:
+        window.cursor.line = window.modeState.help.selectedIndex
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
     of EditorMode.BufferManager:
       # Sync buffer manager selection to window cursor (header at line 0)
-      if window.bufferManagerState.isSome:
-        window.cursor.line = window.bufferManagerState.get.selectedIndex + 1
+      if window.modeState.kind == mskBufferManager:
+        window.cursor.line = window.modeState.bufferManager.selectedIndex + 1
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
     of EditorMode.BookmarkManager:
       # Sync bookmark manager selection to window cursor (header at line 0)
-      if window.bookmarkManagerState.isSome:
-        window.cursor.line = window.bookmarkManagerState.get.selectedIndex + 1
+      if window.modeState.kind == mskBookmarkManager:
+        window.cursor.line = window.modeState.bookmarkManager.selectedIndex + 1
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
     of EditorMode.BackupManager:
       # Sync backup manager selection to window cursor (header at line 0)
-      if window.backupManagerState.isSome:
-        window.cursor.line = window.backupManagerState.get.selectedIndex + 1
+      if window.modeState.kind == mskBackupManager:
+        window.cursor.line = window.modeState.backupManager.selectedIndex + 1
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
     of EditorMode.DiffViewer:
       # Sync diff viewer selection to window cursor for normal view rendering
-      if window.diffViewerState.isSome:
-        window.cursor.line = window.diffViewerState.get.selectedLine
+      if window.modeState.kind == mskDiffViewer:
+        window.cursor.line = window.modeState.diffViewer.selectedLine
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
     of EditorMode.Debug:
       # Sync debug viewer selection to window cursor
-      if window.debugViewerState.isSome:
-        window.cursor.line = window.debugViewerState.get.selectedLine
+      if window.modeState.kind == mskDebug:
+        window.cursor.line = window.modeState.debug.selectedLine
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
     of EditorMode.References:
       # Sync references selection to window cursor (header at line 0)
-      if window.referencesViewerState.isSome:
-        window.cursor.line = window.referencesViewerState.get.selectedIndex + 1
+      if window.modeState.kind == mskReferences:
+        window.cursor.line = window.modeState.references.selectedIndex + 1
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
     of EditorMode.DocumentSymbol:
       # Sync document symbol selection to window cursor (header at line 0)
-      if window.documentSymbolViewerState.isSome:
-        window.cursor.line = window.documentSymbolViewerState.get.selectedIndex + 1
+      if window.modeState.kind == mskDocumentSymbol:
+        window.cursor.line = window.modeState.documentSymbol.selectedIndex + 1
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
     of EditorMode.CallHierarchy:
       # Sync call hierarchy selection to window cursor (header at line 0)
-      if window.callHierarchyViewerState.isSome:
-        window.cursor.line = window.callHierarchyViewerState.get.selectedIndex + 1
+      if window.modeState.kind == mskCallHierarchy:
+        window.cursor.line = window.modeState.callHierarchy.selectedIndex + 1
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
       )
     of EditorMode.RecentFile:
       # Sync recent file selection to window cursor (header at line 0)
-      if window.recentFileModeState.isSome:
-        window.cursor.line = window.recentFileModeState.get.selectedIndex + 1
+      if window.modeState.kind == mskRecentFile:
+        window.cursor.line = window.modeState.recentFile.selectedIndex + 1
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
@@ -250,7 +250,8 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     of EditorMode.Terminal:
       # Terminal mode renders grid directly in Input sub-mode,
       # or uses standard window rendering in Normal sub-mode
-      if window.terminalState.isSome and window.terminalState.get.subMode == tsmInput:
+      if window.modeState.kind == mskTerminal and
+          window.modeState.terminal.subMode == tsmInput:
         e.renderTerminal(buffer, window, isBottomWindow, tabLineOffset)
       else:
         e.renderWindow(
@@ -258,8 +259,8 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
         )
     of EditorMode.FileTree:
       # FileTree uses virtual buffer pattern (like Filer)
-      if window.fileTreeState.isSome:
-        window.cursor.line = window.fileTreeState.get.selectedIndex
+      if window.modeState.kind == mskFileTree:
+        window.cursor.line = window.modeState.fileTree.selectedIndex
         window.cursor.column = 0
       e.renderWindow(
         buffer, window, lineNumOffset, isBottomWindow, isActiveWindow, tabLineOffset
@@ -290,8 +291,9 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     # Terminal-Input mode manages its own screen cursor from the grid,
     # so skip the standard cursor calculation that would overwrite it.
     let isTerminalInput =
-      e.activeWindow.mode == EditorMode.Terminal and e.activeWindow.terminalState.isSome and
-      e.activeWindow.terminalState.get.subMode == tsmInput
+      e.activeWindow.mode == EditorMode.Terminal and
+      e.activeWindow.modeState.kind == mskTerminal and
+      e.activeWindow.modeState.terminal.subMode == tsmInput
 
     if not isTerminalInput:
       e.setActiveWindowScreenCursor(e.activeWindow)

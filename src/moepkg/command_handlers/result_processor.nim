@@ -87,7 +87,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     if editResult.isErr:
       e.state.statusMessage = "Error: " & editResult.error
     else:
-      activeWin.filerState = none(FilerState)
+      activeWin.modeState = ModeState(kind: mskNone)
       activeWin.mode = EditorMode.Normal
       e.setMode(EditorMode.Normal)
       if e.config.notification.screenNotifications and
@@ -105,7 +105,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.state.statusMessage = "Error: " & splitResult.error
     else:
       let activeWin = e.activeWindow
-      activeWin.filerState = none(FilerState)
+      activeWin.modeState = ModeState(kind: mskNone)
       activeWin.mode = EditorMode.Normal
       e.setMode(EditorMode.Normal)
       if e.config.notification.screenNotifications and
@@ -123,7 +123,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.state.statusMessage = "Error: " & splitResult.error
     else:
       let activeWin = e.activeWindow
-      activeWin.filerState = none(FilerState)
+      activeWin.modeState = ModeState(kind: mskNone)
       activeWin.mode = EditorMode.Normal
       e.setMode(EditorMode.Normal)
       if e.config.notification.screenNotifications and
@@ -156,8 +156,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
 
     # Reveal the opened file in the file tree (order-independent iteration)
     for win in e.windowManager.windows:
-      if win.mode == EditorMode.FileTree and win.fileTreeState.isSome:
-        win.fileTreeState.get.revealPath(r.fileTreeFilePath)
+      if win.mode == EditorMode.FileTree and win.modeState.kind == mskFileTree:
+        win.modeState.fileTree.revealPath(r.fileTreeFilePath)
         break
 
     if targetWinIdx >= 0:
@@ -194,8 +194,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrFilerDeleteFile:
     # Delete file/directory from filer
     let activeWin = e.activeWindow
-    if activeWin.filerState.isSome:
-      let deleteResult = activeWin.filerState.get.deleteSelected()
+    if activeWin.modeState.kind == mskFiler:
+      let deleteResult = activeWin.modeState.filer.deleteSelected()
       if deleteResult.success:
         # File/directory deleted successfully
         if e.config.notification.screenNotifications and
@@ -232,9 +232,9 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrLogViewerRefresh:
     # Refresh log viewer content by creating new buffer with updated content
     let activeWin = e.activeWindow
-    if activeWin.logViewerState.isSome:
+    if activeWin.modeState.kind == mskLogViewer:
       let logLines =
-        case activeWin.logViewerState.get.contentKind
+        case activeWin.modeState.logViewer.contentKind
         of lckEditor:
           getMessageLog()
         of lckLsp:
@@ -293,7 +293,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrDocumentSymbolJumpTo:
     # Jump to selected symbol (same file)
     let activeWin = e.activeWindow
-    let filePath = activeWin.documentSymbolViewerState.get.filePath
+    let filePath = activeWin.modeState.documentSymbol.filePath
     activeWin.clearModeState(EditorMode.DocumentSymbol)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
@@ -347,7 +347,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     activeWin.restoreOriginalBuffer(EditorMode.BufferManager)
     if bufferIndex >= 0 and bufferIndex < e.buffers.len:
       e.switchToBufferByIndex(bufferIndex)
-    activeWin.bufferManagerState = none(BufferManagerState)
+    activeWin.modeState = ModeState(kind: mskNone)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     return true
@@ -380,8 +380,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
 
         # Update buffer manager entries and regenerate TextBuffer
         let activeWin = e.activeWindow
-        if activeWin.bufferManagerState.isSome:
-          let bmState = activeWin.bufferManagerState.get
+        if activeWin.modeState.kind == mskBufferManager:
+          let bmState = activeWin.modeState.bufferManager
           bmState.updateEntries(e.getBufferInfos())
           activeWin.buffer = bmState.createBufferManagerTextBuffer()
           activeWin.cursor.line =
@@ -409,15 +409,15 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       let clampedLine = min(jumpLine, max(0, buf.len - 1))
       e.activeWindow.cursor = BufferPosition(line: clampedLine, column: 0)
       e.activeWindow.viewport.topLine = max(0, clampedLine - 5)
-    activeWin.bookmarkManagerState = none(BookmarkManagerState)
+    activeWin.modeState = ModeState(kind: mskNone)
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     return true
   of hrBookmarkManagerDelete:
     # Delete the bookmark and refresh
     let activeWin = e.activeWindow
-    if activeWin.bookmarkManagerState.isSome:
-      let bmState = activeWin.bookmarkManagerState.get
+    if activeWin.modeState.kind == mskBookmarkManager:
+      let bmState = activeWin.modeState.bookmarkManager
       bmState.deleteSelectedBookmark(e.buffers)
       activeWin.buffer = bmState.createBookmarkManagerTextBuffer()
       activeWin.cursor.line = min(bmState.selectedIndex + 1, activeWin.buffer.len - 1)
@@ -512,8 +512,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrBackupManagerRefresh:
     # Refresh backup list and regenerate TextBuffer
     let activeWin = e.activeWindow
-    if activeWin.backupManagerState.isSome:
-      let bkState = activeWin.backupManagerState.get
+    if activeWin.modeState.kind == mskBackupManager:
+      let bkState = activeWin.modeState.backupManager
       bkState.refresh()
       activeWin.buffer = bkState.createBackupManagerTextBuffer()
       activeWin.cursor.line = min(bkState.selectedIndex + 1, activeWin.buffer.len - 1)
@@ -523,8 +523,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     # Restore the selected backup
     let backupIndex = r.restoreBackupIndex
     let activeWin = e.activeWindow
-    if activeWin.backupManagerState.isSome:
-      let bkState = activeWin.backupManagerState.get
+    if activeWin.modeState.kind == mskBackupManager:
+      let bkState = activeWin.modeState.backupManager
       # Backup current buffer before restore (in case user wants to undo)
       discard
         backupBuffer(e.buffer.filePath, e.buffer.getFileContent(), e.config.autoBackup)
@@ -562,8 +562,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     # Delete the selected backup
     let backupIndex = r.deleteBackupIndex
     let activeWin = e.activeWindow
-    if activeWin.backupManagerState.isSome:
-      let bkState = activeWin.backupManagerState.get
+    if activeWin.modeState.kind == mskBackupManager:
+      let bkState = activeWin.modeState.backupManager
       if bkState.deleteBackup(backupIndex):
         e.state.statusMessage = "Backup deleted"
         # Regenerate TextBuffer after deletion
@@ -577,19 +577,19 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     # Open diff viewer for the selected backup
     let backupIndex = r.diffBackupIndex
     let activeWin = e.activeWindow
-    if activeWin.backupManagerState.isSome:
-      let bkState = activeWin.backupManagerState.get
+    if activeWin.modeState.kind == mskBackupManager:
+      let bkState = activeWin.modeState.backupManager
       if backupIndex >= 0 and backupIndex < bkState.entries.len:
         let entry = bkState.entries[backupIndex]
         # Initialize diff viewer with source and backup paths
         let dvState = initDiffViewerState(bkState.sourceFilePath, entry.fullPath)
         # Save original buffer and replace with diff content TextBuffer
-        dvState.originalBuffer = activeWin.buffer
+        activeWin.saveOriginalBuffer()
         activeWin.buffer = dvState.createDiffTextBuffer()
         activeWin.cursor = BufferPosition(line: 0, column: 0)
         activeWin.viewport.topLine = 0
         activeWin.viewport.leftColumn = 0
-        activeWin.diffViewerState = some(dvState)
+        activeWin.modeState = ModeState(kind: mskDiffViewer, diffViewer: dvState)
         e.state.previousMode = e.state.mode
         e.setMode(EditorMode.DiffViewer)
         activeWin.mode = EditorMode.DiffViewer
@@ -812,7 +812,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
 
     # Initialize filer state when entering Filer mode
     let activeWin = e.activeWindow
-    if newMode == EditorMode.Filer and activeWin.filerState.isNone:
+    if newMode == EditorMode.Filer and activeWin.modeState.kind != mskFiler:
       # Use buffer's directory or current working directory
       let startPath =
         if activeBuffer.filePath.isSome:
@@ -820,8 +820,8 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
         else:
           getCurrentDir()
       let filerState = newFilerState(startPath)
-      filerState.originalBuffer = activeWin.buffer
-      activeWin.filerState = some(filerState)
+      activeWin.saveOriginalBuffer()
+      activeWin.modeState = ModeState(kind: mskFiler, filer: filerState)
       activeWin.buffer = filerState.createFilerTextBuffer(e.config.filer.showIcons)
       activeWin.cursor = BufferPosition(line: 0, column: 0)
       activeWin.viewport.topLine = 0
@@ -833,7 +833,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       let bmState = newBufferManagerState()
       bmState.updateEntries(e.getBufferInfos())
       bmState.previousWindowIndex = e.windowManager.activeWindowIndex
-      activeWin.bufferManagerState = some(bmState)
+      activeWin.modeState = ModeState(kind: mskBufferManager, bufferManager: bmState)
       activeWin.mode = EditorMode.BufferManager
 
     # Initialize bookmark manager state when entering BookmarkManager mode
@@ -841,8 +841,9 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       let bkmState = newBookmarkManagerState()
       bkmState.updateEntries(e.buffers)
       bkmState.previousWindowIndex = e.windowManager.activeWindowIndex
-      bkmState.originalBuffer = activeWin.buffer
-      activeWin.bookmarkManagerState = some(bkmState)
+      activeWin.saveOriginalBuffer()
+      activeWin.modeState =
+        ModeState(kind: mskBookmarkManager, bookmarkManager: bkmState)
       activeWin.buffer = bkmState.createBookmarkManagerTextBuffer()
       activeWin.cursor = BufferPosition(line: 0, column: 0)
       activeWin.viewport.topLine = 0
@@ -873,19 +874,20 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   # Filer buffer regeneration after state changes (e.g. enterDirectory, toggleHidden)
   if e.state.mode == EditorMode.Filer:
     let filerWin = e.activeWindow
-    if filerWin.filerState.isSome and filerWin.filerState.get.needsBufferRefresh:
+    if filerWin.modeState.kind == mskFiler and
+        filerWin.modeState.filer.needsBufferRefresh:
       filerWin.buffer =
-        filerWin.filerState.get.createFilerTextBuffer(e.config.filer.showIcons)
-      filerWin.filerState.get.needsBufferRefresh = false
+        filerWin.modeState.filer.createFilerTextBuffer(e.config.filer.showIcons)
+      filerWin.modeState.filer.needsBufferRefresh = false
 
   # FileTree buffer regeneration after state changes (check all windows since
   # the file tree sidebar may not be the active window)
   for win in e.windowManager.windows:
-    if win.mode == EditorMode.FileTree and win.fileTreeState.isSome and
-        win.fileTreeState.get.needsBufferRefresh:
+    if win.mode == EditorMode.FileTree and win.modeState.kind == mskFileTree and
+        win.modeState.fileTree.needsBufferRefresh:
       win.buffer =
-        win.fileTreeState.get.createFileTreeTextBuffer(e.config.filer.showIcons)
-      win.fileTreeState.get.needsBufferRefresh = false
+        win.modeState.fileTree.createFileTreeTextBuffer(e.config.filer.showIcons)
+      win.modeState.fileTree.needsBufferRefresh = false
 
   # Set status message if any
   let statusMsg = r.getStatusMessage()

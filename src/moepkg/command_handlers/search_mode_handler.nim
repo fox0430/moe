@@ -40,11 +40,11 @@ import command_mode_handler
 
 proc syncHelpViewerIndex(e: Editor, line: int) =
   ## Sync help viewer selectedIndex with the given line position.
-  ## No-op if not in Help mode or helpViewerState is not set.
+  ## No-op if not in Help mode or the variant payload is missing.
   if e.state.mode == EditorMode.Help:
     let window = e.activeWindow
-    if window.helpViewerState.isSome:
-      window.helpViewerState.get.selectedIndex = line
+    if window.modeState.kind == mskHelp:
+      window.modeState.help.selectedIndex = line
 
 proc executeSearchFromCurrentPosition(e: Editor): bool =
   ## Execute search from current position (used when incsearch is disabled)
@@ -132,8 +132,8 @@ proc finalizeSearch(e: Editor) =
     # Sync search query and position to help viewer state if in Help mode
     if e.state.mode == EditorMode.Help:
       let window = e.activeWindow
-      if window.helpViewerState.isSome:
-        window.helpViewerState.get.setSearchQuery(e.state.search.text)
+      if window.modeState.kind == mskHelp:
+        window.modeState.help.setSearchQuery(e.state.search.text)
     e.syncHelpViewerIndex(e.cursor.line)
 
   # Exit overlay and return to base mode
