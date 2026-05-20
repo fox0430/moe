@@ -19,86 +19,56 @@
 
 ## Per-window mode state lifecycle.
 ## Restores the original buffer for modes that swap the window buffer
-## (Filer, BufferManager, Terminal, ...) and clears the matching mode
-## state Option fields on `EditorWindow`.
+## (Filer, BufferManager, Terminal, ...) and resets the `modeState`
+## variant on `EditorWindow` back to `mskNone`.
 
 import std/options
 
-import editor_types, terminal_mode
+import editor_types, terminal_mode, message_log
+
+proc saveOriginalBuffer*(win: EditorWindow) =
+  ## Stash the current buffer as `originalBuffer` so a later mode exit can
+  ## restore it. Logs a warning if a previous save is still live — that
+  ## means an upstream mode transition skipped `clearModeState` and the
+  ## prior original is about to be lost.
+  if win.originalBuffer != nil:
+    addMessageLog(
+      "saveOriginalBuffer: overwriting existing originalBuffer " & "(modeState.kind=" &
+        $win.modeState.kind & ") — missing clearModeState upstream?"
+    )
+  win.originalBuffer = win.buffer
+
+proc restoreOriginalBufferUnchecked(win: EditorWindow) =
+  if win.originalBuffer != nil:
+    win.buffer = win.originalBuffer
+    win.originalBuffer = nil
 
 proc restoreOriginalBuffer*(win: EditorWindow, mode: EditorMode) =
-  ## Restore the original buffer for modes that replace the window buffer.
-  case mode
-  of EditorMode.Filer:
-    if win.filerState.isSome and win.filerState.get.originalBuffer != nil:
-      win.buffer = win.filerState.get.originalBuffer
-  of EditorMode.BufferManager:
-    if win.bufferManagerState.isSome and win.bufferManagerState.get.originalBuffer != nil:
-      win.buffer = win.bufferManagerState.get.originalBuffer
-  of EditorMode.BookmarkManager:
-    if win.bookmarkManagerState.isSome and
-        win.bookmarkManagerState.get.originalBuffer != nil:
-      win.buffer = win.bookmarkManagerState.get.originalBuffer
-  of EditorMode.DiffViewer:
-    if win.diffViewerState.isSome and win.diffViewerState.get.originalBuffer != nil:
-      win.buffer = win.diffViewerState.get.originalBuffer
-  of EditorMode.References:
-    if win.referencesViewerState.isSome and
-        win.referencesViewerState.get.originalBuffer != nil:
-      win.buffer = win.referencesViewerState.get.originalBuffer
-  of EditorMode.DocumentSymbol:
-    if win.documentSymbolViewerState.isSome and
-        win.documentSymbolViewerState.get.originalBuffer != nil:
-      win.buffer = win.documentSymbolViewerState.get.originalBuffer
-  of EditorMode.CallHierarchy:
-    if win.callHierarchyViewerState.isSome and
-        win.callHierarchyViewerState.get.originalBuffer != nil:
-      win.buffer = win.callHierarchyViewerState.get.originalBuffer
-  of EditorMode.Terminal:
-    if win.terminalState.isSome and win.terminalState.get.originalBuffer != nil:
-      win.buffer = win.terminalState.get.originalBuffer
-  of EditorMode.FileTree:
-    discard # FileTree uses its own window; no original buffer to restore
-  else:
-    discard
+  ## Restore the saved buffer (if any) for modes that replace the window
+  ## buffer on entry. No-op when the live ModeState variant does not match
+  ## `mode` (defensive against unmatched callers) or when no buffer was
+  ## saved (modes that open their own split window — Help, LogViewer,
+  ## BackupManager, Debug, Config, RecentFile, FileTree).
+  if win.modeState.kind != modeStateKind(mode):
+    return
+  win.restoreOriginalBufferUnchecked()
 
 proc clearModeState*(win: EditorWindow, mode: EditorMode) =
-  ## Restore original buffer (if any) and clear the mode state field.
-  win.restoreOriginalBuffer(mode)
+  ## Restore the original buffer (if any), run mode-specific cleanup, and
+  ## reset the `modeState` variant back to `mskNone`. All side effects
+  ## are gated on the variant actually matching `mode`, so callers that
+  ## clear an unrelated mode do not disturb whatever state happens to be
+  ## live on the window.
+  if win.modeState.kind != modeStateKind(mode):
+    return
 
-  case mode
-  of EditorMode.Filer:
-    win.filerState = none(FilerState)
-  of EditorMode.LogViewer:
-    win.logViewerState = none(LogViewerState)
-  of EditorMode.Help:
-    win.helpViewerState = none(HelpViewerState)
-  of EditorMode.BufferManager:
-    win.bufferManagerState = none(BufferManagerState)
-  of EditorMode.BookmarkManager:
-    win.bookmarkManagerState = none(BookmarkManagerState)
-  of EditorMode.BackupManager:
-    win.backupManagerState = none(BackupManagerState)
-  of EditorMode.DiffViewer:
-    win.diffViewerState = none(DiffViewerState)
-  of EditorMode.Debug:
-    win.debugViewerState = none(DebugViewerState)
-  of EditorMode.Config:
-    win.configModeState = none(ConfigModeState)
-  of EditorMode.References:
-    win.referencesViewerState = none(ReferencesViewerState)
-  of EditorMode.DocumentSymbol:
-    win.documentSymbolViewerState = none(DocumentSymbolViewerState)
-  of EditorMode.CallHierarchy:
-    win.callHierarchyViewerState = none(CallHierarchyViewerState)
-  of EditorMode.RecentFile:
-    win.recentFileModeState = none(RecentFileModeState)
-  of EditorMode.Terminal:
-    if win.terminalState.isSome:
-      win.terminalState.get.cleanup()
-    win.terminalState = none(TerminalState)
-  of EditorMode.FileTree:
-    win.fileTreeState = none(FileTreeState)
+  win.restoreOriginalBufferUnchecked()
+
+  # Terminal owns a PTY that must be cleaned up before the ref is dropped.
+  if win.modeState.kind == mskTerminal:
+    win.modeState.terminal.cleanup()
+
+  if win.modeState.kind == mskFileTree:
     win.fixedWidth = none(int)
-  else:
-    discard
+
+  win.modeState = ModeState(kind: mskNone)

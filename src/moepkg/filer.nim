@@ -50,7 +50,6 @@ type
     showHidden*: bool # Whether to show hidden files
     topLine*: int # Scroll position (first visible line)
     previousPath*: Option[string] # Path to return to when closing filer
-    originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
     needsBufferRefresh*: bool # Flag to trigger buffer regeneration after state changes
 
 proc isHiddenFile(name: string): bool =

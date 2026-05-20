@@ -496,10 +496,10 @@ suite "Help viewer - split window open and close":
     e.setMode(EditorMode.Help)
     let activeWin = e.activeWindow
     activeWin.mode = EditorMode.Help
-    activeWin.helpViewerState = some(helpState)
+    activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
 
     check activeWin.mode == EditorMode.Help
-    check activeWin.helpViewerState.isSome
+    check activeWin.modeState.kind == mskHelp
 
   test "Close help viewer removes split window and buffer":
     let e = createTestEditor()
@@ -517,7 +517,7 @@ suite "Help viewer - split window open and close":
     e.setMode(EditorMode.Help)
     let activeWin = e.activeWindow
     activeWin.mode = EditorMode.Help
-    activeWin.helpViewerState = some(helpState)
+    activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
 
     # Close help viewer (same logic as hrHelpViewerQuit)
     activeWin.clearModeState(EditorMode.Help)
@@ -548,7 +548,7 @@ suite "Help viewer - split window open and close":
     let helpState = newHelpViewerState()
     let activeWin = e.activeWindow
     activeWin.mode = EditorMode.Help
-    activeWin.helpViewerState = some(helpState)
+    activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
 
     # Close help viewer - should not close window since only 1 window
     activeWin.clearModeState(EditorMode.Help)
@@ -556,4 +556,4 @@ suite "Help viewer - split window open and close":
     e.setMode(EditorMode.Normal)
     # windows.len == 1, so skip closing
     check e.windowManager.windows.len == 1
-    check activeWin.helpViewerState.isNone
+    check activeWin.modeState.kind == mskNone

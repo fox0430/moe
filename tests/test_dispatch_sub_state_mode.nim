@@ -187,11 +187,32 @@ suite "dispatchSubStateMode - missing sub-state returns hrError":
     check r.kind == hrError
     check r.errorMessage == "Terminal state not initialized"
 
+suite "dispatchSubStateMode - wrong-kind variant returns hrError":
+  # If `mode` and `modeState.kind` disagree (a transient inconsistency we
+  # never expect in production, but worth pinning), the dispatcher must
+  # treat it as "state not initialized" rather than dereferencing the
+  # wrong variant payload.
+  test "Filer mode with Help variant payload yields Filer hrError":
+    let (manager, editor, keyCombo) = setupDispatchTest(EditorMode.Filer)
+    editor.activeWindow.modeState = ModeState(kind: mskHelp, help: newHelpViewerState())
+    let r = manager.dispatchSubStateMode(editor, keyCombo)
+    check r.kind == hrError
+    check r.errorMessage == "Filer state not initialized"
+
+  test "Terminal mode with Filer variant payload yields Terminal hrError":
+    let (manager, editor, keyCombo) = setupDispatchTest(EditorMode.Terminal)
+    editor.activeWindow.modeState =
+      ModeState(kind: mskFiler, filer: newFilerState(getTempDir()))
+    let r = manager.dispatchSubStateMode(editor, keyCombo)
+    check r.kind == hrError
+    check r.errorMessage == "Terminal state not initialized"
+
 suite "dispatchSubStateMode - happy path smoke (Filer)":
   test "Filer: filerState=some forwards to handleFilerMode":
     let (manager, editor, keyCombo) = setupDispatchTest(EditorMode.Filer)
     # newFilerState requires an existing directory; use the OS temp dir.
-    editor.activeWindow.filerState = some(newFilerState(getTempDir()))
+    let fs = newFilerState(getTempDir())
+    editor.activeWindow.modeState = ModeState(kind: mskFiler, filer: fs)
     let r = manager.dispatchSubStateMode(editor, keyCombo)
     # 'a' is not a registered filer key — handler returns hrUnhandled, but
     # importantly we did NOT hit the hrError branch.

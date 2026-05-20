@@ -77,6 +77,49 @@ type
     x*: int
     y*: int
 
+  ModeStateKind* {.pure.} = enum
+    ## Discriminator for `ModeState`. `mskNone` covers all modes that do not
+    ## carry per-window state (Normal/Insert/Visual/... and overlays).
+    mskNone
+    mskFiler
+    mskFileTree
+    mskLogViewer
+    mskHelp
+    mskBufferManager
+    mskBookmarkManager
+    mskBackupManager
+    mskDiffViewer
+    mskDebug
+    mskConfig
+    mskReferences
+    mskDocumentSymbol
+    mskCallHierarchy
+    mskRecentFile
+    mskTerminal
+
+  ModeState* = object
+    ## Per-window mode-specific state, replacing the previous bundle of
+    ## `Option[XxxState]` fields on `EditorWindow`. At most one mode owns the
+    ## window at a time, so a tagged union enforces the exclusivity that was
+    ## previously a convention.
+    case kind*: ModeStateKind
+    of mskNone: discard
+    of mskFiler: filer*: FilerState
+    of mskFileTree: fileTree*: FileTreeState
+    of mskLogViewer: logViewer*: LogViewerState
+    of mskHelp: help*: HelpViewerState
+    of mskBufferManager: bufferManager*: BufferManagerState
+    of mskBookmarkManager: bookmarkManager*: BookmarkManagerState
+    of mskBackupManager: backupManager*: BackupManagerState
+    of mskDiffViewer: diffViewer*: DiffViewerState
+    of mskDebug: debug*: DebugViewerState
+    of mskConfig: config*: ConfigModeState
+    of mskReferences: references*: ReferencesViewerState
+    of mskDocumentSymbol: documentSymbol*: DocumentSymbolViewerState
+    of mskCallHierarchy: callHierarchy*: CallHierarchyViewerState
+    of mskRecentFile: recentFile*: RecentFileModeState
+    of mskTerminal: terminal*: TerminalState
+
   EditorWindow* = ref object
     ## Represents a split window with its own buffer and viewport
     buffer*: TextBuffer
@@ -91,23 +134,10 @@ type
     previousMode*: EditorMode # Previous mode for ESC handling
     preferredColumn*: int # Preferred column for vertical movement (vim's $ behavior)
     screenCursor*: CursorPosition # Screen cursor position (x/y)
-    filerState*: Option[FilerState] # File explorer state
-    logViewerState*: Option[LogViewerState] # Log viewer state
-    helpViewerState*: Option[HelpViewerState] # Help viewer state
-    bufferManagerState*: Option[BufferManagerState] # Buffer manager state
-    bookmarkManagerState*: Option[BookmarkManagerState] # Bookmark manager state
-    backupManagerState*: Option[BackupManagerState] # Backup manager state
-    diffViewerState*: Option[DiffViewerState] # Diff viewer state
-    debugViewerState*: Option[DebugViewerState] # Debug viewer state
-    configModeState*: Option[ConfigModeState] # Configuration mode state
-    referencesViewerState*: Option[ReferencesViewerState] # References viewer state
-    documentSymbolViewerState*: Option[DocumentSymbolViewerState]
-      # Document symbol viewer state
-    callHierarchyViewerState*: Option[CallHierarchyViewerState]
-      # Call hierarchy viewer state
-    recentFileModeState*: Option[RecentFileModeState] # Recent file mode state
-    terminalState*: Option[TerminalState] # Terminal mode state
-    fileTreeState*: Option[FileTreeState] # File tree sidebar state
+    modeState*: ModeState # Per-window mode-specific state (variant)
+    originalBuffer*: TextBuffer
+      # Saved buffer for modes that swap the window buffer (Filer, Terminal,
+      # BufferManager, ...). Set on mode entry, restored and cleared on exit.
     fixedWidth*: Option[int] # Fixed width for sidebar windows (skips equalize)
 
   SearchDirection* = enum
@@ -796,3 +826,26 @@ proc effectiveMode*(state: EditorState): EditorMode =
   ## Returns the overlay mode if active, otherwise the base mode
   ## This is for backward compatibility with code that checks state.mode
   state.mode
+
+proc modeStateKind*(mode: EditorMode): ModeStateKind =
+  ## Map an `EditorMode` to the `ModeStateKind` it expects on `EditorWindow`.
+  ## Modes that do not own per-window state (Normal/Insert/Visual/... and
+  ## the QuickRun/Command/Replace/Replace/Search overlay modes) return
+  ## `mskNone`.
+  case mode
+  of EditorMode.Filer: mskFiler
+  of EditorMode.FileTree: mskFileTree
+  of EditorMode.LogViewer: mskLogViewer
+  of EditorMode.Help: mskHelp
+  of EditorMode.BufferManager: mskBufferManager
+  of EditorMode.BookmarkManager: mskBookmarkManager
+  of EditorMode.BackupManager: mskBackupManager
+  of EditorMode.DiffViewer: mskDiffViewer
+  of EditorMode.Debug: mskDebug
+  of EditorMode.Config: mskConfig
+  of EditorMode.References: mskReferences
+  of EditorMode.DocumentSymbol: mskDocumentSymbol
+  of EditorMode.CallHierarchy: mskCallHierarchy
+  of EditorMode.RecentFile: mskRecentFile
+  of EditorMode.Terminal: mskTerminal
+  else: mskNone

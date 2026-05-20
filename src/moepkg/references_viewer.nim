@@ -39,7 +39,6 @@ type
     selectedIndex*: int # Currently selected item index
     topLine*: int # Scroll position (first visible line)
     title*: string # Title for the list (e.g., "References", "Definitions")
-    originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
 
 proc newReferencesViewerState*(
     items: seq[ReferenceItem], title: string = "References"

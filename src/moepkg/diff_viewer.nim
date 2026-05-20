@@ -45,7 +45,6 @@ type
     sourceFilePath*: string # Path of the source file (current version)
     backupFilePath*: string # Path of the backup file (old version)
     errorMessage*: string # Error message if diff failed
-    originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
 
 proc newDiffViewerState*(): DiffViewerState =
   DiffViewerState(

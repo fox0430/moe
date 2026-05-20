@@ -24,8 +24,9 @@ import std/[options, strutils, json, monotimes, times]
 import pkg/results
 
 import
-  editor_types, editor_file, signature_help, documentsymbol_viewer, references_viewer,
-  callhierarchy_viewer, lsp_service, lsp_integration, buffer, unicode_utils
+  editor_types, editor_file, editor_window_state, signature_help, documentsymbol_viewer,
+  references_viewer, callhierarchy_viewer, lsp_service, lsp_integration, buffer,
+  unicode_utils
 import lsp/protocol/types as lspTypes
 import command_handlers/[handler_manager, insert_handler]
 
@@ -246,12 +247,12 @@ proc handleLspLocations(
     e.setMode(EditorMode.References)
     let refState = newReferencesViewerState(items, title)
     let activeWin = e.activeWindow
-    refState.originalBuffer = activeWin.buffer
+    activeWin.saveOriginalBuffer()
     activeWin.buffer = refState.createReferencesTextBuffer()
     activeWin.cursor = BufferPosition(line: 0, column: 0)
     activeWin.viewport.topLine = 0
     activeWin.viewport.leftColumn = 0
-    activeWin.referencesViewerState = some(refState)
+    activeWin.modeState = ModeState(kind: mskReferences, references: refState)
     e.state.statusMessage = $locations.len & " " & title.toLowerAscii() & " found"
     return true
 
@@ -531,20 +532,22 @@ proc pollLspCallHierarchy*(e: Editor) =
         # Enter CallHierarchy mode (only set previousMode if not already in CallHierarchy)
         let chState = newCallHierarchyViewerState(items, chvkIncoming)
         let activeWin = e.activeWindow
-        # Preserve originalBuffer from previous CallHierarchy state if switching views
+        # Preserve originalBuffer from the previous CallHierarchy entry when
+        # switching between Incoming and Outgoing views; otherwise we are
+        # entering CallHierarchy fresh and should save the current buffer.
         if e.state.mode == EditorMode.CallHierarchy and
-            activeWin.callHierarchyViewerState.isSome and
-            activeWin.callHierarchyViewerState.get.originalBuffer != nil:
-          chState.originalBuffer = activeWin.callHierarchyViewerState.get.originalBuffer
+            activeWin.modeState.kind == mskCallHierarchy and
+            activeWin.originalBuffer != nil:
+          discard # activeWin.originalBuffer is already set
         else:
           e.state.previousMode = e.state.mode
-          chState.originalBuffer = activeWin.buffer
+          activeWin.saveOriginalBuffer()
         e.setMode(EditorMode.CallHierarchy)
         activeWin.buffer = chState.createCallHierarchyTextBuffer()
         activeWin.cursor = BufferPosition(line: 0, column: 0)
         activeWin.viewport.topLine = 0
         activeWin.viewport.leftColumn = 0
-        activeWin.callHierarchyViewerState = some(chState)
+        activeWin.modeState = ModeState(kind: mskCallHierarchy, callHierarchy: chState)
         e.state.statusMessage = $items.len & " incoming calls found"
       else:
         e.state.statusMessage = "No incoming calls found"
@@ -567,20 +570,22 @@ proc pollLspCallHierarchy*(e: Editor) =
         # Enter CallHierarchy mode (only set previousMode if not already in CallHierarchy)
         let chState = newCallHierarchyViewerState(items, chvkOutgoing)
         let activeWin = e.activeWindow
-        # Preserve originalBuffer from previous CallHierarchy state if switching views
+        # Preserve originalBuffer from the previous CallHierarchy entry when
+        # switching between Incoming and Outgoing views; otherwise we are
+        # entering CallHierarchy fresh and should save the current buffer.
         if e.state.mode == EditorMode.CallHierarchy and
-            activeWin.callHierarchyViewerState.isSome and
-            activeWin.callHierarchyViewerState.get.originalBuffer != nil:
-          chState.originalBuffer = activeWin.callHierarchyViewerState.get.originalBuffer
+            activeWin.modeState.kind == mskCallHierarchy and
+            activeWin.originalBuffer != nil:
+          discard # activeWin.originalBuffer is already set
         else:
           e.state.previousMode = e.state.mode
-          chState.originalBuffer = activeWin.buffer
+          activeWin.saveOriginalBuffer()
         e.setMode(EditorMode.CallHierarchy)
         activeWin.buffer = chState.createCallHierarchyTextBuffer()
         activeWin.cursor = BufferPosition(line: 0, column: 0)
         activeWin.viewport.topLine = 0
         activeWin.viewport.leftColumn = 0
-        activeWin.callHierarchyViewerState = some(chState)
+        activeWin.modeState = ModeState(kind: mskCallHierarchy, callHierarchy: chState)
         e.state.statusMessage = $items.len & " outgoing calls found"
       else:
         e.state.statusMessage = "No outgoing calls found"
@@ -987,12 +992,13 @@ proc pollLspDocumentSymbols*(e: Editor) =
       e.state.previousMode = e.state.mode
       e.setMode(EditorMode.DocumentSymbol)
       let activeWin = e.activeWindow
-      viewerState.originalBuffer = activeWin.buffer
+      activeWin.saveOriginalBuffer()
       activeWin.buffer = viewerState.createDocumentSymbolTextBuffer()
       activeWin.cursor = BufferPosition(line: 0, column: 0)
       activeWin.viewport.topLine = 0
       activeWin.viewport.leftColumn = 0
-      activeWin.documentSymbolViewerState = some(viewerState)
+      activeWin.modeState =
+        ModeState(kind: mskDocumentSymbol, documentSymbol: viewerState)
       e.state.statusMessage = $symbolCount & " symbols found"
     else:
       e.state.statusMessage = "No symbols found"

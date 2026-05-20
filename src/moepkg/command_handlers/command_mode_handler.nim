@@ -165,8 +165,8 @@ proc enterFilerInActiveWindow*(e: Editor, path: string) =
   let activeWin = e.activeWindow
   activeWin.mode = EditorMode.Filer
   let filerState = newFilerState(path)
-  filerState.originalBuffer = activeWin.buffer
-  activeWin.filerState = some(filerState)
+  activeWin.saveOriginalBuffer()
+  activeWin.modeState = ModeState(kind: mskFiler, filer: filerState)
   activeWin.buffer = filerState.createFilerTextBuffer(e.config.filer.showIcons)
   activeWin.cursor = BufferPosition(line: 0, column: 0)
   activeWin.viewport.topLine = 0
@@ -229,7 +229,7 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
     cursor: BufferPosition(line: 0, column: 0),
     active: false,
     mode: EditorMode.FileTree,
-    fileTreeState: some(ftState),
+    modeState: ModeState(kind: mskFileTree, fileTree: ftState),
     fixedWidth: some(ftWidth),
   )
 
@@ -322,8 +322,8 @@ proc enterTerminalInActiveWindow(e: Editor, command: string) =
     return
 
   let termState = termResult.get
-  termState.originalBuffer = activeWin.buffer
-  activeWin.terminalState = some(termState)
+  activeWin.saveOriginalBuffer()
+  activeWin.modeState = ModeState(kind: mskTerminal, terminal: termState)
   # Create a placeholder buffer (grid will be rendered directly)
   activeWin.buffer = newTextBuffer("")
   activeWin.cursor = BufferPosition(line: 0, column: 0)
@@ -1065,7 +1065,8 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.setMode(EditorMode.LogViewer)
           let activeWin = e.activeWindow
           activeWin.mode = EditorMode.LogViewer
-          activeWin.logViewerState = some(newLogViewerState(lckEditor))
+          let logState = newLogViewerState(lckEditor)
+          activeWin.modeState = ModeState(kind: mskLogViewer, logViewer: logState)
       of hrLspLog:
         overlayHandled = true
         # Open LogViewer in a new split window for LSP messages - exit overlay first
@@ -1085,7 +1086,8 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.setMode(EditorMode.LogViewer)
           let activeWin = e.activeWindow
           activeWin.mode = EditorMode.LogViewer
-          activeWin.logViewerState = some(newLogViewerState(lckLsp))
+          let logState = newLogViewerState(lckLsp)
+          activeWin.modeState = ModeState(kind: mskLogViewer, logViewer: logState)
       of hrEnterHelpViewer:
         overlayHandled = true
         # Enter help viewer mode in a split window
@@ -1104,7 +1106,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           activeWin.cursor = BufferPosition(line: 0, column: 0)
           activeWin.viewport.topLine = 0
           activeWin.viewport.leftColumn = 0
-          activeWin.helpViewerState = some(helpState)
+          activeWin.modeState = ModeState(kind: mskHelp, help: helpState)
       of hrEnterBufferManager:
         overlayHandled = true
         # Enter buffer manager mode - save base mode, exit overlay
@@ -1117,12 +1119,12 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         bmState.previousWindowIndex = e.windowManager.activeWindowIndex
         let activeWin = e.activeWindow
         activeWin.mode = EditorMode.BufferManager
-        bmState.originalBuffer = activeWin.buffer
+        activeWin.saveOriginalBuffer()
         activeWin.buffer = bmState.createBufferManagerTextBuffer()
         activeWin.cursor = BufferPosition(line: 0, column: 0)
         activeWin.viewport.topLine = 0
         activeWin.viewport.leftColumn = 0
-        activeWin.bufferManagerState = some(bmState)
+        activeWin.modeState = ModeState(kind: mskBufferManager, bufferManager: bmState)
       of hrEnterBackupManager:
         overlayHandled = true
         # Enter backup manager mode in a vertical split
@@ -1143,7 +1145,8 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.setMode(EditorMode.BackupManager)
           let activeWin = e.activeWindow
           activeWin.mode = EditorMode.BackupManager
-          activeWin.backupManagerState = some(bkState)
+          activeWin.modeState =
+            ModeState(kind: mskBackupManager, backupManager: bkState)
       of hrRecentFile:
         overlayHandled = true
         # Enter recent file mode in a vertical split
@@ -1257,7 +1260,7 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.state.timing.lastDebugUpdate = getMonoTime()
           if e.state.timing.debugUpdateInterval == 0:
             e.state.timing.debugUpdateInterval = 500 # Default: 500ms
-          e.activeWindow.debugViewerState = some(debugState)
+          e.activeWindow.modeState = ModeState(kind: mskDebug, debug: debugState)
           # Enter debug mode
           e.state.exitOverlay()
           e.state.previousMode = e.state.baseMode
@@ -1371,12 +1374,13 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         bkmState.previousWindowIndex = e.windowManager.activeWindowIndex
         let activeWin = e.activeWindow
         activeWin.mode = EditorMode.BookmarkManager
-        bkmState.originalBuffer = activeWin.buffer
+        activeWin.saveOriginalBuffer()
         activeWin.buffer = bkmState.createBookmarkManagerTextBuffer()
         activeWin.cursor = BufferPosition(line: 0, column: 0)
         activeWin.viewport.topLine = 0
         activeWin.viewport.leftColumn = 0
-        activeWin.bookmarkManagerState = some(bkmState)
+        activeWin.modeState =
+          ModeState(kind: mskBookmarkManager, bookmarkManager: bkmState)
       of hrTheme:
         overlayHandled = true
         # Handle theme change command
@@ -1418,7 +1422,8 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           e.setMode(EditorMode.Config)
           let activeWin = e.activeWindow
           activeWin.mode = EditorMode.Config
-          activeWin.configModeState = some(newConfigModeState(e.config))
+          let cfgState = newConfigModeState(e.config)
+          activeWin.modeState = ModeState(kind: mskConfig, config: cfgState)
       of hrHandled, hrUnhandled, hrError:
         overlayHandled = true
         # Handle mode transitions

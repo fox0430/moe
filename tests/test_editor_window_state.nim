@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options]
+import std/unittest
 
 import
   ../src/moepkg/[editor, editor_window_state, config, types, buffer, modes, help_viewer]
@@ -27,29 +27,41 @@ proc createTestEditor(): Editor =
   let config = newEditorConfig()
   result = newEditor(config)
 
+# Helper to populate the window with a given mode variant and remember the
+# original buffer on the window (the Phase 5 contract: `originalBuffer` is
+# owned by EditorWindow, not by the per-mode state).
+proc enterMode(
+    win: EditorWindow,
+    modeState: ModeState,
+    swappedBuffer: TextBuffer,
+    originalBuffer: TextBuffer = nil,
+) =
+  if originalBuffer != nil:
+    win.originalBuffer = originalBuffer
+  win.buffer = swappedBuffer
+  win.modeState = modeState
+
 suite "restoreOriginalBuffer":
   test "Filer - restores original buffer":
     let e = createTestEditor()
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let filerBuf = newTextBuffer("filer")
-    win.buffer = filerBuf
-    let fs = FilerState(originalBuffer: origBuf)
-    win.filerState = some(fs)
+    win.enterMode(ModeState(kind: mskFiler, filer: FilerState()), filerBuf, origBuf)
 
     win.restoreOriginalBuffer(EditorMode.Filer)
 
     check win.buffer == origBuf
-    # State field is not cleared by restoreOriginalBuffer
-    check win.filerState.isSome
+    # State is not cleared by restoreOriginalBuffer
+    check win.modeState.kind == mskFiler
+    # originalBuffer is cleared once it has been restored
+    check win.originalBuffer == nil
 
   test "Filer - no-op when originalBuffer is nil":
     let e = createTestEditor()
     let win = e.activeWindow
     let filerBuf = newTextBuffer("filer")
-    win.buffer = filerBuf
-    let fs = FilerState(originalBuffer: nil)
-    win.filerState = some(fs)
+    win.enterMode(ModeState(kind: mskFiler, filer: FilerState()), filerBuf)
 
     win.restoreOriginalBuffer(EditorMode.Filer)
 
@@ -59,9 +71,7 @@ suite "restoreOriginalBuffer":
     let e = createTestEditor()
     let win = e.activeWindow
     let helpBuf = newTextBuffer("help")
-    win.buffer = helpBuf
-    let hs = newHelpViewerState()
-    win.helpViewerState = some(hs)
+    win.enterMode(ModeState(kind: mskHelp, help: newHelpViewerState()), helpBuf)
 
     win.restoreOriginalBuffer(EditorMode.Help)
 
@@ -72,10 +82,11 @@ suite "restoreOriginalBuffer":
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let bmBuf = newTextBuffer("bm")
-    win.buffer = bmBuf
-    let bms = newBufferManagerState()
-    bms.originalBuffer = origBuf
-    win.bufferManagerState = some(bms)
+    win.enterMode(
+      ModeState(kind: mskBufferManager, bufferManager: newBufferManagerState()),
+      bmBuf,
+      origBuf,
+    )
 
     win.restoreOriginalBuffer(EditorMode.BufferManager)
 
@@ -86,10 +97,9 @@ suite "restoreOriginalBuffer":
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let dvBuf = newTextBuffer("diff")
-    win.buffer = dvBuf
-    let dvs = newDiffViewerState()
-    dvs.originalBuffer = origBuf
-    win.diffViewerState = some(dvs)
+    win.enterMode(
+      ModeState(kind: mskDiffViewer, diffViewer: newDiffViewerState()), dvBuf, origBuf
+    )
 
     win.restoreOriginalBuffer(EditorMode.DiffViewer)
 
@@ -100,10 +110,11 @@ suite "restoreOriginalBuffer":
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let refBuf = newTextBuffer("refs")
-    win.buffer = refBuf
-    let rs = newReferencesViewerState(@[])
-    rs.originalBuffer = origBuf
-    win.referencesViewerState = some(rs)
+    win.enterMode(
+      ModeState(kind: mskReferences, references: newReferencesViewerState(@[])),
+      refBuf,
+      origBuf,
+    )
 
     win.restoreOriginalBuffer(EditorMode.References)
 
@@ -114,9 +125,11 @@ suite "restoreOriginalBuffer":
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let dsBuf = newTextBuffer("symbols")
-    win.buffer = dsBuf
-    let dss = DocumentSymbolViewerState(originalBuffer: origBuf)
-    win.documentSymbolViewerState = some(dss)
+    win.enterMode(
+      ModeState(kind: mskDocumentSymbol, documentSymbol: DocumentSymbolViewerState()),
+      dsBuf,
+      origBuf,
+    )
 
     win.restoreOriginalBuffer(EditorMode.DocumentSymbol)
 
@@ -127,9 +140,11 @@ suite "restoreOriginalBuffer":
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let chBuf = newTextBuffer("callhierarchy")
-    win.buffer = chBuf
-    let chs = CallHierarchyViewerState(originalBuffer: origBuf)
-    win.callHierarchyViewerState = some(chs)
+    win.enterMode(
+      ModeState(kind: mskCallHierarchy, callHierarchy: CallHierarchyViewerState()),
+      chBuf,
+      origBuf,
+    )
 
     win.restoreOriginalBuffer(EditorMode.CallHierarchy)
 
@@ -139,8 +154,7 @@ suite "restoreOriginalBuffer":
     let e = createTestEditor()
     let win = e.activeWindow
     let logBuf = newTextBuffer("log")
-    win.buffer = logBuf
-    win.logViewerState = some(newLogViewerState())
+    win.enterMode(ModeState(kind: mskLogViewer, logViewer: newLogViewerState()), logBuf)
 
     win.restoreOriginalBuffer(EditorMode.LogViewer)
 
@@ -162,160 +176,163 @@ suite "clearModeState":
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let filerBuf = newTextBuffer("filer")
-    win.buffer = filerBuf
-    let fs = FilerState(originalBuffer: origBuf)
-    win.filerState = some(fs)
+    win.enterMode(ModeState(kind: mskFiler, filer: FilerState()), filerBuf, origBuf)
 
     win.clearModeState(EditorMode.Filer)
 
     check win.buffer == origBuf
-    check win.filerState.isNone
+    check win.modeState.kind == mskNone
+    check win.originalBuffer == nil
 
   test "LogViewer - clears state without buffer change":
     let e = createTestEditor()
     let win = e.activeWindow
     let logBuf = newTextBuffer("log")
-    win.buffer = logBuf
-    win.logViewerState = some(newLogViewerState())
+    win.enterMode(ModeState(kind: mskLogViewer, logViewer: newLogViewerState()), logBuf)
 
     win.clearModeState(EditorMode.LogViewer)
 
     check win.buffer == logBuf
-    check win.logViewerState.isNone
+    check win.modeState.kind == mskNone
 
   test "Help - clears state without buffer change (split window mode)":
     let e = createTestEditor()
     let win = e.activeWindow
     let helpBuf = newTextBuffer("help")
-    win.buffer = helpBuf
-    let hs = newHelpViewerState()
-    win.helpViewerState = some(hs)
+    win.enterMode(ModeState(kind: mskHelp, help: newHelpViewerState()), helpBuf)
 
     win.clearModeState(EditorMode.Help)
 
     check win.buffer == helpBuf
-    check win.helpViewerState.isNone
+    check win.modeState.kind == mskNone
 
   test "BufferManager - restores buffer and clears state":
     let e = createTestEditor()
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let bmBuf = newTextBuffer("bm")
-    win.buffer = bmBuf
-    let bms = newBufferManagerState()
-    bms.originalBuffer = origBuf
-    win.bufferManagerState = some(bms)
+    win.enterMode(
+      ModeState(kind: mskBufferManager, bufferManager: newBufferManagerState()),
+      bmBuf,
+      origBuf,
+    )
 
     win.clearModeState(EditorMode.BufferManager)
 
     check win.buffer == origBuf
-    check win.bufferManagerState.isNone
+    check win.modeState.kind == mskNone
 
   test "BackupManager - clears state without buffer change":
     let e = createTestEditor()
     let win = e.activeWindow
     let buf = newTextBuffer("backup")
-    win.buffer = buf
-    win.backupManagerState = some(newBackupManagerState())
+    win.enterMode(
+      ModeState(kind: mskBackupManager, backupManager: newBackupManagerState()), buf
+    )
 
     win.clearModeState(EditorMode.BackupManager)
 
     check win.buffer == buf
-    check win.backupManagerState.isNone
+    check win.modeState.kind == mskNone
 
   test "DiffViewer - restores buffer and clears state":
     let e = createTestEditor()
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let dvBuf = newTextBuffer("diff")
-    win.buffer = dvBuf
-    let dvs = newDiffViewerState()
-    dvs.originalBuffer = origBuf
-    win.diffViewerState = some(dvs)
+    win.enterMode(
+      ModeState(kind: mskDiffViewer, diffViewer: newDiffViewerState()), dvBuf, origBuf
+    )
 
     win.clearModeState(EditorMode.DiffViewer)
 
     check win.buffer == origBuf
-    check win.diffViewerState.isNone
+    check win.modeState.kind == mskNone
 
   test "Debug - clears state without buffer change":
     let e = createTestEditor()
     let win = e.activeWindow
     let buf = newTextBuffer("debug")
-    win.buffer = buf
-    win.debugViewerState = some(newDebugViewerState())
+    win.enterMode(ModeState(kind: mskDebug, debug: newDebugViewerState()), buf)
 
     win.clearModeState(EditorMode.Debug)
 
     check win.buffer == buf
-    check win.debugViewerState.isNone
+    check win.modeState.kind == mskNone
 
   test "Config - clears state without buffer change":
     let e = createTestEditor()
     let win = e.activeWindow
     let buf = newTextBuffer("config")
-    win.buffer = buf
-    win.configModeState = some(newConfigModeState(newEditorConfig()))
+    win.enterMode(
+      ModeState(kind: mskConfig, config: newConfigModeState(newEditorConfig())), buf
+    )
 
     win.clearModeState(EditorMode.Config)
 
     check win.buffer == buf
-    check win.configModeState.isNone
+    check win.modeState.kind == mskNone
 
   test "References - restores buffer and clears state":
     let e = createTestEditor()
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let refBuf = newTextBuffer("refs")
-    win.buffer = refBuf
-    let rs = newReferencesViewerState(@[])
-    rs.originalBuffer = origBuf
-    win.referencesViewerState = some(rs)
+    win.enterMode(
+      ModeState(kind: mskReferences, references: newReferencesViewerState(@[])),
+      refBuf,
+      origBuf,
+    )
 
     win.clearModeState(EditorMode.References)
 
     check win.buffer == origBuf
-    check win.referencesViewerState.isNone
+    check win.modeState.kind == mskNone
 
   test "DocumentSymbol - restores buffer and clears state":
     let e = createTestEditor()
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let dsBuf = newTextBuffer("symbols")
-    win.buffer = dsBuf
-    let dss = DocumentSymbolViewerState(originalBuffer: origBuf)
-    win.documentSymbolViewerState = some(dss)
+    win.enterMode(
+      ModeState(kind: mskDocumentSymbol, documentSymbol: DocumentSymbolViewerState()),
+      dsBuf,
+      origBuf,
+    )
 
     win.clearModeState(EditorMode.DocumentSymbol)
 
     check win.buffer == origBuf
-    check win.documentSymbolViewerState.isNone
+    check win.modeState.kind == mskNone
 
   test "CallHierarchy - restores buffer and clears state":
     let e = createTestEditor()
     let win = e.activeWindow
     let origBuf = newTextBuffer("original")
     let chBuf = newTextBuffer("callhierarchy")
-    win.buffer = chBuf
-    let chs = CallHierarchyViewerState(originalBuffer: origBuf)
-    win.callHierarchyViewerState = some(chs)
+    win.enterMode(
+      ModeState(kind: mskCallHierarchy, callHierarchy: CallHierarchyViewerState()),
+      chBuf,
+      origBuf,
+    )
 
     win.clearModeState(EditorMode.CallHierarchy)
 
     check win.buffer == origBuf
-    check win.callHierarchyViewerState.isNone
+    check win.modeState.kind == mskNone
 
   test "RecentFile - clears state without buffer change":
     let e = createTestEditor()
     let win = e.activeWindow
     let buf = newTextBuffer("recent")
-    win.buffer = buf
-    win.recentFileModeState = some(newRecentFileModeState())
+    win.enterMode(
+      ModeState(kind: mskRecentFile, recentFile: newRecentFileModeState()), buf
+    )
 
     win.clearModeState(EditorMode.RecentFile)
 
     check win.buffer == buf
-    check win.recentFileModeState.isNone
+    check win.modeState.kind == mskNone
 
   test "Normal mode - no-op":
     let e = createTestEditor()
@@ -326,3 +343,86 @@ suite "clearModeState":
     win.clearModeState(EditorMode.Normal)
 
     check win.buffer == buf
+
+suite "ModeState variant invariants":
+  test "modeStateKind maps every stateful mode":
+    check modeStateKind(EditorMode.Normal) == mskNone
+    check modeStateKind(EditorMode.Insert) == mskNone
+    check modeStateKind(EditorMode.Command) == mskNone
+    check modeStateKind(EditorMode.QuickRun) == mskNone
+    check modeStateKind(EditorMode.Filer) == mskFiler
+    check modeStateKind(EditorMode.FileTree) == mskFileTree
+    check modeStateKind(EditorMode.LogViewer) == mskLogViewer
+    check modeStateKind(EditorMode.Help) == mskHelp
+    check modeStateKind(EditorMode.BufferManager) == mskBufferManager
+    check modeStateKind(EditorMode.BookmarkManager) == mskBookmarkManager
+    check modeStateKind(EditorMode.BackupManager) == mskBackupManager
+    check modeStateKind(EditorMode.DiffViewer) == mskDiffViewer
+    check modeStateKind(EditorMode.Debug) == mskDebug
+    check modeStateKind(EditorMode.Config) == mskConfig
+    check modeStateKind(EditorMode.References) == mskReferences
+    check modeStateKind(EditorMode.DocumentSymbol) == mskDocumentSymbol
+    check modeStateKind(EditorMode.CallHierarchy) == mskCallHierarchy
+    check modeStateKind(EditorMode.RecentFile) == mskRecentFile
+    check modeStateKind(EditorMode.Terminal) == mskTerminal
+
+  test "clearModeState leaves unrelated variant payload untouched":
+    let e = createTestEditor()
+    let win = e.activeWindow
+    win.modeState = ModeState(kind: mskFiler, filer: FilerState())
+    win.originalBuffer = newTextBuffer("orig")
+    let beforeBuffer = win.buffer
+    let beforeOriginal = win.originalBuffer
+
+    # Clearing a mode that does not match the current variant should not
+    # erase the unrelated payload, restore a buffer, or touch the window's
+    # saved originalBuffer.
+    win.clearModeState(EditorMode.Help)
+
+    check win.modeState.kind == mskFiler
+    check win.buffer == beforeBuffer
+    check win.originalBuffer == beforeOriginal
+
+  test "clearModeState skips Terminal cleanup when mode mismatches":
+    # If the window holds a non-Terminal variant, clearing Terminal must
+    # not touch any (potentially uninitialized) terminal payload.
+    let e = createTestEditor()
+    let win = e.activeWindow
+    win.modeState = ModeState(kind: mskFiler, filer: FilerState())
+
+    win.clearModeState(EditorMode.Terminal)
+
+    check win.modeState.kind == mskFiler
+
+  test "restoreOriginalBuffer is a no-op when variant kind mismatches mode":
+    # The early-return guard protects against callers passing a mode whose
+    # kind does not match the live variant. Keep that contract under test.
+    let e = createTestEditor()
+    let win = e.activeWindow
+    let activeBuf = newTextBuffer("active")
+    win.buffer = activeBuf
+    win.originalBuffer = newTextBuffer("orig")
+    win.modeState = ModeState(kind: mskFiler, filer: FilerState())
+
+    win.restoreOriginalBuffer(EditorMode.BufferManager)
+
+    check win.buffer == activeBuf
+    check win.modeState.kind == mskFiler
+    # originalBuffer must remain intact on a guard-rejected call
+    check win.originalBuffer != nil
+
+  test "restoreOriginalBuffer is a no-op when variant kind is mskNone":
+    let e = createTestEditor()
+    let win = e.activeWindow
+    let activeBuf = newTextBuffer("active")
+    win.buffer = activeBuf
+
+    win.restoreOriginalBuffer(EditorMode.Filer)
+
+    check win.buffer == activeBuf
+
+  test "Default-constructed EditorWindow has mskNone variant":
+    let e = createTestEditor()
+    let win = e.activeWindow
+    check win.modeState.kind == mskNone
+    check win.originalBuffer == nil

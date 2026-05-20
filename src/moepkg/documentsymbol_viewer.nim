@@ -42,7 +42,6 @@ type
     selectedIndex*: int # Currently selected item index
     topLine*: int # Scroll position (first visible line)
     filePath*: string # File path for the symbols
-    originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
 
 proc symbolKindToString*(kind: SymbolKind): string =
   ## Convert SymbolKind to a short display string

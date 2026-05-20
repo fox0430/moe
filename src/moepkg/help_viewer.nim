@@ -496,7 +496,6 @@ type HelpViewerState* = ref object
   selectedIndex*: int # Currently selected line index (cursor position)
   topLine*: int # Scroll position (first visible line)
   searchQuery*: string # Current search query
-  originalBuffer*: TextBuffer # Saved original buffer (restored on exit)
 
 proc newHelpViewerState*(): HelpViewerState =
   ## Create a new help viewer state
