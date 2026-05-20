@@ -21,7 +21,7 @@ import std/[unittest, strutils]
 
 import
   ../src/moepkg/[
-    editor editor_window, editor_window_layout, config, types, buffer, modes,
+    editor, editor_window, editor_window_layout, config, types, buffer, modes,
     render_utils,
   ]
 

@@ -352,131 +352,37 @@ const
 proc loadStandardConfig(
     table: TomlTableRef, config: var StandardConfig, vr: var ValidationResult
 ) =
-  const section = "Standard"
-  const validKeys = [
-    "number", "relativeNumber", "statusLine", "syntax", "indentationLines", "tabStop",
-    "shiftWidth", "softTabStop", "expandTab", "sidebar", "scrollbar", "scrollbarWidth",
-    "bookmarkMarker", "showModifiedLines", "autoCloseParen", "autoIndent", "ignorecase",
-    "smartcase", "disableChangeCursor", "defaultCursor", "normalModeCursor",
-    "insertModeCursor", "liveReloadOfConf", "incrementalSearch", "popupWindowInExmode",
-    "autoDeleteParen", "liveReloadOfFile", "colorMode", "mouse", "lineWrap",
-    "timeoutlen", "bufferBackend",
-  ]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "number", config.number, vr, section)
-  loadBool(table, "relativeNumber", config.relativeNumber, vr, section)
-  loadBool(table, "statusLine", config.statusLine, vr, section)
-  loadBool(table, "syntax", config.syntax, vr, section)
-  loadBool(table, "indentationLines", config.indentationLines, vr, section)
-  loadInt(table, "tabStop", config.tabStop, vr, section, minVal = 1)
-  loadInt(table, "shiftWidth", config.shiftWidth, vr, section, minVal = 0)
-  loadInt(table, "softTabStop", config.softTabStop, vr, section, minVal = 0)
-  loadBool(table, "expandTab", config.expandTab, vr, section)
-  loadBool(table, "sidebar", config.sidebar, vr, section)
-  loadBool(table, "scrollbar", config.scrollbar, vr, section)
-  loadInt(table, "scrollbarWidth", config.scrollbarWidth, vr, section, minVal = 0)
-  loadString(table, "bookmarkMarker", config.bookmarkMarker, vr, section)
-  loadBool(table, "showModifiedLines", config.showModifiedLines, vr, section)
-  loadBool(table, "autoCloseParen", config.autoCloseParen, vr, section)
-  loadBool(table, "autoIndent", config.autoIndent, vr, section)
-  loadBool(table, "ignorecase", config.ignorecase, vr, section)
-  loadBool(table, "smartcase", config.smartcase, vr, section)
-  loadBool(table, "disableChangeCursor", config.disableChangeCursor, vr, section)
-  loadEnum(
-    table, "defaultCursor", config.defaultCursor, vr, section, parseCursorType,
-    ValidCursorTypes,
-  )
-  loadEnum(
-    table, "normalModeCursor", config.normalModeCursor, vr, section, parseCursorType,
-    ValidCursorTypes,
-  )
-  loadEnum(
-    table, "insertModeCursor", config.insertModeCursor, vr, section, parseCursorType,
-    ValidCursorTypes,
-  )
-  loadBool(table, "liveReloadOfConf", config.liveReloadOfConf, vr, section)
-  loadBool(table, "incrementalSearch", config.incrementalSearch, vr, section)
-  loadBool(table, "popupWindowInExmode", config.popupWindowInExmode, vr, section)
-  loadBool(table, "autoDeleteParen", config.autoDeleteParen, vr, section)
-  loadBool(table, "liveReloadOfFile", config.liveReloadOfFile, vr, section)
-  loadEnum(
-    table, "colorMode", config.colorMode, vr, section, parseColorMode, ValidColorModes
-  )
-  loadBool(table, "mouse", config.mouse, vr, section)
-  loadBool(table, "lineWrap", config.lineWrap, vr, section)
-  loadInt(table, "timeoutlen", config.timeoutlen, vr, section, minVal = 0)
-  loadEnum(
-    table, "bufferBackend", config.bufferBackend, vr, section, parseBufferBackend,
-    ValidBufferBackends,
-  )
+  generateConfigLoader(table, config, vr, StandardConfig)
 
 proc loadClipboardConfig(
     table: TomlTableRef, config: var ClipboardConfig, vr: var ValidationResult
 ) =
-  const section = "Clipboard"
-  const validKeys = ["enable", "tool"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
-  loadEnum(
-    table, "tool", config.tool, vr, section, parseClipboardTool, ValidClipboardTools
-  )
+  generateConfigLoader(table, config, vr, ClipboardConfig)
 
 proc loadBuildOnSaveConfig(
     table: TomlTableRef, config: var BuildOnSaveConfig, vr: var ValidationResult
 ) =
-  const section = "BuildOnSave"
-  const validKeys = ["enable", "workspaceRoot", "command"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
-  loadOptionDirPath(table, "workspaceRoot", config.workspaceRoot, vr, section)
-  loadOptionString(table, "command", config.command, vr, section)
+  generateConfigLoader(table, config, vr, BuildOnSaveConfig)
 
 proc loadStatusLineConfig(
     table: TomlTableRef, config: var StatusLineConfig, vr: var ValidationResult
 ) =
-  const section = "StatusLine"
-  const validKeys = [
-    "multipleStatusLine", "merge", "mode", "filename", "changedMark", "directory",
-    "gitChangedLines", "gitBranchName", "showGitInactive", "showModeInactive",
-    "setupText",
-  ]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "multipleStatusLine", config.multipleStatusLine, vr, section)
-  loadBool(table, "merge", config.merge, vr, section)
-  loadBool(table, "mode", config.mode, vr, section)
-  loadBool(table, "filename", config.filename, vr, section)
-  loadBool(table, "changedMark", config.changedMark, vr, section)
-  loadBool(table, "directory", config.directory, vr, section)
-  loadBool(table, "gitChangedLines", config.gitChangedLines, vr, section)
-  loadBool(table, "gitBranchName", config.gitBranchName, vr, section)
-  loadBool(table, "showGitInactive", config.showGitInactive, vr, section)
-  loadBool(table, "showModeInactive", config.showModeInactive, vr, section)
-  loadString(table, "setupText", config.setupText, vr, section)
+  generateConfigLoader(table, config, vr, StatusLineConfig)
 
 proc loadGitConfig(
     table: TomlTableRef, config: var GitConfig, vr: var ValidationResult
 ) =
-  const section = "Git"
-  const validKeys = ["showChangedLine", "updateInterval"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "showChangedLine", config.showChangedLine, vr, section)
-  loadInt(table, "updateInterval", config.updateInterval, vr, section, minVal = 1)
+  generateConfigLoader(table, config, vr, GitConfig)
 
 proc loadSyntaxCheckerConfig(
     table: TomlTableRef, config: var SyntaxCheckerConfig, vr: var ValidationResult
 ) =
-  const section = "SyntaxChecker"
-  const validKeys = ["enable"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
+  generateConfigLoader(table, config, vr, SyntaxCheckerConfig)
 
 proc loadEditorConfigSettings(
     table: TomlTableRef, config: var EditorConfigSettings, vr: var ValidationResult
 ) =
-  const section = "EditorConfig"
-  const validKeys = ["enable"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
+  generateConfigLoader(table, config, vr, EditorConfigSettings)
 
 proc loadThemeConfig(
     table: TomlTableRef, config: var ThemeConfig, vr: var ValidationResult
@@ -494,330 +400,112 @@ proc loadThemeConfig(
 proc loadAutoSaveConfig(
     table: TomlTableRef, config: var AutoSaveConfig, vr: var ValidationResult
 ) =
-  const section = "AutoSave"
-  const validKeys = ["enable", "interval"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
-  loadInt(table, "interval", config.interval, vr, section, minVal = 1)
+  generateConfigLoader(table, config, vr, AutoSaveConfig)
 
 proc loadNotificationConfig(
     table: TomlTableRef, config: var NotificationConfig, vr: var ValidationResult
 ) =
-  const section = "Notification"
-  const validKeys = [
-    "screenNotifications", "logNotifications", "autoBackupScreenNotify",
-    "autoBackupLogNotify", "autoSaveScreenNotify", "autoSaveLogNotify",
-    "yankScreenNotify", "yankLogNotify", "deleteScreenNotify", "deleteLogNotify",
-    "saveScreenNotify", "saveLogNotify", "quickRunScreenNotify", "quickRunLogNotify",
-    "buildOnSaveScreenNotify", "buildOnSaveLogNotify", "filerScreenNotify",
-    "filerLogNotify", "restoreScreenNotify", "restoreLogNotify", "lspScreenNotify",
-    "lspLogNotify", "lspForcePopup", "popupNotifications", "popupPosition",
-    "popupTimeoutMs", "popupMaxVisible", "popupMaxWidth", "popupBorder",
-  ]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "screenNotifications", config.screenNotifications, vr, section)
-  loadBool(table, "logNotifications", config.logNotifications, vr, section)
-  loadBool(table, "autoBackupScreenNotify", config.autoBackupScreenNotify, vr, section)
-  loadBool(table, "autoBackupLogNotify", config.autoBackupLogNotify, vr, section)
-  loadBool(table, "autoSaveScreenNotify", config.autoSaveScreenNotify, vr, section)
-  loadBool(table, "autoSaveLogNotify", config.autoSaveLogNotify, vr, section)
-  loadBool(table, "yankScreenNotify", config.yankScreenNotify, vr, section)
-  loadBool(table, "yankLogNotify", config.yankLogNotify, vr, section)
-  loadBool(table, "deleteScreenNotify", config.deleteScreenNotify, vr, section)
-  loadBool(table, "deleteLogNotify", config.deleteLogNotify, vr, section)
-  loadBool(table, "saveScreenNotify", config.saveScreenNotify, vr, section)
-  loadBool(table, "saveLogNotify", config.saveLogNotify, vr, section)
-  loadBool(table, "quickRunScreenNotify", config.quickRunScreenNotify, vr, section)
-  loadBool(table, "quickRunLogNotify", config.quickRunLogNotify, vr, section)
-  loadBool(
-    table, "buildOnSaveScreenNotify", config.buildOnSaveScreenNotify, vr, section
-  )
-  loadBool(table, "buildOnSaveLogNotify", config.buildOnSaveLogNotify, vr, section)
-  loadBool(table, "filerScreenNotify", config.filerScreenNotify, vr, section)
-  loadBool(table, "filerLogNotify", config.filerLogNotify, vr, section)
-  loadBool(table, "restoreScreenNotify", config.restoreScreenNotify, vr, section)
-  loadBool(table, "restoreLogNotify", config.restoreLogNotify, vr, section)
-  loadBool(table, "lspScreenNotify", config.lspScreenNotify, vr, section)
-  loadBool(table, "lspLogNotify", config.lspLogNotify, vr, section)
-  loadBool(table, "lspForcePopup", config.lspForcePopup, vr, section)
-  loadBool(table, "popupNotifications", config.popupNotifications, vr, section)
-  loadString(table, "popupPosition", config.popupPosition, vr, section)
-  if table.hasKey("popupPosition") and
-      config.popupPosition notin ["topRight", "topLeft", "bottomRight", "bottomLeft"]:
-    vr.addError(
-      fullKey(section, "popupPosition"),
-      config.popupPosition,
-      "one of: topRight, topLeft, bottomRight, bottomLeft",
-    )
-    config.popupPosition = "bottomRight"
-  loadInt(table, "popupTimeoutMs", config.popupTimeoutMs, vr, section, minVal = 100)
-  loadInt(table, "popupMaxVisible", config.popupMaxVisible, vr, section, minVal = 1)
-  loadInt(table, "popupMaxWidth", config.popupMaxWidth, vr, section, minVal = 10)
-  loadBool(table, "popupBorder", config.popupBorder, vr, section)
+  generateConfigLoader(table, config, vr, NotificationConfig)
 
 proc loadAutoBackupConfig(
     table: TomlTableRef, config: var AutoBackupConfig, vr: var ValidationResult
 ) =
-  const section = "AutoBackup"
-  const validKeys = ["enable", "backupDir", "idleTime", "interval", "dirToExclude"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
-  loadOptionDirPath(table, "backupDir", config.backupDir, vr, section)
-  loadInt(table, "idleTime", config.idleTime, vr, section, minVal = 1)
-  loadInt(table, "interval", config.interval, vr, section, minVal = 1)
-  loadStringArray(table, "dirToExclude", config.dirToExclude, vr, section)
+  generateConfigLoader(table, config, vr, AutoBackupConfig)
 
 proc loadSmoothScrollConfig(
     table: TomlTableRef, config: var SmoothScrollConfig, vr: var ValidationResult
 ) =
-  const section = "SmoothScroll"
-  const validKeys = ["enable", "friction", "airDrag"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
-  loadFloat(table, "friction", config.friction, vr, section, minVal = 0.0)
-  loadFloat(table, "airDrag", config.airDrag, vr, section, minVal = 0.0)
+  generateConfigLoader(table, config, vr, SmoothScrollConfig)
 
 proc loadHighlightConfig(
     table: TomlTableRef, config: var HighlightConfig, vr: var ValidationResult
 ) =
-  const section = "Highlight"
-  const validKeys = [
-    "currentLine", "currentColumn", "reservedWord", "replaceText", "pairOfParen",
-    "fullWidthSpace", "trailingSpaces", "currentWord", "findCharHighlight",
-    "colorCodeHighlight", "gitConflict", "gitConflictTwoColor",
-  ]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "currentLine", config.currentLine, vr, section)
-  loadBool(table, "currentColumn", config.currentColumn, vr, section)
-  loadStringArray(table, "reservedWord", config.reservedWord, vr, section)
-  loadBool(table, "replaceText", config.replaceText, vr, section)
-  loadBool(table, "pairOfParen", config.pairOfParen, vr, section)
-  loadBool(table, "fullWidthSpace", config.fullWidthSpace, vr, section)
-  loadBool(table, "trailingSpaces", config.trailingSpaces, vr, section)
-  loadBool(table, "currentWord", config.currentWord, vr, section)
-  loadBool(table, "findCharHighlight", config.findCharHighlight, vr, section)
-  loadBool(table, "colorCodeHighlight", config.colorCodeHighlight, vr, section)
-  loadBool(table, "gitConflict", config.gitConflict, vr, section)
-  loadBool(table, "gitConflictTwoColor", config.gitConflictTwoColor, vr, section)
+  generateConfigLoader(table, config, vr, HighlightConfig)
 
 proc loadFilerConfig(
     table: TomlTableRef, config: var FilerConfig, vr: var ValidationResult
 ) =
-  const section = "Filer"
-  const validKeys = ["showIcons"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "showIcons", config.showIcons, vr, section)
+  generateConfigLoader(table, config, vr, FilerConfig)
 
 proc loadFileTreeConfig(
     table: TomlTableRef, config: var FileTreeConfig, vr: var ValidationResult
 ) =
-  const section = "FileTree"
-  const validKeys = ["width"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadInt(table, "width", config.width, vr, section, minVal = 1)
+  generateConfigLoader(table, config, vr, FileTreeConfig)
 
 proc loadAutocompleteConfig(
     table: TomlTableRef, config: var AutocompleteConfig, vr: var ValidationResult
 ) =
-  const section = "Autocomplete"
-  const validKeys = ["enable", "windowBorder"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
-  loadBool(table, "windowBorder", config.windowBorder, vr, section)
+  generateConfigLoader(table, config, vr, AutocompleteConfig)
 
 proc loadPersistConfig(
     table: TomlTableRef, config: var PersistConfig, vr: var ValidationResult
 ) =
-  const section = "Persist"
-  const validKeys = [
-    "commandHistory", "commandHistoryLimit", "search", "searchHistoryLimit",
-    "cursorPosition", "bookmarks",
-  ]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "commandHistory", config.commandHistory, vr, section)
-  loadInt(
-    table, "commandHistoryLimit", config.commandHistoryLimit, vr, section, minVal = 1
-  )
-  loadBool(table, "search", config.search, vr, section)
-  loadInt(
-    table, "searchHistoryLimit", config.searchHistoryLimit, vr, section, minVal = 1
-  )
-  loadBool(table, "cursorPosition", config.cursorPosition, vr, section)
-  loadBool(table, "bookmarks", config.bookmarks, vr, section)
+  generateConfigLoader(table, config, vr, PersistConfig)
 
 proc loadQuickRunConfig(
     table: TomlTableRef, config: var QuickRunConfig, vr: var ValidationResult
 ) =
-  const section = "QuickRun"
-  const validKeys = [
-    "saveBufferWhenQuickRun", "command", "timeout", "nimAdvancedCommand",
-    "ClangOptions", "CppOptions", "NimOptions", "shOptions", "bashOptions",
-  ]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "saveBufferWhenQuickRun", config.saveBufferWhenQuickRun, vr, section)
-  loadOptionString(table, "command", config.command, vr, section)
-  loadInt(table, "timeout", config.timeout, vr, section, minVal = 1)
-  loadOptionString(table, "nimAdvancedCommand", config.nimAdvancedCommand, vr, section)
-  loadOptionString(table, "ClangOptions", config.clangOptions, vr, section)
-  loadOptionString(table, "CppOptions", config.cppOptions, vr, section)
-  loadOptionString(table, "NimOptions", config.nimOptions, vr, section)
-  loadOptionString(table, "shOptions", config.shOptions, vr, section)
-  loadOptionString(table, "bashOptions", config.bashOptions, vr, section)
+  generateConfigLoader(table, config, vr, QuickRunConfig)
 
 proc loadTabLineConfig(
     table: TomlTableRef, config: var TabLineConfig, vr: var ValidationResult
 ) =
-  const section = "TabLine"
-  const validKeys = ["enable"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
+  generateConfigLoader(table, config, vr, TabLineConfig)
 
 proc loadStartUpFileOpenConfig(
     table: TomlTableRef, config: var StartUpFileOpenConfig, vr: var ValidationResult
 ) =
-  const section = "StartUp.FileOpen"
-  const validKeys = ["autoSplit", "splitType"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "autoSplit", config.autoSplit, vr, section)
-  loadEnum(
-    table, "splitType", config.splitType, vr, section, parseSplitType, ValidSplitTypes
-  )
+  generateConfigLoader(table, config, vr, StartUpFileOpenConfig)
 
 proc loadStartUpFileTreeConfig(
     table: TomlTableRef, config: var StartUpFileTreeConfig, vr: var ValidationResult
 ) =
-  const section = "StartUp.FileTree"
-  const validKeys = ["enable"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
+  generateConfigLoader(table, config, vr, StartUpFileTreeConfig)
 
 proc loadDebugWindowNodeConfig(
-    table: TomlTableRef,
-    config: var DebugWindowNodeConfig,
-    vr: var ValidationResult,
-    section: string,
+    table: TomlTableRef, config: var DebugWindowNodeConfig, vr: var ValidationResult
 ) =
-  const validKeys = [
-    "enable", "currentWindow", "index", "windowIndex", "bufferIndex", "parentIndex",
-    "childLen", "splitType", "haveCursesWin", "y", "x", "h", "w", "currentLine",
-    "currentColumn", "expandedColumn", "cursor",
-  ]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
-  loadBool(table, "currentWindow", config.currentWindow, vr, section)
-  loadBool(table, "index", config.index, vr, section)
-  loadBool(table, "windowIndex", config.windowIndex, vr, section)
-  loadBool(table, "bufferIndex", config.bufferIndex, vr, section)
-  loadBool(table, "parentIndex", config.parentIndex, vr, section)
-  loadBool(table, "childLen", config.childLen, vr, section)
-  loadBool(table, "splitType", config.splitType, vr, section)
-  loadBool(table, "haveCursesWin", config.haveCursesWin, vr, section)
-  loadBool(table, "y", config.y, vr, section)
-  loadBool(table, "x", config.x, vr, section)
-  loadBool(table, "h", config.h, vr, section)
-  loadBool(table, "w", config.w, vr, section)
-  loadBool(table, "currentLine", config.currentLine, vr, section)
-  loadBool(table, "currentColumn", config.currentColumn, vr, section)
-  loadBool(table, "expandedColumn", config.expandedColumn, vr, section)
-  loadBool(table, "cursor", config.cursor, vr, section)
+  generateConfigLoader(table, config, vr, DebugWindowNodeConfig)
 
 proc loadDebugEditorViewConfig(
-    table: TomlTableRef,
-    config: var DebugEditorViewConfig,
-    vr: var ValidationResult,
-    section: string,
+    table: TomlTableRef, config: var DebugEditorViewConfig, vr: var ValidationResult
 ) =
-  const validKeys =
-    ["enable", "widthOfLineNum", "height", "width", "originalLine", "start", "length"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
-  loadBool(table, "widthOfLineNum", config.widthOfLineNum, vr, section)
-  loadBool(table, "height", config.height, vr, section)
-  loadBool(table, "width", config.width, vr, section)
-  loadBool(table, "originalLine", config.originalLine, vr, section)
-  loadBool(table, "start", config.start, vr, section)
-  loadBool(table, "length", config.length, vr, section)
+  generateConfigLoader(table, config, vr, DebugEditorViewConfig)
 
 proc loadDebugBufferStatusConfig(
-    table: TomlTableRef,
-    config: var DebugBufferStatusConfig,
-    vr: var ValidationResult,
-    section: string,
+    table: TomlTableRef, config: var DebugBufferStatusConfig, vr: var ValidationResult
 ) =
-  const validKeys = [
-    "enable", "bufferIndex", "path", "openDir", "currentMode", "prevMode", "language",
-    "encoding", "countChange", "cmdLoop", "lastSaveTime", "bufferLen",
-  ]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
-  loadBool(table, "bufferIndex", config.bufferIndex, vr, section)
-  loadBool(table, "path", config.path, vr, section)
-  loadBool(table, "openDir", config.openDir, vr, section)
-  loadBool(table, "currentMode", config.currentMode, vr, section)
-  loadBool(table, "prevMode", config.prevMode, vr, section)
-  loadBool(table, "language", config.language, vr, section)
-  loadBool(table, "encoding", config.encoding, vr, section)
-  loadBool(table, "countChange", config.countChange, vr, section)
-  loadBool(table, "cmdLoop", config.cmdLoop, vr, section)
-  loadBool(table, "lastSaveTime", config.lastSaveTime, vr, section)
-  loadBool(table, "bufferLen", config.bufferLen, vr, section)
+  generateConfigLoader(table, config, vr, DebugBufferStatusConfig)
 
 proc loadDebugSearchConfig(
-    table: TomlTableRef,
-    config: var DebugSearchConfig,
-    vr: var ValidationResult,
-    section: string,
+    table: TomlTableRef, config: var DebugSearchConfig, vr: var ValidationResult
 ) =
-  const validKeys = ["enable"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
+  generateConfigLoader(table, config, vr, DebugSearchConfig)
 
 proc loadDebugMacroConfig(
-    table: TomlTableRef,
-    config: var DebugMacroConfig,
-    vr: var ValidationResult,
-    section: string,
+    table: TomlTableRef, config: var DebugMacroConfig, vr: var ValidationResult
 ) =
-  const validKeys = ["enable"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
+  generateConfigLoader(table, config, vr, DebugMacroConfig)
 
 proc loadDebugVisualConfig(
-    table: TomlTableRef,
-    config: var DebugVisualConfig,
-    vr: var ValidationResult,
-    section: string,
+    table: TomlTableRef, config: var DebugVisualConfig, vr: var ValidationResult
 ) =
-  const validKeys = ["enable"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
+  generateConfigLoader(table, config, vr, DebugVisualConfig)
 
 proc loadDebugJumpListConfig(
-    table: TomlTableRef,
-    config: var DebugJumpListConfig,
-    vr: var ValidationResult,
-    section: string,
+    table: TomlTableRef, config: var DebugJumpListConfig, vr: var ValidationResult
 ) =
-  const validKeys = ["enable"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
+  generateConfigLoader(table, config, vr, DebugJumpListConfig)
 
 proc loadDebugLspConfig(
-    table: TomlTableRef,
-    config: var DebugLspConfig,
-    vr: var ValidationResult,
-    section: string,
+    table: TomlTableRef, config: var DebugLspConfig, vr: var ValidationResult
 ) =
-  const validKeys = ["enable"]
-  checkUnknownKeys(table, validKeys, section, vr)
-  loadBool(table, "enable", config.enable, vr, section)
+  generateConfigLoader(table, config, vr, DebugLspConfig)
 
 proc loadLogConfig(
     table: TomlTableRef, config: var LogConfig, vr: var ValidationResult
 ) =
-  const validKeys = ["clearOnStart"]
-  checkUnknownKeys(table, validKeys, "Log", vr)
-  loadBool(table, "clearOnStart", config.clearOnStart, vr, "Log")
+  generateConfigLoader(table, config, vr, LogConfig)
 
 proc loadDebugConfig(
     table: TomlTableRef, config: var DebugConfig, vr: var ValidationResult
@@ -828,31 +516,23 @@ proc loadDebugConfig(
   ]
   checkUnknownKeys(table, validKeys, "Debug", vr)
   if table.hasKey("WindowNode"):
-    loadDebugWindowNodeConfig(
-      table["WindowNode"].getTable(), config.windowNode, vr, "Debug.WindowNode"
-    )
+    loadDebugWindowNodeConfig(table["WindowNode"].getTable(), config.windowNode, vr)
   if table.hasKey("EditorView"):
-    loadDebugEditorViewConfig(
-      table["EditorView"].getTable(), config.editorView, vr, "Debug.EditorView"
-    )
+    loadDebugEditorViewConfig(table["EditorView"].getTable(), config.editorView, vr)
   if table.hasKey("BufferStatus"):
     loadDebugBufferStatusConfig(
-      table["BufferStatus"].getTable(), config.bufferStatus, vr, "Debug.BufferStatus"
+      table["BufferStatus"].getTable(), config.bufferStatus, vr
     )
   if table.hasKey("Search"):
-    loadDebugSearchConfig(table["Search"].getTable(), config.search, vr, "Debug.Search")
+    loadDebugSearchConfig(table["Search"].getTable(), config.search, vr)
   if table.hasKey("MacroState"):
-    loadDebugMacroConfig(
-      table["MacroState"].getTable(), config.macroState, vr, "Debug.MacroState"
-    )
+    loadDebugMacroConfig(table["MacroState"].getTable(), config.macroState, vr)
   if table.hasKey("Visual"):
-    loadDebugVisualConfig(table["Visual"].getTable(), config.visual, vr, "Debug.Visual")
+    loadDebugVisualConfig(table["Visual"].getTable(), config.visual, vr)
   if table.hasKey("JumpList"):
-    loadDebugJumpListConfig(
-      table["JumpList"].getTable(), config.jumpList, vr, "Debug.JumpList"
-    )
+    loadDebugJumpListConfig(table["JumpList"].getTable(), config.jumpList, vr)
   if table.hasKey("Lsp"):
-    loadDebugLspConfig(table["Lsp"].getTable(), config.lsp, vr, "Debug.Lsp")
+    loadDebugLspConfig(table["Lsp"].getTable(), config.lsp, vr)
 
 proc loadLspFeatureConfig(
     table: TomlTableRef,
@@ -1474,18 +1154,14 @@ proc loadConfig*(): Result[(EditorConfig, ValidationResult), string] =
 # Theme loading functions
 
 proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
-  ## Convert a TOML key to EditorColorPairIndex
-  ## Keys ending with "Bg" are treated as background colors
-  ## Returns none if the key doesn't match any color index
-
-  # Remove "Bg" suffix if present for lookup
-  let lookupKey =
-    if key.endsWith("Bg"):
-      key[0 ..< key.len - 2]
-    else:
-      key
-
-  case lookupKey
+  ## Convert a TOML key to EditorColorPairIndex.
+  ## Performs an exact match against the enum-name variants below.
+  ## Background-suffix resolution (e.g. `defaultBg` -> EditorColorPairIndex.default
+  ## as background) is handled by the caller, which retries after stripping a
+  ## trailing "Bg". This two-step lookup is necessary because some enum names
+  ## themselves end in "Bg" (e.g. `configModePopupBg`, `currentLineBg`).
+  ## Returns none if the key doesn't match any color index.
+  case key
   of "foreground", "default":
     return some(EditorColorPairIndex.default)
   of "lineNum":
@@ -1606,6 +1282,8 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.operator)
   of "property":
     return some(EditorColorPairIndex.property)
+  of "markdownCodeBlock":
+    return some(EditorColorPairIndex.markdownCodeBlock)
   of "namespace":
     return some(EditorColorPairIndex.namespace)
   of "className":
@@ -1929,8 +1607,18 @@ proc loadThemeFromToml*(
       continue
 
     let rgb = rgbResult.get
-    let isBackground = key.endsWith("Bg")
-    let indexOpt = toEditorColorPairIndex(key)
+
+    # Try exact match first (key is the enum name itself -> foreground).
+    # If that fails and the key ends with "Bg", strip the suffix and look up
+    # again -> background. This two-step approach correctly handles enum names
+    # that themselves end in "Bg" (e.g. configModePopupBgBg sets the background
+    # of EditorColorPairIndex.configModePopupBg).
+    var indexOpt = toEditorColorPairIndex(key)
+    var isBackground = false
+    if indexOpt.isNone and key.endsWith("Bg"):
+      indexOpt = toEditorColorPairIndex(key[0 ..< key.len - 2])
+      if indexOpt.isSome:
+        isBackground = true
 
     if indexOpt.isNone:
       vr.addUnknownKey(fullKey(section, key))
