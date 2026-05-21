@@ -26,7 +26,7 @@
 import std/unicode
 import pkg/celina
 
-import types, buffer, unicode_utils, color
+import types, buffer, unicode_utils, color, modes, sidebar
 
 # Rendering constants
 const
@@ -338,6 +338,48 @@ proc calculateWrapCount*(text: string, maxWidth: int, tabStop: int): int =
     else:
       segmentWidth += w
 
+proc ensureFresh*(
+    cache: WrapCountCache, buffer: TextBuffer, maxWidth: int, tabStop: int
+) =
+  ## Validate the cache key against the current frame's
+  ## `(buffer, maxWidth, tabStop)` and bump the generation if anything
+  ## changed. Hot loops should call this once before entering the loop,
+  ## then call `cachedWrapCount` per line.
+  if cache.bufferId != buffer.id or cache.bufferChangeSeq != buffer.changeSeq or
+      cache.viewportWidth != maxWidth or cache.tabStop != tabStop:
+    if cache.bufferId != buffer.id:
+      # All gens become stale on the gen bump below, so drop the storage
+      # entirely instead of keeping shrunk-but-poisoned entries.
+      cache.counts.setLen(0)
+      cache.gens.setLen(0)
+    cache.currentGen.inc
+    cache.bufferId = buffer.id
+    cache.bufferChangeSeq = buffer.changeSeq
+    cache.viewportWidth = maxWidth
+    cache.tabStop = tabStop
+
+proc cachedWrapCount*(cache: WrapCountCache, buffer: TextBuffer, line: int): int =
+  ## Per-line lookup. Caller must have invoked `ensureFresh` first with
+  ## the frame's `(maxWidth, tabStop)`; this proc uses the cached values.
+  if line >= cache.gens.len:
+    let needed = line + 1
+    cache.counts.setLen(needed)
+    cache.gens.setLen(needed)
+  if cache.gens[line] != cache.currentGen:
+    cache.counts[line] =
+      calculateWrapCount(buffer.getLine(line), cache.viewportWidth, cache.tabStop)
+    cache.gens[line] = cache.currentGen
+  cache.counts[line]
+
+proc getWrapCount*(
+    cache: WrapCountCache, buffer: TextBuffer, line: int, maxWidth: int, tabStop: int
+): int =
+  ## Single-shot memoized `calculateWrapCount`. For tight loops that hit
+  ## the same `(maxWidth, tabStop)` repeatedly, prefer
+  ## `ensureFresh` + `cachedWrapCount` to skip the per-call key compare.
+  cache.ensureFresh(buffer, maxWidth, tabStop)
+  cache.cachedWrapCount(buffer, line)
+
 proc clearBuffer*(buffer: var Buffer) =
   ## Clear the entire buffer to prevent rendering artifacts
   ## Uses the theme's default background color for consistent appearance
@@ -360,17 +402,38 @@ proc calculateLineNumOffset*(buffer: TextBuffer, showLineNumber: bool = true): i
   else:
     0
 
+proc sidebarWidthFor*(mode: EditorMode, showSidebar: bool): int {.inline.} =
+  ## Mode-gated sidebar width. Sidebar only renders in file-edit modes.
+  if mode.isFileEditMode and showSidebar: DefaultSidebarWidth else: 0
+
+proc scrollbarWidthFor*(
+    mode: EditorMode, scrollbar: bool, scrollbarWidth: int
+): int {.inline.} =
+  ## Mode-gated scrollbar width. Scrollbar only renders in file-edit modes.
+  if mode.isFileEditMode and scrollbar and scrollbarWidth > 0: scrollbarWidth else: 0
+
 proc calculateViewportOffset*(
     buffer: TextBuffer,
+    mode: EditorMode,
     showLineNumbers, showSidebar: bool,
     scrollbar: bool = false,
     scrollbarWidth: int = 0,
 ): int =
-  ## Calculate the total line number + sidebar + scrollbar offset for viewport width calculations.
-  ## Matches the rendering layout: sidebarWidth + lineNumOffset + scrollbarWidth.
-  calculateLineNumOffset(buffer, showLineNumbers) + (if showSidebar: 2 else: 0) +
-    # DefaultSidebarWidth = 2
-  (if scrollbar: scrollbarWidth else: 0)
+  ## Total of lineNumber + sidebar + scrollbar widths, mode-gated so the
+  ## wrap-count cache key stays in lockstep with what the renderer actually
+  ## allocates.
+  calculateLineNumOffset(buffer, showLineNumbers) + sidebarWidthFor(mode, showSidebar) +
+    scrollbarWidthFor(mode, scrollbar, scrollbarWidth)
+
+proc viewportOffsetFor*(buffer: TextBuffer, state: EditorState): int {.inline.} =
+  ## Convenience wrapper: pulls every display field calculateViewportOffset
+  ## needs from `state`. `state.mode` forwards to the active window's mode,
+  ## so the cache key stays in lockstep with the renderer's sidebar /
+  ## scrollbar gating.
+  calculateViewportOffset(
+    buffer, state.mode, state.display.showLineNumbers, state.display.showSidebar,
+    state.display.scrollbar, state.display.scrollbarWidth,
+  )
 
 proc findMaxBottomY*(windows: seq[EditorWindow]): int =
   ## Find the maximum bottom Y coordinate among all windows

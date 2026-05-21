@@ -256,6 +256,7 @@ suite "calculateViewportOffset":
     let buffer = newTextBuffer("Hello")
     let offset = calculateViewportOffset(
       buffer,
+      EditorMode.Normal,
       showLineNumbers = true,
       showSidebar = true,
       scrollbar = true,
@@ -267,6 +268,7 @@ suite "calculateViewportOffset":
     let buffer = newTextBuffer("Hello")
     let offset = calculateViewportOffset(
       buffer,
+      EditorMode.Normal,
       showLineNumbers = true,
       showSidebar = true,
       scrollbar = true,
@@ -278,6 +280,7 @@ suite "calculateViewportOffset":
     let buffer = newTextBuffer("Hello")
     let offset = calculateViewportOffset(
       buffer,
+      EditorMode.Normal,
       showLineNumbers = true,
       showSidebar = true,
       scrollbar = false,
@@ -289,6 +292,7 @@ suite "calculateViewportOffset":
     let buffer = newTextBuffer("Hello")
     let offset = calculateViewportOffset(
       buffer,
+      EditorMode.Normal,
       showLineNumbers = true,
       showSidebar = true,
       scrollbar = true,
@@ -300,12 +304,40 @@ suite "calculateViewportOffset":
     let buffer = newTextBuffer("Hello")
     let offset = calculateViewportOffset(
       buffer,
+      EditorMode.Normal,
       showLineNumbers = false,
       showSidebar = false,
       scrollbar = true,
       scrollbarWidth = 1,
     )
     check offset == 0 + 0 + 1 # scrollbar only
+
+  test "non-edit mode drops sidebar and scrollbar":
+    # Mirrors calculateSidebarWidth / calculateScrollbarWidth: only file-edit
+    # modes get sidebar / scrollbar width. Keeps the wrap-count cache key
+    # consistent with the renderer in modes like Filer / Help / BufferManager.
+    let buffer = newTextBuffer("Hello")
+    let offset = calculateViewportOffset(
+      buffer,
+      EditorMode.Filer,
+      showLineNumbers = true,
+      showSidebar = true,
+      scrollbar = true,
+      scrollbarWidth = 2,
+    )
+    check offset == 2 # lineNum only — sidebar/scrollbar zeroed
+
+  test "edit mode keeps sidebar and scrollbar":
+    let buffer = newTextBuffer("Hello")
+    let offset = calculateViewportOffset(
+      buffer,
+      EditorMode.Insert,
+      showLineNumbers = true,
+      showSidebar = true,
+      scrollbar = true,
+      scrollbarWidth = 2,
+    )
+    check offset == 2 + 2 + 2
 
 suite "calculateWindowCursor":
   test "cursor at buffer start, no wrap":

@@ -21,7 +21,7 @@
 ## These procs are side-effect-free helpers used by both the window
 ## management layer and the rendering layer.
 
-import editor_types, render_utils, sidebar
+import editor_types, render_utils
 
 proc calculateReservedLines*(e: Editor, isBottomWindow: bool = true): int =
   ## Calculate number of reserved lines based on status line configuration
@@ -71,6 +71,7 @@ proc calculateWindowCursor*(
     lineNumOffset: int,
     reservedLines: int,
     scrollbarWidth: int = 0,
+    wrapCache: WrapCountCache = nil,
 ): CursorPosition =
   ## Calculate screen cursor position for a window
   ## Returns the absolute screen coordinates
@@ -87,14 +88,21 @@ proc calculateWindowCursor*(
     # WRAP MODE: Calculate cursor position considering line wrapping
     let maxWidth = max(1, viewport.width - lineNumOffset - scrollbarWidth)
 
+    if wrapCache != nil:
+      wrapCache.ensureFresh(buffer, maxWidth, e.state.display.tabStop)
+
     var screenY = 0
     let maxVisibleLine = min(cursor.line, viewport.topLine + viewport.height)
 
     for lineIdx in viewport.topLine ..< maxVisibleLine:
       if lineIdx >= 0 and lineIdx < buffer.len:
-        let line = buffer.getLine(lineIdx)
-
-        let wrappedLines = calculateWrapCount(line, maxWidth, e.state.display.tabStop)
+        let wrappedLines =
+          if wrapCache != nil:
+            wrapCache.cachedWrapCount(buffer, lineIdx)
+          else:
+            calculateWrapCount(
+              buffer.getLine(lineIdx), maxWidth, e.state.display.tabStop
+            )
         screenY += wrappedLines
 
         if screenY >= viewport.height - reservedLines:
@@ -134,10 +142,8 @@ proc calculateWindowCursor*(
 
 proc calculateSidebarWidth*(e: Editor, mode: EditorMode): int =
   ## Calculate the width occupied by the sidebar (0 if disabled)
-  if mode.isFileEditMode and e.state.display.showSidebar: DefaultSidebarWidth else: 0
+  sidebarWidthFor(mode, e.state.display.showSidebar)
 
 proc calculateScrollbarWidth*(e: Editor, mode: EditorMode): int =
   ## Calculate the width occupied by the scrollbar (0 if disabled or non-edit mode)
-  ## Only shown in file editing modes (same as sidebar).
-  if mode.isFileEditMode and e.state.display.scrollbar and
-      e.state.display.scrollbarWidth > 0: e.state.display.scrollbarWidth else: 0
+  scrollbarWidthFor(mode, e.state.display.scrollbar, e.state.display.scrollbarWidth)

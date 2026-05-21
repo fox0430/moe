@@ -566,6 +566,7 @@ proc vsplit*(
     cursor: newCursor,
     active: true,
     mode: EditorMode.Normal, # New windows start in Normal mode
+    wrapCountCache: WrapCountCache(),
   )
 
   # Insert new window before the active window (left position)
@@ -642,6 +643,7 @@ proc vsplitWithBuffer*(
     cursor: newCursor,
     active: true,
     mode: EditorMode.Normal, # New windows start in Normal mode
+    wrapCountCache: WrapCountCache(),
   )
 
   # Insert new window before the active window (left position)
@@ -751,6 +753,7 @@ proc hsplit*(
     cursor: newCursor,
     active: true,
     mode: EditorMode.Normal, # New windows start in Normal mode
+    wrapCountCache: WrapCountCache(),
   )
 
   # Insert new window before the active window (top position)
@@ -840,6 +843,7 @@ proc hsplitWithBuffer*(
     cursor: newCursor,
     active: true,
     mode: EditorMode.Normal, # New windows start in Normal mode
+    wrapCountCache: WrapCountCache(),
   )
 
   # Insert new window before the active window (top position)

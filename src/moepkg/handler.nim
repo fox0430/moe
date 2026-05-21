@@ -337,6 +337,7 @@ proc screenToBufferPosition(
     lineWrap: bool,
     tabStop: int = 4,
     scrollbarWidth: int = 0,
+    wrapCache: WrapCountCache = nil,
 ): Option[BufferPosition] =
   ## Convert screen coordinates to buffer position.
   ## Returns none if click is outside the text area.
@@ -360,14 +361,19 @@ proc screenToBufferPosition(
   if lineWrap:
     # Must match renderWindowLineWrapped: maxWidth = viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
     let maxWidth = max(1, vp.width - sidebarWidth - scrollbarWidth - lineNumOffset)
+    if wrapCache != nil:
+      wrapCache.ensureFresh(buffer, maxWidth, tabStop)
     # Walk through buffer lines, accumulating screen rows for each wrapped line
     var currentScreenY = 0
     var bufferLine = vp.topLine
     var wrapSegment = 0
 
     while bufferLine < buffer.len:
-      let line = buffer.getLine(bufferLine)
-      let wrapCount = calculateWrapCount(line, maxWidth, tabStop)
+      let wrapCount =
+        if wrapCache != nil:
+          wrapCache.cachedWrapCount(buffer, bufferLine)
+        else:
+          calculateWrapCount(buffer.getLine(bufferLine), maxWidth, tabStop)
       if currentScreenY + wrapCount > screenY:
         wrapSegment = screenY - currentScreenY
         break
@@ -597,11 +603,11 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
             let tabIdx =
               hitTestTabLine(buffersToShow, window.mode, vp.x, vp.width, mouse.x)
             if tabIdx >= 0:
-              # Switch to clicked window if not already active
               if i != e.windowManager.activeWindowIndex:
                 e.windowManager.activeWindowIndex = i
                 for j, w in e.windowManager.windows.mpairs:
                   w.active = (j == i)
+                e.syncActiveWindow()
               e.switchToWindowBuffer(tabIdx)
               e.state.windowDisplay.needsFullRedraw = true
               return true
@@ -620,7 +626,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
             posOpt = screenToBufferPosition(
               vp, window.buffer, mouse.x, mouse.y, lineNumOffset, sidebarWidth,
               reservedLines, e.state.display.lineWrap, e.state.display.tabStop,
-              scrollbarWidth,
+              scrollbarWidth, window.wrapCountCache,
             )
 
           if posOpt.isNone:
@@ -628,14 +634,12 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
 
           let pos = posOpt.get
 
-          # Switch to clicked window if not already active
           if i != e.windowManager.activeWindowIndex:
             e.windowManager.activeWindowIndex = i
             for j, w in e.windowManager.windows.mpairs:
               w.active = (j == i)
+            e.syncActiveWindow()
 
-          # Update cursor (e.cursor= sets both state.cursor and activeWindow.cursor)
-          # Note: After switching window index, e.activeWindow now refers to window i
           e.cursor = pos
           if mouse.button == mouse_logic.MouseButton.Middle:
             e.middleClickPaste()
@@ -677,7 +681,8 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       adjustedMouseY = mouse.y - tabLineOffset
       posOpt = screenToBufferPosition(
         e.viewport, activeBuffer, mouse.x, adjustedMouseY, lineNumOffset, sidebarWidth,
-        reservedLines, e.state.display.lineWrap, e.state.display.tabStop, scrollbarWidth,
+        reservedLines, e.state.display.lineWrap, e.state.display.tabStop,
+        scrollbarWidth, e.activeWindow.wrapCountCache,
       )
 
     if posOpt.isNone:

@@ -46,6 +46,8 @@ proc syncActiveWindow*(e: Editor) =
   e.executer.buffer = e.activeWindow.buffer
   e.executer.motionController.executor.buffer = e.activeWindow.buffer
   e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
+  e.executer.motionController.viewportManager.wrapCountCache =
+    e.activeWindow.wrapCountCache
   e.viewport = e.activeWindow.viewport
   # Keep state.windowDisplay.currentBufferId aligned with the active window's buffer so that
   # window-switch / split / close paths automatically refresh the Jump List
@@ -86,6 +88,7 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
     lineNumOffset,
     reservedLines + tabLineOffset,
     scrollbarWidth,
+    window.wrapCountCache,
   )
   # Adjust cursor Y for tab line offset
   cursorPos.y += tabLineOffset
@@ -277,15 +280,11 @@ proc enew*(e: Editor): Result[(), string] =
   e.activeWindow.viewport.topLine = 0
   e.activeWindow.viewport.leftColumn = 0
 
-  # Update executor and motion controller buffer references
-  # Viewport is shared by reference, so field changes above are already reflected
-  e.executer.buffer = newBuffer
-  e.executer.motionController.executor.buffer = newBuffer
-
   # Reset cursor
   e.cursor = BufferPosition(line: 0, column: 0)
 
-  e.state.windowDisplay.needsFullRedraw = true
+  e.syncActiveWindow()
+
   ok(())
 
 proc new*(e: Editor): Result[(), string] =
