@@ -447,9 +447,7 @@ template requireBufferPath(lsp: LspIntegration, buffer: TextBuffer): string =
     return err("Buffer has no file path")
   buffer.filePath.get
 
-proc resolveLspPath(
-    lsp: LspIntegration, buffer: TextBuffer
-): Result[string, string] =
+proc resolveLspPath(lsp: LspIntegration, buffer: TextBuffer): Result[string, string] =
   ## Async-safe counterpart to `requireBufferPath`: returns the buffer's path
   ## or an error as a Result, without performing an early return in the caller.
   if not lsp.enabled:
