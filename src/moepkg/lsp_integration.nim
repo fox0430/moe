@@ -432,6 +432,37 @@ proc toUtf16Column(buffer: TextBuffer, line, column: int): int =
       ""
   utf8OffsetToUtf16(lineText, column)
 
+template requireBufferPath(lsp: LspIntegration, buffer: TextBuffer): string =
+  ## Guard for sync LSP request wrappers: checks `enabled` and `filePath`,
+  ## returning an `err` Result from the caller on failure. Evaluates to the
+  ## file path.
+  ##
+  ## Sync-only: chronos `{.async.}` procs cannot use this template because the
+  ## embedded `return err(...)` is not transformed into `complete(...)` by the
+  ## async macro. Async procs should call `resolveLspPath` instead and bind
+  ## the Result themselves.
+  if not lsp.enabled:
+    return err("LSP disabled")
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+  buffer.filePath.get
+
+proc resolveLspPath(lsp: LspIntegration, buffer: TextBuffer): Result[string, string] =
+  ## Async-safe counterpart to `requireBufferPath`: returns the buffer's path
+  ## or an error as a Result, without performing an early return in the caller.
+  if not lsp.enabled:
+    return err("LSP disabled")
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+  ok(buffer.filePath.get)
+
+proc requireLangId(lsp: LspIntegration, buffer: TextBuffer): Option[string] =
+  ## Resolve the language ID for a buffer when LSP is enabled and the buffer
+  ## has a path. Returns `none` when any precondition fails.
+  if not lsp.enabled or buffer.filePath.isNone:
+    return none(string)
+  lsp.service.getLanguageIdFromPath(buffer.filePath.get)
+
 # Async (non-blocking) feature requests
 # These return immediately with a request ID. Use poll() and checkResponse() to get results.
 # Note: All position-based requests convert UTF-8 column to UTF-16 for LSP protocol compliance.
@@ -440,246 +471,131 @@ proc startCompletionRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
   ## Start a completion request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  let utf16Col = buffer.toUtf16Column(line, column)
-  return lsp.service.startCompletionRequest(path, line, utf16Col)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startCompletionRequest(path, line, buffer.toUtf16Column(line, column))
 
 proc startCompletionResolveRequest*(
     lsp: LspIntegration, buffer: TextBuffer, itemJson: JsonNode
 ): Result[int, string] =
   ## Start a completionItem/resolve request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.startCompletionResolveRequest(path, itemJson)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startCompletionResolveRequest(path, itemJson)
 
 proc startHoverRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
   ## Start a hover request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  let utf16Col = buffer.toUtf16Column(line, column)
-  return lsp.service.startHoverRequest(path, line, utf16Col)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startHoverRequest(path, line, buffer.toUtf16Column(line, column))
 
 proc startDefinitionRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
   ## Start a definition request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  let utf16Col = buffer.toUtf16Column(line, column)
-  return lsp.service.startDefinitionRequest(path, line, utf16Col)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startDefinitionRequest(path, line, buffer.toUtf16Column(line, column))
 
 proc startDeclarationRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
   ## Start a declaration request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  let utf16Col = buffer.toUtf16Column(line, column)
-  return lsp.service.startDeclarationRequest(path, line, utf16Col)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startDeclarationRequest(path, line, buffer.toUtf16Column(line, column))
 
 proc startReferencesRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
   ## Start a references request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  let utf16Col = buffer.toUtf16Column(line, column)
-  return lsp.service.startReferencesRequest(path, line, utf16Col)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startReferencesRequest(path, line, buffer.toUtf16Column(line, column))
 
 proc startTypeDefinitionRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
   ## Start a type definition request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  let utf16Col = buffer.toUtf16Column(line, column)
-  return lsp.service.startTypeDefinitionRequest(path, line, utf16Col)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startTypeDefinitionRequest(path, line, buffer.toUtf16Column(line, column))
 
 proc startImplementationRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
   ## Start an implementation request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  let utf16Col = buffer.toUtf16Column(line, column)
-  return lsp.service.startImplementationRequest(path, line, utf16Col)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startImplementationRequest(path, line, buffer.toUtf16Column(line, column))
 
 proc startSignatureHelpRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
   ## Start a signature help request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  let utf16Col = buffer.toUtf16Column(line, column)
-  return lsp.service.startSignatureHelpRequest(path, line, utf16Col)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startSignatureHelpRequest(path, line, buffer.toUtf16Column(line, column))
 
 proc startDocumentHighlightRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
   ## Start a document highlight request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  let utf16Col = buffer.toUtf16Column(line, column)
-  return lsp.service.startDocumentHighlightRequest(path, line, utf16Col)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startDocumentHighlightRequest(
+    path, line, buffer.toUtf16Column(line, column)
+  )
 
 proc startCodeLensRequest*(
     lsp: LspIntegration, buffer: TextBuffer
 ): Result[int, string] =
   ## Start a code lens request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.startCodeLensRequest(path)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startCodeLensRequest(path)
 
 proc startCallHierarchyPrepareRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
   ## Start a call hierarchy prepare request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  let utf16Col = buffer.toUtf16Column(line, column)
-  return lsp.service.startCallHierarchyPrepareRequest(path, line, utf16Col)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startCallHierarchyPrepareRequest(
+    path, line, buffer.toUtf16Column(line, column)
+  )
 
 proc startCallHierarchyIncomingCallsRequest*(
     lsp: LspIntegration, buffer: TextBuffer, item: CallHierarchyItem
 ): Result[int, string] =
   ## Start a call hierarchy incoming calls request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.startCallHierarchyIncomingCallsRequest(path, item)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startCallHierarchyIncomingCallsRequest(path, item)
 
 proc startCallHierarchyOutgoingCallsRequest*(
     lsp: LspIntegration, buffer: TextBuffer, item: CallHierarchyItem
 ): Result[int, string] =
   ## Start a call hierarchy outgoing calls request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.startCallHierarchyOutgoingCallsRequest(path, item)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startCallHierarchyOutgoingCallsRequest(path, item)
 
 proc startDocumentSymbolsRequest*(
     lsp: LspIntegration, buffer: TextBuffer
 ): Result[int, string] =
   ## Start a document symbols request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.startDocumentSymbolsRequest(path)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startDocumentSymbolsRequest(path)
 
 proc startDocumentLinkRequest*(
     lsp: LspIntegration, buffer: TextBuffer
 ): Result[int, string] =
   ## Start a document link request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.startDocumentLinkRequest(path)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startDocumentLinkRequest(path)
 
 proc startDocumentLinkResolveRequest*(
     lsp: LspIntegration, buffer: TextBuffer, link: DocumentLink
 ): Result[int, string] =
   ## Start a document link resolve request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return lsp.service.startDocumentLinkResolveRequest(path, link)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startDocumentLinkResolveRequest(path, link)
 
 proc startSelectionRangeRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[int, string] =
   ## Start a selection range request (non-blocking). Returns request ID.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  let utf16Col = buffer.toUtf16Column(line, column)
-  return lsp.service.startSelectionRangeRequest(path, line, utf16Col)
+  let path = requireBufferPath(lsp, buffer)
+  lsp.service.startSelectionRangeRequest(path, line, buffer.toUtf16Column(line, column))
 
 proc checkResponse*(
     lsp: LspIntegration, requestId: int
@@ -703,34 +619,20 @@ proc getSemanticTokensLegend*(
     lsp: LspIntegration, buffer: TextBuffer
 ): Option[SemanticTokensLegend] =
   ## Get the semantic tokens legend for a buffer's language
-  if not lsp.enabled:
+  let langId = requireLangId(lsp, buffer)
+  if langId.isNone:
     return none(SemanticTokensLegend)
-
-  if buffer.filePath.isNone:
-    return none(SemanticTokensLegend)
-
-  let path = buffer.filePath.get
-  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return none(SemanticTokensLegend)
-
-  return lsp.service.getSemanticTokensLegend(langIdOpt.get)
+  lsp.service.getSemanticTokensLegend(langId.get)
 
 proc startSemanticTokensRequest*(
     lsp: LspIntegration, buffer: TextBuffer, firstLine, lastLine: int
 ): Result[int, string] =
   ## Start a semantic tokens request (non-blocking). Returns request ID.
   ## Uses range request if supported, otherwise falls back to full document.
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
+  let path = requireBufferPath(lsp, buffer)
   if buffer.len == 0:
     return err("Buffer is empty")
 
-  let path = buffer.filePath.get
   let langIdOpt = lsp.service.getLanguageIdFromPath(path)
   if langIdOpt.isNone:
     return err("No LSP support for file: " & path)
@@ -752,63 +654,23 @@ proc startSemanticTokensRequest*(
 
 proc hasInlineValueSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if inline value is supported for a buffer's language
-  if not lsp.enabled:
-    return false
-
-  if buffer.filePath.isNone:
-    return false
-
-  let path = buffer.filePath.get
-  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return false
-
-  return lsp.service.hasInlineValueSupport(langIdOpt.get)
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasInlineValueSupport(langId.get)
 
 proc hasDocumentLinkSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if document link is supported for a buffer's language
-  if not lsp.enabled:
-    return false
-
-  if buffer.filePath.isNone:
-    return false
-
-  let path = buffer.filePath.get
-  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return false
-
-  return lsp.service.hasDocumentLinkSupport(langIdOpt.get)
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasDocumentLinkSupport(langId.get)
 
 proc hasDocumentLinkResolveSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if document link resolve is supported for a buffer's language
-  if not lsp.enabled:
-    return false
-
-  if buffer.filePath.isNone:
-    return false
-
-  let path = buffer.filePath.get
-  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return false
-
-  return lsp.service.hasDocumentLinkResolveSupport(langIdOpt.get)
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasDocumentLinkResolveSupport(langId.get)
 
 proc hasRenameSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if rename is supported for a buffer's language
-  if not lsp.enabled:
-    return false
-
-  if buffer.filePath.isNone:
-    return false
-
-  let path = buffer.filePath.get
-  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return false
-
-  return lsp.service.hasRenameSupport(langIdOpt.get)
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasRenameSupport(langId.get)
 
 # TextEdit application helpers
 proc compareTextEditReverse(a, b: TextEdit): int =
@@ -1218,77 +1080,33 @@ proc isServerRunningForPath*(lsp: LspIntegration, path: string): bool =
 # CodeLens support
 proc hasCodeLensSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if code lens is supported for a buffer's language
-  if not lsp.enabled:
-    return false
-
-  if buffer.filePath.isNone:
-    return false
-
-  let path = buffer.filePath.get
-  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return false
-
-  return lsp.service.hasCodeLensSupport(langIdOpt.get)
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasCodeLensSupport(langId.get)
 
 proc hasCodeLensResolveSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if code lens resolve is supported for a buffer's language
-  if not lsp.enabled:
-    return false
-
-  if buffer.filePath.isNone:
-    return false
-
-  let path = buffer.filePath.get
-  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return false
-
-  return lsp.service.hasCodeLensResolveSupport(langIdOpt.get)
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasCodeLensResolveSupport(langId.get)
 
 proc hasDocumentSymbolSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if document symbol is supported for a buffer's language
-  if not lsp.enabled:
-    return false
-
-  if buffer.filePath.isNone:
-    return false
-
-  let path = buffer.filePath.get
-  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return false
-
-  return lsp.service.hasDocumentSymbolSupport(langIdOpt.get)
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasDocumentSymbolSupport(langId.get)
 
 proc hasCallHierarchySupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if call hierarchy is supported for a buffer's language
-  if not lsp.enabled:
-    return false
-
-  if buffer.filePath.isNone:
-    return false
-
-  let path = buffer.filePath.get
-  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return false
-
-  return lsp.service.hasCallHierarchySupport(langIdOpt.get)
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasCallHierarchySupport(langId.get)
 
 proc requestCodeLensResolve*(
     lsp: LspIntegration, buffer: TextBuffer, lens: CodeLens
 ): Future[Result[CodeLens, string]] {.async: (raises: [CancelledError]).} =
   ## Resolve a code lens to get its command
   ## Used when the initial codeLens response doesn't include the command
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return await lsp.service.requestCodeLensResolve(path, lens)
+  let pathRes = resolveLspPath(lsp, buffer)
+  if pathRes.isErr:
+    return err(pathRes.error)
+  return await lsp.service.requestCodeLensResolve(pathRes.get, lens)
 
 proc requestExecuteCommand*(
     lsp: LspIntegration,
@@ -1297,45 +1115,21 @@ proc requestExecuteCommand*(
     arguments: seq[JsonNode] = @[],
 ): Future[Result[JsonNode, string]] {.async: (raises: [CancelledError]).} =
   ## Execute a command on the LSP server (used for code lens commands)
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return await lsp.service.requestExecuteCommand(path, command, arguments)
+  let pathRes = resolveLspPath(lsp, buffer)
+  if pathRes.isErr:
+    return err(pathRes.error)
+  return await lsp.service.requestExecuteCommand(pathRes.get, command, arguments)
 
 proc hasExecuteCommandSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if execute command is supported for a buffer's language
-  if not lsp.enabled:
-    return false
-
-  if buffer.filePath.isNone:
-    return false
-
-  let path = buffer.filePath.get
-  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return false
-
-  return lsp.service.hasExecuteCommandSupport(langIdOpt.get)
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasExecuteCommandSupport(langId.get)
 
 # Folding Range support
 proc hasFoldingRangeSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if folding range is supported for a buffer's language
-  if not lsp.enabled:
-    return false
-
-  if buffer.filePath.isNone:
-    return false
-
-  let path = buffer.filePath.get
-  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return false
-
-  return lsp.service.hasFoldingRangeSupport(langIdOpt.get)
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasFoldingRangeSupport(langId.get)
 
 proc applyLspFoldingRanges*(
     buffer: TextBuffer,
@@ -1401,109 +1195,64 @@ proc requestFormatting*(
     lsp: LspIntegration, buffer: TextBuffer, tabSize: int = 2, insertSpaces: bool = true
 ): Future[Result[seq[TextEdit], string]] {.async: (raises: [CancelledError]).} =
   ## Request formatting for a buffer
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return await lsp.service.requestFormatting(path, tabSize, insertSpaces)
+  let pathRes = resolveLspPath(lsp, buffer)
+  if pathRes.isErr:
+    return err(pathRes.error)
+  return await lsp.service.requestFormatting(pathRes.get, tabSize, insertSpaces)
 
 proc requestRename*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int, newName: string
 ): Future[Result[Option[WorkspaceEdit], string]] {.async: (raises: [CancelledError]).} =
   ## Request rename at a position
   ## Note: column is expected to be UTF-8 byte offset, converted to UTF-16 for LSP
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-
-  # Convert UTF-8 byte offset to UTF-16 code unit offset for LSP
-  let lineText =
-    if line >= 0 and line < buffer.len:
-      buffer.getLine(line)
-    else:
-      ""
-  let utf16Column = utf8OffsetToUtf16(lineText, column)
-
-  return await lsp.service.requestRename(path, line, utf16Column, newName)
+  let pathRes = resolveLspPath(lsp, buffer)
+  if pathRes.isErr:
+    return err(pathRes.error)
+  return await lsp.service.requestRename(
+    pathRes.get, line, buffer.toUtf16Column(line, column), newName
+  )
 
 proc requestDefinition*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
   ## Request go to definition at a position
   ## Note: column is expected to be UTF-8 byte offset, converted to UTF-16 for LSP
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-
-  # Convert UTF-8 byte offset to UTF-16 code unit offset for LSP
-  let lineText =
-    if line >= 0 and line < buffer.len:
-      buffer.getLine(line)
-    else:
-      ""
-  let utf16Column = utf8OffsetToUtf16(lineText, column)
-
-  return await lsp.service.requestDefinition(path, line, utf16Column)
+  let pathRes = resolveLspPath(lsp, buffer)
+  if pathRes.isErr:
+    return err(pathRes.error)
+  return await lsp.service.requestDefinition(
+    pathRes.get, line, buffer.toUtf16Column(line, column)
+  )
 
 proc requestReferences*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
   ## Request find references at a position
   ## Note: column is expected to be UTF-8 byte offset, converted to UTF-16 for LSP
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-
-  # Convert UTF-8 byte offset to UTF-16 code unit offset for LSP
-  let lineText =
-    if line >= 0 and line < buffer.len:
-      buffer.getLine(line)
-    else:
-      ""
-  let utf16Column = utf8OffsetToUtf16(lineText, column)
-
-  return await lsp.service.requestReferences(path, line, utf16Column)
+  let pathRes = resolveLspPath(lsp, buffer)
+  if pathRes.isErr:
+    return err(pathRes.error)
+  return await lsp.service.requestReferences(
+    pathRes.get, line, buffer.toUtf16Column(line, column)
+  )
 
 proc requestDocumentSymbols*(
     lsp: LspIntegration, buffer: TextBuffer
 ): Future[Result[DocumentSymbolResult, string]] {.async: (raises: [CancelledError]).} =
   ## Request document symbols
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return await lsp.service.requestDocumentSymbols(path)
+  let pathRes = resolveLspPath(lsp, buffer)
+  if pathRes.isErr:
+    return err(pathRes.error)
+  return await lsp.service.requestDocumentSymbols(pathRes.get)
 
 proc requestFoldingRanges*(
     lsp: LspIntegration, buffer: TextBuffer
 ): Future[Result[seq[FoldingRange], string]] {.async: (raises: [CancelledError]).} =
   ## Request folding ranges for a buffer
-  if not lsp.enabled:
-    return err("LSP disabled")
-
-  if buffer.filePath.isNone:
-    return err("Buffer has no file path")
-
-  let path = buffer.filePath.get
-  return await lsp.service.requestFoldingRange(path)
+  let pathRes = resolveLspPath(lsp, buffer)
+  if pathRes.isErr:
+    return err(pathRes.error)
+  return await lsp.service.requestFoldingRange(pathRes.get)
 
 proc refreshLspFolds*(
     lsp: LspIntegration,
