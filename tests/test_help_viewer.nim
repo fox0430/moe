@@ -371,3 +371,122 @@ suite "HelpViewer - Search first":
     check result.isSome
     # The first match should be the "# Exiting" header near the beginning
     check state.selectedIndex < 10
+
+suite "HelpViewer - Command mode rendering (snapshot)":
+  ## These assertions pin the exact output of `help_generator` so that any
+  ## change to the structured ExCommandGroups / BoolSetOptions / ValueSetOptions
+  ## tables or to the per-group alignment width is caught as a test failure.
+  ## Update the literals deliberately when the help text is intentionally changed.
+
+  test "Command mode header is present":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Command mode")
+
+  test "head group 1 (jump/shell/bg/man) is aligned to width 15":
+    let state = newHelpViewerState()
+    check state.lines.contains("number          - Jump to line number; e.g. :10")
+    check state.lines.contains("! shell command - Shell command execution")
+    check state.lines.contains(
+      "bg              - Pause the editor and show the recent terminal output"
+    )
+
+  test "head group 2 (:e family) is aligned to width 11":
+    let state = newHelpViewerState()
+    check state.lines.contains("e filename  - Open file")
+    check state.lines.contains(
+      "e           - Reload current file (error if unsaved changes)"
+    )
+    check state.lines.contains("e! filename - Open file (discard unsaved changes)")
+
+  test "head group 3 (:delete family) is aligned to width 21":
+    let state = newHelpViewerState()
+    check state.lines.contains(
+      "%s/keyword1/keyword2/ - Replace text (normal mode only)"
+    )
+    check state.lines.contains(
+      "delete                - Delete current line and copy to register"
+    )
+
+  test "head group 4 (buffers/windows) is aligned to width 15":
+    let state = newHelpViewerState()
+    check state.lines.contains("ls              - Display all buffers")
+    check state.lines.contains("bd or bd number - Delete buffer")
+    check state.lines.contains(
+      "filetree path   - Toggle FileTree sidebar with specified root path"
+    )
+
+  test "head group 5 (theme/noh/stripwhitespace) is aligned to width 15":
+    let state = newHelpViewerState()
+    check state.lines.contains(
+      "theme themeName - Change color theme; for example theme dark"
+    )
+    check state.lines.contains("noh             - Turn off search highlights")
+    check state.lines.contains("stripwhitespace - Delete trailing spaces")
+
+  test "bool set options block is aligned to the widest entry":
+    let state = newHelpViewerState()
+    # Short entry must be padded to match the longest entry
+    # (`set highlightgitconflicttwocolor / set nohighlightgitconflicttwocolor (hgctc/nohgctc)`).
+    check state.lines.contains(
+      "set number / set nonumber (nu/nonu)                                                   - Show/hide line numbers"
+    )
+    # `set wrap` / `set scrollbar` have no short alias and so render without parens.
+    check state.lines.contains(
+      "set wrap / set nowrap                                                                 - Enable/disable line wrap"
+    )
+    check state.lines.contains(
+      "set scrollbar / set noscrollbar                                                       - Enable/disable scrollbar"
+    )
+    # Longest entry sets the width; only one space before the dash.
+    check state.lines.contains(
+      "set highlightgitconflicttwocolor / set nohighlightgitconflicttwocolor (hgctc/nohgctc) - Use two-color (ours/theirs) conflict scheme"
+    )
+
+  test "value set options block is aligned to its own widest entry":
+    let state = newHelpViewerState()
+    check state.lines.contains(
+      "set scrollbarwidth=number       - Change scrollbar width; e.g. set scrollbarwidth=2"
+    )
+    check state.lines.contains(
+      "set scrollairdrag=number (sad)  - Change smooth scroll air drag; e.g. set scrollairdrag=2.0"
+    )
+
+  test "trailing group (build/lspfold/lspformat) is aligned to width 9":
+    let state = newHelpViewerState()
+    check state.lines.contains("build     - Build the current buffer")
+    check state.lines.contains("lspfold   - LSP Folding Range")
+    check state.lines.contains("lspformat - LSP Document Formatting")
+
+  test "trailing group (lsprestart/lspcallhierarchy) is aligned to width 24":
+    let state = newHelpViewerState()
+    check state.lines.contains(
+      "lsprestart               - Restart the current LSP server"
+    )
+    check state.lines.contains(
+      "lspcallhierarchyincoming - Show incoming calls (callers) at cursor"
+    )
+
+  test "trailing group (terminal) is aligned to width 16":
+    let state = newHelpViewerState()
+    check state.lines.contains(
+      "terminal         - Open terminal emulator (default shell)"
+    )
+    check state.lines.contains("terminal command - Run command in terminal emulator")
+
+  test "trailing single-entry groups render without padding":
+    let state = newHelpViewerState()
+    check state.lines.contains("help - Open this help")
+    check state.lines.contains("quickrun - Quick run")
+    check state.lines.contains(
+      "conflictprev - Jump to previous git merge conflict block"
+    )
+
+  test "blank line separates Command mode section from Runtime Key Mapping":
+    let state = newHelpViewerState()
+    # The last Command-mode line, a blank line, then the next subsection header
+    # must appear consecutively in the rendered output.
+    let idx =
+      state.lines.find("conflictprev - Jump to previous git merge conflict block")
+    check idx >= 0
+    check state.lines[idx + 1] == ""
+    check state.lines[idx + 2] == "## Runtime Key Mapping"
