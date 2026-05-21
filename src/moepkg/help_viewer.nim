@@ -21,7 +21,12 @@
 ##
 ## This module provides the data structures and operations for the help viewer mode.
 
-const HelpSentences* = """
+import std/[strutils, options]
+
+import buffer, help_generator
+
+const HelpSentences* =
+  """
 # Exiting
 
 :w    - Write file
@@ -306,118 +311,8 @@ v  - Split window and open file or directory
 
 # Command mode
 
-number          - Jump to line number; e.g. :10
-! shell command - Shell command execution
-bg              - Pause the editor and show the recent terminal output
-man arguments   - Show the given UNIX manual page, if available; e.g. :man man
-
-e filename - Open file
-e          - Reload current file (error if unsaved changes)
-e!         - Force reload current file (discard unsaved changes)
-e! filename - Open file (discard unsaved changes)
-ene        - Create a new empty buffer
-new        - Create a new empty buffer in a horizontally split window
-vnew       - Create a new empty buffer in a vertically split window
-
-%s/keyword1/keyword2/ - Replace text (normal mode only)
-delete          - Delete current line and copy to register
-%d              - Delete all lines and copy to register
-1,10d           - Delete lines in range and copy to register
-
-ls              - Display all buffers
-bprev           - Switch to the previous buffer
-bnext           - Switch to the next buffer
-bfirst          - Switch to the first buffer
-blast           - Switch to the last buffer
-bd or bd number - Delete buffer
-vs          - Vertical split window
-vs filename - Open in a vertical split window
-sp          - Horizontal split window
-sp filename - Open in a horizontal split window
-only        - Close all other windows
-filetree      - Toggle FileTree sidebar
-filetree path - Toggle FileTree sidebar with specified root path
-
-theme themeName - Change color theme; for example theme dark
-noh            - Turn off search highlights
-stripwhitespace - Delete trailing spaces
-
-set number / set nonumber (nu/nonu)                         - Show/hide line numbers
-set relativenumber / set norelativenumber (rnu/nornu)       - Show/hide relative line numbers
-set cursorline / set nocursorline (cul/nocul)               - Highlight the current line
-set cursorcolumn / set nocursorcolumn (cuc/nocuc)           - Highlight the current column
-set statusline / set nostatusline (stl/nostl)               - Show/hide status line
-set syntax / set nosyntax (syn/nosyn)                       - Enable/disable syntax highlighting
-set indentationlines / set noindentationlines (indl/noindl) - Enable/disable indentation guide lines
-set autoindent / set noautoindent (ai/noai)                 - Enable/disable auto indent
-set autocloseparen / set noautocloseparen (acp/noacp)       - Enable/disable auto close paren
-set autodeleteparen / set noautodeleteparen (adp/noadp)     - Enable/disable auto delete paren
-set clipboard / set noclipboard (cb/nocb)                   - Enable/disable system clipboard
-set smoothscroll / set nosmoothscroll (sms/nosms)           - Enable/disable smooth scroll
-set livereload / set nolivereload (lr/nolr)                 - Enable/disable live reload of config
-set icon / set noicon (icons/noicons)                       - Show/hide icons in filer mode
-set highlightcurrentline / set nohighlightcurrentline (hcl/nohcl) - Highlight the current line
-set highlightcurrentword / set nohighlightcurrentword (hcw/nohcw) - Highlight other uses of the current word
-set highlightfullspace / set nohighlightfullspace (hfs/nohfs)     - Highlight full width space
-set highlightparen / set nohighlightparen (hp/nohp)         - Highlight matching paren
-set highlightfindchar / set nohighlightfindchar (hfc/nohfc) - Highlight f/F/t/T matches
-set highlightcolorcode / set nohighlightcolorcode (hcc/nohcc) - Highlight inline color codes
-set highlightgitconflict / set nohighlightgitconflict (hgc/nohgc) - Highlight git merge conflict blocks
-set highlightgitconflicttwocolor / set nohighlightgitconflicttwocolor (hgctc/nohgctc) - Use two-color (ours/theirs) conflict scheme
-set multistatusline / set nomultistatusline (msl/nomsl)     - Enable/disable multiple status line
-set ignorecase / set noignorecase (ic/noic)                 - Enable/disable ignorecase
-set smartcase / set nosmartcase (scs/noscs)                 - Enable/disable smartcase
-set incsearch / set noincsearch (is/nois)                   - Enable/disable incremental search
-set hlsearch / set nohlsearch (hls/nohls)                   - Enable/disable search highlighting
-set buildonsave / set nobuildonsave (bos/nobos)             - Enable/disable build on save
-set showgitinactive / set noshowgitinactive (sgi/nosgi)     - Show/hide git branch in inactive window
-set wrap / set nowrap                                       - Enable/disable line wrap
-set expandtab / set noexpandtab (et/noet)                   - Enable/disable expand tab to spaces
-set scrollbar / set noscrollbar                             - Enable/disable scrollbar
-set scrollbarwidth=number        - Change scrollbar width; e.g. set scrollbarwidth=2
-set tabstop=number (ts)          - Change tab stop width; e.g. set tabstop=2
-set shiftwidth=number (sw)       - Change indent width; e.g. set shiftwidth=2
-set softtabstop=number (sts)     - Change soft tab stop width; e.g. set softtabstop=4
-set scrollfriction=number (sfr)  - Change smooth scroll friction; e.g. set scrollfriction=80.0
-set scrollairdrag=number (sad)   - Change smooth scroll air drag; e.g. set scrollairdrag=2.0
-build - Build the current buffer
-lspfold - LSP Folding Range
-lspformat - LSP Document Formatting
-
-log - Open a log viewer for editor log
-lsplog - Open a log viewer for LSP log
-
-lsprestart - Restart the current LSP server
-lspcallhierarchyincoming - Show incoming calls (callers) at cursor
-lspcallhierarchyoutgoing - Show outgoing calls (callees) at cursor
-
-help - Open this help
-
-putconfigfile - Put a sample configuration file in ~/.config/moe
-
-moerc - Open the configuration file (moerc.toml) for editing
-
-quickrun - Quick run
-
-recent - Open recent file selection mode (Only supported on Linux)
-
-backup - Open backup file manager
-
-config - Open configuration mode
-
-debug - Open debug mode
-
-jump - Open Jump list viewer
-
-terminal         - Open terminal emulator (default shell)
-terminal command - Run command in terminal emulator
-
-changes - Show Change list
-
-bookmarks - Show bookmark list
-
-conflictnext - Jump to next git merge conflict block
-conflictprev - Jump to previous git merge conflict block
+""" &
+  renderExCommandHead() & "\n" & renderSetOptionsSection() & renderExCommandTail() & """
 
 ## Runtime Key Mapping
 
@@ -486,10 +381,6 @@ i  - Return to Terminal-Input sub-mode
 a  - Return to Terminal-Input sub-mode
 :  - Enter command mode
 """
-
-import std/[strutils, options]
-
-import buffer
 
 type HelpViewerState* = ref object
   lines*: seq[string] # Help lines to display
