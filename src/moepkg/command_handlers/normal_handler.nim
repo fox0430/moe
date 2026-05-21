@@ -94,10 +94,7 @@ proc updateCursorToJumpPosition(
 
   let
     cursorPos = CursorPosition(x: state.cursor.column, y: state.cursor.line)
-    lineNumOffset = calculateViewportOffset(
-      buffer, state.display.showLineNumbers, state.display.showSidebar,
-      state.display.scrollbar, state.display.scrollbarWidth,
-    )
+    lineNumOffset = viewportOffsetFor(buffer, state)
   handler.motionController.viewportManager.updateViewport(
     cursorPos, buffer.len, state.display.showStatusLine,
     state.windowDisplay.viewportReservedLines, state.display.lineWrap, buffer,

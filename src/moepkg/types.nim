@@ -97,6 +97,18 @@ type
     mskRecentFile
     mskTerminal
 
+  WrapCountCache* = ref object
+    ## Per-window memoization of `calculateWrapCount` results. Bumping
+    ## `currentGen` on any key-field mismatch gives O(1) invalidation —
+    ## an entry is fresh iff `gens[line] == currentGen`.
+    counts*: seq[int]
+    gens*: seq[int]
+    currentGen*: int
+    bufferId*: BufferId
+    bufferChangeSeq*: int
+    viewportWidth*: int
+    tabStop*: int
+
   ModeState* = object
     ## Per-window mode-specific state, replacing the previous bundle of
     ## `Option[XxxState]` fields on `EditorWindow`. At most one mode owns the
@@ -139,6 +151,7 @@ type
       # Saved buffer for modes that swap the window buffer (Filer, Terminal,
       # BufferManager, ...). Set on mode entry, restored and cleared on exit.
     fixedWidth*: Option[int] # Fixed width for sidebar windows (skips equalize)
+    wrapCountCache*: WrapCountCache
 
   SearchDirection* = enum
     Forward # Search forward (/)

@@ -66,10 +66,7 @@ proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
     activeBuffer = e.activeBuffer()
     lineCount = activeBuffer.len
     cursorPos = CursorPosition(x: pos.column, y: pos.line)
-    lineNumOffset = calculateViewportOffset(
-      activeBuffer, e.state.display.showLineNumbers, e.state.display.showSidebar,
-      e.state.display.scrollbar, e.state.display.scrollbarWidth,
-    )
+    lineNumOffset = viewportOffsetFor(activeBuffer, e.state)
 
   e.handlerManager.motionController.viewportManager.updateViewport(
     cursorPos, lineCount, e.state.display.showStatusLine,
@@ -231,6 +228,7 @@ proc toggleFileTree*(e: Editor, pathOpt: Option[string], activeBuffer: TextBuffe
     mode: EditorMode.FileTree,
     modeState: ModeState(kind: mskFileTree, fileTree: ftState),
     fixedWidth: some(ftWidth),
+    wrapCountCache: WrapCountCache(),
   )
 
   e.windowManager.windows.insert(ftWindow, 0)

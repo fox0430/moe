@@ -97,10 +97,7 @@ proc jumpCursorToLine*(ctx: CommandContext, line: int) =
   ## hunks, conflict blocks).
   recordJump(ctx.state)
   ctx.cursor = BufferPosition(line: line, column: 0)
-  let lineNumOffset = calculateViewportOffset(
-    ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar,
-    ctx.state.display.scrollbar, ctx.state.display.scrollbarWidth,
-  )
+  let lineNumOffset = viewportOffsetFor(ctx.buffer, ctx.state)
   ctx.motionController.viewportManager.updateViewport(
     CursorPosition(x: 0, y: line),
     ctx.buffer.len,
@@ -271,10 +268,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
       let
         lineCount = ctx.buffer.len
         cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
-        lineNumOffset = calculateViewportOffset(
-          ctx.buffer, ctx.state.display.showLineNumbers, ctx.state.display.showSidebar,
-          ctx.state.display.scrollbar, ctx.state.display.scrollbarWidth,
-        )
+        lineNumOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
       ctx.motionController.viewportManager.updateViewport(
         cursorPos, lineCount, ctx.state.display.showStatusLine,
@@ -615,10 +609,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
           let
             lineCount = ctx.buffer.len
             cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
-            lineNumOffset = calculateViewportOffset(
-              ctx.buffer, ctx.state.display.showLineNumbers,
-              ctx.state.display.showSidebar,
-            )
+            lineNumOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
           ctx.motionController.viewportManager.updateViewport(
             cursorPos, lineCount, ctx.state.display.showStatusLine,
@@ -699,10 +690,7 @@ proc registerMiscCommands*(registry: CommandRegistry) =
           let
             lineCount = ctx.buffer.len
             cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
-            lineNumOffset = calculateViewportOffset(
-              ctx.buffer, ctx.state.display.showLineNumbers,
-              ctx.state.display.showSidebar,
-            )
+            lineNumOffset = viewportOffsetFor(ctx.buffer, ctx.state)
 
           ctx.motionController.viewportManager.updateViewport(
             cursorPos, lineCount, ctx.state.display.showStatusLine,

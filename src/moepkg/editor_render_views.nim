@@ -46,8 +46,9 @@ proc adjustViewportForCursor(
     cursor: BufferPosition,
     visibleHeight, textAreaWidth: int,
     lineWrap: bool,
-    textBuffer: TextBuffer = nil,
-    tabStop: int = 4,
+    textBuffer: TextBuffer,
+    tabStop: int,
+    wrapCache: WrapCountCache,
 ) =
   ## Adjust viewport to keep cursor visible (scroll if cursor is off-screen)
   # Vertical adjustment
@@ -57,18 +58,16 @@ proc adjustViewportForCursor(
     if cursor.line < viewport.topLine:
       viewport.topLine = cursor.line
     else:
-      # Count screen lines from topLine through cursor.line (inclusive)
+      wrapCache.ensureFresh(textBuffer, maxWidth, tabStop)
       var totalScreenLines = 0
       for lineIdx in viewport.topLine .. min(cursor.line, textBuffer.len - 1):
-        totalScreenLines +=
-          calculateWrapCount(textBuffer.getLine(lineIdx), maxWidth, tabStop)
+        totalScreenLines += wrapCache.cachedWrapCount(textBuffer, lineIdx)
 
       if totalScreenLines > visibleHeight:
         # Cursor is below viewport — scroll down incrementally (O(n))
         var newTopLine = viewport.topLine
         while totalScreenLines > visibleHeight and newTopLine < cursor.line:
-          totalScreenLines -=
-            calculateWrapCount(textBuffer.getLine(newTopLine), maxWidth, tabStop)
+          totalScreenLines -= wrapCache.cachedWrapCount(textBuffer, newTopLine)
           newTopLine += 1
         viewport.topLine = newTopLine
   else:
@@ -122,10 +121,13 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       textAreaWidth =
         max(0, window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset)
 
-    # Adjust viewport to keep cursor visible
+    # Utility windows (Filer / Help / BufferManager / ...) render in
+    # no-wrap mode regardless of the global lineWrap setting, matching the
+    # sidebar / scrollbar gating done above.
+    let effectiveLineWrap = e.state.display.lineWrap and window.mode.isFileEditMode
     adjustViewportForCursor(
-      window.viewport, window.cursor, visibleHeight, textAreaWidth,
-      e.state.display.lineWrap, window.buffer, e.state.display.tabStop,
+      window.viewport, window.cursor, visibleHeight, textAreaWidth, effectiveLineWrap,
+      window.buffer, e.state.display.tabStop, window.wrapCountCache,
     )
 
     # Render tab line for this window if enabled.

@@ -27,11 +27,13 @@ import ../src/moepkg/types
 import ../src/moepkg/buffer
 import ../src/moepkg/modes
 import ../src/moepkg/help_viewer
+import ../src/moepkg/render_utils
 
 # Helper to create a minimal Editor for testing
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
   result = newEditor(config)
+  result.syncActiveWindow()
 
 suite "vsplit":
   test "vertical split creates two windows":
@@ -322,6 +324,89 @@ suite "syncActiveWindow":
     e.syncActiveWindow()
 
     check e.state.windowDisplay.needsFullRedraw
+
+  test "binds wrapCountCache to active window's cache":
+    let e = createTestEditor()
+    e.syncActiveWindow()
+    check e.executer.motionController.viewportManager.wrapCountCache ==
+      e.activeWindow.wrapCountCache
+
+  test "hsplit rebinds wrapCountCache to the new active window":
+    let e = createTestEditor()
+    let win0 = e.activeWindow
+    let res = e.hsplit()
+    check res.isOk
+    let win1 = e.activeWindow
+    check win1 != win0
+    check e.executer.motionController.viewportManager.wrapCountCache ==
+      win1.wrapCountCache
+
+  test "closeWindow rebinds wrapCountCache after switching active window":
+    # vsplit inserts the new window at activeWindowIndex, so after vsplit
+    # the new window is at index 0 and the original is at index 1. After
+    # switchToPrevWindow, index 1 (the original) is active; closing it
+    # leaves the new window as the survivor at index 0.
+    let e = createTestEditor()
+    let res = e.vsplit()
+    check res.isOk
+    let survivor = e.windowManager.windows[0]
+    e.switchToPrevWindow()
+    let shouldQuit = e.closeWindow()
+    check not shouldQuit
+    check e.activeWindow == survivor
+    check e.executer.motionController.viewportManager.wrapCountCache ==
+      survivor.wrapCountCache
+
+  test "vsplit rebinds wrapCountCache to the new active window":
+    let e = createTestEditor()
+    let win0 = e.activeWindow
+    let res = e.vsplit()
+    check res.isOk
+    let win1 = e.activeWindow
+    check win1 != win0
+    check e.executer.motionController.viewportManager.wrapCountCache ==
+      win1.wrapCountCache
+
+  test "switchToNextWindow rebinds wrapCountCache":
+    let e = createTestEditor()
+    let res = e.vsplit()
+    check res.isOk
+    let winA = e.activeWindow
+    e.switchToNextWindow()
+    let winB = e.activeWindow
+    check winA != winB
+    check e.executer.motionController.viewportManager.wrapCountCache ==
+      winB.wrapCountCache
+
+  test "closeWindow rebinds wrapCountCache to the surviving window":
+    let e = createTestEditor()
+    let res = e.vsplit()
+    check res.isOk
+    let shouldQuit = e.closeWindow()
+    check not shouldQuit
+    check e.executer.motionController.viewportManager.wrapCountCache ==
+      e.activeWindow.wrapCountCache
+
+  test "enew rebinds wrapCountCache (same window, new buffer)":
+    # enew swaps the active window's buffer in-place — the cache ref stays,
+    # but its content must invalidate via bufferId.
+    let e = createTestEditor()
+    let oldBuf = e.activeWindow.buffer
+    discard getWrapCount(e.activeWindow.wrapCountCache, oldBuf, 0, 10, 4)
+    e.activeWindow.wrapCountCache.counts[0] = 999 # poison
+    let oldId = e.activeWindow.wrapCountCache.bufferId
+
+    let res = e.enew()
+    check res.isOk
+
+    check e.executer.motionController.viewportManager.wrapCountCache ==
+      e.activeWindow.wrapCountCache
+
+    let newBuf = e.activeWindow.buffer
+    check newBuf.id != oldId
+    let r = getWrapCount(e.activeWindow.wrapCountCache, newBuf, 0, 10, 4)
+    check r != 999
+    check e.activeWindow.wrapCountCache.bufferId == newBuf.id
 
 suite "setActiveWindowScreenCursor":
   test "sets screen cursor for active window":

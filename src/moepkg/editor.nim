@@ -522,6 +522,7 @@ proc openFileInNewRightWindow*(e: Editor, path: string): Result[(), string] =
     cursor: BufferPosition(line: 0, column: 0),
     active: true,
     mode: EditorMode.Normal,
+    wrapCountCache: WrapCountCache(),
   )
 
   let ftIndex = e.windowManager.activeWindowIndex
@@ -918,6 +919,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       preferredColumn: -1,
       screenCursor: CursorPosition(x: 0, y: 0),
       active: true,
+      wrapCountCache: WrapCountCache(),
     )
   )
   result.windowManager.activeWindowIndex = 0

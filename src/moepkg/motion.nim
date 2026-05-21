@@ -42,6 +42,8 @@ type
   # Viewport manager - handles viewport updates
   ViewportManager* = ref object
     viewport*: ViewPort
+    wrapCountCache*: WrapCountCache
+      # Bound to the active window's cache by syncActiveWindow.
 
   # Cursor manager - handles cursor positioning and clamping
   CursorManager* = ref object
@@ -933,6 +935,7 @@ proc newViewportManager*(viewport: ViewPort): ViewportManager =
   ViewportManager(viewport: viewport)
 
 proc calculateScreenLine(
+    mgr: ViewportManager,
     buffer: buffer.TextBuffer,
     startLine: int,
     targetLine: int,
@@ -944,15 +947,20 @@ proc calculateScreenLine(
   ## Calculate screen line position of targetLine starting from startLine.
   ## Returns the number of screen lines from startLine to targetLine.
   ## Stops early if result reaches maxResult to avoid O(n) for distant jumps.
+  if lineWrap and mgr.wrapCountCache != nil:
+    mgr.wrapCountCache.ensureFresh(buffer, maxWidth, tabStop)
   result = 0
   for lineIdx in startLine ..< targetLine:
     if result >= maxResult:
       return
     if lineIdx >= 0 and lineIdx < buffer.len:
       if lineWrap:
-        let line = buffer.getLine(lineIdx)
-        let wrappedLines = calculateWrapCount(line, maxWidth, tabStop)
-        result += wrappedLines
+        let wrapped =
+          if mgr.wrapCountCache != nil:
+            mgr.wrapCountCache.cachedWrapCount(buffer, lineIdx)
+          else:
+            calculateWrapCount(buffer.getLine(lineIdx), maxWidth, tabStop)
+        result += wrapped
       else:
         result += 1
 
@@ -995,7 +1003,7 @@ proc updateViewport*(
 
     # Calculate cursor's screen line position relative to topLine.
     # Use visibleHeight as early-exit bound to avoid O(n) for distant jumps.
-    var cursorScreenLine = calculateScreenLine(
+    var cursorScreenLine = mgr.calculateScreenLine(
       buffer,
       mgr.viewport.topLine,
       clampedCursorY,
@@ -1032,6 +1040,8 @@ proc updateViewport*(
       # Condition: sum(wrapCount[topLine..cursorY-1]) + cursorWrapOffset < visibleHeight
       let budget = visibleHeight - cursorWrapOffset
 
+      if mgr.wrapCountCache != nil:
+        mgr.wrapCountCache.ensureFresh(buffer, maxWidth, tabStop)
       var
         targetTopLine = clampedCursorY
         accum = 0
@@ -1040,7 +1050,10 @@ proc updateViewport*(
       while line >= 0:
         let lineHeight =
           if line < buffer.len:
-            calculateWrapCount(buffer.getLine(line), maxWidth, tabStop)
+            if mgr.wrapCountCache != nil:
+              mgr.wrapCountCache.cachedWrapCount(buffer, line)
+            else:
+              calculateWrapCount(buffer.getLine(line), maxWidth, tabStop)
           else:
             1
         if accum + lineHeight < budget:
@@ -1306,13 +1319,8 @@ proc executeMotion*(
   if updateViewport:
     let
       lineCount = controller.executor.buffer.len
-      lineNumOffset = calculateViewportOffset(
-        controller.executor.buffer,
-        controller.cursorManager.state.display.showLineNumbers,
-        controller.cursorManager.state.display.showSidebar,
-        controller.cursorManager.state.display.scrollbar,
-        controller.cursorManager.state.display.scrollbarWidth,
-      )
+      lineNumOffset =
+        viewportOffsetFor(controller.executor.buffer, controller.cursorManager.state)
 
     controller.viewportManager.updateViewport(
       newPos, lineCount, controller.cursorManager.state.display.showStatusLine,

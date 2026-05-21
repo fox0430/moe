@@ -19,9 +19,10 @@
 
 import std/[unittest, strutils]
 
+import pkg/results
+
 import ../src/moepkg/render_utils {.all.}
-import ../src/moepkg/buffer
-import ../src/moepkg/types
+import ../src/moepkg/[buffer, types, primitives]
 
 suite "formatLineNumber":
   # formatLineNumber uses: align($(lineIndex + 1), width - 1) & " "
@@ -448,3 +449,108 @@ suite "calculateWindowStatusLineY":
     let win = EditorWindow(buffer: buf, viewport: ViewPort(y: 10, height: 15))
     check calculateWindowStatusLineY(win, true) == 24 # 10 + 15 - 1 = 24
     check calculateWindowStatusLineY(win, false) == 24 # 10 + 15 - 1 = 24
+
+suite "getWrapCount":
+  test "matches direct calculateWrapCount":
+    let buf = newTextBuffer("aaaaaaaaaabbbbbbbbbbcccccccccc")
+    let cache = WrapCountCache()
+    let expected = calculateWrapCount(buf.getLine(0), 10, 4)
+    check getWrapCount(cache, buf, 0, 10, 4) == expected
+
+  test "populates cache on first call":
+    let buf = newTextBuffer("hello world")
+    let cache = WrapCountCache()
+    check cache.gens.len == 0
+    discard getWrapCount(cache, buf, 0, 5, 4)
+    check cache.gens.len >= 1
+    check cache.gens[0] == cache.currentGen
+    check cache.bufferId == buf.id
+    check cache.bufferChangeSeq == buf.changeSeq
+    check cache.viewportWidth == 5
+    check cache.tabStop == 4
+    check cache.currentGen >= 1
+
+  test "second call returns cached value (key unchanged)":
+    let buf = newTextBuffer("the quick brown fox")
+    let cache = WrapCountCache()
+    discard getWrapCount(cache, buf, 0, 7, 4)
+    cache.counts[0] = 999 # poison
+    check getWrapCount(cache, buf, 0, 7, 4) == 999
+
+  test "invalidates on buffer changeSeq change":
+    var buf = newTextBuffer("aaa bbb ccc")
+    let cache = WrapCountCache()
+    discard getWrapCount(cache, buf, 0, 5, 4)
+    cache.counts[0] = 999
+    let r = buf.insertText(BufferPosition(line: 0, column: 0), "X")
+    check r.isOk
+    check getWrapCount(cache, buf, 0, 5, 4) != 999
+    check cache.bufferChangeSeq == buf.changeSeq
+
+  test "invalidates on viewportWidth change":
+    let buf = newTextBuffer("aaaaaaaaaabbbbbbbbbb")
+    let cache = WrapCountCache()
+    let narrow = getWrapCount(cache, buf, 0, 5, 4)
+    let wide = getWrapCount(cache, buf, 0, 50, 4)
+    check narrow > wide
+    check cache.viewportWidth == 50
+
+  test "invalidates on tabStop change":
+    let buf = newTextBuffer("\taaaa")
+    let cache = WrapCountCache()
+    discard getWrapCount(cache, buf, 0, 5, 2)
+    discard getWrapCount(cache, buf, 0, 5, 8)
+    check cache.tabStop == 8
+
+  test "invalidates when buffer is swapped (different BufferId)":
+    let bufA = newTextBuffer("AAAAAAAAAA")
+    let bufB = newTextBuffer("BB")
+    let cache = WrapCountCache()
+    discard getWrapCount(cache, bufA, 0, 5, 4)
+    cache.counts[0] = 999
+    let r = getWrapCount(cache, bufB, 0, 5, 4)
+    check r != 999
+    check cache.bufferId == bufB.id
+
+  test "shrinks counts on buffer swap to bound memory":
+    # Open a "large" buffer, then swap to a smaller one. The cache must
+    # release entries past the new buffer's line count rather than carry
+    # them forever.
+    var bufLarge = newTextBuffer("a")
+    for _ in 1 .. 50:
+      let r = bufLarge.insert(bufLarge.len, "x")
+      check r.isOk
+    let cache = WrapCountCache()
+    for i in 0 ..< bufLarge.len:
+      discard getWrapCount(cache, bufLarge, i, 5, 4)
+    check cache.counts.len == bufLarge.len
+
+    let bufSmall = newTextBuffer("y")
+    discard getWrapCount(cache, bufSmall, 0, 5, 4)
+    check cache.counts.len <= bufSmall.len + 1
+
+  test "extends gens/counts seqs when buffer grows":
+    var buf = newTextBuffer("line0")
+    let cache = WrapCountCache()
+    discard getWrapCount(cache, buf, 0, 80, 4)
+    check cache.gens.len >= 1
+    let r = buf.insert(1, "line1")
+    check r.isOk
+    discard getWrapCount(cache, buf, 1, 80, 4)
+    check cache.gens.len >= 2
+    check cache.gens[1] == cache.currentGen
+
+  test "invalidation is O(1) — currentGen bump only, no seq realloc":
+    # Regression guard against an eager-fill implementation that would
+    # `setLen(buffer.len)` on every key change. Querying only line 0 must
+    # leave gens.len at 1 no matter how many invalidations fire.
+    var buf = newTextBuffer("line0\nline1\nline2\nline3\nline4")
+    check buf.len >= 5
+    let cache = WrapCountCache()
+    discard getWrapCount(cache, buf, 0, 5, 4)
+    check cache.gens.len == 1
+    let genAfterFirst = cache.currentGen
+    for i in 0 .. 100:
+      discard getWrapCount(cache, buf, 0, 5, if i mod 2 == 0: 4 else: 8)
+    check cache.gens.len == 1
+    check cache.currentGen > genAfterFirst
