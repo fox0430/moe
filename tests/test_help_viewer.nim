@@ -374,9 +374,10 @@ suite "HelpViewer - Search first":
 
 suite "HelpViewer - Command mode rendering (snapshot)":
   ## These assertions pin the exact output of `help_generator` so that any
-  ## change to the structured ExCommandGroups / BoolSetOptions / ValueSetOptions
-  ## tables or to the per-group alignment width is caught as a test failure.
-  ## Update the literals deliberately when the help text is intentionally changed.
+  ## change to the structured `ExCommandGroups` or to the canonical
+  ## `SetOptionTable` (in `setting_options`) — or to the per-group alignment
+  ## width — is caught as a test failure. Update the literals deliberately
+  ## when the help text is intentionally changed.
 
   test "Command mode header is present":
     let state = newHelpViewerState()
@@ -444,8 +445,20 @@ suite "HelpViewer - Command mode rendering (snapshot)":
 
   test "value set options block is aligned to its own widest entry":
     let state = newHelpViewerState()
+    # Example values now come from the canonical SetOptionTable (which also
+    # feeds the executeSet error messages — so they say "scrollbarwidth=1" /
+    # "tabstop=4" instead of the older help-only "=2").
     check state.lines.contains(
-      "set scrollbarwidth=number       - Change scrollbar width; e.g. set scrollbarwidth=2"
+      "set scrollbarwidth=number       - Change scrollbar width; e.g. set scrollbarwidth=1"
+    )
+    check state.lines.contains(
+      "set tabstop=number (ts)         - Change tab stop width; e.g. set tabstop=4"
+    )
+    check state.lines.contains(
+      "set shiftwidth=number (sw)      - Change indent width; e.g. set shiftwidth=4"
+    )
+    check state.lines.contains(
+      "set softtabstop=number (sts)    - Change soft tab stop width; e.g. set softtabstop=4"
     )
     check state.lines.contains(
       "set scrollairdrag=number (sad)  - Change smooth scroll air drag; e.g. set scrollairdrag=2.0"
@@ -490,3 +503,120 @@ suite "HelpViewer - Command mode rendering (snapshot)":
     check idx >= 0
     check state.lines[idx + 1] == ""
     check state.lines[idx + 2] == "## Runtime Key Mapping"
+
+suite "HelpViewer - Mode sections (snapshot)":
+  ## Snapshot assertions for the per-mode `render*Section` procs in
+  ## `help_generator`. Each suite test pins the section header plus a few
+  ## representative entries (first/last/longest) so accidental drops, reorders,
+  ## or column-width changes in the underlying `*Commands` tables fail the
+  ## build. Update literals deliberately when content is intentionally changed.
+
+  test "# Exiting section is aligned to width 5":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Exiting")
+    check state.lines.contains(":w    - Write file")
+    check state.lines.contains(":q    - Quit")
+    check state.lines.contains(":wqa! - Force quit all windows")
+    check state.lines.contains(":cq   - Quit with non-zero exit code")
+
+  test "# Changing modes section is aligned to width 6":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Changing modes")
+    check state.lines.contains("v      - Visual mode")
+    check state.lines.contains("Ctrl-v - Visual block mode")
+    check state.lines.contains("A      - Same as $a")
+
+  test "# Normal mode section preserves representative entries":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Normal mode")
+    check state.lines.contains("h          - Go left")
+    check state.lines.contains("gg         - Go to the first line")
+    check state.lines.contains("dgN        - Delete previous search match")
+    check state.lines.contains(
+      "ca{ or ca} - Delete around curly brackets and enter insert mode"
+    )
+
+  test "# Visual mode section uses minWidth=7 padding":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Visual mode")
+    # natural max is 6 ("Ctrl-a"/"Ctrl-x"/"Ctrl-s"); minWidth pads to 7
+    check state.lines.contains("d or x  - Delete text")
+    check state.lines.contains("Ctrl-a  - Increase number under cursor")
+    check state.lines.contains("Esc     - Go to Normal mode")
+
+  test "# Replace mode section is aligned to width 9":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Replace mode")
+    check state.lines.contains("Esc       - Go to Normal mode")
+    check state.lines.contains("Backspace - Undo")
+
+  test "# Insert mode section is aligned to widest entry":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Insert mode")
+    check state.lines.contains(
+      "Ctrl-e              - Insert the character which is below the cursor"
+    )
+    check state.lines.contains(
+      "Ctrl-h or Backspace - Delete the character before the cursor"
+    )
+    check state.lines.contains("Esc                 - Go to Normal mode")
+
+  test "# Backup mode section is aligned to width 5":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Backup mode")
+    check state.lines.contains("j     - Go down")
+    check state.lines.contains("Enter - Open diff")
+    check state.lines.contains("R     - Restore backup file")
+
+  test "# Diff mode section is aligned to width 2":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Diff mode")
+    check state.lines.contains("j  - Go down")
+    check state.lines.contains("gg - Go to the first line")
+    check state.lines.contains("G  - Go to the last line")
+
+  test "# References mode section is aligned to width 5":
+    let state = newHelpViewerState()
+    check state.lines.contains("# References mode")
+    check state.lines.contains("Enter - Jump to the destination")
+    check state.lines.contains("Esc   - Quit References mode")
+
+  test "# Call hierarchy viewer mode section is aligned to width 5":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Call hierarchy viewer mode")
+    check state.lines.contains("Enter - Jump to the destination")
+    check state.lines.contains("i     - Incoming call")
+    check state.lines.contains("o     - Outgoing call")
+
+  test "# Filer mode section is aligned to width 2":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Filer mode")
+    check state.lines.contains("j  - Go down")
+    check state.lines.contains("D  - Delete file")
+    check state.lines.contains("v  - Split window and open file or directory")
+
+  test "# Register section lists patterns verbatim (no key/desc form)":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Register")
+    check state.lines.contains("\"-any key-yy")
+    check state.lines.contains("\"-any key-di-any key")
+    check state.lines.contains("\"-any key-ci-any key")
+
+  test "# Terminal mode section has both sub-mode headers":
+    let state = newHelpViewerState()
+    check state.lines.contains("# Terminal mode")
+    check state.lines.contains("## Terminal-Input sub-mode (default)")
+    check state.lines.contains("## Terminal-Normal sub-mode")
+
+  test "Terminal-Input sub-mode body lists Ctrl-\\ Ctrl-n switch":
+    let state = newHelpViewerState()
+    check state.lines.contains(
+      "All keystrokes are forwarded to the running shell/command."
+    )
+    check state.lines.contains("Ctrl-\\ Ctrl-n - Switch to Terminal-Normal sub-mode")
+
+  test "Terminal-Normal sub-mode body uses minWidth=2":
+    let state = newHelpViewerState()
+    check state.lines.contains("i  - Return to Terminal-Input sub-mode")
+    check state.lines.contains("a  - Return to Terminal-Input sub-mode")
+    check state.lines.contains(":  - Enter command mode")

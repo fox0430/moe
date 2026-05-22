@@ -896,7 +896,7 @@ suite "CommandModeHandler - executeSet Scrollbar":
     let handler = setupHandler()
     let result = handler.executeSet("scrollbarwidth", some("-1"))
     check result.kind == cmrError
-    check "must be >= 0" in result.errorMessage
+    check "must be non-negative" in result.errorMessage
 
 suite "CommandModeHandler - executeSet Float Options":
   test "Set scrollfriction":

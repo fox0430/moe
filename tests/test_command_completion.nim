@@ -848,6 +848,21 @@ suite "CommandCompletion - edge cases":
         check opt.description.len > 0
     check hasTabstop
 
+  test "Int value options include example syntax in completion description":
+    let options = collectSetOptions("tab")
+    for opt in options:
+      if opt.command == "tabstop":
+        check "(e.g., tabstop=4)" in opt.description
+
+  test "Float value options include example syntax in completion description":
+    let options = collectSetOptions("scroll")
+    var found = false
+    for opt in options:
+      if opt.command == "scrollfriction":
+        found = true
+        check "(e.g., scrollfriction=80.0)" in opt.description
+    check found
+
   test "filterAndSortEntries with fuzzy match":
     let mgr = newCommandCompletionManager()
     mgr.allCommands = @[

@@ -26,7 +26,7 @@ import std/[algorithm, strutils, unicode, tables, os]
 
 import pkg/celina
 
-import command_line, fuzzy_match, unicode_utils
+import command_line, fuzzy_match, setting_options, unicode_utils
 
 type
   CommandCompletionState* = enum
@@ -190,97 +190,25 @@ const CommandDescriptions = {
 const FilePathCommands* =
   ["e", "edit", "w", "write", "vs", "vsplit", "sp", "split", "filetree"]
 
-# Set options
-const SetOptions* = {
-  # Line numbers
-  "number": "Show line numbers",
-  "nonumber": "Hide line numbers",
-  "relativenumber": "Show relative line numbers",
-  "norelativenumber": "Hide relative line numbers",
-  # Cursor line/column
-  "cursorline": "Highlight cursor line",
-  "nocursorline": "Disable cursor line highlight",
-  "cursorcolumn": "Highlight cursor column",
-  "nocursorcolumn": "Disable cursor column highlight",
-  # Status line
-  "statusline": "Show status line",
-  "nostatusline": "Hide status line",
-  "multistatusline": "Status line per window",
-  "nomultistatusline": "Single status line",
-  # Syntax / indentation
-  "syntax": "Enable syntax highlighting",
-  "nosyntax": "Disable syntax highlighting",
-  "indentationlines": "Show indentation guide lines",
-  "noindentationlines": "Hide indentation guide lines",
-  # Auto features
-  "autoindent": "Auto indent new lines",
-  "noautoindent": "Disable auto indent",
-  "autocloseparen": "Auto-close parentheses/brackets/quotes",
-  "noautocloseparen": "Disable auto-close parentheses",
-  "autodeleteparen": "Auto-delete matching parentheses",
-  "noautodeleteparen": "Disable auto-delete parentheses",
-  # Clipboard
-  "clipboard": "Enable system clipboard",
-  "noclipboard": "Disable system clipboard",
-  # Scroll
-  "smoothscroll": "Enable smooth scroll",
-  "nosmoothscroll": "Disable smooth scroll",
-  "scrollfriction": "Smooth scroll friction (e.g., scrollfriction=80.0)",
-  "scrollairdrag": "Smooth scroll air drag (e.g., scrollairdrag=2.0)",
-  # Live reload
-  "livereload": "Enable live reload of config",
-  "nolivereload": "Disable live reload of config",
-  # Filer icons
-  "icon": "Show filer icons",
-  "noicon": "Hide filer icons",
-  # Highlight
-  "highlightcurrentline": "Highlight current line",
-  "nohighlightcurrentline": "Disable current line highlight",
-  "highlightcurrentword": "Highlight current word",
-  "nohighlightcurrentword": "Disable current word highlight",
-  "highlightfullspace": "Highlight full-width spaces",
-  "nohighlightfullspace": "Disable full-width space highlight",
-  "highlightparen": "Highlight matching parentheses",
-  "nohighlightparen": "Disable matching parentheses highlight",
-  "highlightfindchar": "Highlight f/F/t/T matches",
-  "nohighlightfindchar": "Disable f/F/t/T match highlight",
-  "highlightcolorcode": "Highlight inline color codes",
-  "nohighlightcolorcode": "Disable inline color code highlight",
-  "highlightgitconflict": "Highlight git merge conflict blocks",
-  "nohighlightgitconflict": "Disable git conflict highlight",
-  "highlightgitconflicttwocolor": "Use two-color (ours/theirs) conflict scheme",
-  "nohighlightgitconflicttwocolor": "Use single-color conflict scheme",
-  # Search
-  "ignorecase": "Case insensitive search",
-  "noignorecase": "Case sensitive search",
-  "smartcase": "Smart case search",
-  "nosmartcase": "Disable smart case",
-  "hlsearch": "Highlight search results",
-  "nohlsearch": "Disable search highlight",
-  "incsearch": "Incremental search",
-  "noincsearch": "Disable incremental search",
-  # Build
-  "buildonsave": "Build on save",
-  "nobuildonsave": "Disable build on save",
-  # Git
-  "showgitinactive": "Show git branch in inactive window",
-  "noshowgitinactive": "Hide git branch in inactive window",
-  # Line wrap
-  "wrap": "Enable line wrapping",
-  "nowrap": "Disable line wrapping",
-  # Tab / indent
-  "expandtab": "Use spaces instead of tabs",
-  "noexpandtab": "Use tab characters",
-  # Scrollbar
-  "scrollbar": "Enable scrollbar",
-  "noscrollbar": "Disable scrollbar",
-  "scrollbarwidth": "Scrollbar width (e.g., scrollbarwidth=2)",
-  # Tab / indent
-  "tabstop": "Tab width (e.g., tabstop=4)",
-  "shiftwidth": "Indent width for >>/<<  (e.g., shiftwidth=4, 0=use tabstop)",
-  "softtabstop":
-    "Tab/Backspace width in insert mode (e.g., softtabstop=4, 0=use tabstop)",
-}.toTable
+# Set options — derived from the canonical SetOptionTable so the completion
+# popup, the help text, and the :set parser all share the same source of
+# truth. Bool toggles map both positive and negative names to the same
+# combined description ("Show/hide line numbers"); value options append the
+# inline example (e.g., "tabstop=4") so users see the value syntax.
+const SetOptions*: Table[string, string] = block:
+  var t: Table[string, string]
+  for spec in SetOptionTable:
+    case spec.kind
+    of sokBool:
+      t[spec.longName] = spec.description
+      t["no" & spec.longName] = spec.description
+    of sokInt:
+      t[spec.longName] =
+        spec.description & " (e.g., " & spec.longName & "=" & $spec.intExample & ")"
+    of sokFloat:
+      t[spec.longName] =
+        spec.description & " (e.g., " & spec.longName & "=" & $spec.floatExample & ")"
+  t
 
 # Command collection
 
