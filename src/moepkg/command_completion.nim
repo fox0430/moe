@@ -26,7 +26,7 @@ import std/[algorithm, strutils, unicode, tables, os]
 
 import pkg/celina
 
-import command_line, fuzzy_match, setting_options, unicode_utils
+import command_line, command_line_commands, fuzzy_match, setting_options, unicode_utils
 
 type
   CommandCompletionState* = enum
@@ -66,129 +66,26 @@ const
   PopupPadding* = 2
   DescriptionGap* = 2 # Gap between command and description
 
-# Command descriptions for built-in commands
-const CommandDescriptions = {
-  # Quit commands
-  "q": "Quit (close window)",
-  "qa": "Quit all windows",
-  "cq": "Quit with non-zero exit code",
-  # Save commands
-  "w": "Write (save) file",
-  "wa": "Write all files",
-  # Combined commands
-  "wq": "Write and quit",
-  "wqa": "Write all and quit",
-  # Edit commands
-  "e": "Edit file",
-  "ene": "Create new empty buffer",
-  # Settings
-  "set": "Set option",
-  # Help
-  "help": "Show help",
-  # Substitute
-  "s": "Substitute",
-  # Delete lines
-  "delete": "Delete lines and copy to register",
-  # Window split
-  "vs": "Vertical split",
-  "sp": "Horizontal split",
-  "new": "New horizontal split",
-  "vnew": "New vertical split",
-  # Buffer navigation
-  "b": "Switch to buffer",
-  "buffer": "Switch to buffer",
-  "bn": "Next buffer",
-  "bnext": "Next buffer",
-  "bp": "Previous buffer",
-  "bprev": "Previous buffer",
-  "bprevious": "Previous buffer",
-  "bf": "First buffer",
-  "bfirst": "First buffer",
-  "brewind": "First buffer",
-  "bl": "Last buffer",
-  "blast": "Last buffer",
-  "bd": "Delete buffer",
-  "bdelete": "Delete buffer",
-  # Strip whitespace
-  "stripwhitespace": "Strip trailing whitespace",
-  # Log viewer
-  "log": "Open log viewer",
-  "messages": "Open log viewer",
-  # QuickRun
-  "quickrun": "Run current buffer",
-  # Buffer manager
-  "ls": "Open buffer manager",
-  # Backup manager
-  "backup": "Open backup manager",
-  # Recent file
-  "recent": "Open recent files",
-  # Clear search highlight
-  "noh": "Clear search highlight",
-  # Background
-  "bg": "Suspend editor",
-  # Jump list
-  "jump": "Show jump list",
-  # Change list
-  "changes": "Show change list",
-  # Bookmarks
-  "bookmarks": "Show bookmark list",
-  # Git conflict navigation
-  "conflictnext": "Jump to next git conflict block",
-  "conflictprev": "Jump to previous git conflict block",
-  # Build
-  "build": "Build project",
-  # Debug mode
-  "debug": "Open debug mode",
-  # Configuration mode
-  "config": "Open configuration",
-  # Put config file
-  "putconfigfile": "Create config file",
-  # Manual
-  "man": "Show manual",
-  # Theme
-  "theme": "Select theme",
-  # LSP commands
-  "lsplog": "Open LSP log",
-  "lspformat": "Format with LSP",
-  "lsprestart": "Restart LSP",
-  "lspfold": "Fold with LSP",
-  "lspexecommand": "Execute LSP command",
-  "lspcallhierarchyincoming": "Show incoming calls",
-  "lspcallhierarchyoutgoing": "Show outgoing calls",
-  # Terminal
-  "terminal": "Open terminal emulator",
-  # Key mapping commands
-  "map": "Map keys (all modes)",
-  "noremap": "Map keys (all modes)",
-  "nmap": "Map keys (Normal mode)",
-  "nnoremap": "Map keys (Normal mode)",
-  "imap": "Map keys (Insert mode)",
-  "inoremap": "Map keys (Insert mode)",
-  "vmap": "Map keys (Visual modes)",
-  "vnoremap": "Map keys (Visual modes)",
-  "rmap": "Map keys (Replace mode)",
-  "cmap": "Map keys (Command mode)",
-  "cnoremap": "Map keys (Command mode)",
-  "unmap": "Unmap keys (all modes)",
-  "nunmap": "Unmap keys (Normal mode)",
-  "iunmap": "Unmap keys (Insert mode)",
-  "vunmap": "Unmap keys (Visual modes)",
-  "runmap": "Unmap keys (Replace mode)",
-  "cunmap": "Unmap keys (Command mode)",
-  "mapclear": "Clear mappings (all modes)",
-  "nmapclear": "Clear mappings (Normal mode)",
-  "imapclear": "Clear mappings (Insert mode)",
-  "vmapclear": "Clear mappings (Visual modes)",
-  "rmapclear": "Clear mappings (Replace mode)",
-  "cmapclear": "Clear mappings (Command mode)",
-  "only": "Close all other windows",
-  "moerc": "Open config file",
-  "filetree": "Toggle FileTree sidebar",
-}.toTable
+# Command descriptions — derived from the canonical `CommandLineCommandTable`
+# in `command_line_commands.nim` so the completion popup, the help text, and
+# the parser dispatch all share one source of truth. Specs with an empty
+# completionDescription (long forms used only by TOML config) are excluded.
+const CommandDescriptions*: Table[string, string] = block:
+  var t: Table[string, string]
+  for spec in CommandLineCommandTable:
+    if spec.completionDescription.len > 0:
+      t[spec.name] = spec.completionDescription
+  t
 
-# Commands that take file path arguments
-const FilePathCommands* =
-  ["e", "edit", "w", "write", "vs", "vsplit", "sp", "split", "filetree"]
+# Commands that take file path arguments. Derived from the canonical
+# `CommandLineCommandTable` filtered on `takesFilePath` so the list of
+# names eligible for file-path completion lives in exactly one place.
+const FilePathCommands*: seq[string] = block:
+  var s: seq[string]
+  for spec in CommandLineCommandTable:
+    if spec.takesFilePath:
+      s.add(spec.name)
+  s
 
 # Set options — derived from the canonical SetOptionTable so the completion
 # popup, the help text, and the :set parser all share the same source of
