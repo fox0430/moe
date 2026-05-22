@@ -28,57 +28,11 @@
 import std/[options, strutils, os]
 
 import ../[buffer, modes, command_line, command_config, command_registry, config_loader]
+import ../setting_options
 import handler_types
-export handler_types
+export setting_options, handler_types
 
 type
-  BoolSettingOption* = enum
-    ## Boolean setting options that can be toggled via :set command
-    bsoNumber # line numbers
-    bsoRelativeNumber # relative line numbers
-    bsoCursorLine # cursor line highlight
-    bsoCursorColumn # cursor column highlight
-    bsoStatusLine # status line
-    bsoSyntax # syntax highlighting
-    bsoIndentationLines # indentation guide lines
-    bsoAutoIndent # auto indent
-    bsoAutoCloseParen # auto close parentheses
-    bsoAutoDeleteParen # auto delete parentheses
-    bsoClipboard # system clipboard
-    bsoSmoothScroll # smooth scroll
-    bsoLiveReloadOfConf # live reload of config
-    bsoShowIcons # filer icons
-    bsoHighlightCurrentLine # highlight current line
-    bsoHighlightCurrentWord # highlight current word
-    bsoHighlightFullWidthSpace # highlight full-width space
-    bsoHighlightPairOfParen # highlight pair of parentheses
-    bsoHighlightFindChar # highlight f/F/t/T matches
-    bsoHighlightColorCode # highlight inline color codes
-    bsoHighlightGitConflict # highlight git merge conflict blocks
-    bsoHighlightGitConflictTwoColor # two-color (ours/theirs) conflict scheme
-    bsoMultipleStatusLine # multiple status line
-    bsoIgnoreCase # ignore case in search
-    bsoSmartCase # smart case in search
-    bsoIncSearch # incremental search
-    bsoHlSearch # highlight search results
-    bsoBuildOnSave # build on save
-    bsoShowGitInactive # show git branch in inactive window
-    bsoLineWrap # line wrapping
-    bsoExpandTab # expand tab to spaces
-    bsoScrollbar # scrollbar
-
-  IntSettingOption* = enum
-    ## Integer setting options that can be set via :set command
-    isoTabStop # tab stop width
-    isoShiftWidth # indent width
-    isoSoftTabStop # tab/backspace width in insert mode
-    isoScrollbarWidth # scrollbar width (0 = hidden)
-
-  FloatSettingOption* = enum
-    ## Float setting options that can be set via :set command
-    fsoScrollFriction # smooth scroll friction (comfortable-motion compatible)
-    fsoScrollAirDrag # smooth scroll air drag (comfortable-motion compatible)
-
   CommandModeResultKind* = enum
     cmrQuit # Application should quit
     cmrCloseWindow # Close current window
@@ -397,434 +351,83 @@ proc executeGotoLine*(
 
   return CommandModeResult(kind: cmrGotoLine, lineNumber: clampedLine)
 
+proc parseSetIntValue(spec: SetOptionSpec, value: Option[string]): CommandModeResult =
+  ## Validate and dispatch an integer-typed `:set X=N` option.
+  doAssert spec.kind == sokInt, "parseSetIntValue called with non-int spec"
+  if value.isNone:
+    return CommandModeResult(
+      kind: cmrError,
+      errorMessage:
+        spec.longName & " requires a value (e.g., " & spec.longName & "=" &
+        $spec.intExample & ")",
+    )
+  try:
+    let intVal = parseInt(value.get)
+    if intBoundOk(spec.intBound, intVal):
+      return CommandModeResult(
+        kind: cmrSetIntOption, intOption: spec.intOption, intValue: intVal
+      )
+    return CommandModeResult(
+      kind: cmrError, errorMessage: spec.longName & " " & intBoundError(spec.intBound)
+    )
+  except ValueError:
+    return CommandModeResult(
+      kind: cmrError, errorMessage: "Invalid value for " & spec.longName
+    )
+
+proc parseSetFloatValue(spec: SetOptionSpec, value: Option[string]): CommandModeResult =
+  ## Validate and dispatch a float-typed `:set X=N.N` option.
+  doAssert spec.kind == sokFloat, "parseSetFloatValue called with non-float spec"
+  if value.isNone:
+    return CommandModeResult(
+      kind: cmrError,
+      errorMessage:
+        spec.longName & " requires a value (e.g., " & spec.longName & "=" &
+        $spec.floatExample & ")",
+    )
+  try:
+    let floatVal = parseFloat(value.get)
+    if floatVal >= 0:
+      return CommandModeResult(
+        kind: cmrSetFloatOption, floatOption: spec.floatOption, floatValue: floatVal
+      )
+    return CommandModeResult(
+      kind: cmrError, errorMessage: spec.longName & " must be non-negative"
+    )
+  except ValueError:
+    return CommandModeResult(
+      kind: cmrError, errorMessage: "Invalid value for " & spec.longName
+    )
+
 proc executeSet*(
     handler: CommandModeHandler, option: string, value: Option[string]
 ): CommandModeResult =
-  ## Execute set command (:set option=value)
+  ## Execute set command (:set option=value). Dispatches via `SetOptionTable`
+  ## so each `:set` option lives in exactly one place (setting_options.nim).
   let opt = option.toLower
-
-  # Boolean options - enable
-  case opt
-  # Line numbers
-  of "number", "nu":
-    return
-      CommandModeResult(kind: cmrSetBoolOption, boolOption: bsoNumber, boolValue: true)
-  of "nonumber", "nonu":
-    return
-      CommandModeResult(kind: cmrSetBoolOption, boolOption: bsoNumber, boolValue: false)
-  # Relative line numbers
-  of "relativenumber", "rnu":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoRelativeNumber, boolValue: true
-    )
-  of "norelativenumber", "nornu":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoRelativeNumber, boolValue: false
-    )
-  # Cursor line
-  of "cursorline", "cul":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoCursorLine, boolValue: true
-    )
-  of "nocursorline", "nocul":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoCursorLine, boolValue: false
-    )
-  # Cursor column
-  of "cursorcolumn", "cuc":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoCursorColumn, boolValue: true
-    )
-  of "nocursorcolumn", "nocuc":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoCursorColumn, boolValue: false
-    )
-  # Status line
-  of "statusline", "stl":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoStatusLine, boolValue: true
-    )
-  of "nostatusline", "nostl":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoStatusLine, boolValue: false
-    )
-  # Syntax highlighting
-  of "syntax", "syn":
-    return
-      CommandModeResult(kind: cmrSetBoolOption, boolOption: bsoSyntax, boolValue: true)
-  of "nosyntax", "nosyn":
-    return
-      CommandModeResult(kind: cmrSetBoolOption, boolOption: bsoSyntax, boolValue: false)
-  # Indentation lines
-  of "indentationlines", "indl":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoIndentationLines, boolValue: true
-    )
-  of "noindentationlines", "noindl":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoIndentationLines, boolValue: false
-    )
-  # Auto indent
-  of "autoindent", "ai":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoAutoIndent, boolValue: true
-    )
-  of "noautoindent", "noai":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoAutoIndent, boolValue: false
-    )
-  # Auto close paren
-  of "autocloseparen", "acp":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoAutoCloseParen, boolValue: true
-    )
-  of "noautocloseparen", "noacp":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoAutoCloseParen, boolValue: false
-    )
-  # Auto delete paren
-  of "autodeleteparen", "adp":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoAutoDeleteParen, boolValue: true
-    )
-  of "noautodeleteparen", "noadp":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoAutoDeleteParen, boolValue: false
-    )
-  # Clipboard
-  of "clipboard", "cb":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoClipboard, boolValue: true
-    )
-  of "noclipboard", "nocb":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoClipboard, boolValue: false
-    )
-  # Smooth scroll
-  of "smoothscroll", "sms":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoSmoothScroll, boolValue: true
-    )
-  of "nosmoothscroll", "nosms":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoSmoothScroll, boolValue: false
-    )
-  # Live reload of config
-  of "livereload", "lr":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoLiveReloadOfConf, boolValue: true
-    )
-  of "nolivereload", "nolr":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoLiveReloadOfConf, boolValue: false
-    )
-  # Filer icons
-  of "icon", "icons":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoShowIcons, boolValue: true
-    )
-  of "noicon", "noicons":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoShowIcons, boolValue: false
-    )
-  # Highlight current line
-  of "highlightcurrentline", "hcl":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightCurrentLine, boolValue: true
-    )
-  of "nohighlightcurrentline", "nohcl":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightCurrentLine, boolValue: false
-    )
-  # Highlight current word
-  of "highlightcurrentword", "hcw":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightCurrentWord, boolValue: true
-    )
-  of "nohighlightcurrentword", "nohcw":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightCurrentWord, boolValue: false
-    )
-  # Highlight full width space
-  of "highlightfullspace", "hfs":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightFullWidthSpace, boolValue: true
-    )
-  of "nohighlightfullspace", "nohfs":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightFullWidthSpace, boolValue: false
-    )
-  # Highlight pair of paren
-  of "highlightparen", "hp":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightPairOfParen, boolValue: true
-    )
-  of "nohighlightparen", "nohp":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightPairOfParen, boolValue: false
-    )
-  # Highlight find char (f/F/t/T)
-  of "highlightfindchar", "hfc":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightFindChar, boolValue: true
-    )
-  of "nohighlightfindchar", "nohfc":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightFindChar, boolValue: false
-    )
-  # Highlight color code
-  of "highlightcolorcode", "hcc":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightColorCode, boolValue: true
-    )
-  of "nohighlightcolorcode", "nohcc":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightColorCode, boolValue: false
-    )
-  # Highlight git conflict
-  of "highlightgitconflict", "hgc":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightGitConflict, boolValue: true
-    )
-  of "nohighlightgitconflict", "nohgc":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHighlightGitConflict, boolValue: false
-    )
-  # Highlight git conflict two-color
-  of "highlightgitconflicttwocolor", "hgctc":
-    return CommandModeResult(
-      kind: cmrSetBoolOption,
-      boolOption: bsoHighlightGitConflictTwoColor,
-      boolValue: true,
-    )
-  of "nohighlightgitconflicttwocolor", "nohgctc":
-    return CommandModeResult(
-      kind: cmrSetBoolOption,
-      boolOption: bsoHighlightGitConflictTwoColor,
-      boolValue: false,
-    )
-  # Multiple status line
-  of "multistatusline", "msl":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoMultipleStatusLine, boolValue: true
-    )
-  of "nomultistatusline", "nomsl":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoMultipleStatusLine, boolValue: false
-    )
-  # Ignore case
-  of "ignorecase", "ic":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoIgnoreCase, boolValue: true
-    )
-  of "noignorecase", "noic":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoIgnoreCase, boolValue: false
-    )
-  # Smart case
-  of "smartcase", "scs":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoSmartCase, boolValue: true
-    )
-  of "nosmartcase", "noscs":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoSmartCase, boolValue: false
-    )
-  # Incremental search
-  of "incsearch", "is":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoIncSearch, boolValue: true
-    )
-  of "noincsearch", "nois":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoIncSearch, boolValue: false
-    )
-  # Highlight search
-  of "hlsearch", "hls":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHlSearch, boolValue: true
-    )
-  of "nohlsearch", "nohls":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoHlSearch, boolValue: false
-    )
-  # Build on save
-  of "buildonsave", "bos":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoBuildOnSave, boolValue: true
-    )
-  of "nobuildonsave", "nobos":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoBuildOnSave, boolValue: false
-    )
-  # Show git in inactive window
-  of "showgitinactive", "sgi":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoShowGitInactive, boolValue: true
-    )
-  of "noshowgitinactive", "nosgi":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoShowGitInactive, boolValue: false
-    )
-  # Line wrap
-  of "wrap":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoLineWrap, boolValue: true
-    )
-  of "nowrap":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoLineWrap, boolValue: false
-    )
-  # Expand tab
-  of "expandtab", "et":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoExpandTab, boolValue: true
-    )
-  of "noexpandtab", "noet":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoExpandTab, boolValue: false
-    )
-  # Scrollbar
-  of "scrollbar":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoScrollbar, boolValue: true
-    )
-  of "noscrollbar":
-    return CommandModeResult(
-      kind: cmrSetBoolOption, boolOption: bsoScrollbar, boolValue: false
-    )
-  # Scrollbar width (integer option)
-  of "scrollbarwidth":
-    if value.isSome:
-      try:
-        let intVal = parseInt(value.get)
-        if intVal >= 0:
-          return CommandModeResult(
-            kind: cmrSetIntOption, intOption: isoScrollbarWidth, intValue: intVal
-          )
-        else:
-          return CommandModeResult(
-            kind: cmrError, errorMessage: "scrollbarwidth must be >= 0"
-          )
-      except ValueError:
+  for spec in SetOptionTable:
+    case spec.kind
+    of sokBool:
+      if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
         return CommandModeResult(
-          kind: cmrError, errorMessage: "Invalid value for scrollbarwidth"
+          kind: cmrSetBoolOption, boolOption: spec.boolOption, boolValue: true
         )
-    else:
-      return CommandModeResult(
-        kind: cmrError,
-        errorMessage: "scrollbarwidth requires a value (e.g., scrollbarwidth=1)",
-      )
-  # Tab stop (integer option)
-  of "tabstop", "ts":
-    if value.isSome:
-      try:
-        let intVal = parseInt(value.get)
-        if intVal > 0:
-          return CommandModeResult(
-            kind: cmrSetIntOption, intOption: isoTabStop, intValue: intVal
-          )
-        else:
-          return
-            CommandModeResult(kind: cmrError, errorMessage: "tabstop must be positive")
-      except ValueError:
-        return
-          CommandModeResult(kind: cmrError, errorMessage: "Invalid value for tabstop")
-    else:
-      return CommandModeResult(
-        kind: cmrError, errorMessage: "tabstop requires a value (e.g., tabstop=4)"
-      )
-  # Shift width (integer option)
-  of "shiftwidth", "sw":
-    if value.isSome:
-      try:
-        let intVal = parseInt(value.get)
-        if intVal >= 0:
-          return CommandModeResult(
-            kind: cmrSetIntOption, intOption: isoShiftWidth, intValue: intVal
-          )
-        else:
-          return CommandModeResult(
-            kind: cmrError, errorMessage: "shiftwidth must be non-negative"
-          )
-      except ValueError:
+      let noLong = "no" & spec.longName
+      if opt == noLong:
         return CommandModeResult(
-          kind: cmrError, errorMessage: "Invalid value for shiftwidth"
+          kind: cmrSetBoolOption, boolOption: spec.boolOption, boolValue: false
         )
-    else:
-      return CommandModeResult(
-        kind: cmrError, errorMessage: "shiftwidth requires a value (e.g., shiftwidth=4)"
-      )
-  # Soft tab stop (integer option)
-  of "softtabstop", "sts":
-    if value.isSome:
-      try:
-        let intVal = parseInt(value.get)
-        if intVal >= 0:
-          return CommandModeResult(
-            kind: cmrSetIntOption, intOption: isoSoftTabStop, intValue: intVal
-          )
-        else:
-          return CommandModeResult(
-            kind: cmrError, errorMessage: "softtabstop must be non-negative"
-          )
-      except ValueError:
+      if spec.shortName.len > 0 and opt == "no" & spec.shortName:
         return CommandModeResult(
-          kind: cmrError, errorMessage: "Invalid value for softtabstop"
+          kind: cmrSetBoolOption, boolOption: spec.boolOption, boolValue: false
         )
-    else:
-      return CommandModeResult(
-        kind: cmrError,
-        errorMessage: "softtabstop requires a value (e.g., softtabstop=4)",
-      )
-  # Scroll friction (float option, comfortable-motion compatible)
-  of "scrollfriction", "sfr":
-    if value.isSome:
-      try:
-        let floatVal = parseFloat(value.get)
-        if floatVal >= 0:
-          return CommandModeResult(
-            kind: cmrSetFloatOption,
-            floatOption: fsoScrollFriction,
-            floatValue: floatVal,
-          )
-        else:
-          return CommandModeResult(
-            kind: cmrError, errorMessage: "scrollfriction must be non-negative"
-          )
-      except ValueError:
-        return CommandModeResult(
-          kind: cmrError, errorMessage: "Invalid value for scrollfriction"
-        )
-    else:
-      return CommandModeResult(
-        kind: cmrError,
-        errorMessage: "scrollfriction requires a value (e.g., scrollfriction=80.0)",
-      )
-  # Scroll air drag (float option, comfortable-motion compatible)
-  of "scrollairdrag", "sad":
-    if value.isSome:
-      try:
-        let floatVal = parseFloat(value.get)
-        if floatVal >= 0:
-          return CommandModeResult(
-            kind: cmrSetFloatOption, floatOption: fsoScrollAirDrag, floatValue: floatVal
-          )
-        else:
-          return CommandModeResult(
-            kind: cmrError, errorMessage: "scrollairdrag must be non-negative"
-          )
-      except ValueError:
-        return CommandModeResult(
-          kind: cmrError, errorMessage: "Invalid value for scrollairdrag"
-        )
-    else:
-      return CommandModeResult(
-        kind: cmrError,
-        errorMessage: "scrollairdrag requires a value (e.g., scrollairdrag=2.0)",
-      )
-  else:
-    return CommandModeResult(kind: cmrError, errorMessage: "Unknown option: " & option)
+    of sokInt:
+      if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
+        return parseSetIntValue(spec, value)
+    of sokFloat:
+      if opt == spec.longName or (spec.shortName.len > 0 and opt == spec.shortName):
+        return parseSetFloatValue(spec, value)
+  return CommandModeResult(kind: cmrError, errorMessage: "Unknown option: " & option)
 
 proc executeHelp*(
     handler: CommandModeHandler, topic: Option[string]
