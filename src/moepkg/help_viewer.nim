@@ -39,7 +39,8 @@ const HelpSentences* =
 # Command mode
 
 """ &
-  renderExCommandHead() & "\n" & renderSetOptionsSection() & renderExCommandTail() & """
+  renderCommandModeHead() & "\n" & renderSetOptionsSection() & renderCommandModeTail() &
+  """
 
 ## Runtime Key Mapping
 

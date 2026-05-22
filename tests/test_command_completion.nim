@@ -930,10 +930,12 @@ suite "CommandCompletion - edge cases":
 
     let commands = collectCommands(parser)
     for cmd in commands:
+      # Descriptions now match the help text wording (the unified source of
+      # truth in `command_line_commands.CommandLineCommandTable`).
       if cmd.command == "q":
-        check cmd.description == "Quit (close window)"
+        check cmd.description == "Quit"
       if cmd.command == "w":
-        check cmd.description == "Write (save) file"
+        check cmd.description == "Write file"
       if cmd.command == "wq":
         check cmd.description == "Write and quit"
 
@@ -949,6 +951,12 @@ suite "CommandCompletion - edge cases":
       check cmd.description.len > 0
 
   test "loadDefaultConfig aliases and CommandDescriptions are in sync":
+    ## Both `config.aliases` (from `loadDefaultConfig`) and
+    ## `CommandDescriptions` derive from `CommandLineCommandTable`, so the
+    ## key sets must match. Beyond that, every registered alias must carry
+    ## the description string declared in the canonical table — i.e. the
+    ## parser-side description (when not overridden) and the
+    ## completion-popup description point at the same string.
     let config = newCommandConfig()
     config.loadDefaultConfig()
 
@@ -963,6 +971,10 @@ suite "CommandCompletion - edge cases":
     descKeys.sort()
 
     check configAliases == descKeys
+
+    for alias in configAliases:
+      check alias in CommandDescriptions
+      check CommandDescriptions[alias].len > 0
 
   test "SetOptions contains common vim options":
     let options = collectSetOptions("")

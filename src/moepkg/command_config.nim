@@ -33,7 +33,7 @@
 
 import std/[tables, sequtils, options, strutils]
 
-import command_line
+import command_line, command_line_commands
 
 type
   CommandConfig* = ref object ## Configuration for command line commands
@@ -46,108 +46,36 @@ type
     ## (alias name, human-readable description) pair used when registering a
     ## Command mode command alias as a keymap RHS target.
 
-# Mapping from canonical command names to CommandLineAction.
-# Used for resolving user-defined aliases in [CommandAliases] config.
-const
-  CommandNameTable* = {
-    "quit": claQuit,
-    "quitall": claQuitAll,
-    "save": claSave,
-    "saveall": claSaveAll,
-    "saveandquit": claSaveAndQuit,
-    "saveallandquit": claSaveAllAndQuit,
-    "edit": claEdit,
-    "enew": claEnew,
-    "set": claSet,
-    "help": claHelp,
-    "substitute": claSubstitute,
-    "delete": claDeleteLines,
-    "vsplit": claVSplit,
-    "hsplit": claHSplit,
-    "new": claNew,
-    "vnew": claVnew,
-    "buffernext": claBufferNext,
-    "bufferprev": claBufferPrev,
-    "bufferfirst": claBufferFirst,
-    "bufferlast": claBufferLast,
-    "bufferdelete": claBufferDelete,
-    "buffer": claBuffer,
-    "stripwhitespace": claStripWhitespace,
-    "filer": claFiler,
-    "log": claLogViewer,
-    "quickrun": claQuickRun,
-    "buffermanager": claBufferManager,
-    "backup": claBackupManager,
-    "recent": claRecentFile,
-    "noh": claClearSearchHighlight,
-    "shell": claShellCommand,
-    "background": claBackground,
-    "jumplist": claJumpList,
-    "changes": claChanges,
-    "bookmarks": claBookmarks,
-    "conflictnext": claConflictNext,
-    "conflictprev": claConflictPrev,
-    "build": claBuild,
-    "debug": claDebug,
-    "config": claConfig,
-    "putconfigfile": claPutConfigFile,
-    "man": claMan,
-    "theme": claTheme,
-    "lsplog": claLspLog,
-    "lspformat": claLspFormat,
-    "lsprestart": claLspRestart,
-    "lspfold": claLspFold,
-    "lspexecommand": claLspExecuteCommand,
-    "lspcallhierarchyincoming": claLspCallHierarchyIncoming,
-    "lspcallhierarchyoutgoing": claLspCallHierarchyOutgoing,
-    "terminal": claTerminal,
-    "only": claOnlyWindow,
-    "editconfigfile": claEditConfigFile,
-    "filetree": claFileTree,
-    "cquit": claCquit,
-  }.toTable
+# Mapping from canonical command names to CommandLineAction. Used for
+# resolving user-defined aliases in `[CommandAliases]` config. Derived from
+# the canonical `CommandLineCommandTable` filtered for entries flagged
+# `isCanonicalLong` (the long form intended for TOML user config).
+const CommandNameTable*: Table[string, CommandLineAction] = block:
+  var t: Table[string, CommandLineAction]
+  for spec in CommandLineCommandTable:
+    if spec.isCanonicalLong and spec.action.isSome:
+      t[spec.name] = spec.action.get
+  t
 
-  keyMappableCommandModeAliases*: seq[KeyMappableCommandAlias] = @[
-    ## Command mode command aliases registrable as keymap RHS targets.
-    ## Each is dispatched at runtime through `hrExecCommand` / `nmrExecCommand`,
-    ## so the full command-line parser runs (inheriting modified-buffer safety
-    ## checks like `:bd` / `:q`). Curated to argumentless Command mode commands
-    ## — `:vs`, `:e`, `:ls`, `:set` etc. need arguments to be useful and are
-    ## intentionally excluded.
-    ##
-    ## Names that collide with a pre-existing registered Command (e.g. "save")
-    ## are intentionally listed here too: the registration loop in
-    ## `setupDefaultBindings` skips collisions so the original handler keeps its
-    ## real `commandId`. The list therefore acts as the authoritative "valid
-    ## keymap RHS alias" set even though some entries are registered elsewhere.
-
-    # Buffer switching
-    ("bn", "Switch to next buffer (:bn)"),
-    ("bnext", "Switch to next buffer (:bnext)"),
-    ("bp", "Switch to previous buffer (:bp)"),
-    ("bprev", "Switch to previous buffer (:bprev)"),
-    ("bprevious", "Switch to previous buffer (:bprevious)"),
-    ("bf", "Switch to first buffer (:bf)"),
-    ("bfirst", "Switch to first buffer (:bfirst)"),
-    ("bl", "Switch to last buffer (:bl)"),
-    ("blast", "Switch to last buffer (:blast)"),
-    # Buffer delete (modified-buffer check via :bd)
-    ("bd", "Delete current buffer (:bd)"),
-    ("bdelete", "Delete current buffer (:bdelete)"),
-    # Quit (modified-buffer check via :q)
-    ("q", "Quit (:q)"),
-    ("qa", "Quit all (:qa)"),
-    ("quit", "Quit (:quit)"),
-    ("quitall", "Quit all (:quitall)"),
-    # Save
-    ("w", "Save current buffer (:w)"),
-    ("wa", "Save all buffers (:wa)"),
-    ("save", "Save current buffer (:save)"),
-    ("saveall", "Save all buffers (:saveall)"),
-    # Save and quit
-    ("wq", "Save and quit (:wq)"),
-    ("wqa", "Save all and quit (:wqa)"),
-  ]
+# Command mode command aliases registrable as keymap RHS targets. Each is
+# dispatched at runtime through `hrExecCommand` / `nmrExecCommand`, so the
+# full command-line parser runs (inheriting modified-buffer safety checks
+# like `:bd` / `:q`). Curated to argumentless Command mode commands — `:vs`,
+# `:e`, `:ls`, `:set` etc. need arguments to be useful and are intentionally
+# excluded.
+#
+# Derived from the canonical `CommandLineCommandTable`: any spec carrying a
+# non-empty `keymapBaseDescription` becomes an entry here, with the full
+# description built as `<base> (:<name>)`. The set of registered Command-
+# mode handlers is computed from this list in `setupDefaultBindings`, and
+# names that collide with a pre-existing Command (e.g. "save") are skipped
+# there so the original handler keeps its real `commandId`.
+const keyMappableCommandModeAliases*: seq[KeyMappableCommandAlias] = block:
+  var s: seq[KeyMappableCommandAlias]
+  for spec in CommandLineCommandTable:
+    if spec.keymapBaseDescription.len > 0:
+      s.add((spec.name, spec.keymapBaseDescription & " (:" & spec.name & ")"))
+  s
 
 proc resolveCommandName*(name: string): Option[CommandLineAction] =
   ## Resolve a command name string to a CommandLineAction.
@@ -196,166 +124,15 @@ proc isCommandEnabled*(config: CommandConfig, action: CommandLineAction): bool =
   action notin config.disabledCommands
 
 proc loadDefaultConfig*(config: CommandConfig) =
-  ## Load default command configuration.
-  ## This is the single source of truth for all command aliases.
-  ## When adding a new command, add its aliases here.
-
-  # Standard quit commands
-  config.addAlias("q", claQuit)
-  config.addAlias("qa", claQuitAll)
-  config.addAlias("cq", claCquit)
-
-  # Save commands
-  config.addAlias("w", claSave)
-  config.addAlias("wa", claSaveAll)
-
-  # Combined commands
-  config.addAlias("wq", claSaveAndQuit)
-  config.addAlias("wqa", claSaveAllAndQuit)
-
-  # Edit commands
-  config.addAlias("e", claEdit)
-  config.addAlias("ene", claEnew)
-
-  # Settings
-  config.addAlias("set", claSet)
-
-  # Help
-  config.addAlias("help", claHelp)
-
-  # Substitute
-  config.addAlias("s", claSubstitute)
-
-  # Delete lines
-  config.addAlias("delete", claDeleteLines)
-
-  # Window split
-  config.addAlias("vs", claVSplit)
-  config.addAlias("sp", claHSplit)
-  config.addAlias("new", claNew)
-  config.addAlias("vnew", claVnew)
-
-  # Buffer navigation
-  config.addAlias("b", claBuffer)
-  config.addAlias("buffer", claBuffer)
-  config.addAlias("bn", claBufferNext)
-  config.addAlias("bnext", claBufferNext)
-  config.addAlias("bp", claBufferPrev)
-  config.addAlias("bprev", claBufferPrev)
-  config.addAlias("bprevious", claBufferPrev)
-  config.addAlias("bf", claBufferFirst)
-  config.addAlias("bfirst", claBufferFirst)
-  config.addAlias("brewind", claBufferFirst)
-  config.addAlias("bl", claBufferLast)
-  config.addAlias("blast", claBufferLast)
-  config.addAlias("bd", claBufferDelete)
-  config.addAlias("bdelete", claBufferDelete)
-
-  # Strip whitespace
-  config.addAlias("stripwhitespace", claStripWhitespace)
-
-  # Log viewer
-  config.addAlias("log", claLogViewer)
-  config.addAlias("messages", claLogViewer)
-
-  # QuickRun
-  config.addAlias("quickrun", claQuickRun)
-
-  # Buffer manager
-  config.addAlias("ls", claBufferManager)
-
-  # Backup manager
-  config.addAlias("backup", claBackupManager)
-
-  # Recent file
-  config.addAlias("recent", claRecentFile)
-
-  # Clear search highlight
-  config.addAlias("noh", claClearSearchHighlight)
-
-  # Background (pause editor and show terminal)
-  config.addAlias("bg", claBackground)
-
-  # Jump list
-  config.addAlias("jump", claJumpList)
-
-  # Change list
-  config.addAlias("changes", claChanges)
-
-  # Bookmarks
-  config.addAlias("bookmarks", claBookmarks)
-
-  # Git conflict navigation
-  config.addAlias("conflictnext", claConflictNext)
-  config.addAlias("conflictprev", claConflictPrev)
-
-  # Build
-  config.addAlias("build", claBuild)
-
-  # Debug mode
-  config.addAlias("debug", claDebug)
-
-  # Configuration mode
-  config.addAlias("config", claConfig)
-
-  # Put config file
-  config.addAlias("putconfigfile", claPutConfigFile)
-
-  # Manual
-  config.addAlias("man", claMan)
-
-  # Theme
-  config.addAlias("theme", claTheme)
-
-  # LSP commands
-  config.addAlias("lsplog", claLspLog)
-  config.addAlias("lspformat", claLspFormat)
-  config.addAlias("lsprestart", claLspRestart)
-  config.addAlias("lspfold", claLspFold)
-  config.addAlias("lspexecommand", claLspExecuteCommand)
-  config.addAlias("lspcallhierarchyincoming", claLspCallHierarchyIncoming)
-  config.addAlias("lspcallhierarchyoutgoing", claLspCallHierarchyOutgoing)
-
-  # Terminal
-  config.addAlias("terminal", claTerminal)
-
-  # Key mapping commands
-  config.addAlias("map", claMap)
-  config.addAlias("noremap", claMap)
-  config.addAlias("nmap", claNmap)
-  config.addAlias("nnoremap", claNmap)
-  config.addAlias("imap", claImap)
-  config.addAlias("inoremap", claImap)
-  config.addAlias("vmap", claVmap)
-  config.addAlias("vnoremap", claVmap)
-  config.addAlias("rmap", claRmap)
-  config.addAlias("cmap", claCmap)
-  config.addAlias("cnoremap", claCmap)
-
-  # Key unmapping commands
-  config.addAlias("unmap", claUnmap)
-  config.addAlias("nunmap", claNunmap)
-  config.addAlias("iunmap", claIunmap)
-  config.addAlias("vunmap", claVunmap)
-  config.addAlias("runmap", claRunmap)
-  config.addAlias("cunmap", claCunmap)
-
-  # File tree sidebar
-  config.addAlias("filetree", claFileTree)
-
-  # Only window (close all other windows)
-  config.addAlias("only", claOnlyWindow)
-
-  # Edit config file
-  config.addAlias("moerc", claEditConfigFile)
-
-  # Key mapping clear commands
-  config.addAlias("mapclear", claMapclear)
-  config.addAlias("nmapclear", claNmapclear)
-  config.addAlias("imapclear", claImapclear)
-  config.addAlias("vmapclear", claVmapclear)
-  config.addAlias("rmapclear", claRmapclear)
-  config.addAlias("cmapclear", claCmapclear)
+  ## Load default command configuration. Registers every alias defined in
+  ## `CommandLineCommandTable` that's intended as a runtime command (i.e.,
+  ## has a non-empty `completionDescription`). Long forms reserved purely
+  ## for TOML `[CommandAliases]` resolution (e.g. `quit`, `save`,
+  ## `buffermanager`) carry an empty `completionDescription` and are
+  ## skipped here — they are exposed via `CommandNameTable` instead.
+  for spec in CommandLineCommandTable:
+    if spec.action.isSome and spec.completionDescription.len > 0:
+      config.addAlias(spec.name, spec.action.get)
 
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser
