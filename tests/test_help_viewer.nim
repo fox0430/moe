@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, options, strutils]
-import ../src/moepkg/help_viewer
+import ../src/moepkg/[help_viewer, buffer]
 
 suite "HelpViewer - State creation":
   test "newHelpViewerState creates state with lines":
@@ -34,6 +34,22 @@ suite "HelpViewer - State creation":
 
     check state.lineCount == state.lines.len
     check state.lineCount > 0
+
+  test "lines.len matches rendered buffer.len":
+    # Regression: when state.lines has more lines than the buffer,
+    # selectedIndex can scroll past the last buffer line into a blank row.
+    let state = newHelpViewerState()
+    let buf = state.createHelpTextBuffer()
+
+    check state.lines.len == buf.len
+
+  test "last line is non-empty":
+    # Regression: a trailing empty entry in state.lines lets selectedIndex
+    # land on a row that the buffer does not render.
+    let state = newHelpViewerState()
+
+    check state.lines.len > 0
+    check state.lines[^1].len > 0
 
 suite "HelpViewer - Line access":
   test "getLine returns line at valid index":

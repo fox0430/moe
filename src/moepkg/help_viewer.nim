@@ -121,6 +121,11 @@ proc newHelpViewerState*(): HelpViewerState =
   for line in HelpSentences.splitLines:
     lines.add(line)
 
+  while lines.len > 0 and lines[^1].len == 0:
+    # Drop trailing empty lines so state.lines.len matches buffer.len —
+    # otherwise selectedIndex can scroll one row past the buffer end.
+    lines.setLen(lines.len - 1)
+
   HelpViewerState(lines: lines, selectedIndex: 0, topLine: 0, searchQuery: "")
 
 proc lineCount*(state: HelpViewerState): int =
