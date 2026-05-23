@@ -141,3 +141,20 @@ suite "config_macros: generateConfigLoader":
     loadMini(t, c, vr)
     check vr.hasErrors
     check c.mode == "x" # first option = fallback default
+
+suite "config_macros: escapeMarkdownCell":
+  test "passes through plain text unchanged":
+    check escapeMarkdownCell("hello world") == "hello world"
+    check escapeMarkdownCell("") == ""
+
+  test "escapes pipe so the cell cannot terminate":
+    check escapeMarkdownCell("a|b") == "a\\|b"
+    check escapeMarkdownCell("|") == "\\|"
+
+  test "escapes backslash before pipe escaping (preserves round-trip)":
+    check escapeMarkdownCell("a\\b") == "a\\\\b"
+    check escapeMarkdownCell("\\|") == "\\\\\\|"
+
+  test "collapses newlines to spaces so the row cannot break":
+    check escapeMarkdownCell("a\nb") == "a b"
+    check escapeMarkdownCell("a\r\nb") == "a  b"

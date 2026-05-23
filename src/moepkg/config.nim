@@ -27,6 +27,12 @@ import std/[options, tables, os, osproc]
 import config_macros
 export config_macros
 
+const DefaultBackupDir* = "~/.cache/moe/backups"
+  ## Effective default for `AutoBackupConfig.backupDir` when the field is
+  ## `none`. Lives here (not in `backup.nim`) so it can be referenced by
+  ## `cfgDocDefault` on the field without introducing a config → backup
+  ## cycle.
+
 type
   UserCommandEntry* = object
     command*: string ## The command to execute (command name or shell command)
@@ -71,265 +77,480 @@ type
 
   # Standard settings
   StandardConfig* {.cfgSection: "Standard".} = object
-    number* {.cfg.}: bool
-    relativeNumber* {.cfg.}: bool
-    statusLine* {.cfg.}: bool
-    syntax* {.cfg.}: bool
-    indentationLines* {.cfg.}: bool
-    tabStop* {.cfg, cfgMin: 1, cfgMax: 16.}: int
-    shiftWidth* {.cfg, cfgMin: 0, cfgMax: 16.}: int
-      ## Indent width, 0 = use tabStop (Vim compatible)
-    softTabStop* {.cfg, cfgMin: 0, cfgMax: 16.}: int
-      ## Tab/Backspace width in insert mode, 0 = use tabStop (Vim compatible)
-    expandTab* {.cfg.}: bool
-    sidebar* {.cfg.}: bool
-    scrollbar* {.cfg.}: bool
-    scrollbarWidth* {.cfg, cfgMin: 0, cfgMax: 5.}: int
-    bookmarkMarker* {.cfg.}: string
-    showModifiedLines* {.cfg.}: bool
-    autoCloseParen* {.cfg.}: bool
-    autoIndent* {.cfg.}: bool
-    ignorecase* {.cfg.}: bool
-    smartcase* {.cfg.}: bool
-    disableChangeCursor* {.cfg.}: bool
-    defaultCursor* {.cfg.}: CursorType
-    normalModeCursor* {.cfg.}: CursorType
-    insertModeCursor* {.cfg.}: CursorType
-    liveReloadOfConf* {.cfg.}: bool
-    incrementalSearch* {.cfg.}: bool
-    popupWindowInExmode* {.cfg.}: bool
-    autoDeleteParen* {.cfg.}: bool
-    liveReloadOfFile* {.cfg.}: bool
-    colorMode* {.cfg.}: ColorMode
-    mouse* {.cfg.}: bool
-    lineWrap* {.cfg.}: bool
-    timeoutlen* {.cfg, cfgMin: 0, cfgMax: 10000.}: int
-      ## Key mapping timeout in ms (0 = no timeout)
-    bufferBackend* {.cfg.}: BufferBackendConfig
+    number* {.cfg, cfgDocDescription: "Display line numbers".}: bool
+    relativeNumber* {.cfg, cfgDocDescription: "Display relative line numbers".}: bool
+    statusLine* {.cfg, cfgDocDescription: "Display status lines".}: bool
+    syntax* {.cfg, cfgDocDescription: "Enable syntax highlighting".}: bool
+    indentationLines* {.cfg, cfgDocDescription: "Enable indentation lines".}: bool
+    tabStop* {.cfg, cfgMin: 1, cfgMax: 16, cfgDocDescription: "Tab width".}: int
+    shiftWidth* {.
+      cfg, cfgMin: 0, cfgMax: 16, cfgDocDescription: "Indent width (0 = use tabStop)"
+    .}: int ## Indent width, 0 = use tabStop (Vim compatible)
+    softTabStop* {.
+      cfg,
+      cfgMin: 0,
+      cfgMax: 16,
+      cfgDocDescription: "Tab/Backspace width in insert mode (0 = use tabStop)"
+    .}: int ## Tab/Backspace width in insert mode, 0 = use tabStop (Vim compatible)
+    expandTab* {.cfg, cfgDocDescription: "Expand tabs to spaces".}: bool
+    sidebar* {.cfg, cfgDocDescription: "Enable Sidebars for editor views".}: bool
+    scrollbar* {.
+      cfg, cfgDocDescription: "Enable scrollbar on the right edge of windows"
+    .}: bool
+    scrollbarWidth* {.
+      cfg,
+      cfgMin: 0,
+      cfgMax: 5,
+      cfgDocDescription: "Scrollbar width in characters (0 = hidden)"
+    .}: int
+    bookmarkMarker* {.cfg, cfgDocDescription: "Bookmark indicator symbol in sidebars".}:
+      string
+    showModifiedLines* {.
+      cfg, cfgDocDescription: "Show modified/inserted line indicators in sidebars"
+    .}: bool
+    autoCloseParen* {.cfg, cfgDocDescription: "Automatic closing brackets".}: bool
+    autoIndent* {.cfg, cfgDocDescription: "Automatic indentation".}: bool
+    ignorecase* {.cfg, cfgDocDescription: "Enable ignorecase when searching".}: bool
+    smartcase* {.cfg, cfgDocDescription: "Enable smartcase when searching".}: bool
+    disableChangeCursor* {.
+      cfg, cfgDocDescription: "Disable change of the cursor shape"
+    .}: bool
+    defaultCursor* {.
+      cfg, cfgDocDescription: "The cursor shape of the terminal emulator you are using"
+    .}: CursorType
+    normalModeCursor* {.cfg, cfgDocDescription: "The cursor shape in Normal mode".}:
+      CursorType
+    insertModeCursor* {.cfg, cfgDocDescription: "The cursor shape in insert mode".}:
+      CursorType
+    liveReloadOfConf* {.
+      cfg, cfgDocDescription: "Enable live reload of the configuration file"
+    .}: bool
+    incrementalSearch* {.cfg, cfgDocDescription: "Enable incremental search".}: bool
+    popupWindowInExmode* {.
+      cfg, cfgDocDescription: "Show Pop-up window in Command mode"
+    .}: bool
+    autoDeleteParen* {.cfg, cfgDocDescription: "Automatic delete brackets".}: bool
+    liveReloadOfFile* {.cfg, cfgDocDescription: "Enable live reload of opening files".}:
+      bool
+    colorMode* {.cfg, cfgDocDescription: "Terminal color mode".}: ColorMode
+    mouse* {.cfg, cfgDocDescription: "Enable mouse cursor movement".}: bool
+    lineWrap* {.cfg, cfgDocDescription: "Enable line wrapping".}: bool
+    timeoutlen* {.
+      cfg,
+      cfgMin: 0,
+      cfgMax: 10000,
+      cfgDocDescription: "Key mapping timeout in milliseconds (0 = no timeout)"
+    .}: int ## Key mapping timeout in ms (0 = no timeout)
+    bufferBackend* {.
+      cfg,
+      cfgDocDescription:
+        "Buffer data structure. \"auto\" selects backend based on file size"
+    .}: BufferBackendConfig
 
   # Clipboard settings
   ClipboardConfig* {.cfgSection: "Clipboard".} = object
-    enable* {.cfg.}: bool
-    tool* {.cfg.}: ClipboardTool
+    enable* {.cfg, cfgDocDescription: "Enable system clipboard".}: bool
+    tool* {.
+      cfg, cfgDocDefault: cbtXsel, cfgDocDescription: "The clipboard tool for Linux"
+    .}: ClipboardTool
+      ## Runtime default is system-dependent (detectClipboardTool()); the doc
+      ## fixes it to "xsel" via cfgDocDefault for stability across environments.
 
   # Build on save settings
   BuildOnSaveConfig* {.cfgSection: "BuildOnSave".} = object
-    enable* {.cfg.}: bool
-    workspaceRoot* {.cfg, cfgDirPath, cfgNoUi.}: Option[string]
-    command* {.cfg, cfgNoUi.}: Option[string]
+    enable* {.cfg, cfgDocDescription: "Enable build on save".}: bool
+    workspaceRoot* {.
+      cfg, cfgDirPath, cfgNoUi, cfgDocDescription: "Project root directory"
+    .}: Option[string]
+    command* {.cfg, cfgNoUi, cfgDocDescription: "Override commands executed at build".}:
+      Option[string]
 
   # Tab line settings
   TabLineConfig* {.cfgSection: "TabLine".} = object
-    enable* {.cfg.}: bool
+    enable* {.cfg, cfgDocDescription: "Enable tab line".}: bool
 
   # Status line settings
   StatusLineConfig* {.cfgSection: "StatusLine".} = object
-    multipleStatusLine* {.cfg.}: bool
-    merge* {.cfg.}: bool
-    mode* {.cfg.}: bool
-    filename* {.cfg.}: bool
-    changedMark* {.cfg.}: bool
-    directory* {.cfg.}: bool
-    gitChangedLines* {.cfg.}: bool
-    gitBranchName* {.cfg.}: bool
-    showGitInactive* {.cfg.}: bool
-    showModeInactive* {.cfg.}: bool
-    setupText* {.cfg, cfgNoUi.}: string
+    multipleStatusLine* {.cfg, cfgDocDescription: "Show multiple status lines".}: bool
+    merge* {.
+      cfg, cfgDocDescription: "Enable merge the status line with the command line"
+    .}: bool
+    mode* {.cfg, cfgDocDescription: "Display the current mode".}: bool
+    filename* {.cfg, cfgDocDescription: "Display the filename".}: bool
+    changedMark* {.cfg, cfgDocDescription: "Display the buffer changed mark".}: bool
+    directory* {.cfg, cfgDocDescription: "Display the directory of the path".}: bool
+    gitChangedLines* {.cfg, cfgDocDescription: "Display number of changed lines".}: bool
+    gitBranchName* {.cfg, cfgDocDescription: "Display the current git branch name".}:
+      bool
+    showGitInactive* {.
+      cfg,
+      cfgDocDescription:
+        "Display the git branch name on the status line in inactive windows"
+    .}: bool
+    showModeInactive* {.
+      cfg, cfgDocDescription: "Display the mode on the status line in inactive windows"
+    .}: bool
+    setupText* {.
+      cfg,
+      cfgNoUi,
+      cfgDocDescription:
+        "Text to customize the items displayed in the status line. Please check StatusLineItem"
+    .}: string
 
   # Highlight settings
   HighlightConfig* {.cfgSection: "Highlight".} = object
-    currentLine* {.cfg.}: bool
-    currentColumn* {.cfg.}: bool
-    reservedWord* {.cfg, cfgNoUi.}: seq[string]
-    replaceText* {.cfg.}: bool
-    pairOfParen* {.cfg.}: bool
-    fullWidthSpace* {.cfg.}: bool
-    trailingSpaces* {.cfg.}: bool
-    currentWord* {.cfg.}: bool
-    findCharHighlight* {.cfg.}: bool
-    colorCodeHighlight* {.cfg.}: bool
-    gitConflict* {.cfg.}: bool
-    gitConflictTwoColor* {.cfg.}: bool
+    currentLine* {.cfg, cfgDocDescription: "Highlight the current line background".}:
+      bool
+    currentColumn* {.cfg, cfgDocDescription: "Highlight the current column background".}:
+      bool
+    reservedWord* {.cfg, cfgNoUi, cfgDocDescription: "Highlight any words".}:
+      seq[string]
+    replaceText* {.cfg, cfgDocDescription: "Highlight replacement text".}: bool
+    pairOfParen* {.cfg, cfgDocDescription: "Highlight a pair of brackets".}: bool
+    fullWidthSpace* {.cfg, cfgDocDescription: "Highlight full-width spaces".}: bool
+    trailingSpaces* {.cfg, cfgDocDescription: "Highlight trailing spaces".}: bool
+    currentWord* {.
+      cfg,
+      cfgDocDescription: "Highlight other uses of the current word under the cursor"
+    .}: bool
+    findCharHighlight* {.cfg, cfgDocDescription: "Highlight f/F/t/T matches".}: bool
+    colorCodeHighlight* {.
+      cfg,
+      cfgDocDescription:
+        "Highlight inline color codes (#RRGGBB, #RGB) with their actual color"
+    .}: bool
+    gitConflict* {.
+      cfg,
+      cfgDocDescription:
+        "Highlight git merge conflict blocks (`<<<<<<<` / `=======` / `>>>>>>>`)"
+    .}: bool
+    gitConflictTwoColor* {.
+      cfg,
+      cfgDocDescription:
+        "Use GitHub-style two-color scheme (ours / theirs distinct); false for single red background"
+    .}: bool
 
   # Auto backup settings
   AutoBackupConfig* {.cfgSection: "AutoBackup".} = object
-    enable* {.cfg.}: bool
-    backupDir* {.cfg, cfgDirPath, cfgNoUi.}: Option[string]
-    idleTime* {.cfg, cfgMin: 1, cfgMax: 3600.}: int
-    interval* {.cfg, cfgMin: 1, cfgMax: 3600.}: int
-    dirToExclude* {.cfg, cfgNoUi.}: seq[string]
+    enable* {.cfg, cfgDocDescription: "Enable automatic backups".}: bool
+    backupDir* {.
+      cfg,
+      cfgDirPath,
+      cfgNoUi,
+      cfgDocDescription: "Directory to save backup files",
+      cfgDocDefault: some(DefaultBackupDir)
+    .}: Option[string]
+    idleTime* {.
+      cfg,
+      cfgMin: 1,
+      cfgMax: 3600,
+      cfgDocDescription: "Start backup when there is no operation times (seconds)"
+    .}: int
+    interval* {.
+      cfg, cfgMin: 1, cfgMax: 3600, cfgDocDescription: "Backup interval (minutes)"
+    .}: int
+    dirToExclude* {.
+      cfg,
+      cfgNoUi,
+      cfgDocDescription:
+        "Exclude dirs for where you don't want to produce automatic backups"
+    .}: seq[string]
 
   # Quick run settings
   QuickRunConfig* {.cfgSection: "QuickRun".} = object
-    saveBufferWhenQuickRun* {.cfg.}: bool
-    command* {.cfg, cfgNoUi.}: Option[string]
-    timeout* {.cfg, cfgMin: 1.}: int
-    nimAdvancedCommand* {.cfg, cfgNoUi.}: Option[string]
-    clangOptions* {.cfg, cfgKey: "ClangOptions", cfgNoUi.}: Option[string]
-    cppOptions* {.cfg, cfgKey: "CppOptions", cfgNoUi.}: Option[string]
-    nimOptions* {.cfg, cfgKey: "NimOptions", cfgNoUi.}: Option[string]
-    shOptions* {.cfg, cfgNoUi.}: Option[string]
-    bashOptions* {.cfg, cfgNoUi.}: Option[string]
+    saveBufferWhenQuickRun* {.cfg, cfgDocDescription: "Save buffer when run QuickRun".}:
+      bool
+    command* {.cfg, cfgNoUi, cfgDocDescription: "Commands to be executed by quick run".}:
+      Option[string]
+    timeout* {.cfg, cfgMin: 1, cfgDocDescription: "Command timeout (seconds)".}: int
+    nimAdvancedCommand* {.
+      cfg, cfgNoUi, cfgDocDescription: "Nim compiler advanced args"
+    .}: Option[string]
+    clangOptions* {.
+      cfg,
+      cfgKey: "ClangOptions",
+      cfgNoUi,
+      cfgDocDescription: "C lang compiler options. The default compiler is gcc"
+    .}: Option[string]
+    cppOptions* {.
+      cfg,
+      cfgKey: "CppOptions",
+      cfgNoUi,
+      cfgDocDescription: "C++ compiler options. The default compiler is gcc"
+    .}: Option[string]
+    nimOptions* {.
+      cfg, cfgKey: "NimOptions", cfgNoUi, cfgDocDescription: "Nim compiler options"
+    .}: Option[string]
+    shOptions* {.cfg, cfgNoUi, cfgDocDescription: "sh options".}: Option[string]
+    bashOptions* {.cfg, cfgNoUi, cfgDocDescription: "bash options".}: Option[string]
 
   # Notification settings
   NotificationConfig* {.cfgSection: "Notification".} = object
-    screenNotifications* {.cfg.}: bool
-    logNotifications* {.cfg.}: bool
-    autoBackupScreenNotify* {.cfg.}: bool
-    autoBackupLogNotify* {.cfg.}: bool
-    autoSaveScreenNotify* {.cfg.}: bool
-    autoSaveLogNotify* {.cfg.}: bool
-    yankScreenNotify* {.cfg.}: bool
-    yankLogNotify* {.cfg.}: bool
-    deleteScreenNotify* {.cfg.}: bool
-    deleteLogNotify* {.cfg.}: bool
-    saveScreenNotify* {.cfg.}: bool
-    saveLogNotify* {.cfg.}: bool
-    quickRunScreenNotify* {.cfg.}: bool
-    quickRunLogNotify* {.cfg.}: bool
-    buildOnSaveScreenNotify* {.cfg.}: bool
-    buildOnSaveLogNotify* {.cfg.}: bool
-    filerScreenNotify* {.cfg.}: bool
-    filerLogNotify* {.cfg.}: bool
-    restoreScreenNotify* {.cfg.}: bool
-    restoreLogNotify* {.cfg.}: bool
-    lspScreenNotify* {.cfg.}: bool
-    lspLogNotify* {.cfg.}: bool
-    lspForcePopup* {.cfg.}: bool
-    popupNotifications* {.cfg.}: bool
+    screenNotifications* {.
+      cfg, cfgDocDescription: "Show all messages/notifications in the command line"
+    .}: bool
+    logNotifications* {.
+      cfg, cfgDocDescription: "Record all messages/notifications to the log"
+    .}: bool
+    autoBackupScreenNotify* {.
+      cfg, cfgDocDescription: "Auto backups messages/notifications in the command line"
+    .}: bool
+    autoBackupLogNotify* {.
+      cfg, cfgDocDescription: "Auto backups messages/notifications to the log"
+    .}: bool
+    autoSaveScreenNotify* {.
+      cfg, cfgDocDescription: "Auto save messages/notifications in the command line"
+    .}: bool
+    autoSaveLogNotify* {.
+      cfg, cfgDocDescription: "Auto save messages/notifications to the log"
+    .}: bool
+    yankScreenNotify* {.
+      cfg, cfgDocDescription: "Yank messages/notifications in the command line"
+    .}: bool
+    yankLogNotify* {.cfg, cfgDocDescription: "Yank messages/notifications to the log".}:
+      bool
+    deleteScreenNotify* {.
+      cfg, cfgDocDescription: "Delete buffer messages/notifications in the command line"
+    .}: bool
+    deleteLogNotify* {.
+      cfg, cfgDocDescription: "Delete buffer messages/notifications to the log"
+    .}: bool
+    saveScreenNotify* {.
+      cfg, cfgDocDescription: "Save messages/notifications in the command line"
+    .}: bool
+    saveLogNotify* {.cfg, cfgDocDescription: "Save messages/notifications to the log".}:
+      bool
+    quickRunScreenNotify* {.
+      cfg, cfgDocDescription: "QuickRun messages/notifications in the command line"
+    .}: bool
+    quickRunLogNotify* {.
+      cfg, cfgDocDescription: "QuickRun messages/notifications to the log"
+    .}: bool
+    buildOnSaveScreenNotify* {.
+      cfg, cfgDocDescription: "Build on save messages/notifications in the command line"
+    .}: bool
+    buildOnSaveLogNotify* {.
+      cfg, cfgDocDescription: "Build on save messages/notifications to the log"
+    .}: bool
+    filerScreenNotify* {.
+      cfg, cfgDocDescription: "Filer messages/notifications in the command line"
+    .}: bool
+    filerLogNotify* {.
+      cfg, cfgDocDescription: "Filer messages/notifications to the log"
+    .}: bool
+    restoreScreenNotify* {.
+      cfg, cfgDocDescription: "Restore messages/notifications in the command line"
+    .}: bool
+    restoreLogNotify* {.
+      cfg, cfgDocDescription: "Restore messages/notifications to the log"
+    .}: bool
+    lspScreenNotify* {.
+      cfg, cfgDocDescription: "Lsp messages/notifications in the command line"
+    .}: bool
+    lspLogNotify* {.cfg, cfgDocDescription: "Lsp messages/notifications to the log".}:
+      bool
+    lspForcePopup* {.
+      cfg,
+      cfgDocDescription:
+        "Force all LSP messages (including logs) to popup notifications"
+    .}: bool
+    popupNotifications* {.
+      cfg,
+      cfgDocDescription:
+        "Show notifications as floating popups instead of the command line"
+    .}: bool
     popupPosition* {.
-      cfg, cfgEnumStrings: ["bottomRight", "topRight", "topLeft", "bottomLeft"]
+      cfg,
+      cfgEnumStrings: ["bottomRight", "topRight", "topLeft", "bottomLeft"],
+      cfgDocDescription:
+        "Popup position: \"topRight\", \"topLeft\", \"bottomRight\", \"bottomLeft\""
     .}: string
-    popupTimeoutMs* {.cfg, cfgMin: 100.}: int
-    popupMaxVisible* {.cfg, cfgMin: 1.}: int
-    popupMaxWidth* {.cfg, cfgMin: 10.}: int
-    popupBorder* {.cfg.}: bool
+    popupTimeoutMs* {.
+      cfg,
+      cfgMin: 100,
+      cfgDocDescription: "Auto-dismiss timeout in milliseconds (minimum: 100)"
+    .}: int
+    popupMaxVisible* {.
+      cfg,
+      cfgMin: 1,
+      cfgDocDescription:
+        "Maximum number of simultaneous popup notifications (minimum: 1)"
+    .}: int
+    popupMaxWidth* {.
+      cfg,
+      cfgMin: 10,
+      cfgDocDescription: "Maximum popup width in characters (minimum: 10)"
+    .}: int
+    popupBorder* {.cfg, cfgDocDescription: "Show border around popup notifications".}:
+      bool
 
   # Filer settings
   FilerConfig* {.cfgSection: "Filer".} = object
-    showIcons* {.cfg.}: bool
+    showIcons* {.cfg, cfgDocDescription: "Show/Hidden file type icons".}: bool
 
   # FileTree settings
   FileTreeConfig* {.cfgSection: "FileTree".} = object
-    width* {.cfg, cfgMin: 1.}: int
+    width* {.
+      cfg, cfgMin: 1, cfgDocDescription: "Width of the FileTree sidebar in columns"
+    .}: int
 
   # Autocomplete settings
   AutocompleteConfig* {.cfgSection: "Autocomplete".} = object
-    enable* {.cfg.}: bool
-    windowBorder* {.cfg.}: bool
+    enable* {.cfg, cfgDocDescription: "Enable/Disable General-purpose autocompletion".}:
+      bool
+    windowBorder* {.cfg, cfgDocDescription: "Show borderline on completion window".}:
+      bool
 
   # Auto save settings
   AutoSaveConfig* {.cfgSection: "AutoSave".} = object
-    enable* {.cfg.}: bool
-    interval* {.cfg, cfgMin: 1, cfgMax: 3600.}: int
+    enable* {.cfg, cfgDocDescription: "Auto save".}: bool
+    interval* {.
+      cfg, cfgMin: 1, cfgMax: 3600, cfgDocDescription: "Auto save interval (minutes)"
+    .}: int
 
   # Persist settings
   PersistConfig* {.cfgSection: "Persist".} = object
-    commandHistory* {.cfg.}: bool
-    commandHistoryLimit* {.cfg, cfgMin: 1.}: int
-    search* {.cfg.}: bool
-    searchHistoryLimit* {.cfg, cfgMin: 1.}: int
-    cursorPosition* {.cfg.}: bool
-    bookmarks* {.cfg.}: bool
+    commandHistory* {.cfg, cfgDocDescription: "Saving Command mode command history".}:
+      bool
+    commandHistoryLimit* {.
+      cfg,
+      cfgMin: 1,
+      cfgDocDescription: "The maximum entries of Command mode command history to save"
+    .}: int
+    search* {.cfg, cfgDocDescription: "Saving search history".}: bool
+    searchHistoryLimit* {.
+      cfg, cfgMin: 1, cfgDocDescription: "The maximum entries of search history to save"
+    .}: int
+    cursorPosition* {.cfg, cfgDocDescription: "Saving last cursor position".}: bool
+    bookmarks* {.cfg, cfgDocDescription: "Saving bookmarks".}: bool
 
   # Git settings
   GitConfig* {.cfgSection: "Git".} = object
-    showChangedLine* {.cfg.}: bool
-    updateInterval* {.cfg, cfgMin: 100, cfgMax: 60000.}: int
+    showChangedLine* {.cfg, cfgDocDescription: "Line changes on sidebars".}: bool
+    updateInterval* {.
+      cfg,
+      cfgMin: 100,
+      cfgMax: 60000,
+      cfgDocDescription: "Interval for updating Git information. (Milli seconds)"
+    .}: int
 
   # Syntax checker settings
   SyntaxCheckerConfig* {.cfgSection: "SyntaxChecker".} = object
-    enable* {.cfg.}: bool
+    enable* {.cfg, cfgDocDescription: "Syntax checker".}: bool
 
   # Smooth scroll settings (physics-based, compatible with vim comfortable-motion)
   SmoothScrollConfig* {.cfgSection: "SmoothScroll".} = object
-    enable* {.cfg.}: bool
-    friction* {.cfg, cfgMin: 0.0, cfgMax: 500.0, cfgStep: 10.0.}: float
-      # Friction coefficient (velocity decay rate). Default: 80.0
-    airDrag* {.cfg, cfgMin: 0.0, cfgMax: 20.0, cfgStep: 0.5.}: float
-      # Air drag coefficient (velocity resistance). Default: 2.0
+    enable* {.cfg, cfgDocDescription: "Enable smooth scrolling".}: bool
+    friction* {.
+      cfg,
+      cfgMin: 0.0,
+      cfgMax: 500.0,
+      cfgStep: 10.0,
+      cfgDocDescription: "Friction coefficient (velocity decay rate)"
+    .}: float
+    airDrag* {.
+      cfg,
+      cfgMin: 0.0,
+      cfgMax: 20.0,
+      cfgStep: 0.5,
+      cfgDocDescription: "Air drag coefficient (velocity resistance)"
+    .}: float
 
   # EditorConfig settings
   EditorConfigSettings* {.cfgSection: "EditorConfig".} = object
-    enable* {.cfg.}: bool
+    enable* {.
+      cfg, cfgDocDescription: "[EditorConfig](https://editorconfig.org) support"
+    .}: bool
 
   # Startup file open settings
   StartUpFileOpenConfig* {.cfgSection: "StartUp.FileOpen".} = object
-    autoSplit* {.cfg.}: bool
-    splitType* {.cfg.}: SplitType
+    autoSplit* {.
+      cfg,
+      cfgDocDescription:
+        "Display all buffers in multiple views if multiple paths are received when starting the editor"
+    .}: bool
+    splitType* {.
+      cfg, cfgDocDescription: "The split type for `StartUp.FileOpen.autoSplit`"
+    .}: SplitType
 
   # Startup file tree settings
   StartUpFileTreeConfig* {.cfgSection: "StartUp.FileTree".} = object
-    enable* {.cfg.}: bool
+    enable* {.
+      cfg, cfgDocDescription: "Open the fileTree sidebar automatically on startup"
+    .}: bool
 
   # Debug window node settings
   DebugWindowNodeConfig* {.cfgSection: "Debug.WindowNode".} = object
-    enable* {.cfg.}: bool
-    currentWindow* {.cfg.}: bool
-    index* {.cfg.}: bool
-    windowIndex* {.cfg.}: bool
-    bufferIndex* {.cfg.}: bool
-    parentIndex* {.cfg.}: bool
-    childLen* {.cfg.}: bool
-    splitType* {.cfg.}: bool
-    haveCursesWin* {.cfg.}: bool
-    y* {.cfg.}: bool
-    x* {.cfg.}: bool
-    h* {.cfg.}: bool
-    w* {.cfg.}: bool
-    currentLine* {.cfg.}: bool
-    currentColumn* {.cfg.}: bool
-    expandedColumn* {.cfg.}: bool
-    cursor* {.cfg.}: bool
+    enable* {.cfg, cfgDocDescription: "All WindowNode info".}: bool
+    currentWindow* {.cfg, cfgDocDescription: "Whether the current window or not".}: bool
+    index* {.cfg, cfgDocDescription: "WindowNode.index".}: bool
+    windowIndex* {.cfg, cfgDocDescription: "WindowNode.windowIndex".}: bool
+    bufferIndex* {.cfg, cfgDocDescription: "WindowNode.bufferIndex".}: bool
+    parentIndex* {.cfg, cfgDocDescription: "Parent node's WindowNode.index".}: bool
+    childLen* {.cfg, cfgDocDescription: "WindowNode.child.len".}: bool
+    splitType* {.cfg, cfgDocDescription: "WindowNode.splitType".}: bool
+    haveCursesWin* {.
+      cfg, cfgDocDescription: "Whether windowNode have cursesWindow or not"
+    .}: bool
+    y* {.cfg, cfgDocDescription: "WindowNode.y".}: bool
+    x* {.cfg, cfgDocDescription: "WindowNode.x".}: bool
+    h* {.cfg, cfgDocDescription: "WindowNode.h".}: bool
+    w* {.cfg, cfgDocDescription: "WindowNode.w".}: bool
+    currentLine* {.cfg, cfgDocDescription: "WindowNode.currentLine".}: bool
+    currentColumn* {.cfg, cfgDocDescription: "WindowNode.currentColumn".}: bool
+    expandedColumn* {.cfg, cfgDocDescription: "WindowNode.expandedColumn".}: bool
+    cursor* {.cfg, cfgDocDescription: "WindowNode.cursor".}: bool
 
   # Debug editor view settings
   DebugEditorViewConfig* {.cfgSection: "Debug.EditorView".} = object
-    enable* {.cfg.}: bool
-    widthOfLineNum* {.cfg.}: bool
-    height* {.cfg.}: bool
-    width* {.cfg.}: bool
-    originalLine* {.cfg.}: bool
-    start* {.cfg.}: bool
-    length* {.cfg.}: bool
+    enable* {.cfg, cfgDocDescription: "All Editorview info".}: bool
+    widthOfLineNum* {.cfg, cfgDocDescription: "Editorview.widthOfLineNum".}: bool
+    height* {.cfg, cfgDocDescription: "Editorview.height".}: bool
+    width* {.cfg, cfgDocDescription: "Editorview.width".}: bool
+    originalLine* {.cfg, cfgDocDescription: "Editorview.originalLine".}: bool
+    start* {.cfg, cfgDocDescription: "Editorview.start".}: bool
+    length* {.cfg, cfgDocDescription: "Editorview.length".}: bool
 
   # Debug buffer status settings
   DebugBufferStatusConfig* {.cfgSection: "Debug.BufferStatus".} = object
-    enable* {.cfg.}: bool
-    bufferIndex* {.cfg.}: bool
-    path* {.cfg.}: bool
-    openDir* {.cfg.}: bool
-    currentMode* {.cfg.}: bool
-    prevMode* {.cfg.}: bool
-    language* {.cfg.}: bool
-    encoding* {.cfg.}: bool
-    countChange* {.cfg.}: bool
-    cmdLoop* {.cfg.}: bool
-    lastSaveTime* {.cfg.}: bool
-    bufferLen* {.cfg.}: bool
+    enable* {.cfg, cfgDocDescription: "All BufStatus info".}: bool
+    bufferIndex* {.cfg, cfgDocDescription: "The index of BufStatus".}: bool
+    path* {.cfg, cfgDocDescription: "BufStatus.path".}: bool
+    openDir* {.cfg, cfgDocDescription: "BufStatus.openDir".}: bool
+    currentMode* {.cfg, cfgDocDescription: "BufStatus.mode".}: bool
+    prevMode* {.cfg, cfgDocDescription: "BufStatus.prevMode".}: bool
+    language* {.cfg, cfgDocDescription: "BufStatus.language".}: bool
+    encoding* {.cfg, cfgDocDescription: "BufStatus.characterEncoding".}: bool
+    countChange* {.cfg, cfgDocDescription: "BufStatus.countChange".}: bool
+    cmdLoop* {.cfg, cfgDocDescription: "BufStatus.cmdLoop".}: bool
+    lastSaveTime* {.cfg, cfgDocDescription: "BufStatus.lastSaveTime".}: bool
+    bufferLen* {.cfg, cfgDocDescription: "BufStatus.buffer.len".}: bool
 
   # Debug search settings
   DebugSearchConfig* {.cfgSection: "Debug.Search".} = object
-    enable* {.cfg.}: bool
+    enable* {.cfg, cfgDocDescription: "Search debug info".}: bool
 
   # Debug macro settings
   DebugMacroConfig* {.cfgSection: "Debug.MacroState".} = object
-    enable* {.cfg.}: bool
+    enable* {.cfg, cfgDocDescription: "Macro state debug info".}: bool
 
   # Debug visual selection settings
   DebugVisualConfig* {.cfgSection: "Debug.Visual".} = object
-    enable* {.cfg.}: bool
+    enable* {.cfg, cfgDocDescription: "Visual selection debug info".}: bool
 
   # Debug jump list settings
   DebugJumpListConfig* {.cfgSection: "Debug.JumpList".} = object
-    enable* {.cfg.}: bool
+    enable* {.cfg, cfgDocDescription: "Jump list debug info".}: bool
 
   # Debug LSP settings
   DebugLspConfig* {.cfgSection: "Debug.Lsp".} = object
-    enable* {.cfg.}: bool
+    enable* {.cfg, cfgDocDescription: "LSP debug info".}: bool
 
   # Log settings
   LogConfig* {.cfgSection: "Log".} = object
-    clearOnStart* {.cfg.}: bool ## Clear existing log file when starting with debug mode
+    clearOnStart* {.
+      cfg, cfgDocDescription: "Clear existing log file when starting with debug mode"
+    .}: bool
 
   # Debug settings
   DebugConfig* = object

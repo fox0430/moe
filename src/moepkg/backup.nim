@@ -32,7 +32,6 @@ import config, logger
 
 const
   BackupJsonFilename = "backup.json"
-  DefaultBackupDir* = "~/.cache/moe/backups"
   BackupDateFormat = "yyyy-MM-dd'T'HH:mm:sszzz"
   MaxBackupFiles* = 100 ## Maximum number of backup files per source file
 
