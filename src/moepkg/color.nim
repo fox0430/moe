@@ -26,79 +26,15 @@ import std/[strutils, strformat, options, os]
 
 import pkg/[results, celina]
 
-type ColorModeKind* = enum
-  ## Color mode for terminal output
-  cmk8color ## 8 basic ANSI colors (0-7)
-  cmk16color ## 16 ANSI colors (0-15, includes bright)
-  cmk256color ## 256-color palette
-  cmk24bit ## True color (24-bit RGB)
-  cmkNone ## No colors (terminal defaults only)
-
-var globalColorMode* = cmk24bit ## Current color mode setting
-
-proc rgbTo8Color*(r, g, b: int16): uint8 =
-  ## Convert RGB to 8-color ANSI index (0-7).
-  ## Uses threshold-based mapping to basic colors.
-  ##
-  ## ANSI 8 colors: black(0), red(1), green(2), yellow(3),
-  ##                blue(4), magenta(5), cyan(6), white(7)
-
-  # Threshold for considering a channel "on"
-  const threshold = 128'i16
-
-  # Map RGB channels to 3-bit color index
-  let
-    rBit = if r >= threshold: 1'u8 else: 0'u8
-    gBit = if g >= threshold: 2'u8 else: 0'u8
-    bBit = if b >= threshold: 4'u8 else: 0'u8
-
-  result = rBit or gBit or bBit
-
-proc rgbTo16Color*(r, g, b: int16): uint8 =
-  ## Convert RGB to 16-color ANSI index (0-15).
-  ## Colors 0-7 are normal, 8-15 are bright variants.
-  ##
-  ## ANSI 16 colors:
-  ##   0: black,   1: red,     2: green,   3: yellow
-  ##   4: blue,    5: magenta, 6: cyan,    7: white
-  ##   8: bright black (gray), 9-15: bright variants
-
-  # Calculate luminance (perceived brightness, 0-255 range)
-  # Use int to avoid overflow: 255 * 587 = 149,685 exceeds int16 max
-  let luminance = (r.int * 299 + g.int * 587 + b.int * 114) div 1000
-
-  # Check for grayscale (R ≈ G ≈ B)
-  let
-    maxCh = max(max(r, g), b)
-    minCh = min(min(r, g), b)
-    isGrayscale = (maxCh - minCh) < 32
-
-  if isGrayscale:
-    # Map grayscale to 4 levels: black, dark gray, light gray, white
-    if luminance < 64:
-      return 0'u8 # Black
-    elif luminance < 128:
-      return 8'u8 # Bright black (dark gray)
-    elif luminance < 192:
-      return 7'u8 # White (actually light gray in most terminals)
-    else:
-      return 15'u8 # Bright white
-
-  # For chromatic colors, use lower threshold to catch dark colors
-  const threshold = 85'i16
-  let
-    rBit = if r >= threshold: 1'u8 else: 0'u8
-    gBit = if g >= threshold: 2'u8 else: 0'u8
-    bBit = if b >= threshold: 4'u8 else: 0'u8
-    baseColor = rBit or gBit or bBit
-
-  # Use bright variant if any channel is high
-  if maxCh >= 192:
-    result = baseColor + 8
-  else:
-    result = baseColor
-
 type
+  ColorModeKind* = enum
+    ## Color mode for terminal output
+    cmk8color ## 8 basic ANSI colors (0-7)
+    cmk16color ## 16 ANSI colors (0-15, includes bright)
+    cmk256color ## 256-color palette
+    cmk24bit ## True color (24-bit RGB)
+    cmkNone ## No colors (terminal defaults only)
+
   ## RGB color with values 0-255. -1 indicates terminal default color.
   Rgb* = object
     red*, green*, blue*: int16
@@ -369,12 +305,299 @@ type
   ThemeColors* = array[EditorColorPairIndex, ColorPair]
 
 const
+  EditorColorPairDocDescription*: array[EditorColorPairIndex, string] = [
+    ## Human-readable description for each color pair, used by
+    ## `tools/gen_config_docs.nim` to render the Color table in
+    ## `documents/configfile.md`. Every enum member must have an entry —
+    ## adding a new variant without a description triggers a compile error
+    ## here, so undocumented theme colors cannot ship silently.
+    EditorColorPairIndex.default: "Editor default text and background colors",
+    EditorColorPairIndex.lineNum: "Line number gutter",
+    EditorColorPairIndex.currentLineNum: "Current line number highlight",
+    EditorColorPairIndex.sidebarSessionModifiedSign: "Sidebar: modified line sign",
+    EditorColorPairIndex.sidebarSessionInsertedSign: "Sidebar: inserted line sign",
+    EditorColorPairIndex.statusLineNormalMode: "Status line in Normal mode (active)",
+    EditorColorPairIndex.statusLineNormalModeLabel:
+      "Status line mode label in Normal mode",
+    EditorColorPairIndex.statusLineNormalModeInactive:
+      "Status line in Normal mode (inactive)",
+    EditorColorPairIndex.statusLineInsertMode: "Status line in Insert mode (active)",
+    EditorColorPairIndex.statusLineInsertModeLabel:
+      "Status line mode label in Insert mode",
+    EditorColorPairIndex.statusLineInsertModeInactive:
+      "Status line in Insert mode (inactive)",
+    EditorColorPairIndex.statusLineVisualMode: "Status line in Visual mode (active)",
+    EditorColorPairIndex.statusLineVisualModeLabel:
+      "Status line mode label in Visual mode",
+    EditorColorPairIndex.statusLineVisualModeInactive:
+      "Status line in Visual mode (inactive)",
+    EditorColorPairIndex.statusLineReplaceMode: "Status line in Replace mode (active)",
+    EditorColorPairIndex.statusLineReplaceModeLabel:
+      "Status line mode label in Replace mode",
+    EditorColorPairIndex.statusLineReplaceModeInactive:
+      "Status line in Replace mode (inactive)",
+    EditorColorPairIndex.statusLineFilerMode: "Status line in Filer mode (active)",
+    EditorColorPairIndex.statusLineFilerModeLabel:
+      "Status line mode label in Filer mode",
+    EditorColorPairIndex.statusLineFilerModeInactive:
+      "Status line in Filer mode (inactive)",
+    EditorColorPairIndex.statusLineExMode: "Status line in Command mode (active)",
+    EditorColorPairIndex.statusLineExModeLabel: "Status line mode label in Command mode",
+    EditorColorPairIndex.statusLineExModeInactive:
+      "Status line in Command mode (inactive)",
+    EditorColorPairIndex.statusLineGitChangedLines:
+      "Status line git changed-lines counter",
+    EditorColorPairIndex.statusLineGitBranch: "Status line git branch name",
+    EditorColorPairIndex.tab: "Tab title in the tab line",
+    EditorColorPairIndex.currentTab: "Current tab title in the tab line",
+    EditorColorPairIndex.commandLine: "Command line",
+    EditorColorPairIndex.errorMessage: "Error message",
+    EditorColorPairIndex.warnMessage: "Warning message",
+    EditorColorPairIndex.searchResult: "Search result highlight",
+    EditorColorPairIndex.findCharMatch: "f/F/t/T character match highlight",
+    EditorColorPairIndex.selectArea: "Visual mode selection",
+    EditorColorPairIndex.keyword: "Syntax: keyword",
+    EditorColorPairIndex.functionName: "Syntax: function name",
+    EditorColorPairIndex.typeName: "Syntax: type name",
+    EditorColorPairIndex.boolean: "Syntax: boolean literal",
+    EditorColorPairIndex.specialVar: "Syntax: special variable",
+    EditorColorPairIndex.builtin: "Syntax: builtin",
+    EditorColorPairIndex.charLit: "Syntax: character literal",
+    EditorColorPairIndex.stringLit: "Syntax: string literal",
+    EditorColorPairIndex.binNumber: "Syntax: binary number literal",
+    EditorColorPairIndex.decNumber: "Syntax: decimal number literal",
+    EditorColorPairIndex.floatNumber: "Syntax: floating-point number literal",
+    EditorColorPairIndex.hexNumber: "Syntax: hexadecimal number literal",
+    EditorColorPairIndex.octNumber: "Syntax: octal number literal",
+    EditorColorPairIndex.comment: "Syntax: line comment",
+    EditorColorPairIndex.longComment: "Syntax: block/long comment",
+    EditorColorPairIndex.docComment: "Syntax: documentation comment",
+    EditorColorPairIndex.docLongComment: "Syntax: long documentation comment",
+    EditorColorPairIndex.whitespace: "Syntax: whitespace indicator",
+    EditorColorPairIndex.preprocessor: "Syntax: preprocessor directive",
+    EditorColorPairIndex.pragma: "Syntax: pragma",
+    EditorColorPairIndex.identifier: "Syntax: identifier",
+    EditorColorPairIndex.table: "Syntax: TOML table header",
+    EditorColorPairIndex.date: "Syntax: date literal",
+    EditorColorPairIndex.logError: "Log file error level",
+    EditorColorPairIndex.logWarning: "Log file warning level",
+    EditorColorPairIndex.logInfo: "Log file info/debug level",
+    EditorColorPairIndex.logUuid: "Log file UUID",
+    EditorColorPairIndex.operator: "Syntax: operator",
+    EditorColorPairIndex.property: "Syntax: property",
+    EditorColorPairIndex.markdownCodeBlock: "Markdown code block",
+    EditorColorPairIndex.namespace: "LSP semantic token: namespace",
+    EditorColorPairIndex.className: "LSP semantic token: class name",
+    EditorColorPairIndex.enumName: "LSP semantic token: enum name",
+    EditorColorPairIndex.enumMember: "LSP semantic token: enum member",
+    EditorColorPairIndex.interfaceName: "LSP semantic token: interface name",
+    EditorColorPairIndex.typeParameter: "LSP semantic token: type parameter",
+    EditorColorPairIndex.parameter: "LSP semantic token: parameter",
+    EditorColorPairIndex.variable: "LSP semantic token: variable",
+    EditorColorPairIndex.lspString: "LSP semantic token: string",
+    EditorColorPairIndex.event: "LSP semantic token: event",
+    EditorColorPairIndex.function: "LSP semantic token: function",
+    EditorColorPairIndex.`method`: "LSP semantic token: method",
+    EditorColorPairIndex.`macro`: "LSP semantic token: macro",
+    EditorColorPairIndex.regexp: "LSP semantic token: regular expression",
+    EditorColorPairIndex.decorator: "LSP semantic token: decorator",
+    EditorColorPairIndex.angle: "LSP semantic token: angle bracket",
+    EditorColorPairIndex.arithmetic: "LSP semantic token: arithmetic operator",
+    EditorColorPairIndex.attribute: "LSP semantic token: attribute",
+    EditorColorPairIndex.attributeBracket: "LSP semantic token: attribute bracket",
+    EditorColorPairIndex.bitwise: "LSP semantic token: bitwise operator",
+    EditorColorPairIndex.brace: "LSP semantic token: brace",
+    EditorColorPairIndex.bracket: "LSP semantic token: bracket",
+    EditorColorPairIndex.builtinAttribute: "LSP semantic token: builtin attribute",
+    EditorColorPairIndex.builtinType: "LSP semantic token: builtin type",
+    EditorColorPairIndex.colon: "LSP semantic token: colon",
+    EditorColorPairIndex.comma: "LSP semantic token: comma",
+    EditorColorPairIndex.comparison: "LSP semantic token: comparison operator",
+    EditorColorPairIndex.constParameter: "LSP semantic token: const parameter",
+    EditorColorPairIndex.derive: "LSP semantic token: derive",
+    EditorColorPairIndex.deriveHelper: "LSP semantic token: derive helper",
+    EditorColorPairIndex.dot: "LSP semantic token: dot",
+    EditorColorPairIndex.escapeSequence: "LSP semantic token: escape sequence",
+    EditorColorPairIndex.invalidEscapeSequence:
+      "LSP semantic token: invalid escape sequence",
+    EditorColorPairIndex.formatSpecifier: "LSP semantic token: format specifier",
+    EditorColorPairIndex.generic: "LSP semantic token: generic",
+    EditorColorPairIndex.label: "LSP semantic token: label",
+    EditorColorPairIndex.lifetime: "LSP semantic token: lifetime",
+    EditorColorPairIndex.logical: "LSP semantic token: logical operator",
+    EditorColorPairIndex.macroBang: "LSP semantic token: macro bang (`!`)",
+    EditorColorPairIndex.parenthesis: "LSP semantic token: parenthesis",
+    EditorColorPairIndex.punctuation: "Syntax: punctuation",
+    EditorColorPairIndex.selfKeyword: "LSP semantic token: `self` keyword",
+    EditorColorPairIndex.selfTypeKeyword: "LSP semantic token: `Self` type keyword",
+    EditorColorPairIndex.semicolon: "LSP semantic token: semicolon",
+    EditorColorPairIndex.typeAlias: "LSP semantic token: type alias",
+    EditorColorPairIndex.toolModule: "LSP semantic token: tool module",
+    EditorColorPairIndex.union: "LSP semantic token: union",
+    EditorColorPairIndex.unresolvedReference: "LSP semantic token: unresolved reference",
+    EditorColorPairIndex.inlayHint: "LSP inlay hint",
+    EditorColorPairIndex.inlineValue: "LSP inline value",
+    EditorColorPairIndex.codeLens: "LSP code lens",
+    EditorColorPairIndex.currentFile: "Filer: current file name",
+    EditorColorPairIndex.file: "Filer: file name",
+    EditorColorPairIndex.dir: "Filer: directory name",
+    EditorColorPairIndex.pcLink: "Filer: symbolic link",
+    EditorColorPairIndex.popupWindow: "Pop-up window",
+    EditorColorPairIndex.popupWinCurrentLine: "Pop-up window current line",
+    EditorColorPairIndex.notificationPopupInfo: "Notification popup: info body",
+    EditorColorPairIndex.notificationPopupInfoBorder: "Notification popup: info border",
+    EditorColorPairIndex.notificationPopupWarning: "Notification popup: warning body",
+    EditorColorPairIndex.notificationPopupWarningBorder:
+      "Notification popup: warning border",
+    EditorColorPairIndex.notificationPopupError: "Notification popup: error body",
+    EditorColorPairIndex.notificationPopupErrorBorder:
+      "Notification popup: error border",
+    EditorColorPairIndex.replaceText: "Replace command replacement text",
+    EditorColorPairIndex.parenPair: "Matching bracket pair highlight",
+    EditorColorPairIndex.currentWord: "Other occurrences of the word under cursor",
+    EditorColorPairIndex.highlightFullWidthSpace: "Full-width space highlight",
+    EditorColorPairIndex.highlightTrailingSpaces: "Trailing whitespace highlight",
+    EditorColorPairIndex.reservedWord: "Reserved word highlight",
+    EditorColorPairIndex.syntaxCheckInfo: "Syntax checker: info diagnostic",
+    EditorColorPairIndex.syntaxCheckHint: "Syntax checker: hint diagnostic",
+    EditorColorPairIndex.syntaxCheckWarn: "Syntax checker: warning diagnostic",
+    EditorColorPairIndex.syntaxCheckErr: "Syntax checker: error diagnostic",
+    EditorColorPairIndex.gitConflict:
+      "Git conflict block (single-color fallback when gitConflictTwoColor = false)",
+    EditorColorPairIndex.gitConflictMarker:
+      "Git conflict marker lines (`<<<<<<<`, `|||||||`, `=======`, `>>>>>>>`)",
+    EditorColorPairIndex.gitConflictOurs: "Git conflict: \"ours\" side",
+    EditorColorPairIndex.gitConflictBase: "Git conflict: diff3 \"base\" side",
+    EditorColorPairIndex.gitConflictTheirs: "Git conflict: \"theirs\" side",
+    EditorColorPairIndex.backupManagerCurrentLine: "Backup manager: current line",
+    EditorColorPairIndex.diffViewerAddedLine: "Diff viewer: added line",
+    EditorColorPairIndex.diffViewerDeletedLine: "Diff viewer: deleted line",
+    EditorColorPairIndex.configModeCurrentLine: "Configuration mode: current line",
+    EditorColorPairIndex.currentLineBg: "Editor current line background (bg-only)",
+    EditorColorPairIndex.currentColumnBg: "Editor current column background (bg-only)",
+    EditorColorPairIndex.foldingLine: "Folded-region indicator line",
+    EditorColorPairIndex.sidebarGitAddedSign: "Sidebar: git added sign",
+    EditorColorPairIndex.sidebarGitDeletedSign: "Sidebar: git deleted sign",
+    EditorColorPairIndex.sidebarGitChangedSign: "Sidebar: git changed sign",
+    EditorColorPairIndex.sidebarGitConflictSign: "Sidebar: git conflict sign",
+    EditorColorPairIndex.sidebarSyntaxCheckInfoSign: "Sidebar: syntax checker info sign",
+    EditorColorPairIndex.sidebarSyntaxCheckHintSign: "Sidebar: syntax checker hint sign",
+    EditorColorPairIndex.sidebarSyntaxCheckWarnSign:
+      "Sidebar: syntax checker warning sign",
+    EditorColorPairIndex.sidebarSyntaxCheckErrSign: "Sidebar: syntax checker error sign",
+    EditorColorPairIndex.viewerHeader: "Viewer common: header",
+    EditorColorPairIndex.viewerSelectedLine: "Viewer common: selected line",
+    EditorColorPairIndex.viewerEmptyMessage: "Viewer common: empty-state message",
+    EditorColorPairIndex.filerDirectory: "Filer: directory entry",
+    EditorColorPairIndex.filerSymlink: "Filer: symbolic link entry",
+    EditorColorPairIndex.filerSymlinkDir: "Filer: symbolic link to directory",
+    EditorColorPairIndex.filerHiddenFile: "Filer: hidden file entry",
+    EditorColorPairIndex.filerExecutable: "Filer: executable file entry",
+    EditorColorPairIndex.bufferManagerActive: "Buffer manager: active buffer",
+    EditorColorPairIndex.bufferManagerModified: "Buffer manager: modified buffer",
+    EditorColorPairIndex.configModeSection: "Configuration mode: section header",
+    EditorColorPairIndex.configModeEditMode: "Configuration mode: edit mode indicator",
+    EditorColorPairIndex.configModePopupBg: "Configuration mode: popup body and border",
+    EditorColorPairIndex.configModePopupSelected:
+      "Configuration mode: popup selected entry",
+    EditorColorPairIndex.diffViewerHeader: "Diff viewer: header",
+    EditorColorPairIndex.diffViewerMeta: "Diff viewer: metadata line",
+    EditorColorPairIndex.recentFileMissing: "Recent file mode: missing file entry",
+    EditorColorPairIndex.debugViewerSectionHeader: "Debug viewer: section header",
+    EditorColorPairIndex.referencesViewerHeader: "References viewer: header",
+    EditorColorPairIndex.documentSymbolViewerHeader: "Document symbol viewer: header",
+    EditorColorPairIndex.callHierarchyViewerHeader: "Call hierarchy viewer: header",
+    EditorColorPairIndex.helpViewerSectionHeader: "Help viewer: section header",
+  ]
+
   ## Terminal default RGB (-1 indicates use terminal default)
   TerminalDefaultRgb* = Rgb(red: -1, green: -1, blue: -1)
 
   ## Default terminal colors
   DefaultForegroundColor* = ThemeColor(rgb: TerminalDefaultRgb)
   DefaultBackgroundColor* = ThemeColor(rgb: TerminalDefaultRgb)
+
+var globalColorMode* = cmk24bit ## Current color mode setting
+
+proc rgbTo8Color*(r, g, b: int16): uint8 =
+  ## Convert RGB to 8-color ANSI index (0-7).
+  ## Uses threshold-based mapping to basic colors.
+  ##
+  ## ANSI 8 colors: black(0), red(1), green(2), yellow(3),
+  ##                blue(4), magenta(5), cyan(6), white(7)
+
+  # Threshold for considering a channel "on"
+  const threshold = 128'i16
+
+  # Map RGB channels to 3-bit color index
+  let
+    rBit = if r >= threshold: 1'u8 else: 0'u8
+    gBit = if g >= threshold: 2'u8 else: 0'u8
+    bBit = if b >= threshold: 4'u8 else: 0'u8
+
+  result = rBit or gBit or bBit
+
+proc rgbTo16Color*(r, g, b: int16): uint8 =
+  ## Convert RGB to 16-color ANSI index (0-15).
+  ## Colors 0-7 are normal, 8-15 are bright variants.
+  ##
+  ## ANSI 16 colors:
+  ##   0: black,   1: red,     2: green,   3: yellow
+  ##   4: blue,    5: magenta, 6: cyan,    7: white
+  ##   8: bright black (gray), 9-15: bright variants
+
+  # Calculate luminance (perceived brightness, 0-255 range)
+  # Use int to avoid overflow: 255 * 587 = 149,685 exceeds int16 max
+  let luminance = (r.int * 299 + g.int * 587 + b.int * 114) div 1000
+
+  # Check for grayscale (R ≈ G ≈ B)
+  let
+    maxCh = max(max(r, g), b)
+    minCh = min(min(r, g), b)
+    isGrayscale = (maxCh - minCh) < 32
+
+  if isGrayscale:
+    # Map grayscale to 4 levels: black, dark gray, light gray, white
+    if luminance < 64:
+      return 0'u8 # Black
+    elif luminance < 128:
+      return 8'u8 # Bright black (dark gray)
+    elif luminance < 192:
+      return 7'u8 # White (actually light gray in most terminals)
+    else:
+      return 15'u8 # Bright white
+
+  # For chromatic colors, use lower threshold to catch dark colors
+  const threshold = 85'i16
+  let
+    rBit = if r >= threshold: 1'u8 else: 0'u8
+    gBit = if g >= threshold: 2'u8 else: 0'u8
+    bBit = if b >= threshold: 4'u8 else: 0'u8
+    baseColor = rBit or gBit or bBit
+
+  # Use bright variant if any channel is high
+  if maxCh >= 192:
+    result = baseColor + 8
+  else:
+    result = baseColor
+
+proc toTomlColorKey*(index: EditorColorPairIndex): string =
+  ## Convert EditorColorPairIndex to its TOML key in the theme file.
+  ## Names generally match the enum, with three "Bg"-stripped exceptions
+  ## whose enum identifiers predate the inline-table TOML format
+  ## (`currentLineBg`, `currentColumnBg`, `configModePopupBg`), plus
+  ## `lspString` which is keyed as `string` to avoid the enum-keyword clash.
+  case index
+  of EditorColorPairIndex.lspString:
+    "string"
+  of EditorColorPairIndex.currentLineBg:
+    "currentLine"
+  of EditorColorPairIndex.currentColumnBg:
+    "currentColumn"
+  of EditorColorPairIndex.configModePopupBg:
+    "configModePopup"
+  else:
+    $index
 
 proc isTermDefaultColor*(rgb: Rgb): bool {.inline.} =
   ## Check if this RGB represents the terminal default color

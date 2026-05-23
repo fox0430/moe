@@ -10,309 +10,229 @@
 foreground = "#dadada"
 background = "#000000"
 
-lineNum = "#636d83"
-lineNumBg = "#000000"
+lineNum = { fg = "#636d83", bg = "#000000" }
 
-currentLineNum = "#56b6c2"
-currentLineNumBg = "#000000"
+currentLineNum = { fg = "#56b6c2", bg = "#000000" }
 
-statusLineNormalMode = "#ffffff"
-statusLineNormalModeBg = "#61afef"
-statusLineNormalModeLabel = "#000000"
-statusLineNormalModeLabelBg = "#ffffff"
-statusLineNormalModeInactive = "#61afef"
-statusLineNormalModeInactiveBg = "#ffffff"
+statusLineNormalMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineNormalModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineNormalModeInactive = { fg = "#61afef", bg = "#ffffff" }
 
-statusLineInsertMode = "#ffffff"
-statusLineInsertModeBg = "#61afef"
-statusLineInsertModeLabel = "#000000"
-statusLineInsertModeLabelBg = "#ffffff"
-statusLineInsertModeInactive = "#61afef"
-statusLineInsertModeInactiveBg = "#ffffff"
+statusLineInsertMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineInsertModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineInsertModeInactive = { fg = "#61afef", bg = "#ffffff" }
 
-statusLineVisualMode = "#ffffff"
-statusLineVisualModeBg = "#61afef"
-statusLineVisualModeLabel = "#000000"
-statusLineVisualModeLabelBg = "#ffffff"
-statusLineVisualModeInactive = "#61afef"
-statusLineVisualModeInactiveBg = "#ffffff"
+statusLineVisualMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineVisualModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineVisualModeInactive = { fg = "#61afef", bg = "#ffffff" }
 
-statusLineReplaceMode = "#ffffff"
-statusLineReplaceModeBg = "#61afef"
-statusLineReplaceModeLabel = "#000000"
-statusLineReplaceModeLabelBg = "#ffffff"
-statusLineReplaceModeInactive = "#61afef"
-statusLineReplaceModeInactiveBg = "#ffffff"
+statusLineReplaceMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineReplaceModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineReplaceModeInactive = { fg = "#61afef", bg = "#ffffff" }
 
-statusLineFilerMode = "#ffffff"
-statusLineFilerModeBg = "#61afef"
-statusLineFilerModeLabel = "#000000"
-statusLineFilerModeLabelBg = "#ffffff"
-statusLineFilerModeInactive = "#61afef"
-statusLineFilerModeInactiveBg = "#ffffff"
+statusLineFilerMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineFilerModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineFilerModeInactive = { fg = "#61afef", bg = "#ffffff" }
 
-statusLineExMode = "#ffffff"
-statusLineExModeBg = "#61afef"
-statusLineExModeLabel = "#000000"
-statusLineExModeLabelBg = "#ffffff"
-statusLineExModeInactive = "#61afef"
-statusLineExModeInactiveBg = "#ffffff"
+statusLineExMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineExModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineExModeInactive = { fg = "#61afef", bg = "#ffffff" }
 
-statusLineGitChangedLines = "#ffffff"
-statusLineGitChangedLinesBg = "#3d59a1"
-statusLineGitBranch = "#ffffff"
-statusLineGitBranchBg = "#3d59a1"
+statusLineGitChangedLines = { fg = "#ffffff", bg = "#3d59a1" }
+statusLineGitBranch = { fg = "#ffffff", bg = "#3d59a1" }
 
-tab = "#949494"
-tabBg = "#262626"
-currentTab = "#ffffff"
-currentTabBg = "#1e1e1e"
+tab = { fg = "#949494", bg = "#262626" }
+currentTab = { fg = "#ffffff", bg = "#1e1e1e" }
 
-commandLine = "#ffffff"
-commandLineBg = "#000000"
+commandLine = { fg = "#ffffff", bg = "#000000" }
 
-errorMessage = "#e06c75"
-errorMessageBg = "#000000"
+errorMessage = { fg = "#e06c75", bg = "#000000" }
 
-warnMessage = "#e5c07b"
-warnMessageBg = "#000000"
+warnMessage = { fg = "#e5c07b", bg = "#000000" }
 
-searchResult = "#ffffff"
-searchResultBg = "#be5046"
+searchResult = { fg = "#ffffff", bg = "#be5046" }
 
-selectArea = "#ffffff"
-selectAreaBg = "#5c3d6e"
+selectArea = { fg = "#ffffff", bg = "#5c3d6e" }
 
-keyword = "#5fd7ff"
-functionName = "#61afef"
-typeName = "#2ac3de"
-boolean = "#d19a66"
-charLit = "#98c379"
-stringLit = "#98c379"
-specialVar = "#c678dd"
-builtin = "#2ac3de"
-binNumber = "#d19a66"
-decNumber = "#d19a66"
-floatNumber = "#d19a66"
-hexNumber = "#d19a66"
-octNumber = "#d19a66"
-comment = "#5c6773"
-longComment = "#5c6773"
-docComment = "#7a8a99"
-docLongComment = "#7a8a99"
-whitespace = "#4b5263"
-preprocessor = "#c678dd"
-pragma = "#c678dd"
-identifier = "#dadada"
-table = "#0087af"
-date = "#0087af"
-logError = "#e06c75"
-logWarning = "#e5c07b"
-logInfo = "#61afef"
-logUuid = "#56b6c2"
-operator = "#89ddff"
-property = "#61afef"
+keyword = { fg = "#5fd7ff" }
+functionName = { fg = "#61afef" }
+typeName = { fg = "#2ac3de" }
+boolean = { fg = "#d19a66" }
+charLit = { fg = "#98c379" }
+stringLit = { fg = "#98c379" }
+specialVar = { fg = "#c678dd" }
+builtin = { fg = "#2ac3de" }
+binNumber = { fg = "#d19a66" }
+decNumber = { fg = "#d19a66" }
+floatNumber = { fg = "#d19a66" }
+hexNumber = { fg = "#d19a66" }
+octNumber = { fg = "#d19a66" }
+comment = { fg = "#5c6773" }
+longComment = { fg = "#5c6773" }
+docComment = { fg = "#7a8a99" }
+docLongComment = { fg = "#7a8a99" }
+whitespace = { fg = "#4b5263" }
+preprocessor = { fg = "#c678dd" }
+pragma = { fg = "#c678dd" }
+identifier = { fg = "#dadada" }
+table = { fg = "#0087af" }
+date = { fg = "#0087af" }
+logError = { fg = "#e06c75" }
+logWarning = { fg = "#e5c07b" }
+logInfo = { fg = "#61afef" }
+logUuid = { fg = "#56b6c2" }
+operator = { fg = "#89ddff" }
+property = { fg = "#61afef" }
 
-markdownCodeBlock = "#dadada"
-markdownCodeBlockBg = "#1a1a2e"
+markdownCodeBlock = { fg = "#dadada", bg = "#1a1a2e" }
 
-namespace = "#2ac3de"
-className = "#2ac3de"
-enumName = "#2ac3de"
-enumMember = "#d19a66"
-interfaceName = "#2ac3de"
-typeParameter = "#2ac3de"
-parameter = "#abb2bf"
-variable = "#dadada"
-string = "#98c379"
-event = "#dadada"
-function = "#61afef"
-method = "#61afef"
-macro = "#c678dd"
-regexp = "#98c379"
-decorator = "#c678dd"
-angle = "#dadada"
-arithmetic = "#89ddff"
-attribute = "#c678dd"
-attributeBracket = "#c678dd"
-bitwise = "#89ddff"
-brace = "#dadada"
-bracket = "#dadada"
-builtinAttribute = "#c678dd"
-builtinType = "#2ac3de"
-colon = "#dadada"
-comma = "#dadada"
-comparison = "#89ddff"
-constParameter = "#d19a66"
-derive = "#2ac3de"
-deriveHelper = "#2ac3de"
-dot = "#dadada"
-escapeSequence = "#d19a66"
-invalidEscapeSequence = "#e06c75"
-formatSpecifier = "#d19a66"
-generic = "#dadada"
-label = "#dadada"
-lifetime = "#c678dd"
-logical = "#89ddff"
-macroBang = "#c678dd"
-parenthesis = "#dadada"
-punctuation = "#dadada"
-selfKeyword = "#e06c75"
-selfTypeKeyword = "#2ac3de"
-semicolon = "#dadada"
-typeAlias = "#2ac3de"
-toolModule = "#dadada"
-union = "#2ac3de"
-unresolvedReference = "#dadada"
+namespace = { fg = "#2ac3de" }
+className = { fg = "#2ac3de" }
+enumName = { fg = "#2ac3de" }
+enumMember = { fg = "#d19a66" }
+interfaceName = { fg = "#2ac3de" }
+typeParameter = { fg = "#2ac3de" }
+parameter = { fg = "#abb2bf" }
+variable = { fg = "#dadada" }
+string = { fg = "#98c379" }
+event = { fg = "#dadada" }
+function = { fg = "#61afef" }
+method = { fg = "#61afef" }
+macro = { fg = "#c678dd" }
+regexp = { fg = "#98c379" }
+decorator = { fg = "#c678dd" }
+angle = { fg = "#dadada" }
+arithmetic = { fg = "#89ddff" }
+attribute = { fg = "#c678dd" }
+attributeBracket = { fg = "#c678dd" }
+bitwise = { fg = "#89ddff" }
+brace = { fg = "#dadada" }
+bracket = { fg = "#dadada" }
+builtinAttribute = { fg = "#c678dd" }
+builtinType = { fg = "#2ac3de" }
+colon = { fg = "#dadada" }
+comma = { fg = "#dadada" }
+comparison = { fg = "#89ddff" }
+constParameter = { fg = "#d19a66" }
+derive = { fg = "#2ac3de" }
+deriveHelper = { fg = "#2ac3de" }
+dot = { fg = "#dadada" }
+escapeSequence = { fg = "#d19a66" }
+invalidEscapeSequence = { fg = "#e06c75" }
+formatSpecifier = { fg = "#d19a66" }
+generic = { fg = "#dadada" }
+label = { fg = "#dadada" }
+lifetime = { fg = "#c678dd" }
+logical = { fg = "#89ddff" }
+macroBang = { fg = "#c678dd" }
+parenthesis = { fg = "#dadada" }
+punctuation = { fg = "#dadada" }
+selfKeyword = { fg = "#e06c75" }
+selfTypeKeyword = { fg = "#2ac3de" }
+semicolon = { fg = "#dadada" }
+typeAlias = { fg = "#2ac3de" }
+toolModule = { fg = "#dadada" }
+union = { fg = "#2ac3de" }
+unresolvedReference = { fg = "#dadada" }
 
-inlayHint = "#636d83"
-inlineValue = "#636d83"
-codeLens = "#636d83"
+inlayHint = { fg = "#636d83" }
+inlineValue = { fg = "#636d83" }
+codeLens = { fg = "#636d83" }
 
-currentFile = "#ffffff"
-currentFileBg = "#61afef"
-file = "#ffffff"
-fileBg = "#000000"
-dir = "#61afef"
-dirBg = "#000000"
-pcLink = "#008080"
-pcLinkBg = "#000000"
+currentFile = { fg = "#ffffff", bg = "#61afef" }
+file = { fg = "#ffffff", bg = "#000000" }
+dir = { fg = "#61afef", bg = "#000000" }
+pcLink = { fg = "#008080", bg = "#000000" }
 
-popupWindow = "#ffffff"
-popupWindowBg = "#000000"
-popupWinCurrentLine = "#61afef"
-popupWinCurrentLineBg = "#000000"
+popupWindow = { fg = "#ffffff", bg = "#000000" }
+popupWinCurrentLine = { fg = "#61afef", bg = "#000000" }
 
-notificationPopupInfo = "#ffffff"
-notificationPopupInfoBg = "#323232"
-notificationPopupInfoBorder = "#808080"
-notificationPopupInfoBorderBg = "#323232"
-notificationPopupWarning = "#ffffff"
-notificationPopupWarningBg = "#323232"
-notificationPopupWarningBorder = "#ffff00"
-notificationPopupWarningBorderBg = "#323232"
-notificationPopupError = "#ffffff"
-notificationPopupErrorBg = "#323232"
-notificationPopupErrorBorder = "#ff0000"
-notificationPopupErrorBorderBg = "#323232"
+notificationPopupInfo = { fg = "#ffffff", bg = "#323232" }
+notificationPopupInfoBorder = { fg = "#808080", bg = "#323232" }
+notificationPopupWarning = { fg = "#ffffff", bg = "#323232" }
+notificationPopupWarningBorder = { fg = "#ffff00", bg = "#323232" }
+notificationPopupError = { fg = "#ffffff", bg = "#323232" }
+notificationPopupErrorBorder = { fg = "#ff0000", bg = "#323232" }
 
-replaceText = "#ffffff"
-replaceTextBg = "#be5046"
+replaceText = { fg = "#ffffff", bg = "#be5046" }
 
-parenPair = "#ffffff"
-parenPairBg = "#61afef"
+parenPair = { fg = "#ffffff", bg = "#61afef" }
 
-currentWord = "#ffffff"
-currentWordBg = "#808080"
+currentWord = { fg = "#ffffff", bg = "#808080" }
 
-findCharMatch = "#ffffff"
-findCharMatchBg = "#be5046"
+findCharMatch = { fg = "#ffffff", bg = "#be5046" }
 
-highlightFullWidthSpace = "#dadada"
-highlightFullWidthSpaceBg = "#ff0000"
+highlightFullWidthSpace = { fg = "#dadada", bg = "#ff0000" }
 
-highlightTrailingSpaces = "#dadada"
-highlightTrailingSpacesBg = "#ff0000"
+highlightTrailingSpaces = { fg = "#dadada", bg = "#ff0000" }
 
-reservedWord = "#ffffff"
-reservedWordBg = "#808080"
+reservedWord = { fg = "#ffffff", bg = "#808080" }
 
-syntaxCheckInfo = "#e5c07b"
-syntaxCheckInfoBg = "#000000"
-syntaxCheckHint = "#e5c07b"
-syntaxCheckHintBg = "#000000"
-syntaxCheckWarn = "#e5c07b"
-syntaxCheckWarnBg = "#000000"
-syntaxCheckErr = "#e06c75"
-syntaxCheckErrBg = "#000000"
+syntaxCheckInfo = { fg = "#e5c07b", bg = "#000000" }
+syntaxCheckHint = { fg = "#e5c07b", bg = "#000000" }
+syntaxCheckWarn = { fg = "#e5c07b", bg = "#000000" }
+syntaxCheckErr = { fg = "#e06c75", bg = "#000000" }
 
-gitConflict = "#ffffff"
-gitConflictBg = "#3a1e1e"
-gitConflictMarker = "#ffffff"
-gitConflictMarkerBg = "#be5046"
-gitConflictOurs = "#ffffff"
-gitConflictOursBg = "#2f2540"
-gitConflictBase = "#dadada"
-gitConflictBaseBg = "#3a2f1a"
-gitConflictTheirs = "#ffffff"
-gitConflictTheirsBg = "#1a2f3a"
+gitConflict = { fg = "#ffffff", bg = "#3a1e1e" }
+gitConflictMarker = { fg = "#ffffff", bg = "#be5046" }
+gitConflictOurs = { fg = "#ffffff", bg = "#2f2540" }
+gitConflictBase = { fg = "#dadada", bg = "#3a2f1a" }
+gitConflictTheirs = { fg = "#ffffff", bg = "#1a2f3a" }
 
-backupManagerCurrentLine = "#ffffff"
-backupManagerCurrentLineBg = "#008080"
+backupManagerCurrentLine = { fg = "#ffffff", bg = "#008080" }
 
-diffViewerAddedLine = "#98c379"
-diffViewerAddedLineBg = "#000000"
-diffViewerDeletedLine = "#e06c75"
-diffViewerDeletedLineBg = "#000000"
+diffViewerAddedLine = { fg = "#98c379", bg = "#000000" }
+diffViewerDeletedLine = { fg = "#e06c75", bg = "#000000" }
 
-configModeCurrentLine = "#ffffff"
-configModeCurrentLineBg = "#008080"
+configModeCurrentLine = { fg = "#ffffff", bg = "#008080" }
 
-currentLineBg = "#3e4452"
+currentLine = { bg = "#3e4452" }
 
-currentColumnBg = "#3e4452"
+currentColumn = { bg = "#3e4452" }
 
-foldingLine = "#808080"
-foldingLineBg = "#3f3f3f"
+foldingLine = { fg = "#808080", bg = "#3f3f3f" }
 
-sidebarGitAddedSign = "#98c379"
-sidebarGitAddedSignBg = "#000000"
-sidebarGitDeletedSign = "#e06c75"
-sidebarGitDeletedSignBg = "#000000"
-sidebarGitChangedSign = "#e5c07b"
-sidebarGitChangedSignBg = "#000000"
-sidebarGitConflictSign = "#e06c75"
-sidebarGitConflictSignBg = "#000000"
+sidebarGitAddedSign = { fg = "#98c379", bg = "#000000" }
+sidebarGitDeletedSign = { fg = "#e06c75", bg = "#000000" }
+sidebarGitChangedSign = { fg = "#e5c07b", bg = "#000000" }
+sidebarGitConflictSign = { fg = "#e06c75", bg = "#000000" }
 
-sidebarSyntaxCheckInfoSign = "#e5c07b"
-sidebarSyntaxCheckInfoSignBg = "#000000"
-sidebarSyntaxCheckHintSign = "#e5c07b"
-sidebarSyntaxCheckHintSignBg = "#000000"
-sidebarSyntaxCheckWarnSign = "#e5c07b"
-sidebarSyntaxCheckWarnSignBg = "#000000"
-sidebarSyntaxCheckErrSign = "#e06c75"
-sidebarSyntaxCheckErrSignBg = "#000000"
-sidebarSessionModifiedSign = "#e5c07b"
-sidebarSessionModifiedSignBg = "#000000"
-sidebarSessionInsertedSign = "#98c379"
-sidebarSessionInsertedSignBg = "#000000"
+sidebarSyntaxCheckInfoSign = { fg = "#e5c07b", bg = "#000000" }
+sidebarSyntaxCheckHintSign = { fg = "#e5c07b", bg = "#000000" }
+sidebarSyntaxCheckWarnSign = { fg = "#e5c07b", bg = "#000000" }
+sidebarSyntaxCheckErrSign = { fg = "#e06c75", bg = "#000000" }
+sidebarSessionModifiedSign = { fg = "#e5c07b", bg = "#000000" }
+sidebarSessionInsertedSign = { fg = "#98c379", bg = "#000000" }
 
 # Viewer common colors
-viewerHeader = "#d7af00"
-viewerHeaderBg = "#000000"
-viewerSelectedLine = "#000000"
-viewerSelectedLineBg = "#ffffff"
-viewerEmptyMessage = "#8a8a8a"
-viewerEmptyMessageBg = "#000000"
+viewerHeader = { fg = "#d7af00", bg = "#000000" }
+viewerSelectedLine = { fg = "#000000", bg = "#ffffff" }
+viewerEmptyMessage = { fg = "#8a8a8a", bg = "#000000" }
 
 # Filer mode specific
-filerDirectory = "#61afef"
-filerSymlink = "#00ffff"
-filerSymlinkDir = "#875fd7"
-filerHiddenFile = "#808080"
+filerDirectory = { fg = "#61afef" }
+filerSymlink = { fg = "#00ffff" }
+filerSymlinkDir = { fg = "#875fd7" }
+filerHiddenFile = { fg = "#808080" }
 
 # Buffer manager specific
-bufferManagerActive = "#5fff5f"
-bufferManagerModified = "#ff8700"
+bufferManagerActive = { fg = "#5fff5f" }
+bufferManagerModified = { fg = "#ff8700" }
 
 # Configuration mode specific
-configModeSection = "#5fff5f"
-configModeSectionBg = "#000000"
-configModeEditMode = "#000000"
-configModeEditModeBg = "#d7af00"
-configModePopupBg = "#ffffff"
-configModePopupBgBg = "#323232"
-configModePopupSelected = "#ffffff"
-configModePopupSelectedBg = "#005faf"
+configModeSection = { fg = "#5fff5f", bg = "#000000" }
+configModeEditMode = { fg = "#000000", bg = "#d7af00" }
+configModePopup = { fg = "#ffffff", bg = "#323232" }
+configModePopupSelected = { fg = "#ffffff", bg = "#005faf" }
 
 # Diff viewer specific
-diffViewerHeader = "#00afaf"
-diffViewerMeta = "#d7af00"
+diffViewerHeader = { fg = "#00afaf" }
+diffViewerMeta = { fg = "#d7af00" }
 
 # Other viewers
-recentFileMissing = "#606060"
-debugViewerSectionHeader = "#87afff"
-referencesViewerHeader = "#0087ff"
-documentSymbolViewerHeader = "#afd700"
-callHierarchyViewerHeader = "#afd700"
-helpViewerSectionHeader = "#5f87ff"
+recentFileMissing = { fg = "#606060" }
+debugViewerSectionHeader = { fg = "#87afff" }
+referencesViewerHeader = { fg = "#0087ff" }
+documentSymbolViewerHeader = { fg = "#afd700" }
+callHierarchyViewerHeader = { fg = "#afd700" }
+helpViewerSectionHeader = { fg = "#5f87ff" }
