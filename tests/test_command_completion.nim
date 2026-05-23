@@ -863,6 +863,17 @@ suite "CommandCompletion - edge cases":
         check "(e.g., scrollfriction=80.0)" in opt.description
     check found
 
+  test "Completion descriptions do not leak markdown backticks":
+    # `SetOptionSpec.description` is a structured `Description` that
+    # carries inline-code segments (e.g. ``"Highlight inline color
+    # codes (`#RRGGBB`, `#RGB`)"``) for the howtouse.md renderer. The
+    # completion popup paints descriptions to the terminal verbatim, so
+    # `toPlainText` must drop the code-span markers before the string
+    # reaches the popup — otherwise raw `` ` `` glyphs would show.
+    let options = collectSetOptions("")
+    for opt in options:
+      check '`' notin opt.description
+
   test "filterAndSortEntries with fuzzy match":
     let mgr = newCommandCompletionManager()
     mgr.allCommands = @[

@@ -25,6 +25,7 @@ import std/[unittest, tables, options]
 
 import ../src/moepkg/command_line_commands
 import ../src/moepkg/command_line/types
+import ../src/moepkg/help_description
 
 suite "CommandLineCommandTable invariants":
   test "exactly one canonical-long spec per action":
@@ -84,9 +85,14 @@ suite "CommandLineCommandTable invariants":
     ## wording so users see one consistent description for the command.
     ## Extended-usage variants (helpEntries[1..]) — e.g. `e filename` vs `e`
     ## — are allowed to carry their own descriptions.
+    ##
+    ## `helpEntries[0].description` is a structured `Description` whose
+    ## code segments are wrapped in backticks for the howtouse.md
+    ## renderer; `completionDescription` is plain text. Compare via
+    ## `toPlainText` so the two wordings match modulo markup.
     for spec in CommandLineCommandTable:
       if spec.completionDescription.len == 0:
         continue
       if spec.helpEntries.len == 0:
         continue
-      check spec.helpEntries[0].description == spec.completionDescription
+      check toPlainText(spec.helpEntries[0].description) == spec.completionDescription

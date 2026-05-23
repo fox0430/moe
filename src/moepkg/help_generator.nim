@@ -20,13 +20,11 @@
 ## Compile-time generators for sections of the help viewer text.
 ##
 ## The simple key→description sections of `HelpSentences` (`# Exiting`,
-## `# Changing modes`, `# Normal mode`, `# Visual mode`, `# Replace mode`,
-## `# Insert mode`, `# Backup mode`, `# Diff mode`, `# References mode`,
-## `# Call hierarchy viewer mode`, `# Filer mode`, and the two
-## `# Terminal mode` sub-modes) are built from the corresponding
-## `XxxCommands*` `HelpGroup` constants. The
-## `# Register` section is a flat `seq[string]` (`RegisterPatterns`) because
-## its lines have no `- description` part. The
+## `# Changing modes`, `# Normal mode`, `# Register`, `# Visual mode`,
+## `# Replace mode`, `# Insert mode`, `# Backup mode`, `# Diff mode`,
+## `# References mode`, `# Call hierarchy viewer mode`, `# Filer mode`,
+## and the two `# Terminal mode` sub-modes) are built from the
+## corresponding `XxxCommands*` `HelpGroup` constants. The
 ## `# Command mode` subsection is built from `CommandLineCommandTable` +
 ## `CommandLineSpecialHelp` (in `command_line_commands`), and the
 ## `set` options block is built from the canonical `SetOptionTable` defined
@@ -37,7 +35,9 @@
 
 import std/[options, strutils]
 
-import setting_options, command_line_commands
+import setting_options, command_line_commands, help_description
+
+descriptionFromStringConverter()
 export setting_options, command_line_commands
 
 type HelpGroup* = object
@@ -353,13 +353,66 @@ const CallHierarchyModeCommands*: HelpGroup = HelpGroup(
   ]
 )
 
-const RegisterPatterns*: seq[string] = @[
-  "\"-any key-yy", "\"-any key-yl", "\"-any key-yw", "\"-any key-y}", "\"-any key-y{",
-  "\"-any key-p", "\"-any key-P", "\"-any key-dd", "\"-any key-dw", "\"-any key-d$",
-  "\"-any key-d0", "\"-any key-dG", "\"-any key-dgg", "\"-any key-d{", "\"-any key-d}",
-  "\"-any key-di-any key", "\"-any key-dh", "\"-any key-cl", "\"-any key-s",
-  "\"-any key-ci-any key",
-]
+# `syntax` uses the space-separated `any` placeholder that `tokenizeKey`
+# normalizes to the canonical `Any key` token, matching the convention
+# already used by `yt any` / `q any` / `@ any` entries elsewhere. This lets
+# the markdown renderer share `renderKbdHelpGroup` instead of needing a
+# Register-specific tokenizer.
+const RegisterCommands*: HelpGroup = HelpGroup(
+  entries: @[
+    HelpEntry(syntax: "\" any yy", description: "Yank a line to a named register"),
+    HelpEntry(syntax: "\" any yl", description: "Yank a character to a named register"),
+    HelpEntry(syntax: "\" any yw", description: "Yank a word to a named register"),
+    HelpEntry(
+      syntax: "\" any y}",
+      description: "Yank to the next blank line to a named register",
+    ),
+    HelpEntry(
+      syntax: "\" any y{",
+      description: "Yank to the previous blank line to a named register",
+    ),
+    HelpEntry(
+      syntax: "\" any p", description: "Paste from a named register after cursor"
+    ),
+    HelpEntry(
+      syntax: "\" any P", description: "Paste from a named register before cursor"
+    ),
+    HelpEntry(syntax: "\" any dd", description: "Delete a line to a named register"),
+    HelpEntry(syntax: "\" any dw", description: "Delete a word to a named register"),
+    HelpEntry(
+      syntax: "\" any d$", description: "Delete to end of line to a named register"
+    ),
+    HelpEntry(
+      syntax: "\" any d0",
+      description: "Delete to beginning of line to a named register",
+    ),
+    HelpEntry(
+      syntax: "\" any dG", description: "Delete to end of file to a named register"
+    ),
+    HelpEntry(
+      syntax: "\" any dgg",
+      description: "Delete to beginning of file to a named register",
+    ),
+    HelpEntry(
+      syntax: "\" any d{",
+      description: "Delete to the previous blank line to a named register",
+    ),
+    HelpEntry(
+      syntax: "\" any d}",
+      description: "Delete to the next blank line to a named register",
+    ),
+    HelpEntry(syntax: "\" any di any", description: "Delete inside to a named register"),
+    HelpEntry(
+      syntax: "\" any dh",
+      description: "Delete a character before cursor to a named register",
+    ),
+    HelpEntry(
+      syntax: "\" any cl or \" any s",
+      description: "Change a character to a named register",
+    ),
+    HelpEntry(syntax: "\" any ci any", description: "Change inside to a named register"),
+  ]
+)
 
 # `minWidth: 7` matches the hand-written original, which padded one column
 # beyond the longest entry (`d or x` / `Ctrl-a` / ...) for breathing room.
@@ -485,7 +538,7 @@ proc renderGroup(g: HelpGroup): string =
   for e in g.entries:
     result.add e.syntax.alignLeft(width)
     result.add " - "
-    result.add e.description
+    result.add toPlainText(e.description)
     result.add '\n'
 
 proc helpEntriesFor(name: string): seq[HelpEntry] {.compileTime.} =
@@ -534,11 +587,8 @@ proc renderCallHierarchyModeSection*(): string {.compileTime.} =
   renderGroup(CallHierarchyModeCommands)
 
 proc renderRegisterSection*(): string {.compileTime.} =
-  ## The "# Register" section body. Patterns are emitted one per line with
-  ## no `key - description` form — they are syntax-only documentation.
-  for p in RegisterPatterns:
-    result.add p
-    result.add '\n'
+  ## The "# Register" section body.
+  renderGroup(RegisterCommands)
 
 proc renderVisualModeSection*(): string {.compileTime.} =
   ## The "# Visual mode" section body.
@@ -629,7 +679,7 @@ proc renderSetOptionsSection*(): string {.compileTime.} =
       continue
     result.add boolSetHead(spec).alignLeft(width)
     result.add " - "
-    result.add spec.description
+    result.add toPlainText(spec.description)
     result.add '\n'
 
   var vwidth = 0
@@ -644,7 +694,7 @@ proc renderSetOptionsSection*(): string {.compileTime.} =
       continue
     result.add valueSetHead(spec).alignLeft(vwidth)
     result.add " - "
-    result.add spec.description
+    result.add toPlainText(spec.description)
     result.add "; e.g. "
     result.add valueSetExample(spec)
     result.add '\n'
