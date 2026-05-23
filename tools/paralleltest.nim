@@ -8,6 +8,10 @@ const
   DefaultJobs = 4
   DefaultTimeoutSec = 120
 
+  # Flaky tests that must be run sequentially after the parallel batch
+  # so concurrent file/clipboard/etc. usage cannot perturb them.
+  SequentialTests = ["test_registers.nim"]
+
 proc main() =
   let jobs =
     if paramCount() >= 1:
@@ -25,44 +29,58 @@ proc main() =
     else:
       DefaultTimeoutSec
 
-  let testFiles = toSeq(walkDir("tests", relative = true))
+  let allTestFiles = toSeq(walkDir("tests", relative = true))
     .filterIt(
       it.kind == pcFile and it.path.startsWith("t") and it.path.endsWith(".nim")
     )
     .mapIt(it.path)
 
+  let parallelFiles = allTestFiles.filterIt(it notin SequentialTests)
+  let sequentialFiles = allTestFiles.filterIt(it in SequentialTests)
+  let totalFiles = parallelFiles.len + sequentialFiles.len
+
   if timeoutSec > 0:
     echo "Running ",
-      testFiles.len, " tests with ", jobs, " parallel jobs (timeout: ", timeoutSec,
+      parallelFiles.len, " tests with ", jobs, " parallel jobs (timeout: ", timeoutSec,
       "s per file)..."
   else:
-    echo "Running ", testFiles.len, " tests with ", jobs, " parallel jobs..."
+    echo "Running ", parallelFiles.len, " tests with ", jobs, " parallel jobs..."
 
-  let commands = testFiles.mapIt(
+  proc buildCommand(file: string): string =
     if timeoutSec > 0:
-      "timeout --foreground --kill-after=5 " & $timeoutSec & " nim c -r tests/" & it
+      "timeout --foreground --kill-after=5 " & $timeoutSec & " nim c -r tests/" & file
     else:
-      "nim c -r tests/" & it
-  )
+      "nim c -r tests/" & file
+
+  let commands = parallelFiles.mapIt(buildCommand(it))
 
   var failedTests: seq[tuple[name: string, exitCode: int]]
 
   proc afterTest(idx: int, p: Process) =
     let code = p.peekExitCode()
     if code != 0:
-      failedTests.add((testFiles[idx], code))
+      failedTests.add((parallelFiles[idx], code))
 
-  let exitCode = execProcesses(
+  var exitCode = execProcesses(
     commands,
     n = jobs,
     options = {poParentStreams, poUsePath},
     afterRunEvent = afterTest,
   )
 
-  echo "\nFinished ", testFiles.len, " files"
+  if sequentialFiles.len > 0:
+    echo "\nRunning ", sequentialFiles.len, " flaky test(s) sequentially..."
+    for file in sequentialFiles:
+      let code = execCmd(buildCommand(file))
+      if code != 0:
+        failedTests.add((file, code))
+        if exitCode == 0:
+          exitCode = code
+
+  echo "\nFinished ", totalFiles, " files"
 
   if failedTests.len > 0:
-    echo "\nFailed (", failedTests.len, "/", testFiles.len, "):"
+    echo "\nFailed (", failedTests.len, "/", totalFiles, "):"
     for (name, code) in failedTests:
       let suffix =
         if code == 124:
