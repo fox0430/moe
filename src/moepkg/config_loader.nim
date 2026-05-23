@@ -130,6 +130,13 @@ proc parseBufferBackend(s: string): BufferBackendConfig =
   of "pieceTable": bbcPieceTable
   else: bbcAuto
 
+proc parseBracketSplitMode(s: string): BracketSplitMode =
+  case s
+  of "disable": bsmDisable
+  of "noIndent": bsmNoIndent
+  of "indent": bsmIndent
+  else: bsmDisable
+
 # Integrated load+validate helper functions
 # These functions validate and load in one step.
 # Invalid values are skipped (keeping defaults) and errors are collected.
@@ -349,6 +356,7 @@ const
   ValidSplitTypes* = ["horizontal", "vertical"]
   ValidLspTraceLevels* = ["off", "messages", "verbose"]
   ValidBufferBackends* = ["auto", "gapBuffer", "sqrtDecomp", "rope", "pieceTable"]
+  ValidBracketSplitModes* = ["disable", "noIndent", "indent"]
 
 # Integrated load functions (validate + load in one step)
 
@@ -1831,6 +1839,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "lineWrap = " & toTomlBool(config.standard.lineWrap)
   lines.add "timeoutlen = " & $config.standard.timeoutlen
   lines.add "bufferBackend = " & toTomlString($config.standard.bufferBackend)
+  lines.add "bracketSplit = " & toTomlString($config.standard.bracketSplit)
   lines.add ""
 
   # Clipboard section

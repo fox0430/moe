@@ -271,6 +271,12 @@ proc correspondingOpenBracket*(r: Rune): Rune =
   else:
     r # Return same rune if not a closing bracket
 
+proc isAdjacentBracketPair*(line: string, pos: int): bool =
+  ## Check if line[pos] is an opening bracket () [] {} and line[pos+1] is its
+  ## matching closing bracket. Excludes quotes (", '), unlike isAdjacentPair.
+  ## pos is a character index (not byte position).
+  isAdjacentPair(line, pos) and line.runeAtPos(pos).isOpenBracket
+
 proc findMatchingCloseOnLine*(line: string, openCol: int): int =
   ## Find the matching closing bracket for an opening bracket at openCol.
   ## Uses nesting-aware matching. Only searches within the same line.

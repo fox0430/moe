@@ -26,14 +26,14 @@ import
   command_completion, message_log, logger, buffer_manager, bookmark_manager,
   backup_manager, diff_viewer, debug_viewer, config_mode, references_viewer,
   documentsymbol_viewer, callhierarchy_viewer, hover_popup, notification_popup,
-  primitives, syntax_checker, recent_file_mode, terminal_mode
+  primitives, syntax_checker, recent_file_mode, terminal_mode, config
 
 export
   buffer.LineMarkerKind, registers, command_completion, filer, filetree, log_viewer,
   help_viewer, buffer_manager, bookmark_manager, backup_manager, diff_viewer,
   debug_viewer, config_mode, references_viewer, documentsymbol_viewer,
   callhierarchy_viewer, hover_popup, notification_popup, primitives, syntax_checker,
-  recent_file_mode, terminal_mode
+  recent_file_mode, terminal_mode, config.BracketSplitMode
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -235,6 +235,8 @@ type
     autoIndent*: bool # Automatically indent new lines
     autoCloseParen*: bool # Automatically insert closing parenthesis/bracket/quote
     autoDeleteParen*: bool # Automatically delete matching parenthesis
+    bracketSplit*: BracketSplitMode
+      # Enter behavior when cursor sits between () [] {} pairs
 
   LspCacheState* = object ## LSP cache and picker state grouped together
     codeLensCache*: CodeLensCache # Cached CodeLens items for current buffer

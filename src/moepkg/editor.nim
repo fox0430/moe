@@ -755,6 +755,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         autoIndent: editorConfig.standard.autoIndent,
         autoCloseParen: editorConfig.standard.autoCloseParen,
         autoDeleteParen: editorConfig.standard.autoDeleteParen,
+        bracketSplit: editorConfig.standard.bracketSplit,
       ),
       windowDisplay: WindowDisplayState(
         needsFullRedraw: true, # Initial render needs full draw
@@ -1101,6 +1102,7 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   e.state.display.autoIndent = newConfig.standard.autoIndent
   e.state.display.autoCloseParen = newConfig.standard.autoCloseParen
   e.state.display.autoDeleteParen = newConfig.standard.autoDeleteParen
+  e.state.display.bracketSplit = newConfig.standard.bracketSplit
 
   # Update search settings
   e.state.search.ignorecase = newConfig.standard.ignorecase
