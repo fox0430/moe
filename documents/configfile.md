@@ -11,7 +11,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 ## Configuration Items
 
-### CursorShape
+### CursorType
 
 - type: string
 
@@ -24,7 +24,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | nonBlinkIbeam |
 
 
-### TerminalColorMode
+### ColorMode
 
 - type: string
 
@@ -72,7 +72,8 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 | Name | Description |
 |:-----------------------------|:-----------------------------|
-| gapBuffer | GapBuffer (default) |
+| auto | Pick a backend based on the file size (default) |
+| gapBuffer | GapBuffer |
 | sqrtDecomp | Sqrt Decomposition |
 | rope | Rope (B-tree) |
 | pieceTable | Piece Table (Red-Black Tree) |
@@ -90,8 +91,9 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 ### Standard table
 
+<!-- AUTO-GEN:start Standard -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | number | bool | true | Display line numbers |
 | relativeNumber | bool | false | Display relative line numbers |
 | statusLine | bool | true | Display status lines |
@@ -106,72 +108,84 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | scrollbarWidth | integer | 1 | Scrollbar width in characters (0 = hidden) |
 | bookmarkMarker | string | "♥ " | Bookmark indicator symbol in sidebars |
 | showModifiedLines | bool | true | Show modified/inserted line indicators in sidebars |
+| autoCloseParen | bool | true | Automatic closing brackets |
+| autoIndent | bool | true | Automatic indentation |
 | ignorecase | bool | true | Enable ignorecase when searching |
 | smartcase | bool | true | Enable smartcase when searching |
-| autoCloseParen | bool | true | Automatic closing brackets |
-| autoDeleteParen | bool | true | Automatic delete brackets |
-| autoIndent | bool | true | Automatic indentation |
 | disableChangeCursor | bool | false | Disable change of the cursor shape |
-| defaultCursor | CursorShape | terminalDefault | The cursor shape of the terminal emulator you are using |
-| normalModeCursor | CursorShape | blinkBlock | The cursor shape in Normal mode |
-| insertModeCursor | CursorShape | blinkIbeam | The cursor shape in insert mode |
+| defaultCursor | string (enum: terminalDefault, blinkBlock, blinkIbeam, nonBlinkBlock, nonBlinkIbeam) | terminalDefault | The cursor shape of the terminal emulator you are using |
+| normalModeCursor | string (enum: terminalDefault, blinkBlock, blinkIbeam, nonBlinkBlock, nonBlinkIbeam) | blinkBlock | The cursor shape in Normal mode |
+| insertModeCursor | string (enum: terminalDefault, blinkBlock, blinkIbeam, nonBlinkBlock, nonBlinkIbeam) | blinkIbeam | The cursor shape in insert mode |
 | liveReloadOfConf | bool | false | Enable live reload of the configuration file |
-| liveReloadOfFile | bool | true | Enable live reload of opening files |
 | incrementalSearch | bool | true | Enable incremental search |
 | popupWindowInExmode | bool | true | Show Pop-up window in Command mode |
-| colorMode | TerminalColorMode | 256 | Terminal color mode |
+| autoDeleteParen | bool | true | Automatic delete brackets |
+| liveReloadOfFile | bool | true | Enable live reload of opening files |
+| colorMode | string (enum: 8, 16, 256, 24bit, none) | 256 | Terminal color mode |
 | mouse | bool | false | Enable mouse cursor movement |
+| lineWrap | bool | true | Enable line wrapping |
 | timeoutlen | integer | 1000 | Key mapping timeout in milliseconds (0 = no timeout) |
-| bufferBackend | BufferBackend | auto | Buffer data structure. "auto" selects backend based on file size |
+| bufferBackend | string (enum: auto, gapBuffer, sqrtDecomp, rope, pieceTable) | auto | Buffer data structure. "auto" selects backend based on file size |
+<!-- AUTO-GEN:end Standard -->
 
 
 ### Clipboard table
 
+<!-- AUTO-GEN:start Clipboard -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | Enable system clipboard |
-| tool | ClipbloardTool | xsel | The clipboard tool for Linux |
+| tool | string (enum: xsel, xclip, wl-clipboard, win32yank, pbcopy) | xsel | The clipboard tool for Linux |
+<!-- AUTO-GEN:end Clipboard -->
 
 
 ### TabLine table
 
+<!-- AUTO-GEN:start TabLine -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | Enable tab line |
+<!-- AUTO-GEN:end TabLine -->
 
 
 ### StatusLine table
 
+<!-- AUTO-GEN:start StatusLine -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | multipleStatusLine | bool | true | Show multiple status lines |
 | merge | bool | false | Enable merge the status line with the command line |
 | mode | bool | true | Display the current mode |
 | filename | bool | true | Display the filename |
-| chanedMark | bool | true | Display the buffer changed mark |
+| changedMark | bool | true | Display the buffer changed mark |
 | directory | bool | true | Display the directory of the path |
-| gitBranchName | bool | true | Display the current git branch name |
 | gitChangedLines | bool | true | Display number of changed lines |
+| gitBranchName | bool | true | Display the current git branch name |
 | showGitInactive | bool | false | Display the git branch name on the status line in inactive windows |
 | showModeInactive | bool | false | Display the mode on the status line in inactive windows |
-| setupText | string | {lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {lineEnding} {fileType} | Text to customize the items displayed in the status line. Please check StatusLineItem |
+| setupText | string | "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {lineEnding} {fileType}" | Text to customize the items displayed in the status line. Please check StatusLineItem |
+<!-- AUTO-GEN:end StatusLine -->
 
 
 ### BuildOnSave table
 
+<!-- AUTO-GEN:start BuildOnSave -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | false | Enable build on save |
-| workspaceRoot | string | | Project root directory |
-| command | string | | Override commands executed at build |
+| workspaceRoot | string (optional) | none | Project root directory |
+| command | string (optional) | none | Override commands executed at build |
+<!-- AUTO-GEN:end BuildOnSave -->
 
 
 ### Highlight table
 
+<!-- AUTO-GEN:start Highlight -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | currentLine | bool | true | Highlight the current line background |
-| reservedWord | Array of string | ["TODO", "WIP", "NOTE"] | Highlight any words |
+| currentColumn | bool | false | Highlight the current column background |
+| reservedWord | string array | ["TODO", "WIP", "NOTE"] | Highlight any words |
 | replaceText | bool | true | Highlight replacement text |
 | pairOfParen | bool | true | Highlight a pair of brackets |
 | fullWidthSpace | bool | true | Highlight full-width spaces |
@@ -181,38 +195,44 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | colorCodeHighlight | bool | true | Highlight inline color codes (#RRGGBB, #RGB) with their actual color |
 | gitConflict | bool | true | Highlight git merge conflict blocks (`<<<<<<<` / `=======` / `>>>>>>>`) |
 | gitConflictTwoColor | bool | true | Use GitHub-style two-color scheme (ours / theirs distinct); false for single red background |
+<!-- AUTO-GEN:end Highlight -->
 
 
 ### AutoBackup table
 
+<!-- AUTO-GEN:start AutoBackup -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | false | Enable automatic backups |
+| backupDir | string (optional) | "~/.cache/moe/backups" | Directory to save backup files |
 | idleTime | integer | 10 | Start backup when there is no operation times (seconds) |
 | interval | integer | 5 | Backup interval (minutes) |
-| backupDir | string | ~/.cache/moe/backups | Directory to save backup files |
-| dirToExclude | Array of string | ["/etc"] | Exclude dirs for where you don't want to produce automatic backups |
+| dirToExclude | string array | ["/etc"] | Exclude dirs for where you don't want to produce automatic backups |
+<!-- AUTO-GEN:end AutoBackup -->
 
 
 ### QuickRun table
 
+<!-- AUTO-GEN:start QuickRun -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | saveBufferWhenQuickRun | bool | true | Save buffer when run QuickRun |
-| command | string | | Commands to be executed by quick run |
+| command | string (optional) | none | Commands to be executed by quick run |
 | timeout | integer | 30 | Command timeout (seconds) |
-| nimAdvancedCommand | string | c | Nim compiler advanced args |
-| clangOptions | string | | C lang compileer options. The default compiler is gcc  |
-| cppOptions | string | | C++ compiler options. The default compiler is gcc |
-| nimOptions | string | | Nim compiler options |
-| shOptions | string | | sh options |
-| bashOptions | string | | bash options |
+| nimAdvancedCommand | string (optional) | none | Nim compiler advanced args |
+| clangOptions | string (optional) | none | C lang compiler options. The default compiler is gcc |
+| cppOptions | string (optional) | none | C++ compiler options. The default compiler is gcc |
+| nimOptions | string (optional) | none | Nim compiler options |
+| shOptions | string (optional) | none | sh options |
+| bashOptions | string (optional) | none | bash options |
+<!-- AUTO-GEN:end QuickRun -->
 
 
 ### Notification table
 
+<!-- AUTO-GEN:start Notification -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | screenNotifications | bool | true | Show all messages/notifications in the command line |
 | logNotifications | bool | true | Record all messages/notifications to the log |
 | autoBackupScreenNotify | bool | true | Auto backups messages/notifications in the command line |
@@ -224,7 +244,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | deleteScreenNotify | bool | true | Delete buffer messages/notifications in the command line |
 | deleteLogNotify | bool | true | Delete buffer messages/notifications to the log |
 | saveScreenNotify | bool | true | Save messages/notifications in the command line |
-| saveLogNotify | bool | true | Save messages/notifications to the log (bool) |
+| saveLogNotify | bool | true | Save messages/notifications to the log |
 | quickRunScreenNotify | bool | true | QuickRun messages/notifications in the command line |
 | quickRunLogNotify | bool | true | QuickRun messages/notifications to the log |
 | buildOnSaveScreenNotify | bool | true | Build on save messages/notifications in the command line |
@@ -242,63 +262,75 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | popupMaxVisible | integer | 3 | Maximum number of simultaneous popup notifications (minimum: 1) |
 | popupMaxWidth | integer | 60 | Maximum popup width in characters (minimum: 10) |
 | popupBorder | bool | false | Show border around popup notifications |
+<!-- AUTO-GEN:end Notification -->
 
 
 ### Filer table
 
+<!-- AUTO-GEN:start Filer -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | showIcons | bool | true | Show/Hidden file type icons |
+<!-- AUTO-GEN:end Filer -->
 
 
 ### Autocomplete table
 
+<!-- AUTO-GEN:start Autocomplete -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | Enable/Disable General-purpose autocompletion |
 | windowBorder | bool | true | Show borderline on completion window |
+<!-- AUTO-GEN:end Autocomplete -->
 
 
 ### AutoSave table
 
+<!-- AUTO-GEN:start AutoSave -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | Auto save |
-| interval | integer | 5 | Auto save interval (Minits) |
+| interval | integer | 5 | Auto save interval (minutes) |
+<!-- AUTO-GEN:end AutoSave -->
 
 
 ### Persist table
 
+<!-- AUTO-GEN:start Persist -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | commandHistory | bool | true | Saving Command mode command history |
 | commandHistoryLimit | integer | 1000 | The maximum entries of Command mode command history to save |
 | search | bool | true | Saving search history |
 | searchHistoryLimit | integer | 1000 | The maximum entries of search history to save |
 | cursorPosition | bool | true | Saving last cursor position |
 | bookmarks | bool | true | Saving bookmarks |
+<!-- AUTO-GEN:end Persist -->
 
 
 ### Log table
 
+<!-- AUTO-GEN:start Log -->
 | Name | Type | Default Value | Description |
-|:-------------|:-----|:--------------|:-------------------------------------------|
+|:---|:---|:---|:---|
 | clearOnStart | bool | false | Clear existing log file when starting with debug mode |
+<!-- AUTO-GEN:end Log -->
 
 
 ### Debug.WindowNode table
 
+<!-- AUTO-GEN:start Debug.WindowNode -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | All WindowNode info |
 | currentWindow | bool | true | Whether the current window or not |
 | index | bool | true | WindowNode.index |
 | windowIndex | bool | true | WindowNode.windowIndex |
 | bufferIndex | bool | true | WindowNode.bufferIndex |
-| parentIndex | bool | true | Parent node's WindoeNode.index |
-| childLen | bool | true | WindoeNode.child.len |
-| splitType | bool | true | WindoeNode.splitType |
-| haveCursesWin | bool | true | Whether windoeNode have cursesWindow or not |
+| parentIndex | bool | true | Parent node's WindowNode.index |
+| childLen | bool | true | WindowNode.child.len |
+| splitType | bool | true | WindowNode.splitType |
+| haveCursesWin | bool | true | Whether windowNode have cursesWindow or not |
 | y | bool | true | WindowNode.y |
 | x | bool | true | WindowNode.x |
 | h | bool | true | WindowNode.h |
@@ -306,13 +338,15 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | currentLine | bool | true | WindowNode.currentLine |
 | currentColumn | bool | true | WindowNode.currentColumn |
 | expandedColumn | bool | true | WindowNode.expandedColumn |
-| cursor | bool | true | WindowNode.curosr |
+| cursor | bool | true | WindowNode.cursor |
+<!-- AUTO-GEN:end Debug.WindowNode -->
 
 
 ### Debug.EditorView table
 
+<!-- AUTO-GEN:start Debug.EditorView -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | All Editorview info |
 | widthOfLineNum | bool | true | Editorview.widthOfLineNum |
 | height | bool | true | Editorview.height |
@@ -320,89 +354,111 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | originalLine | bool | false | Editorview.originalLine |
 | start | bool | false | Editorview.start |
 | length | bool | false | Editorview.length |
+<!-- AUTO-GEN:end Debug.EditorView -->
+
 
 ### Debug.BufferStatus table
 
+<!-- AUTO-GEN:start Debug.BufferStatus -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | All BufStatus info |
 | bufferIndex | bool | true | The index of BufStatus |
 | path | bool | true | BufStatus.path |
 | openDir | bool | true | BufStatus.openDir |
 | currentMode | bool | true | BufStatus.mode |
-| prevMode | bool | true | BufStatus.prevMode  |
+| prevMode | bool | true | BufStatus.prevMode |
 | language | bool | true | BufStatus.language |
-| encoding | bool | true | BufStatus.characterEncoding  |
-| countChange | bool | true | BufStatus.countChange  |
-| cmdLoop | bool | true | BufStatus.cmdLoop  |
-| lastSaveTime | bool | true | BufStatus.lastSaveTime  |
+| encoding | bool | true | BufStatus.characterEncoding |
+| countChange | bool | true | BufStatus.countChange |
+| cmdLoop | bool | true | BufStatus.cmdLoop |
+| lastSaveTime | bool | true | BufStatus.lastSaveTime |
 | bufferLen | bool | true | BufStatus.buffer.len |
+<!-- AUTO-GEN:end Debug.BufferStatus -->
 
 
 ### Debug.Search table
 
+<!-- AUTO-GEN:start Debug.Search -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | Search debug info |
+<!-- AUTO-GEN:end Debug.Search -->
 
 
 ### Debug.MacroState table
 
+<!-- AUTO-GEN:start Debug.MacroState -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | Macro state debug info |
+<!-- AUTO-GEN:end Debug.MacroState -->
 
 
 ### Debug.Visual table
 
+<!-- AUTO-GEN:start Debug.Visual -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | Visual selection debug info |
+<!-- AUTO-GEN:end Debug.Visual -->
 
 
 ### Debug.JumpList table
 
+<!-- AUTO-GEN:start Debug.JumpList -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | Jump list debug info |
+<!-- AUTO-GEN:end Debug.JumpList -->
 
 
 ### Debug.Lsp table
 
+<!-- AUTO-GEN:start Debug.Lsp -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | LSP debug info |
+<!-- AUTO-GEN:end Debug.Lsp -->
 
 
 ### Git table
 
+<!-- AUTO-GEN:start Git -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | showChangedLine | bool | true | Line changes on sidebars |
 | updateInterval | integer | 1000 | Interval for updating Git information. (Milli seconds) |
+<!-- AUTO-GEN:end Git -->
 
 
 ### SyntaxChecker table
 
+<!-- AUTO-GEN:start SyntaxChecker -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | false | Syntax checker |
+<!-- AUTO-GEN:end SyntaxChecker -->
 
 
 ### EditorConfig table
 
+<!-- AUTO-GEN:start EditorConfig -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | true | [EditorConfig](https://editorconfig.org) support |
+<!-- AUTO-GEN:end EditorConfig -->
 
 
 ### SmoothScroll table
 
+<!-- AUTO-GEN:start SmoothScroll -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | Smooth scroll |
+|:---|:---|:---|:---|
+| enable | bool | true | Enable smooth scrolling |
 | friction | float | 80.0 | Friction coefficient (velocity decay rate) |
 | airDrag | float | 2.0 | Air drag coefficient (velocity resistance) |
+<!-- AUTO-GEN:end SmoothScroll -->
 
 
 ### KeyMapping table
@@ -1113,22 +1169,30 @@ Please check more [details](https://github.com/fox0430/moe/blob/develop/document
 
 ### StartUp.FileOpen table
 
+<!-- AUTO-GEN:start StartUp.FileOpen -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | autoSplit | bool | true | Display all buffers in multiple views if multiple paths are received when starting the editor |
-| splitType | string | vertical | The split type for `StartUp.FileOpen.autoSplit` |
+| splitType | string (enum: horizontal, vertical) | vertical | The split type for `StartUp.FileOpen.autoSplit` |
+<!-- AUTO-GEN:end StartUp.FileOpen -->
+
 
 ### FileTree table
 
+<!-- AUTO-GEN:start FileTree -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| width | int | 30 | Width of the fileTree sidebar |
+|:---|:---|:---|:---|
+| width | integer | 30 | Width of the FileTree sidebar in columns |
+<!-- AUTO-GEN:end FileTree -->
+
 
 ### StartUp.FileTree table
 
+<!-- AUTO-GEN:start StartUp.FileTree -->
 | Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+|:---|:---|:---|:---|
 | enable | bool | false | Open the fileTree sidebar automatically on startup |
+<!-- AUTO-GEN:end StartUp.FileTree -->
 
 
 ### CommandAliases table

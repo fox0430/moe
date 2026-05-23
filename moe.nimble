@@ -26,3 +26,6 @@ task debug, "Build for debug":
 
 task ptest, "Run tests in parallel":
   exec "nim r tools/paralleltest.nim"
+
+task gendocs, "Regenerate auto-generated tables in documents/configfile.md":
+  exec "nim r --hints:off --warnings:off tools/gen_config_docs.nim"

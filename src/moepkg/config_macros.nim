@@ -127,6 +127,43 @@ template cfgNoUi*() {.pragma.}
 ## directory at load time (uses loadOptionDirPath instead of loadOptionString).
 template cfgDirPath*() {.pragma.}
 
+## Human-readable description used by the `gen_config_docs` tool to render
+## `documents/configfile.md`. Required for every field that participates in
+## auto-generated documentation. The string is emitted verbatim as the
+## fourth column of the markdown table row.
+template cfgDocDescription*(desc: string) {.pragma.}
+
+## Override the default value shown in `documents/configfile.md`. Use this
+## when `newEditorConfig()` returns a system-dependent value (e.g. the
+## auto-detected clipboard tool) and the documentation needs a stable
+## representative literal instead. Accepts an untyped expression and the
+## tool stringifies it.
+template cfgDocDefault*(v: untyped) {.pragma.}
+
+## Opt a field out of the auto-generated `documents/configfile.md` tables
+## while keeping it active for the TOML loader and the config-mode UI.
+## Without this pragma, every `{.cfg.}` field in a section whose markdown
+## table is auto-generated MUST carry `{.cfgDocDescription.}` — otherwise
+## the macro raises a compile-time error to prevent silently undocumented
+## settings.
+template cfgDocSkip*() {.pragma.}
+
+proc escapeMarkdownCell*(s: string): string =
+  ## Escape characters that would corrupt a single markdown table cell:
+  ## unescaped `|` ends the cell, and a literal newline starts a new row.
+  ## Backslash is escaped so a stray `\|` in source data round-trips faithfully.
+  result = newStringOfCap(s.len)
+  for c in s:
+    case c
+    of '\\':
+      result.add("\\\\")
+    of '|':
+      result.add("\\|")
+    of '\n', '\r':
+      result.add(' ')
+    else:
+      result.add(c)
+
 proc unwrapName(node: NimNode): NimNode =
   ## Strip `*` postfix from an ident.
   if node.kind == nnkPostfix:
@@ -659,3 +696,146 @@ macro generateConfigDescriptors*(
             "{.cfgNoUi.}, skip it entirely with {.cfgSkip.}, or extend the macro.",
           fieldType,
         )
+
+proc docTypeLabel(typeNode: NimNode): string =
+  ## Map a Nim field type to the human-readable label used by
+  ## `documents/configfile.md`. Enum-typed fields render as
+  ## `string (enum: a, b, ...)` — the TOML value is always a string, and
+  ## listing the accepted variants inline is more actionable than the bare
+  ## Nim type name. Falls back to stripping a trailing `Config` for any
+  ## non-enum custom type.
+  if typeNode.kind in {nnkIdent, nnkSym}:
+    case typeNode.strVal
+    of "bool":
+      return "bool"
+    of "int":
+      return "integer"
+    of "float":
+      return "float"
+    of "string":
+      return "string"
+    else:
+      if isEnumTypeIdent(typeNode):
+        let vals = enumStringValues(typeNode)
+        if vals.len > 0:
+          return "string (enum: " & vals.join(", ") & ")"
+      let bare = typeNode.strVal
+      if bare.endsWith("Config"):
+        return bare[0 ..< bare.len - "Config".len]
+      return bare
+  if typeNode.kind == nnkBracketExpr and typeNode.len >= 2:
+    let outer =
+      if typeNode[0].kind in {nnkIdent, nnkSym}:
+        typeNode[0].strVal
+      else:
+        ""
+    let inner =
+      if typeNode[1].kind in {nnkIdent, nnkSym}:
+        typeNode[1].strVal
+      else:
+        ""
+    case outer
+    of "Option":
+      if inner == "string":
+        return "string (optional)"
+      return inner & " (optional)"
+    of "seq":
+      if inner == "string":
+        return "string array"
+      return inner & " array"
+    else:
+      discard
+  typeNode.repr
+
+macro generateSectionMarkdown*(
+    cfg: typed, sectionField: untyped, sectionType: typedesc
+): untyped =
+  ## Render the markdown table for one EditorConfig section. The call:
+  ##   generateSectionMarkdown(cfg, standard, StandardConfig)
+  ## expands to a `block:` expression whose value is the full table string
+  ## (header + separator + one row per `{.cfg.}` field that also carries
+  ## `{.cfgDocDescription.}`). The default-value column uses
+  ## `formatDocDefault(cfg.<section>.<field>)`, expecting overloaded
+  ## `formatDocDefault` helpers to be in scope at the call site.
+  let sectionAccess = newDotExpr(cfg, sectionField)
+  let td = typeDef(sectionType)
+  if td == nil:
+    error("cannot get impl for section type", sectionField)
+
+  let resVar = genSym(nskVar, "docTableResult")
+  result = newStmtList()
+
+  # Compile-time guard: catch `generateSectionMarkdown(cfg, tabLine,
+  # FilerConfig)`-style swaps where the named field on `cfg` doesn't have
+  # the declared section type. Without this, the mismatch surfaces deep
+  # inside macro-expanded code with a confusing "undeclared field" error.
+  let sectionMismatchMsg = newLit(
+    "generateSectionMarkdown: cfg." & sectionField.repr & " is not of type " &
+      sectionType.repr
+  )
+  result.add quote do:
+    static:
+      doAssert typeof(`sectionAccess`) is `sectionType`, `sectionMismatchMsg`
+
+  result.add quote do:
+    var `resVar` = "| Name | Type | Default Value | Description |\n"
+    `resVar` &= "|:---|:---|:---|:---|\n"
+
+  for (fieldName, typeNode, pragmas) in sectionFields(td):
+    if hasPragma(pragmas, "cfgSkip"):
+      continue
+    if not hasPragma(pragmas, "cfg"):
+      continue
+    if hasPragma(pragmas, "cfgDocSkip"):
+      # Field is intentionally excluded from auto-gen docs but still loaded.
+      continue
+    let docDescP = findPragma(pragmas, "cfgDocDescription")
+    if docDescP == nil:
+      error(
+        "field `" & fieldName &
+          "` has {.cfg.} but no {.cfgDocDescription.}: every cfg field in an " &
+          "auto-generated section must be documented. Add a description, or " &
+          "opt out with {.cfgDocSkip.}.",
+        typeNode,
+      )
+    let descArg = pragmaArg(docDescP)
+    if descArg == nil or descArg.kind != nnkStrLit:
+      error("cfgDocDescription requires a string literal", docDescP)
+
+    # Static cells (name / type / description) are known at macro-expansion
+    # time, so escape them now and emit literals — no runtime cost.
+    let nameLit = newLit(escapeMarkdownCell(fieldName))
+    let typeLit = newLit(escapeMarkdownCell(docTypeLabel(typeNode)))
+    let descLit = newLit(escapeMarkdownCell(descArg.strVal))
+
+    # Default value: prefer cfgDocDefault override if present (for fields
+    # whose runtime default varies by environment), otherwise read the
+    # actual field on the passed-in config instance. The formatted result
+    # is escaped at runtime since it depends on the config instance.
+    let docDefaultP = findPragma(pragmas, "cfgDocDefault")
+    let fieldAccess = newDotExpr(sectionAccess, ident(fieldName))
+    let defaultExpr =
+      if docDefaultP != nil:
+        pragmaArg(docDefaultP)
+      else:
+        fieldAccess
+
+    # When an override is supplied, assert at compile time that its type
+    # matches the field's — otherwise overload resolution for
+    # `formatDocDefault` could pick a different overload than what the
+    # TOML serializer would use, and the rendered default would diverge
+    # silently from the actual config behavior.
+    if docDefaultP != nil:
+      let defaultMismatchMsg = newLit(
+        "cfgDocDefault for `" & fieldName & "`: override type does not match field type"
+      )
+      result.add quote do:
+        static:
+          doAssert typeof(`defaultExpr`) is typeof(`fieldAccess`), `defaultMismatchMsg`
+
+    result.add quote do:
+      `resVar` &=
+        "| " & `nameLit` & " | " & `typeLit` & " | " &
+        escapeMarkdownCell(formatDocDefault(`defaultExpr`)) & " | " & `descLit` & " |\n"
+
+  result = nnkBlockStmt.newTree(newEmptyNode(), newStmtList(result, resVar))
