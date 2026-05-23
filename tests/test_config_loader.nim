@@ -1341,10 +1341,12 @@ suite "Config - loadThemeFromToml":
     let colors = result.get
     check colors[EditorColorPairIndex.default].background.rgb.green == 255
 
-  test "Keyword foreground color":
+  test "Keyword foreground via inline table":
     inc testFileCounter
     let testFile = "/tmp/moe_test_theme_kw_" & $testFileCounter & ".toml"
-    writeFile(testFile, "[Colors]\nforeground = \"#ffffff\"\nkeyword = \"#0000ff\"\n")
+    writeFile(
+      testFile, "[Colors]\nforeground = \"#ffffff\"\nkeyword = { fg = \"#0000ff\" }\n"
+    )
     defer:
       removeFile(testFile)
 
@@ -1354,10 +1356,10 @@ suite "Config - loadThemeFromToml":
     check colors[EditorColorPairIndex.keyword].foreground.rgb.blue == 255
     check colors[EditorColorPairIndex.keyword].foreground.rgb.red == 0
 
-  test "Keyword background color via Bg suffix":
+  test "Keyword background-only via inline table":
     inc testFileCounter
     let testFile = "/tmp/moe_test_theme_kwbg_" & $testFileCounter & ".toml"
-    writeFile(testFile, "[Colors]\nkeywordBg = \"#112233\"\n")
+    writeFile(testFile, "[Colors]\nkeyword = { bg = \"#112233\" }\n")
     defer:
       removeFile(testFile)
 
@@ -1368,13 +1370,29 @@ suite "Config - loadThemeFromToml":
     check colors[EditorColorPairIndex.keyword].background.rgb.green == 0x22
     check colors[EditorColorPairIndex.keyword].background.rgb.blue == 0x33
 
-  test "currentLineBg sets the background of currentLineBg":
-    # Regression: bundled themes write `currentLineBg = "..."` to set the
-    # cursor-line background. The enum name itself ends in "Bg" because the
-    # entity has no separate foreground.
+  test "Inline table with fg and bg":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_curlnbg_" & $testFileCounter & ".toml"
-    writeFile(testFile, "[Colors]\ncurrentLineBg = \"#3e4452\"\n")
+    let testFile = "/tmp/moe_test_theme_pair_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nlineNum = { fg = \"#aabbcc\", bg = \"#112233\" }\n")
+    defer:
+      removeFile(testFile)
+
+    let result = loadThemeFromToml(testFile)
+    check result.isOk
+    let colors = result.get
+    check colors[EditorColorPairIndex.lineNum].foreground.rgb.red == 0xaa
+    check colors[EditorColorPairIndex.lineNum].foreground.rgb.green == 0xbb
+    check colors[EditorColorPairIndex.lineNum].foreground.rgb.blue == 0xcc
+    check colors[EditorColorPairIndex.lineNum].background.rgb.red == 0x11
+    check colors[EditorColorPairIndex.lineNum].background.rgb.green == 0x22
+    check colors[EditorColorPairIndex.lineNum].background.rgb.blue == 0x33
+
+  test "currentLine sets background of currentLineBg enum":
+    # The bg-only enum `currentLineBg` is keyed as `currentLine` in TOML
+    # because the new inline-table format expresses bg explicitly.
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_curln_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\ncurrentLine = { bg = \"#3e4452\" }\n")
     defer:
       removeFile(testFile)
 
@@ -1385,10 +1403,10 @@ suite "Config - loadThemeFromToml":
     check colors[EditorColorPairIndex.currentLineBg].background.rgb.green == 0x44
     check colors[EditorColorPairIndex.currentLineBg].background.rgb.blue == 0x52
 
-  test "currentColumnBg sets the background of currentColumnBg":
+  test "currentColumn sets background of currentColumnBg enum":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_curcolbg_" & $testFileCounter & ".toml"
-    writeFile(testFile, "[Colors]\ncurrentColumnBg = \"#3e4452\"\n")
+    let testFile = "/tmp/moe_test_theme_curcol_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\ncurrentColumn = { bg = \"#3e4452\" }\n")
     defer:
       removeFile(testFile)
 
@@ -1399,13 +1417,12 @@ suite "Config - loadThemeFromToml":
     check colors[EditorColorPairIndex.currentColumnBg].background.rgb.green == 0x44
     check colors[EditorColorPairIndex.currentColumnBg].background.rgb.blue == 0x52
 
-  test "configModePopupBg exact match still sets foreground":
-    # configModePopupBg has both fg/bg; the key convention is:
-    #   configModePopupBg   -> foreground
-    #   configModePopupBgBg -> background
+  test "configModePopup sets both fg and bg of configModePopupBg enum":
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_cmpopbg_" & $testFileCounter & ".toml"
-    writeFile(testFile, "[Colors]\nconfigModePopupBg = \"#ffffff\"\n")
+    let testFile = "/tmp/moe_test_theme_cmpop_" & $testFileCounter & ".toml"
+    writeFile(
+      testFile, "[Colors]\nconfigModePopup = { fg = \"#ffffff\", bg = \"#323232\" }\n"
+    )
     defer:
       removeFile(testFile)
 
@@ -1413,22 +1430,74 @@ suite "Config - loadThemeFromToml":
     check result.isOk
     let colors = result.get
     check colors[EditorColorPairIndex.configModePopupBg].foreground.rgb.red == 0xff
-    check colors[EditorColorPairIndex.configModePopupBg].foreground.rgb.green == 0xff
-    check colors[EditorColorPairIndex.configModePopupBg].foreground.rgb.blue == 0xff
+    check colors[EditorColorPairIndex.configModePopupBg].background.rgb.red == 0x32
 
-  test "configModePopupBgBg sets background of configModePopupBg":
+  test "Bare string for non-default entry is rejected":
+    # Pre-rewrite themes used `key = "#hex"`; the new parser requires inline tables.
     inc testFileCounter
-    let testFile = "/tmp/moe_test_theme_cmpopbgbg_" & $testFileCounter & ".toml"
-    writeFile(testFile, "[Colors]\nconfigModePopupBgBg = \"#323232\"\n")
+    let testFile = "/tmp/moe_test_theme_bare_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nkeyword = \"#0000ff\"\n")
     defer:
       removeFile(testFile)
 
-    let result = loadThemeFromToml(testFile)
+    var vr = newValidationResult()
+    let result = loadThemeFromToml(testFile, vr)
     check result.isOk
+    check vr.hasErrors
+    check vr.errors[0].kind == iikInvalidValue
+    check "keyword" in vr.errors[0].name
+
+  test "Unknown sub-key inside inline table is reported":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_unksub_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nkeyword = { fg = \"#0000ff\", bogus = \"x\" }\n")
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let result = loadThemeFromToml(testFile, vr)
+    check result.isOk
+    # fg is still applied; bogus is reported as unknown
     let colors = result.get
-    check colors[EditorColorPairIndex.configModePopupBg].background.rgb.red == 0x32
-    check colors[EditorColorPairIndex.configModePopupBg].background.rgb.green == 0x32
-    check colors[EditorColorPairIndex.configModePopupBg].background.rgb.blue == 0x32
+    check colors[EditorColorPairIndex.keyword].foreground.rgb.blue == 255
+    check vr.errors.len == 1
+    check vr.errors[0].kind == iikUnknownKey
+    check "keyword.bogus" in vr.errors[0].name
+
+  test "Empty inline table is reported":
+    # `keyword = {}` is a no-op (defaults are already applied) and almost
+    # always a typo; surface it as an invalid value rather than silently
+    # accepting it.
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_empty_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nkeyword = {}\n")
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let result = loadThemeFromToml(testFile, vr)
+    check result.isOk
+    check vr.errors.len == 1
+    check vr.errors[0].kind == iikInvalidValue
+    check vr.errors[0].name == "Theme.Colors.keyword"
+    check vr.errors[0].val == "{}"
+
+  test "Non-string sub-value is reported":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_theme_nonstr_" & $testFileCounter & ".toml"
+    writeFile(testFile, "[Colors]\nkeyword = { fg = 123 }\n")
+    defer:
+      removeFile(testFile)
+
+    var vr = newValidationResult()
+    let result = loadThemeFromToml(testFile, vr)
+    check result.isOk
+    check vr.errors.len == 1
+    check vr.errors[0].kind == iikInvalidValue
+    check vr.errors[0].name == "Theme.Colors.keyword.fg"
+    # The error message should mention "string" so the user knows the value
+    # type is wrong (not just the format).
+    check "string" in vr.errors[0].expected
 
   test "termDefault color is processed (rgb.red == -1)":
     inc testFileCounter
@@ -1474,7 +1543,7 @@ suite "Config - loadThemeFromToml":
   test "Invalid color value is reported in ValidationResult":
     inc testFileCounter
     let testFile = "/tmp/moe_test_theme_badcolor_" & $testFileCounter & ".toml"
-    writeFile(testFile, "[Colors]\nkeyword = \"notacolor\"\n")
+    writeFile(testFile, "[Colors]\nkeyword = { fg = \"notacolor\" }\n")
     defer:
       removeFile(testFile)
 
@@ -1484,7 +1553,7 @@ suite "Config - loadThemeFromToml":
     check vr.hasErrors
     check vr.errors.len == 1
     check vr.errors[0].kind == iikInvalidValue
-    check "keyword" in vr.errors[0].name
+    check "keyword.fg" in vr.errors[0].name
     check vr.errors[0].val == "notacolor"
 
   test "Invalid foreground/background values are reported":
@@ -1505,7 +1574,9 @@ suite "Config - loadThemeFromToml":
   test "Valid theme produces no validation errors":
     inc testFileCounter
     let testFile = "/tmp/moe_test_theme_valid_vr_" & $testFileCounter & ".toml"
-    writeFile(testFile, "[Colors]\nforeground = \"#ffffff\"\nkeyword = \"#0000ff\"\n")
+    writeFile(
+      testFile, "[Colors]\nforeground = \"#ffffff\"\nkeyword = { fg = \"#0000ff\" }\n"
+    )
     defer:
       removeFile(testFile)
 

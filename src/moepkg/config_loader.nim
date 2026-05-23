@@ -44,6 +44,9 @@ type
   ValidationResult* = object ## Result of validating a configuration table
     errors*: seq[InvalidItem]
 
+const themeColorExpected = "string color (\"#RRGGBB\" hex or \"termDefault\")"
+const themeInlineTableExpected = "inline table { fg = \"...\", bg = \"...\" }"
+
 proc newValidationResult*(): ValidationResult =
   ValidationResult(errors: @[])
 
@@ -1155,11 +1158,13 @@ proc loadConfig*(): Result[(EditorConfig, ValidationResult), string] =
 
 proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
   ## Convert a TOML key to EditorColorPairIndex.
-  ## Performs an exact match against the enum-name variants below.
-  ## Background-suffix resolution (e.g. `defaultBg` -> EditorColorPairIndex.default
-  ## as background) is handled by the caller, which retries after stripping a
-  ## trailing "Bg". This two-step lookup is necessary because some enum names
-  ## themselves end in "Bg" (e.g. `configModePopupBg`, `currentLineBg`).
+  ## TOML keys generally match enum names, with three exceptions where the
+  ## enum's "Bg" suffix is dropped at the config layer because the new
+  ## inline-table format expresses fg/bg explicitly:
+  ##   currentLine    -> EditorColorPairIndex.currentLineBg    (bg-only)
+  ##   currentColumn  -> EditorColorPairIndex.currentColumnBg  (bg-only)
+  ##   configModePopup -> EditorColorPairIndex.configModePopupBg
+  ## `lspString` is keyed as `string` (see toTomlColorKey for the inverse).
   ## Returns none if the key doesn't match any color index.
   case key
   of "foreground", "default":
@@ -1448,9 +1453,9 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.diffViewerDeletedLine)
   of "configModeCurrentLine":
     return some(EditorColorPairIndex.configModeCurrentLine)
-  of "currentLineBg":
+  of "currentLine":
     return some(EditorColorPairIndex.currentLineBg)
-  of "currentColumnBg":
+  of "currentColumn":
     return some(EditorColorPairIndex.currentColumnBg)
   of "sidebarSessionModifiedSign":
     return some(EditorColorPairIndex.sidebarSessionModifiedSign)
@@ -1502,7 +1507,7 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.configModeSection)
   of "configModeEditMode":
     return some(EditorColorPairIndex.configModeEditMode)
-  of "configModePopupBg":
+  of "configModePopup":
     return some(EditorColorPairIndex.configModePopupBg)
   of "configModePopupSelected":
     return some(EditorColorPairIndex.configModePopupSelected)
@@ -1526,8 +1531,6 @@ proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
     return some(EditorColorPairIndex.helpViewerSectionHeader)
   else:
     return none(EditorColorPairIndex)
-
-const themeColorExpected = "color hex (\"#RRGGBB\") or \"termDefault\""
 
 proc loadThemeFromToml*(
     path: string, vr: var ValidationResult
@@ -1566,20 +1569,28 @@ proc loadThemeFromToml*(
   var defaultBg = colors[EditorColorPairIndex.default].background.rgb
 
   if colorsTable.hasKey("foreground"):
-    let raw = colorsTable["foreground"].getStr()
-    let fgResult = parseThemeColor(raw)
-    if fgResult.isOk:
-      defaultFg = fgResult.get
+    let v = colorsTable["foreground"]
+    if v.kind != TomlValueKind.String:
+      vr.addError(fullKey(section, "foreground"), $v, themeColorExpected)
     else:
-      vr.addError(fullKey(section, "foreground"), raw, themeColorExpected)
+      let raw = v.getStr()
+      let fgResult = parseThemeColor(raw)
+      if fgResult.isOk:
+        defaultFg = fgResult.get
+      else:
+        vr.addError(fullKey(section, "foreground"), raw, themeColorExpected)
 
   if colorsTable.hasKey("background"):
-    let raw = colorsTable["background"].getStr()
-    let bgResult = parseThemeColor(raw)
-    if bgResult.isOk:
-      defaultBg = bgResult.get
+    let v = colorsTable["background"]
+    if v.kind != TomlValueKind.String:
+      vr.addError(fullKey(section, "background"), $v, themeColorExpected)
     else:
-      vr.addError(fullKey(section, "background"), raw, themeColorExpected)
+      let raw = v.getStr()
+      let bgResult = parseThemeColor(raw)
+      if bgResult.isOk:
+        defaultBg = bgResult.get
+      else:
+        vr.addError(fullKey(section, "background"), raw, themeColorExpected)
 
   # Update default color pair
   colors[EditorColorPairIndex.default] = ColorPair(
@@ -1595,49 +1606,53 @@ proc loadThemeFromToml*(
         colors[index].background.rgb == hardcodedDefaultBg:
       colors[index].background = ThemeColor(rgb: defaultBg)
 
-  # Process all color entries
+  # Process all color entries. Each entry is an inline table of the form
+  # `entry = { fg = "...", bg = "..." }`; both `fg` and `bg` are optional.
+  # Omitting `bg` leaves the entry's bg at whatever `DefaultColors` provided:
+  # for entries whose bundled default is the hardcoded #000000 (most syntax
+  # colors), the upstream sweep above has already replaced that with the
+  # user's top-level `background`; for entries with a non-#000000 bundled
+  # default (e.g. statusLine*, tab, markdownCodeBlock), that bundled bg is
+  # preserved. An entry may also set bg only (e.g. `currentLine = { bg = ... }`).
   for key, value in colorsTable:
     if key == "foreground" or key == "background":
       continue
 
-    let colorStr = value.getStr()
-    let rgbResult = parseThemeColor(colorStr)
-    if rgbResult.isErr:
-      vr.addError(fullKey(section, key), colorStr, themeColorExpected)
-      continue
-
-    let rgb = rgbResult.get
-
-    # Try exact match first (key is the enum name itself -> foreground).
-    # If that fails and the key ends with "Bg", strip the suffix and look up
-    # again -> background. This two-step approach correctly handles enum names
-    # that themselves end in "Bg" (e.g. configModePopupBgBg sets the background
-    # of EditorColorPairIndex.configModePopupBg).
-    # Exception: currentLineBg and currentColumnBg are background-only entities
-    # (no separate foreground), so an exact match on those keys sets the
-    # background, matching the convention used by the bundled themes.
-    var indexOpt = toEditorColorPairIndex(key)
-    var isBackground = false
-    if indexOpt.isSome and key in ["currentLineBg", "currentColumnBg"]:
-      isBackground = true
-    elif indexOpt.isNone and key.endsWith("Bg"):
-      indexOpt = toEditorColorPairIndex(key[0 ..< key.len - 2])
-      if indexOpt.isSome:
-        isBackground = true
-
+    let indexOpt = toEditorColorPairIndex(key)
     if indexOpt.isNone:
       vr.addUnknownKey(fullKey(section, key))
       continue
-
     let index = indexOpt.get
 
-    if isBackground:
-      colors[index].background = ThemeColor(rgb: rgb)
-    else:
-      colors[index].foreground = ThemeColor(rgb: rgb)
-      # For syntax colors without explicit background, use default background
-      if not colorsTable.hasKey(key & "Bg"):
-        colors[index].background = ThemeColor(rgb: defaultBg)
+    if value.kind != TomlValueKind.Table:
+      vr.addError(fullKey(section, key), $value, themeInlineTableExpected)
+      continue
+
+    let sub = value.getTable()
+    if sub.len == 0:
+      # `key = {}` is almost always a typo (defaults are already applied
+      # before this loop, so an empty table is a no-op). Surface it.
+      vr.addError(fullKey(section, key), "{}", themeInlineTableExpected)
+      continue
+
+    for subkey, subval in sub:
+      case subkey
+      of "fg", "bg":
+        let subkeyPath = fullKey(section, key & "." & subkey)
+        if subval.kind != TomlValueKind.String:
+          vr.addError(subkeyPath, $subval, themeColorExpected)
+          continue
+        let raw = subval.getStr()
+        let parsed = parseThemeColor(raw)
+        if parsed.isErr:
+          vr.addError(subkeyPath, raw, themeColorExpected)
+          continue
+        if subkey == "fg":
+          colors[index].foreground = ThemeColor(rgb: parsed.get)
+        else:
+          colors[index].background = ThemeColor(rgb: parsed.get)
+      else:
+        vr.addUnknownKey(fullKey(section, key & "." & subkey))
 
   return Result[ThemeColors, string].ok(colors)
 
@@ -1706,14 +1721,6 @@ proc toTomlStringArray(val: seq[string]): string =
     result.add toTomlString(s)
   result.add "]"
 
-proc toTomlColorKey(index: EditorColorPairIndex): string =
-  ## Convert EditorColorPairIndex to TOML key name
-  case index
-  of EditorColorPairIndex.lspString:
-    "string"
-  else:
-    $index
-
 proc themeColorToTomlValue(color: ThemeColor): string =
   ## Convert ThemeColor to TOML value string
   if color.rgb.isTermDefaultColor:
@@ -1744,14 +1751,21 @@ proc saveThemeToToml*(colors: ThemeColors, path: string): Result[void, string] =
     themeColorToTomlValue(colors[EditorColorPairIndex.default].background)
   lines.add ""
 
-  # Write all other color pairs
+  # Write all other color pairs as inline tables: `key = { fg = "...", bg = "..." }`.
+  # currentLineBg and currentColumnBg are bg-only entities, so emit only `bg`.
+  const BgOnlyEntries =
+    {EditorColorPairIndex.currentLineBg, EditorColorPairIndex.currentColumnBg}
   for index in EditorColorPairIndex:
     if index == EditorColorPairIndex.default:
       continue
 
     let key = toTomlColorKey(index)
-    lines.add key & " = " & themeColorToTomlValue(colors[index].foreground)
-    lines.add key & "Bg = " & themeColorToTomlValue(colors[index].background)
+    let bg = themeColorToTomlValue(colors[index].background)
+    if index in BgOnlyEntries:
+      lines.add key & " = { bg = " & bg & " }"
+    else:
+      let fg = themeColorToTomlValue(colors[index].foreground)
+      lines.add key & " = { fg = " & fg & ", bg = " & bg & " }"
 
   lines.add ""
 

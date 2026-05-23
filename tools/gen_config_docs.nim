@@ -15,7 +15,7 @@
 
 import std/[macros, options, os, sequtils, strutils]
 
-import ../src/moepkg/[config, config_macros]
+import ../src/moepkg/[color, config, config_macros]
 
 # default-value formatters used by `generateSectionMarkdown`
 
@@ -184,6 +184,36 @@ proc replaceMarkers(text: string, name, body: string): string =
   let after = text[endIdx ..^ 1]
   before & "\n" & body & after
 
+proc generateColorsMarkdown(): string =
+  ## Render the markdown table for the Theme `[Colors]` section. Unlike the
+  ## struct-driven sections, this one iterates `EditorColorPairIndex` and
+  ## reads descriptions from `EditorColorPairDocDescription` in color.nim;
+  ## the TOML key for each enum value comes from `toTomlColorKey`. The two
+  ## top-level keys `foreground` / `background` are emitted manually since
+  ## they overlay the `default` pair rather than appearing as enum members.
+  result = "| Name | Description |\n"
+  result &= "|:---|:---|\n"
+  result &= "| foreground | Default foreground color (overrides `Colors.default.fg`) |\n"
+  result &= "| background | Default background color (overrides `Colors.default.bg`) |\n"
+  for index in EditorColorPairIndex:
+    if index == EditorColorPairIndex.default:
+      continue
+    let key = escapeMarkdownCell(toTomlColorKey(index))
+    let desc = escapeMarkdownCell(EditorColorPairDocDescription[index])
+    result &= "| " & key & " | " & desc & " |\n"
+
+const ExtraSectionNames* = @["Colors"]
+  ## Section names handled outside the struct-driven `defineSections`
+  ## dispatch. Each entry has a one-off generator invoked from
+  ## `regenerateConfigDocs` after the standard sections.
+
+proc bodyForExtra(name: string): string =
+  case name
+  of "Colors":
+    generateColorsMarkdown()
+  else:
+    raise newException(ValueError, "unknown extra section: " & name)
+
 proc regenerateConfigDocs*(input: string): string =
   ## Apply every section's AUTO-GEN replacement to `input` and return the
   ## new markdown content. Pure function — does not touch the filesystem.
@@ -193,6 +223,8 @@ proc regenerateConfigDocs*(input: string): string =
   result = input
   for name in SectionNames:
     result = replaceMarkers(result, name, bodyFor(name, cfg))
+  for name in ExtraSectionNames:
+    result = replaceMarkers(result, name, bodyForExtra(name))
 
 proc main() =
   if not fileExists(DocsPath):
@@ -201,11 +233,12 @@ proc main() =
 
   let original = readFile(DocsPath)
   let regenerated = regenerateConfigDocs(original)
+  let totalSections = SectionNames.len + ExtraSectionNames.len
   if regenerated != original:
     writeFile(DocsPath, regenerated)
-    echo "regenerated ", SectionNames.len, " section(s) in ", DocsPath
+    echo "regenerated ", totalSections, " section(s) in ", DocsPath
   else:
-    echo "up-to-date: ", DocsPath, " (", SectionNames.len, " section(s) checked)"
+    echo "up-to-date: ", DocsPath, " (", totalSections, " section(s) checked)"
 
 when isMainModule:
   main()

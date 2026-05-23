@@ -1307,223 +1307,192 @@ Put the toml file that describes the `Colors` table in the path specified by `Th
 moe supports 24 bit color and set in hexadecimal (`#000000` ~ `#ffffff`).
 And, `termDefault` can be used for both foreground and background to use the terminal's default color.
 
-| Name |  Description |
-|:-----------------------------|:-----------------------------|
-| foreground | Default text color |
-| background | Default background olor |
-| currentLineBg | Background color of the editor current line |
-| currentColumnBg | Background color of the editor current column |
-| lineNum | Text color of line numbers  |
-| lineNumBg | Background color of line numbers |
-| currentLineNum | Text color of current line number highlighting |
-| currentLineNumBg | Background color of current line number highlighting |
-| statusLineNormalMode | Text color of Status line in Normal mode |
-| statusLineNormalModeBg | Background color of Status line in Normal mode |
-| statusLineNormalModeLabel | Mode label text color in status line in Normal mode |
-| statusLineNormalModeLabelBg | Mode label background color in status line in Normal mode |
-| statusLineNormalModeInactive | Text color of status line in Normal mode when inactive |
-| statusLineNormalModeInactiveBg | Background color of status line in Normal mode when inactive |
-| statusLineInsertMode | Text color of status line in Insert mode |
-| statusLineInsertModeBg | Background color of status line in Insert mode |
-| statusLineInsertModeLabel | Mode label text color in status line in Insert mode |
-| statusLineInsertModeLabelBg | Mode label background color in status line in Insert mode |
-| statusLineInsertModeInactive | Text color of status line in Insert mode when inactive |
-| statusLineInsertModeInactiveBg | Background color of status line in Insert mode when inactive |
-| statusLineVisualMode | Text color of Status line in Visual mode |
-| statusLineVisualModeBg | Background color of Status line in Visual mode |
-| statusLineVisualModeLabel | Mode label text color in status line in visual mode |
-| statusLineVisualModeLabelBg | Mode label background color in status line in visual mode |
-| statusLineVisualModeInactive | Text color of Status line in Visual mode when inactive |
-| statusLineVisualModeInactiveBg | Background color of status line in Visual mode when inactive |
-| statusLineReplaceMode | Text color of Status line Replace in mode |
-| statusLineReplaceModeBg | Background color of status line Replace in mode |
-| statusLineReplaceModeLabel | Mode label text color in status line in Replace mode |
-| statusLineReplaceModeLabelBg | Mode label background color in status line in Replace mode |
-| statusLineReplaceModeInactive | Text color of Status line Replace in mode when inactive |
-| statusLineReplaceModeInactiveBg | Background color of Status line Replace in mode when inactive |
-| statusLineFilerMode | Text color of Status line in Filer mode |
-| statusLineFilerModeBg | Background color of Status line in Filer mode |
-| statusLineFilerModeLabel | Mode label text color in status line in Filer mode |
-| statusLineFilerModeLabelBg | Mode label background color in status line in Filer mode |
-| statusLineFilerModeInactive | Text color of status line in Filer mode when inactive |
-| statusLineFilerModeInactiveBg | Background color of Status line in Filer mode when inactive |
-| statusLineExMode | Text color of Status line in Command mode |
-| statusLineExModeBg | Background color of Status line in Command mode |
-| statusLineExModeLabel | Mode label text color in status line in Command mode |
-| statusLineExModeLabelBg | Mode label background color in status line in Command mode |
-| statusLineExModeInactive | Text color of status line in Command mode when inactive |
-| statusLineExModeInactiveBg | Background color of Status line in Command mode when inactive |
-| statusLineGitChangedLines | Text color of git changed lines count |
-| statusLineGitChangedLinesBg | Background color of git changed lines count |
-| statusLineGitBranch | Text color of git branch |
-| statusLineGitBranchBg | Background color of git branch |
-| tab | Text color of tab title in tab line |
-| tabBg | Background color of tab title in tab line |
-| currentTab | Text color of current tab title in tab line |
-| currentTabBg | Background color of current tab title in tab line |
-| commandLine | Text color in command line |
-| commandLineBg | Background color in command line |
-| errorMessage | Text color of error messages |
-| errorMessageBg | Background color of error messages |
-| warnMessage | Text color of warning messages |
-| warnMessageBg | Background color of warning messages |
-| searchResult | Text color of search result highlighting |
-| searchResultBg | Background color of search result highlighting |
-| selectArea | Text color selected in visual mode |
-| selectAreaBg | Background color selected in visual mode |
-| keyword | Syntax highlighting color |
-| functionName | Syntax highlighting color |
-| typeName | Syntax highlighting color |
-| boolean | Syntax highlighting color |
-| specialVar | Syntax highlighting color |
-| builtin | Syntax highlighting color |
-| charLit | Syntax highlighting color |
-| stringLit | Syntax highlighting color |
-| binNumber | Syntax highlighting color |
-| decNumber | Syntax highlighting color |
-| floatNumber | Syntax highlighting color |
-| hexNumber | Syntax highlighting color |
-| octNumber | Syntax highlighting color |
-| comment | Syntax highlighting color |
-| longComment | Syntax highlighting color |
-| docComment | Syntax highlighting color |
-| docLongComment | Syntax highlighting color |
-| whitespace | Syntax highlighting color |
-| preprocessor | Syntax highlighting color |
-| pragma | Syntax highlighting color |
-| identifier | Syntax highlighting color |
-| table | Syntax highlighting color |
-| date | Syntax highlighting color |
-| logError | Log file error level highlighting color |
-| logWarning | Log file warning level highlighting color |
-| logInfo | Log file info/debug level highlighting color |
-| logUuid | Log file UUID highlighting color |
-| operator | Syntax highlighting color |
-| markdownCodeBlock | Markdown code block text color |
-| markdownCodeBlockBg | Markdown code block background color |
-| namespace | Syntax highlighting color (LSP Semantic Tokens) |
-| className | Syntax highlighting color (LSP Semantic Tokens) |
-| enumName | Syntax highlighting color (LSP Semantic Tokens) |
-| enumMember | Syntax highlighting color (LSP Semantic Tokens) |
-| interfaceName | Syntax highlighting color (LSP Semantic Tokens) |
-| typeParameter | Syntax highlighting color (LSP Semantic Tokens) |
-| parameter | Syntax highlighting color (LSP Semantic Tokens) |
-| variable | Syntax highlighting color (LSP Semantic Tokens) |
-| property | Syntax highlighting color (LSP Semantic Tokens) |
-| string | Syntax highlighting color (LSP Semantic Tokens) |
-| event | Syntax highlighting color (LSP Semantic Tokens) |
-| function | Syntax highlighting color (LSP Semantic Tokens) |
-| method | Syntax highlighting color (LSP Semantic Tokens) |
-| macro | Syntax highlighting color (LSP Semantic Tokens) |
-| regexp | Syntax highlighting color (LSP Semantic Tokens) |
-| decorator | Syntax highlighting color (LSP Semantic Tokens) |
-| angle | Syntax highlighting color (LSP Semantic Tokens) |
-| arithmetic | Syntax highlighting color (LSP Semantic Tokens) |
-| attribute | Syntax highlighting color (LSP Semantic Tokens) |
-| attributeBracket | Syntax highlighting color (LSP Semantic Tokens) |
-| bitwise | Syntax highlighting color (LSP Semantic Tokens) |
-| brace | Syntax highlighting color (LSP Semantic Tokens) |
-| bracket | Syntax highlighting color (LSP Semantic Tokens) |
-| builtinAttribute | Syntax highlighting color (LSP Semantic Tokens) |
-| builtinType | Syntax highlighting color (LSP Semantic Tokens) |
-| colon | Syntax highlighting color (LSP Semantic Tokens) |
-| comma | Syntax highlighting color (LSP Semantic Tokens) |
-| comparison | Syntax highlighting color (LSP Semantic Tokens) |
-| constParameter | Syntax highlighting color (LSP Semantic Tokens) |
-| derive | Syntax highlighting color (LSP Semantic Tokens) |
-| deriveHelper | Syntax highlighting color (LSP Semantic Tokens) |
-| dot | Syntax highlighting color (LSP Semantic Tokens) |
-| escapeSequence | Syntax highlighting color (LSP Semantic Tokens) |
-| invalidEscapeSequence | Syntax highlighting color (LSP Semantic Tokens) |
-| formatSpecifier | Syntax highlighting color (LSP Semantic Tokens) |
-| generic | Syntax highlighting color (LSP Semantic Tokens) |
-| label | Syntax highlighting color (LSP Semantic Tokens) |
-| lifetime | Syntax highlighting color (LSP Semantic Tokens) |
-| logical | Syntax highlighting color (LSP Semantic Tokens) |
-| macroBang | Syntax highlighting color (LSP Semantic Tokens) |
-| parenthesis | Syntax highlighting color (LSP Semantic Tokens) |
-| punctuation | Syntax highlighting color |
-| selfKeyword | Syntax highlighting color (LSP Semantic Tokens) |
-| selfTypeKeyword | Syntax highlighting color (LSP Semantic Tokens) |
-| semicolon | Syntax highlighting color (LSP Semantic Tokens) |
-| typeAlias | Syntax highlighting color (LSP Semantic Tokens) |
-| toolModule | Syntax highlighting color (LSP Semantic Tokens) |
-| union | Syntax highlighting color (LSP Semantic Tokens) |
-| unresolvedReference | Syntax highlighting color (LSP Semantic Tokens) |
-| inlayHint | LSP inlay hint text color |
-| inlineValue | LSP inline value text color |
-| codeLens | LSP code lens text color |
-| currentFile | Text color of current file name in Filer mode |
-| currentFileBg | Background color of current file name in Filer mode |
-| file | Text color of file name in Filer mode |
-| fileBg | Background color of file name in Filer mode |
-| dir | Text of directory name in filer mode |
-| dirBg | Background of directory name in filer mode |
-| pcLink | Text of symbolic links to file in filer mode |
-| pcLinkBg | Background of symbolic links to file in filer mode |
-| popupWindow | Pop-up window text color |
-| popupWindowBg | Pop-up window background color |
-| popupWinCurrentLine | Pop-up window current line text color |
-| popupWinCurrentLineBg | Pop-up window current line background color |
-| replaceText | Text color of replacing text |
-| replaceTextBg | Background color of replacing text |
-| parenPair | Pair of bracket highlighting |
-| parenPairBg | Pair of bracket highlighting |
-| currentWord | Current word highlighting |
-| currentWordBg | Current word highlighting |
-| findCharMatch | f/F/t/T match highlighting |
-| findCharMatchBg | f/F/t/T match highlighting |
-| highlightFullWidthSpace | Full-width space text color |
-| highlightFullWidthSpaceBg | Full-width space background color |
-| highlightTrailingSpaces | Trailing space text color |
-| highlightTrailingSpacesBg | Trailing space background color |
-| reservedWord | Reserved word text color |
-| reservedWordBg | Reserved word text color |
-| syntaxCheckInfo | A info color of syntax checker result highlighting |
-| syntaxCheckInfoBg | A info color of syntax checker result highlighting |
-| syntaxCheckHint | A hint color of syntax checker result highlighting |
-| syntaxCheckHintBg | A hint color of syntax checker result highlighting |
-| syntaxCheckWarn | A warning color of syntax checker result highlighting |
-| syntaxCheckWarnBg | A warning color of syntax checker result highlighting |
-| syntaxCheckErr | An error color of syntax checker result highlighting |
-| syntaxCheckErrBg | An error color of syntax checker result highlighting |
-| gitConflict | Single-color fallback for git conflict block (used when gitConflictTwoColor = false) |
-| gitConflictBg | Single-color fallback background for git conflict block |
-| gitConflictMarker | Foreground color for marker lines (`<<<<<<<`, `\|\|\|\|\|\|\|`, `=======`, `>>>>>>>`) |
-| gitConflictMarkerBg | Background color for marker lines |
-| gitConflictOurs | Foreground color for the "ours" side of a conflict block |
-| gitConflictOursBg | Background color for the "ours" side |
-| gitConflictBase | Foreground color for the diff3 "base" side of a conflict block |
-| gitConflictBaseBg | Background color for the diff3 "base" side |
-| gitConflictTheirs | Foreground color for the "theirs" side of a conflict block |
-| gitConflictTheirsBg | Background color for the "theirs" side |
-| diffViewerAddedLine  | Added line color on Diff viewer |
-| diffViewerAddedLineBg  | Added line color on Diff viewer |
-| diffViewerDeletedLine | Deleted line color on Diff viewer |
-| diffViewerDeletedLineBg | Deleted line color on Diff viewer |
-| backupManagerCurrentLine | Current line color on Backup manager |
-| backupManagerCurrentLineBg | Current line color on Backup manager |
-| configModeCurrentLine | Current line color in Configuration mode |
-| configModeCurrentLineBg | Current line color in Configuration mode |
-| foldingLine | Folding line text color |
-| foldingLineBg | Folding line background color |
-| sidebarGitAddedSign | An added lines sign color of Git in sidebars |
-| sidebarGitAddedSignBg | An added lines sign color of Git in sidebars |
-| sidebarGitDeletedSign | A deleted lines sign color of Git in sidebars |
-| sidebarGitDeletedSignBg | A deleted lines sign color of Git in sidebars |
-| sidebarGitChangedSign | A changed lines sign color of Git in sidebars |
-| sidebarGitChangedSignBg | A changed lines sign color of Git in sidebars |
-| sidebarGitConflictSign | A merge conflict sign color of Git in sidebars |
-| sidebarGitConflictSignBg | A merge conflict sign color of Git in sidebars |
-| sidebarSyntaxCheckInfoSign  | A info sign color of syntax checker results in sidebars |
-| sidebarSyntaxCheckInfoSignBg  | A info sign color of syntax checker results in sidebars |
-| sidebarSyntaxCheckHintSign | A hint sign color of syntax checker results in sidebars |
-| sidebarSyntaxCheckHintSignBg | A hint sign color of syntax checker results in sidebars |
-| sidebarSyntaxCheckWarnSign | A warning color of syntax checker results in sidebars |
-| sidebarSyntaxCheckWarnSignBg | A warning color of syntax checker results in sidebars |
-| sidebarSyntaxCheckErrSign | An error color of syntax checker results in sidebars |
-| sidebarSyntaxCheckErrSignBg | An error color of syntax checker results in sidebars |
-| sidebarSessionModifiedSign | A modified line sign color in sidebars |
-| sidebarSessionModifiedSignBg | A modified line sign background color in sidebars |
-| sidebarSessionInsertedSign | An inserted line sign color in sidebars |
-| sidebarSessionInsertedSignBg | An inserted line sign background color in sidebars |
+Each entry under `[Colors]` is an inline table that sets `fg` and/or `bg`,
+for example `lineNum = { fg = "#636d83", bg = "#000000" }`. The top-level
+`foreground` and `background` keys override the editor's default text and
+background colors, which all other entries inherit when their `bg` is
+omitted.
+
+<!-- AUTO-GEN:start Colors -->
+| Name | Description |
+|:---|:---|
+| foreground | Default foreground color (overrides `Colors.default.fg`) |
+| background | Default background color (overrides `Colors.default.bg`) |
+| lineNum | Line number gutter |
+| currentLineNum | Current line number highlight |
+| sidebarSessionModifiedSign | Sidebar: modified line sign |
+| sidebarSessionInsertedSign | Sidebar: inserted line sign |
+| statusLineNormalMode | Status line in Normal mode (active) |
+| statusLineNormalModeLabel | Status line mode label in Normal mode |
+| statusLineNormalModeInactive | Status line in Normal mode (inactive) |
+| statusLineInsertMode | Status line in Insert mode (active) |
+| statusLineInsertModeLabel | Status line mode label in Insert mode |
+| statusLineInsertModeInactive | Status line in Insert mode (inactive) |
+| statusLineVisualMode | Status line in Visual mode (active) |
+| statusLineVisualModeLabel | Status line mode label in Visual mode |
+| statusLineVisualModeInactive | Status line in Visual mode (inactive) |
+| statusLineReplaceMode | Status line in Replace mode (active) |
+| statusLineReplaceModeLabel | Status line mode label in Replace mode |
+| statusLineReplaceModeInactive | Status line in Replace mode (inactive) |
+| statusLineFilerMode | Status line in Filer mode (active) |
+| statusLineFilerModeLabel | Status line mode label in Filer mode |
+| statusLineFilerModeInactive | Status line in Filer mode (inactive) |
+| statusLineExMode | Status line in Command mode (active) |
+| statusLineExModeLabel | Status line mode label in Command mode |
+| statusLineExModeInactive | Status line in Command mode (inactive) |
+| statusLineGitChangedLines | Status line git changed-lines counter |
+| statusLineGitBranch | Status line git branch name |
+| tab | Tab title in the tab line |
+| currentTab | Current tab title in the tab line |
+| commandLine | Command line |
+| errorMessage | Error message |
+| warnMessage | Warning message |
+| searchResult | Search result highlight |
+| findCharMatch | f/F/t/T character match highlight |
+| selectArea | Visual mode selection |
+| keyword | Syntax: keyword |
+| functionName | Syntax: function name |
+| typeName | Syntax: type name |
+| boolean | Syntax: boolean literal |
+| specialVar | Syntax: special variable |
+| builtin | Syntax: builtin |
+| charLit | Syntax: character literal |
+| stringLit | Syntax: string literal |
+| binNumber | Syntax: binary number literal |
+| decNumber | Syntax: decimal number literal |
+| floatNumber | Syntax: floating-point number literal |
+| hexNumber | Syntax: hexadecimal number literal |
+| octNumber | Syntax: octal number literal |
+| comment | Syntax: line comment |
+| longComment | Syntax: block/long comment |
+| docComment | Syntax: documentation comment |
+| docLongComment | Syntax: long documentation comment |
+| whitespace | Syntax: whitespace indicator |
+| preprocessor | Syntax: preprocessor directive |
+| pragma | Syntax: pragma |
+| identifier | Syntax: identifier |
+| table | Syntax: TOML table header |
+| date | Syntax: date literal |
+| logError | Log file error level |
+| logWarning | Log file warning level |
+| logInfo | Log file info/debug level |
+| logUuid | Log file UUID |
+| operator | Syntax: operator |
+| property | Syntax: property |
+| markdownCodeBlock | Markdown code block |
+| namespace | LSP semantic token: namespace |
+| className | LSP semantic token: class name |
+| enumName | LSP semantic token: enum name |
+| enumMember | LSP semantic token: enum member |
+| interfaceName | LSP semantic token: interface name |
+| typeParameter | LSP semantic token: type parameter |
+| parameter | LSP semantic token: parameter |
+| variable | LSP semantic token: variable |
+| string | LSP semantic token: string |
+| event | LSP semantic token: event |
+| function | LSP semantic token: function |
+| method | LSP semantic token: method |
+| macro | LSP semantic token: macro |
+| regexp | LSP semantic token: regular expression |
+| decorator | LSP semantic token: decorator |
+| angle | LSP semantic token: angle bracket |
+| arithmetic | LSP semantic token: arithmetic operator |
+| attribute | LSP semantic token: attribute |
+| attributeBracket | LSP semantic token: attribute bracket |
+| bitwise | LSP semantic token: bitwise operator |
+| brace | LSP semantic token: brace |
+| bracket | LSP semantic token: bracket |
+| builtinAttribute | LSP semantic token: builtin attribute |
+| builtinType | LSP semantic token: builtin type |
+| colon | LSP semantic token: colon |
+| comma | LSP semantic token: comma |
+| comparison | LSP semantic token: comparison operator |
+| constParameter | LSP semantic token: const parameter |
+| derive | LSP semantic token: derive |
+| deriveHelper | LSP semantic token: derive helper |
+| dot | LSP semantic token: dot |
+| escapeSequence | LSP semantic token: escape sequence |
+| invalidEscapeSequence | LSP semantic token: invalid escape sequence |
+| formatSpecifier | LSP semantic token: format specifier |
+| generic | LSP semantic token: generic |
+| label | LSP semantic token: label |
+| lifetime | LSP semantic token: lifetime |
+| logical | LSP semantic token: logical operator |
+| macroBang | LSP semantic token: macro bang (`!`) |
+| parenthesis | LSP semantic token: parenthesis |
+| punctuation | Syntax: punctuation |
+| selfKeyword | LSP semantic token: `self` keyword |
+| selfTypeKeyword | LSP semantic token: `Self` type keyword |
+| semicolon | LSP semantic token: semicolon |
+| typeAlias | LSP semantic token: type alias |
+| toolModule | LSP semantic token: tool module |
+| union | LSP semantic token: union |
+| unresolvedReference | LSP semantic token: unresolved reference |
+| inlayHint | LSP inlay hint |
+| inlineValue | LSP inline value |
+| codeLens | LSP code lens |
+| currentFile | Filer: current file name |
+| file | Filer: file name |
+| dir | Filer: directory name |
+| pcLink | Filer: symbolic link |
+| popupWindow | Pop-up window |
+| popupWinCurrentLine | Pop-up window current line |
+| notificationPopupInfo | Notification popup: info body |
+| notificationPopupInfoBorder | Notification popup: info border |
+| notificationPopupWarning | Notification popup: warning body |
+| notificationPopupWarningBorder | Notification popup: warning border |
+| notificationPopupError | Notification popup: error body |
+| notificationPopupErrorBorder | Notification popup: error border |
+| replaceText | Replace command replacement text |
+| parenPair | Matching bracket pair highlight |
+| currentWord | Other occurrences of the word under cursor |
+| highlightFullWidthSpace | Full-width space highlight |
+| highlightTrailingSpaces | Trailing whitespace highlight |
+| reservedWord | Reserved word highlight |
+| syntaxCheckInfo | Syntax checker: info diagnostic |
+| syntaxCheckHint | Syntax checker: hint diagnostic |
+| syntaxCheckWarn | Syntax checker: warning diagnostic |
+| syntaxCheckErr | Syntax checker: error diagnostic |
+| gitConflict | Git conflict block (single-color fallback when gitConflictTwoColor = false) |
+| gitConflictMarker | Git conflict marker lines (`<<<<<<<`, `\|\|\|\|\|\|\|`, `=======`, `>>>>>>>`) |
+| gitConflictOurs | Git conflict: "ours" side |
+| gitConflictBase | Git conflict: diff3 "base" side |
+| gitConflictTheirs | Git conflict: "theirs" side |
+| backupManagerCurrentLine | Backup manager: current line |
+| diffViewerAddedLine | Diff viewer: added line |
+| diffViewerDeletedLine | Diff viewer: deleted line |
+| configModeCurrentLine | Configuration mode: current line |
+| currentLine | Editor current line background (bg-only) |
+| currentColumn | Editor current column background (bg-only) |
+| foldingLine | Folded-region indicator line |
+| sidebarGitAddedSign | Sidebar: git added sign |
+| sidebarGitDeletedSign | Sidebar: git deleted sign |
+| sidebarGitChangedSign | Sidebar: git changed sign |
+| sidebarGitConflictSign | Sidebar: git conflict sign |
+| sidebarSyntaxCheckInfoSign | Sidebar: syntax checker info sign |
+| sidebarSyntaxCheckHintSign | Sidebar: syntax checker hint sign |
+| sidebarSyntaxCheckWarnSign | Sidebar: syntax checker warning sign |
+| sidebarSyntaxCheckErrSign | Sidebar: syntax checker error sign |
+| viewerHeader | Viewer common: header |
+| viewerSelectedLine | Viewer common: selected line |
+| viewerEmptyMessage | Viewer common: empty-state message |
+| filerDirectory | Filer: directory entry |
+| filerSymlink | Filer: symbolic link entry |
+| filerSymlinkDir | Filer: symbolic link to directory |
+| filerHiddenFile | Filer: hidden file entry |
+| filerExecutable | Filer: executable file entry |
+| bufferManagerActive | Buffer manager: active buffer |
+| bufferManagerModified | Buffer manager: modified buffer |
+| configModeSection | Configuration mode: section header |
+| configModeEditMode | Configuration mode: edit mode indicator |
+| configModePopup | Configuration mode: popup body and border |
+| configModePopupSelected | Configuration mode: popup selected entry |
+| diffViewerHeader | Diff viewer: header |
+| diffViewerMeta | Diff viewer: metadata line |
+| recentFileMissing | Recent file mode: missing file entry |
+| debugViewerSectionHeader | Debug viewer: section header |
+| referencesViewerHeader | References viewer: header |
+| documentSymbolViewerHeader | Document symbol viewer: header |
+| callHierarchyViewerHeader | Call hierarchy viewer: header |
+| helpViewerSectionHeader | Help viewer: section header |
+<!-- AUTO-GEN:end Colors -->
