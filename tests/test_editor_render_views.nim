@@ -30,6 +30,9 @@ proc createTestEditor(): Editor =
   let config = newEditorConfig()
   let vr = newValidationResult()
   result = newEditor(config, vr)
+  # Clear any startup status message (e.g. theme validation errors) so it does
+  # not overlay the status line in render-output assertions.
+  result.state.statusMessage = ""
 
 proc createTestBuffer(): Buffer =
   ## Create a minimal Celina Buffer for testing
