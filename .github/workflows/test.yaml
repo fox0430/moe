@@ -27,7 +27,7 @@ on:
       - 'moe.nimble'
       - 'nimble.lock'
       - 'src/**'
-      - 'tools/paralleltest.nim'
+      - 'tools/**'
       - 'tests/**'
 
 permissions:

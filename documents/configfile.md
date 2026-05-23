@@ -1313,6 +1313,29 @@ for example `lineNum = { fg = "#636d83", bg = "#000000" }`. The top-level
 background colors, which all other entries inherit when their `bg` is
 omitted.
 
+#### Migrating from the legacy format
+
+Earlier versions used separate flat keys for foreground and background
+(`lineNum = "#636d83"` / `lineNumBg = "#000000"`). User themes written in
+that format can be converted with `tools/migrate_theme_toml.nim`:
+
+```sh
+nim r tools/migrate_theme_toml.nim path/to/theme.toml             # print to stdout
+nim r tools/migrate_theme_toml.nim --in-place path/to/theme.toml  # rewrite in place (original saved as .bak)
+nim r tools/migrate_theme_toml.nim --check path/to/theme.toml     # exit 0 if already migrated
+```
+
+The tool is idempotent — re-running it on an already-migrated file is a no-op.
+
+Notes:
+
+- Comments (header and inline) are not preserved; the output is rebuilt from
+  the parsed TOML AST. Move any hand-written notes out of your theme file
+  before running `--in-place`.
+- Only the `[Colors]` section is emitted; any other top-level sections in
+  the input are dropped.
+- `--in-place` overwrites an existing `<file>.bak` without warning.
+
 <!-- AUTO-GEN:start Colors -->
 | Name | Description |
 |:---|:---|
