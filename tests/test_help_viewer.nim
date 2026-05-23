@@ -196,6 +196,95 @@ suite "HelpViewer - Viewport":
     state.ensureSelectedVisible(10)
     check state.topLine == 6
 
+suite "HelpViewer - Section navigation":
+  test "moveToNextSection jumps to next '# ' header":
+    let state = newHelpViewerState()
+    # state.lines[0] is "# Exiting" — the first top-level section header.
+    check state.lines[0].startsWith("# ")
+    check state.selectedIndex == 0
+
+    state.moveToNextSection()
+    check state.selectedIndex > 0
+    check state.lines[state.selectedIndex].startsWith("# ")
+    check not state.lines[state.selectedIndex].startsWith("## ")
+
+  test "moveToNextSection skips '## ' sub-section headers":
+    let state = newHelpViewerState()
+
+    # Land on a "## " sub-section line and verify the next jump goes to a
+    # top-level "# " section, not the next "## ".
+    var subIdx = -1
+    for i, line in state.lines:
+      if line.startsWith("## "):
+        subIdx = i
+        break
+    check subIdx >= 0
+
+    state.selectedIndex = subIdx
+    state.moveToNextSection()
+
+    if state.selectedIndex != subIdx:
+      check state.lines[state.selectedIndex].startsWith("# ")
+      check not state.lines[state.selectedIndex].startsWith("## ")
+
+  test "moveToNextSection stays put when no further section exists":
+    let state = newHelpViewerState()
+
+    # Find the last top-level section, then move past it.
+    var lastSectionIdx = -1
+    for i, line in state.lines:
+      if line.startsWith("# ") and not line.startsWith("## "):
+        lastSectionIdx = i
+    check lastSectionIdx >= 0
+
+    state.selectedIndex = lastSectionIdx
+    state.moveToNextSection()
+    check state.selectedIndex == lastSectionIdx
+
+  test "moveToPreviousSection jumps to previous '# ' header":
+    let state = newHelpViewerState()
+
+    # Find the second top-level section and jump back from it.
+    var firstIdx = -1
+    var secondIdx = -1
+    for i, line in state.lines:
+      if line.startsWith("# ") and not line.startsWith("## "):
+        if firstIdx == -1:
+          firstIdx = i
+        else:
+          secondIdx = i
+          break
+    check firstIdx >= 0
+    check secondIdx > firstIdx
+
+    state.selectedIndex = secondIdx
+    state.moveToPreviousSection()
+    check state.selectedIndex == firstIdx
+
+  test "moveToPreviousSection stays put when no earlier section exists":
+    let state = newHelpViewerState()
+    state.selectedIndex = 0
+
+    state.moveToPreviousSection()
+    check state.selectedIndex == 0
+
+  test "moveToPreviousSection skips '## ' sub-section headers":
+    let state = newHelpViewerState()
+
+    var subIdx = -1
+    for i, line in state.lines:
+      if line.startsWith("## "):
+        subIdx = i
+        break
+    check subIdx >= 0
+
+    state.selectedIndex = subIdx
+    state.moveToPreviousSection()
+
+    check state.selectedIndex < subIdx
+    check state.lines[state.selectedIndex].startsWith("# ")
+    check not state.lines[state.selectedIndex].startsWith("## ")
+
 suite "HelpViewer - Search query":
   test "setSearchQuery sets the query":
     let state = newHelpViewerState()

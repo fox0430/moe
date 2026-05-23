@@ -332,6 +332,81 @@ suite "help_handler: handleHelpViewerModeKey - Search navigation":
     check result.kind == hvrHandled
     check helpState.selectedIndex == 50 # Position unchanged
 
+suite "help_handler: handleHelpViewerModeKey - Section navigation":
+  test "] jumps to the next top-level section":
+    let
+      handler = newHelpViewerHandler()
+      helpState = newHelpViewerState()
+    check helpState.selectedIndex == 0
+
+    let result =
+      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("]"))
+
+    check result.kind == hvrHandled
+    check helpState.selectedIndex > 0
+    check helpState.lines[helpState.selectedIndex].len >= 2
+    check helpState.lines[helpState.selectedIndex][0 .. 1] == "# "
+
+  test "[ jumps to the previous top-level section":
+    let
+      handler = newHelpViewerHandler()
+      helpState = newHelpViewerState()
+    helpState.moveToLast()
+    let startIdx = helpState.selectedIndex
+
+    let result =
+      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("["))
+
+    check result.kind == hvrHandled
+    check helpState.selectedIndex < startIdx
+    check helpState.lines[helpState.selectedIndex].len >= 2
+    check helpState.lines[helpState.selectedIndex][0 .. 1] == "# "
+
+  test "] at last section stays on last section":
+    let
+      handler = newHelpViewerHandler()
+      helpState = newHelpViewerState()
+
+    # Find the last top-level "# " line.
+    var lastSectionIdx = -1
+    for i, line in helpState.lines:
+      if line.len >= 2 and line[0 .. 1] == "# ":
+        lastSectionIdx = i
+    check lastSectionIdx >= 0
+
+    helpState.selectedIndex = lastSectionIdx
+    let result =
+      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("]"))
+
+    check result.kind == hvrHandled
+    check helpState.selectedIndex == lastSectionIdx
+
+  test "[ at first section stays on first section":
+    let
+      handler = newHelpViewerHandler()
+      helpState = newHelpViewerState()
+    helpState.selectedIndex = 0
+
+    let result =
+      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("["))
+
+    check result.kind == hvrHandled
+    check helpState.selectedIndex == 0
+
+  test "] adjusts topLine to keep target visible":
+    let
+      handler = newHelpViewerHandler()
+      helpState = newHelpViewerState()
+    helpState.selectedIndex = 0
+    helpState.topLine = 0
+
+    let result =
+      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("]"))
+
+    check result.kind == hvrHandled
+    check helpState.topLine <= helpState.selectedIndex
+    check helpState.topLine + TestViewportHeight > helpState.selectedIndex
+
 suite "help_handler: handleHelpViewerModeKey - Scroll adjustment":
   test "Moving down adjusts topLine when cursor goes below viewport":
     let

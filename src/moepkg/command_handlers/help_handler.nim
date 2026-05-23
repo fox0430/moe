@@ -141,6 +141,14 @@ proc handleHelpViewerModeKey*(
       helpState.moveToLast()
       helpState.ensureSelectedVisible(viewportHeight)
       return HelpViewerResult(kind: hvrHandled)
+    of "}":
+      helpState.moveToNextSection()
+      helpState.ensureSelectedVisible(viewportHeight)
+      return HelpViewerResult(kind: hvrHandled)
+    of "{":
+      helpState.moveToPreviousSection()
+      helpState.ensureSelectedVisible(viewportHeight)
+      return HelpViewerResult(kind: hvrHandled)
     else:
       discard
 
