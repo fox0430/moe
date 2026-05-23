@@ -352,6 +352,259 @@ suite "Insert Commands - insertNewline":
     check buf.len >= 2
     check state.cursor.line == 1
 
+suite "Insert Commands - insertNewline bracket split":
+  test "bsmDisable keeps existing behavior inside []":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "test[]")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.bracketSplit = bsmDisable
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "test["
+    check buf.getLine(1) == "]"
+    check buf.len == 2
+    check state.cursor.line == 1
+    check state.cursor.column == 0
+
+  test "bsmIndent splits [] onto three lines with deeper middle indent":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    test[]")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.expandTab = true
+    state.display.tabStop = 4
+    state.display.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 9)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "    test["
+    check buf.getLine(1) == "        "
+    check buf.getLine(2) == "    ]"
+    check buf.len == 3
+    check state.cursor.line == 1
+    check state.cursor.column == 8
+
+  test "bsmNoIndent splits [] onto three lines without indentation":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    test[]")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.expandTab = true
+    state.display.tabStop = 4
+    state.display.bracketSplit = bsmNoIndent
+    state.cursor = BufferPosition(line: 0, column: 9)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "    test["
+    check buf.getLine(1) == ""
+    check buf.getLine(2) == "]"
+    check buf.len == 3
+    check state.cursor.line == 1
+    check state.cursor.column == 0
+
+  test "bsmIndent splits () pair":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "f()")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.expandTab = true
+    state.display.tabStop = 2
+    state.display.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "f("
+    check buf.getLine(1) == "  "
+    check buf.getLine(2) == ")"
+    check state.cursor.line == 1
+    check state.cursor.column == 2
+
+  test "bsmIndent splits {} pair":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "{}")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.expandTab = true
+    state.display.tabStop = 2
+    state.display.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 1)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "{"
+    check buf.getLine(1) == "  "
+    check buf.getLine(2) == "}"
+
+  test "quote pair is not split":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\"\"")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 1)
+
+    insertNewline(buf, state)
+
+    # Falls through to existing behavior (single newline, no split)
+    check buf.getLine(0) == "\""
+    check buf.getLine(1) == "\""
+    check buf.len == 2
+
+  test "no split at start of line before []":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "[]")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 0)
+
+    insertNewline(buf, state)
+
+    # column == 0 -> existing behavior
+    check buf.getLine(0) == ""
+    check buf.getLine(1) == "[]"
+    check buf.len == 2
+
+  test "no split when opening bracket has no matching close after cursor":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "test[")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 5)
+
+    insertNewline(buf, state)
+
+    # Cursor at end (after [), no closing -> existing behavior
+    check buf.getLine(0) == "test["
+    check buf.len == 2
+
+  test "no split when bracket pair is mismatched":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "[)")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 1)
+
+    insertNewline(buf, state)
+
+    # [ and ) are not a matching pair
+    check buf.getLine(0) == "["
+    check buf.getLine(1) == ")"
+    check buf.len == 2
+
+  test "nested bracket pair splits only the inner pair":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "[[]]")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.expandTab = true
+    state.display.tabStop = 2
+    state.display.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "[["
+    check buf.getLine(1) == "  "
+    check buf.getLine(2) == "]]"
+    check buf.len == 3
+    check state.cursor.line == 1
+    check state.cursor.column == 2
+
+  test "bsmIndent with autoIndent=false uses no base indent":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    test[]")
+    let state = createTestState()
+    state.display.autoIndent = false
+    state.display.expandTab = true
+    state.display.tabStop = 4
+    state.display.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 9)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "    test["
+    check buf.getLine(1) == "    "
+    check buf.getLine(2) == "]"
+    check state.cursor.column == 4
+
+  test "bsmIndent uses tab character when expandTab=false":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\ttest[]")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.expandTab = false
+    state.display.tabStop = 4
+    state.display.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 6)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "\ttest["
+    check buf.getLine(1) == "\t\t"
+    check buf.getLine(2) == "\t]"
+
+  test "bsmIndent handles multibyte characters before the bracket":
+    # Indent detection only looks at leading ASCII whitespace, but a multibyte
+    # character before [] must not break rune-index arithmetic.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "あ[]")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.expandTab = true
+    state.display.tabStop = 2
+    state.display.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertNewline(buf, state)
+
+    check buf.getLine(0) == "あ["
+    check buf.getLine(1) == "  "
+    check buf.getLine(2) == "]"
+    check state.cursor.line == 1
+    check state.cursor.column == 2
+
+  test "bsmIndent registers middle line for Esc cleanup":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    f()")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.expandTab = true
+    state.display.tabStop = 2
+    state.display.bracketSplit = bsmIndent
+    state.cursor = BufferPosition(line: 0, column: 6)
+
+    insertNewline(buf, state)
+
+    # Leaving Insert mode without typing should clear the inserted whitespace
+    # on the middle line while keeping the bracket pair intact.
+    clearAutoIndentIfUnedited(buf, state)
+
+    check buf.getLine(0) == "    f("
+    check buf.getLine(1) == ""
+    check buf.getLine(2) == "    )"
+    check state.cursor.column == 0
+
+  test "bsmNoIndent does not register for Esc cleanup":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "f()")
+    let state = createTestState()
+    state.display.autoIndent = true
+    state.display.bracketSplit = bsmNoIndent
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    insertNewline(buf, state)
+
+    check state.editState.autoIndentedLine.isNone
+
 suite "Insert Commands - insertLineBelow":
   test "Insert line below with auto-indent":
     let buf = newTextBuffer()

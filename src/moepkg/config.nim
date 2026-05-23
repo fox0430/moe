@@ -75,6 +75,11 @@ type
     bbcRope = "rope"
     bbcPieceTable = "pieceTable"
 
+  BracketSplitMode* = enum
+    bsmDisable = "disable" ## Existing behavior: no special handling on Enter
+    bsmNoIndent = "noIndent" ## Split pair onto 3 lines without indenting
+    bsmIndent = "indent" ## Split pair and indent the middle line one step deeper
+
   # Standard settings
   StandardConfig* {.cfgSection: "Standard".} = object
     number* {.cfg, cfgDocDescription: "Display line numbers".}: bool
@@ -146,6 +151,12 @@ type
       cfgDocDescription:
         "Buffer data structure. \"auto\" selects backend based on file size"
     .}: BufferBackendConfig
+    bracketSplit* {.
+      cfg,
+      cfgDocDescription:
+        "Behavior when pressing Enter between matching bracket pairs " &
+        "(disable/noIndent/indent)"
+    .}: BracketSplitMode
 
   # Clipboard settings
   ClipboardConfig* {.cfgSection: "Clipboard".} = object
@@ -749,6 +760,7 @@ proc newEditorConfig*(): EditorConfig =
       lineWrap: true,
       timeoutlen: 1000,
       bufferBackend: bbcAuto,
+      bracketSplit: bsmDisable,
     ),
     clipboard: ClipboardConfig(enable: true, tool: detectClipboardTool()),
     buildOnSave: BuildOnSaveConfig(

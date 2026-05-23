@@ -23,7 +23,7 @@
 ## that are independent of CommandContext for better testability
 
 import std/[options, strutils, unicode]
-import ../[buffer, types, modes]
+import ../[buffer, types, modes, unicode_utils]
 
 proc getLineIndent*(line: string): string =
   ## Extract leading whitespace (spaces and tabs) from a line
@@ -102,6 +102,36 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
 
   # Get current line content for indent detection
   let currentLineText = buffer.getLine(pos.line)
+
+  # Split bracket pair onto three lines when cursor sits between () [] {}
+  if state.display.bracketSplit != bsmDisable and pos.column > 0 and
+      pos.column < currentLineText.runeLen and
+      isAdjacentBracketPair(currentLineText, pos.column - 1):
+    let indented = state.display.bracketSplit == bsmIndent
+    let baseIndent =
+      if state.display.autoIndent:
+        getLineIndent(currentLineText)
+      else:
+        ""
+    let middleIndent =
+      if indented:
+        baseIndent & getIndentString(state)
+      else:
+        ""
+    let closeIndent = if indented: baseIndent else: ""
+    let textToInsert = "\n" & middleIndent & "\n" & closeIndent
+    discard buffer.insertText(pos, textToInsert)
+    state.cursor.line += 1
+    state.cursor.column = middleIndent.runeLen
+    # Register the middle line for auto-indent cleanup on Esc — if the user
+    # leaves Insert mode without typing anything, the whitespace we just
+    # inserted is removed (the bracket pair itself stays intact).
+    if middleIndent.len > 0:
+      state.editState.autoIndentedLine =
+        some((line: state.cursor.line, indent: middleIndent))
+    else:
+      state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
+    return
 
   # Prepare the text to insert (newline + optional indent as single operation)
   var textToInsert = "\n"

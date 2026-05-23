@@ -52,6 +52,8 @@ incrementalSearch = true               # Incremental search
 
 autoDeleteParen = true                 # Auto-delete matching parens - Set to false to disable
 
+bracketSplit = "disable"               # Enter behavior between () [] {} pairs: "disable", "noIndent", "indent"
+
 liveReloadOfFile = true                # Auto-reload when file changed externally
 
 colorMode = "256"                      # Color mode: "8", "16", "256", "24bit", "none"

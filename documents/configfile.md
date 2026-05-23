@@ -126,6 +126,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | lineWrap | bool | true | Enable line wrapping |
 | timeoutlen | integer | 1000 | Key mapping timeout in milliseconds (0 = no timeout) |
 | bufferBackend | string (enum: auto, gapBuffer, sqrtDecomp, rope, pieceTable) | auto | Buffer data structure. "auto" selects backend based on file size |
+| bracketSplit | string (enum: disable, noIndent, indent) | disable | Behavior when pressing Enter between matching bracket pairs (disable/noIndent/indent) |
 <!-- AUTO-GEN:end Standard -->
 
 
