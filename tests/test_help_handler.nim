@@ -333,21 +333,21 @@ suite "help_handler: handleHelpViewerModeKey - Search navigation":
     check helpState.selectedIndex == 50 # Position unchanged
 
 suite "help_handler: handleHelpViewerModeKey - Section navigation":
-  test "] jumps to the next top-level section":
+  test "} jumps to the next top-level section":
     let
       handler = newHelpViewerHandler()
       helpState = newHelpViewerState()
     check helpState.selectedIndex == 0
 
     let result =
-      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("]"))
+      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("}"))
 
     check result.kind == hvrHandled
     check helpState.selectedIndex > 0
     check helpState.lines[helpState.selectedIndex].len >= 2
     check helpState.lines[helpState.selectedIndex][0 .. 1] == "# "
 
-  test "[ jumps to the previous top-level section":
+  test "{ jumps to the previous top-level section":
     let
       handler = newHelpViewerHandler()
       helpState = newHelpViewerState()
@@ -355,14 +355,14 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
     let startIdx = helpState.selectedIndex
 
     let result =
-      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("["))
+      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("{"))
 
     check result.kind == hvrHandled
     check helpState.selectedIndex < startIdx
     check helpState.lines[helpState.selectedIndex].len >= 2
     check helpState.lines[helpState.selectedIndex][0 .. 1] == "# "
 
-  test "] at last section stays on last section":
+  test "} at last section stays on last section":
     let
       handler = newHelpViewerHandler()
       helpState = newHelpViewerState()
@@ -376,24 +376,24 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
 
     helpState.selectedIndex = lastSectionIdx
     let result =
-      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("]"))
+      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("}"))
 
     check result.kind == hvrHandled
     check helpState.selectedIndex == lastSectionIdx
 
-  test "[ at first section stays on first section":
+  test "{ at first section stays on first section":
     let
       handler = newHelpViewerHandler()
       helpState = newHelpViewerState()
     helpState.selectedIndex = 0
 
     let result =
-      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("["))
+      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("{"))
 
     check result.kind == hvrHandled
     check helpState.selectedIndex == 0
 
-  test "] adjusts topLine to keep target visible":
+  test "} adjusts topLine to keep target visible":
     let
       handler = newHelpViewerHandler()
       helpState = newHelpViewerState()
@@ -401,7 +401,7 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
     helpState.topLine = 0
 
     let result =
-      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("]"))
+      handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("}"))
 
     check result.kind == hvrHandled
     check helpState.topLine <= helpState.selectedIndex
