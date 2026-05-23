@@ -214,6 +214,7 @@ filerDirectory = { fg = "#0040ff" }
 filerSymlink = { fg = "#008080" }
 filerSymlinkDir = { fg = "#800080" }
 filerHiddenFile = { fg = "#a0a0a0" }
+filerExecutable = { fg = "#008000" }
 
 # Buffer manager specific
 bufferManagerActive = { fg = "#008000" }
