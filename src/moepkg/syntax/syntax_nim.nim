@@ -215,34 +215,36 @@ proc nimNextToken*(g: var GeneralTokenizer) =
   var pos = g.pos
   g.start = g.pos
   if g.state == gtStringLit:
-    g.kind = gtStringLit
-    while true:
+    if g.buf[pos] == '\\':
+      g.kind = gtEscapeSequence
+      inc(pos)
       case g.buf[pos]
-      of '\\':
-        g.kind = gtEscapeSequence
+      of 'x', 'X':
         inc(pos)
-        case g.buf[pos]
-        of 'x', 'X':
+        if g.buf[pos] in HexChars:
           inc(pos)
-          if g.buf[pos] in HexChars:
-            inc(pos)
-        of '0' .. '9':
-          while g.buf[pos] in {'0' .. '9'}:
-            inc(pos)
-        of '\0':
-          g.state = gtNone
-        else:
+      of '0' .. '9':
+        while g.buf[pos] in {'0' .. '9'}:
           inc(pos)
-        break
-      of '\0', '\x0D', '\x0A':
+      of '\0':
         g.state = gtNone
-        break
-      of '\"':
-        inc(pos)
-        g.state = gtNone
-        break
       else:
         inc(pos)
+    else:
+      g.kind = gtStringLit
+      while true:
+        case g.buf[pos]
+        of '\0', '\x0D', '\x0A':
+          g.state = gtNone
+          break
+        of '\"':
+          inc(pos)
+          g.state = gtNone
+          break
+        of '\\':
+          break
+        else:
+          inc(pos)
   elif g.state == gtLongStringLit:
     if g.buf[pos] == '\0':
       g.kind = gtEof

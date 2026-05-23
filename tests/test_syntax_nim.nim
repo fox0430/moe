@@ -1384,6 +1384,61 @@ suite "syntax_nim - nimNextToken string continuation":
     g.nimNextToken() # "
     check g.kind == gtStringLit
 
+  test "text between two escapes is classified as string":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"abc\\\"def\\\"ghi\"")
+
+    g.nimNextToken() # "abc
+    check g.kind == gtStringLit
+    check g.length == 4
+    check g.state == gtStringLit
+
+    g.nimNextToken() # \"
+    check g.kind == gtEscapeSequence
+    check g.length == 2
+    check g.state == gtStringLit
+
+    g.nimNextToken() # def — must be gtStringLit, not gtEscapeSequence
+    check g.kind == gtStringLit
+    check g.length == 3
+    check g.state == gtStringLit
+
+    g.nimNextToken() # \"
+    check g.kind == gtEscapeSequence
+    check g.length == 2
+    check g.state == gtStringLit
+
+    g.nimNextToken() # ghi"
+    check g.kind == gtStringLit
+    check g.length == 4
+    check g.state == gtNone
+
+  test "escaped quotes do not break highlighting":
+    # Regression: previously, characters between two \" escapes were
+    # mis-tagged as gtEscapeSequence, breaking string highlighting after \"
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(
+      "\"string color (\\\"#RRGGBB\\\" hex or \\\"termDefault\\\")\""
+    )
+
+    var tokens: seq[(TokenClass, int)] = @[]
+    while true:
+      g.nimNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add((g.kind, g.length))
+
+    # Every token must be either gtStringLit or gtEscapeSequence
+    for (kind, _) in tokens:
+      check kind in {gtStringLit, gtEscapeSequence}
+
+    # There should be exactly 4 escape sequences (four \")
+    var escapeCount = 0
+    for (kind, _) in tokens:
+      if kind == gtEscapeSequence:
+        inc escapeCount
+    check escapeCount == 4
+
 suite "syntax_nim - nimNextToken special operator cases":
   test "asterisk followed by open paren":
     var g: GeneralTokenizer
