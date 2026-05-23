@@ -171,6 +171,28 @@ proc halfPageDown*(state: HelpViewerState, viewportHeight: int) =
   if state.lines.len > 0:
     state.selectedIndex = min(state.lines.high, state.selectedIndex + halfPage)
 
+proc isSectionHeader(line: string): bool {.inline.} =
+  # Top-level section header in HelpSentences ("# Heading").
+  # `##` sub-sections are intentionally excluded so [/] step through
+  # the top-level structure only.
+  line.startsWith("# ")
+
+proc moveToNextSection*(state: HelpViewerState) =
+  ## Jump to the next top-level "# " section header.
+  ## Stays put if no further section exists.
+  for i in (state.selectedIndex + 1) ..< state.lines.len:
+    if state.lines[i].isSectionHeader:
+      state.selectedIndex = i
+      return
+
+proc moveToPreviousSection*(state: HelpViewerState) =
+  ## Jump to the previous top-level "# " section header.
+  ## Stays put if no earlier section exists.
+  for i in countdown(state.selectedIndex - 1, 0):
+    if state.lines[i].isSectionHeader:
+      state.selectedIndex = i
+      return
+
 proc ensureSelectedVisible*(state: HelpViewerState, viewportHeight: int) =
   ## Ensure the selected line is visible in the viewport
   # Adjust topLine to keep selected line visible
