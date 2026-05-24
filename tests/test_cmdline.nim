@@ -17,9 +17,10 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils]
+import std/[options, unittest, strutils]
 
 import ../src/moepkg/cmdline {.all.}
+import ../src/moepkg/config
 
 suite "cmdline - CmdLineConfig":
   test "default CmdLineConfig values":
@@ -27,6 +28,19 @@ suite "cmdline - CmdLineConfig":
     check config.debugEnabled == false
     check config.isReadonly == false
     check config.filePaths.len == 0
+    check config.bufferBackend.isNone
+
+suite "cmdline - parseBufferBackendArg":
+  test "auto":
+    check parseBufferBackendArg("auto") == bbcAuto
+  test "gapBuffer":
+    check parseBufferBackendArg("gapBuffer") == bbcGapBuffer
+  test "sqrtDecomp":
+    check parseBufferBackendArg("sqrtDecomp") == bbcSqrtDecomp
+  test "rope":
+    check parseBufferBackendArg("rope") == bbcRope
+  test "pieceTable":
+    check parseBufferBackendArg("pieceTable") == bbcPieceTable
 
 suite "cmdline - generateVersionInfoMessage":
   test "message contains moe version prefix":

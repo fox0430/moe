@@ -22,15 +22,17 @@
 ## This module handles parsing of command line arguments and provides
 ## configuration for the editor startup.
 
-import std/[os, strutils, terminal]
+import std/[options, os, strutils, terminal]
 
-import app_info
+import app_info, config
 
 type CmdLineConfig* = object ## Command line configuration
   debugEnabled*: bool ## Enable debug logging
   clearLog*: bool ## Clear existing log file on start
   isReadonly*: bool ## Open files in readonly mode
   filePaths*: seq[string] ## File paths to open (supports multiple files)
+  bufferBackend*: Option[BufferBackendConfig]
+    ## Override of the configured buffer backend. `none` keeps the TOML value.
 
 proc generateVersionInfoMessage(): string =
   const
@@ -52,11 +54,13 @@ Usage:
   moe [file]       Edit file
 
 Arguments:
-  -R               Readonly mode
-  -d, --debug      Enable debug logging
-  --clear-log      Clear existing debug log file on start
-  -h, --help       Print this help
-  -v, --version    Print version
+  -R                       Readonly mode
+  -d, --debug              Enable debug logging
+  --clear-log              Clear existing debug log file on start
+  --buffer-backend=<name>  Override buffer backend for this session
+                           (auto, gapBuffer, sqrtDecomp, rope, pieceTable)
+  -h, --help               Print this help
+  -v, --version            Print version
 """
 
   echo generateVersionInfoMessage() & "\n\n" & HelpMessage
@@ -69,6 +73,26 @@ proc showUnknownArgsError(arg: string) =
   echo """Please check "moe -h""""
   quit(1)
 
+proc parseBufferBackendArg(value: string): BufferBackendConfig =
+  case value
+  of "auto":
+    bbcAuto
+  of "gapBuffer":
+    bbcGapBuffer
+  of "sqrtDecomp":
+    bbcSqrtDecomp
+  of "rope":
+    bbcRope
+  of "pieceTable":
+    bbcPieceTable
+  else:
+    stderr.styledWriteLine(
+      ForegroundColor.fgRed,
+      "Error: Invalid value for --buffer-backend: \"" & value & "\"",
+    )
+    stderr.writeLine "Valid values: auto, gapBuffer, sqrtDecomp, rope, pieceTable"
+    quit(1)
+
 proc parseCmdLine*(): CmdLineConfig =
   ## Parse command line arguments and return configuration
   ##
@@ -80,7 +104,11 @@ proc parseCmdLine*(): CmdLineConfig =
   ##   if config.debugEnabled:
   ##     echo "Debug mode enabled"
   result = CmdLineConfig(
-    debugEnabled: false, clearLog: false, isReadonly: false, filePaths: @[]
+    debugEnabled: false,
+    clearLog: false,
+    isReadonly: false,
+    filePaths: @[],
+    bufferBackend: none(BufferBackendConfig),
   )
 
   for i in 1 .. paramCount():
@@ -97,7 +125,10 @@ proc parseCmdLine*(): CmdLineConfig =
     of "-R":
       result.isReadonly = true
     else:
-      if not arg.startsWith("-"):
+      if arg.startsWith("--buffer-backend="):
+        let value = arg["--buffer-backend=".len .. ^1]
+        result.bufferBackend = some(parseBufferBackendArg(value))
+      elif not arg.startsWith("-"):
         result.filePaths.add(arg)
       else:
         showUnknownArgsError(arg)

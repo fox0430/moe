@@ -291,6 +291,10 @@ proc main() =
     validationResult.addError("config", loadResult.error, "valid TOML file")
     editorConfig = newEditorConfig()
 
+  # Apply command-line overrides on top of the TOML-loaded config.
+  if cmdLineConfig.bufferBackend.isSome:
+    editorConfig.standard.bufferBackend = cmdLineConfig.bufferBackend.get
+
   # Initialize file logging system for debugging
   # clearOnStart is enabled if set via command line or config file
   let clearLog = cmdLineConfig.clearLog or editorConfig.log.clearOnStart
