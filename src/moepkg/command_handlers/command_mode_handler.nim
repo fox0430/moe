@@ -311,7 +311,9 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
       e.state.windowDisplay.needsFullRedraw = true
 
 proc enterTerminalInActiveWindow(e: Editor, command: string) =
-  ## Switch the active window to Terminal mode.
+  ## Open a new Terminal session as its own tab in the active window.
+  ## The session is tracked in `e.terminalStates` keyed by the buffer id
+  ## so the user can move between tabs without tearing down the PTY.
   let activeWin = e.activeWindow
   let (cols, rows) = e.calculateTerminalAreaDimensions(activeWin)
   let termResult = newTerminalState(command, cols, rows)
@@ -320,15 +322,19 @@ proc enterTerminalInActiveWindow(e: Editor, command: string) =
     return
 
   let termState = termResult.get
-  activeWin.saveOriginalBuffer()
+  let termBuf = newTextBuffer("")
+  termBuf.displayName = some("[Terminal: " & command & "]")
+
+  e.addBuffer(termBuf)
+  e.addBufferToWindowList(termBuf)
+  e.terminalStates[termBuf.id] = termState
+
+  activeWin.buffer = termBuf
   activeWin.modeState = ModeState(kind: mskTerminal, terminal: termState)
-  # Create a placeholder buffer (grid will be rendered directly)
-  activeWin.buffer = newTextBuffer("")
   activeWin.cursor = BufferPosition(line: 0, column: 0)
   activeWin.viewport.topLine = 0
   activeWin.viewport.leftColumn = 0
   e.setMode(EditorMode.Terminal)
-  activeWin.mode = EditorMode.Terminal
 
 proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool
 
@@ -587,16 +593,24 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
 
         # Save buffer ref before clearModeState restores originalBuffer
         let splitBuf = activeWin.buffer
-        activeWin.clearModeState(e.state.mode)
 
-        if not e.state.mode.isFileEditMode:
-          # For special modes with split windows, remove the temporary buffer
-          if e.windowManager.windows.len > 1:
-            let idx = e.bufferIndexById(splitBuf.id)
-            if idx >= 0:
-              evictGitCacheForBuffer(splitBuf)
-              e.deleteBufferAt(idx)
-              e.pruneBufferIdFromAllWindows(splitBuf.id)
+        if e.terminalStates.hasKey(splitBuf.id):
+          # Terminal tab: PTY lifecycle is owned by `e.terminalStates`.
+          # `clearModeState(Terminal)` would kill the PTY via cleanup() but
+          # leave the map entry behind, breaking the buffer-id invariant.
+          # Delegate to the dedicated path so both stay in sync.
+          e.closeTerminalBuffer(splitBuf.id)
+        else:
+          activeWin.clearModeState(e.state.mode)
+
+          if not e.state.mode.isFileEditMode:
+            # For special modes with split windows, remove the temporary buffer
+            if e.windowManager.windows.len > 1:
+              let idx = e.bufferIndexById(splitBuf.id)
+              if idx >= 0:
+                evictGitCacheForBuffer(splitBuf)
+                e.deleteBufferAt(idx)
+                e.pruneBufferIdFromAllWindows(splitBuf.id)
 
         # Reset mode before closing
         e.state.previousMode = EditorMode.Normal

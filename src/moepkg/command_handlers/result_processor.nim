@@ -139,10 +139,10 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     e.setMode(EditorMode.Normal)
     return true
   of hrTerminalQuit:
-    # Close terminal and return to Normal mode
-    e.activeWindow.clearModeState(EditorMode.Terminal)
-    e.activeWindow.mode = EditorMode.Normal
-    e.setMode(EditorMode.Normal)
+    # Close the Terminal tab in the active window. closeTerminalBuffer
+    # picks a successor tab (or spawns a No Name buffer) and resets the
+    # window's mode to Normal.
+    e.closeTerminalBuffer(e.activeWindow.buffer.id)
     return true
   of hrFileTreeOpenFile:
     # Open file from file tree in the first non-FileTree window.

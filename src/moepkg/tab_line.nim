@@ -46,12 +46,25 @@ proc getCurrentTabStyle(): Style =
 
 proc buildTabText(buf: TextBuffer): string =
   ## Build the display text for a single tab
-  ## Format: " filename[+] " where [+] indicates modified
-  ## Always shows the buffer's filename regardless of editor mode.
+  ## Format: " filename[+] " where [+] indicates modified.
+  ## Buffers with `displayName` set (e.g. Terminal) use that label instead
+  ## of the filename, and never show the modified mark.
 
   let
-    name = if buf.filePath.isSome: buf.filePath.get.extractFilename else: "No Name"
-    modMark = if buf.isModified: "[+]" else: ""
+    name =
+      if buf.displayName.isSome:
+        buf.displayName.get
+      elif buf.filePath.isSome:
+        buf.filePath.get.extractFilename
+      else:
+        "No Name"
+    modMark =
+      if buf.displayName.isSome:
+        ""
+      elif buf.isModified:
+        "[+]"
+      else:
+        ""
 
   return " " & name & modMark & " "
 

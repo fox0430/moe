@@ -69,6 +69,11 @@ type
     cursorPositions*: Table[string, CursorPositionEntry]
     savedBookmarks*: Table[string, seq[int]]
     runningBackgroundProcesses*: seq[BackgroundProcess]
+    terminalStates*: Table[BufferId, TerminalState]
+      ## Live Terminal sessions keyed by their buffer id. The window's
+      ## `modeState` is rebuilt from this table on tab switches so a
+      ## terminal can be backgrounded by moving to another tab and resumed
+      ## later.
 
   RenderContext* = object
     ## Context for rendering operations to reduce parameter passing
