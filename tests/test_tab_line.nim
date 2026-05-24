@@ -176,6 +176,18 @@ suite "TabLine - buildTabText":
     let text = buildTabText(buf)
     check text == " file.txt "
 
+  test "displayName overrides filename":
+    let buf = createTestTextBuffer("/path/to/file.nim")
+    buf.displayName = some("[Terminal: bash]")
+    let text = buildTabText(buf)
+    check text == " [Terminal: bash] "
+
+  test "displayName suppresses modified marker":
+    let buf = createTestTextBuffer("/path/to/file.nim", modified = true)
+    buf.displayName = some("[Terminal: htop]")
+    let text = buildTabText(buf)
+    check text == " [Terminal: htop] "
+
 suite "TabLine - renderTabLine":
   test "Does nothing when showTabLine is false":
     var displayBuffer = createTestBuffer()

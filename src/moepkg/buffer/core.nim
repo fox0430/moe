@@ -169,6 +169,9 @@ type
     id*: BufferId # Unique buffer identifier
     backend*: BufferBackend
     filePath*: Option[string]
+    displayName*: Option[string]
+      # Overrides the tab label when set (used for Terminal buffers, etc.).
+      # Skips the `[+]` modified mark.
     readOnly*: bool
     isUtilityBuffer*: bool # Utility buffers (jumplist, log, etc.) disable decorations
     lineEnding*: LineEnding

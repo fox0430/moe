@@ -41,7 +41,7 @@ proc pollTerminalWindows*(e: Editor) =
   ## Poll PTY output for all windows in Terminal mode.
   ## Called on every render frame to ensure terminal output is up-to-date.
   ## Also handles automatic cleanup when the shell process exits.
-  for i, window in e.windowManager.windows:
+  for window in e.windowManager.windows:
     if window.mode == EditorMode.Terminal and window.modeState.kind == mskTerminal:
       let termState = window.modeState.terminal
       if termState.subMode == tsmInput:
@@ -58,31 +58,43 @@ proc pollTerminalWindows*(e: Editor) =
 
         if termState.exitCode.isSome:
           if termState.command.len > 0:
-            # Command mode (e.g. `:terminal ls`): show output in scrollback view
+            # Command mode (e.g. `:terminal ls`): swap the live terminal
+            # buffer for its scrollback snapshot, keeping the tab slot
+            # and the `terminalStates` association intact so `:q` can
+            # close it through the normal Terminal path.
+            let oldBufId = window.buffer.id
             let snapshot = termState.enterNormalSubMode()
-            window.buffer = snapshot
+            snapshot.displayName = some(
+              "[Terminal: " & termState.command & "] (done: " & $termState.exitCode.get &
+                ")"
+            )
+            e.addBuffer(snapshot)
+            for w in e.windowManager.windows:
+              for j in 0 ..< w.bufferIds.len:
+                if w.bufferIds[j] == oldBufId:
+                  w.bufferIds[j] = snapshot.id
+              # Repoint any other window also displaying the dead terminal
+              # buffer at the snapshot, so its `.buffer` ref doesn't dangle
+              # after `deleteBufferAt` evicts the old id from `bufferIdIndex`.
+              if w.buffer != nil and w.buffer.id == oldBufId:
+                w.buffer = snapshot
+            if e.terminalStates.hasKey(oldBufId):
+              e.terminalStates[snapshot.id] = e.terminalStates[oldBufId]
+              e.terminalStates.del(oldBufId)
+            let oldIdx = e.bufferIndexById(oldBufId)
+            if oldIdx >= 0:
+              e.deleteBufferAt(oldIdx)
+            # `window.mode` / `window.modeState` are left as-is on purpose:
+            # they keep pointing to the same `TerminalState` object (only its
+            # `terminalStates` key changed), and `subMode == tsmNormal` is
+            # what flips the renderer over to the scrollback snapshot — the
+            # `tsmInput` guard at the top of pollTerminalWindows prevents
+            # this branch from re-running against the now-static snapshot.
             window.cursor = BufferPosition(line: max(0, snapshot.len - 1), column: 0)
             window.viewport.topLine = max(0, snapshot.len - window.viewport.height)
           else:
-            # Interactive shell (`:terminal`): close terminal window
-            window.clearModeState(EditorMode.Terminal)
-            if e.windowManager.windows.len > 1:
-              # Multiple windows: close the terminal window
-              let origActive = e.windowManager.activeWindowIndex
-              e.windowManager.activeWindowIndex = i
-              discard e.windowManager.closeWindow(e.state.display.multiStatusLine)
-              if origActive != i:
-                e.windowManager.activeWindowIndex =
-                  if origActive > i:
-                    origActive - 1
-                  else:
-                    origActive
-              e.syncActiveWindow()
-              e.setMode(e.activeWindow.mode)
-            else:
-              # Last window: return to Normal mode
-              window.mode = EditorMode.Normal
-              e.setMode(EditorMode.Normal)
+            # Interactive shell (`:terminal`): tear down the tab.
+            e.closeTerminalBuffer(window.buffer.id)
           e.state.windowDisplay.needsFullRedraw = true
           return
 
