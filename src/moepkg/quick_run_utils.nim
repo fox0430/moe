@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, strformat, options]
+import std/[os, strformat, options, strutils]
 
 import pkg/[results, chronos]
 
@@ -58,6 +58,47 @@ proc isSh(buffer: TextBuffer): bool {.inline.} =
     let firstLine = buffer.getLine(0)
     return firstLine == "#!/bin/sh"
   return false
+
+proc parseShebang(buffer: TextBuffer): Option[BackgroundProcessCommand] =
+  ## Parse a shebang line and return the interpreter command (without
+  ## appending the script path — the caller is responsible for that).
+  ## Handles ``/usr/bin/env <cmd> [args...]`` and ``#!<cmd> [args...]``.
+  if buffer.len == 0:
+    return none(BackgroundProcessCommand)
+
+  let firstLine = buffer.getLine(0)
+  if not firstLine.startsWith("#!"):
+    return none(BackgroundProcessCommand)
+
+  let rest = firstLine[2 .. ^1].strip()
+  if rest.len == 0:
+    return none(BackgroundProcessCommand)
+
+  let parts = rest.splitWhitespace()
+  if parts.len == 0:
+    return none(BackgroundProcessCommand)
+
+  var cmd: string
+  var args: seq[string]
+
+  if parts[0].extractFilename == "env" and parts.len >= 2:
+    # "#!/usr/bin/env python3 -u" → cmd="python3", args=["-u"]
+    cmd = parts[1]
+    if parts.len >= 3:
+      args.add parts[2 .. ^1]
+  else:
+    cmd = parts[0]
+    if parts.len >= 2:
+      args.add parts[1 .. ^1]
+
+  return some(BackgroundProcessCommand(cmd: cmd, args: args))
+
+proc shebangQuickRunCommand(
+    path: string, shebang: BackgroundProcessCommand
+): BackgroundProcessCommand =
+  var args = shebang.args
+  args.add path
+  BackgroundProcessCommand(cmd: shebang.cmd, args: args)
 
 proc nimQuickRunCommand(
     path: string, settings: QuickRunConfig
@@ -169,8 +210,12 @@ proc quickRunCommand(
   of SourceLanguage.langRust:
     command = rustQuickRunCommand(path, settings)
   else:
-    return
-      Result[BackgroundProcessCommand, string].err "Unsupported language for QuickRun"
+    let shebang = parseShebang(buffer)
+    if shebang.isSome:
+      command = shebangQuickRunCommand(path, shebang.get)
+    else:
+      return
+        Result[BackgroundProcessCommand, string].err "Unsupported language for QuickRun"
 
   return Result[BackgroundProcessCommand, string].ok command
 

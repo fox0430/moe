@@ -91,6 +91,107 @@ suite "QuickRunUtils - isSh":
     var buffer = newTextBuffer("")
     check buffer.isSh == false
 
+suite "QuickRunUtils - parseShebang":
+  test "Empty buffer returns none":
+    var buffer = newTextBuffer("")
+    check buffer.parseShebang.isNone
+
+  test "Buffer without shebang returns none":
+    var buffer = newTextBuffer("echo hello")
+    check buffer.parseShebang.isNone
+
+  test "Shebang with only #! returns none":
+    var buffer = newTextBuffer("#!\necho hello")
+    check buffer.parseShebang.isNone
+
+  test "Direct interpreter path":
+    var buffer = newTextBuffer("#!/bin/bash\necho hello")
+    let r = buffer.parseShebang
+    check r.isSome
+    check r.get.cmd == "/bin/bash"
+    check r.get.args.len == 0
+
+  test "Direct interpreter with args":
+    var buffer = newTextBuffer("#!/bin/bash -x\necho hello")
+    let r = buffer.parseShebang
+    check r.isSome
+    check r.get.cmd == "/bin/bash"
+    check r.get.args == @["-x"]
+
+  test "env-style python3":
+    var buffer = newTextBuffer("#!/usr/bin/env python3\nprint('x')")
+    let r = buffer.parseShebang
+    check r.isSome
+    check r.get.cmd == "python3"
+    check r.get.args.len == 0
+
+  test "env-style with args":
+    var buffer = newTextBuffer("#!/usr/bin/env python3 -u\nprint('x')")
+    let r = buffer.parseShebang
+    check r.isSome
+    check r.get.cmd == "python3"
+    check r.get.args == @["-u"]
+
+  test "env-style with only env returns none-ish (env alone)":
+    # "#!/usr/bin/env" with no following command should be treated as no shebang
+    var buffer = newTextBuffer("#!/usr/bin/env\n")
+    let r = buffer.parseShebang
+    check r.isSome
+    check r.get.cmd == "/usr/bin/env"
+
+  test "Shebang with leading spaces":
+    var buffer = newTextBuffer("#!   /bin/sh\necho hello")
+    let r = buffer.parseShebang
+    check r.isSome
+    check r.get.cmd == "/bin/sh"
+
+  test "perl interpreter":
+    var buffer = newTextBuffer("#!/usr/bin/perl\nprint \"hi\\n\";")
+    let r = buffer.parseShebang
+    check r.isSome
+    check r.get.cmd == "/usr/bin/perl"
+
+  test "Shebang with only whitespace returns none":
+    var buffer = newTextBuffer("#!   \t  \necho hello")
+    check buffer.parseShebang.isNone
+
+  test "Shebang with shell metachars is passed as opaque argv (no injection)":
+    # startProcess uses fork+exec (no shell), so these characters end up as
+    # literal bytes in the command name — they cannot inject commands.
+    var buffer = newTextBuffer("#!/bin/sh; rm -rf /\n")
+    let r = buffer.parseShebang
+    check r.isSome
+    # The whole token is taken verbatim as cmd; whitespace is the only splitter.
+    check r.get.cmd == "/bin/sh;"
+    check r.get.args == @["rm", "-rf", "/"]
+
+  test "Shebang with command substitution is passed verbatim":
+    var buffer = newTextBuffer("#!$(rm -rf /)\n")
+    let r = buffer.parseShebang
+    check r.isSome
+    check r.get.cmd == "$(rm"
+
+  test "Shebang with backticks is passed verbatim":
+    var buffer = newTextBuffer("#!`rm -rf /`\n")
+    let r = buffer.parseShebang
+    check r.isSome
+    check r.get.cmd == "`rm"
+
+  test "Relative interpreter name (PATH lookup)":
+    var buffer = newTextBuffer("#!python3\nprint('x')\n")
+    let r = buffer.parseShebang
+    check r.isSome
+    check r.get.cmd == "python3"
+
+  test "env with no interpreter falls back to /usr/bin/env itself":
+    # Documented behaviour: a lone "/usr/bin/env" shebang is rare but valid in
+    # the sense that it gets executed as the command.
+    var buffer = newTextBuffer("#!/usr/bin/env\n")
+    let r = buffer.parseShebang
+    check r.isSome
+    check r.get.cmd == "/usr/bin/env"
+    check r.get.args.len == 0
+
 suite "QuickRunUtils - nimQuickRunCommand":
   test "Basic nim command":
     let settings =
@@ -280,6 +381,35 @@ suite "QuickRunUtils - quickRunCommand":
     let settings = QuickRunConfig()
     let result =
       quickRunCommand("/path/to/file.html", SourceLanguage.langHtml, buffer, settings)
+    check result.isErr
+    check "Unsupported language" in result.error
+
+  test "Unsupported language falls back to shebang (python via env)":
+    var buffer = newTextBuffer("#!/usr/bin/env python3\nprint('x')")
+    buffer.language = SourceLanguage.langNone
+    let settings = QuickRunConfig()
+    let result =
+      quickRunCommand("/path/to/script", SourceLanguage.langNone, buffer, settings)
+    check result.isOk
+    check result.get.cmd == "python3"
+    check result.get.args == @["/path/to/script"]
+
+  test "Unsupported language falls back to shebang (perl direct)":
+    var buffer = newTextBuffer("#!/usr/bin/perl -w\nprint \"x\\n\";")
+    buffer.language = SourceLanguage.langNone
+    let settings = QuickRunConfig()
+    let result =
+      quickRunCommand("/path/to/script.pl", SourceLanguage.langNone, buffer, settings)
+    check result.isOk
+    check result.get.cmd == "/usr/bin/perl"
+    check result.get.args == @["-w", "/path/to/script.pl"]
+
+  test "Unsupported language without shebang still errors":
+    var buffer = newTextBuffer("just text")
+    buffer.language = SourceLanguage.langNone
+    let settings = QuickRunConfig()
+    let result =
+      quickRunCommand("/path/to/file", SourceLanguage.langNone, buffer, settings)
     check result.isErr
     check "Unsupported language" in result.error
 
