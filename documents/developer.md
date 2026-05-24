@@ -1,62 +1,146 @@
 # Developer documentation
 
-## How to debug moe 
+This document describes how to build, test, debug, and contribute to moe.
 
-### Using logger
-You can use the logger.
-Log files are written to the temp dir (`/tmp/moe/logs`).
-You have to import `srd/logger`.
-
-Example
-
-```Nim
-import std/[os, times, logging]
-import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop]
-
-##### Important #####
-import std/logging
-
-.
-.
-.
-
-proc initEditor(): EditorStatus =
-  let parsedList = parseCommandLineOption(commandLineParams())
-
-  defer: exitUi()
-
-  startUi()
-
-  ##### Important! #####
-  debug "debug"
-
-  result = initEditorStatus()
-  result.loadConfigurationFile
-  result.timeConfFileLastReloaded = now()
-  result.changeTheme
-```
+## Source layout
 
 ```
-cat /tmp/moe/logs/2023-10-24T05:42:17+09:00/moe.log
-DEBUG debug
+src/
+  moe.nim              # Entry point (main loop, command-line arg handling)
+  moepkg/              # Editor implementation
+    logger.nim         # File-based debug logger
+    message_log.nim    # In-memory message / LSP message log
+    cmdline.nim        # Command-line argument parsing
+    command_handlers/  # Command-mode dispatchers
+    config/            # Config file loading
+    ...
+tests/                 # std/unittest test suites (test_<module>.nim)
+tools/                 # Build/test helpers, doc generators
+documents/             # User and developer documentation
+example/               # Sample configs and themes
 ```
 
-### Using log viewer
-You can use the log in moe. 
-This is not written to a file.
+## Building
 
-Example
-
-```Nim
-proc normalMode*(status: var EditorStatus) =
-  if not status.settings.disableChangeCursor:
-    changeCursorType(status.settings.normalModeCursor)
-
-  ##### Write to log #####
-  status.messageLog.add(($status.settings.normalModeCursor).toRunes)
+```sh
+nimble build           # Default build
+nimble release         # Optimized release build (-d:release)
+nimble debug           # Debug build (--debugger:native, -d:debug)
 ```
 
-You can check log in Log viewer (```:log``` command).
+The resulting binary is `./moe`.
 
-## Debug mode
-moe is build in Debug mode. Debug mode can be start with ```:debug``` command.
+## Running tests
+
+Use the parallel test runner; `nimble test` is **not** the recommended path because it runs serially.
+
+```sh
+nimble ptest           # Run all tests in parallel (default: 4 jobs)
+nimble ptest 8         # Override job count
+```
+
+Environment variables understood by the runner (`tools/paralleltest.nim`):
+
+| Variable             | Purpose                                            |
+|----------------------|----------------------------------------------------|
+| `MOE_TEST_JOBS`      | Parallel job count (default: 4)                    |
+| `MOE_TEST_TIMEOUT`   | Per-file timeout in seconds (default: 120, 0 off)  |
+
+Test files live under `tests/` and follow the `test_<module>.nim` naming convention. They use `std/unittest` (`suite` / `test` / `check`) and are compiled with the chronos async backend (`tests/config.nims` sets `-d:asyncBackend=chronos`).
+
+For async tests, define an inner `proc runTest(): Future[T] {.async.}` and drive it with `waitFor`.
+
+## Code formatting
+
+The repository is formatted with [`nph`](https://github.com/arnetheduck/nph). CI fails if `src/` or `tests/` is not formatted:
+
+```sh
+nph src/ tests/
+```
+
+## Debug logging
+
+moe ships with a thread-safe file logger (`src/moepkg/logger.nim`) that writes to a log file *outside* the TUI so it does not corrupt the screen.
+
+### Enabling the logger
+
+Logging is **off by default**. Enable it with a command-line flag:
+
+```sh
+moe -d                 # or --debug
+moe --debug --clear-log    # Also truncate the existing log file on start
+```
+
+Or set it in the config file:
+
+```toml
+[Log]
+clearOnStart = true    # Truncate log file when starting in debug mode
+```
+
+### Log file location
+
+- Primary: `./moe-debug.log` (current working directory)
+- Fallback: `/tmp/moe-debug.log` (used if the primary path is not writable)
+
+### Writing log entries
+
+`logger.nim` exposes a global logger and four convenience procs. Import it directly — do *not* use `std/logging`.
+
+```nim
+import moepkg/logger
+
+logDebug("mymodule", "entering foo()")
+logInfo("mymodule",  "loaded config from " & path)
+logWarn("mymodule",  "fallback theme in use")
+logError("mymodule", "request failed: " & err.msg)
+```
+
+Each entry is written as:
+
+```
+[2026-05-24 12:34:56] [DEBUG] [mymodule] entering foo()
+```
+
+The convenience procs are `gcsafe` and have `raises: []`, so they are safe to call from async handlers and `proc` bodies that disallow exceptions.
+
+## In-editor log viewers
+
+Some information is kept only in memory (it is not flushed to disk) and is viewed through editor commands.
+
+### `:log` / `:messages` — editor message log
+
+Stores command-line messages (errors, save notifications, etc.) emitted by `addMessageLog` (`src/moepkg/message_log.nim`). Use this to recover a message that disappeared from the command line too quickly to read.
+
+```nim
+import moepkg/message_log
+
+addMessageLog("saved: " & path)
+```
+
+### `:lsplog` — LSP message log
+
+Same mechanism as `:log` but scoped to LSP traffic. Populate it with `addLspMessageLog`.
+
+### `:debug` — debug viewer
+
+Opens a vertical split with a live (~500 ms refresh) dump of internal editor state: active window node, buffer status, search state, macro state, visual selection, jump list, and LSP state.
+
+Which sections are shown is controlled by the `[Debug.*]` tables in `moerc.toml`. See `example/moerc.toml` for the full list of toggles (`Debug.WindowNode`, `Debug.EditorView`, `Debug.BufferStatus`, `Debug.Search`, `Debug.MacroState`, `Debug.Visual`, `Debug.JumpList`, `Debug.Lsp`).
+
+## Documentation generators
+
+Parts of `documents/` are auto-generated from source. Regenerate them after changing config options or commands:
+
+```sh
+nimble gendocs         # Both config and howtouse
+nimble genhowtouse     # Just documents/howtouse.md
+```
+
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome. Before opening a PR:
+
+1. Run `nimble ptest` locally and make sure it passes.
+2. Run `nph ./` so the formatting check passes in CI.
+3. If you changed config keys or commands, run `nimble gendocs` and commit the generated `documents/*.md` updates.
