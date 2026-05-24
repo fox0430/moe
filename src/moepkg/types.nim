@@ -233,6 +233,7 @@ type
     softTabStop*: int # Tab/Backspace width in insert mode, 0 = use tabStop
     expandTab*: bool # Insert spaces instead of tab character
     autoIndent*: bool # Automatically indent new lines
+    smartIndent*: bool # Language-aware extra indent on Enter (currently Nim)
     autoCloseParen*: bool # Automatically insert closing parenthesis/bracket/quote
     autoDeleteParen*: bool # Automatically delete matching parenthesis
     bracketSplit*: BracketSplitMode

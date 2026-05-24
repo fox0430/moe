@@ -753,6 +753,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         softTabStop: editorConfig.standard.softTabStop,
         expandTab: editorConfig.standard.expandTab,
         autoIndent: editorConfig.standard.autoIndent,
+        smartIndent: editorConfig.standard.smartIndent,
         autoCloseParen: editorConfig.standard.autoCloseParen,
         autoDeleteParen: editorConfig.standard.autoDeleteParen,
         bracketSplit: editorConfig.standard.bracketSplit,
@@ -1100,6 +1101,7 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   e.state.display.softTabStop = newConfig.standard.softTabStop
   e.state.display.expandTab = newConfig.standard.expandTab
   e.state.display.autoIndent = newConfig.standard.autoIndent
+  e.state.display.smartIndent = newConfig.standard.smartIndent
   e.state.display.autoCloseParen = newConfig.standard.autoCloseParen
   e.state.display.autoDeleteParen = newConfig.standard.autoDeleteParen
   e.state.display.bracketSplit = newConfig.standard.bracketSplit
