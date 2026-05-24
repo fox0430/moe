@@ -523,9 +523,11 @@ suite "HelpViewer - Command mode rendering (snapshot)":
 
   test "head group 5 (theme/noh/stripwhitespace) is aligned to width 15":
     let state = newHelpViewerState()
-    check state.lines.contains(
-      "theme themeName - Change color theme; for example theme dark"
-    )
+    # `description` is a structured `Description` with inline-code
+    # segments for the howtouse.md renderer; `toPlainText` strips the
+    # code-span markers before the TUI sees the line, so the rendered
+    # prose has no `` ` `` glyphs.
+    check state.lines.contains("theme themeName - Change color theme; e.g. theme dark")
     check state.lines.contains("noh             - Turn off search highlights")
     check state.lines.contains("stripwhitespace - Delete trailing spaces")
 
@@ -545,7 +547,7 @@ suite "HelpViewer - Command mode rendering (snapshot)":
     )
     # Longest entry sets the width; only one space before the dash.
     check state.lines.contains(
-      "set highlightgitconflicttwocolor / set nohighlightgitconflicttwocolor (hgctc/nohgctc) - Use two-color (ours/theirs) conflict scheme"
+      "set highlightgitconflicttwocolor / set nohighlightgitconflicttwocolor (hgctc/nohgctc) - Use two-color (ours/theirs) conflict scheme; disable for single-color fallback"
     )
 
   test "value set options block is aligned to its own widest entry":
@@ -554,7 +556,7 @@ suite "HelpViewer - Command mode rendering (snapshot)":
     # feeds the executeSet error messages — so they say "scrollbarwidth=1" /
     # "tabstop=4" instead of the older help-only "=2").
     check state.lines.contains(
-      "set scrollbarwidth=number       - Change scrollbar width; e.g. set scrollbarwidth=1"
+      "set scrollbarwidth=number       - Change scrollbar width (0 = hidden); e.g. set scrollbarwidth=1"
     )
     check state.lines.contains(
       "set tabstop=number (ts)         - Change tab stop width; e.g. set tabstop=4"
@@ -621,7 +623,7 @@ suite "HelpViewer - Mode sections (snapshot)":
     check state.lines.contains("# Exiting")
     check state.lines.contains(":w    - Write file")
     check state.lines.contains(":q    - Quit")
-    check state.lines.contains(":wqa! - Force quit all windows")
+    check state.lines.contains(":wqa! - Force write and quit all windows")
     check state.lines.contains(":cq   - Quit with non-zero exit code")
 
   test "# Changing modes section is aligned to width 6":
@@ -700,12 +702,22 @@ suite "HelpViewer - Mode sections (snapshot)":
     check state.lines.contains("D  - Delete file")
     check state.lines.contains("v  - Split window and open file or directory")
 
-  test "# Register section lists patterns verbatim (no key/desc form)":
+  test "# Register section uses the kbd-group syntax + description form":
+    # The widest entry is `" any cl or " any s` (19 chars), which sets the
+    # alignment for the entire group. Switching from the old hyphen-only
+    # `seq[string]` to a `HelpGroup` means each row now renders as
+    # `syntax  - description`, consistent with every other mode section.
     let state = newHelpViewerState()
     check state.lines.contains("# Register")
-    check state.lines.contains("\"-any key-yy")
-    check state.lines.contains("\"-any key-di-any key")
-    check state.lines.contains("\"-any key-ci-any key")
+    check state.lines.contains(
+      "\" any yy".alignLeft(19) & " - Yank a line to a named register"
+    )
+    check state.lines.contains(
+      "\" any di any".alignLeft(19) & " - Delete inside to a named register"
+    )
+    check state.lines.contains(
+      "\" any cl or \" any s - Change a character to a named register"
+    )
 
   test "# Terminal mode section has both sub-mode headers":
     let state = newHelpViewerState()

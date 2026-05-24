@@ -27,6 +27,10 @@
 ## Adding a new `:set xxx` option means appending one entry here. No other
 ## file needs to be updated.
 
+import help_description
+
+descriptionFromStringConverter()
+
 type
   BoolSettingOption* = enum
     ## Boolean setting options that can be toggled via `:set` command.
@@ -89,10 +93,16 @@ type
   SetOptionSpec* = object
     longName*: string
     shortName*: string ## "" if no short alias
-    description*: string
+    description*: Description
       ## Combined "Show/hide …" / "Enable/disable …" wording, used by both
       ## the help text and the completion popup. Bool toggles share this
       ## single string for positive and negative forms.
+      ##
+      ## A `string → Description` converter in `help_description.nim`
+      ## parses markdown backticks (e.g. `` `#RRGGBB` ``) into code
+      ## segments at construction time, so plain-string literals here
+      ## still compile. Renderers pick `toPlainText` or `toMarkdownCell`
+      ## per their output format.
     case kind*: SetOptionKind
     of sokBool:
       boolOption*: BoolSettingOption
@@ -243,21 +253,24 @@ const SetOptionTable*: seq[SetOptionSpec] = @[
   SetOptionSpec(
     longName: "highlightcolorcode",
     shortName: "hcc",
-    description: "Highlight inline color codes",
+    description:
+      "Highlight inline color codes (`#RRGGBB`, `#RGB`) with their actual color",
     kind: sokBool,
     boolOption: bsoHighlightColorCode,
   ),
   SetOptionSpec(
     longName: "highlightgitconflict",
     shortName: "hgc",
-    description: "Highlight git merge conflict blocks",
+    description:
+      "Highlight git merge conflict blocks (`<<<<<<<` / `=======` / `>>>>>>>`)",
     kind: sokBool,
     boolOption: bsoHighlightGitConflict,
   ),
   SetOptionSpec(
     longName: "highlightgitconflicttwocolor",
     shortName: "hgctc",
-    description: "Use two-color (ours/theirs) conflict scheme",
+    description:
+      "Use two-color (ours/theirs) conflict scheme; disable for single-color fallback",
     kind: sokBool,
     boolOption: bsoHighlightGitConflictTwoColor,
   ),
@@ -334,7 +347,7 @@ const SetOptionTable*: seq[SetOptionSpec] = @[
   SetOptionSpec(
     longName: "scrollbarwidth",
     shortName: "",
-    description: "Change scrollbar width",
+    description: "Change scrollbar width (0 = hidden)",
     kind: sokInt,
     intOption: isoScrollbarWidth,
     intBound: ibNonNegative,

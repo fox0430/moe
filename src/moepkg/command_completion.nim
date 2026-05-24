@@ -26,7 +26,9 @@ import std/[algorithm, strutils, unicode, tables, os]
 
 import pkg/celina
 
-import command_line, command_line_commands, fuzzy_match, setting_options, unicode_utils
+import
+  command_line, command_line_commands, fuzzy_match, help_description, setting_options,
+  unicode_utils
 
 type
   CommandCompletionState* = enum
@@ -92,19 +94,25 @@ const FilePathCommands*: seq[string] = block:
 # truth. Bool toggles map both positive and negative names to the same
 # combined description ("Show/hide line numbers"); value options append the
 # inline example (e.g., "tabstop=4") so users see the value syntax.
+#
+# `spec.description` is a structured `Description` (text + inline-code
+# segments). The completion popup paints descriptions to the terminal
+# verbatim, so render via `toPlainText` to drop the code-span markers
+# that `help_markdown.nim` uses for the howtouse.md tables.
 const SetOptions*: Table[string, string] = block:
   var t: Table[string, string]
   for spec in SetOptionTable:
+    let desc = toPlainText(spec.description)
     case spec.kind
     of sokBool:
-      t[spec.longName] = spec.description
-      t["no" & spec.longName] = spec.description
+      t[spec.longName] = desc
+      t["no" & spec.longName] = desc
     of sokInt:
       t[spec.longName] =
-        spec.description & " (e.g., " & spec.longName & "=" & $spec.intExample & ")"
+        desc & " (e.g., " & spec.longName & "=" & $spec.intExample & ")"
     of sokFloat:
       t[spec.longName] =
-        spec.description & " (e.g., " & spec.longName & "=" & $spec.floatExample & ")"
+        desc & " (e.g., " & spec.longName & "=" & $spec.floatExample & ")"
   t
 
 # Command collection

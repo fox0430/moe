@@ -32,13 +32,19 @@
 
 import std/[options, tables]
 
-import command_line/types
+import command_line/types, help_description
+
+descriptionFromStringConverter()
 
 type
   HelpEntry* = object ## A single line in the help text.
     syntax*: string
       ## Left of the dash, e.g. `":w"`, `"e filename"`, `"%s/keyword1/keyword2/"`.
-    description*: string ## Right of the dash.
+    description*: Description
+      ## Right of the dash. A `string → Description` converter in
+      ## `help_description.nim` parses markdown backticks into code
+      ## segments at construction time, so plain-string literals here
+      ## still compile.
 
   CommandLineCommandSpec* = object
     name*: string
@@ -95,7 +101,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   CommandLineCommandSpec(
     name: "qa",
     completionDescription: "Quit all windows",
-    helpEntries: @[],
+    helpEntries: @[HelpEntry(syntax: ":qa", description: "Quit all windows")],
     action: some(claQuitAll),
     isCanonicalLong: false,
     keymapBaseDescription: "Quit all",
@@ -111,7 +117,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   CommandLineCommandSpec(
     name: "qa!",
     completionDescription: "",
-    helpEntries: @[HelpEntry(syntax: ":qa!", description: "Quit all windows")],
+    helpEntries: @[HelpEntry(syntax: ":qa!", description: "Force quit all windows")],
     action: none(CommandLineAction),
     isCanonicalLong: false,
   ),
@@ -219,7 +225,8 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   CommandLineCommandSpec(
     name: "wqa!",
     completionDescription: "",
-    helpEntries: @[HelpEntry(syntax: ":wqa!", description: "Force quit all windows")],
+    helpEntries:
+      @[HelpEntry(syntax: ":wqa!", description: "Force write and quit all windows")],
     action: none(CommandLineAction),
     isCanonicalLong: false,
   ),
@@ -547,11 +554,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   # Theme / search / whitespace
   CommandLineCommandSpec(
     name: "theme",
-    completionDescription: "Change color theme; for example theme dark",
+    completionDescription: "Change color theme; e.g. theme dark",
     helpEntries: @[
       HelpEntry(
-        syntax: "theme themeName",
-        description: "Change color theme; for example theme dark",
+        syntax: "theme themeName", description: "Change color theme; e.g. `theme dark`"
       )
     ],
     action: some(claTheme),
@@ -835,7 +841,7 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     helpEntries: @[
       HelpEntry(
         syntax: "man arguments",
-        description: "Show the given UNIX manual page, if available; e.g. :man man",
+        description: "Show the given UNIX manual page, if available; e.g. `:man man`",
       )
     ],
     action: some(claMan),
@@ -857,11 +863,16 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
     action: some(claShellCommand),
     isCanonicalLong: true,
   ),
-  # Runtime key mapping (completion-only, no help section)
+  # Runtime key mapping (the `noremap` aliases are documented under their
+  # canonical-long counterpart; their `helpEntries` stay empty so the help
+  # text doesn't list the same binding twice).
   CommandLineCommandSpec(
     name: "map",
     completionDescription: "Map keys (all modes)",
-    helpEntries: @[],
+    helpEntries: @[
+      HelpEntry(syntax: "map {lhs} {rhs}", description: "Map keys (all modes)"),
+      HelpEntry(syntax: "map", description: "List all mode mappings"),
+    ],
     action: some(claMap),
     isCanonicalLong: true,
   ),
@@ -875,7 +886,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   CommandLineCommandSpec(
     name: "nmap",
     completionDescription: "Map keys (Normal mode)",
-    helpEntries: @[],
+    helpEntries: @[
+      HelpEntry(syntax: "nmap {lhs} {rhs}", description: "Map keys (Normal mode)"),
+      HelpEntry(syntax: "nmap", description: "List all Normal mode mappings"),
+    ],
     action: some(claNmap),
     isCanonicalLong: true,
   ),
@@ -889,7 +903,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   CommandLineCommandSpec(
     name: "imap",
     completionDescription: "Map keys (Insert mode)",
-    helpEntries: @[],
+    helpEntries: @[
+      HelpEntry(syntax: "imap {lhs} {rhs}", description: "Map keys (Insert mode)"),
+      HelpEntry(syntax: "imap", description: "List all Insert mode mappings"),
+    ],
     action: some(claImap),
     isCanonicalLong: true,
   ),
@@ -903,7 +920,10 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   CommandLineCommandSpec(
     name: "vmap",
     completionDescription: "Map keys (Visual modes)",
-    helpEntries: @[],
+    helpEntries: @[
+      HelpEntry(syntax: "vmap {lhs} {rhs}", description: "Map keys (Visual modes)"),
+      HelpEntry(syntax: "vmap", description: "List all Visual mode mappings"),
+    ],
     action: some(claVmap),
     isCanonicalLong: true,
   ),
@@ -917,14 +937,20 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   CommandLineCommandSpec(
     name: "rmap",
     completionDescription: "Map keys (Replace mode)",
-    helpEntries: @[],
+    helpEntries: @[
+      HelpEntry(syntax: "rmap {lhs} {rhs}", description: "Map keys (Replace mode)"),
+      HelpEntry(syntax: "rmap", description: "List all Replace mode mappings"),
+    ],
     action: some(claRmap),
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "cmap",
     completionDescription: "Map keys (Command mode)",
-    helpEntries: @[],
+    helpEntries: @[
+      HelpEntry(syntax: "cmap {lhs} {rhs}", description: "Map keys (Command mode)"),
+      HelpEntry(syntax: "cmap", description: "List all Command mode mappings"),
+    ],
     action: some(claCmap),
     isCanonicalLong: true,
   ),
@@ -938,84 +964,96 @@ const CommandLineCommandTable*: seq[CommandLineCommandSpec] = @[
   CommandLineCommandSpec(
     name: "unmap",
     completionDescription: "Unmap keys (all modes)",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "unmap {lhs}", description: "Unmap keys (all modes)")],
     action: some(claUnmap),
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "nunmap",
     completionDescription: "Unmap keys (Normal mode)",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "nunmap {lhs}", description: "Unmap keys (Normal mode)")],
     action: some(claNunmap),
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "iunmap",
     completionDescription: "Unmap keys (Insert mode)",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "iunmap {lhs}", description: "Unmap keys (Insert mode)")],
     action: some(claIunmap),
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "vunmap",
     completionDescription: "Unmap keys (Visual modes)",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "vunmap {lhs}", description: "Unmap keys (Visual modes)")],
     action: some(claVunmap),
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "runmap",
     completionDescription: "Unmap keys (Replace mode)",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "runmap {lhs}", description: "Unmap keys (Replace mode)")],
     action: some(claRunmap),
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "cunmap",
     completionDescription: "Unmap keys (Command mode)",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "cunmap {lhs}", description: "Unmap keys (Command mode)")],
     action: some(claCunmap),
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "mapclear",
     completionDescription: "Clear mappings (all modes)",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "mapclear", description: "Clear mappings (all modes)")],
     action: some(claMapclear),
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "nmapclear",
     completionDescription: "Clear mappings (Normal mode)",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "nmapclear", description: "Clear mappings (Normal mode)")],
     action: some(claNmapclear),
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "imapclear",
     completionDescription: "Clear mappings (Insert mode)",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "imapclear", description: "Clear mappings (Insert mode)")],
     action: some(claImapclear),
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "vmapclear",
     completionDescription: "Clear mappings (Visual modes)",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "vmapclear", description: "Clear mappings (Visual modes)")],
     action: some(claVmapclear),
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "rmapclear",
     completionDescription: "Clear mappings (Replace mode)",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "rmapclear", description: "Clear mappings (Replace mode)")],
     action: some(claRmapclear),
     isCanonicalLong: true,
   ),
   CommandLineCommandSpec(
     name: "cmapclear",
     completionDescription: "Clear mappings (Command mode)",
-    helpEntries: @[],
+    helpEntries:
+      @[HelpEntry(syntax: "cmapclear", description: "Clear mappings (Command mode)")],
     action: some(claCmapclear),
     isCanonicalLong: true,
   ),
@@ -1033,7 +1071,8 @@ const CommandLineSpecialHelp*:
   ## special syntax (line number jump, `!` shell escape, `%s/.../.../`
   ## substitute, `%d` / `N,Md` range delete). Named-field tuple so
   ## `help_generator.nim` references them by name rather than by index.
-  lineNumber: HelpEntry(syntax: "number", description: "Jump to line number; e.g. :10"),
+  lineNumber:
+    HelpEntry(syntax: "number", description: "Jump to line number; e.g. `:10`"),
   shellCommand:
     HelpEntry(syntax: "! shell command", description: "Shell command execution"),
   substitute: HelpEntry(
