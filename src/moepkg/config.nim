@@ -115,6 +115,13 @@ type
     .}: bool
     autoCloseParen* {.cfg, cfgDocDescription: "Automatic closing brackets".}: bool
     autoIndent* {.cfg, cfgDocDescription: "Automatic indentation".}: bool
+    smartIndent* {.
+      cfg,
+      cfgDocDescription:
+        "Language-aware extra indent on Enter " &
+        "(Nim: var/let/const/type, trailing or/and/object/tuple/enum, " &
+        "trailing `:` or `=`, unclosed brackets)"
+    .}: bool
     ignorecase* {.cfg, cfgDocDescription: "Enable ignorecase when searching".}: bool
     smartcase* {.cfg, cfgDocDescription: "Enable smartcase when searching".}: bool
     disableChangeCursor* {.
@@ -744,6 +751,7 @@ proc newEditorConfig*(): EditorConfig =
       showModifiedLines: true,
       autoCloseParen: true,
       autoIndent: true,
+      smartIndent: false,
       ignorecase: true,
       smartcase: true,
       disableChangeCursor: false,

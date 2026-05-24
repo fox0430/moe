@@ -34,6 +34,8 @@ autoCloseParen = true                  # Auto-close parentheses
 
 autoIndent = true                      # Auto-indent
 
+smartIndent = false                    # Language-aware extra indent on Enter (Nim only currently)
+
 ignorecase = true                      # Search case insensitive
 
 smartcase = true                       # Smart case search

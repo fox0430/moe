@@ -1462,6 +1462,7 @@ proc saveConfigToToml*(config: EditorConfig, path: string): Result[void, string]
   lines.add "showModifiedLines = " & toTomlBool(config.standard.showModifiedLines)
   lines.add "autoCloseParen = " & toTomlBool(config.standard.autoCloseParen)
   lines.add "autoIndent = " & toTomlBool(config.standard.autoIndent)
+  lines.add "smartIndent = " & toTomlBool(config.standard.smartIndent)
   lines.add "ignorecase = " & toTomlBool(config.standard.ignorecase)
   lines.add "smartcase = " & toTomlBool(config.standard.smartcase)
   lines.add "disableChangeCursor = " & toTomlBool(config.standard.disableChangeCursor)

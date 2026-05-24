@@ -110,6 +110,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | showModifiedLines | bool | true | Show modified/inserted line indicators in sidebars |
 | autoCloseParen | bool | true | Automatic closing brackets |
 | autoIndent | bool | true | Automatic indentation |
+| smartIndent | bool | false | Language-aware extra indent on Enter (Nim: var/let/const/type, trailing or/and/object/tuple/enum, trailing `:` or `=`, unclosed brackets) |
 | ignorecase | bool | true | Enable ignorecase when searching |
 | smartcase | bool | true | Enable smartcase when searching |
 | disableChangeCursor | bool | false | Disable change of the cursor shape |

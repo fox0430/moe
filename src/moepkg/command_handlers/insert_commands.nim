@@ -24,6 +24,7 @@
 
 import std/[options, strutils, unicode]
 import ../[buffer, types, modes, unicode_utils]
+import smart_indent
 
 proc getLineIndent*(line: string): string =
   ## Extract leading whitespace (spaces and tabs) from a line
@@ -136,16 +137,23 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   # Prepare the text to insert (newline + optional indent as single operation)
   var textToInsert = "\n"
   var indentLen = 0
+  var newLineIndent = ""
 
   # Apply auto-indent if enabled
   if state.display.autoIndent:
     # Get the indentation from the current line
-    let indent = getLineIndent(currentLineText)
+    let baseIndent = getLineIndent(currentLineText)
+    let extraIndent =
+      if state.display.smartIndent:
+        extraIndentForNewline(currentLineText, buffer.language, getIndentString(state))
+      else:
+        ""
+    newLineIndent = baseIndent & extraIndent
 
-    if indent.len > 0:
+    if newLineIndent.len > 0:
       # Combine newline and indent into single insertion
-      textToInsert = "\n" & indent
-      indentLen = indent.len
+      textToInsert = "\n" & newLineIndent
+      indentLen = newLineIndent.len
 
   # Insert newline (and indent if any) as a single undo-able operation
   discard buffer.insertText(pos, textToInsert)
@@ -156,7 +164,7 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
 
   if indentLen > 0:
     state.editState.autoIndentedLine =
-      some((line: state.cursor.line, indent: getLineIndent(currentLineText)))
+      some((line: state.cursor.line, indent: newLineIndent))
   else:
     state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
 
@@ -169,12 +177,20 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState) =
 
   var textToInsert = "\n"
   var indentLen = 0
+  var newLineIndent = ""
 
   if state.display.autoIndent:
-    let indent = getLineIndent(lineContent)
-    if indent.len > 0:
-      textToInsert = "\n" & indent
-      indentLen = indent.len
+    let baseIndent = getLineIndent(lineContent)
+    let extraIndent =
+      if state.display.smartIndent:
+        extraIndentForNewline(lineContent, buffer.language, getIndentString(state))
+      else:
+        ""
+    newLineIndent = baseIndent & extraIndent
+
+    if newLineIndent.len > 0:
+      textToInsert = "\n" & newLineIndent
+      indentLen = newLineIndent.len
 
   discard buffer.insertText(state.cursor, textToInsert)
 
@@ -183,7 +199,7 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState) =
 
   if indentLen > 0:
     state.editState.autoIndentedLine =
-      some((line: currentLine + 1, indent: getLineIndent(lineContent)))
+      some((line: currentLine + 1, indent: newLineIndent))
   else:
     state.editState.autoIndentedLine = none(tuple[line: int, indent: string])
 
