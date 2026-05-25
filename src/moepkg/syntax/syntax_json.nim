@@ -23,26 +23,56 @@ const
   SymChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   JsonKeywords = ["false", "null", "true"]
 
-proc jsonNextToken*(g: var GeneralTokenizer) =
-  ## Enhanced JSON tokenizer with improved name and variable highlighting
+proc skipJsonKeyLookahead(
+    buf: cstring, start: int, allowComments: bool
+): tuple[pos: int, sawColon: bool] =
+  ## Scan past whitespace and (when allowComments) `//` / `/* */` comments.
+  ## Returns the position landed on and whether it is a `:`.
+  var p = start
+  while buf[p] != '\0':
+    case buf[p]
+    of ' ', '\t', '\n', '\r':
+      inc(p)
+    of '/':
+      if not allowComments:
+        break
+      if buf[p + 1] == '/':
+        inc(p, 2)
+        while buf[p] notin {'\0', '\n', '\r'}:
+          inc(p)
+      elif buf[p + 1] == '*':
+        inc(p, 2)
+        while buf[p] != '\0':
+          if buf[p] == '*' and buf[p + 1] == '/':
+            inc(p, 2)
+            break
+          inc(p)
+      else:
+        break
+    else:
+      break
+  result = (p, buf[p] == ':')
+
+proc jsonLikeNextToken*(g: var GeneralTokenizer, allowComments: bool) =
+  ## Tokenizer for JSON, and for JSONC when `allowComments` is true.
 
   var pos = g.pos
   g.start = g.pos
-  if g.state == gtLongStringLit:
+  if allowComments and g.state == gtLongComment:
     if g.buf[pos] == '\0':
       g.kind = gtEof
     else:
-      g.kind = gtLongStringLit
+      g.kind = gtLongComment
     while g.kind != gtEof:
       case g.buf[pos]
-      of '\0':
-        break
-      of '\"':
+      of '*':
         inc(pos)
-        if g.buf[pos] == '\"' and g.buf[pos + 1] == '\"' and g.buf[pos + 2] != '\"':
-          inc(pos, 2)
+        if g.buf[pos] == '/':
+          inc(pos)
           g.state = gtNone
           break
+      of '\0':
+        break
       else:
         inc(pos)
     g.length = pos - g.pos
@@ -78,6 +108,32 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
       g.kind = gtWhitespace
       while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
         inc(pos)
+    of '/':
+      if allowComments and g.buf[pos + 1] == '/':
+        g.kind = gtComment
+        inc(pos, 2)
+        while not (g.buf[pos] in {'\0', '\x0A', '\x0D'}):
+          inc(pos)
+      elif allowComments and g.buf[pos + 1] == '*':
+        g.kind = gtLongComment
+        inc(pos, 2)
+        while true:
+          case g.buf[pos]
+          of '*':
+            inc(pos)
+            if g.buf[pos] == '/':
+              inc(pos)
+              g.state = gtNone
+              break
+          of '\0':
+            g.state = gtLongComment
+            break
+          else:
+            inc(pos)
+      else:
+        g.kind = gtOperator
+        while g.buf[pos] in opChars:
+          inc(pos)
     of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
       var id = ""
       while g.buf[pos] in SymChars:
@@ -89,63 +145,39 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
         g.kind = gtIdentifier
     of '0' .. '9':
       pos = generalNumber(g, pos)
-      if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
-        inc(pos)
     of '"':
       inc(pos)
-      # Check if this string is a key (followed by a colon)
       var isKey = false
       var tempPos = pos
-      # Skip to end of string to check if it's followed by colon
-      while tempPos < g.buf.len and g.buf[tempPos] != '\0':
+      while g.buf[tempPos] != '\0':
         case g.buf[tempPos]
         of '"':
           inc(tempPos)
-          # Skip whitespace after closing quote
-          while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t', '\n', '\r'}:
-            inc(tempPos)
-          # Check if next non-whitespace character is colon
-          if tempPos < g.buf.len and g.buf[tempPos] == ':':
-            isKey = true
+          let (after, sawColon) = skipJsonKeyLookahead(g.buf, tempPos, allowComments)
+          tempPos = after
+          isKey = sawColon
           break
         of '\\':
-          inc(tempPos, 2) # Skip escape sequence
+          inc(tempPos, 2)
         else:
           inc(tempPos)
 
-      if (g.buf[pos] == '\"') and (g.buf[pos + 1] == '\"'):
-        inc(pos, 2)
-        g.kind = gtLongStringLit
-        while true:
-          case g.buf[pos]
-          of '\0':
-            g.state = gtLongStringLit
-            break
-          of '\"':
-            inc(pos)
-            if g.buf[pos] == '\"' and g.buf[pos + 1] == '\"' and g.buf[pos + 2] != '\"':
-              inc(pos, 2)
-              break
-          else:
-            inc(pos)
+      if isKey:
+        g.kind = gtKey
       else:
-        # Set kind based on whether this is a key or value
-        if isKey:
-          g.kind = gtKey
+        g.kind = gtStringLit
+      while true:
+        case g.buf[pos]
+        of '\0', '\r', '\n':
+          break
+        of '\"':
+          inc(pos)
+          break
+        of '\\':
+          g.state = g.kind
+          break
         else:
-          g.kind = gtStringLit
-        while true:
-          case g.buf[pos]
-          of '\0', '\r', '\n':
-            break
-          of '\"':
-            inc(pos)
-            break
-          of '\\':
-            g.state = g.kind
-            break
-          else:
-            inc(pos)
+          inc(pos)
     of '{', '}', '[', ']':
       inc(pos)
       g.kind = gtPunctuation
@@ -169,3 +201,6 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
   if g.kind != gtEof and g.length <= 0:
     assert false, "produced an empty token"
   g.pos = pos
+
+proc jsonNextToken*(g: var GeneralTokenizer) =
+  jsonLikeNextToken(g, allowComments = false)

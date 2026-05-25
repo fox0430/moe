@@ -537,16 +537,16 @@ suite "syntax_json - jsonNextToken edge cases":
     g.jsonNextToken() # ]
     check g.kind == gtPunctuation
 
-  test "number with suffix becomes identifier":
+  test "number followed by identifier splits cleanly":
     var g: GeneralTokenizer
     g.initGeneralTokenizer("123abc")
     g.jsonNextToken()
     check g.kind == gtDecNumber
-    check g.length == 4 # "123a"
+    check g.length == 3 # "123"
 
     g.jsonNextToken()
     check g.kind == gtIdentifier
-    check g.length == 2 # "bc"
+    check g.length == 3 # "abc"
 
   test "unknown character":
     var g: GeneralTokenizer
@@ -565,18 +565,18 @@ suite "syntax_json - jsonNextToken edge cases":
     check g.kind == gtEscapeSequence
     check g.state == gtNone
 
-suite "syntax_json - jsonNextToken long string literal":
-  test "triple quoted string":
+suite "syntax_json - jsonNextToken adjacent strings (not triple-quoted)":
+  test "two empty strings are tokenized separately":
+    # JSON spec does not have triple-quoted strings: """" is just "" then "".
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"\"\"multi\nline\"\"\"")
+    g.initGeneralTokenizer("\"\"\"\"")
     g.jsonNextToken()
-    check g.kind == gtLongStringLit
+    check g.kind == gtStringLit
+    check g.length == 2
 
-  test "empty triple quoted string":
-    var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"\"\"\"\"\"")
     g.jsonNextToken()
-    check g.kind == gtLongStringLit
+    check g.kind == gtStringLit
+    check g.length == 2
 
 suite "syntax_json - jsonNextToken string continuation":
   test "string continuation after escape":
