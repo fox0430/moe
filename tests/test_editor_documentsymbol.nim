@@ -17,68 +17,29 @@
 #                                                                              #
 #[############################################################################]#
 
-## Tests for editor_lsp.nim
+## Tests for editor_documentsymbol.nim
 
-import std/[unittest, os, options, strutils, monotimes, times]
+import std/unittest
 
-import ../src/moepkg/[editor, buffer, config, config_loader, types, hover_popup]
-import ../src/moepkg/editor_lsp {.all.}
-import ../src/moepkg/lsp_integration {.all.}
-import ../src/moepkg/lsp/protocol/types as lspTypes
+import ../src/moepkg/[editor, config, config_loader]
+import ../src/moepkg/editor_documentsymbol
 
 proc createTestEditor(): Editor =
-  ## Create a minimal editor for testing
   let config = newEditorConfig()
   let vr = newValidationResult()
   result = newEditor(config, vr)
 
 proc createTestEditorWithLspDisabled(): Editor =
-  ## Create an editor with LSP disabled
   let config = newEditorConfig()
   let vr = newValidationResult()
   result = newEditor(config, vr)
   result.lsp.enabled = false
 
-suite "editor_lsp - maybeUpdateLsp":
-  test "Does nothing when LSP is disabled":
-    let e = createTestEditorWithLspDisabled()
-    let initialSeq = e.lastLspChangeSeq
-
-    e.maybeUpdateLsp()
-
-    check e.lastLspChangeSeq == initialSeq
-
-  test "Does nothing when buffer has not changed":
-    let e = createTestEditor()
-    e.lsp.enabled = true
-    let activeBuffer = e.activeBuffer()
-    e.lastLspChangeSeq = activeBuffer.changeSeq
-
-    e.maybeUpdateLsp()
-
-    check e.lastLspChangeSeq == activeBuffer.changeSeq
-
-suite "editor_lsp - pollLspCompletion":
-  test "Does nothing when LSP is disabled":
-    let e = createTestEditorWithLspDisabled()
-    e.state.mode = EditorMode.Insert
-
-    e.pollLspCompletion()
-    # No crash means success
-
-  test "Does nothing when not in Insert mode":
-    let e = createTestEditor()
-    e.lsp.enabled = true
-    e.state.mode = EditorMode.Normal
-
-    e.pollLspCompletion()
-    # No crash means success
-
-suite "editor_lsp - restartLspServer":
+suite "editor_documentsymbol - startLspDocumentSymbols":
   test "Returns false when LSP is disabled":
     let e = createTestEditorWithLspDisabled()
 
-    let result = e.restartLspServer()
+    let result = e.startLspDocumentSymbols()
 
     check not result
     check e.state.statusMessage == "LSP is not enabled"
@@ -88,30 +49,30 @@ suite "editor_lsp - restartLspServer":
     e.lsp.enabled = true
     # Default buffer has no file path
 
-    let result = e.restartLspServer()
+    let result = e.startLspDocumentSymbols()
 
     check not result
     check e.state.statusMessage == "No file path for current buffer"
 
-suite "editor_lsp - Async functions":
-  test "requestLspFormat returns false when LSP disabled":
+suite "editor_documentsymbol - requestDocumentSymbols":
+  test "Returns false when LSP is disabled":
     let e = createTestEditorWithLspDisabled()
 
-    # We can't easily test async functions without running event loop
-    # but we can verify the function exists and compiles
-    check not e.lsp.enabled
+    let result = e.requestDocumentSymbols()
 
-  test "refreshLspFolds does nothing when LSP disabled":
+    check not result
+
+suite "editor_documentsymbol - pollLspDocumentSymbols":
+  test "Does nothing when LSP is disabled":
     let e = createTestEditorWithLspDisabled()
 
-    check not e.lsp.enabled
+    e.pollLspDocumentSymbols()
+    # No crash means success
 
-  test "requestLspRename does nothing when LSP disabled":
-    let e = createTestEditorWithLspDisabled()
+  test "Does nothing when no pending request":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.state.lspCache.pendingDocumentSymbolsRequestId = 0
 
-    check not e.lsp.enabled
-
-  test "requestLspExecuteCommand does nothing when LSP disabled":
-    let e = createTestEditorWithLspDisabled()
-
-    check not e.lsp.enabled
+    e.pollLspDocumentSymbols()
+    # No crash means success
