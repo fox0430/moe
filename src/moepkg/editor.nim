@@ -23,7 +23,9 @@ import pkg/[results, chronos]
 
 import
   editor_types, editor_window, editor_window_state, editor_file, editor_lsp,
-  editor_codelens, editor_render, editorconfig_helper, emergency
+  editor_codelens, editor_selectionrange, editor_documentsymbol, editor_documentlink,
+  editor_signaturehelp, editor_hover, editor_callhierarchy, editor_navigation,
+  editor_render, editorconfig_helper, emergency
 
 import
   status_line, render_utils, git_diff, git_conflict, logger, config_loader,
@@ -35,7 +37,10 @@ import key_bindings except Command
 import command_handlers/handler_manager
 
 export
-  editor_types, editor_window, editor_file, editor_lsp, editor_codelens, editor_render
+  editor_types, editor_window, editor_file, editor_lsp, editor_codelens,
+  editor_selectionrange, editor_documentsymbol, editor_documentlink,
+  editor_signaturehelp, editor_hover, editor_callhierarchy, editor_navigation,
+  editor_render
 
 proc findBufferByPath*(e: Editor, path: string): int =
   ## Find a buffer in the buffer list by its file path
