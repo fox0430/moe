@@ -27,7 +27,12 @@ import pkg/results
 
 import ../[primitives, unicode_utils, logger]
 import ../buffer_backends/piece_table
-import ./[core, internal_mutations]
+import core, internal_mutations
+
+# Forward declaration: undoChange calls redoChange for ckTransaction
+# roll-forward on partial failure. The reverse direction (redoChange ->
+# undoChange) does not need one because undoChange is defined first.
+proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string]
 
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Apply the inverse of a single change (internal helper)
@@ -65,11 +70,24 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckReplaceLine:
       b.backendReplaceLine(change.replaceLineIdx, change.replaceLineOldText)
     of ckTransaction:
-      # Undo all changes in transaction in reverse order
-      for i in countdown(change.transactionChanges.len - 1, 0):
+      # Undo all changes in transaction in reverse order. If one fails partway,
+      # roll forward (redo) the inner changes we already undid so the buffer
+      # ends up back at the pre-undo state instead of an intermediate one.
+      let n = change.transactionChanges.len
+      var i = n - 1
+      while i >= 0:
         let r = b.undoChange(change.transactionChanges[i])
         if r.isErr:
+          # Roll forward indices (i+1 .. n-1) which we already reverted.
+          for j in (i + 1) .. (n - 1):
+            let rr = b.redoChange(change.transactionChanges[j])
+            if rr.isErr:
+              logError(
+                "buffer",
+                "Failed to roll forward after partial transaction undo: " & rr.error,
+              )
           return r
+        dec i
     of ckSnapshot:
       b.pieceTable.restoreSnapshot(change.snapshotData)
       b.lineMarkers = change.snapshotLineMarkers
@@ -129,10 +147,17 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
 
   # Add transaction as a single undo entry if it has changes
   if transaction.changes.len > 0:
+    # changeSeq was inc'd once per inner change in pushUndoChange. Snapshot the
+    # post-commit value so undo() can restore the pre-transaction state in one
+    # step, regardless of inner change count.
+    let preTxnSeq = transaction.startSeq
+    let postTxnSeq = b.changeSeq
     if b.pendingSnapshot.isSome:
       # PieceTable: single O(1) snapshot undo entry for entire transaction
       b.undoStack.addLast(
         BufferChange(
+          startSeq: preTxnSeq,
+          endSeq: postTxnSeq,
           kind: ckSnapshot,
           snapshotData: b.pendingSnapshot.get,
           snapshotCursorPos:
@@ -149,13 +174,16 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
       b.hasPendingModifiedLinesSnapshot = false
     else:
       let transactionChange = BufferChange(
+        startSeq: preTxnSeq,
+        endSeq: postTxnSeq,
         kind: ckTransaction,
         transactionChanges: transaction.changes,
         transactionDescription: transaction.description,
         transactionCursorPos: transaction.cursorPos,
       )
       b.undoStack.addLast(transactionChange)
-    # Note: changeSeq was already incremented by each change in pushUndoChange
+    # Note: changeSeq was inc'd per inner change in pushUndoChange; preTxnSeq /
+    # postTxnSeq above let undo() / redo() restore changeSeq atomically.
     # Note: redoStack was already cleared by the first change in pushUndoChange
 
     # Record transaction position in changelist
@@ -237,6 +265,8 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     var redoEntry =
       if change.kind == ckSnapshot:
         BufferChange(
+          startSeq: change.startSeq,
+          endSeq: change.endSeq,
           kind: ckSnapshot,
           snapshotData: b.pieceTable.takeSnapshot(),
           snapshotCursorPos: change.snapshotCursorPos,
@@ -261,8 +291,10 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     undoneChanges.add(redoEntry)
 
-    # Decrement change sequence for each undo
-    b.changeSeq.dec
+    # Restore changeSeq to the pre-mutation value. For transactions this
+    # collapses N inc'd changes back to the saved value in one step, fixing
+    # the stale isModified-after-multi-change-undo bug.
+    b.changeSeq = change.startSeq
 
     # Adjust changelist index
     if b.changeListIndex > 0:
@@ -343,11 +375,23 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckReplaceLine:
       b.backendReplaceLine(change.replaceLineIdx, change.replaceLineNewText)
     of ckTransaction:
-      # Redo all changes in transaction in forward order
-      for change in change.transactionChanges:
-        let r = b.redoChange(change)
+      # Redo all changes in transaction in forward order. On partial failure,
+      # roll back (undo) the inner changes we already applied so the buffer is
+      # restored to the pre-redo state.
+      let n = change.transactionChanges.len
+      var i = 0
+      while i < n:
+        let r = b.redoChange(change.transactionChanges[i])
         if r.isErr:
+          for j in countdown(i - 1, 0):
+            let rr = b.undoChange(change.transactionChanges[j])
+            if rr.isErr:
+              logError(
+                "buffer",
+                "Failed to roll back after partial transaction redo: " & rr.error,
+              )
           return r
+        inc i
     of ckSnapshot:
       b.pieceTable.restoreSnapshot(change.snapshotData)
       b.lineMarkers = change.snapshotLineMarkers
@@ -390,6 +434,8 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     var undoEntry =
       if change.kind == ckSnapshot:
         BufferChange(
+          startSeq: change.startSeq,
+          endSeq: change.endSeq,
           kind: ckSnapshot,
           snapshotData: b.pieceTable.takeSnapshot(),
           snapshotCursorPos: change.snapshotCursorPos,
@@ -414,8 +460,8 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     redoneChanges.add(undoEntry)
 
-    # Increment change sequence for each redo
-    b.changeSeq.inc
+    # Restore changeSeq to the post-mutation value (symmetric with undo()).
+    b.changeSeq = change.endSeq
 
     # Adjust changelist index
     if b.changeListIndex < b.changeList.len - 1:

@@ -127,6 +127,11 @@ type
   BufferChange* = object
     savedModifiedLines*: seq[LineModificationKind]
       ## Pre-mutation modifiedLines snapshot for undo/redo (1 byte per line)
+    startSeq*: int
+      ## changeSeq value BEFORE this entry was applied. undo() restores changeSeq
+      ## to this so a transaction collapsing N mutations is reverted atomically.
+    endSeq*: int
+      ## changeSeq value AFTER this entry was applied. redo() restores to this.
     case kind*: BufferChangeKind
     of ckInsertText:
       insertPos*: BufferPosition
@@ -688,6 +693,18 @@ proc captureSnapshotIfNeeded*(b: TextBuffer) {.inline.} =
     b.pendingModifiedLinesSnapshot = b.modifiedLines
     b.hasPendingModifiedLinesSnapshot = true
 
+proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
+  ## Drop every pending snapshot artifact captured for a mutation that ended up
+  ## not happening (e.g. backend raised after captureSnapshotIfNeeded). Symmetric
+  ## inverse of captureSnapshotIfNeeded; keeps the next pushUndoChange from
+  ## attaching stale data.
+  b.pendingSnapshot = none(PieceTableSnapshot)
+  b.pendingSnapshotMarkers.setLen(0)
+  b.pendingSnapshotModifiedLines.setLen(0)
+  b.pendingSnapshotFolds = initFoldState()
+  b.hasPendingModifiedLinesSnapshot = false
+  b.pendingModifiedLinesSnapshot.setLen(0)
+
 proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   ## Add a change to the undo stack (or current transaction)
   ## Always increments changeSeq to mark buffer as modified
@@ -695,8 +712,18 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
   # Clear redo stack when new change is made
   b.redoStack.clear()
 
-  # Increment change sequence number (marks as modified)
+  # New edit invalidates any "future" changeList entries that an earlier undo
+  # left behind. Without this, g; / g, can navigate to positions that no longer
+  # correspond to any undoable change.
+  if b.changeList.len > 0 and b.changeListIndex < b.changeList.len - 1:
+    b.changeList.setLen(b.changeListIndex + 1)
+
+  # Snapshot changeSeq before and after this mutation so undo()/redo() can
+  # restore it by direct assignment instead of inc/dec. Required for transactions
+  # which collapse N inc'd changes into a single undo entry.
+  let preSeq = b.changeSeq
   b.changeSeq.inc
+  let postSeq = b.changeSeq
 
   # Mark highlight as needing update and track changed range
   b.highlightNeedsUpdate = true
@@ -718,6 +745,8 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
 
   # Attach pre-mutation modifiedLines snapshot to the change
   var changeWithSnapshot = change
+  changeWithSnapshot.startSeq = preSeq
+  changeWithSnapshot.endSeq = postSeq
   if b.hasPendingModifiedLinesSnapshot:
     changeWithSnapshot.savedModifiedLines = b.pendingModifiedLinesSnapshot
     b.hasPendingModifiedLinesSnapshot = false
@@ -731,6 +760,8 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
     # PieceTable: convert to O(1) snapshot undo entry
     b.undoStack.addLast(
       BufferChange(
+        startSeq: preSeq,
+        endSeq: postSeq,
         kind: ckSnapshot,
         snapshotData: b.pendingSnapshot.get,
         snapshotCursorPos: getChangePosition(change),

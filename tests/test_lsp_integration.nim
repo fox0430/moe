@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json, options, tables, times, strutils, importutils]
+import std/[unittest, json, options, tables, times, strutils, importutils, deques]
 
 import pkg/results
 
@@ -626,6 +626,82 @@ suite "LspIntegration - applyTextEdits":
     let result = applyTextEdits(buffer, edits)
     check result.isOk
     check buffer.getLine(0) == "hello world"
+
+  test "applyTextEdits creates single undo entry when called standalone (#7)":
+    # Regression: applyTextEdits used to push one undo entry per inner edit when
+    # invoked outside an existing transaction. A standalone caller (e.g. format
+    # on save) had to press Ctrl-r/u once per edit to revert a single format.
+    let buffer = newTextBuffer("abc")
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 1)
+        ),
+        newText: "A",
+      ),
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 2), `end`: Position(line: 0, character: 3)
+        ),
+        newText: "C",
+      ),
+    ]
+    let preStackLen = buffer.undoStack.len
+    let r = applyTextEdits(buffer, edits)
+    check r.isOk
+    check buffer.getLine(0) == "AbC"
+    check buffer.undoStack.len == preStackLen + 1
+
+    let u = buffer.undo()
+    check u.isOk
+    check buffer.getLine(0) == "abc"
+    check not buffer.isModified
+
+  test "applyTextEdits joins existing outer transaction":
+    # When the caller has already begun a transaction (Insert-mode completion,
+    # workspace edit), applyTextEdits must not open its own and instead share
+    # the outer one. The whole group still collapses to a single undo entry.
+    let buffer = newTextBuffer("abc")
+    discard buffer.beginTransaction("outer")
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 1)
+        ),
+        newText: "A",
+      )
+    ]
+    let r = applyTextEdits(buffer, edits)
+    check r.isOk
+    discard buffer.commitTransaction()
+    check buffer.undoStack.len == 1
+    check buffer.getLine(0) == "Abc"
+
+  test "applyTextEdits rolls back on failure when self-managed":
+    # An invalid TextEdit must leave the buffer at its pre-call state when
+    # applyTextEdits owned the transaction.
+    let buffer = newTextBuffer("abc")
+    let edits = @[
+      TextEdit(
+        range: Range(
+          start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 1)
+        ),
+        newText: "A",
+      ),
+      TextEdit(
+        range: Range(
+          start: Position(line: 99, character: 0),
+          `end`: Position(line: 99, character: 1),
+        ),
+        newText: "X",
+      ),
+    ]
+    let preLine = buffer.getLine(0)
+    let r = applyTextEdits(buffer, edits)
+    check r.isErr
+    check buffer.getLine(0) == preLine
+    check not buffer.isModified
+    check buffer.undoStack.len == 0
 
 suite "LspIntegration - applyLspFoldingRanges":
   test "applyLspFoldingRanges with empty ranges":

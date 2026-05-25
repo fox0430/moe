@@ -372,6 +372,74 @@ suite "Buffer - Modified Flag":
     check b.isModified # Still modified (original " 1" is still there)
     check b.getLine(0) == "test 1" # Only original change remains
 
+  test "isModified false after undo of multi-change transaction (#1)":
+    # Regression: changeSeq is inc'd per inner change in pushUndoChange but
+    # undo() used to dec only once, leaving isModified true after a single undo
+    # of a multi-change transaction. Now BufferChange.startSeq is restored.
+    let b = newTextBuffer("test")
+    check not b.isModified
+
+    discard b.beginTransaction("multi")
+    discard b.insertText(BufferPosition(line: 0, column: 4), "a")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "b")
+    discard b.insertText(BufferPosition(line: 0, column: 6), "c")
+    discard b.insertText(BufferPosition(line: 0, column: 7), "d")
+    discard b.insertText(BufferPosition(line: 0, column: 8), "e")
+    discard b.commitTransaction()
+    check b.getLine(0) == "testabcde"
+    check b.isModified
+
+    let r = b.undo()
+    check r.isOk
+    check b.getLine(0) == "test"
+    check b.changeSeq == b.savedSeq
+    check not b.isModified
+
+  test "isModified true after redo of multi-change transaction":
+    let b = newTextBuffer("test")
+    discard b.beginTransaction("multi")
+    discard b.insertText(BufferPosition(line: 0, column: 4), "a")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "b")
+    discard b.commitTransaction()
+    discard b.undo()
+    check not b.isModified
+
+    let r = b.redo()
+    check r.isOk
+    check b.getLine(0) == "testab"
+    check b.isModified
+
+  test "changeSeq restored exactly across undo/redo cycle":
+    let b = newTextBuffer("test")
+    discard b.beginTransaction("multi")
+    discard b.insertText(BufferPosition(line: 0, column: 4), "a")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "b")
+    discard b.insertText(BufferPosition(line: 0, column: 6), "c")
+    discard b.commitTransaction()
+    let postCommitSeq = b.changeSeq
+
+    discard b.undo()
+    check b.changeSeq == 0
+    discard b.redo()
+    check b.changeSeq == postCommitSeq
+
+  test "isModified false after undo of multi-change transaction (PieceTable)":
+    setConfiguredBackend(PieceTable)
+    defer:
+      setConfiguredBackend(GapBuffer)
+    let b = newTextBuffer("test")
+    discard b.beginTransaction("multi")
+    discard b.insertText(BufferPosition(line: 0, column: 4), "a")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "b")
+    discard b.insertText(BufferPosition(line: 0, column: 6), "c")
+    discard b.commitTransaction()
+    check b.isModified
+
+    discard b.undo()
+    check b.getLine(0) == "test"
+    check b.changeSeq == b.savedSeq
+    check not b.isModified
+
 suite "Buffer - Cursor Position Suggestion":
   test "undo returns suggested cursor position":
     let b = newTextBuffer("test")
@@ -895,3 +963,84 @@ suite "Buffer - Change List":
       discard b.insertText(BufferPosition(line: 0, column: 0), "x")
     check b.changeList.len == 100
     check b.changeListIndex == 99
+
+  test "new edit truncates changeList after undo (#2)":
+    # Regression: pushUndoChange used to leave stale changeList entries past
+    # changeListIndex, so g; / g, could navigate to positions whose undo
+    # entries were already discarded.
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "a") # idx 0
+    discard b.insertText(BufferPosition(line: 0, column: 1), "b") # idx 1
+    discard b.insertText(BufferPosition(line: 0, column: 2), "c") # idx 2
+    check b.changeList.len == 3
+    check b.changeListIndex == 2
+
+    discard b.undo()
+    discard b.undo()
+    check b.changeListIndex == 0
+
+    # New edit must drop the abandoned changeList tail (idx 1, 2).
+    discard b.insertText(BufferPosition(line: 0, column: 0), "z")
+    check b.changeList.len == 2
+    check b.changeListIndex == 1
+    check b.changeList[^1].column == 0
+
+  test "transaction commit after undo also truncates changeList":
+    let b = newTextBuffer("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "a")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "b")
+    discard b.insertText(BufferPosition(line: 0, column: 2), "c")
+    discard b.undo()
+    discard b.undo()
+    check b.changeListIndex == 0
+
+    discard b.beginTransaction("late")
+    discard b.insertText(BufferPosition(line: 0, column: 0), "z")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "y")
+    discard b.commitTransaction()
+    check b.changeList.len == 2
+    check b.changeListIndex == 1
+
+suite "Buffer - Pending Snapshot Cleanup":
+  test "failed insertText does not leak pending modifiedLines snapshot (#3)":
+    # If the snapshot is not discarded on failure, the next successful edit
+    # attaches an outdated pre-mutation snapshot, and undo restores stale state.
+    let b = newTextBuffer("hello")
+    let badPos = BufferPosition(line: 99, column: 0)
+    let bad = b.insertText(badPos, "x")
+    check bad.isErr
+
+    let good = b.insertText(BufferPosition(line: 0, column: 5), "!")
+    check good.isOk
+    check b.getLine(0) == "hello!"
+
+    let u = b.undo()
+    check u.isOk
+    check b.getLine(0) == "hello"
+    check not b.isModified
+
+  test "replaceLine out-of-bounds returns err and keeps undo healthy":
+    let b = newTextBuffer("hello")
+    let bad = b.replaceLine(99, "world")
+    check bad.isErr
+
+    let good = b.replaceLine(0, "world")
+    check good.isOk
+    check b.getLine(0) == "world"
+
+    discard b.undo()
+    check b.getLine(0) == "hello"
+    check not b.isModified
+
+  test "PieceTable: failed edit does not leak pendingSnapshot":
+    setConfiguredBackend(PieceTable)
+    defer:
+      setConfiguredBackend(GapBuffer)
+    let b = newTextBuffer("hello")
+    let bad = b.insertText(BufferPosition(line: 42, column: 0), "x")
+    check bad.isErr
+
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    discard b.undo()
+    check b.getLine(0) == "hello"
+    check not b.isModified
