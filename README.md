@@ -46,7 +46,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
     - Zsh
   - TOML
   - YAML
-  - JSON
+  - JSON/JSONC
   - Lisp
   - Tcl
   - Hyprland

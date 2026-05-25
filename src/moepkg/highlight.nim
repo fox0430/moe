@@ -1225,6 +1225,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langYaml
   of ".json":
     return SourceLanguage.langJson
+  of ".jsonc":
+    return SourceLanguage.langJsonc
   of ".tex", ".sty", ".cls", ".ltx", ".dtx":
     return SourceLanguage.langLatex
   of ".lisp", ".lsp", ".cl", ".el", ".scm", ".ss", ".rkt", ".asd", ".fasl":
