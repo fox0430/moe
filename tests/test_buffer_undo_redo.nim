@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils, options]
+import std/[unittest, strutils, options, deques]
 
 import pkg/results
 
@@ -372,7 +372,7 @@ suite "Buffer - Modified Flag":
     check b.isModified # Still modified (original " 1" is still there)
     check b.getLine(0) == "test 1" # Only original change remains
 
-  test "isModified false after undo of multi-change transaction (#1)":
+  test "isModified false after undo of multi-change transaction":
     # Regression: changeSeq is inc'd per inner change in pushUndoChange but
     # undo() used to dec only once, leaving isModified true after a single undo
     # of a multi-change transaction. Now BufferChange.startSeq is restored.
@@ -964,7 +964,7 @@ suite "Buffer - Change List":
     check b.changeList.len == 100
     check b.changeListIndex == 99
 
-  test "new edit truncates changeList after undo (#2)":
+  test "new edit truncates changeList after undo":
     # Regression: pushUndoChange used to leave stale changeList entries past
     # changeListIndex, so g; / g, could navigate to positions whose undo
     # entries were already discarded.
@@ -1002,7 +1002,7 @@ suite "Buffer - Change List":
     check b.changeListIndex == 1
 
 suite "Buffer - Pending Snapshot Cleanup":
-  test "failed insertText does not leak pending modifiedLines snapshot (#3)":
+  test "failed insertText does not leak pending modifiedLines snapshot":
     # If the snapshot is not discarded on failure, the next successful edit
     # attaches an outdated pre-mutation snapshot, and undo restores stale state.
     let b = newTextBuffer("hello")
@@ -1044,3 +1044,93 @@ suite "Buffer - Pending Snapshot Cleanup":
     discard b.undo()
     check b.getLine(0) == "hello"
     check not b.isModified
+
+suite "Buffer - Transaction Partial Failure Recovery":
+  # These tests verify that the roll-forward / roll-back paths added in
+  # undo.nim for ckTransaction actually restore the buffer to the pre-call
+  # state when an inner undoChange/redoChange fails partway. We can't easily
+  # trigger an inner failure through the public API, so we hand-craft a
+  # ckTransaction undo entry whose inner changes are designed to make exactly
+  # one undoChange/redoChange raise (out-of-range line index → backend
+  # delete/insert raises → caught by the try/except in undoChange/redoChange).
+
+  test "undo rolls forward inner changes when a partway undoChange fails":
+    let b = newTextBuffer("Xabc")
+    let baselineSeq = b.changeSeq
+    let preLine = b.getLine(0)
+
+    # undo() walks transactionChanges in reverse:
+    #   inner[1] (valid)  → undoChange removes the leading "X" → succeeds
+    #   inner[0] (bad)    → undoChange calls backendDeleteLine(999) → raises
+    # Roll-forward path should redoChange inner[1] (re-insert "X").
+    let txn = BufferChange(
+      startSeq: baselineSeq,
+      endSeq: baselineSeq + 2,
+      kind: ckTransaction,
+      transactionChanges: @[
+        BufferChange(
+          startSeq: baselineSeq,
+          endSeq: baselineSeq + 1,
+          kind: ckInsertLine,
+          insertLineIdx: 999,
+          insertLineText: "x",
+        ),
+        BufferChange(
+          startSeq: baselineSeq + 1,
+          endSeq: baselineSeq + 2,
+          kind: ckInsertText,
+          insertPos: BufferPosition(line: 0, column: 0),
+          insertText: "X",
+        ),
+      ],
+      transactionDescription: "test",
+    )
+    b.undoStack.addLast(txn)
+    let stackLenBefore = b.undoStack.len
+
+    let r = b.undo()
+    check r.isErr
+    # Roll-forward restored "X" — buffer content is back to pre-undo state.
+    check b.getLine(0) == preLine
+    # undo() restored the failed entry to the stack so future undo() works.
+    check b.undoStack.len == stackLenBefore
+
+  test "redo rolls back inner changes when a partway redoChange fails":
+    let b = newTextBuffer("abc")
+    let baselineSeq = b.changeSeq
+    let preLine = b.getLine(0)
+
+    # redo() walks transactionChanges forward:
+    #   inner[0] (valid) → redoChange inserts "X" at (0,0) → succeeds
+    #   inner[1] (bad)   → redoChange calls backendInsertLine at idx 999 → raises
+    # Roll-back path should undoChange inner[0] (remove the "X" just added).
+    let txn = BufferChange(
+      startSeq: baselineSeq,
+      endSeq: baselineSeq + 2,
+      kind: ckTransaction,
+      transactionChanges: @[
+        BufferChange(
+          startSeq: baselineSeq,
+          endSeq: baselineSeq + 1,
+          kind: ckInsertText,
+          insertPos: BufferPosition(line: 0, column: 0),
+          insertText: "X",
+        ),
+        BufferChange(
+          startSeq: baselineSeq + 1,
+          endSeq: baselineSeq + 2,
+          kind: ckInsertLine,
+          insertLineIdx: 999,
+          insertLineText: "x",
+        ),
+      ],
+      transactionDescription: "test",
+    )
+    b.redoStack.addLast(txn)
+    let stackLenBefore = b.redoStack.len
+
+    let r = b.redo()
+    check r.isErr
+    # Roll-back removed the "X" that inner[0] had inserted.
+    check b.getLine(0) == preLine
+    check b.redoStack.len == stackLenBefore

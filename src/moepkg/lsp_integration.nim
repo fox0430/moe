@@ -689,6 +689,14 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
   ## transaction (e.g. Insert mode completion, workspace edit), we join that
   ## one; otherwise we open and commit our own so a single Ctrl-r/u reverts
   ## the whole edit group instead of one TextEdit at a time.
+  ##
+  ## Failure semantics:
+  ## - Self-managed (no outer transaction): on partial failure we rollback
+  ##   the transaction we opened, so the buffer is left at its pre-call state.
+  ## - Joined an outer transaction: on partial failure we return err WITHOUT
+  ##   rolling back — the outer transaction is left dirty with whichever inner
+  ##   edits already applied. The caller is responsible for rollback because
+  ##   it may want to keep earlier work in the same transaction.
   if edits.len == 0:
     return ok()
 
@@ -777,6 +785,9 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
   if ownTransaction:
     let cr = buffer.commitTransaction()
     if cr.isErr:
+      # Commit failed but we own the transaction. Attempt to rollback so the
+      # buffer doesn't stay stuck in an in-progress transaction.
+      discard buffer.rollbackTransaction()
       return err("Failed to commit transaction: " & cr.error)
 
   return ok()

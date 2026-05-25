@@ -32,6 +32,9 @@ import core, internal_mutations
 # Forward declaration: undoChange calls redoChange for ckTransaction
 # roll-forward on partial failure. The reverse direction (redoChange ->
 # undoChange) does not need one because undoChange is defined first.
+# NOTE: this signature must stay in sync with the redoChange definition
+# below. Nim does not cross-check the two — editing one without the other
+# will silently call the wrong overload or fail at link time.
 proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string]
 
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
@@ -103,7 +106,11 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     b.ensureMarkersSize()
     b.ensureModifiedLinesSize()
     return ok(())
-  except CatchableError as e:
+  except CatchableError, Defect:
+    # Defect is included so that backend IndexDefect (out-of-range line/col)
+    # surfaces as a Result err and triggers the ckTransaction roll-forward
+    # path, instead of crashing the editor mid-undo.
+    let e = getCurrentException()
     logError("buffer", "Undo operation failed: " & e.msg)
     return err("Failed to undo change: " & e.msg)
 
@@ -407,7 +414,11 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     b.ensureMarkersSize()
     b.ensureModifiedLinesSize()
     return ok(())
-  except CatchableError as e:
+  except CatchableError, Defect:
+    # Defect is included so that backend IndexDefect (out-of-range line/col)
+    # surfaces as a Result err and triggers the ckTransaction roll-back path,
+    # instead of crashing the editor mid-redo.
+    let e = getCurrentException()
     logError("buffer", "Redo operation failed: " & e.msg)
     return err("Failed to redo change: " & e.msg)
 

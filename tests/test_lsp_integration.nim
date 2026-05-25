@@ -627,7 +627,7 @@ suite "LspIntegration - applyTextEdits":
     check result.isOk
     check buffer.getLine(0) == "hello world"
 
-  test "applyTextEdits creates single undo entry when called standalone (#7)":
+  test "applyTextEdits creates single undo entry when called standalone":
     # Regression: applyTextEdits used to push one undo entry per inner edit when
     # invoked outside an existing transaction. A standalone caller (e.g. format
     # on save) had to press Ctrl-r/u once per edit to revert a single format.
