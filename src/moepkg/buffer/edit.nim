@@ -47,7 +47,11 @@ proc replaceLine*(b: TextBuffer, lineNumber: int, content: string): Result[(), s
     return err("Line index out of bounds: " & $lineNumber)
   let oldContent = b.getLine(lineNumber)
   b.captureSnapshotIfNeeded()
-  b.backendReplaceLine(lineNumber, content)
+  try:
+    b.backendReplaceLine(lineNumber, content)
+  except CatchableError as e:
+    b.discardPendingSnapshot()
+    return err("Failed to replace line: " & e.msg)
   b.pushUndoChange(
     BufferChange(
       kind: ckReplaceLine,
@@ -80,7 +84,7 @@ proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), s
       # Use insertTextWithNewlines to handle newlines correctly
       b.insertTextWithNewlines(pos, text)
     except IndexDefect as e:
-      b.pendingSnapshot = none(PieceTableSnapshot)
+      b.discardPendingSnapshot()
       return err("Failed to insert text: " & e.msg)
 
   # Record change for undo
@@ -103,7 +107,7 @@ proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
   of GapBuffer, SqrtDecomp, Rope, PieceTable:
     let line = b.getLine(pos.line)
     if pos.column >= line.charLen:
-      b.pendingSnapshot = none(PieceTableSnapshot)
+      b.discardPendingSnapshot()
       return err("Column position out of bounds: " & $pos.column)
 
     try:
@@ -122,7 +126,7 @@ proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
         BufferChange(kind: ckDeleteText, deletePos: pos, deletedText: $deletedChar)
       )
     except IndexDefect as e:
-      b.pendingSnapshot = none(PieceTableSnapshot)
+      b.discardPendingSnapshot()
       return err("Failed to delete character: " & e.msg)
 
   return ok(())
@@ -140,7 +144,7 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
     try:
       b.backendInsertLine(lineIndex, content)
     except IndexDefect as e:
-      b.pendingSnapshot = none(PieceTableSnapshot)
+      b.discardPendingSnapshot()
       return err("Failed to insert line: " & e.msg)
 
   # Insert marker entry (none by default)
@@ -182,7 +186,7 @@ proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
     try:
       b.backendDeleteLine(lineIndex)
     except IndexDefect as e:
-      b.pendingSnapshot = none(PieceTableSnapshot)
+      b.discardPendingSnapshot()
       return err("Failed to delete line: " & e.msg)
 
   # Delete corresponding marker entry
@@ -287,7 +291,7 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
       else:
         b.deleteRangeMultiLine(startPos, endPos)
     except IndexDefect as e:
-      b.pendingSnapshot = none(PieceTableSnapshot)
+      b.discardPendingSnapshot()
       return err("Failed to delete range: " & e.msg)
 
   # Record change for undo

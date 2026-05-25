@@ -685,12 +685,35 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
   ## Edits are applied in reverse order (back to front) to preserve positions
   ## Note: LSP TextEdit.range.end is exclusive, buffer.deleteRange is inclusive
   ## Note: LSP character positions are in UTF-16 code units, converted to UTF-8 bytes
+  ## Edits are wrapped in a single undo entry. If the caller already opened a
+  ## transaction (e.g. Insert mode completion, workspace edit), we join that
+  ## one; otherwise we open and commit our own so a single Ctrl-r/u reverts
+  ## the whole edit group instead of one TextEdit at a time.
+  ##
+  ## Failure semantics:
+  ## - Self-managed (no outer transaction): on partial failure we rollback
+  ##   the transaction we opened, so the buffer is left at its pre-call state.
+  ## - Joined an outer transaction: on partial failure we return err WITHOUT
+  ##   rolling back — the outer transaction is left dirty with whichever inner
+  ##   edits already applied. The caller is responsible for rollback because
+  ##   it may want to keep earlier work in the same transaction.
   if edits.len == 0:
     return ok()
+
+  let ownTransaction = not buffer.inTransaction
+  if ownTransaction:
+    let txr = buffer.beginTransaction("LSP TextEdits")
+    if txr.isErr:
+      return err("Failed to begin transaction: " & txr.error)
 
   # Sort edits in reverse order (back to front)
   var sortedEdits = edits
   sortedEdits.sort(compareTextEditReverse)
+
+  template failEdit(msg: string): untyped =
+    if ownTransaction:
+      discard buffer.rollbackTransaction()
+    return err(msg)
 
   # Apply each edit
   for edit in sortedEdits:
@@ -751,13 +774,21 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
       ):
         let deleteResult = buffer.deleteRange(startPos, adjustedEndPos)
         if deleteResult.isErr:
-          return err("Failed to delete range: " & deleteResult.error)
+          failEdit("Failed to delete range: " & deleteResult.error)
 
     # Insert the new text if not empty
     if edit.newText.len > 0:
       let insertResult = buffer.insertText(startPos, edit.newText)
       if insertResult.isErr:
-        return err("Failed to insert text: " & insertResult.error)
+        failEdit("Failed to insert text: " & insertResult.error)
+
+  if ownTransaction:
+    let cr = buffer.commitTransaction()
+    if cr.isErr:
+      # Commit failed but we own the transaction. Attempt to rollback so the
+      # buffer doesn't stay stuck in an in-progress transaction.
+      discard buffer.rollbackTransaction()
+      return err("Failed to commit transaction: " & cr.error)
 
   return ok()
 
