@@ -19,7 +19,7 @@
 
 ## Tests for insert_handler.nim
 
-import std/[unittest, options, tables, json]
+import std/[unittest, options, tables, json, monotimes]
 
 import ../src/moepkg/buffer {.all.}
 import ../src/moepkg/types {.all.}
@@ -34,6 +34,7 @@ import ../src/moepkg/signature_help {.all.}
 import ../src/moepkg/syntax/tokenizer {.all.}
 import ../src/moepkg/window_manager {.all.}
 import ../src/moepkg/editor_types {.all.}
+import ../src/moepkg/lsp_integration {.all.}
 import ../src/moepkg/command_handlers/insert_handler {.all.}
 
 proc createTestState(): EditorState =
@@ -2089,3 +2090,59 @@ suite "InsertModeHandler - textEdit with keepPopupOpen":
     # textEdit replaces range [4,6) with "vec![$0]"
     check buf.getLine(0) == "    vec![$0]"
     check not handler.completionManager.isActive()
+
+suite "InsertModeHandler - LSP debounce prefix staleness":
+  test "Fast typing through LSP debounce keeps menu.prefix in sync":
+    # Regression: when LSP debounce skipped the re-request and no LSP items had
+    # arrived yet, menu.prefix was left stale at the first typed character.
+    # Pressing Tab then deleted only that one char and re-inserted the
+    # completion, producing e.g. "ttemplate" instead of "template" at col 0.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "template\n")
+
+    # Real LspIntegration but no server is started; enabled flag is enough to
+    # take the LSP code path in triggerLspCompletionRequest.
+    let lsp = newLspIntegration("")
+    lsp.enabled = true
+
+    let keyBindingRegistry = newKeyBindingRegistry()
+    setupDefaultBindings(keyBindingRegistry)
+    let commandRegistry = newCommandRegistry()
+    registerBuiltinCommands(commandRegistry)
+    let motionController =
+      newMotionController(buf, createTestState(), createTestViewport())
+    let handler = newInsertModeHandler(
+      keyBindingRegistry,
+      motionController,
+      commandRegistry,
+      lsp,
+      true,
+      NotificationConfig(),
+    )
+
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 0)
+
+    # Type 't' at col 0 of a fresh line — first call, no debounce
+    let typeT = KeyCombo(isSpecial: false, char: "t", modifiers: {})
+    discard handler.handleInsertModeKey(createTestEditor(buf, state), typeT)
+    check handler.completionManager.isActive()
+    check handler.completionManager.menu.prefix == "t"
+
+    # Mimic an in-flight LSP request: set lastLspRequestTime to "now" so the
+    # next call to triggerLspCompletionRequest hits the debounce-skip branch
+    # while lspItems is still empty.
+    handler.completionManager.lastLspRequestTime = getMonoTime()
+
+    # Type 'e' — under the bug, triggerLspCompletionRequest returns early
+    # and leaves menu.prefix at "t". With the fix it refreshes the buffer
+    # completion menu so menu.prefix becomes "te".
+    let typeE = KeyCombo(isSpecial: false, char: "e", modifiers: {})
+    discard handler.handleInsertModeKey(createTestEditor(buf, state), typeE)
+    check handler.completionManager.menu.prefix == "te"
+
+    let tab = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(createTestEditor(buf, state), tab)
+
+    check buf.getLine(1) == "template"
+    check state.cursor.column == 8
