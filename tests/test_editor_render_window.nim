@@ -26,8 +26,8 @@ import
   ../src/moepkg/[
     editor, buffer, config, config_loader, render_utils, modes, color, highlight, types
   ]
-import ../src/moepkg/editor_render_window
-import ../src/moepkg/editor_render_helpers
+import ../src/moepkg/editor_render_window {.all.}
+import ../src/moepkg/[editor_render_helpers, style_patch, colorcode]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -50,6 +50,83 @@ proc createTestSidebar(height: int): Sidebar =
     row.add(SidebarItem(text: " ", style: normalStyle()))
     row.add(SidebarItem(text: " ", style: normalStyle()))
     result.buffer.add(row)
+
+proc getSelectionStyleAt(
+    e: Editor,
+    buffer: TextBuffer,
+    hasSelection: bool,
+    pos: BufferPosition,
+    cursorLine: int,
+    cursorCol: int,
+    windowMode: EditorMode,
+    displayCol: int = -1,
+    cursorDisplayCol: int = -1,
+    lineConflict: ConflictMarkerKind = cmkNone,
+    useTwoColor: bool = false,
+    searchRanges: seq[ColumnRange] = @[],
+    wordRanges: seq[ColumnRange] = @[],
+): Style =
+  ## Test helper that bridges the legacy per-line params to the new
+  ## LineStyleContext-based signature. Optional params let tests inject
+  ## conflict/search/word state symmetrically with the other *At helpers.
+  let lineCtx = LineStyleContext(
+    lineIndex: pos.line,
+    isCursorLine: pos.line == cursorLine,
+    lineConflict: lineConflict,
+    useTwoColor: useTwoColor,
+    searchRanges: searchRanges,
+    wordRanges: wordRanges,
+  )
+  e.getSelectionStyle(
+    buffer,
+    hasSelection = hasSelection,
+    pos = pos,
+    cursorCol = cursorCol,
+    windowMode = windowMode,
+    lineCtx = lineCtx,
+    displayCol = displayCol,
+    cursorDisplayCol = cursorDisplayCol,
+  )
+
+proc lineFillPatchAt(
+    e: Editor,
+    lineIndex: int,
+    cursorLine: int,
+    displayX: int,
+    cursorDisplayCol: int,
+    lineConflict: ConflictMarkerKind,
+    useTwoColor: bool,
+    inVisualSelection: bool,
+): StylePatch =
+  ## Test helper bridging the legacy explicit-args signature to the
+  ## LineStyleContext-based one.
+  let lineCtx = LineStyleContext(
+    lineIndex: lineIndex,
+    isCursorLine: lineIndex == cursorLine,
+    lineConflict: lineConflict,
+    useTwoColor: useTwoColor,
+  )
+  e.lineFillPatch(lineCtx, displayX, cursorDisplayCol, inVisualSelection)
+
+proc overlayPatchSyntaxAt(
+    e: Editor,
+    pos: BufferPosition,
+    cursorLine: int,
+    displayCol: int,
+    cursorDisplayCol: int,
+    lineConflict: ConflictMarkerKind,
+    useTwoColor: bool,
+    colorPair: EditorColorPairIndex,
+): StylePatch =
+  ## Test helper bridging the legacy explicit-args signature to the
+  ## LineStyleContext-based one.
+  let lineCtx = LineStyleContext(
+    lineIndex: pos.line,
+    isCursorLine: pos.line == cursorLine,
+    lineConflict: lineConflict,
+    useTwoColor: useTwoColor,
+  )
+  e.overlayPatchSyntax(pos, lineCtx, displayCol, cursorDisplayCol, colorPair)
 
 suite "renderWindowLineWrapped - Basic behavior":
   test "Render empty line":
@@ -1438,7 +1515,7 @@ suite "getSelectionStyle - Basic":
     let e = createTestEditor()
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    discard e.getSelectionStyle(
+    discard e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 5),
@@ -1455,7 +1532,7 @@ suite "getSelectionStyle - Basic":
     e.state.display.showSyntax = false
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    discard e.getSelectionStyle(
+    discard e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 0),
@@ -1475,7 +1552,7 @@ suite "getSelectionStyle - Basic":
     e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = true,
       pos = BufferPosition(line: 0, column: 5),
@@ -1504,7 +1581,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     e.textBuffer.highlight =
       initHighlight(@["let x = 42".toRunes], @[], SourceLanguage.langNim)
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = true,
       pos = BufferPosition(line: 0, column: 0),
@@ -1532,7 +1609,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     e.textBuffer.highlight =
       initHighlight(@["let x = 42".toRunes], @[], SourceLanguage.langNim)
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = true,
       pos = BufferPosition(line: 0, column: 0),
@@ -1554,7 +1631,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = true,
       pos = BufferPosition(line: 0, column: 5),
@@ -1571,7 +1648,7 @@ suite "getSelectionStyle - Matching paren":
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "(hello)")
     e.state.matchingParenPos = some(BufferPosition(line: 0, column: 6))
 
-    discard e.getSelectionStyle(
+    discard e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 6),
@@ -1590,7 +1667,7 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 2),
@@ -1608,7 +1685,7 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 1),
@@ -1627,7 +1704,7 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 1, column: 2),
@@ -1645,7 +1722,7 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.ui.findCharMatches = @[]
     e.state.ui.findCharMatchLine = 0
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 0),
@@ -1667,7 +1744,7 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = true,
       pos = BufferPosition(line: 0, column: 2),
@@ -1688,7 +1765,7 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.ui.findCharMatches = @[1, 3, 5, 7]
     e.state.ui.findCharMatchLine = 0
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 8),
@@ -1707,7 +1784,7 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 2),
@@ -1729,7 +1806,7 @@ suite "getSelectionStyle - Search highlight":
     discard
       e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
 
-    discard e.getSelectionStyle(
+    discard e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 0),
@@ -1748,7 +1825,7 @@ suite "getSelectionStyle - Search highlight":
     e.state.display.showCursorLine = false
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    discard e.getSelectionStyle(
+    discard e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 0),
@@ -1766,7 +1843,7 @@ suite "getSelectionStyle - Search highlight":
     e.state.mode = EditorMode.Normal
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    discard e.getSelectionStyle(
+    discard e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 0),
@@ -1784,7 +1861,7 @@ suite "getSelectionStyle - Cursor line":
     e.state.display.showDocumentHighlight = false
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    discard e.getSelectionStyle(
+    discard e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
@@ -1800,7 +1877,7 @@ suite "getSelectionStyle - Cursor line":
     e.state.display.showSyntax = false
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    discard e.getSelectionStyle(
+    discard e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
@@ -1832,7 +1909,7 @@ suite "getSelectionStyle - Cursor line":
       ]
     )
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
@@ -1866,7 +1943,7 @@ suite "getSelectionStyle - Cursor line":
       ]
     )
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
@@ -1886,7 +1963,7 @@ suite "getSelectionStyle - Cursor column":
     e.state.display.showDocumentHighlight = false
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
@@ -1905,7 +1982,7 @@ suite "getSelectionStyle - Cursor column":
     e.state.display.showSyntax = false
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
@@ -1924,7 +2001,7 @@ suite "getSelectionStyle - Cursor column":
     e.state.display.showSyntax = false
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
@@ -1945,7 +2022,7 @@ suite "getSelectionStyle - Cursor column":
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # At intersection (same line AND same column): cursorLine wins
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 5),
@@ -1965,7 +2042,7 @@ suite "getSelectionStyle - Cursor column":
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # Without displayCol/cursorDisplayCol params (default -1), no column highlight
-    let style = e.getSelectionStyle(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 5),
@@ -2273,3 +2350,545 @@ suite "renderLineSegmentWithSelection - tab trailing space highlight":
 
     let trailingStyle = trailingSpacesStyle()
     check buf[2, 0].style != trailingStyle
+
+# Helpers for priority-chain tests.
+proc setupDocumentHighlight(e: Editor, line, startCol, endCol, kind: int) =
+  e.state.display.showDocumentHighlight = true
+  e.state.lspCache.documentHighlightCache.isValid = true
+  e.state.lspCache.documentHighlightCache.itemsByLine = {
+    line: @[
+      DocumentHighlightItem(
+        line: line, startColumn: startCol, endColumn: endCol, kind: kind
+      )
+    ]
+  }.toTable
+
+suite "render layer predicates":
+  test "matchesVisualSelection: hasSelection false short-circuits":
+    let e = createTestEditor()
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    check not e.matchesVisualSelection(false, BufferPosition(line: 0, column: 2))
+
+  test "matchesVisualSelection: position inside selection":
+    let e = createTestEditor()
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    check e.matchesVisualSelection(true, BufferPosition(line: 0, column: 2))
+
+  test "matchesVisualSelection: position outside selection":
+    let e = createTestEditor()
+    e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
+    e.state.visualSelection.active = true
+    e.state.visualSelection.kind = VisualSelectionKind.vskChar
+    check not e.matchesVisualSelection(true, BufferPosition(line: 0, column: 9))
+
+  test "matchesMatchingParen: positive match":
+    let e = createTestEditor()
+    e.state.matchingParenPos = some(BufferPosition(line: 2, column: 7))
+    check e.matchesMatchingParen(BufferPosition(line: 2, column: 7))
+
+  test "matchesMatchingParen: different position":
+    let e = createTestEditor()
+    e.state.matchingParenPos = some(BufferPosition(line: 2, column: 7))
+    check not e.matchesMatchingParen(BufferPosition(line: 2, column: 8))
+    check not e.matchesMatchingParen(BufferPosition(line: 3, column: 7))
+
+  test "matchesMatchingParen: none set":
+    let e = createTestEditor()
+    e.state.matchingParenPos = none(BufferPosition)
+    check not e.matchesMatchingParen(BufferPosition(line: 0, column: 0))
+
+  test "matchesFindCharMatch: in matches on right line":
+    let e = createTestEditor()
+    e.config.highlight.findCharHighlight = true
+    e.state.ui.findCharMatchLine = 1
+    e.state.ui.findCharMatches = @[3, 5, 9]
+    check e.matchesFindCharMatch(BufferPosition(line: 1, column: 5))
+
+  test "matchesFindCharMatch: wrong line":
+    let e = createTestEditor()
+    e.config.highlight.findCharHighlight = true
+    e.state.ui.findCharMatchLine = 1
+    e.state.ui.findCharMatches = @[3, 5, 9]
+    check not e.matchesFindCharMatch(BufferPosition(line: 2, column: 5))
+
+  test "matchesFindCharMatch: config disabled":
+    let e = createTestEditor()
+    e.config.highlight.findCharHighlight = false
+    e.state.ui.findCharMatchLine = 1
+    e.state.ui.findCharMatches = @[5]
+    check not e.matchesFindCharMatch(BufferPosition(line: 1, column: 5))
+
+  test "matchesCurrentWord: word in range":
+    let e = createTestEditor()
+    let lineCtx = LineStyleContext(wordRanges: @[ColumnRange(startCol: 4, endCol: 9)])
+    check e.matchesCurrentWord(lineCtx, BufferPosition(line: 0, column: 5))
+
+  test "matchesCurrentWord: search overlay suppresses":
+    let e = createTestEditor()
+    e.state.overlay = some(OverlayKind.okSearch)
+    let lineCtx = LineStyleContext(wordRanges: @[ColumnRange(startCol: 4, endCol: 9)])
+    check not e.matchesCurrentWord(lineCtx, BufferPosition(line: 0, column: 5))
+
+  test "matchesCurrentWord: outside range":
+    let e = createTestEditor()
+    let lineCtx = LineStyleContext(wordRanges: @[ColumnRange(startCol: 4, endCol: 9)])
+    check not e.matchesCurrentWord(lineCtx, BufferPosition(line: 0, column: 2))
+
+  test "matchesSearchHighlight: column in search range":
+    let lineCtx = LineStyleContext(searchRanges: @[ColumnRange(startCol: 0, endCol: 4)])
+    check lineCtx.matchesSearchHighlight(BufferPosition(line: 0, column: 2))
+    check not lineCtx.matchesSearchHighlight(BufferPosition(line: 0, column: 4))
+
+  test "gitConflictApplies: cmkNone is false":
+    let lineCtx = LineStyleContext(lineConflict: cmkNone)
+    check not lineCtx.gitConflictApplies
+
+  test "gitConflictApplies: any other kind is true":
+    let lineCtx = LineStyleContext(lineConflict: cmkOurs)
+    check lineCtx.gitConflictApplies
+
+  test "cursorLineApplies: both conditions true":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    let lineCtx = LineStyleContext(isCursorLine: true)
+    check e.cursorLineApplies(lineCtx)
+
+  test "cursorLineApplies: showCursorLine off":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    let lineCtx = LineStyleContext(isCursorLine: true)
+    check not e.cursorLineApplies(lineCtx)
+
+  test "cursorLineApplies: not on cursor line":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    let lineCtx = LineStyleContext(isCursorLine: false)
+    check not e.cursorLineApplies(lineCtx)
+
+  test "cursorColumnApplies: all conditions true":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    check e.cursorColumnApplies(displayCol = 5, cursorDisplayCol = 5)
+
+  test "cursorColumnApplies: config off":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = false
+    check not e.cursorColumnApplies(displayCol = 5, cursorDisplayCol = 5)
+
+  test "cursorColumnApplies: displayCol is -1 sentinel":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    check not e.cursorColumnApplies(displayCol = -1, cursorDisplayCol = -1)
+
+  test "cursorColumnApplies: columns differ":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    check not e.cursorColumnApplies(displayCol = 3, cursorDisplayCol = 5)
+
+suite "charOverridePatch":
+  proc fileEditCtx(): RenderContext =
+    RenderContext(windowMode: EditorMode.Normal, windowRightEdge: 80)
+
+  proc helpCtx(): RenderContext =
+    # Help mode is NOT a file edit mode; per-char overrides should suppress.
+    RenderContext(windowMode: EditorMode.Help, windowRightEdge: 80)
+
+  test "no override returns noPatch":
+    let e = createTestEditor()
+    e.config.highlight.fullWidthSpace = false
+    e.config.highlight.trailingSpaces = false
+    let ctx = fileEditCtx()
+    let lineCtx = LineStyleContext()
+    let p = e.charOverridePatch(ctx, lineCtx, 'a'.Rune, 0)
+    check p == noPatch
+
+  test "fullWidthSpace fires for FULLWIDTH_SPACE rune":
+    let e = createTestEditor()
+    e.config.highlight.fullWidthSpace = true
+    let ctx = fileEditCtx()
+    let lineCtx = LineStyleContext()
+    let p = e.charOverridePatch(ctx, lineCtx, FULLWIDTH_SPACE, 3)
+    check p == full(fullWidthSpaceStyle())
+
+  test "fullWidthSpace ignored outside file edit mode":
+    let e = createTestEditor()
+    e.config.highlight.fullWidthSpace = true
+    let ctx = helpCtx()
+    let lineCtx = LineStyleContext()
+    let p = e.charOverridePatch(ctx, lineCtx, FULLWIDTH_SPACE, 3)
+    check p == noPatch
+
+  test "trailingSpaces fires for trailing space char":
+    let e = createTestEditor()
+    e.config.highlight.trailingSpaces = true
+    let ctx = fileEditCtx()
+    let lineCtx = LineStyleContext(trailingSpaceStart: 5, isCursorLine: false)
+    let p = e.charOverridePatch(ctx, lineCtx, ' '.Rune, 7)
+    check p == full(trailingSpacesStyle())
+
+  test "trailingSpaces ignored on cursor line":
+    let e = createTestEditor()
+    e.config.highlight.trailingSpaces = true
+    let ctx = fileEditCtx()
+    let lineCtx = LineStyleContext(trailingSpaceStart: 5, isCursorLine: true)
+    let p = e.charOverridePatch(ctx, lineCtx, ' '.Rune, 7)
+    check p == noPatch
+
+  test "trailingSpaces ignored before trailingSpaceStart":
+    let e = createTestEditor()
+    e.config.highlight.trailingSpaces = true
+    let ctx = fileEditCtx()
+    let lineCtx = LineStyleContext(trailingSpaceStart: 5, isCursorLine: false)
+    let p = e.charOverridePatch(ctx, lineCtx, ' '.Rune, 4)
+    check p == noPatch
+
+  test "trailingSpaces ignored for non-whitespace rune":
+    let e = createTestEditor()
+    e.config.highlight.trailingSpaces = true
+    let ctx = fileEditCtx()
+    let lineCtx = LineStyleContext(trailingSpaceStart: 5, isCursorLine: false)
+    let p = e.charOverridePatch(ctx, lineCtx, 'x'.Rune, 7)
+    check p == noPatch
+
+  test "colorCode override beats trailingSpaces":
+    let e = createTestEditor()
+    e.config.highlight.trailingSpaces = true
+    let ctx = fileEditCtx()
+    let ccStyle = Style(
+      fg: ColorValue(kind: Default),
+      bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 1, g: 2, b: 3)),
+      modifiers: {},
+    )
+    let lineCtx = LineStyleContext(
+      trailingSpaceStart: 5,
+      isCursorLine: false,
+      colorCodeMatches: @[ColorCodeMatch(startCol: 6, endCol: 8, style: ccStyle)],
+    )
+    let p = e.charOverridePatch(ctx, lineCtx, ' '.Rune, 7)
+    check p == full(ccStyle)
+
+  test "colorCode requires col within range":
+    let e = createTestEditor()
+    let ctx = fileEditCtx()
+    let ccStyle = Style(
+      fg: ColorValue(kind: Default),
+      bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 1, g: 2, b: 3)),
+      modifiers: {},
+    )
+    let lineCtx = LineStyleContext(
+      colorCodeMatches: @[ColorCodeMatch(startCol: 6, endCol: 8, style: ccStyle)]
+    )
+    check e.charOverridePatch(ctx, lineCtx, 'a'.Rune, 5) == noPatch
+    check e.charOverridePatch(ctx, lineCtx, 'a'.Rune, 6) == full(ccStyle)
+    check e.charOverridePatch(ctx, lineCtx, 'a'.Rune, 8) == full(ccStyle)
+    check e.charOverridePatch(ctx, lineCtx, 'a'.Rune, 9) == noPatch
+
+  test "trailingSpaces overrides fullWidthSpace at trailing position":
+    let e = createTestEditor()
+    e.config.highlight.fullWidthSpace = true
+    e.config.highlight.trailingSpaces = true
+    let ctx = fileEditCtx()
+    let lineCtx = LineStyleContext(trailingSpaceStart: 5, isCursorLine: false)
+    let p = e.charOverridePatch(ctx, lineCtx, FULLWIDTH_SPACE, 7)
+    check p == full(trailingSpacesStyle())
+
+  test "trailingSpaces fires for TAB rune at trailing position":
+    let e = createTestEditor()
+    e.config.highlight.trailingSpaces = true
+    let ctx = fileEditCtx()
+    let lineCtx = LineStyleContext(trailingSpaceStart: 5, isCursorLine: false)
+    let p = e.charOverridePatch(ctx, lineCtx, TAB_CHAR, 7)
+    check p == full(trailingSpacesStyle())
+
+suite "overlayPatchSyntax priority chain":
+  test "documentHighlight wins over gitConflict":
+    let e = createTestEditor()
+    e.setupDocumentHighlight(line = 0, startCol = 0, endCol = 5, kind = 2) # Read
+    let pos = BufferPosition(line: 0, column: 2)
+    let patch = e.overlayPatchSyntaxAt(
+      pos = pos,
+      cursorLine = -1,
+      displayCol = -1,
+      cursorDisplayCol = -1,
+      lineConflict = cmkOurs,
+      useTwoColor = true,
+      colorPair = EditorColorPairIndex.default,
+    )
+    check patch.bg == some(getDocumentHighlightStyle(2).bg)
+
+  test "documentHighlight wins over cursorLine":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    e.setupDocumentHighlight(line = 0, startCol = 0, endCol = 5, kind = 3) # Write
+    let pos = BufferPosition(line: 0, column: 2)
+    let patch = e.overlayPatchSyntaxAt(
+      pos = pos,
+      cursorLine = 0,
+      displayCol = -1,
+      cursorDisplayCol = -1,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      colorPair = EditorColorPairIndex.default,
+    )
+    check patch.bg == some(getDocumentHighlightStyle(3).bg)
+
+  test "gitConflict wins over cursorLine":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    let pos = BufferPosition(line: 0, column: 0)
+    let patch = e.overlayPatchSyntaxAt(
+      pos = pos,
+      cursorLine = 0,
+      displayCol = -1,
+      cursorDisplayCol = -1,
+      lineConflict = cmkOurs,
+      useTwoColor = true,
+      colorPair = EditorColorPairIndex.default,
+    )
+    check patch.bg == some(conflictStyleFor(cmkOurs, true).bg)
+
+  test "gitConflict wins over cursorColumn":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    let pos = BufferPosition(line: 0, column: 5)
+    let patch = e.overlayPatchSyntaxAt(
+      pos = pos,
+      cursorLine = -1,
+      displayCol = 5,
+      cursorDisplayCol = 5,
+      lineConflict = cmkTheirs,
+      useTwoColor = true,
+      colorPair = EditorColorPairIndex.default,
+    )
+    check patch.bg == some(conflictStyleFor(cmkTheirs, true).bg)
+
+  test "cursorLine wins over cursorColumn":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    e.state.display.showCursorColumn = true
+    let pos = BufferPosition(line: 0, column: 5)
+    let patch = e.overlayPatchSyntaxAt(
+      pos = pos,
+      cursorLine = 0,
+      displayCol = 5,
+      cursorDisplayCol = 5,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      colorPair = EditorColorPairIndex.default,
+    )
+    check patch.bg == some(cursorLineHighlightStyle().bg)
+
+  test "searchResult colorPair suppresses cursorLine/cursorColumn":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    e.state.display.showCursorColumn = true
+    let pos = BufferPosition(line: 0, column: 5)
+    let patch = e.overlayPatchSyntaxAt(
+      pos = pos,
+      cursorLine = 0,
+      displayCol = 5,
+      cursorDisplayCol = 5,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      colorPair = EditorColorPairIndex.searchResult,
+    )
+    check patch == noPatch
+
+  test "searchResult colorPair does not suppress gitConflict":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    let pos = BufferPosition(line: 0, column: 0)
+    let patch = e.overlayPatchSyntaxAt(
+      pos = pos,
+      cursorLine = 0,
+      displayCol = -1,
+      cursorDisplayCol = -1,
+      lineConflict = cmkBase,
+      useTwoColor = true,
+      colorPair = EditorColorPairIndex.searchResult,
+    )
+    check patch.bg == some(conflictStyleFor(cmkBase, true).bg)
+
+  test "searchResult colorPair does not suppress documentHighlight":
+    let e = createTestEditor()
+    e.setupDocumentHighlight(line = 0, startCol = 0, endCol = 5, kind = 1) # Text
+    let pos = BufferPosition(line: 0, column: 2)
+    let patch = e.overlayPatchSyntaxAt(
+      pos = pos,
+      cursorLine = -1,
+      displayCol = -1,
+      cursorDisplayCol = -1,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      colorPair = EditorColorPairIndex.searchResult,
+    )
+    check patch.bg == some(getDocumentHighlightStyle(1).bg)
+
+  test "no overrides returns noPatch":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showCursorColumn = false
+    let pos = BufferPosition(line: 0, column: 0)
+    let patch = e.overlayPatchSyntaxAt(
+      pos = pos,
+      cursorLine = 0,
+      displayCol = 0,
+      cursorDisplayCol = 0,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      colorPair = EditorColorPairIndex.default,
+    )
+    check patch == noPatch
+
+  test "cursorLine not applied when showCursorLine is off":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    let pos = BufferPosition(line: 0, column: 0)
+    let patch = e.overlayPatchSyntaxAt(
+      pos = pos,
+      cursorLine = 0,
+      displayCol = -1,
+      cursorDisplayCol = -1,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      colorPair = EditorColorPairIndex.default,
+    )
+    check patch == noPatch
+
+  test "cursorColumn requires non-negative displayCol":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    let pos = BufferPosition(line: 0, column: 0)
+    # displayCol = -1 means the column position is unknown / not applicable
+    let patch = e.overlayPatchSyntaxAt(
+      pos = pos,
+      cursorLine = -1,
+      displayCol = -1,
+      cursorDisplayCol = -1,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      colorPair = EditorColorPairIndex.default,
+    )
+    check patch == noPatch
+
+suite "lineFillPatch priority chain":
+  test "visualSelection wins over gitConflict":
+    let e = createTestEditor()
+    let patch = e.lineFillPatchAt(
+      lineIndex = 0,
+      cursorLine = -1,
+      displayX = 0,
+      cursorDisplayCol = -1,
+      lineConflict = cmkOurs,
+      useTwoColor = true,
+      inVisualSelection = true,
+    )
+    check patch == full(visualStyle())
+
+  test "visualSelection wins over cursorLine":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    let patch = e.lineFillPatchAt(
+      lineIndex = 0,
+      cursorLine = 0,
+      displayX = 0,
+      cursorDisplayCol = -1,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      inVisualSelection = true,
+    )
+    check patch == full(visualStyle())
+
+  test "gitConflict wins over cursorLine":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    let patch = e.lineFillPatchAt(
+      lineIndex = 0,
+      cursorLine = 0,
+      displayX = 0,
+      cursorDisplayCol = -1,
+      lineConflict = cmkTheirs,
+      useTwoColor = true,
+      inVisualSelection = false,
+    )
+    check patch == full(conflictStyleFor(cmkTheirs, true))
+
+  test "gitConflict wins over cursorColumn":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    let patch = e.lineFillPatchAt(
+      lineIndex = 0,
+      cursorLine = -1,
+      displayX = 5,
+      cursorDisplayCol = 5,
+      lineConflict = cmkBase,
+      useTwoColor = true,
+      inVisualSelection = false,
+    )
+    check patch == full(conflictStyleFor(cmkBase, true))
+
+  test "cursorLine wins over cursorColumn":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    e.state.display.showCursorColumn = true
+    let patch = e.lineFillPatchAt(
+      lineIndex = 0,
+      cursorLine = 0,
+      displayX = 5,
+      cursorDisplayCol = 5,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      inVisualSelection = false,
+    )
+    check patch == full(cursorLineHighlightStyle())
+
+  test "cursorColumn applied when only cursorColumn matches":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = true
+    e.state.display.showCursorColumn = true
+    let patch = e.lineFillPatchAt(
+      lineIndex = 0,
+      cursorLine = 1, # different line
+      displayX = 5,
+      cursorDisplayCol = 5,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      inVisualSelection = false,
+    )
+    check patch == full(cursorColumnHighlightStyle())
+
+  test "no overrides returns noPatch":
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showCursorColumn = false
+    let patch = e.lineFillPatchAt(
+      lineIndex = 0,
+      cursorLine = 0,
+      displayX = 0,
+      cursorDisplayCol = 0,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      inVisualSelection = false,
+    )
+    check patch == noPatch
+
+  test "cursorColumn requires non-negative cursorDisplayCol":
+    let e = createTestEditor()
+    e.state.display.showCursorColumn = true
+    let patch = e.lineFillPatchAt(
+      lineIndex = 0,
+      cursorLine = -1,
+      displayX = 5,
+      cursorDisplayCol = -1,
+      lineConflict = cmkNone,
+      useTwoColor = false,
+      inVisualSelection = false,
+    )
+    check patch == noPatch
