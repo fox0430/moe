@@ -25,8 +25,7 @@ import std/[options, unicode]
 import pkg/results
 
 import ../[primitives, unicode_utils]
-import ../buffer_backends/piece_table
-import ./[core, internal_mutations, undo]
+import core, internal_mutations, undo
 
 # Public NoUndo procs for external code that bypasses undo recording
 proc replaceLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =

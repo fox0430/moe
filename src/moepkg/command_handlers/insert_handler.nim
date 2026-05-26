@@ -392,8 +392,8 @@ proc triggerLspCompletionRequest*(
   # This must be checked BEFORE triggerCompletion, which clears lspItems.
   if not handler.lsp.isNil and handler.lsp.isEnabled:
     if handler.completionManager.shouldSkipLspRequest(prefix):
-      # Filter existing LSP items client-side without clearing them
       if handler.completionManager.lspItems.len > 0:
+        # Filter existing LSP items client-side without clearing them
         handler.completionManager.menu.prefix = prefix
         handler.completionManager.menu.entries =
           handler.completionManager.filterAndSortEntries(prefix)
@@ -402,6 +402,14 @@ proc triggerLspCompletionRequest*(
         handler.completionManager.menu.hasSelection = false
         if handler.completionManager.menu.entries.len > 0:
           handler.completionManager.state = csActive
+      else:
+        # LSP response not yet arrived; refresh buffer completions in place so
+        # menu.prefix stays in sync with the cursor. Skipping this would leave a
+        # stale prefix and cause commitCompletion to delete the wrong number of
+        # characters (e.g. typing "te" fast at col 0 then Tab → "ttemplate").
+        handler.completionManager.triggerCompletion(
+          buffer, state.cursor.line, state.cursor.column, buffer.language
+        )
       return
 
   # First, show buffer completions immediately for instant feedback
