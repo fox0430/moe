@@ -32,6 +32,10 @@ type
   ConfigModeResultKind* = enum
     cmrHandled # Command was handled successfully
     cmrEnterCommand # Enter command mode
+    cmrEnterSearch # Enter search mode (forward)
+    cmrEnterSearchBackward # Enter search mode (backward)
+    cmrRepeatSearch # Jumped to next/prev match (re-enable highlight)
+    cmrClearSearchHighlight # Clear search highlight (double-Escape)
     cmrSaveConfig # Save configuration to file
     cmrUnhandled # Command was not handled
     cmrError # Error occurred
@@ -152,6 +156,22 @@ proc handleConfigModeKey*(
       return ConfigModeResult(kind: cmrHandled)
     # If not 'g', fall through to normal handling
 
+  # Handle Escape key for double-Escape search highlight clear
+  if keyCombo.isSpecial and keyCombo.special == skEscape:
+    if handler.lastKeyWasEscape:
+      # Second Escape press - clear search highlight.
+      # Display is gated by the global hlsearch flags (set by the dispatcher),
+      # so searchQuery is kept as the match target (like buffer lastText).
+      handler.lastKeyWasEscape = false
+      return ConfigModeResult(kind: cmrClearSearchHighlight)
+    else:
+      # First Escape press - just mark it
+      handler.lastKeyWasEscape = true
+      return ConfigModeResult(kind: cmrHandled)
+
+  # Any non-Escape key resets the Escape counter
+  handler.lastKeyWasEscape = false
+
   # Check for special keys first
   if keyCombo.isSpecial:
     case keyCombo.special
@@ -231,6 +251,23 @@ proc handleConfigModeKey*(
     case keyCombo.char
     of ":":
       return ConfigModeResult(kind: cmrEnterCommand)
+    of "/":
+      return ConfigModeResult(kind: cmrEnterSearch)
+    of "?":
+      return ConfigModeResult(kind: cmrEnterSearchBackward)
+    of "n":
+      # Jump to the next search match. Re-enable highlight (like Vim's n) only
+      # when there is a match to jump to; an empty query must not touch the gate.
+      if configState.searchForward().isSome:
+        configState.ensureSelectedVisible(viewportHeight)
+        return ConfigModeResult(kind: cmrRepeatSearch)
+      return ConfigModeResult(kind: cmrHandled)
+    of "N":
+      # Jump to the previous search match (see "n" for the gate rationale).
+      if configState.searchBackward().isSome:
+        configState.ensureSelectedVisible(viewportHeight)
+        return ConfigModeResult(kind: cmrRepeatSearch)
+      return ConfigModeResult(kind: cmrHandled)
     of "j":
       configState.moveDown()
       configState.ensureSelectedVisible(viewportHeight)

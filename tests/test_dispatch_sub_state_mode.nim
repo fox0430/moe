@@ -239,3 +239,45 @@ suite "dispatchSubStateMode - early-return branches":
 # instead of logViewerState (see TODO in mode_dispatchers.nim), and the
 # underlying handler dereferences fields that are nil in a minimal test
 # harness. LogViewer behavior is owned by SubStateHandler-specific tests.
+
+suite "dispatchSubStateMode - Config search highlight clear":
+  test "Config double-Escape disables the global hlsearch gate":
+    # Regression: a highlight clear in Config mode must propagate to every
+    # window/mode via the shared EditorState.search gate, not just the active
+    # Config window. Previously the dispatcher only set needsFullRedraw, so
+    # buffer/Help windows kept their highlight.
+    let (manager, editor, keyCombo) = setupDispatchTest(EditorMode.Config)
+    editor.activeWindow.modeState =
+      ModeState(kind: mskConfig, config: newConfigModeState(newEditorConfig()))
+    editor.state.search.hlsearchTempDisabled = false
+
+    let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    # First Escape is only recorded; the gate must stay enabled.
+    let r1 = manager.dispatchSubStateMode(editor, esc)
+    check r1.kind == hrHandled
+    check not editor.state.search.hlsearchTempDisabled
+    # Second Escape clears: the global gate is disabled for all windows.
+    let r2 = manager.dispatchSubStateMode(editor, esc)
+    check r2.kind == hrHandled
+    check editor.state.search.hlsearchTempDisabled
+
+  test "Config 'n' re-enables the global hlsearch gate after a clear":
+    # After a highlight clear, jumping to a match with n must bring the
+    # highlight back across all windows (like Vim's n after :noh).
+    let (manager, editor, keyCombo) = setupDispatchTest(EditorMode.Config)
+    let configState = newConfigModeState(newEditorConfig())
+    var idx = -1
+    for i, item in configState.items:
+      if item.kind != cvkSection:
+        idx = i
+        break
+    check idx >= 0
+    configState.setSearchQuery(configState.items[idx].displayName)
+    editor.activeWindow.modeState = ModeState(kind: mskConfig, config: configState)
+    # Highlight was previously cleared.
+    editor.state.search.hlsearchTempDisabled = true
+
+    let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
+    let r = manager.dispatchSubStateMode(editor, n)
+    check r.kind == hrHandled
+    check not editor.state.search.hlsearchTempDisabled

@@ -1395,3 +1395,103 @@ suite "SubStateHandler - Empty Items Edge Case":
     let result = handler.handleConfigModeKey(configState, 24, keyCombo)
 
     check result.kind == cmrHandled
+
+suite "SubStateHandler - Search":
+  test "'/' enters forward search":
+    let handler = newSubStateHandler()
+    let configState = createTestConfigState()
+    let keyCombo = KeyCombo(isSpecial: false, char: "/", modifiers: {})
+    let result = handler.handleConfigModeKey(configState, 24, keyCombo)
+    check result.kind == cmrEnterSearch
+
+  test "'?' enters backward search":
+    let handler = newSubStateHandler()
+    let configState = createTestConfigState()
+    let keyCombo = KeyCombo(isSpecial: false, char: "?", modifiers: {})
+    let result = handler.handleConfigModeKey(configState, 24, keyCombo)
+    check result.kind == cmrEnterSearchBackward
+
+  test "'n' repeats search forward":
+    let handler = newSubStateHandler()
+    let configState = createTestConfigState()
+    let keyCombo = KeyCombo(isSpecial: false, char: "n", modifiers: {})
+    let result = handler.handleConfigModeKey(configState, 24, keyCombo)
+    check result.kind == cmrHandled
+
+  test "'N' repeats search backward":
+    let handler = newSubStateHandler()
+    let configState = createTestConfigState()
+    let keyCombo = KeyCombo(isSpecial: false, char: "N", modifiers: {})
+    let result = handler.handleConfigModeKey(configState, 24, keyCombo)
+    check result.kind == cmrHandled
+
+  test "'n' moves selection to the next match":
+    let handler = newSubStateHandler()
+    let configState = createTestConfigState()
+    # Find the first editable item and search for its name.
+    var idx = -1
+    for i, item in configState.items:
+      if item.kind != cvkSection:
+        idx = i
+        break
+    check idx >= 0
+    configState.setSearchQuery(configState.items[idx].displayName)
+    configState.selectedIndex = 0
+    let keyCombo = KeyCombo(isSpecial: false, char: "n", modifiers: {})
+    discard handler.handleConfigModeKey(configState, 24, keyCombo)
+    check configState.isItemMatched(configState.selectedIndex)
+
+  test "Single Escape is consumed and waits for a second":
+    let handler = newSubStateHandler()
+    let configState = createTestConfigState()
+    let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    let result = handler.handleConfigModeKey(configState, 24, esc)
+    check result.kind == cmrHandled
+    check handler.lastKeyWasEscape
+
+  test "Double Escape requests highlight clear and keeps the query":
+    let handler = newSubStateHandler()
+    let configState = createTestConfigState()
+    configState.setSearchQuery("lsp")
+    let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    discard handler.handleConfigModeKey(configState, 24, esc)
+    let result = handler.handleConfigModeKey(configState, 24, esc)
+    check result.kind == cmrClearSearchHighlight
+    # searchQuery is kept as the match target; display is gated by the global
+    # hlsearch flags (set by the dispatcher), not by clearing the query here.
+    check configState.hasSearchQuery
+    check not handler.lastKeyWasEscape
+
+  test "A non-Escape key resets the Escape counter":
+    let handler = newSubStateHandler()
+    let configState = createTestConfigState()
+    let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    discard handler.handleConfigModeKey(configState, 24, esc)
+    check handler.lastKeyWasEscape
+    let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
+    discard handler.handleConfigModeKey(configState, 24, j)
+    check not handler.lastKeyWasEscape
+
+  test "'n' returns cmrRepeatSearch when a match is found":
+    let handler = newSubStateHandler()
+    let configState = createTestConfigState()
+    # A committed query with a match makes n/N request a highlight re-enable.
+    var idx = -1
+    for i, item in configState.items:
+      if item.kind != cvkSection:
+        idx = i
+        break
+    check idx >= 0
+    configState.setSearchQuery(configState.items[idx].displayName)
+    let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
+    let result = handler.handleConfigModeKey(configState, 24, n)
+    check result.kind == cmrRepeatSearch
+
+  test "'n' returns cmrHandled (not cmrRepeatSearch) without a query":
+    # An empty query must not request a gate change — pressing n is a no-op.
+    let handler = newSubStateHandler()
+    let configState = createTestConfigState()
+    check not configState.hasSearchQuery
+    let n = KeyCombo(isSpecial: false, char: "n", modifiers: {})
+    let result = handler.handleConfigModeKey(configState, 24, n)
+    check result.kind == cmrHandled

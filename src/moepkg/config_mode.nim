@@ -111,6 +111,8 @@ type
     editCursor*: int # Cursor position in edit buffer
     enumPopupOpen*: bool # Whether enum selection popup is open
     enumPopupIndex*: int # Selected index in enum popup
+    searchQuery*: string # Active search query ("" when no search)
+    searchStartIndex*: int # Selection index when the current search began
     config*: EditorConfig # Reference to the config being edited
 
 # Config Item Descriptors - Single source of truth for config items
@@ -328,6 +330,8 @@ proc newConfigModeState*(config: EditorConfig): ConfigModeState =
     editCursor: 0,
     enumPopupOpen: false,
     enumPopupIndex: 0,
+    searchQuery: "",
+    searchStartIndex: 0,
     config: config,
   )
   result.buildItemList()
@@ -373,6 +377,77 @@ proc moveToFirst*(state: ConfigModeState) =
 proc moveToLast*(state: ConfigModeState) =
   ## Move to last item
   state.selectedIndex = max(0, state.items.len - 1)
+
+# Search
+
+proc matchesSearchQuery*(item: ConfigItem, query: string): bool =
+  ## Case-insensitive match of `query` against an item's display name and value
+  if query.len == 0:
+    return false
+  let q = query.toLowerAscii
+  if item.displayName.toLowerAscii.contains(q):
+    return true
+  case item.kind
+  of cvkBool:
+    (if item.boolValue: "true" else: "false").contains(q)
+  of cvkInt:
+    ($item.intValue).contains(q)
+  of cvkFloat:
+    ($item.floatValue).contains(q)
+  of cvkString:
+    item.stringValue.toLowerAscii.contains(q)
+  of cvkEnum:
+    item.enumValue.toLowerAscii.contains(q)
+  of cvkSection:
+    false
+
+proc setSearchQuery*(state: ConfigModeState, query: string) =
+  ## Set the active search query
+  state.searchQuery = query
+
+proc clearSearch*(state: ConfigModeState) =
+  ## Clear the active search query
+  state.searchQuery = ""
+
+proc hasSearchQuery*(state: ConfigModeState): bool =
+  ## Whether a search query is currently active
+  state.searchQuery.len > 0
+
+proc isItemMatched*(state: ConfigModeState, index: int): bool =
+  ## Whether the item at `index` matches the active search query
+  if not state.hasSearchQuery:
+    return false
+  if index < 0 or index >= state.items.len:
+    return false
+  state.items[index].matchesSearchQuery(state.searchQuery)
+
+proc searchItems*(
+    state: ConfigModeState, query: string, startIndex: int, forward: bool
+): Option[int] =
+  ## Scan items for `query` starting at `startIndex` (inclusive), wrapping around
+  ## the list. Moves `selectedIndex` to the first match and returns its index.
+  if query.len == 0 or state.items.len == 0:
+    return none(int)
+
+  let n = state.items.len
+  for offset in 0 ..< n:
+    let i =
+      if forward:
+        (startIndex + offset) mod n
+      else:
+        ((startIndex - offset) mod n + n) mod n
+    if state.items[i].matchesSearchQuery(query):
+      state.selectedIndex = i
+      return some(i)
+  none(int)
+
+proc searchForward*(state: ConfigModeState): Option[int] =
+  ## Move to the next match after the current selection (wraps around)
+  state.searchItems(state.searchQuery, state.selectedIndex + 1, true)
+
+proc searchBackward*(state: ConfigModeState): Option[int] =
+  ## Move to the previous match before the current selection (wraps around)
+  state.searchItems(state.searchQuery, state.selectedIndex - 1, false)
 
 # Value manipulation
 
