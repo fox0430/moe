@@ -36,16 +36,16 @@ proc specialKey(sk: SpecialKey, mods: set[KeyModifier] = {}): KeyCombo =
   ## Helper to create a special key combo
   KeyCombo(isSpecial: true, special: sk, fnNum: 0, modifiers: mods)
 
-suite "help_handler: newHelpViewerHandler":
+suite "help_handler: newSubStateHandler":
   test "Create new handler":
-    let handler = newHelpViewerHandler()
+    let handler = newSubStateHandler()
     check handler != nil
     check handler.waitingForG == false
 
 suite "help_handler: handleHelpViewerModeKey - Movement keys":
   test "j key moves down":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     check helpState.selectedIndex == 0
 
@@ -57,7 +57,7 @@ suite "help_handler: handleHelpViewerModeKey - Movement keys":
 
   test "k key moves up":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.selectedIndex = 5
 
@@ -69,7 +69,7 @@ suite "help_handler: handleHelpViewerModeKey - Movement keys":
 
   test "k key does not move above first line":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     check helpState.selectedIndex == 0
 
@@ -81,7 +81,7 @@ suite "help_handler: handleHelpViewerModeKey - Movement keys":
 
   test "j key does not move below last line":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.moveToLast()
     let lastIndex = helpState.selectedIndex
@@ -94,7 +94,7 @@ suite "help_handler: handleHelpViewerModeKey - Movement keys":
 
   test "Down arrow moves down":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     check helpState.selectedIndex == 0
 
@@ -106,7 +106,7 @@ suite "help_handler: handleHelpViewerModeKey - Movement keys":
 
   test "Up arrow moves up":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.selectedIndex = 5
 
@@ -119,7 +119,7 @@ suite "help_handler: handleHelpViewerModeKey - Movement keys":
 suite "help_handler: handleHelpViewerModeKey - gg and G commands":
   test "gg moves to first line":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.selectedIndex = 50
 
@@ -139,7 +139,7 @@ suite "help_handler: handleHelpViewerModeKey - gg and G commands":
 
   test "g followed by non-g cancels":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.selectedIndex = 50
 
@@ -158,7 +158,7 @@ suite "help_handler: handleHelpViewerModeKey - gg and G commands":
 
   test "g followed by special key cancels":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.selectedIndex = 50
 
@@ -177,7 +177,7 @@ suite "help_handler: handleHelpViewerModeKey - gg and G commands":
 
   test "G moves to last line":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     check helpState.selectedIndex == 0
 
@@ -190,7 +190,7 @@ suite "help_handler: handleHelpViewerModeKey - gg and G commands":
 suite "help_handler: handleHelpViewerModeKey - Half page movement":
   test "Ctrl+d moves half page down":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     check helpState.selectedIndex == 0
 
@@ -203,7 +203,7 @@ suite "help_handler: handleHelpViewerModeKey - Half page movement":
 
   test "Ctrl+u moves half page up":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.selectedIndex = 50
 
@@ -216,7 +216,7 @@ suite "help_handler: handleHelpViewerModeKey - Half page movement":
 
   test "Ctrl+u does not go below 0":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.selectedIndex = 5
 
@@ -229,7 +229,7 @@ suite "help_handler: handleHelpViewerModeKey - Half page movement":
 
   test "Ctrl+d does not exceed last line":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     # Move near end of document
     helpState.moveToLast()
@@ -246,7 +246,7 @@ suite "help_handler: handleHelpViewerModeKey - Half page movement":
 suite "help_handler: handleHelpViewerModeKey - Mode transitions":
   test ": enters command mode":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
 
     let result =
@@ -256,7 +256,7 @@ suite "help_handler: handleHelpViewerModeKey - Mode transitions":
 
   test "/ enters search mode":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
 
     let result =
@@ -266,7 +266,7 @@ suite "help_handler: handleHelpViewerModeKey - Mode transitions":
 
   test "? enters backward search mode":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
 
     let result =
@@ -277,7 +277,7 @@ suite "help_handler: handleHelpViewerModeKey - Mode transitions":
 suite "help_handler: handleHelpViewerModeKey - Search navigation":
   test "n searches forward":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.setSearchQuery("Visual")
     check helpState.selectedIndex == 0
@@ -292,7 +292,7 @@ suite "help_handler: handleHelpViewerModeKey - Search navigation":
 
   test "N searches backward":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.setSearchQuery("Normal")
     # Move to end of document
@@ -309,7 +309,7 @@ suite "help_handler: handleHelpViewerModeKey - Search navigation":
 
   test "n with no search query does not crash":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     # No search query set
 
@@ -321,7 +321,7 @@ suite "help_handler: handleHelpViewerModeKey - Search navigation":
 
   test "N with no search query does not crash":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.selectedIndex = 50
     # No search query set
@@ -335,7 +335,7 @@ suite "help_handler: handleHelpViewerModeKey - Search navigation":
 suite "help_handler: handleHelpViewerModeKey - Section navigation":
   test "} jumps to the next top-level section":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     check helpState.selectedIndex == 0
 
@@ -349,7 +349,7 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
 
   test "{ jumps to the previous top-level section":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.moveToLast()
     let startIdx = helpState.selectedIndex
@@ -364,7 +364,7 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
 
   test "} at last section stays on last section":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
 
     # Find the last top-level "# " line.
@@ -383,7 +383,7 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
 
   test "{ at first section stays on first section":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.selectedIndex = 0
 
@@ -395,7 +395,7 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
 
   test "} adjusts topLine to keep target visible":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.selectedIndex = 0
     helpState.topLine = 0
@@ -410,7 +410,7 @@ suite "help_handler: handleHelpViewerModeKey - Section navigation":
 suite "help_handler: handleHelpViewerModeKey - Scroll adjustment":
   test "Moving down adjusts topLine when cursor goes below viewport":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     # Set position at the bottom edge of viewport
     helpState.selectedIndex = TestViewportHeight - 1
@@ -426,7 +426,7 @@ suite "help_handler: handleHelpViewerModeKey - Scroll adjustment":
 
   test "Moving up adjusts topLine when cursor goes above viewport":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     # Set position at top of viewport (which is scrolled down)
     helpState.selectedIndex = 30
@@ -442,7 +442,7 @@ suite "help_handler: handleHelpViewerModeKey - Scroll adjustment":
 
   test "G command scrolls to make last line visible":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.topLine = 0
 
@@ -458,7 +458,7 @@ suite "help_handler: handleHelpViewerModeKey - Scroll adjustment":
 suite "help_handler: handleHelpViewerModeKey - Double-Escape clears search highlight":
   test "First Escape returns handled and marks lastKeyWasEscape":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
 
     let result = handler.handleHelpViewerModeKey(
@@ -470,7 +470,7 @@ suite "help_handler: handleHelpViewerModeKey - Double-Escape clears search highl
 
   test "Second Escape returns clearSearchHighlight":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.setSearchQuery("Visual")
 
@@ -490,7 +490,7 @@ suite "help_handler: handleHelpViewerModeKey - Double-Escape clears search highl
 
   test "Escape followed by non-Escape resets lastKeyWasEscape":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
 
     # First Escape
@@ -505,7 +505,7 @@ suite "help_handler: handleHelpViewerModeKey - Double-Escape clears search highl
 
   test "Double-Escape clears search query":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     helpState.setSearchQuery("Insert")
     check helpState.hasSearchQuery == true
@@ -523,7 +523,7 @@ suite "help_handler: handleHelpViewerModeKey - Double-Escape clears search highl
 
   test "Double-Escape without active search still returns clearSearchHighlight":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
     check helpState.hasSearchQuery == false
 
@@ -540,7 +540,7 @@ suite "help_handler: handleHelpViewerModeKey - Double-Escape clears search highl
 suite "help_handler: handleHelpViewerModeKey - Unhandled keys":
   test "Unbound key returns unhandled":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
 
     let result =
@@ -550,7 +550,7 @@ suite "help_handler: handleHelpViewerModeKey - Unhandled keys":
 
   test "Unbound special key returns unhandled":
     let
-      handler = newHelpViewerHandler()
+      handler = newSubStateHandler()
       helpState = newHelpViewerState()
 
     # skHome is not handled by help viewer

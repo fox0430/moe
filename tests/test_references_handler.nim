@@ -22,16 +22,16 @@ import ../src/moepkg/references_viewer
 import ../src/moepkg/command_handlers/references_handler
 import ../src/moepkg/key_bindings
 
-suite "ReferencesHandler - Handler creation":
-  test "newReferencesHandler creates handler":
-    let handler = newReferencesHandler()
+suite "SubStateHandler - Handler creation":
+  test "newSubStateHandler creates handler":
+    let handler = newSubStateHandler()
 
     check handler != nil
     check handler.waitingForG == false
 
-suite "ReferencesHandler - Navigation keys":
+suite "SubStateHandler - Navigation keys":
   test "j key moves down":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -46,7 +46,7 @@ suite "ReferencesHandler - Navigation keys":
     check state.selectedIndex == 1
 
   test "k key moves up":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -62,7 +62,7 @@ suite "ReferencesHandler - Navigation keys":
     check state.selectedIndex == 1
 
   test "Down arrow key moves down":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -76,7 +76,7 @@ suite "ReferencesHandler - Navigation keys":
     check state.selectedIndex == 1
 
   test "Up arrow key moves up":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -90,9 +90,9 @@ suite "ReferencesHandler - Navigation keys":
     check result.kind == rvrHandled
     check state.selectedIndex == 0
 
-suite "ReferencesHandler - Go to first/last":
+suite "SubStateHandler - Go to first/last":
   test "gg moves to first item":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -118,7 +118,7 @@ suite "ReferencesHandler - Go to first/last":
     check state.selectedIndex == 0
 
   test "G moves to last item":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -134,7 +134,7 @@ suite "ReferencesHandler - Go to first/last":
     check state.selectedIndex == 2
 
   test "g followed by non-g cancels gg sequence":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -157,9 +157,9 @@ suite "ReferencesHandler - Go to first/last":
     # The j key should be processed normally after gg cancellation
     # Position doesn't change because we're at last index (2) and moveDown does nothing
 
-suite "ReferencesHandler - Half page navigation":
+suite "SubStateHandler - Half page navigation":
   test "Ctrl+d moves half page down":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     var itemList: seq[ReferenceItem]
     for i in 0 ..< 20:
       itemList.add ReferenceItem(
@@ -176,7 +176,7 @@ suite "ReferencesHandler - Half page navigation":
     check state.selectedIndex == 10
 
   test "Ctrl+u moves half page up":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     var itemList: seq[ReferenceItem]
     for i in 0 ..< 20:
       itemList.add ReferenceItem(
@@ -192,9 +192,9 @@ suite "ReferencesHandler - Half page navigation":
     check result.kind == rvrHandled
     check state.selectedIndex == 10
 
-suite "ReferencesHandler - Quit commands":
+suite "SubStateHandler - Quit commands":
   test "q key returns quit result":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
     let state = newReferencesViewerState(items)
     let keyCombo = toKeyCombo('q')
@@ -204,7 +204,7 @@ suite "ReferencesHandler - Quit commands":
     check result.kind == rvrUnhandled
 
   test "Escape key returns quit result":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
     let state = newReferencesViewerState(items)
     let keyCombo = toSpecialKeyCombo(skEscape)
@@ -213,9 +213,9 @@ suite "ReferencesHandler - Quit commands":
 
     check result.kind == rvrUnhandled
 
-suite "ReferencesHandler - Enter command mode":
+suite "SubStateHandler - Enter command mode":
   test ": key returns enter command result":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
     let state = newReferencesViewerState(items)
     let keyCombo = toKeyCombo(':')
@@ -224,9 +224,9 @@ suite "ReferencesHandler - Enter command mode":
 
     check result.kind == rvrEnterCommand
 
-suite "ReferencesHandler - Jump to reference":
+suite "SubStateHandler - Jump to reference":
   test "Enter key returns jump result with selected item":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/first.nim", line: 10, column: 5, text: "first"),
       ReferenceItem(path: "/second.nim", line: 20, column: 10, text: "second"),
@@ -244,7 +244,7 @@ suite "ReferencesHandler - Jump to reference":
     check result.targetItem.text == "second"
 
   test "Enter key on empty state returns error":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let state = newReferencesViewerState(@[])
     let keyCombo = toSpecialKeyCombo(skEnter)
 
@@ -253,9 +253,9 @@ suite "ReferencesHandler - Jump to reference":
     check result.kind == rvrError
     check result.errorMessage == "No reference selected"
 
-suite "ReferencesHandler - Unhandled keys":
+suite "SubStateHandler - Unhandled keys":
   test "unhandled key returns unhandled result":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
     let state = newReferencesViewerState(items)
     let keyCombo = toKeyCombo('x') # x is not a handled key
@@ -265,7 +265,7 @@ suite "ReferencesHandler - Unhandled keys":
     check result.kind == rvrUnhandled
 
   test "unhandled special key returns unhandled result":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
     let state = newReferencesViewerState(items)
     let keyCombo = toSpecialKeyCombo(skPageUp) # PageUp is not handled
@@ -274,9 +274,9 @@ suite "ReferencesHandler - Unhandled keys":
 
     check result.kind == rvrUnhandled
 
-suite "ReferencesHandler - Viewport scrolling":
+suite "SubStateHandler - Viewport scrolling":
   test "navigation ensures selected item is visible":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     var itemList: seq[ReferenceItem]
     for i in 0 ..< 30:
       itemList.add ReferenceItem(
@@ -298,9 +298,9 @@ suite "ReferencesHandler - Viewport scrolling":
     check state.selectedIndex >= state.topLine
     check state.selectedIndex < state.topLine + 10
 
-suite "ReferencesHandler - Boundary conditions":
+suite "SubStateHandler - Boundary conditions":
   test "k at first item stays at first":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -315,7 +315,7 @@ suite "ReferencesHandler - Boundary conditions":
     check state.selectedIndex == 0
 
   test "j at last item stays at last":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -330,7 +330,7 @@ suite "ReferencesHandler - Boundary conditions":
     check state.selectedIndex == 1
 
   test "Up arrow at first item stays at first":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -345,7 +345,7 @@ suite "ReferencesHandler - Boundary conditions":
     check state.selectedIndex == 0
 
   test "Down arrow at last item stays at last":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -359,9 +359,9 @@ suite "ReferencesHandler - Boundary conditions":
     check result.kind == rvrHandled
     check state.selectedIndex == 1
 
-suite "ReferencesHandler - gg with special key":
+suite "SubStateHandler - gg with special key":
   test "g followed by Escape cancels gg and quits":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -384,7 +384,7 @@ suite "ReferencesHandler - gg with special key":
     check state.selectedIndex == 1 # Position unchanged
 
   test "g followed by Enter cancels gg and jumps":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 1, column: 2, text: "target"),
@@ -407,7 +407,7 @@ suite "ReferencesHandler - gg with special key":
     check result.targetItem.path == "/b.nim"
 
   test "g followed by Down cancels gg and moves down":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -430,9 +430,9 @@ suite "ReferencesHandler - gg with special key":
     check result.kind == rvrHandled
     check state.selectedIndex == 1
 
-suite "ReferencesHandler - G with viewport":
+suite "SubStateHandler - G with viewport":
   test "G scrolls viewport to show last item":
-    let handler = newReferencesHandler()
+    let handler = newSubStateHandler()
     var itemList: seq[ReferenceItem]
     for i in 0 ..< 30:
       itemList.add ReferenceItem(

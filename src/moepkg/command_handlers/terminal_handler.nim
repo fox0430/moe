@@ -46,9 +46,6 @@ type
     else:
       discard
 
-proc newTerminalHandler*(): TerminalHandler =
-  TerminalHandler()
-
 proc keyComboToBytes*(keyCombo: KeyCombo): string =
   ## Convert a KeyCombo to raw terminal bytes for PTY forwarding.
   if keyCombo.isSpecial:
@@ -141,7 +138,7 @@ proc keyComboToBytes*(keyCombo: KeyCombo): string =
       return keyCombo.char
 
 proc handleTerminalModeKey*(
-    handler: TerminalHandler, termState: TerminalState, keyCombo: KeyCombo
+    handler: SubStateHandler, termState: TerminalState, keyCombo: KeyCombo
 ): TerminalResult =
   ## Handle a key press in Terminal mode.
 

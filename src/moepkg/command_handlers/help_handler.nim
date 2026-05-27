@@ -44,12 +44,8 @@ type
     else:
       discard
 
-proc newHelpViewerHandler*(): HelpViewerHandler =
-  ## Create a new Help Viewer mode handler
-  HelpViewerHandler(waitingForG: false, lastKeyWasEscape: false)
-
 proc handleHelpViewerModeKey*(
-    handler: HelpViewerHandler,
+    handler: SubStateHandler,
     helpState: HelpViewerState,
     viewportHeight: int,
     keyCombo: KeyCombo,

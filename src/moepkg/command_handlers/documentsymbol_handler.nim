@@ -46,12 +46,8 @@ type
     else:
       discard
 
-proc newDocumentSymbolHandler*(): DocumentSymbolHandler =
-  ## Create a new Document Symbol Viewer mode handler
-  DocumentSymbolHandler(waitingForG: false)
-
 proc handleDocumentSymbolModeKey*(
-    handler: DocumentSymbolHandler,
+    handler: SubStateHandler,
     symState: DocumentSymbolViewerState,
     viewportHeight: int,
     keyCombo: KeyCombo,

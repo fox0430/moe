@@ -36,14 +36,14 @@ proc createTestBufferManagerState(): BufferManagerState =
   state.updateEntries(bufferInfos)
   result = state
 
-suite "BufferManagerHandler - Constructor":
-  test "Create BufferManagerHandler":
-    let handler = newBufferManagerHandler()
+suite "SubStateHandler - Constructor":
+  test "Create SubStateHandler":
+    let handler = newSubStateHandler()
 
     check handler != nil
     check handler.waitingForG == false
 
-suite "BufferManagerHandler - Result Types":
+suite "SubStateHandler - Result Types":
   test "bmrHandled result":
     let result = BufferManagerResult(kind: bmrHandled)
     check result.kind == bmrHandled
@@ -75,9 +75,9 @@ suite "BufferManagerHandler - Result Types":
     check result.kind == bmrError
     check result.errorMessage == "test error"
 
-suite "BufferManagerHandler - Navigation":
+suite "SubStateHandler - Navigation":
   test "Move down with j":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
@@ -88,7 +88,7 @@ suite "BufferManagerHandler - Navigation":
     check bmState.selectedIndex == 1
 
   test "Move up with k":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 1
 
@@ -99,7 +99,7 @@ suite "BufferManagerHandler - Navigation":
     check bmState.selectedIndex == 0
 
   test "Move down with Down arrow":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
@@ -110,7 +110,7 @@ suite "BufferManagerHandler - Navigation":
     check bmState.selectedIndex == 1
 
   test "Move up with Up arrow":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 1
 
@@ -121,7 +121,7 @@ suite "BufferManagerHandler - Navigation":
     check bmState.selectedIndex == 0
 
   test "Move to last with G":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
@@ -132,7 +132,7 @@ suite "BufferManagerHandler - Navigation":
     check bmState.selectedIndex == bmState.entries.len - 1
 
   test "Move to first with gg":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 2
 
@@ -153,7 +153,7 @@ suite "BufferManagerHandler - Navigation":
     check handler.waitingForG == false
 
   test "Half page down with Ctrl+d":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
     let viewportHeight = 4
@@ -168,7 +168,7 @@ suite "BufferManagerHandler - Navigation":
     check bmState.selectedIndex == expectedIndex
 
   test "Half page up with Ctrl+u":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 2
     let viewportHeight = 4
@@ -182,9 +182,9 @@ suite "BufferManagerHandler - Navigation":
     let expectedIndex = max(0, 2 - expectedMove)
     check bmState.selectedIndex == expectedIndex
 
-suite "BufferManagerHandler - Buffer Selection":
+suite "SubStateHandler - Buffer Selection":
   test "Select buffer with Enter":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 1
 
@@ -195,7 +195,7 @@ suite "BufferManagerHandler - Buffer Selection":
     check result.bufferIndex == 1
 
   test "Open buffer with o":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 2
 
@@ -206,7 +206,7 @@ suite "BufferManagerHandler - Buffer Selection":
     check result.bufferIndex == 2
 
   test "Select buffer with empty entries returns handled":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBufferManagerState()
     # Empty state
 
@@ -216,7 +216,7 @@ suite "BufferManagerHandler - Buffer Selection":
     check result.kind == bmrHandled
 
   test "Open buffer with o on empty entries returns handled":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBufferManagerState()
     # Empty state
 
@@ -225,9 +225,9 @@ suite "BufferManagerHandler - Buffer Selection":
 
     check result.kind == bmrHandled
 
-suite "BufferManagerHandler - Buffer Deletion":
+suite "SubStateHandler - Buffer Deletion":
   test "Delete buffer with D":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 1
 
@@ -238,7 +238,7 @@ suite "BufferManagerHandler - Buffer Deletion":
     check result.deleteBufferIndex == 1
 
   test "Delete buffer with D on empty entries returns handled":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBufferManagerState()
     # Empty state
 
@@ -247,9 +247,9 @@ suite "BufferManagerHandler - Buffer Deletion":
 
     check result.kind == bmrHandled
 
-suite "BufferManagerHandler - Mode Transitions":
+suite "SubStateHandler - Mode Transitions":
   test "Quit with Escape":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
@@ -258,7 +258,7 @@ suite "BufferManagerHandler - Mode Transitions":
     check result.kind == bmrQuit
 
   test "Quit with q":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "q", modifiers: {})
@@ -267,7 +267,7 @@ suite "BufferManagerHandler - Mode Transitions":
     check result.kind == bmrQuit
 
   test "Enter command mode with :":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: ":", modifiers: {})
@@ -275,9 +275,9 @@ suite "BufferManagerHandler - Mode Transitions":
 
     check result.kind == bmrEnterCommand
 
-suite "BufferManagerHandler - Window Navigation (Unhandled)":
+suite "SubStateHandler - Window Navigation (Unhandled)":
   test "Ctrl+k returns unhandled":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "k", modifiers: {kmCtrl})
@@ -286,7 +286,7 @@ suite "BufferManagerHandler - Window Navigation (Unhandled)":
     check result.kind == bmrUnhandled
 
   test "Ctrl+j returns unhandled":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {kmCtrl})
@@ -294,9 +294,9 @@ suite "BufferManagerHandler - Window Navigation (Unhandled)":
 
     check result.kind == bmrUnhandled
 
-suite "BufferManagerHandler - Waiting for G State":
+suite "SubStateHandler - Waiting for G State":
   test "First g sets waitingForG true":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "g", modifiers: {})
@@ -306,7 +306,7 @@ suite "BufferManagerHandler - Waiting for G State":
     check handler.waitingForG == true
 
   test "Waiting for G cancelled on non-g key":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
@@ -325,7 +325,7 @@ suite "BufferManagerHandler - Waiting for G State":
     check bmState.selectedIndex == 1
 
   test "Waiting for G with special key cancels and handles key":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     # First 'g' starts waiting
@@ -341,9 +341,9 @@ suite "BufferManagerHandler - Waiting for G State":
     check handler.waitingForG == false
     check result.kind == bmrQuit
 
-suite "BufferManagerHandler - Unhandled Keys":
+suite "SubStateHandler - Unhandled Keys":
   test "Unhandled special key returns bmrUnhandled":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     # PageUp is not handled
@@ -353,7 +353,7 @@ suite "BufferManagerHandler - Unhandled Keys":
     check result.kind == bmrUnhandled
 
   test "Unhandled character key returns bmrUnhandled":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     # 'z' is not handled
@@ -363,7 +363,7 @@ suite "BufferManagerHandler - Unhandled Keys":
     check result.kind == bmrUnhandled
 
   test "Unhandled function key returns bmrUnhandled":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     # F5 is not handled
@@ -373,9 +373,9 @@ suite "BufferManagerHandler - Unhandled Keys":
 
     check result.kind == bmrUnhandled
 
-suite "BufferManagerHandler - Edge Cases":
+suite "SubStateHandler - Edge Cases":
   test "Navigation at top boundary":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
@@ -386,7 +386,7 @@ suite "BufferManagerHandler - Edge Cases":
     check bmState.selectedIndex == 0 # Should stay at 0
 
   test "Navigation at bottom boundary":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = bmState.entries.len - 1
 
@@ -397,7 +397,7 @@ suite "BufferManagerHandler - Edge Cases":
     check bmState.selectedIndex == bmState.entries.len - 1 # Should stay at last
 
   test "G with empty entries":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBufferManagerState()
     # Empty state
 
@@ -408,7 +408,7 @@ suite "BufferManagerHandler - Edge Cases":
     check bmState.selectedIndex == 0 # max(0, -1) = 0
 
   test "gg with empty entries":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBufferManagerState()
     # Empty state
 
@@ -425,7 +425,7 @@ suite "BufferManagerHandler - Edge Cases":
     check bmState.topLine == 0
 
   test "Ctrl+d with large half page":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
     # Large viewport - half page is larger than entries count
@@ -439,7 +439,7 @@ suite "BufferManagerHandler - Edge Cases":
     check bmState.selectedIndex == bmState.entries.len - 1
 
   test "Ctrl+u at top":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
     let viewportHeight = 4
@@ -451,7 +451,7 @@ suite "BufferManagerHandler - Edge Cases":
     check bmState.selectedIndex == 0
 
   test "Select buffer at index 0":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
@@ -462,7 +462,7 @@ suite "BufferManagerHandler - Edge Cases":
     check result.bufferIndex == 0
 
   test "Delete buffer at index 0":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
@@ -472,9 +472,9 @@ suite "BufferManagerHandler - Edge Cases":
     check result.kind == bmrDeleteBuffer
     check result.deleteBufferIndex == 0
 
-suite "BufferManagerHandler - Integration":
+suite "SubStateHandler - Integration":
   test "Full workflow: navigate, select, quit":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
@@ -509,7 +509,7 @@ suite "BufferManagerHandler - Integration":
     check result5.bufferIndex == 2
 
   test "Navigate with arrow keys and half-page scrolling":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
@@ -538,7 +538,7 @@ suite "BufferManagerHandler - Integration":
     check bmState.selectedIndex == 0 # Back to top
 
   test "Mode transitions workflow":
-    let handler = newBufferManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     # Enter command mode

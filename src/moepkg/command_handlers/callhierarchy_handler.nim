@@ -49,12 +49,8 @@ type
     else:
       discard
 
-proc newCallHierarchyHandler*(): CallHierarchyHandler =
-  ## Create a new Call Hierarchy Viewer mode handler
-  CallHierarchyHandler(waitingForG: false)
-
 proc handleCallHierarchyModeKey*(
-    handler: CallHierarchyHandler,
+    handler: SubStateHandler,
     chState: CallHierarchyViewerState,
     viewportHeight: int,
     keyCombo: KeyCombo,

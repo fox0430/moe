@@ -32,14 +32,14 @@ proc createTestConfigState(): ConfigModeState =
   let config = newEditorConfig()
   result = newConfigModeState(config)
 
-suite "ConfigModeHandler - Constructor":
-  test "Create ConfigModeHandler":
-    let handler = newConfigModeHandler()
+suite "SubStateHandler - Constructor":
+  test "Create SubStateHandler":
+    let handler = newSubStateHandler()
 
     check handler != nil
     check handler.waitingForG == false
 
-suite "ConfigModeHandler - Result Types":
+suite "SubStateHandler - Result Types":
   test "cmrHandled result":
     let result = ConfigModeResult(kind: cmrHandled)
     check result.kind == cmrHandled
@@ -61,9 +61,9 @@ suite "ConfigModeHandler - Result Types":
     check result.kind == cmrError
     check result.errorMessage == "test error"
 
-suite "ConfigModeHandler - Navigation":
+suite "SubStateHandler - Navigation":
   test "Move down with j":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
     let initialIndex = configState.selectedIndex
 
@@ -74,7 +74,7 @@ suite "ConfigModeHandler - Navigation":
     check configState.selectedIndex == initialIndex + 1
 
   test "Move up with k":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
     # Move down first to have room to move up
     configState.moveDown()
@@ -87,7 +87,7 @@ suite "ConfigModeHandler - Navigation":
     check configState.selectedIndex == initialIndex - 1
 
   test "Move down with Down arrow":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
     let initialIndex = configState.selectedIndex
 
@@ -98,7 +98,7 @@ suite "ConfigModeHandler - Navigation":
     check configState.selectedIndex == initialIndex + 1
 
   test "Move up with Up arrow":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
     configState.moveDown()
     let initialIndex = configState.selectedIndex
@@ -110,7 +110,7 @@ suite "ConfigModeHandler - Navigation":
     check configState.selectedIndex == initialIndex - 1
 
   test "Move to last with G":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "G", modifiers: {})
@@ -120,7 +120,7 @@ suite "ConfigModeHandler - Navigation":
     check configState.selectedIndex == configState.items.len - 1
 
   test "Move to first with gg":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
     # Move to end first
     configState.moveToLast()
@@ -141,7 +141,7 @@ suite "ConfigModeHandler - Navigation":
     check handler.waitingForG == false
 
   test "Half page down with Ctrl+d":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
     let initialIndex = configState.selectedIndex
     let viewportHeight = 20
@@ -156,7 +156,7 @@ suite "ConfigModeHandler - Navigation":
     check configState.selectedIndex == expectedIndex
 
   test "Half page up with Ctrl+u":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
     # Move down first
     configState.moveToLast()
@@ -172,9 +172,9 @@ suite "ConfigModeHandler - Navigation":
     let expectedIndex = max(0, initialIndex - expectedMove)
     check configState.selectedIndex == expectedIndex
 
-suite "ConfigModeHandler - Mode Transitions":
+suite "SubStateHandler - Mode Transitions":
   test "Enter command mode with :":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: ":", modifiers: {})
@@ -182,9 +182,9 @@ suite "ConfigModeHandler - Mode Transitions":
 
     check result.kind == cmrEnterCommand
 
-suite "ConfigModeHandler - Boolean Value Editing":
+suite "SubStateHandler - Boolean Value Editing":
   test "Toggle bool value with Enter":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     # Find first bool item
@@ -206,7 +206,7 @@ suite "ConfigModeHandler - Boolean Value Editing":
       check configState.items[boolIndex].boolValue == (not originalValue)
 
   test "Toggle bool value with Space":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var boolIndex = -1
@@ -226,7 +226,7 @@ suite "ConfigModeHandler - Boolean Value Editing":
       check configState.items[boolIndex].boolValue == (not originalValue)
 
   test "Toggle bool value with l":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var boolIndex = -1
@@ -246,7 +246,7 @@ suite "ConfigModeHandler - Boolean Value Editing":
       check configState.items[boolIndex].boolValue == (not originalValue)
 
   test "Toggle bool value with Right arrow":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var boolIndex = -1
@@ -266,9 +266,9 @@ suite "ConfigModeHandler - Boolean Value Editing":
       check result.kind == cmrHandled
       check configState.items[boolIndex].boolValue == (not originalValue)
 
-suite "ConfigModeHandler - Int Value Editing":
+suite "SubStateHandler - Int Value Editing":
   test "Increment int value with Right arrow":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -290,7 +290,7 @@ suite "ConfigModeHandler - Int Value Editing":
         check configState.items[intIndex].intValue == originalValue + 1
 
   test "Decrement int value with Left arrow":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -313,7 +313,7 @@ suite "ConfigModeHandler - Int Value Editing":
         check configState.items[intIndex].intValue == originalValue - 1
 
   test "Decrement int value with h":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -335,7 +335,7 @@ suite "ConfigModeHandler - Int Value Editing":
         check configState.items[intIndex].intValue == originalValue - 1
 
   test "Start int edit mode with Enter":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -354,9 +354,9 @@ suite "ConfigModeHandler - Int Value Editing":
       check result.kind == cmrHandled
       check configState.isEditing() == true
 
-suite "ConfigModeHandler - Float Value Editing":
+suite "SubStateHandler - Float Value Editing":
   test "Increment float value with Right arrow":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var floatIndex = -1
@@ -379,7 +379,7 @@ suite "ConfigModeHandler - Float Value Editing":
         check configState.items[floatIndex].floatValue == originalValue + step
 
   test "Decrement float value with Left arrow":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var floatIndex = -1
@@ -402,9 +402,9 @@ suite "ConfigModeHandler - Float Value Editing":
       if originalValue - step >= configState.items[floatIndex].floatMin:
         check configState.items[floatIndex].floatValue == originalValue - step
 
-suite "ConfigModeHandler - Enum Value Editing":
+suite "SubStateHandler - Enum Value Editing":
   test "Cycle enum value forward with Right arrow":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -430,7 +430,7 @@ suite "ConfigModeHandler - Enum Value Editing":
       check configState.items[enumIndex].enumValue == options[expectedIdx]
 
   test "Cycle enum value backward with Left arrow":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -455,7 +455,7 @@ suite "ConfigModeHandler - Enum Value Editing":
       check configState.items[enumIndex].enumValue == options[expectedIdx]
 
   test "Open enum popup with Enter":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -475,7 +475,7 @@ suite "ConfigModeHandler - Enum Value Editing":
       check configState.isEnumPopupOpen() == true
 
   test "Open enum popup with Space":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -493,9 +493,9 @@ suite "ConfigModeHandler - Enum Value Editing":
       check result.kind == cmrHandled
       check configState.isEnumPopupOpen() == true
 
-suite "ConfigModeHandler - Edit Mode":
+suite "SubStateHandler - Edit Mode":
   test "Cancel edit with Escape":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     # Find int item and start editing
@@ -518,7 +518,7 @@ suite "ConfigModeHandler - Edit Mode":
       check configState.isEditing() == false
 
   test "Confirm edit with Enter":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -540,7 +540,7 @@ suite "ConfigModeHandler - Edit Mode":
       check configState.isEditing() == false
 
   test "Insert character in edit mode":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -563,7 +563,7 @@ suite "ConfigModeHandler - Edit Mode":
       check configState.editCursor == 1
 
   test "Backspace in edit mode":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -587,7 +587,7 @@ suite "ConfigModeHandler - Edit Mode":
       check configState.editCursor == 2
 
   test "Delete in edit mode":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -611,7 +611,7 @@ suite "ConfigModeHandler - Edit Mode":
       check configState.editCursor == 1
 
   test "Move cursor left in edit mode":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -633,7 +633,7 @@ suite "ConfigModeHandler - Edit Mode":
       check configState.editCursor == 1
 
   test "Move cursor right in edit mode":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -656,7 +656,7 @@ suite "ConfigModeHandler - Edit Mode":
       check configState.editCursor == 2
 
   test "Move cursor to home in edit mode":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -678,7 +678,7 @@ suite "ConfigModeHandler - Edit Mode":
       check configState.editCursor == 0
 
   test "Move cursor to end in edit mode":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -699,9 +699,9 @@ suite "ConfigModeHandler - Edit Mode":
       check result.kind == cmrHandled
       check configState.editCursor == 3
 
-suite "ConfigModeHandler - Enum Popup":
+suite "SubStateHandler - Enum Popup":
   test "Close enum popup with Escape":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -723,7 +723,7 @@ suite "ConfigModeHandler - Enum Popup":
       check configState.isEnumPopupOpen() == false
 
   test "Confirm enum popup with Enter":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -745,7 +745,7 @@ suite "ConfigModeHandler - Enum Popup":
       check configState.isEnumPopupOpen() == false
 
   test "Move up in enum popup with Up arrow":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -769,7 +769,7 @@ suite "ConfigModeHandler - Enum Popup":
         configState.items[enumIndex].enumOptions.len == 1
 
   test "Move down in enum popup with Down arrow":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -792,7 +792,7 @@ suite "ConfigModeHandler - Enum Popup":
         configState.items[enumIndex].enumOptions.len == 1
 
   test "Move down in enum popup with j":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -814,7 +814,7 @@ suite "ConfigModeHandler - Enum Popup":
         configState.items[enumIndex].enumOptions.len == 1
 
   test "Move up in enum popup with k":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -837,7 +837,7 @@ suite "ConfigModeHandler - Enum Popup":
         configState.items[enumIndex].enumOptions.len == 1
 
   test "Move down in enum popup with Tab":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -859,7 +859,7 @@ suite "ConfigModeHandler - Enum Popup":
         configState.items[enumIndex].enumOptions.len == 1
 
   test "Move up in enum popup with BackTab":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -883,7 +883,7 @@ suite "ConfigModeHandler - Enum Popup":
         configState.items[enumIndex].enumOptions.len == 1
 
   test "Confirm enum popup with Space":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -904,7 +904,7 @@ suite "ConfigModeHandler - Enum Popup":
       check configState.isEnumPopupOpen() == false
 
   test "Confirm enum popup with l":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -925,7 +925,7 @@ suite "ConfigModeHandler - Enum Popup":
       check configState.isEnumPopupOpen() == false
 
   test "Close enum popup with h":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -945,9 +945,9 @@ suite "ConfigModeHandler - Enum Popup":
       check result.kind == cmrHandled
       check configState.isEnumPopupOpen() == false
 
-suite "ConfigModeHandler - Section Headers":
+suite "SubStateHandler - Section Headers":
   test "Enter on section header does nothing":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     # First item should be a section
@@ -969,9 +969,9 @@ suite "ConfigModeHandler - Section Headers":
       check configState.isEditing() == false
       check configState.isEnumPopupOpen() == false
 
-suite "ConfigModeHandler - Waiting for G State":
+suite "SubStateHandler - Waiting for G State":
   test "Waiting for G cancelled on non-g key":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     # First 'g' starts waiting
@@ -987,9 +987,9 @@ suite "ConfigModeHandler - Waiting for G State":
     check handler.waitingForG == false
     check result.kind == cmrHandled
 
-suite "ConfigModeHandler - Unhandled Keys":
+suite "SubStateHandler - Unhandled Keys":
   test "Unhandled special key returns cmrUnhandled":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     # F5 is not handled
@@ -1000,7 +1000,7 @@ suite "ConfigModeHandler - Unhandled Keys":
     check result.kind == cmrUnhandled
 
   test "Unhandled character key returns cmrUnhandled":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     # 'z' is not handled
@@ -1009,9 +1009,9 @@ suite "ConfigModeHandler - Unhandled Keys":
 
     check result.kind == cmrUnhandled
 
-suite "ConfigModeHandler - Edit Mode Edge Cases":
+suite "SubStateHandler - Edit Mode Edge Cases":
   test "Other special key in edit mode is ignored":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -1036,7 +1036,7 @@ suite "ConfigModeHandler - Edit Mode Edge Cases":
       check configState.isEditing() == true
 
   test "Character with modifiers in edit mode is ignored":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -1060,7 +1060,7 @@ suite "ConfigModeHandler - Edit Mode Edge Cases":
       check configState.editBuffer == originalBuffer
 
   test "Empty char in edit mode":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -1081,9 +1081,9 @@ suite "ConfigModeHandler - Edit Mode Edge Cases":
       check result.kind == cmrHandled
       check configState.editBuffer == originalBuffer
 
-suite "ConfigModeHandler - Enum Popup Edge Cases":
+suite "SubStateHandler - Enum Popup Edge Cases":
   test "Other special key in enum popup is ignored":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -1107,7 +1107,7 @@ suite "ConfigModeHandler - Enum Popup Edge Cases":
       check configState.enumPopupIndex == originalPopupIndex
 
   test "Other character in enum popup is ignored":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var enumIndex = -1
@@ -1129,9 +1129,9 @@ suite "ConfigModeHandler - Enum Popup Edge Cases":
       check configState.isEnumPopupOpen() == true
       check configState.enumPopupIndex == originalPopupIndex
 
-suite "ConfigModeHandler - Float Value Editing Extended":
+suite "SubStateHandler - Float Value Editing Extended":
   test "Start float edit mode with Enter":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var floatIndex = -1
@@ -1151,7 +1151,7 @@ suite "ConfigModeHandler - Float Value Editing Extended":
       check configState.isEditing() == true
 
   test "Start float edit mode with l":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var floatIndex = -1
@@ -1170,7 +1170,7 @@ suite "ConfigModeHandler - Float Value Editing Extended":
       check configState.isEditing() == true
 
   test "Start float edit mode with Space":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var floatIndex = -1
@@ -1189,7 +1189,7 @@ suite "ConfigModeHandler - Float Value Editing Extended":
       check configState.isEditing() == true
 
   test "Decrement float value with h":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var floatIndex = -1
@@ -1211,9 +1211,9 @@ suite "ConfigModeHandler - Float Value Editing Extended":
       if originalValue - step >= configState.items[floatIndex].floatMin:
         check configState.items[floatIndex].floatValue == originalValue - step
 
-suite "ConfigModeHandler - Int Value Editing Extended":
+suite "SubStateHandler - Int Value Editing Extended":
   test "Start int edit mode with l":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -1232,7 +1232,7 @@ suite "ConfigModeHandler - Int Value Editing Extended":
       check configState.isEditing() == true
 
   test "Start int edit mode with Space":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var intIndex = -1
@@ -1250,9 +1250,9 @@ suite "ConfigModeHandler - Int Value Editing Extended":
       check result.kind == cmrHandled
       check configState.isEditing() == true
 
-suite "ConfigModeHandler - Section Header Edge Cases":
+suite "SubStateHandler - Section Header Edge Cases":
   test "Left arrow on section does nothing":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var sectionIndex = -1
@@ -1270,7 +1270,7 @@ suite "ConfigModeHandler - Section Header Edge Cases":
       check result.kind == cmrHandled
 
   test "Right arrow on section does nothing":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var sectionIndex = -1
@@ -1289,7 +1289,7 @@ suite "ConfigModeHandler - Section Header Edge Cases":
       check result.kind == cmrHandled
 
   test "h key on section does nothing":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var sectionIndex = -1
@@ -1307,7 +1307,7 @@ suite "ConfigModeHandler - Section Header Edge Cases":
       check result.kind == cmrHandled
 
   test "l key on section does nothing":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var sectionIndex = -1
@@ -1326,9 +1326,9 @@ suite "ConfigModeHandler - Section Header Edge Cases":
       check configState.isEditing() == false
       check configState.isEnumPopupOpen() == false
 
-suite "ConfigModeHandler - Bool Value Editing Extended":
+suite "SubStateHandler - Bool Value Editing Extended":
   test "Left arrow on bool does nothing":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var boolIndex = -1
@@ -1349,7 +1349,7 @@ suite "ConfigModeHandler - Bool Value Editing Extended":
       check configState.items[boolIndex].boolValue == originalValue
 
   test "h key on bool does nothing":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     var boolIndex = -1
@@ -1369,9 +1369,9 @@ suite "ConfigModeHandler - Bool Value Editing Extended":
       # Bool value should NOT change with h
       check configState.items[boolIndex].boolValue == originalValue
 
-suite "ConfigModeHandler - Empty Items Edge Case":
+suite "SubStateHandler - Empty Items Edge Case":
   test "Handle key with empty items list":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     # Clear items to simulate empty state
@@ -1385,7 +1385,7 @@ suite "ConfigModeHandler - Empty Items Edge Case":
     check result.kind == cmrHandled
 
   test "Navigation with empty items":
-    let handler = newConfigModeHandler()
+    let handler = newSubStateHandler()
     let configState = createTestConfigState()
 
     configState.items = @[]

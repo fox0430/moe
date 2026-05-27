@@ -56,16 +56,16 @@ proc newTestBackupManagerState(entryCount: int = 10): BackupManagerState =
       )
     )
 
-suite "backup_manager_handler: newBackupManagerHandler":
+suite "backup_manager_handler: newSubStateHandler":
   test "Create new handler":
-    let handler = newBackupManagerHandler()
+    let handler = newSubStateHandler()
     check handler != nil
     check handler.waitingForG == false
 
 suite "backup_manager_handler: handleBackupManagerModeKey - Basic movement keys":
   test "j key moves down":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
     check bkState.selectedIndex == 0
 
@@ -77,7 +77,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Basic movement keys"
 
   test "k key moves up":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 3
 
@@ -89,7 +89,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Basic movement keys"
 
   test "k key does not move above first entry":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
     check bkState.selectedIndex == 0
 
@@ -101,7 +101,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Basic movement keys"
 
   test "j key does not move below last entry":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 4
 
@@ -114,7 +114,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Basic movement keys"
 suite "backup_manager_handler: handleBackupManagerModeKey - Arrow keys":
   test "Down arrow moves down":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
     check bkState.selectedIndex == 0
 
@@ -127,7 +127,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Arrow keys":
 
   test "Up arrow moves up":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 3
 
@@ -140,7 +140,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Arrow keys":
 suite "backup_manager_handler: handleBackupManagerModeKey - gg and G commands":
   test "gg moves to first entry":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 5
 
@@ -161,7 +161,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - gg and G commands":
 
   test "g followed by non-g cancels and falls through":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 3
 
@@ -181,7 +181,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - gg and G commands":
 
   test "G moves to last entry":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     check bkState.selectedIndex == 0
 
@@ -194,7 +194,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - gg and G commands":
 suite "backup_manager_handler: handleBackupManagerModeKey - Half page movement":
   test "Ctrl+d moves half page down":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(50)
     check bkState.selectedIndex == 0
 
@@ -208,7 +208,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Half page movement":
 
   test "Ctrl+u moves half page up":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(50)
     bkState.selectedIndex = 30
 
@@ -222,7 +222,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Half page movement":
 
   test "Ctrl+u does not go below 0":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 3
 
@@ -235,7 +235,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Half page movement":
 
   test "Ctrl+d does not exceed last entry":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 8
 
@@ -249,7 +249,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Half page movement":
 suite "backup_manager_handler: handleBackupManagerModeKey - Mode transitions":
   test ": enters command mode":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
 
     let result =
@@ -259,7 +259,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Mode transitions":
 
   test "q quits backup manager":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
 
     let result =
@@ -269,7 +269,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Mode transitions":
 
   test "Escape quits backup manager":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
 
     let result = handler.handleBackupManagerModeKey(
@@ -281,7 +281,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Mode transitions":
 suite "backup_manager_handler: handleBackupManagerModeKey - Backup actions":
   test "R returns restore with index when entry selected":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 2
 
@@ -293,7 +293,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Backup actions":
 
   test "R returns handled when no entries":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newBackupManagerState()
     check bkState.entries.len == 0
 
@@ -304,7 +304,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Backup actions":
 
   test "D returns delete with index when entry selected":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 3
 
@@ -316,7 +316,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Backup actions":
 
   test "D returns handled when no entries":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newBackupManagerState()
     check bkState.entries.len == 0
 
@@ -327,7 +327,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Backup actions":
 
   test "r returns refresh":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
 
     let result =
@@ -337,7 +337,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Backup actions":
 
   test "Enter returns openDiff with index when entry selected":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 1
 
@@ -350,7 +350,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Backup actions":
 
   test "Enter returns handled when no entries":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newBackupManagerState()
     check bkState.entries.len == 0
 
@@ -363,7 +363,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Backup actions":
 suite "backup_manager_handler: handleBackupManagerModeKey - Window switching":
   test "Ctrl+k returns unhandled for window switching":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
 
     let result = handler.handleBackupManagerModeKey(
@@ -374,7 +374,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Window switching":
 
   test "Ctrl+j returns unhandled for window switching":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
 
     let result = handler.handleBackupManagerModeKey(
@@ -386,7 +386,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Window switching":
 suite "backup_manager_handler: handleBackupManagerModeKey - Unhandled keys":
   test "Unbound key returns unhandled":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
 
     let result =
@@ -396,7 +396,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Unhandled keys":
 
   test "Unbound special key returns unhandled":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
 
     let result = handler.handleBackupManagerModeKey(
@@ -407,7 +407,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Unhandled keys":
 
   test "Character with unbound modifier returns unhandled":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
 
     # Ctrl+X - not a standard binding
@@ -420,7 +420,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Unhandled keys":
 suite "backup_manager_handler: handleBackupManagerModeKey - Edge cases":
   test "Empty state - j does not crash":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newBackupManagerState()
     check bkState.entries.len == 0
 
@@ -432,7 +432,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Edge cases":
 
   test "Empty state - G stays at 0":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newBackupManagerState()
     check bkState.entries.len == 0
 
@@ -444,7 +444,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Edge cases":
 
   test "Empty state - gg stays at 0":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newBackupManagerState()
 
     # First 'g'
@@ -459,7 +459,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Edge cases":
 
   test "g followed by special key cancels":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 3
 
@@ -481,7 +481,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Edge cases":
 suite "backup_manager_handler: handleBackupManagerModeKey - Scroll position":
   test "k updates topLine when going above visible area":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(30)
     bkState.selectedIndex = 5
     bkState.topLine = 5 # First visible line is 5
@@ -495,7 +495,7 @@ suite "backup_manager_handler: handleBackupManagerModeKey - Scroll position":
 
   test "gg resets topLine to 0":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(30)
     bkState.selectedIndex = 20
     bkState.topLine = 15
@@ -551,7 +551,7 @@ suite "backup_manager_handler: BackupManagerResult kinds":
 suite "backup_manager_handler: Multiple consecutive operations":
   test "Multiple j presses move cursor down":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
 
     for i in 0 ..< 5:
@@ -562,7 +562,7 @@ suite "backup_manager_handler: Multiple consecutive operations":
 
   test "Multiple k presses move cursor up":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 8
 
@@ -574,7 +574,7 @@ suite "backup_manager_handler: Multiple consecutive operations":
 
   test "j at last entry followed by k moves up":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 9 # Last entry
 
@@ -590,7 +590,7 @@ suite "backup_manager_handler: Multiple consecutive operations":
 
   test "G followed by gg":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
 
     # G moves to last entry
@@ -608,7 +608,7 @@ suite "backup_manager_handler: Multiple consecutive operations":
 suite "backup_manager_handler: Single entry state":
   test "j on single entry state":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(1)
     check bkState.entries.len == 1
     check bkState.selectedIndex == 0
@@ -621,7 +621,7 @@ suite "backup_manager_handler: Single entry state":
 
   test "k on single entry state":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(1)
     check bkState.selectedIndex == 0
 
@@ -633,7 +633,7 @@ suite "backup_manager_handler: Single entry state":
 
   test "G on single entry state":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(1)
 
     let result =
@@ -644,7 +644,7 @@ suite "backup_manager_handler: Single entry state":
 
   test "Ctrl+d on single entry state":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(1)
 
     let result = handler.handleBackupManagerModeKey(
@@ -656,7 +656,7 @@ suite "backup_manager_handler: Single entry state":
 
   test "R on single entry state returns restore":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(1)
 
     let result =
@@ -667,7 +667,7 @@ suite "backup_manager_handler: Single entry state":
 
   test "D on single entry state returns delete":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(1)
 
     let result =
@@ -679,7 +679,7 @@ suite "backup_manager_handler: Single entry state":
 suite "backup_manager_handler: Small viewport":
   test "Ctrl+d with viewportHeight = 1 moves at least 1 entry":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     check bkState.selectedIndex == 0
 
@@ -690,7 +690,7 @@ suite "backup_manager_handler: Small viewport":
 
   test "Ctrl+u with viewportHeight = 1 moves at least 1 entry":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 5
 
@@ -701,7 +701,7 @@ suite "backup_manager_handler: Small viewport":
 
   test "Ctrl+d with viewportHeight = 0 moves at least 1 entry":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     check bkState.selectedIndex == 0
 
@@ -713,7 +713,7 @@ suite "backup_manager_handler: Small viewport":
 suite "backup_manager_handler: waitingForG with modifier keys":
   test "g followed by Ctrl+d cancels g and executes Ctrl+d":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(30)
     bkState.selectedIndex = 5
 
@@ -734,7 +734,7 @@ suite "backup_manager_handler: waitingForG with modifier keys":
 
   test "g followed by Ctrl+u cancels g and executes Ctrl+u":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(30)
     bkState.selectedIndex = 20
 
@@ -753,7 +753,7 @@ suite "backup_manager_handler: waitingForG with modifier keys":
 
   test "g followed by : cancels g and enters command mode":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
 
     # First 'g'
@@ -769,7 +769,7 @@ suite "backup_manager_handler: waitingForG with modifier keys":
 
   test "g followed by q cancels g and quits":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
 
     # First 'g'
@@ -785,7 +785,7 @@ suite "backup_manager_handler: waitingForG with modifier keys":
 
   test "g followed by G cancels g and moves to last entry":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 3
 
@@ -803,7 +803,7 @@ suite "backup_manager_handler: waitingForG with modifier keys":
 
   test "g followed by Escape cancels g and quits":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
 
     # First 'g'
@@ -820,7 +820,7 @@ suite "backup_manager_handler: waitingForG with modifier keys":
 
   test "g followed by unknown key cancels g and returns unhandled":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
 
     # First 'g'
@@ -836,7 +836,7 @@ suite "backup_manager_handler: waitingForG with modifier keys":
 
   test "g followed by R cancels g and returns restore":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 5
 
@@ -854,7 +854,7 @@ suite "backup_manager_handler: waitingForG with modifier keys":
 
   test "g followed by D cancels g and returns delete":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 7
 
@@ -872,7 +872,7 @@ suite "backup_manager_handler: waitingForG with modifier keys":
 
   test "g followed by r cancels g and returns refresh":
     let
-      handler = newBackupManagerHandler()
+      handler = newSubStateHandler()
       bkState = newTestBackupManagerState(10)
 
     # First 'g'

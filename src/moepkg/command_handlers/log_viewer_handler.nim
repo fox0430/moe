@@ -51,12 +51,8 @@ type
     else:
       discard
 
-proc newLogViewerHandler*(): LogViewerHandler =
-  ## Create a new Log Viewer mode handler
-  LogViewerHandler(waitingForG: false)
-
 proc handleLogViewerModeKey*(
-    handler: LogViewerHandler,
+    handler: SubStateHandler,
     buffer: TextBuffer,
     state: EditorState,
     viewportHeight: int,

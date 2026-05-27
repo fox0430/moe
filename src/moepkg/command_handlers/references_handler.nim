@@ -45,12 +45,8 @@ type
     else:
       discard
 
-proc newReferencesHandler*(): ReferencesHandler =
-  ## Create a new References Viewer mode handler
-  ReferencesHandler(waitingForG: false)
-
 proc handleReferencesModeKey*(
-    handler: ReferencesHandler,
+    handler: SubStateHandler,
     refState: ReferencesViewerState,
     viewportHeight: int,
     keyCombo: KeyCombo,

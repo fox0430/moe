@@ -70,16 +70,16 @@ proc specialKeyCombo(key: SpecialKey): KeyCombo =
   ## Create a special key combo
   KeyCombo(isSpecial: true, special: key, modifiers: {})
 
-suite "DocumentSymbolHandler - newDocumentSymbolHandler":
+suite "SubStateHandler - newSubStateHandler":
   test "Create new handler":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
 
     check handler != nil
     check handler.waitingForG == false
 
-suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Quit commands":
+suite "SubStateHandler - handleDocumentSymbolModeKey - Quit commands":
   test "Escape key quits":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     let keyCombo = specialKeyCombo(skEscape)
 
@@ -88,7 +88,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Quit commands":
     check result.kind == dsvrQuit
 
   test "'q' key quits":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     let keyCombo = charKeyCombo("q")
 
@@ -96,9 +96,9 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Quit commands":
 
     check result.kind == dsvrQuit
 
-suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Command mode":
+suite "SubStateHandler - handleDocumentSymbolModeKey - Command mode":
   test "':' key enters command mode":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     let keyCombo = charKeyCombo(":")
 
@@ -106,9 +106,9 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Command mode":
 
     check result.kind == dsvrEnterCommand
 
-suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Navigation with j/k":
+suite "SubStateHandler - handleDocumentSymbolModeKey - Navigation with j/k":
   test "'j' key moves down":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 0
     let keyCombo = charKeyCombo("j")
@@ -119,7 +119,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Navigation with j/k
     check state.selectedIndex == 1
 
   test "'k' key moves up":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 2
     let keyCombo = charKeyCombo("k")
@@ -130,7 +130,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Navigation with j/k
     check state.selectedIndex == 1
 
   test "'j' at last item stays at last":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 2
     let keyCombo = charKeyCombo("j")
@@ -141,7 +141,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Navigation with j/k
     check state.selectedIndex == 2
 
   test "'k' at first item stays at first":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 0
     let keyCombo = charKeyCombo("k")
@@ -151,9 +151,9 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Navigation with j/k
     check result.kind == dsvrHandled
     check state.selectedIndex == 0
 
-suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Navigation with arrow keys":
+suite "SubStateHandler - handleDocumentSymbolModeKey - Navigation with arrow keys":
   test "Down arrow moves down":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 0
     let keyCombo = specialKeyCombo(skDown)
@@ -164,7 +164,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Navigation with arr
     check state.selectedIndex == 1
 
   test "Up arrow moves up":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 2
     let keyCombo = specialKeyCombo(skUp)
@@ -174,9 +174,9 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Navigation with arr
     check result.kind == dsvrHandled
     check state.selectedIndex == 1
 
-suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - G and gg commands":
+suite "SubStateHandler - handleDocumentSymbolModeKey - G and gg commands":
   test "'G' moves to last":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 0
     let keyCombo = charKeyCombo("G")
@@ -187,7 +187,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - G and gg commands":
     check state.selectedIndex == 2
 
   test "'g' sets waitingForG":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 2
     let keyCombo = charKeyCombo("g")
@@ -198,7 +198,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - G and gg commands":
     check handler.waitingForG == true
 
   test "'gg' moves to first":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 2
     let keyComboG = charKeyCombo("g")
@@ -215,7 +215,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - G and gg commands":
     check state.selectedIndex == 0
 
   test "'g' followed by other key resets state":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 2
     let keyComboG = charKeyCombo("g")
@@ -233,9 +233,9 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - G and gg commands":
     # j should move down (but already at last, so stays at 2)
     check state.selectedIndex == 2
 
-suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Enter key":
+suite "SubStateHandler - handleDocumentSymbolModeKey - Enter key":
   test "Enter key jumps to selected symbol":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 1
     let keyCombo = specialKeyCombo(skEnter)
@@ -247,7 +247,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Enter key":
     check result.targetItem.line == 10
 
   test "Enter key with empty state returns error":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createEmptyState()
     let keyCombo = specialKeyCombo(skEnter)
 
@@ -256,9 +256,9 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Enter key":
     check result.kind == dsvrError
     check result.errorMessage == "No symbol selected"
 
-suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Half page navigation":
+suite "SubStateHandler - handleDocumentSymbolModeKey - Half page navigation":
   test "Ctrl+d moves half page down":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     var symbols: seq[lspTypes.DocumentSymbol] = @[]
     for i in 0 ..< 20:
       symbols.add(makeDocumentSymbol("func" & $i, skFunction, i, 0))
@@ -274,7 +274,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Half page navigatio
     check state.selectedIndex == 10
 
   test "Ctrl+u moves half page up":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     var symbols: seq[lspTypes.DocumentSymbol] = @[]
     for i in 0 ..< 20:
       symbols.add(makeDocumentSymbol("func" & $i, skFunction, i, 0))
@@ -290,7 +290,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Half page navigatio
     check state.selectedIndex == 10
 
   test "Ctrl+d at bottom stays at bottom":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     var symbols: seq[lspTypes.DocumentSymbol] = @[]
     for i in 0 ..< 20:
       symbols.add(makeDocumentSymbol("func" & $i, skFunction, i, 0))
@@ -306,7 +306,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Half page navigatio
     check state.selectedIndex == 19
 
   test "Ctrl+u at top stays at top":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 0
     let keyCombo = ctrlKeyCombo("u")
@@ -316,9 +316,9 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Half page navigatio
     check result.kind == dsvrHandled
     check state.selectedIndex == 0
 
-suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Unhandled keys":
+suite "SubStateHandler - handleDocumentSymbolModeKey - Unhandled keys":
   test "Unknown character key returns unhandled":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     let keyCombo = charKeyCombo("x")
 
@@ -327,7 +327,7 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Unhandled keys":
     check result.kind == dsvrUnhandled
 
   test "Unknown special key returns unhandled":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     let state = createTestState()
     let keyCombo = specialKeyCombo(skPageUp)
 
@@ -335,9 +335,9 @@ suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Unhandled keys":
 
     check result.kind == dsvrUnhandled
 
-suite "DocumentSymbolHandler - handleDocumentSymbolModeKey - Viewport adjustment":
+suite "SubStateHandler - handleDocumentSymbolModeKey - Viewport adjustment":
   test "Navigation adjusts viewport when needed":
-    let handler = newDocumentSymbolHandler()
+    let handler = newSubStateHandler()
     var symbols: seq[lspTypes.DocumentSymbol] = @[]
     for i in 0 ..< 20:
       symbols.add(makeDocumentSymbol("func" & $i, skFunction, i, 0))

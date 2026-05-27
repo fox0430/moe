@@ -41,14 +41,14 @@ proc createTestBookmarkManagerState(): BookmarkManagerState =
   state.updateEntries(@[buf1, buf2])
   result = state
 
-suite "BookmarkManagerHandler - Constructor":
-  test "Create BookmarkManagerHandler":
-    let handler = newBookmarkManagerHandler()
+suite "SubStateHandler - Constructor":
+  test "Create SubStateHandler":
+    let handler = newSubStateHandler()
 
     check handler != nil
     check handler.waitingForG == false
 
-suite "BookmarkManagerHandler - Result Types":
+suite "SubStateHandler - Result Types":
   test "bkmrHandled result":
     let result = BookmarkManagerResult(kind: bkmrHandled)
     check result.kind == bkmrHandled
@@ -82,9 +82,9 @@ suite "BookmarkManagerHandler - Result Types":
     check result.kind == bkmrError
     check result.errorMessage == "test error"
 
-suite "BookmarkManagerHandler - Navigation":
+suite "SubStateHandler - Navigation":
   test "Move down with j":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
 
@@ -95,7 +95,7 @@ suite "BookmarkManagerHandler - Navigation":
     check bmState.selectedIndex == 1
 
   test "Move up with k":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 1
 
@@ -106,7 +106,7 @@ suite "BookmarkManagerHandler - Navigation":
     check bmState.selectedIndex == 0
 
   test "Move down with Down arrow":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
 
@@ -117,7 +117,7 @@ suite "BookmarkManagerHandler - Navigation":
     check bmState.selectedIndex == 1
 
   test "Move up with Up arrow":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 1
 
@@ -128,7 +128,7 @@ suite "BookmarkManagerHandler - Navigation":
     check bmState.selectedIndex == 0
 
   test "Move to last with G":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
 
@@ -139,7 +139,7 @@ suite "BookmarkManagerHandler - Navigation":
     check bmState.selectedIndex == bmState.entries.len - 1
 
   test "Move to first with gg":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 2
 
@@ -160,7 +160,7 @@ suite "BookmarkManagerHandler - Navigation":
     check handler.waitingForG == false
 
   test "Half page down with Ctrl+d":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
     let viewportHeight = 4
@@ -174,7 +174,7 @@ suite "BookmarkManagerHandler - Navigation":
     check bmState.selectedIndex == expectedIndex
 
   test "Half page up with Ctrl+u":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 2
     let viewportHeight = 4
@@ -187,9 +187,9 @@ suite "BookmarkManagerHandler - Navigation":
     let expectedIndex = max(0, 2 - expectedMove)
     check bmState.selectedIndex == expectedIndex
 
-suite "BookmarkManagerHandler - Jump to Bookmark":
+suite "SubStateHandler - Jump to Bookmark":
   test "Jump to bookmark with Enter":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 1 # file1.nim line 3
 
@@ -201,7 +201,7 @@ suite "BookmarkManagerHandler - Jump to Bookmark":
     check result.jumpLine == 3
 
   test "Jump to bookmark in second buffer":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 2 # file2.nim line 0
 
@@ -213,7 +213,7 @@ suite "BookmarkManagerHandler - Jump to Bookmark":
     check result.jumpLine == 0
 
   test "Enter with empty entries returns handled":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBookmarkManagerState()
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
@@ -221,9 +221,9 @@ suite "BookmarkManagerHandler - Jump to Bookmark":
 
     check result.kind == bkmrHandled
 
-suite "BookmarkManagerHandler - Delete Bookmark":
+suite "SubStateHandler - Delete Bookmark":
   test "Delete bookmark with D":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 1
 
@@ -234,7 +234,7 @@ suite "BookmarkManagerHandler - Delete Bookmark":
     check result.deleteEntryIndex == 1
 
   test "Delete with D on empty entries returns handled":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBookmarkManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "D", modifiers: {})
@@ -242,9 +242,9 @@ suite "BookmarkManagerHandler - Delete Bookmark":
 
     check result.kind == bkmrHandled
 
-suite "BookmarkManagerHandler - Mode Transitions":
+suite "SubStateHandler - Mode Transitions":
   test "Quit with Escape":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
@@ -253,7 +253,7 @@ suite "BookmarkManagerHandler - Mode Transitions":
     check result.kind == bkmrQuit
 
   test "Quit with q":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "q", modifiers: {})
@@ -262,7 +262,7 @@ suite "BookmarkManagerHandler - Mode Transitions":
     check result.kind == bkmrQuit
 
   test "Enter command mode with :":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: ":", modifiers: {})
@@ -270,9 +270,9 @@ suite "BookmarkManagerHandler - Mode Transitions":
 
     check result.kind == bkmrEnterCommand
 
-suite "BookmarkManagerHandler - Window Navigation (Unhandled)":
+suite "SubStateHandler - Window Navigation (Unhandled)":
   test "Ctrl+k returns unhandled":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "k", modifiers: {kmCtrl})
@@ -281,7 +281,7 @@ suite "BookmarkManagerHandler - Window Navigation (Unhandled)":
     check result.kind == bkmrUnhandled
 
   test "Ctrl+j returns unhandled":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {kmCtrl})
@@ -289,9 +289,9 @@ suite "BookmarkManagerHandler - Window Navigation (Unhandled)":
 
     check result.kind == bkmrUnhandled
 
-suite "BookmarkManagerHandler - Waiting for G State":
+suite "SubStateHandler - Waiting for G State":
   test "First g sets waitingForG true":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "g", modifiers: {})
@@ -301,7 +301,7 @@ suite "BookmarkManagerHandler - Waiting for G State":
     check handler.waitingForG == true
 
   test "Waiting for G cancelled on non-g key":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
 
@@ -319,7 +319,7 @@ suite "BookmarkManagerHandler - Waiting for G State":
     check bmState.selectedIndex == 1
 
   test "Waiting for G cancelled on colon enters command mode":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
 
     let keyCombo1 = KeyCombo(isSpecial: false, char: "g", modifiers: {})
@@ -333,7 +333,7 @@ suite "BookmarkManagerHandler - Waiting for G State":
     check result.kind == bkmrEnterCommand
 
   test "Waiting for G cancelled on D triggers delete":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 1
 
@@ -349,7 +349,7 @@ suite "BookmarkManagerHandler - Waiting for G State":
     check result.deleteEntryIndex == 1
 
   test "Waiting for G with Escape cancels and quits":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
 
     # First 'g' starts waiting
@@ -365,9 +365,9 @@ suite "BookmarkManagerHandler - Waiting for G State":
     check handler.waitingForG == false
     check result.kind == bkmrQuit
 
-suite "BookmarkManagerHandler - Unhandled Keys":
+suite "SubStateHandler - Unhandled Keys":
   test "Unhandled special key returns bkmrUnhandled":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
 
     let keyCombo = KeyCombo(isSpecial: true, special: skPageUp, fnNum: 0, modifiers: {})
@@ -376,7 +376,7 @@ suite "BookmarkManagerHandler - Unhandled Keys":
     check result.kind == bkmrUnhandled
 
   test "Unhandled character key returns bkmrUnhandled":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "z", modifiers: {})
@@ -385,7 +385,7 @@ suite "BookmarkManagerHandler - Unhandled Keys":
     check result.kind == bkmrUnhandled
 
   test "Unhandled function key returns bkmrUnhandled":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
 
     let keyCombo =
@@ -394,9 +394,9 @@ suite "BookmarkManagerHandler - Unhandled Keys":
 
     check result.kind == bkmrUnhandled
 
-suite "BookmarkManagerHandler - Edge Cases":
+suite "SubStateHandler - Edge Cases":
   test "Navigation at top boundary":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
 
@@ -407,7 +407,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check bmState.selectedIndex == 0
 
   test "Navigation at bottom boundary":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = bmState.entries.len - 1
 
@@ -418,7 +418,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check bmState.selectedIndex == bmState.entries.len - 1
 
   test "G with empty entries":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBookmarkManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "G", modifiers: {})
@@ -428,7 +428,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check bmState.selectedIndex == 0
 
   test "gg with empty entries":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBookmarkManagerState()
 
     let keyCombo1 = KeyCombo(isSpecial: false, char: "g", modifiers: {})
@@ -442,7 +442,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check bmState.topLine == 0
 
   test "Ctrl+d with viewport height 1":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
     let viewportHeight = 1 # max(1, 1 div 2) = max(1, 0) = 1
@@ -454,7 +454,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check bmState.selectedIndex == 1 # Move by 1
 
   test "Ctrl+u with viewport height 1":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 2
     let viewportHeight = 1
@@ -466,7 +466,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check bmState.selectedIndex == 1 # Move by 1
 
   test "Single entry - j does not move":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBookmarkManagerState()
     var buf = newTextBuffer("only line")
     buf.toggleBookmark(0)
@@ -480,7 +480,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check bmState.selectedIndex == 0
 
   test "Single entry - k does not move":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBookmarkManagerState()
     var buf = newTextBuffer("only line")
     buf.toggleBookmark(0)
@@ -493,7 +493,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check bmState.selectedIndex == 0
 
   test "Single entry - Enter returns correct jump":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBookmarkManagerState()
     var buf = newTextBuffer("only line")
     buf.filePath = some("single.nim")
@@ -508,7 +508,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check result.jumpLine == 0
 
   test "Single entry - D returns correct delete":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = newBookmarkManagerState()
     var buf = newTextBuffer("only line")
     buf.toggleBookmark(0)
@@ -521,7 +521,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check result.deleteEntryIndex == 0
 
   test "Ctrl+d with large half page":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
     let viewportHeight = 100
@@ -533,7 +533,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check bmState.selectedIndex == bmState.entries.len - 1
 
   test "Ctrl+u at top":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
     let viewportHeight = 4
@@ -545,7 +545,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check bmState.selectedIndex == 0
 
   test "Jump to bookmark at index 0":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
 
@@ -557,7 +557,7 @@ suite "BookmarkManagerHandler - Edge Cases":
     check result.jumpLine == 1
 
   test "Delete bookmark at index 0":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
 
@@ -567,9 +567,9 @@ suite "BookmarkManagerHandler - Edge Cases":
     check result.kind == bkmrDeleteBookmark
     check result.deleteEntryIndex == 0
 
-suite "BookmarkManagerHandler - Integration":
+suite "SubStateHandler - Integration":
   test "Full workflow: navigate, jump, quit":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
 
@@ -605,7 +605,7 @@ suite "BookmarkManagerHandler - Integration":
     check result5.jumpLine == 0
 
   test "Navigate with arrow keys and half-page scrolling":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
     bmState.selectedIndex = 0
 
@@ -634,7 +634,7 @@ suite "BookmarkManagerHandler - Integration":
     check bmState.selectedIndex == 0
 
   test "Mode transitions workflow":
-    let handler = newBookmarkManagerHandler()
+    let handler = newSubStateHandler()
     let bmState = createTestBookmarkManagerState()
 
     # Enter command mode

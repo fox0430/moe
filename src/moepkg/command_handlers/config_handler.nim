@@ -43,10 +43,6 @@ type
     else:
       discard
 
-proc newConfigModeHandler*(): ConfigModeHandler =
-  ## Create a new Configuration mode handler
-  ConfigModeHandler(waitingForG: false)
-
 proc handleEditModeKey(
     configState: ConfigModeState, keyCombo: KeyCombo
 ): ConfigModeResult =
@@ -131,7 +127,7 @@ proc handleEnumPopupKey(
       return ConfigModeResult(kind: cmrHandled)
 
 proc handleConfigModeKey*(
-    handler: ConfigModeHandler,
+    handler: SubStateHandler,
     configState: ConfigModeState,
     viewportHeight: int,
     keyCombo: KeyCombo,

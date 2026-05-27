@@ -38,13 +38,13 @@ proc makeCtrlKeyCombo(ch: string): KeyCombo =
 proc makeSpecialKeyCombo(special: SpecialKey): KeyCombo =
   KeyCombo(isSpecial: true, special: special, fnNum: 0, modifiers: {})
 
-suite "FileTreeHandler":
+suite "SubStateHandler":
   test "j moves down":
     let tmpDir = createTestTree()
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
     let startIdx = state.selectedIndex
 
@@ -57,7 +57,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
     state.moveDown() # Move to index 1 first
 
@@ -70,7 +70,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Select "src" directory (should be first entry since dirs come first)
@@ -88,7 +88,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Find a file entry
@@ -106,7 +106,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Select a directory
@@ -130,7 +130,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Find a file entry
@@ -148,7 +148,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo(":"))
@@ -159,7 +159,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("G"))
@@ -171,7 +171,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
     state.moveToLast()
 
@@ -192,7 +192,7 @@ suite "FileTreeHandler":
     # Add a hidden file
     writeFile(tmpDir / ".hidden", "hidden")
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     check state.showHidden == false
@@ -206,7 +206,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Select "src" directory
@@ -223,7 +223,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Expand src first
@@ -243,7 +243,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("/"))
@@ -256,7 +256,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Start search
@@ -280,7 +280,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Start search and type
@@ -300,7 +300,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Start search and type
@@ -318,7 +318,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Set up a search with matches
@@ -336,7 +336,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Set up a search with matches
@@ -353,7 +353,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Start search and type "ab"
@@ -375,7 +375,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Start search (buffer is empty)
@@ -394,7 +394,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("/"))
@@ -411,7 +411,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Press g
@@ -431,7 +431,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     discard handler.handleFileTreeModeKey(state, 20, makeCtrlKeyCombo("w"))
@@ -443,7 +443,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     discard handler.handleFileTreeModeKey(state, 20, makeCtrlKeyCombo("w"))
@@ -455,7 +455,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     discard handler.handleFileTreeModeKey(state, 20, makeCtrlKeyCombo("w"))
@@ -467,7 +467,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     discard handler.handleFileTreeModeKey(state, 20, makeCtrlKeyCombo("w"))
@@ -479,7 +479,7 @@ suite "FileTreeHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newFileTreeHandler()
+    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     discard handler.handleFileTreeModeKey(state, 20, makeCtrlKeyCombo("w"))

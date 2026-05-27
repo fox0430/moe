@@ -29,9 +29,9 @@ proc charKey(c: string, mods: set[KeyModifier] = {}): KeyCombo =
 proc specialKey(sk: SpecialKey, mods: set[KeyModifier] = {}): KeyCombo =
   KeyCombo(isSpecial: true, special: sk, modifiers: mods)
 
-suite "TerminalHandler - Creation":
-  test "newTerminalHandler creates handler":
-    let handler = newTerminalHandler()
+suite "SubStateHandler - Creation":
+  test "newSubStateHandler creates handler":
+    let handler = newSubStateHandler()
     check handler != nil
 
 suite "keyComboToBytes - Regular characters":
@@ -102,7 +102,7 @@ suite "keyComboToBytes - Ctrl combinations":
 
 suite "handleTerminalModeKey - Terminal-Input sub-mode":
   test "Regular key in Input mode returns trHandled":
-    let handler = newTerminalHandler()
+    let handler = newSubStateHandler()
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
       let result = handler.handleTerminalModeKey(termState.get, charKey("a"))
@@ -110,7 +110,7 @@ suite "handleTerminalModeKey - Terminal-Input sub-mode":
       termState.get.cleanup()
 
   test "Ctrl-backslash sets waitingForCtrlN":
-    let handler = newTerminalHandler()
+    let handler = newSubStateHandler()
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
       let result = handler.handleTerminalModeKey(termState.get, charKey("\\", {kmCtrl}))
@@ -120,7 +120,7 @@ suite "handleTerminalModeKey - Terminal-Input sub-mode":
 
 suite "handleTerminalModeKey - Terminal-Normal sub-mode":
   test "'i' in Normal sub-mode returns trReturnToInput":
-    let handler = newTerminalHandler()
+    let handler = newSubStateHandler()
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
       discard termState.get.enterNormalSubMode()
@@ -129,7 +129,7 @@ suite "handleTerminalModeKey - Terminal-Normal sub-mode":
       termState.get.cleanup()
 
   test "'a' in Normal sub-mode returns trReturnToInput":
-    let handler = newTerminalHandler()
+    let handler = newSubStateHandler()
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
       discard termState.get.enterNormalSubMode()
@@ -138,7 +138,7 @@ suite "handleTerminalModeKey - Terminal-Normal sub-mode":
       termState.get.cleanup()
 
   test "':' in Normal sub-mode returns trEnterCommand":
-    let handler = newTerminalHandler()
+    let handler = newSubStateHandler()
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
       discard termState.get.enterNormalSubMode()
