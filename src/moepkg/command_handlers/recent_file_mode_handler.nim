@@ -54,12 +54,8 @@ type
     modeTransition*: Option[EditorMode]
     overlayTransition*: Option[OverlayKind]
 
-proc newRecentFileModeHandler*(): RecentFileModeHandler =
-  ## Create a new Recent File mode handler
-  RecentFileModeHandler(waitingForG: false)
-
 proc handleRecentFileModeKey*(
-    handler: RecentFileModeHandler,
+    handler: SubStateHandler,
     state: RecentFileModeState,
     viewportHeight: int,
     keyCombo: KeyCombo,

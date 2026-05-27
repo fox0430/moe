@@ -44,16 +44,16 @@ proc createTestState(): RecentFileModeState =
     state.files.add RecentFileEntry(path: "/file" & $i & ".txt")
   state
 
-suite "recent_file_mode_handler: newRecentFileModeHandler":
+suite "recent_file_mode_handler: newSubStateHandler":
   test "Create new handler":
-    let handler = newRecentFileModeHandler()
+    let handler = newSubStateHandler()
     check handler != nil
     check handler.waitingForG == false
 
 suite "recent_file_mode_handler: handleRecentFileModeKey - Movement keys":
   test "j key moves down":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     check state.selectedIndex == 0
 
@@ -65,7 +65,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Movement keys":
 
   test "k key moves up":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 5
 
@@ -77,7 +77,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Movement keys":
 
   test "k key does not move above first line":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     check state.selectedIndex == 0
 
@@ -89,7 +89,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Movement keys":
 
   test "j key does not move below last line":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.moveToLast()
     let lastIndex = state.selectedIndex
@@ -102,7 +102,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Movement keys":
 
   test "Down arrow moves down":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     check state.selectedIndex == 0
 
@@ -114,7 +114,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Movement keys":
 
   test "Up arrow moves up":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 5
 
@@ -127,7 +127,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Movement keys":
 suite "recent_file_mode_handler: handleRecentFileModeKey - No-op keys":
   test "h key is handled but does not move":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 5
 
@@ -139,7 +139,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - No-op keys":
 
   test "l key is handled but does not move":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 5
 
@@ -151,7 +151,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - No-op keys":
 
   test "Left arrow is handled but does not move":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 5
 
@@ -163,7 +163,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - No-op keys":
 
   test "Right arrow is handled but does not move":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 5
 
@@ -175,7 +175,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - No-op keys":
 
   test "Backspace is handled but does not move":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 5
 
@@ -189,7 +189,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - No-op keys":
 suite "recent_file_mode_handler: handleRecentFileModeKey - gg and G commands":
   test "gg moves to first file":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 20
 
@@ -209,7 +209,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - gg and G commands":
 
   test "g followed by non-g cancels and falls through":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 20
 
@@ -228,7 +228,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - gg and G commands":
 
   test "g followed by special key cancels and falls through":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 20
 
@@ -247,7 +247,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - gg and G commands":
 
   test "G moves to last file":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     check state.selectedIndex == 0
 
@@ -260,7 +260,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - gg and G commands":
 suite "recent_file_mode_handler: handleRecentFileModeKey - Mode transitions":
   test "Escape is unhandled (quit handled at higher level)":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
 
     let result =
@@ -270,7 +270,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Mode transitions":
 
   test ": enters command mode":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
 
     let result =
@@ -283,7 +283,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Mode transitions":
 suite "recent_file_mode_handler: handleRecentFileModeKey - File opening":
   test "Enter opens selected file":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 5
 
@@ -297,7 +297,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - File opening":
 
   test "Enter returns error when no file selected (empty state)":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = newRecentFileModeState() # Empty state
 
     let result =
@@ -309,7 +309,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - File opening":
 suite "recent_file_mode_handler: handleRecentFileModeKey - Scroll adjustment":
   test "Moving down adjusts topLine when cursor goes below viewport":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     # Set position at the bottom edge of viewport
     state.selectedIndex = TestViewportHeight - 1
@@ -325,7 +325,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Scroll adjustment":
 
   test "Moving up adjusts topLine when cursor goes above viewport":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     # Set position at top of viewport (which is scrolled down)
     state.selectedIndex = 10
@@ -341,7 +341,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Scroll adjustment":
 
   test "G command scrolls to make last line visible":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.topLine = 0
 
@@ -357,7 +357,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Scroll adjustment":
 suite "recent_file_mode_handler: handleRecentFileModeKey - Unhandled keys":
   test "Unbound key returns unhandled":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
 
     let result =
@@ -367,7 +367,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Unhandled keys":
 
   test "Unbound special key returns unhandled":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
 
     # skHome is not handled by recent file mode
@@ -378,7 +378,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Unhandled keys":
 
   test "Ctrl with unbound key returns unhandled":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
 
     let result =
@@ -389,7 +389,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Unhandled keys":
 suite "recent_file_mode_handler: handleRecentFileModeKey - Empty state":
   test "j key on empty state does not crash":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = newRecentFileModeState() # Empty
     check state.selectedIndex == 0
 
@@ -401,7 +401,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Empty state":
 
   test "k key on empty state does not crash":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = newRecentFileModeState() # Empty
     check state.selectedIndex == 0
 
@@ -413,7 +413,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Empty state":
 
   test "G key on empty state does not crash":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = newRecentFileModeState() # Empty
 
     let result =
@@ -424,7 +424,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Empty state":
 
   test "gg on empty state does not crash":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = newRecentFileModeState() # Empty
 
     discard handler.handleRecentFileModeKey(state, TestViewportHeight, charKey("g"))
@@ -437,7 +437,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Empty state":
 suite "recent_file_mode_handler: handleRecentFileModeKey - gg command edge cases":
   test "Escape while waiting for g cancels and quits":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 10
 
@@ -454,7 +454,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - gg command edge cases
 
   test "G while waiting for g moves to last":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 10
 
@@ -471,7 +471,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - gg command edge cases
 
   test "Handler state is reset after gg command":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = createTestState()
     state.selectedIndex = 20
 
@@ -490,7 +490,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - gg command edge cases
 suite "recent_file_mode_handler: handleRecentFileModeKey - Boundary conditions":
   test "Single file - j does not move":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = newRecentFileModeState()
     state.files.add RecentFileEntry(path: "/only.txt")
     check state.selectedIndex == 0
@@ -503,7 +503,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Boundary conditions":
 
   test "Single file - k does not move":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = newRecentFileModeState()
     state.files.add RecentFileEntry(path: "/only.txt")
     check state.selectedIndex == 0
@@ -516,7 +516,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Boundary conditions":
 
   test "Single file - G stays at 0":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = newRecentFileModeState()
     state.files.add RecentFileEntry(path: "/only.txt")
 
@@ -528,7 +528,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Boundary conditions":
 
   test "Single file - Enter opens file":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = newRecentFileModeState()
     state.files.add RecentFileEntry(path: "/only.txt")
 
@@ -540,7 +540,7 @@ suite "recent_file_mode_handler: handleRecentFileModeKey - Boundary conditions":
 
   test "Out of range selectedIndex returns error on Enter":
     let
-      handler = newRecentFileModeHandler()
+      handler = newSubStateHandler()
       state = newRecentFileModeState()
     state.files.add RecentFileEntry(path: "/file.txt")
     state.selectedIndex = 100 # Out of range

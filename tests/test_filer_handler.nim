@@ -21,12 +21,12 @@ import std/[unittest, os, strutils]
 import ../src/moepkg/[filer, key_bindings]
 import ../src/moepkg/command_handlers/filer_handler
 
-suite "FilerHandler - Handler creation":
-  test "newFilerHandler creates handler with waitingForG false":
-    let handler = newFilerHandler()
+suite "SubStateHandler - Handler creation":
+  test "newSubStateHandler creates handler with waitingForG false":
+    let handler = newSubStateHandler()
     check handler.waitingForG == false
 
-suite "FilerHandler - Escape key":
+suite "SubStateHandler - Escape key":
   setup:
     let testDir = getTempDir() / "moe_filer_handler_test"
     createDir(testDir)
@@ -36,13 +36,13 @@ suite "FilerHandler - Escape key":
     removeDir(testDir)
 
   test "Escape key returns frHandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     let key = toSpecialKeyCombo(skEscape)
     let result = handler.handleFilerModeKey(state, 20, key)
     check result.kind == frHandled
 
-suite "FilerHandler - Navigation keys":
+suite "SubStateHandler - Navigation keys":
   setup:
     let testDir = getTempDir() / "moe_filer_handler_test"
     createDir(testDir)
@@ -54,7 +54,7 @@ suite "FilerHandler - Navigation keys":
     removeDir(testDir)
 
   test "j key moves down":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     let initialIndex = state.selectedIndex
     let key = toKeyCombo('j')
@@ -63,7 +63,7 @@ suite "FilerHandler - Navigation keys":
     check state.selectedIndex == initialIndex + 1
 
   test "k key moves up":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 2
     let key = toKeyCombo('k')
@@ -72,7 +72,7 @@ suite "FilerHandler - Navigation keys":
     check state.selectedIndex == 1
 
   test "Down arrow moves down":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     let initialIndex = state.selectedIndex
     let key = toSpecialKeyCombo(skDown)
@@ -81,7 +81,7 @@ suite "FilerHandler - Navigation keys":
     check state.selectedIndex == initialIndex + 1
 
   test "Up arrow moves up":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 2
     let key = toSpecialKeyCombo(skUp)
@@ -90,7 +90,7 @@ suite "FilerHandler - Navigation keys":
     check state.selectedIndex == 1
 
   test "G moves to last entry":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     let key = toKeyCombo('G')
     let result = handler.handleFilerModeKey(state, 20, key)
@@ -98,7 +98,7 @@ suite "FilerHandler - Navigation keys":
     check state.selectedIndex == state.entries.len - 1
 
   test "gg moves to first entry":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 3
 
@@ -116,7 +116,7 @@ suite "FilerHandler - Navigation keys":
     check state.selectedIndex == 0
 
   test "g followed by non-g key cancels gg sequence":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 0
 
@@ -132,7 +132,7 @@ suite "FilerHandler - Navigation keys":
     check result.kind == frHandled
     check state.selectedIndex == 1
 
-suite "FilerHandler - Page navigation":
+suite "SubStateHandler - Page navigation":
   setup:
     let testDir = getTempDir() / "moe_filer_handler_test"
     createDir(testDir)
@@ -143,7 +143,7 @@ suite "FilerHandler - Page navigation":
     removeDir(testDir)
 
   test "Ctrl+d moves half page down":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 0
     var key = toKeyCombo('d', ctrl = true)
@@ -152,7 +152,7 @@ suite "FilerHandler - Page navigation":
     check state.selectedIndex > 0
 
   test "Ctrl+u moves half page up":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 15
     var key = toKeyCombo('u', ctrl = true)
@@ -160,7 +160,7 @@ suite "FilerHandler - Page navigation":
     check result.kind == frHandled
     check state.selectedIndex < 15
 
-suite "FilerHandler - Enter and l key (file/directory open)":
+suite "SubStateHandler - Enter and l key (file/directory open)":
   setup:
     let testDir = getTempDir() / "moe_filer_handler_test"
     createDir(testDir)
@@ -171,7 +171,7 @@ suite "FilerHandler - Enter and l key (file/directory open)":
     removeDir(testDir)
 
   test "Enter on directory returns frOpenDirectory":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find subdir
     for i, entry in state.entries:
@@ -184,7 +184,7 @@ suite "FilerHandler - Enter and l key (file/directory open)":
     check result.dirPath.endsWith("subdir")
 
   test "Enter on file returns frOpenFile":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find file.txt
     for i, entry in state.entries:
@@ -197,7 +197,7 @@ suite "FilerHandler - Enter and l key (file/directory open)":
     check result.filePath.endsWith("file.txt")
 
   test "l on directory returns frOpenDirectory":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find subdir
     for i, entry in state.entries:
@@ -210,7 +210,7 @@ suite "FilerHandler - Enter and l key (file/directory open)":
     check result.dirPath.endsWith("subdir")
 
   test "l on file returns frOpenFile":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find file.txt
     for i, entry in state.entries:
@@ -223,7 +223,7 @@ suite "FilerHandler - Enter and l key (file/directory open)":
     check result.filePath.endsWith("file.txt")
 
   test "Enter on .. returns frOpenDirectory with parent path":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 0 # ".."
     let key = toSpecialKeyCombo(skEnter)
@@ -231,7 +231,7 @@ suite "FilerHandler - Enter and l key (file/directory open)":
     check result.kind == frOpenDirectory
     check result.dirPath == parentDir(absolutePath(testDir))
 
-suite "FilerHandler - Split open (v and h keys)":
+suite "SubStateHandler - Split open (v and h keys)":
   setup:
     let testDir = getTempDir() / "moe_filer_handler_test"
     createDir(testDir)
@@ -242,7 +242,7 @@ suite "FilerHandler - Split open (v and h keys)":
     removeDir(testDir)
 
   test "v on file returns frOpenFileVSplit":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find file.txt
     for i, entry in state.entries:
@@ -255,7 +255,7 @@ suite "FilerHandler - Split open (v and h keys)":
     check result.filePath.endsWith("file.txt")
 
   test "v on directory returns frHandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find subdir
     for i, entry in state.entries:
@@ -267,7 +267,7 @@ suite "FilerHandler - Split open (v and h keys)":
     check result.kind == frHandled
 
   test "h on file returns frOpenFileHSplit":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find file.txt
     for i, entry in state.entries:
@@ -280,7 +280,7 @@ suite "FilerHandler - Split open (v and h keys)":
     check result.filePath.endsWith("file.txt")
 
   test "h on directory returns frHandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find subdir
     for i, entry in state.entries:
@@ -291,7 +291,7 @@ suite "FilerHandler - Split open (v and h keys)":
     let result = handler.handleFilerModeKey(state, 20, key)
     check result.kind == frHandled
 
-suite "FilerHandler - Toggle hidden (. key)":
+suite "SubStateHandler - Toggle hidden (. key)":
   setup:
     let testDir = getTempDir() / "moe_filer_handler_test"
     createDir(testDir)
@@ -302,7 +302,7 @@ suite "FilerHandler - Toggle hidden (. key)":
     removeDir(testDir)
 
   test ". toggles hidden files visibility":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     check state.showHidden == true
     let initialLen = state.entries.len
@@ -313,7 +313,7 @@ suite "FilerHandler - Toggle hidden (. key)":
     check state.showHidden == false
     check state.entries.len < initialLen
 
-suite "FilerHandler - Delete (D key)":
+suite "SubStateHandler - Delete (D key)":
   setup:
     let testDir = getTempDir() / "moe_filer_handler_test"
     createDir(testDir)
@@ -323,7 +323,7 @@ suite "FilerHandler - Delete (D key)":
     removeDir(testDir)
 
   test "D on file returns frDeleteFile":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find deleteme.txt
     for i, entry in state.entries:
@@ -336,14 +336,14 @@ suite "FilerHandler - Delete (D key)":
     check result.deletePath.endsWith("deleteme.txt")
 
   test "D on .. returns frHandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 0 # ".."
     let key = toKeyCombo('D')
     let result = handler.handleFilerModeKey(state, 20, key)
     check result.kind == frHandled
 
-suite "FilerHandler - File info (i key)":
+suite "SubStateHandler - File info (i key)":
   setup:
     let testDir = getTempDir() / "moe_filer_handler_test"
     createDir(testDir)
@@ -353,7 +353,7 @@ suite "FilerHandler - File info (i key)":
     removeDir(testDir)
 
   test "i returns frShowInfo with file info":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find info.txt
     for i, entry in state.entries:
@@ -365,7 +365,7 @@ suite "FilerHandler - File info (i key)":
     check result.kind == frShowInfo
     check result.fileInfo.contains("info.txt")
 
-suite "FilerHandler - Command mode (: key)":
+suite "SubStateHandler - Command mode (: key)":
   setup:
     let testDir = getTempDir() / "moe_filer_handler_test"
     createDir(testDir)
@@ -374,13 +374,13 @@ suite "FilerHandler - Command mode (: key)":
     removeDir(testDir)
 
   test ": returns frEnterCommand":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     let key = toKeyCombo(':')
     let result = handler.handleFilerModeKey(state, 20, key)
     check result.kind == frEnterCommand
 
-suite "FilerHandler - Unhandled keys":
+suite "SubStateHandler - Unhandled keys":
   setup:
     let testDir = getTempDir() / "moe_filer_handler_test"
     createDir(testDir)
@@ -389,20 +389,20 @@ suite "FilerHandler - Unhandled keys":
     removeDir(testDir)
 
   test "Unhandled key returns frUnhandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     let key = toKeyCombo('z') # Not a bound key
     let result = handler.handleFilerModeKey(state, 20, key)
     check result.kind == frUnhandled
 
   test "Unhandled special key returns frUnhandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     let key = toSpecialKeyCombo(skPageUp) # Not bound in filer
     let result = handler.handleFilerModeKey(state, 20, key)
     check result.kind == frUnhandled
 
-suite "FilerHandler - Symlink handling":
+suite "SubStateHandler - Symlink handling":
   setup:
     let testDir = getTempDir() / "moe_filer_handler_test"
     createDir(testDir)
@@ -415,7 +415,7 @@ suite "FilerHandler - Symlink handling":
     removeDir(testDir)
 
   test "l on symlink to directory returns frOpenDirectory":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find linktodir
     for i, entry in state.entries:
@@ -428,7 +428,7 @@ suite "FilerHandler - Symlink handling":
     check result.dirPath.endsWith("linktodir")
 
   test "l on symlink to file returns frOpenFile":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find linktofile
     for i, entry in state.entries:
@@ -441,7 +441,7 @@ suite "FilerHandler - Symlink handling":
     check result.filePath.endsWith("linktofile")
 
   test "v on symlink to file returns frOpenFileVSplit":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find linktofile
     for i, entry in state.entries:
@@ -453,7 +453,7 @@ suite "FilerHandler - Symlink handling":
     check result.kind == frOpenFileVSplit
 
   test "v on symlink to directory returns frHandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find linktodir
     for i, entry in state.entries:
@@ -465,7 +465,7 @@ suite "FilerHandler - Symlink handling":
     check result.kind == frHandled
 
   test "h on symlink to file returns frOpenFileHSplit":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find linktofile
     for i, entry in state.entries:
@@ -477,7 +477,7 @@ suite "FilerHandler - Symlink handling":
     check result.kind == frOpenFileHSplit
 
   test "h on symlink to directory returns frHandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find linktodir
     for i, entry in state.entries:
@@ -489,7 +489,7 @@ suite "FilerHandler - Symlink handling":
     check result.kind == frHandled
 
   test "Enter on symlink to directory returns frOpenDirectory":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find linktodir
     for i, entry in state.entries:
@@ -501,7 +501,7 @@ suite "FilerHandler - Symlink handling":
     check result.kind == frOpenDirectory
 
   test "Enter on symlink to file returns frOpenFile":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     # Find linktofile
     for i, entry in state.entries:
@@ -512,7 +512,7 @@ suite "FilerHandler - Symlink handling":
     let result = handler.handleFilerModeKey(state, 20, key)
     check result.kind == frOpenFile
 
-suite "FilerHandler - Edge cases":
+suite "SubStateHandler - Edge cases":
   setup:
     let testDir = getTempDir() / "moe_filer_handler_test_empty"
     createDir(testDir)
@@ -521,7 +521,7 @@ suite "FilerHandler - Edge cases":
     removeDir(testDir)
 
   test "Enter with no valid selection returns frHandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 100 # Invalid
     let key = toSpecialKeyCombo(skEnter)
@@ -529,7 +529,7 @@ suite "FilerHandler - Edge cases":
     check result.kind == frHandled
 
   test "l with no valid selection returns frHandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 100 # Invalid
     let key = toKeyCombo('l')
@@ -537,7 +537,7 @@ suite "FilerHandler - Edge cases":
     check result.kind == frHandled
 
   test "v with no valid selection returns frHandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 100 # Invalid
     let key = toKeyCombo('v')
@@ -545,7 +545,7 @@ suite "FilerHandler - Edge cases":
     check result.kind == frHandled
 
   test "D with no valid selection returns frHandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 100 # Invalid
     let key = toKeyCombo('D')
@@ -553,7 +553,7 @@ suite "FilerHandler - Edge cases":
     check result.kind == frHandled
 
   test "h with no valid selection returns frHandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
     state.selectedIndex = 100 # Invalid
     let key = toKeyCombo('h')
@@ -561,7 +561,7 @@ suite "FilerHandler - Edge cases":
     check result.kind == frHandled
 
   test "g followed by special key cancels gg and returns frUnhandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
 
     # First 'g'
@@ -576,7 +576,7 @@ suite "FilerHandler - Edge cases":
     check result.kind == frUnhandled
 
   test "g followed by Escape returns frHandled":
-    let handler = newFilerHandler()
+    let handler = newSubStateHandler()
     let state = newFilerState(testDir)
 
     # First 'g'

@@ -100,8 +100,7 @@ proc createTestManager(): HandlerManager =
     commandHandler: commandHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
-    filerHandler: newFilerHandler(),
-    fileTreeHandler: newFileTreeHandler(),
+    subStates: initSubStates(),
   )
 
 proc setupDispatchTest(mode: EditorMode): (HandlerManager, Editor, KeyCombo) =
@@ -239,4 +238,4 @@ suite "dispatchSubStateMode - early-return branches":
 # LogViewer is intentionally not covered here: it uses buffer-based dispatch
 # instead of logViewerState (see TODO in mode_dispatchers.nim), and the
 # underlying handler dereferences fields that are nil in a minimal test
-# harness. LogViewer behavior is owned by LogViewerHandler-specific tests.
+# harness. LogViewer behavior is owned by SubStateHandler-specific tests.

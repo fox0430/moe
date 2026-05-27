@@ -55,12 +55,8 @@ type
     else:
       discard
 
-proc newFilerHandler*(): FilerHandler =
-  ## Create a new Filer mode handler
-  FilerHandler(waitingForG: false)
-
 proc handleFilerModeKey*(
-    handler: FilerHandler,
+    handler: SubStateHandler,
     filerState: FilerState,
     viewportHeight: int,
     keyCombo: KeyCombo,

@@ -39,10 +39,6 @@ type
     else:
       discard
 
-proc newDebugViewerHandler*(): DebugViewerHandler =
-  ## Create a new Debug Viewer mode handler
-  DebugViewerHandler()
-
 proc handleDebugModeKey*(
     debugState: DebugViewerState, viewportHeight: int, keyCombo: KeyCombo
 ): DebugViewerResult =

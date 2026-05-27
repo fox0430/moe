@@ -97,7 +97,7 @@ proc createTestManager(): HandlerManager =
     commandHandler: commandHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
-    fileTreeHandler: newFileTreeHandler(),
+    subStates: initSubStates(),
   )
 
 suite "HandlerManager - Overlay Transitions":
@@ -1251,7 +1251,7 @@ proc createTestManagerWithMotion(
     commandHandler: commandHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
-    fileTreeHandler: newFileTreeHandler(),
+    subStates: initSubStates(),
   )
 
 suite "HandlerManager - Ctrl+O Insert-Normal mode":

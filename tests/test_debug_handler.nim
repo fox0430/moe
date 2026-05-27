@@ -221,7 +221,7 @@ suite "Debug handler - Other keys":
 
     check result.kind == dvrHandled
 
-suite "Debug handler - newDebugViewerHandler":
+suite "Debug handler - newSubStateHandler":
   test "Create handler":
-    let handler = newDebugViewerHandler()
+    let handler = newSubStateHandler()
     check handler != nil

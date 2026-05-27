@@ -51,12 +51,8 @@ type
     else:
       discard
 
-proc newDiffViewerHandler*(): DiffViewerHandler =
-  ## Create a new Diff Viewer mode handler
-  DiffViewerHandler(waitingForG: false)
-
 proc handleDiffViewerModeKey*(
-    handler: DiffViewerHandler,
+    handler: SubStateHandler,
     dvState: DiffViewerState,
     viewportHeight: int,
     keyCombo: KeyCombo,

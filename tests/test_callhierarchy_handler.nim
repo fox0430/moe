@@ -56,15 +56,15 @@ proc makeEmptyTestState(): CallHierarchyViewerState =
   let items: seq[lspTypes.CallHierarchyItem] = @[]
   newCallHierarchyViewerState(items, chvkPrepare)
 
-suite "CallHierarchyHandler - newCallHierarchyHandler":
+suite "SubStateHandler - newSubStateHandler":
   test "Create new handler":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
 
     check handler.waitingForG == false
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - Escape":
+suite "SubStateHandler - handleCallHierarchyModeKey - Escape":
   test "Escape key returns chvrQuit":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyCombo = toSpecialKeyCombo(skEscape)
 
@@ -72,9 +72,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - Escape":
 
     check result.kind == chvrQuit
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - q":
+suite "SubStateHandler - handleCallHierarchyModeKey - q":
   test "q key returns chvrQuit":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyCombo = toKeyCombo('q')
 
@@ -82,9 +82,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - q":
 
     check result.kind == chvrQuit
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - colon":
+suite "SubStateHandler - handleCallHierarchyModeKey - colon":
   test "Colon key returns chvrEnterCommand":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyCombo = toKeyCombo(':')
 
@@ -92,9 +92,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - colon":
 
     check result.kind == chvrEnterCommand
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - j":
+suite "SubStateHandler - handleCallHierarchyModeKey - j":
   test "j key moves down":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyCombo = toKeyCombo('j')
 
@@ -106,7 +106,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - j":
     check state.selectedIndex == 1
 
   test "j key at last item stays at last":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 2
     let keyCombo = toKeyCombo('j')
@@ -116,9 +116,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - j":
     check result.kind == chvrHandled
     check state.selectedIndex == 2
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - Down arrow":
+suite "SubStateHandler - handleCallHierarchyModeKey - Down arrow":
   test "Down arrow key moves down":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyCombo = toSpecialKeyCombo(skDown)
 
@@ -129,9 +129,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - Down arrow":
     check result.kind == chvrHandled
     check state.selectedIndex == 1
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - k":
+suite "SubStateHandler - handleCallHierarchyModeKey - k":
   test "k key moves up":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 2
     let keyCombo = toKeyCombo('k')
@@ -142,7 +142,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - k":
     check state.selectedIndex == 1
 
   test "k key at first item stays at first":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyCombo = toKeyCombo('k')
 
@@ -151,9 +151,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - k":
     check result.kind == chvrHandled
     check state.selectedIndex == 0
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - Up arrow":
+suite "SubStateHandler - handleCallHierarchyModeKey - Up arrow":
   test "Up arrow key moves up":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 2
     let keyCombo = toSpecialKeyCombo(skUp)
@@ -163,9 +163,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - Up arrow":
     check result.kind == chvrHandled
     check state.selectedIndex == 1
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - gg":
+suite "SubStateHandler - handleCallHierarchyModeKey - gg":
   test "gg moves to first item":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 2
     let keyComboG = toKeyCombo('g')
@@ -183,7 +183,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - gg":
     check state.selectedIndex == 0
 
   test "g followed by non-g cancels and handles the key":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 1
     let keyComboG = toKeyCombo('g')
@@ -200,9 +200,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - gg":
     check handler.waitingForG == false
     check state.selectedIndex == 2 # Moved down by j
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - G":
+suite "SubStateHandler - handleCallHierarchyModeKey - G":
   test "G moves to last item":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyCombo = toKeyCombo('G')
 
@@ -213,9 +213,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - G":
     check result.kind == chvrHandled
     check state.selectedIndex == 2
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - Enter":
+suite "SubStateHandler - handleCallHierarchyModeKey - Enter":
   test "Enter key returns chvrJumpToItem with selected item":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 1
     let keyCombo = toSpecialKeyCombo(skEnter)
@@ -226,7 +226,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - Enter":
     check result.targetItem.name == "bar"
 
   test "Enter key with empty state returns chvrError":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeEmptyTestState()
     let keyCombo = toSpecialKeyCombo(skEnter)
 
@@ -235,9 +235,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - Enter":
     check result.kind == chvrError
     check result.errorMessage == "No item selected"
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - i":
+suite "SubStateHandler - handleCallHierarchyModeKey - i":
   test "i key returns chvrRequestIncoming with selected item":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 1
     let keyCombo = toKeyCombo('i')
@@ -248,7 +248,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - i":
     check result.targetItem.name == "bar"
 
   test "i key with empty state returns chvrError":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeEmptyTestState()
     let keyCombo = toKeyCombo('i')
 
@@ -257,9 +257,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - i":
     check result.kind == chvrError
     check result.errorMessage == "No item selected"
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - o":
+suite "SubStateHandler - handleCallHierarchyModeKey - o":
   test "o key returns chvrRequestOutgoing with selected item":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 2
     let keyCombo = toKeyCombo('o')
@@ -270,7 +270,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - o":
     check result.targetItem.name == "baz"
 
   test "o key with empty state returns chvrError":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeEmptyTestState()
     let keyCombo = toKeyCombo('o')
 
@@ -279,9 +279,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - o":
     check result.kind == chvrError
     check result.errorMessage == "No item selected"
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - Ctrl+d":
+suite "SubStateHandler - handleCallHierarchyModeKey - Ctrl+d":
   test "Ctrl+d moves half page down":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     var items: seq[lspTypes.CallHierarchyItem] = @[]
     for i in 0 ..< 20:
       items.add(makeCallHierarchyItem("func" & $i, "file:///test.nim", i, 0))
@@ -294,9 +294,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - Ctrl+d":
     check result.kind == chvrHandled
     check state.selectedIndex == 5 # Half of viewport height 10
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - Ctrl+u":
+suite "SubStateHandler - handleCallHierarchyModeKey - Ctrl+u":
   test "Ctrl+u moves half page up":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     var items: seq[lspTypes.CallHierarchyItem] = @[]
     for i in 0 ..< 20:
       items.add(makeCallHierarchyItem("func" & $i, "file:///test.nim", i, 0))
@@ -309,9 +309,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - Ctrl+u":
     check result.kind == chvrHandled
     check state.selectedIndex == 10 # 15 - (10 / 2)
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - unhandled":
+suite "SubStateHandler - handleCallHierarchyModeKey - unhandled":
   test "Unhandled key returns chvrUnhandled":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyCombo = toKeyCombo('x')
 
@@ -320,7 +320,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - unhandled":
     check result.kind == chvrUnhandled
 
   test "Unhandled special key returns chvrUnhandled":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyCombo = toSpecialKeyCombo(skPageUp)
 
@@ -328,9 +328,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - unhandled":
 
     check result.kind == chvrUnhandled
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - ensureSelectedVisible":
+suite "SubStateHandler - handleCallHierarchyModeKey - ensureSelectedVisible":
   test "Moving updates topLine to keep selection visible":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     var items: seq[lspTypes.CallHierarchyItem] = @[]
     for i in 0 ..< 20:
       items.add(makeCallHierarchyItem("func" & $i, "file:///test.nim", i, 0))
@@ -348,9 +348,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - ensureSelectedVisible
     # topLine should be adjusted to keep selected visible
     check state.topLine == 15 # 19 - 5 + 1
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - g followed by special key":
+suite "SubStateHandler - handleCallHierarchyModeKey - g followed by special key":
   test "g followed by Escape quits":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 2
     let keyComboG = toKeyCombo('g')
@@ -367,7 +367,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - g followed by special
     check handler.waitingForG == false
 
   test "g followed by Up arrow moves up":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 2
     let keyComboG = toKeyCombo('g')
@@ -384,7 +384,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - g followed by special
     check state.selectedIndex == 1
 
   test "g followed by Enter jumps to item":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 1
     let keyComboG = toKeyCombo('g')
@@ -399,9 +399,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - g followed by special
     check result.targetItem.name == "bar"
     check handler.waitingForG == false
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - g followed by quit key":
+suite "SubStateHandler - handleCallHierarchyModeKey - g followed by quit key":
   test "g followed by q quits":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyComboG = toKeyCombo('g')
     let keyComboQ = toKeyCombo('q')
@@ -415,9 +415,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - g followed by quit ke
     check result.kind == chvrQuit
     check handler.waitingForG == false
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - modifier keys":
+suite "SubStateHandler - handleCallHierarchyModeKey - modifier keys":
   test "Ctrl+x returns chvrUnhandled":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyCombo = toKeyCombo('x', ctrl = true)
 
@@ -427,7 +427,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - modifier keys":
 
   test "Alt+j still moves down (modifiers ignored for navigation)":
     # Note: Current implementation ignores Alt modifier for j/k keys
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyCombo = toKeyCombo('j', alt = true)
 
@@ -438,7 +438,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - modifier keys":
 
   test "Shift+G moves to last (modifiers ignored)":
     # Note: Current implementation handles uppercase G via char matching
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyCombo = toKeyCombo('G', shift = true)
 
@@ -447,10 +447,10 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - modifier keys":
     check result.kind == chvrHandled
     check state.selectedIndex == 2
 
-suite "CallHierarchyHandler - multiple handlers independence":
+suite "SubStateHandler - multiple handlers independence":
   test "Multiple handlers have independent state":
-    let handler1 = newCallHierarchyHandler()
-    let handler2 = newCallHierarchyHandler()
+    let handler1 = newSubStateHandler()
+    let handler2 = newSubStateHandler()
     let state = makeTestState()
     let keyComboG = toKeyCombo('g')
 
@@ -460,9 +460,9 @@ suite "CallHierarchyHandler - multiple handlers independence":
     check handler1.waitingForG == true
     check handler2.waitingForG == false
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - g followed by unhandled special key":
+suite "SubStateHandler - handleCallHierarchyModeKey - g followed by unhandled special key":
   test "g followed by PageUp returns chvrUnhandled":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     let keyComboG = toKeyCombo('g')
     let keyComboPageUp = toSpecialKeyCombo(skPageUp)
@@ -476,9 +476,9 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - g followed by unhandl
     check result.kind == chvrUnhandled
     check handler.waitingForG == false
 
-suite "CallHierarchyHandler - handleCallHierarchyModeKey - boundary conditions":
+suite "SubStateHandler - handleCallHierarchyModeKey - boundary conditions":
   test "Ctrl+d at last item stays at last":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 2 # Last item (3 items total)
     let keyCombo = toKeyCombo('d', ctrl = true)
@@ -489,7 +489,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - boundary conditions":
     check state.selectedIndex == 2
 
   test "Ctrl+u at first item stays at first":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeTestState()
     state.selectedIndex = 0
     let keyCombo = toKeyCombo('u', ctrl = true)
@@ -500,7 +500,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - boundary conditions":
     check state.selectedIndex == 0
 
   test "G with empty state":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeEmptyTestState()
     let keyCombo = toKeyCombo('G')
 
@@ -510,7 +510,7 @@ suite "CallHierarchyHandler - handleCallHierarchyModeKey - boundary conditions":
     check state.selectedIndex == 0
 
   test "gg with empty state":
-    let handler = newCallHierarchyHandler()
+    let handler = newSubStateHandler()
     let state = makeEmptyTestState()
     let keyComboG = toKeyCombo('g')
 

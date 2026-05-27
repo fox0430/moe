@@ -49,13 +49,8 @@ type
     else:
       discard
 
-proc newFileTreeHandler*(): FileTreeHandler =
-  FileTreeHandler(
-    waitingForG: false, waitingForCtrlW: false, isSearching: false, searchBuffer: ""
-  )
-
 proc handleFileTreeModeKey*(
-    handler: FileTreeHandler,
+    handler: SubStateHandler,
     fileTreeState: FileTreeState,
     viewportHeight: int,
     keyCombo: KeyCombo,

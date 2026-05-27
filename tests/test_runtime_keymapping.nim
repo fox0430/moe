@@ -883,6 +883,7 @@ proc createTestManager(): HandlerManager =
     insertHandler: insertHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
+    subStates: initSubStates(),
   )
 
 # --- Integration tests ---

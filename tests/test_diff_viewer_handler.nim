@@ -53,16 +53,16 @@ proc newTestDiffViewerState(lineCount: int = 10): DiffViewerState =
         dlkNormal
     result.lines.add(DiffLine(text: "line " & $i, kind: kind))
 
-suite "diff_viewer_handler: newDiffViewerHandler":
+suite "diff_viewer_handler: newSubStateHandler":
   test "Create new handler":
-    let handler = newDiffViewerHandler()
+    let handler = newSubStateHandler()
     check handler != nil
     check handler.waitingForG == false
 
 suite "diff_viewer_handler: handleDiffViewerModeKey - Basic movement keys":
   test "j key moves down":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
     check dvState.selectedLine == 0
 
@@ -74,7 +74,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Basic movement keys":
 
   test "k key moves up":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
     dvState.selectedLine = 3
 
@@ -86,7 +86,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Basic movement keys":
 
   test "k key does not move above first line":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
     check dvState.selectedLine == 0
 
@@ -98,7 +98,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Basic movement keys":
 
   test "j key does not move below last line":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
     dvState.selectedLine = 4
 
@@ -111,7 +111,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Basic movement keys":
 suite "diff_viewer_handler: handleDiffViewerModeKey - Arrow keys":
   test "Down arrow moves down":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
     check dvState.selectedLine == 0
 
@@ -123,7 +123,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Arrow keys":
 
   test "Up arrow moves up":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
     dvState.selectedLine = 3
 
@@ -136,7 +136,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Arrow keys":
 suite "diff_viewer_handler: handleDiffViewerModeKey - gg and G commands":
   test "gg moves to first line":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
     dvState.selectedLine = 5
 
@@ -157,7 +157,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - gg and G commands":
 
   test "g followed by non-g cancels and falls through":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
     dvState.selectedLine = 3
 
@@ -177,7 +177,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - gg and G commands":
 
   test "G moves to last line":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
     check dvState.selectedLine == 0
 
@@ -190,7 +190,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - gg and G commands":
 suite "diff_viewer_handler: handleDiffViewerModeKey - Half page movement":
   test "Ctrl+d moves half page down":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(50)
     check dvState.selectedLine == 0
 
@@ -204,7 +204,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Half page movement":
 
   test "Ctrl+u moves half page up":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(50)
     dvState.selectedLine = 30
 
@@ -218,7 +218,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Half page movement":
 
   test "Ctrl+u does not go below 0":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
     dvState.selectedLine = 3
 
@@ -231,7 +231,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Half page movement":
 
   test "Ctrl+d does not exceed last line":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
     dvState.selectedLine = 8
 
@@ -245,7 +245,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Half page movement":
 suite "diff_viewer_handler: handleDiffViewerModeKey - Mode transitions":
   test ": enters command mode":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
 
     let result =
@@ -255,7 +255,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Mode transitions":
 
   test "q quits diff viewer":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
 
     let result =
@@ -265,7 +265,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Mode transitions":
 
   test "Escape quits diff viewer":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
 
     let result =
@@ -276,7 +276,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Mode transitions":
 suite "diff_viewer_handler: handleDiffViewerModeKey - Unhandled keys":
   test "Unbound key returns unhandled":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
 
     let result =
@@ -286,7 +286,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Unhandled keys":
 
   test "Unbound special key returns unhandled":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
 
     let result =
@@ -296,7 +296,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Unhandled keys":
 
   test "Character with modifier returns unhandled":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
 
     # Ctrl+X - not a standard binding
@@ -309,7 +309,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Unhandled keys":
 suite "diff_viewer_handler: handleDiffViewerModeKey - Edge cases":
   test "Empty diff state - j does not crash":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newDiffViewerState()
     check dvState.lines.len == 0
 
@@ -321,7 +321,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Edge cases":
 
   test "Empty diff state - G stays at 0":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newDiffViewerState()
     check dvState.lines.len == 0
 
@@ -333,7 +333,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Edge cases":
 
   test "Empty diff state - gg stays at 0":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newDiffViewerState()
 
     # First 'g'
@@ -347,7 +347,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Edge cases":
 
   test "g followed by special key cancels":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
     dvState.selectedLine = 3
 
@@ -368,7 +368,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Edge cases":
 suite "diff_viewer_handler: handleDiffViewerModeKey - Scroll position":
   test "k updates topLine when going above visible area":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(30)
     dvState.selectedLine = 5
     dvState.topLine = 5 # First visible line is 5
@@ -382,7 +382,7 @@ suite "diff_viewer_handler: handleDiffViewerModeKey - Scroll position":
 
   test "gg resets topLine to 0":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(30)
     dvState.selectedLine = 20
     dvState.topLine = 15
@@ -422,7 +422,7 @@ suite "diff_viewer_handler: DiffViewerResult kinds":
 suite "diff_viewer_handler: Multiple consecutive operations":
   test "Multiple j presses move cursor down":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
 
     for i in 0 ..< 5:
@@ -432,7 +432,7 @@ suite "diff_viewer_handler: Multiple consecutive operations":
 
   test "Multiple k presses move cursor up":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
     dvState.selectedLine = 8
 
@@ -443,7 +443,7 @@ suite "diff_viewer_handler: Multiple consecutive operations":
 
   test "j at last line followed by k moves up":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
     dvState.selectedLine = 9 # Last line
 
@@ -457,7 +457,7 @@ suite "diff_viewer_handler: Multiple consecutive operations":
 
   test "G followed by gg":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
 
     # G moves to last line
@@ -472,7 +472,7 @@ suite "diff_viewer_handler: Multiple consecutive operations":
 suite "diff_viewer_handler: Single line diff":
   test "j on single line diff":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(1)
     check dvState.lines.len == 1
     check dvState.selectedLine == 0
@@ -485,7 +485,7 @@ suite "diff_viewer_handler: Single line diff":
 
   test "k on single line diff":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(1)
     check dvState.selectedLine == 0
 
@@ -497,7 +497,7 @@ suite "diff_viewer_handler: Single line diff":
 
   test "G on single line diff":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(1)
 
     let result =
@@ -508,7 +508,7 @@ suite "diff_viewer_handler: Single line diff":
 
   test "Ctrl+d on single line diff":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(1)
 
     let result = handler.handleDiffViewerModeKey(
@@ -521,7 +521,7 @@ suite "diff_viewer_handler: Single line diff":
 suite "diff_viewer_handler: Small viewport":
   test "Ctrl+d with viewportHeight = 1 moves at least 1 line":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
     check dvState.selectedLine == 0
 
@@ -532,7 +532,7 @@ suite "diff_viewer_handler: Small viewport":
 
   test "Ctrl+u with viewportHeight = 1 moves at least 1 line":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
     dvState.selectedLine = 5
 
@@ -543,7 +543,7 @@ suite "diff_viewer_handler: Small viewport":
 
   test "Ctrl+d with viewportHeight = 0 moves at least 1 line":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
     check dvState.selectedLine == 0
 
@@ -555,7 +555,7 @@ suite "diff_viewer_handler: Small viewport":
 suite "diff_viewer_handler: waitingForG with modifier keys":
   test "g followed by Ctrl+d cancels g and executes Ctrl+d":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(30)
     dvState.selectedLine = 5
 
@@ -576,7 +576,7 @@ suite "diff_viewer_handler: waitingForG with modifier keys":
 
   test "g followed by Ctrl+u cancels g and executes Ctrl+u":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(30)
     dvState.selectedLine = 20
 
@@ -594,7 +594,7 @@ suite "diff_viewer_handler: waitingForG with modifier keys":
 
   test "g followed by : cancels g and enters command mode":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
 
     # First 'g'
@@ -609,7 +609,7 @@ suite "diff_viewer_handler: waitingForG with modifier keys":
 
   test "g followed by q cancels g and quits":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
 
     # First 'g'
@@ -624,7 +624,7 @@ suite "diff_viewer_handler: waitingForG with modifier keys":
 
   test "g followed by G cancels g and moves to last line":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
     dvState.selectedLine = 3
 
@@ -641,7 +641,7 @@ suite "diff_viewer_handler: waitingForG with modifier keys":
 
   test "g followed by Escape cancels g and quits":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
 
     # First 'g'
@@ -656,7 +656,7 @@ suite "diff_viewer_handler: waitingForG with modifier keys":
 
   test "g followed by unknown key cancels g and returns unhandled":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
 
     # First 'g'
@@ -675,7 +675,7 @@ suite "diff_viewer_handler: Other modifier combinations":
 
   test "Ctrl+j is treated as j (modifier ignored)":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
     check dvState.selectedLine == 0
 
@@ -689,7 +689,7 @@ suite "diff_viewer_handler: Other modifier combinations":
 
   test "Ctrl+k is treated as k (modifier ignored)":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
     dvState.selectedLine = 3
 
@@ -703,7 +703,7 @@ suite "diff_viewer_handler: Other modifier combinations":
 
   test "Alt+j is treated as j (modifier ignored)":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
     check dvState.selectedLine == 0
 
@@ -717,7 +717,7 @@ suite "diff_viewer_handler: Other modifier combinations":
 
   test "Shift modifier on special key is ignored":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
     dvState.selectedLine = 3
 
@@ -731,7 +731,7 @@ suite "diff_viewer_handler: Other modifier combinations":
 
   test "Ctrl+G is treated as G (modifier ignored)":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(10)
     check dvState.selectedLine == 0
 
@@ -745,7 +745,7 @@ suite "diff_viewer_handler: Other modifier combinations":
 
   test "Ctrl+q is treated as q (modifier ignored)":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
 
     let result = handler.handleDiffViewerModeKey(
@@ -757,7 +757,7 @@ suite "diff_viewer_handler: Other modifier combinations":
 
   test "Unknown key with Ctrl modifier returns unhandled":
     let
-      handler = newDiffViewerHandler()
+      handler = newSubStateHandler()
       dvState = newTestDiffViewerState(5)
 
     # Ctrl+x is not bound (only Ctrl+d and Ctrl+u are)

@@ -63,12 +63,8 @@ type
     else:
       discard
 
-proc newBackupManagerHandler*(): BackupManagerHandler =
-  ## Create a new Backup Manager mode handler
-  BackupManagerHandler(waitingForG: false)
-
 proc handleBackupManagerModeKey*(
-    handler: BackupManagerHandler,
+    handler: SubStateHandler,
     bkState: BackupManagerState,
     viewportHeight: int,
     keyCombo: KeyCombo,

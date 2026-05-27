@@ -50,12 +50,8 @@ type
     else:
       discard
 
-proc newBookmarkManagerHandler*(): BookmarkManagerHandler =
-  ## Create a new Bookmark Manager mode handler
-  BookmarkManagerHandler(waitingForG: false)
-
 proc handleBookmarkManagerModeKey*(
-    handler: BookmarkManagerHandler,
+    handler: SubStateHandler,
     bmState: BookmarkManagerState,
     viewportHeight: int,
     keyCombo: KeyCombo,

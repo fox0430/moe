@@ -86,41 +86,15 @@ proc newHandlerManager*(
   )
   let replaceHandler =
     newReplaceModeHandler(keyBindingRegistry, motionController, commandRegistry)
-  let filerHandler = newFilerHandler()
-  let logViewerHandler = newLogViewerHandler()
-  let helpViewerHandler = newHelpViewerHandler()
-  let bufferManagerHandler = newBufferManagerHandler()
-  let bookmarkManagerHandler = newBookmarkManagerHandler()
-  let backupManagerHandler = newBackupManagerHandler()
-  let diffViewerHandler = newDiffViewerHandler()
-  let recentFileModeHandler = newRecentFileModeHandler()
-  let configModeHandler = newConfigModeHandler()
-  let referencesHandler = newReferencesHandler()
-  let documentSymbolHandler = newDocumentSymbolHandler()
-  let callHierarchyHandler = newCallHierarchyHandler()
-  let terminalHandler = newTerminalHandler()
-  let fileTreeHandler = newFileTreeHandler()
-
+  # All sub-state modes share the SubStateHandler type and start zero-valued,
+  # so initSubStates() replaces the former 15 newXxxHandler() calls.
   HandlerManager(
     normalHandler: normalHandler,
     insertHandler: insertHandler,
     commandHandler: commandHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
-    filerHandler: filerHandler,
-    logViewerHandler: logViewerHandler,
-    helpViewerHandler: helpViewerHandler,
-    bufferManagerHandler: bufferManagerHandler,
-    bookmarkManagerHandler: bookmarkManagerHandler,
-    backupManagerHandler: backupManagerHandler,
-    diffViewerHandler: diffViewerHandler,
-    recentFileModeHandler: recentFileModeHandler,
-    configModeHandler: configModeHandler,
-    referencesHandler: referencesHandler,
-    documentSymbolHandler: documentSymbolHandler,
-    callHierarchyHandler: callHierarchyHandler,
-    terminalHandler: terminalHandler,
-    fileTreeHandler: fileTreeHandler,
+    subStates: initSubStates(),
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,

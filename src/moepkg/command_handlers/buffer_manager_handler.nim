@@ -49,12 +49,8 @@ type
     else:
       discard
 
-proc newBufferManagerHandler*(): BufferManagerHandler =
-  ## Create a new Buffer Manager mode handler
-  BufferManagerHandler(waitingForG: false)
-
 proc handleBufferManagerModeKey*(
-    handler: BufferManagerHandler,
+    handler: SubStateHandler,
     bmState: BufferManagerState,
     viewportHeight: int,
     keyCombo: KeyCombo,

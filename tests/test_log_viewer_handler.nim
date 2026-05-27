@@ -56,16 +56,16 @@ proc newTestBuffer(content: string = ""): TextBuffer =
   ## Create a test buffer with optional content
   newTextBuffer(content)
 
-suite "log_viewer_handler: newLogViewerHandler":
+suite "log_viewer_handler: newSubStateHandler":
   test "Create new handler":
-    let handler = newLogViewerHandler()
+    let handler = newSubStateHandler()
     check handler != nil
     check handler.waitingForG == false
 
 suite "log_viewer_handler: handleLogViewerModeKey - Basic movement keys":
   test "j key moves down":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\nline3\n")
       state = newTestEditorState()
     check state.cursor.line == 0
@@ -78,7 +78,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Basic movement keys":
 
   test "k key moves up":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\nline3\n")
       state = newTestEditorState()
     state.cursor.line = 2
@@ -91,7 +91,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Basic movement keys":
 
   test "k key does not move above first line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\nline3\n")
       state = newTestEditorState()
     check state.cursor.line == 0
@@ -104,7 +104,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Basic movement keys":
 
   test "j key does not move below last line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\nline3\n")
       state = newTestEditorState()
     state.cursor.line = buffer.len - 1
@@ -117,7 +117,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Basic movement keys":
 
   test "h key moves left":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello\n")
       state = newTestEditorState()
     state.cursor.column = 3
@@ -130,7 +130,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Basic movement keys":
 
   test "h key does not move past column 0":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello\n")
       state = newTestEditorState()
     check state.cursor.column == 0
@@ -143,7 +143,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Basic movement keys":
 
   test "l key moves right":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello\n")
       state = newTestEditorState()
     state.cursor.column = 0
@@ -156,7 +156,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Basic movement keys":
 
   test "l key does not move past end of line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello\n")
       state = newTestEditorState()
     state.cursor.column = 4 # 'o' is at index 4, line length is 6 (includes \n)
@@ -170,7 +170,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Basic movement keys":
 suite "log_viewer_handler: handleLogViewerModeKey - Arrow keys":
   test "Down arrow moves down":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\nline3\n")
       state = newTestEditorState()
     check state.cursor.line == 0
@@ -184,7 +184,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Arrow keys":
 
   test "Up arrow moves up":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\nline3\n")
       state = newTestEditorState()
     state.cursor.line = 2
@@ -198,7 +198,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Arrow keys":
 
   test "Left arrow moves left":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello\n")
       state = newTestEditorState()
     state.cursor.column = 3
@@ -212,7 +212,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Arrow keys":
 
   test "Right arrow moves right":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello\n")
       state = newTestEditorState()
     state.cursor.column = 0
@@ -227,7 +227,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Arrow keys":
 suite "log_viewer_handler: handleLogViewerModeKey - Line position keys":
   test "0 moves to beginning of line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello world\n")
       state = newTestEditorState()
     state.cursor.column = 5
@@ -240,7 +240,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Line position keys":
 
   test "$ moves to end of line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello world\n")
       state = newTestEditorState()
     state.cursor.column = 0
@@ -254,7 +254,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Line position keys":
 
   test "Home moves to beginning of line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello world\n")
       state = newTestEditorState()
     state.cursor.column = 5
@@ -268,7 +268,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Line position keys":
 
   test "End moves to end of line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello world\n")
       state = newTestEditorState()
     state.cursor.column = 0
@@ -284,7 +284,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Line position keys":
 suite "log_viewer_handler: handleLogViewerModeKey - gg and G commands":
   test "gg moves to first line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\nline3\nline4\nline5\n")
       state = newTestEditorState()
     state.cursor.line = 3
@@ -306,7 +306,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - gg and G commands":
 
   test "g followed by non-g cancels and falls through":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\nline3\nline4\n")
       state = newTestEditorState()
     state.cursor.line = 1
@@ -327,7 +327,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - gg and G commands":
 
   test "G moves to last line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\nline3\nline4\nline5\n")
       state = newTestEditorState()
     check state.cursor.line == 0
@@ -342,7 +342,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - gg and G commands":
 suite "log_viewer_handler: handleLogViewerModeKey - Half page and full page movement":
   test "Ctrl+d moves half page down":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer(
         "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12\nline13\nline14\nline15\nline16\nline17\nline18\nline19\nline20\nline21\nline22\nline23\nline24\nline25\nline26\nline27\nline28\nline29\nline30\n"
       )
@@ -360,7 +360,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Half page and full page move
 
   test "Ctrl+u moves half page up":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer(
         "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12\nline13\nline14\nline15\nline16\nline17\nline18\nline19\nline20\nline21\nline22\nline23\nline24\nline25\nline26\nline27\nline28\nline29\nline30\n"
       )
@@ -377,7 +377,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Half page and full page move
 
   test "Ctrl+u does not go below 0":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\nline3\n")
       state = newTestEditorState()
     state.cursor.line = 1
@@ -391,7 +391,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Half page and full page move
 
   test "Ctrl+d does not exceed last line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\nline3\n")
       state = newTestEditorState()
     state.cursor.line = 2
@@ -405,7 +405,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Half page and full page move
 
   test "Ctrl+f moves full page down":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer(
         "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12\nline13\nline14\nline15\nline16\nline17\nline18\nline19\nline20\nline21\nline22\nline23\nline24\nline25\nline26\nline27\nline28\nline29\nline30\nline31\nline32\nline33\nline34\nline35\nline36\nline37\nline38\nline39\nline40\nline41\nline42\nline43\nline44\nline45\nline46\nline47\nline48\nline49\nline50\n"
       )
@@ -422,7 +422,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Half page and full page move
 
   test "Ctrl+b moves full page up":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer(
         "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12\nline13\nline14\nline15\nline16\nline17\nline18\nline19\nline20\nline21\nline22\nline23\nline24\nline25\nline26\nline27\nline28\nline29\nline30\nline31\nline32\nline33\nline34\nline35\nline36\nline37\nline38\nline39\nline40\nline41\nline42\nline43\nline44\nline45\nline46\nline47\nline48\nline49\nline50\n"
       )
@@ -440,7 +440,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Half page and full page move
 suite "log_viewer_handler: handleLogViewerModeKey - Word motion":
   test "w moves to next word":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello world test\n")
       state = newTestEditorState()
     state.cursor.column = 0
@@ -453,7 +453,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Word motion":
 
   test "b moves to previous word":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello world test\n")
       state = newTestEditorState()
     state.cursor.column = 6
@@ -466,7 +466,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Word motion":
 
   test "e moves to end of word":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello world test\n")
       state = newTestEditorState()
     state.cursor.column = 0
@@ -480,7 +480,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Word motion":
 suite "log_viewer_handler: handleLogViewerModeKey - Paragraph motion":
   test "} moves to next blank line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\n\nline4\nline5\n")
       state = newTestEditorState()
     state.cursor.line = 0
@@ -494,7 +494,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Paragraph motion":
 
   test "{ moves to previous blank line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\n\nline4\nline5\n")
       state = newTestEditorState()
     state.cursor.line = 4
@@ -509,7 +509,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Paragraph motion":
 suite "log_viewer_handler: handleLogViewerModeKey - Mode transitions":
   test ": enters command mode":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("test\n")
       state = newTestEditorState()
 
@@ -520,7 +520,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Mode transitions":
 
   test "/ enters forward search mode":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("test\n")
       state = newTestEditorState()
 
@@ -531,7 +531,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Mode transitions":
 
   test "? enters backward search mode":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("test\n")
       state = newTestEditorState()
 
@@ -542,7 +542,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Mode transitions":
 
   test "q quits log viewer":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("test\n")
       state = newTestEditorState()
 
@@ -553,7 +553,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Mode transitions":
 
   test "r refreshes log content":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("test\n")
       state = newTestEditorState()
 
@@ -564,7 +564,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Mode transitions":
 
   test "Escape stays in log viewer (like Vim help)":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("test\n")
       state = newTestEditorState()
 
@@ -577,7 +577,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Mode transitions":
 suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
   test "n searches forward with last search text":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\ntest here\nline3\ntest again\nline5\n")
       state = newTestEditorState()
     state.search.lastText = "test"
@@ -591,7 +591,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
 
   test "N searches backward with last search text":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\ntest here\nline3\ntest again\nline5\n")
       state = newTestEditorState()
     state.search.lastText = "test"
@@ -605,7 +605,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
 
   test "n with no previous search shows message":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("test\n")
       state = newTestEditorState()
     state.search.lastText = ""
@@ -618,7 +618,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
 
   test "N with no previous search shows message":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("test\n")
       state = newTestEditorState()
     state.search.lastText = ""
@@ -631,7 +631,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
 
   test "* searches for word under cursor":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello world hello again\n")
       state = newTestEditorState()
     state.cursor.column = 0 # on "hello"
@@ -645,7 +645,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
 
   test "# searches backward for word under cursor":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello world hello\n")
       state = newTestEditorState()
     state.cursor.column = 12 # on second "hello"
@@ -661,7 +661,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search navigation":
 suite "log_viewer_handler: handleLogViewerModeKey - Unhandled keys":
   test "Unbound key returns unhandled":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("test\n")
       state = newTestEditorState()
 
@@ -672,7 +672,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Unhandled keys":
 
   test "Unbound special key returns unhandled":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("test\n")
       state = newTestEditorState()
 
@@ -685,7 +685,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Unhandled keys":
 suite "log_viewer_handler: handleLogViewerModeKey - Edge cases":
   test "Empty buffer - j does not crash":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("")
       state = newTestEditorState()
 
@@ -697,7 +697,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Edge cases":
 
   test "Empty buffer - G moves to line 0":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("")
       state = newTestEditorState()
 
@@ -709,7 +709,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Edge cases":
 
   test "Empty line - $ on empty line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("\n")
       state = newTestEditorState()
 
@@ -721,7 +721,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Edge cases":
 
   test "Empty line - End on empty line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("\n")
       state = newTestEditorState()
 
@@ -734,7 +734,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Edge cases":
 
   test "g followed by special key cancels":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\nline3\n")
       state = newTestEditorState()
     state.cursor.line = 2
@@ -757,7 +757,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Edge cases":
 suite "log_viewer_handler: handleLogViewerModeKey - Word motion edge cases":
   test "w moves to next line when at end of line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello\nworld\n")
       state = newTestEditorState()
     state.cursor.column = 4 # on 'o' of "hello"
@@ -771,7 +771,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Word motion edge cases":
 
   test "b moves to previous line when at start of line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello\nworld\n")
       state = newTestEditorState()
     state.cursor.line = 1
@@ -786,7 +786,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Word motion edge cases":
 
   test "e moves to next line when at end of line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hi \nworld\n")
       state = newTestEditorState()
     state.cursor.column = 1 # on 'i' of "hi "
@@ -803,7 +803,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Word motion edge cases":
 
   test "w handles symbols (non-word, non-whitespace)":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("foo::bar\n")
       state = newTestEditorState()
     state.cursor.column = 0 # on 'f'
@@ -816,7 +816,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Word motion edge cases":
 
   test "b handles symbols":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("foo::bar\n")
       state = newTestEditorState()
     state.cursor.column = 5 # on 'b' of "bar"
@@ -829,7 +829,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Word motion edge cases":
 
   test "e handles symbols":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("foo::bar\n")
       state = newTestEditorState()
     state.cursor.column = 3 # on first ':'
@@ -843,7 +843,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Word motion edge cases":
 suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
   test "n shows 'Pattern not found' when search fails":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello world\n")
       state = newTestEditorState()
     state.search.lastText = "notfound"
@@ -856,7 +856,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
 
   test "N shows 'Pattern not found' when search fails":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("hello world\n")
       state = newTestEditorState()
     state.search.lastText = "notfound"
@@ -869,7 +869,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
 
   test "* on non-word character does nothing":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("  hello\n")
       state = newTestEditorState()
     state.cursor.column = 0 # on space
@@ -883,7 +883,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
 
   test "# on non-word character does nothing":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("  hello\n")
       state = newTestEditorState()
     state.cursor.column = 0 # on space
@@ -896,7 +896,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
 
   test "* shows 'Pattern not found' when word not found elsewhere":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("unique\n")
       state = newTestEditorState()
     state.cursor.column = 0 # on 'u' of "unique"
@@ -912,7 +912,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
 
   test "# shows 'Pattern not found' when word not found elsewhere":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("unique\n")
       state = newTestEditorState()
     state.cursor.column = 0 # on 'u' of "unique"
@@ -926,7 +926,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Search edge cases":
 suite "log_viewer_handler: handleLogViewerModeKey - Paragraph motion edge cases":
   test "{ at beginning of buffer stays at line 0":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\n")
       state = newTestEditorState()
     state.cursor.line = 0
@@ -939,7 +939,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Paragraph motion edge cases"
 
   test "} at end of buffer stays at last line":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("line1\nline2\n")
       state = newTestEditorState()
     state.cursor.line = buffer.len - 1
@@ -952,7 +952,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Paragraph motion edge cases"
 
   test "{ skips multiple blank lines":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("para1\n\n\npara2\n")
       state = newTestEditorState()
     state.cursor.line = 3 # "para2"
@@ -966,7 +966,7 @@ suite "log_viewer_handler: handleLogViewerModeKey - Paragraph motion edge cases"
 
   test "} skips multiple blank lines":
     let
-      handler = newLogViewerHandler()
+      handler = newSubStateHandler()
       buffer = newTestBuffer("para1\n\n\npara2\n")
       state = newTestEditorState()
     state.cursor.line = 0 # "para1"
