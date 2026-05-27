@@ -899,18 +899,25 @@ proc handleHelpViewerMode*(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
     )
   of hvrEnterSearch:
-    # Enter search mode (forward) from help viewer
+    # Enter search mode (forward) from help viewer.
+    # historyIndex/text/etc. are reset by enterSearchOverlay on transition.
     state.search.direction = Forward
-    state.search.historyIndex = -1
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
     )
   of hvrEnterSearchBackward:
     # Enter search mode (backward) from help viewer
     state.search.direction = Backward
-    state.search.historyIndex = -1
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
+    )
+  of hvrRepeatSearch:
+    # n/N jumped to a match: re-enable the global hlsearch gate (like Vim's n
+    # after :noh) so the highlight comes back across all windows/modes.
+    state.search.hlsearchTempDisabled = false
+    state.windowDisplay.needsFullRedraw = true
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
   of hvrClearSearchHighlight:
     # Double-Escape: clear search highlight in help viewer
@@ -1090,6 +1097,38 @@ proc handleConfigMode*(
     state.commandCursor = 0
     return HandlerResult(
       kind: hrHandled, overlayTransition: some(okCommand), statusMessage: ""
+    )
+  of cmrEnterSearch:
+    # Enter search mode (forward) from config mode.
+    # historyIndex/text/etc. are reset by enterSearchOverlay on transition;
+    # searchStartIndex is the config-specific anchor for the upcoming search.
+    state.search.direction = Forward
+    configState.searchStartIndex = configState.selectedIndex
+    return HandlerResult(
+      kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
+    )
+  of cmrEnterSearchBackward:
+    # Enter search mode (backward) from config mode
+    state.search.direction = Backward
+    configState.searchStartIndex = configState.selectedIndex
+    return HandlerResult(
+      kind: hrHandled, overlayTransition: some(okSearch), statusMessage: ""
+    )
+  of cmrRepeatSearch:
+    # n/N jumped to a match: re-enable the global hlsearch gate (like Vim's n
+    # after :noh) so the highlight comes back across all windows/modes.
+    state.search.hlsearchTempDisabled = false
+    state.windowDisplay.needsFullRedraw = true
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of cmrClearSearchHighlight:
+    # Double-Escape: clear search highlight. Disable the global hlsearch gate
+    # so every window/mode (buffers, Help, other Config windows) hides matches.
+    state.search.hlsearchTempDisabled = true
+    state.windowDisplay.needsFullRedraw = true
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
     )
   of cmrSaveConfig:
     return HandlerResult(kind: hrConfigSaveConfig)

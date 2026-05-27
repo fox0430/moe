@@ -22,6 +22,8 @@
 ## This module handles commands specific to Help Viewer mode.
 ## The help viewer displays editor help information.
 
+import std/options
+
 import ../[key_bindings, help_viewer]
 import handler_types
 export handler_types
@@ -32,6 +34,7 @@ type
     hvrEnterCommand # Enter command mode
     hvrEnterSearch # Enter search mode (forward)
     hvrEnterSearchBackward # Enter search mode (backward)
+    hvrRepeatSearch # Jumped to next/prev match (re-enable highlight)
     hvrClearSearchHighlight # Clear search highlight (double-Escape)
     hvrQuit # Close help viewer and return to previous mode
     hvrUnhandled # Command was not handled
@@ -112,14 +115,17 @@ proc handleHelpViewerModeKey*(
     of "?":
       return HelpViewerResult(kind: hvrEnterSearchBackward)
     of "n":
-      # Search forward for next match
-      discard helpState.searchForward()
-      helpState.ensureSelectedVisible(viewportHeight)
+      # Search forward for next match. Re-enable highlight (like Vim's n) only
+      # when there is a match to jump to; an empty query must not touch the gate.
+      if helpState.searchForward().isSome:
+        helpState.ensureSelectedVisible(viewportHeight)
+        return HelpViewerResult(kind: hvrRepeatSearch)
       return HelpViewerResult(kind: hvrHandled)
     of "N":
-      # Search backward for previous match
-      discard helpState.searchBackward()
-      helpState.ensureSelectedVisible(viewportHeight)
+      # Search backward for previous match (see "n" for the gate rationale).
+      if helpState.searchBackward().isSome:
+        helpState.ensureSelectedVisible(viewportHeight)
+        return HelpViewerResult(kind: hvrRepeatSearch)
       return HelpViewerResult(kind: hvrHandled)
     of "j":
       helpState.moveDown()

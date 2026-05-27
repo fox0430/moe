@@ -285,7 +285,8 @@ suite "help_handler: handleHelpViewerModeKey - Search navigation":
     let result =
       handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("n"))
 
-    check result.kind == hvrHandled
+    # A match jump requests a highlight re-enable (like Vim's n after :noh).
+    check result.kind == hvrRepeatSearch
     # Should find the first occurrence of "Visual" after line 0
     check helpState.selectedIndex > 0
     check helpState.isLineMatched(helpState.selectedIndex)
@@ -302,10 +303,10 @@ suite "help_handler: handleHelpViewerModeKey - Search navigation":
     let result =
       handler.handleHelpViewerModeKey(helpState, TestViewportHeight, charKey("N"))
 
-    check result.kind == hvrHandled
-    # Should find an occurrence before the current position
-    check helpState.selectedIndex < lastIndex or helpState.selectedIndex == lastIndex
-      # If no match found, position unchanged
+    # "Normal" has matches, so the backward jump succeeds and requests a
+    # highlight re-enable; the selection moves before the starting position.
+    check result.kind == hvrRepeatSearch
+    check helpState.selectedIndex < lastIndex
 
   test "n with no search query does not crash":
     let

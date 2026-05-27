@@ -28,7 +28,8 @@ import pkg/celina
 
 import
   ../[
-    editor, key_bindings, modes, buffer, search_utils, types, help_viewer, unicode_utils
+    editor, key_bindings, modes, buffer, search_utils, types, help_viewer, config_mode,
+    unicode_utils,
   ]
 import command_mode_handler
 
@@ -45,6 +46,16 @@ proc syncHelpViewerIndex(e: Editor, line: int) =
     let window = e.activeWindow
     if window.modeState.kind == mskHelp:
       window.modeState.help.selectedIndex = line
+
+proc activeConfigState(e: Editor): ConfigModeState =
+  ## Returns the active window's ConfigModeState, or nil when not in Config mode.
+  ## Config mode renders an item list rather than a text buffer, so its search
+  ## operates on that list instead of the buffer search machinery.
+  if e.state.mode == EditorMode.Config:
+    let window = e.activeWindow
+    if window.modeState.kind == mskConfig:
+      return window.modeState.config
+  return nil
 
 proc executeSearchFromCurrentPosition(e: Editor): bool =
   ## Execute search from current position (used when incsearch is disabled)
@@ -121,20 +132,29 @@ proc finalizeSearch(e: Editor) =
     if e.state.search.history.len > historyLimit:
       e.state.search.history.setLen(historyLimit)
 
-    # If incsearch is enabled, cursor is already at the found position
-    if e.state.search.incsearch:
-      e.updateViewportForCursor(e.cursor)
+    let cfg = e.activeConfigState()
+    if cfg != nil:
+      # Config mode: commit the query and move the selection to the first match,
+      # anchored from where the search started.
+      cfg.setSearchQuery(e.state.search.text)
+      let forward = e.state.search.direction == Forward
+      discard cfg.searchItems(e.state.search.text, cfg.searchStartIndex, forward)
       e.state.windowDisplay.needsFullRedraw = true
     else:
-      # If incsearch is disabled, perform search now
-      discard e.executeSearchFromCurrentPosition()
+      # If incsearch is enabled, cursor is already at the found position
+      if e.state.search.incsearch:
+        e.updateViewportForCursor(e.cursor)
+        e.state.windowDisplay.needsFullRedraw = true
+      else:
+        # If incsearch is disabled, perform search now
+        discard e.executeSearchFromCurrentPosition()
 
-    # Sync search query and position to help viewer state if in Help mode
-    if e.state.mode == EditorMode.Help:
-      let window = e.activeWindow
-      if window.modeState.kind == mskHelp:
-        window.modeState.help.setSearchQuery(e.state.search.text)
-    e.syncHelpViewerIndex(e.cursor.line)
+      # Sync search query and position to help viewer state if in Help mode
+      if e.state.mode == EditorMode.Help:
+        let window = e.activeWindow
+        if window.modeState.kind == mskHelp:
+          window.modeState.help.setSearchQuery(e.state.search.text)
+      e.syncHelpViewerIndex(e.cursor.line)
 
   # Exit overlay and return to base mode
   # The base mode (Normal, LogViewer, Filer, etc.) is preserved
@@ -156,7 +176,13 @@ proc cancelSearch(e: Editor) =
   ## - Exit overlay and return to base mode
   ## - Clear searchText buffer
   ## - Does NOT save to lastSearchText (search was cancelled)
-  if e.state.search.incsearch:
+  let cfg = e.activeConfigState()
+  if cfg != nil:
+    # Config mode: restore the selection that was active before the search.
+    if e.state.search.incsearch:
+      cfg.selectedIndex = cfg.searchStartIndex
+      e.state.windowDisplay.needsFullRedraw = true
+  elif e.state.search.incsearch:
     e.cursor = e.state.search.startPos
     e.syncHelpViewerIndex(e.state.search.startPos.line)
   # Exit overlay and restore base mode
@@ -184,7 +210,21 @@ proc performIncrementalSearch(e: Editor) =
   ## - Sets appropriate status message
   ##
   ## This provides real-time feedback as the user types their search query.
-  if not e.state.search.incsearch or e.state.search.text.len == 0:
+  if not e.state.search.incsearch:
+    return
+
+  let cfg = e.activeConfigState()
+  if cfg != nil:
+    # Config mode: live-search the item list from the search start anchor.
+    if e.state.search.text.len == 0:
+      cfg.selectedIndex = cfg.searchStartIndex
+    else:
+      let forward = e.state.search.direction == Forward
+      discard cfg.searchItems(e.state.search.text, cfg.searchStartIndex, forward)
+    e.state.windowDisplay.needsFullRedraw = true
+    return
+
+  if e.state.search.text.len == 0:
     return
 
   # Apply smartcase logic to determine if we should ignore case
@@ -350,10 +390,15 @@ proc handleSearchModeEvent*(e: Editor, event: Event): bool =
         e.state.search.historyIndex = -1
         e.state.search.text = ""
         e.state.search.cursor = 0
-        # Restore cursor to start position if incsearch is enabled
+        # Restore position to start if incsearch is enabled
         if e.state.search.incsearch:
-          e.cursor = e.state.search.startPos
-          e.syncHelpViewerIndex(e.state.search.startPos.line)
+          let cfg = e.activeConfigState()
+          if cfg != nil:
+            cfg.selectedIndex = cfg.searchStartIndex
+            e.state.windowDisplay.needsFullRedraw = true
+          else:
+            e.cursor = e.state.search.startPos
+            e.syncHelpViewerIndex(e.state.search.startPos.line)
     return true
 
   # Left arrow: Move cursor left within search text

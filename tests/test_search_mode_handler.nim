@@ -28,6 +28,7 @@ import ../src/moepkg/types {.all.}
 import ../src/moepkg/modes {.all.}
 import ../src/moepkg/editor {.all.}
 import ../src/moepkg/config {.all.}
+import ../src/moepkg/config_mode {.all.}
 import ../src/moepkg/help_viewer {.all.}
 import ../src/moepkg/search_utils {.all.}
 import ../src/moepkg/command_handlers/search_mode_handler {.all.}
@@ -62,6 +63,23 @@ proc createTestEditorInHelpMode(): Editor =
   result.windowManager.windows[0].bufferIds = @[helpBuffer.id]
   result.windowManager.windows[0].modeState = ModeState(kind: mskHelp, help: helpState)
   result.state.mode = EditorMode.Help
+
+proc createTestEditorInConfigMode(): (Editor, ConfigModeState) =
+  ## Create an editor in Config mode with a ConfigModeState window.
+  ## Config mode searches an item list, so the search machinery routes through
+  ## activeConfigState() instead of the text-buffer search path.
+  let e = createTestEditorWithBuffer("")
+  let configState = newConfigModeState(e.config)
+  e.windowManager.windows[0].modeState = ModeState(kind: mskConfig, config: configState)
+  e.state.mode = EditorMode.Config
+  (e, configState)
+
+proc firstEditableName(state: ConfigModeState): string =
+  ## Display name of the first non-section item (a guaranteed match target).
+  for item in state.items:
+    if item.kind != cvkSection:
+      return item.displayName
+  ""
 
 suite "handleSearchBackspace":
   test "Remove last ASCII character":
@@ -320,6 +338,110 @@ suite "Search mode - Help mode incremental search sync":
     # Cancel should restore selectedIndex to startPos
     cancelSearch(e)
     check helpState.selectedIndex == 10
+
+suite "Search mode - Config mode integration":
+  test "performIncrementalSearch moves selection to a match from the anchor":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    cfg.searchStartIndex = 0
+    cfg.selectedIndex = 0
+    let name = cfg.firstEditableName
+    e.setSearchText(name)
+
+    performIncrementalSearch(e)
+
+    # Selection lands on an item matching the live text (the committed
+    # searchQuery is only set on finalize, so match against the live text).
+    check cfg.items[cfg.selectedIndex].matchesSearchQuery(name)
+    check cfg.selectedIndex > 0
+
+  test "performIncrementalSearch with empty text restores the anchor selection":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    cfg.searchStartIndex = 0
+    cfg.selectedIndex = cfg.items.high
+    e.setSearchText("")
+
+    performIncrementalSearch(e)
+
+    check cfg.selectedIndex == 0
+
+  test "handleSearchCharacterInput live-updates the selection while typing":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    cfg.searchStartIndex = 0
+    cfg.selectedIndex = 0
+    let name = cfg.firstEditableName
+
+    for ch in name:
+      handleSearchCharacterInput(e, $ch)
+
+    check cfg.items[cfg.selectedIndex].matchesSearchQuery(name)
+
+  test "handleSearchBackspace re-searches from the anchor on the shorter text":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    cfg.searchStartIndex = 0
+    cfg.selectedIndex = 0
+    let name = cfg.firstEditableName
+
+    for ch in name:
+      handleSearchCharacterInput(e, $ch)
+    handleSearchBackspace(e)
+
+    # The selection still rests on an item matching the (shortened) live text.
+    check e.state.search.text == name[0 ..< name.high]
+    check cfg.items[cfg.selectedIndex].matchesSearchQuery(e.state.search.text)
+
+  test "finalizeSearch commits the query and selects the first match":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    cfg.searchStartIndex = 0
+    cfg.selectedIndex = 0
+    let name = cfg.firstEditableName
+    e.setSearchText(name)
+
+    finalizeSearch(e)
+
+    check cfg.searchQuery == name
+    check cfg.isItemMatched(cfg.selectedIndex)
+    # The overlay is exited back to the base Config mode.
+    check not e.state.isSearchOverlay()
+
+  test "finalizeSearch without incsearch still commits and selects":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = false
+    cfg.searchStartIndex = 0
+    cfg.selectedIndex = 0
+    let name = cfg.firstEditableName
+    e.setSearchText(name)
+
+    finalizeSearch(e)
+
+    check cfg.searchQuery == name
+    check cfg.isItemMatched(cfg.selectedIndex)
+
+  test "cancelSearch restores the selection to the anchor":
+    let (e, cfg) = createTestEditorInConfigMode()
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.incsearch = true
+    cfg.searchStartIndex = 0
+    cfg.selectedIndex = 0
+    e.setSearchText(cfg.firstEditableName)
+
+    performIncrementalSearch(e)
+    check cfg.selectedIndex != 0
+
+    cancelSearch(e)
+    check cfg.selectedIndex == 0
+    # A cancelled search must not commit a query.
+    check not cfg.hasSearchQuery
 
 suite "Incremental search - case insensitive highlighting":
   test "Case-insensitive search highlights uppercase matches":

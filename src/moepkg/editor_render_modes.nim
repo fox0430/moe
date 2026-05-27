@@ -69,6 +69,20 @@ proc renderConfig*(
   let isEditMode = configState.isEditing()
   let editInfo = configState.getEditInfo()
 
+  # Effective search query: live text while the search overlay is open,
+  # otherwise the committed query. Display is gated by the same global
+  # hlsearch/hlsearchTempDisabled flags as buffer search, so a highlight
+  # clear (double-Escape, :noh) in any window/mode hides Config matches too.
+  let searchHighlightOn =
+    e.state.search.hlsearch and not e.state.search.hlsearchTempDisabled
+  let searchQuery =
+    if not searchHighlightOn:
+      ""
+    elif e.state.isSearchOverlay():
+      e.state.search.text
+    else:
+      configState.searchQuery
+
   for i in configState.topLine ..< configState.items.len:
     if screenY >= listEndY:
       break
@@ -107,6 +121,26 @@ proc renderConfig*(
         normalStyle()
 
     buffer.setString(startX, screenY, displayLine, style)
+
+    # Overlay the search highlight on just the matched characters (like buffer
+    # search), instead of repainting the whole line. Skip while editing — the
+    # edit style owns that line. Uses byte offsets as cell columns, matching the
+    # ASCII width assumption the rest of this renderer already relies on.
+    if searchQuery.len > 0 and not isBeingEdited:
+      let
+        hlStyle = searchHighlightStyle()
+        lineLower = displayLine.toLowerAscii
+        queryLower = searchQuery.toLowerAscii
+      var searchPos = 0
+      while true:
+        let idx = lineLower.find(queryLower, searchPos)
+        if idx < 0:
+          break
+        buffer.setString(
+          startX + idx, screenY, displayLine[idx ..< idx + queryLower.len], hlStyle
+        )
+        searchPos = idx + queryLower.len
+
     inc screenY
 
   # Clear remaining lines (when sections are collapsed)
@@ -185,8 +219,9 @@ proc renderConfig*(
         listStartY + (configState.selectedIndex - configState.topLine)
       e.state.cursorVisible = true
   else:
-    # Hide cursor when not in edit mode
-    e.state.cursorVisible = false
+    # Hide cursor when not in edit mode, unless an overlay (command/search) is
+    # active — then the prompt line owns the cursor.
+    e.state.cursorVisible = e.state.hasOverlay
 
 proc terminalColorToColorValue(tc: TerminalColor): ColorValue =
   ## Convert ansi_parser TerminalColor to celina ColorValue.

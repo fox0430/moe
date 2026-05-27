@@ -1881,3 +1881,81 @@ suite "ConfigMode - descriptor completeness":
       for item in missing:
         echo "  " & item[0] & "." & item[1]
     check missing.len == 0
+
+suite "ConfigMode - Search":
+  proc firstItemIndex(state: ConfigModeState): int =
+    ## Index of the first editable (non-section) item.
+    for i, item in state.items:
+      if item.kind != cvkSection:
+        return i
+    -1
+
+  test "No search query by default":
+    let state = newConfigModeState(newEditorConfig())
+    check not state.hasSearchQuery
+    check state.searchQuery == ""
+
+  test "setSearchQuery / clearSearch":
+    let state = newConfigModeState(newEditorConfig())
+    state.setSearchQuery("lsp")
+    check state.hasSearchQuery
+    check state.searchQuery == "lsp"
+    state.clearSearch()
+    check not state.hasSearchQuery
+
+  test "matchesSearchQuery is case-insensitive on display name":
+    let state = newConfigModeState(newEditorConfig())
+    let idx = state.firstItemIndex
+    let name = state.items[idx].displayName
+    check state.items[idx].matchesSearchQuery(name.toUpperAscii)
+    check state.items[idx].matchesSearchQuery(name.toLowerAscii)
+    check not state.items[idx].matchesSearchQuery("zzz_no_such_field")
+
+  test "matchesSearchQuery with empty query never matches":
+    let state = newConfigModeState(newEditorConfig())
+    check not state.items[0].matchesSearchQuery("")
+
+  test "searchItems moves selection to the first match":
+    let state = newConfigModeState(newEditorConfig())
+    let idx = state.firstItemIndex
+    let name = state.items[idx].displayName
+    let found = state.searchItems(name, 0, true)
+    check found.isSome
+    check state.items[found.get].matchesSearchQuery(name)
+    check state.selectedIndex == found.get
+
+  test "searchItems returns none when nothing matches":
+    let state = newConfigModeState(newEditorConfig())
+    let before = state.selectedIndex
+    check state.searchItems("zzz_no_such_field", 0, true).isNone
+    check state.selectedIndex == before
+
+  test "isItemMatched reflects the committed query":
+    let state = newConfigModeState(newEditorConfig())
+    let idx = state.firstItemIndex
+    let name = state.items[idx].displayName
+    check not state.isItemMatched(idx) # no query yet
+    state.setSearchQuery(name)
+    check state.isItemMatched(idx)
+    check not state.isItemMatched(-1)
+    check not state.isItemMatched(state.items.len)
+
+  test "searchForward wraps around to a match before the cursor":
+    let state = newConfigModeState(newEditorConfig())
+    let idx = state.firstItemIndex
+    state.setSearchQuery(state.items[idx].displayName)
+    # Place the cursor after the match, then search forward: it must wrap.
+    state.selectedIndex = state.items.high
+    let found = state.searchForward()
+    check found.isSome
+    check state.items[found.get].matchesSearchQuery(state.searchQuery)
+
+  test "searchBackward wraps around to a match after the cursor":
+    let state = newConfigModeState(newEditorConfig())
+    let idx = state.firstItemIndex
+    state.setSearchQuery(state.items[idx].displayName)
+    # Place the cursor before the match, then search backward: it must wrap.
+    state.selectedIndex = 0
+    let found = state.searchBackward()
+    check found.isSome
+    check state.items[found.get].matchesSearchQuery(state.searchQuery)
