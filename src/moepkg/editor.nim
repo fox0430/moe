@@ -92,19 +92,11 @@ proc applyBufferMode*(e: Editor, buf: TextBuffer) =
     # window stuck in Filer/BufferManager/etc.
     e.setMode(EditorMode.Normal)
 
-proc switchToBufferByIndex*(e: Editor, index: int) =
-  ## Switch the current window to display the buffer at the given index in e.buffers.
-  ## Also registers the target buffer in the active window's per-window tab list.
-  if index < 0 or index >= e.buffers.len:
-    return
-
-  let targetBuffer = e.buffers[index]
-
-  # Register in window-local tab list regardless (so :b <name> from another tab
-  # makes the buffer show up in this window's tabs).
-  e.addBufferToWindowList(targetBuffer)
-
-  # Don't reset viewport/cursor if already on this buffer
+proc activateBufferInWindow(e: Editor, targetBuffer: TextBuffer) =
+  ## Point the active window at `targetBuffer` and reset its viewport/cursor.
+  ## No-op when the window is already showing this buffer (preserves position).
+  ## Shared tail of switchToBufferByIndex/switchToWindowBuffer — the callers
+  ## differ only in how they resolve `targetBuffer`.
   if e.activeWindow.buffer == targetBuffer:
     return
 
@@ -117,6 +109,20 @@ proc switchToBufferByIndex*(e: Editor, index: int) =
   # syncActiveWindow also updates state.windowDisplay.currentBufferId for the Jump List anchor.
   e.syncActiveWindow()
   e.setActiveWindowScreenCursor(e.activeWindow)
+
+proc switchToBufferByIndex*(e: Editor, index: int) =
+  ## Switch the current window to display the buffer at the given index in e.buffers.
+  ## Also registers the target buffer in the active window's per-window tab list.
+  if index < 0 or index >= e.buffers.len:
+    return
+
+  let targetBuffer = e.buffers[index]
+
+  # Register in window-local tab list regardless (so :b <name> from another tab
+  # makes the buffer show up in this window's tabs).
+  e.addBufferToWindowList(targetBuffer)
+
+  e.activateBufferInWindow(targetBuffer)
 
 proc currentBufferIndex*(e: Editor): int =
   ## Get the position of the active buffer in e.buffers.
@@ -145,20 +151,7 @@ proc switchToWindowBuffer*(e: Editor, windowIndex: int) =
     e.activeWindow.bufferIds.delete(windowIndex)
     return
 
-  let targetBuffer = bufOpt.get
-
-  if e.activeWindow.buffer == targetBuffer:
-    return
-
-  e.activeWindow.buffer = targetBuffer
-  e.activeWindow.cursor = BufferPosition(line: 0, column: 0)
-  e.activeWindow.viewport.topLine = 0
-  e.activeWindow.viewport.leftColumn = 0
-  e.applyBufferMode(targetBuffer)
-
-  # syncActiveWindow also updates state.windowDisplay.currentBufferId for the Jump List anchor.
-  e.syncActiveWindow()
-  e.setActiveWindowScreenCursor(e.activeWindow)
+  e.activateBufferInWindow(bufOpt.get)
 
 proc closeTerminalBuffer*(e: Editor, bufId: BufferId) =
   ## Tear down a Terminal session: free its PTY, drop the buffer from all
