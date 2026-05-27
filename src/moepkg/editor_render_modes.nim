@@ -23,7 +23,7 @@ import std/[options, strutils]
 
 import pkg/celina
 
-import editor_types, color, render_utils, config_mode
+import editor_types, color, colorcode, render_utils, config_mode
 import terminal/ansi_parser
 
 proc renderConfig*(
@@ -90,7 +90,8 @@ proc renderConfig*(
     let
       item = configState.items[i]
       isSelected = i == configState.selectedIndex
-      isBeingEdited = isSelected and isEditMode and item.kind in {cvkInt, cvkString}
+      isBeingEdited =
+        isSelected and isEditMode and item.kind in {cvkInt, cvkString, cvkColor}
 
     # Build display line
     var displayLine: string
@@ -140,6 +141,20 @@ proc renderConfig*(
           startX + idx, screenY, displayLine[idx ..< idx + queryLower.len], hlStyle
         )
         searchPos = idx + queryLower.len
+
+    # Highlight the hex value with its actual color, the same way normal mode
+    # renders inline color codes (color as background, contrasting foreground).
+    # Skipped while editing and for "termDefault" (no concrete color).
+    if item.kind == cvkColor and not isBeingEdited:
+      let parsed = parseThemeColor(item.colorValue)
+      if parsed.isOk and not parsed.get.isTermDefaultColor:
+        # The value is the trailing colorValue of the formatted content; derive
+        # its column from the formatted line length (not maxNameWidth) so an
+        # over-long name can't misplace the highlight.
+        let valueX =
+          startX + formatItemForDisplay(item, maxNameWidth).len - item.colorValue.len
+        if valueX + item.colorValue.len <= startX + width:
+          buffer.setString(valueX, screenY, item.colorValue, colorCodeStyle(parsed.get))
 
     inc screenY
 

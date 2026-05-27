@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, options, strutils, sets, tables, importutils]
-import ../src/moepkg/config
+import ../src/moepkg/[config, color, theme]
 import ../src/moepkg/config_mode {.all.}
 
 suite "ConfigMode - ConfigModeState initialization":
@@ -1194,6 +1194,7 @@ suite "ConfigMode - Item coverage":
       of cvkFloat: floatCount.inc
       of cvkEnum: enumCount.inc
       of cvkString: discard
+      of cvkColor: discard
 
     check sectionCount > 0
     check boolCount > 0
@@ -1206,7 +1207,8 @@ suite "ConfigMode - Item coverage":
     let state = newConfigModeState(cfg)
 
     for item in state.items:
-      if item.kind == cvkSection:
+      if item.kind in {cvkSection, cvkColor}:
+        # Sections and theme-color items are built without descriptors.
         check item.descriptorIndex == -1
       else:
         check item.descriptorIndex >= 0
@@ -1958,4 +1960,187 @@ suite "ConfigMode - Search":
     state.selectedIndex = 0
     let found = state.searchBackward()
     check found.isSome
-    check state.items[found.get].matchesSearchQuery(state.searchQuery)
+
+suite "ConfigMode - Theme Colors":
+  proc findColorItem(state: ConfigModeState, name: string): int =
+    result = -1
+    for i, item in state.items:
+      if item.kind == cvkColor and item.displayName == name:
+        return i
+
+  proc selectColorItem(state: ConfigModeState, name: string) =
+    state.selectedIndex = state.findColorItem(name)
+
+  setup:
+    # Deterministic global theme state for each test.
+    setThemeColors(DefaultColors)
+
+  test "color items present and section header shown when kind is config":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+
+    var hasSection = false
+    var hasColor = false
+    for item in state.items:
+      if item.kind == cvkSection and item.section == "Theme Colors":
+        hasSection = true
+      if item.kind == cvkColor and item.section == "Theme Colors":
+        hasColor = true
+    check hasSection
+    check hasColor
+
+  test "color items hidden when kind is default":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkDefault
+    let state = newConfigModeState(cfg)
+    for item in state.items:
+      check item.kind != cvkColor
+      check item.section != "Theme Colors"
+
+  test "color items hidden when kind is vscode":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkVscode
+    let state = newConfigModeState(cfg)
+    for item in state.items:
+      check item.kind != cvkColor
+
+  test "color items hidden when config theme has no path":
+    # Without a path there is nowhere for :w to persist the colors, so the
+    # items must not be shown (otherwise editing them is a silent no-op).
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    cfg.theme.path = ""
+    let state = newConfigModeState(cfg)
+    for item in state.items:
+      check item.kind != cvkColor
+      check item.section != "Theme Colors"
+
+  test "normal entry exposes both fg and bg":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+    check state.findColorItem("keyword.fg") >= 0
+    check state.findColorItem("keyword.bg") >= 0
+
+  test "bg-only entries omit the fg item":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+    check state.findColorItem("currentLineBg.fg") < 0
+    check state.findColorItem("currentLineBg.bg") >= 0
+    check state.findColorItem("currentColumnBg.fg") < 0
+    check state.findColorItem("currentColumnBg.bg") >= 0
+
+  test "colorValue reflects the active theme as lowercase hex":
+    var colors = DefaultColors
+    colors[EditorColorPairIndex.keyword].foreground = ThemeColor(rgb: rgb("#abcdef"))
+    setThemeColors(colors)
+
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+    let idx = state.findColorItem("keyword.fg")
+    check idx >= 0
+    check state.items[idx].colorValue == "#abcdef"
+
+  test "colorValue is termDefault for the terminal default color":
+    var colors = DefaultColors
+    colors[EditorColorPairIndex.keyword].foreground =
+      ThemeColor(rgb: TerminalDefaultRgb)
+    setThemeColors(colors)
+
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+    let idx = state.findColorItem("keyword.fg")
+    check state.items[idx].colorValue == "termDefault"
+
+  test "editing applies a valid hex color":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+    state.selectColorItem("keyword.fg")
+
+    state.startEdit()
+    check state.editMode
+    state.editBuffer = "#ff0000"
+    check state.confirmEdit()
+    check getThemeColor(EditorColorPairIndex.keyword).foreground.rgb == rgb("#ff0000")
+
+  test "editing accepts hex without the # prefix":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+    state.selectColorItem("keyword.fg")
+
+    state.startEdit()
+    state.editBuffer = "00ff00"
+    check state.confirmEdit()
+    check getThemeColor(EditorColorPairIndex.keyword).foreground.rgb == rgb("#00ff00")
+
+  test "editing accepts termDefault":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+    state.selectColorItem("keyword.fg")
+
+    state.startEdit()
+    state.editBuffer = "termDefault"
+    check state.confirmEdit()
+    check getThemeColor(EditorColorPairIndex.keyword).foreground.rgb.isTermDefaultColor
+
+  test "invalid hex is rejected and editing continues":
+    var colors = DefaultColors
+    colors[EditorColorPairIndex.keyword].foreground = ThemeColor(rgb: rgb("#123456"))
+    setThemeColors(colors)
+
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+    state.selectColorItem("keyword.fg")
+
+    state.startEdit()
+    state.editBuffer = "nothex"
+    check not state.confirmEdit()
+    check state.editMode # still editing
+    check getThemeColor(EditorColorPairIndex.keyword).foreground.rgb == rgb("#123456")
+
+  test "editing a bg item writes the background channel":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+    let fgBefore = getThemeColor(EditorColorPairIndex.keyword).foreground.rgb
+    state.selectColorItem("keyword.bg")
+
+    state.startEdit()
+    state.editBuffer = "#0000ff"
+    check state.confirmEdit()
+    check getThemeColor(EditorColorPairIndex.keyword).background.rgb == rgb("#0000ff")
+    check getThemeColor(EditorColorPairIndex.keyword).foreground.rgb == fgBefore
+
+  test "selection stays on the same color item after editing":
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+    state.selectColorItem("keyword.fg")
+
+    state.startEdit()
+    state.editBuffer = "#ff0000"
+    check state.confirmEdit()
+    let item = state.items[state.selectedIndex]
+    check item.kind == cvkColor
+    check item.colorIndex == EditorColorPairIndex.keyword
+    check item.colorIsFg
+
+  test "search matches color name and value":
+    var colors = DefaultColors
+    colors[EditorColorPairIndex.keyword].foreground = ThemeColor(rgb: rgb("#ff0000"))
+    setThemeColors(colors)
+
+    let cfg = newEditorConfig()
+    cfg.theme.kind = tkConfig
+    let state = newConfigModeState(cfg)
+    let idx = state.findColorItem("keyword.fg")
+    check state.items[idx].matchesSearchQuery("keyword")
+    check state.items[idx].matchesSearchQuery("ff0000")

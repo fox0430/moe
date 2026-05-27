@@ -52,7 +52,9 @@ proc contrastForeground*(bg: Rgb): Rgb =
   else:
     Rgb(red: 255, green: 255, blue: 255)
 
-proc colorCodeStyle(bg: Rgb): Style =
+proc colorCodeStyle*(bg: Rgb): Style =
+  ## Style for rendering a hex color code: the detected color as background
+  ## with a contrasting foreground, matching the normal-mode highlight.
   let fg = contrastForeground(bg)
   Style(fg: fg.toColorValue, bg: bg.toColorValue, modifiers: {})
 
