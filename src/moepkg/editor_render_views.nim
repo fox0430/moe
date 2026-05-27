@@ -297,7 +297,12 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       e.activeWindow.modeState.kind == mskTerminal and
       e.activeWindow.modeState.terminal.subMode == tsmInput
 
-    if not isTerminalInput:
+    # Config mode positions the cursor itself in renderConfig (at the edit field
+    # while editing, hidden otherwise). The buffer-cursor calculation would
+    # overwrite that and pin the cursor to the top-left, so skip it here too.
+    let isConfig = e.activeWindow.mode == EditorMode.Config
+
+    if not isTerminalInput and not isConfig:
       e.setActiveWindowScreenCursor(e.activeWindow)
 
     # Set cursor visibility based on mode

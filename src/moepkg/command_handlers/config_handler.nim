@@ -186,8 +186,8 @@ proc handleConfigModeKey*(
           configState.toggleBoolValue()
         of cvkEnum:
           configState.openEnumPopup()
-        of cvkInt, cvkFloat, cvkString:
-          # Start edit mode for Int, Float and String
+        of cvkInt, cvkFloat, cvkString, cvkColor:
+          # Start edit mode for Int, Float, String and Color
           configState.startEdit()
       return ConfigModeResult(kind: cmrHandled)
     of skUp:
@@ -295,8 +295,8 @@ proc handleConfigModeKey*(
           configState.toggleBoolValue()
         of cvkEnum:
           configState.openEnumPopup()
-        of cvkInt, cvkFloat, cvkString:
-          # Start edit mode for Int, Float and String
+        of cvkInt, cvkFloat, cvkString, cvkColor:
+          # Start edit mode for Int, Float, String and Color
           configState.startEdit()
       return ConfigModeResult(kind: cmrHandled)
     of "h":

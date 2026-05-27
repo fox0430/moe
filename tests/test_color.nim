@@ -86,6 +86,13 @@ suite "color - hexToRgb":
     let result = hexToRgb("")
     check result.isErr
 
+  test "6-char string with # prefix is rejected without crashing":
+    # "#" + 5 hex chars is 6 long; the prefixed branch must not slice past the end
+    check hexToRgb("#abcde").isErr
+
+  test "leading double # is rejected without crashing":
+    check hexToRgb("##abcd").isErr
+
 suite "color - parseThemeColor":
   test "parse termDefault":
     let result = parseThemeColor("termDefault")

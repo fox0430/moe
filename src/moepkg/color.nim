@@ -607,7 +607,7 @@ proc hexToRgb*(s: string): Result[Rgb, string] =
   ## Parse a hex color string to RGB.
   ## Examples: "#000000", "ff0000"
 
-  if not (s.len == 6 or (s.len == 7 and s.startsWith('#'))):
+  if not ((s.len == 6 and not s.startsWith('#')) or (s.len == 7 and s.startsWith('#'))):
     return Result[Rgb, string].err "Invalid hex color"
 
   let hexStr =

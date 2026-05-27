@@ -25,7 +25,9 @@
 
 import std/[options, strutils]
 
-import config
+import pkg/results
+
+import config, color
 
 type
   ConfigValueKind* = enum
@@ -34,6 +36,7 @@ type
     cvkInt # integer
     cvkFloat # floating point
     cvkString # string
+    cvkColor # theme color (hex or "termDefault")
     cvkEnum # enumerated value
     cvkSection # section header (not editable)
 
@@ -74,6 +77,8 @@ type
     of cvkString:
       stringGet: StringGetter
       stringSetter: StringSetter
+    of cvkColor:
+      discard # Color items are built directly, not via descriptors
     of cvkSection:
       discard
 
@@ -99,6 +104,10 @@ type
     of cvkEnum:
       enumValue*: string
       enumOptions*: seq[string]
+    of cvkColor:
+      colorIndex*: EditorColorPairIndex
+      colorIsFg*: bool
+      colorValue*: string # current value as "#rrggbb" or "termDefault"
     of cvkSection:
       discard
 
@@ -114,6 +123,10 @@ type
     searchQuery*: string # Active search query ("" when no search)
     searchStartIndex*: int # Selection index when the current search began
     config*: EditorConfig # Reference to the config being edited
+
+# Theme color entries that only have a background (no foreground).
+const ColorBgOnlyEntries* =
+  {EditorColorPairIndex.currentLineBg, EditorColorPairIndex.currentColumnBg}
 
 # Config Item Descriptors - Single source of truth for config items
 
@@ -212,6 +225,12 @@ let configDescriptors* = makeDescriptors()
 
 # Item building and value application
 
+proc colorValueString*(index: EditorColorPairIndex, isFg: bool): string =
+  ## Current value of a theme color channel as "#rrggbb" or "termDefault"
+  let pair = getThemeColor(index)
+  let tc = if isFg: pair.foreground else: pair.background
+  toHex(tc.rgb).get("termDefault")
+
 proc buildItemList*(state: ConfigModeState) =
   ## Build the flat list of config items from EditorConfig using descriptors
   state.items = @[]
@@ -280,6 +299,44 @@ proc buildItemList*(state: ConfigModeState) =
         descriptorIndex: i,
         stringValue: desc.stringGet(cfg),
       )
+    of cvkColor:
+      discard # Color items are not produced by descriptors
+
+  # Theme color items (editable only for the config theme, persisted on :w).
+  # These live in the global `themeColors`, not in EditorConfig, so they are
+  # built directly here instead of via descriptors. A path is required because
+  # that is where `:w` writes the colors; without one there is nowhere to
+  # persist them, so the items are hidden to avoid a silent no-op on save.
+  if cfg.theme.kind == tkConfig and cfg.theme.path.len > 0:
+    state.items.add ConfigItem(
+      kind: cvkSection,
+      displayName: "Theme Colors",
+      section: "Theme Colors",
+      depth: 0,
+      descriptorIndex: -1,
+    )
+    for index in EditorColorPairIndex:
+      if index notin ColorBgOnlyEntries:
+        state.items.add ConfigItem(
+          kind: cvkColor,
+          displayName: $index & ".fg",
+          section: "Theme Colors",
+          depth: 1,
+          descriptorIndex: -1,
+          colorIndex: index,
+          colorIsFg: true,
+          colorValue: colorValueString(index, true),
+        )
+      state.items.add ConfigItem(
+        kind: cvkColor,
+        displayName: $index & ".bg",
+        section: "Theme Colors",
+        depth: 1,
+        descriptorIndex: -1,
+        colorIndex: index,
+        colorIsFg: false,
+        colorValue: colorValueString(index, false),
+      )
 
 proc applyChange*(state: ConfigModeState, itemIndex: int) =
   ## Apply a change to the actual config using descriptors
@@ -316,6 +373,38 @@ proc applyChange*(state: ConfigModeState, itemIndex: int) =
       break
   if state.selectedIndex >= state.items.len:
     state.selectedIndex = max(0, state.items.len - 1)
+
+proc applyColorChange*(state: ConfigModeState, itemIndex: int) =
+  ## Apply a theme color change to the global `themeColors` (live preview).
+  ## Persisted to the theme file by the normal `:w` save path.
+  if itemIndex < 0 or itemIndex >= state.items.len:
+    return
+
+  let item = state.items[itemIndex]
+  if item.kind != cvkColor:
+    return
+
+  let parsed = parseThemeColor(item.colorValue)
+  if parsed.isErr:
+    return # Caller validates before calling
+
+  var colors = themeColors
+  if item.colorIsFg:
+    colors[item.colorIndex].foreground = ThemeColor(rgb: parsed.get)
+  else:
+    colors[item.colorIndex].background = ThemeColor(rgb: parsed.get)
+  setThemeColors(colors)
+
+  # Rebuild and re-select by (colorIndex, colorIsFg) identity
+  let
+    savedIdx = item.colorIndex
+    savedIsFg = item.colorIsFg
+  state.buildItemList()
+  for i, newItem in state.items:
+    if newItem.kind == cvkColor and newItem.colorIndex == savedIdx and
+        newItem.colorIsFg == savedIsFg:
+      state.selectedIndex = i
+      break
 
 # State management
 
@@ -398,6 +487,8 @@ proc matchesSearchQuery*(item: ConfigItem, query: string): bool =
     item.stringValue.toLowerAscii.contains(q)
   of cvkEnum:
     item.enumValue.toLowerAscii.contains(q)
+  of cvkColor:
+    item.colorValue.toLowerAscii.contains(q)
   of cvkSection:
     false
 
@@ -534,6 +625,8 @@ proc formatItemForDisplay*(item: ConfigItem, maxNameWidth: int): string =
     return indent & name & " : " & item.stringValue
   of cvkEnum:
     return indent & name & " : " & item.enumValue
+  of cvkColor:
+    return indent & name & " : " & item.colorValue
 
 # Edit mode (Int/String editing)
 
@@ -556,6 +649,10 @@ proc startEdit*(state: ConfigModeState) =
   of cvkString:
     state.editMode = true
     state.editBuffer = item.stringValue
+    state.editCursor = state.editBuffer.len
+  of cvkColor:
+    state.editMode = true
+    state.editBuffer = item.colorValue
     state.editCursor = state.editBuffer.len
   else:
     discard
@@ -603,6 +700,13 @@ proc confirmEdit*(state: ConfigModeState): bool =
   of cvkString:
     state.items[itemIndex].stringValue = state.editBuffer
     state.applyChange(itemIndex)
+    state.cancelEdit()
+    return true
+  of cvkColor:
+    if parseThemeColor(state.editBuffer).isErr:
+      return false # Invalid hex / not "termDefault"; keep editing
+    state.items[itemIndex].colorValue = state.editBuffer
+    state.applyColorChange(itemIndex)
     state.cancelEdit()
     return true
   else:
