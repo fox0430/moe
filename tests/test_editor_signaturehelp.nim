@@ -19,9 +19,9 @@
 
 ## Tests for editor_signaturehelp.nim
 
-import std/unittest
+import std/[unittest, monotimes, times, options, json, importutils]
 
-import ../src/moepkg/[editor, config, config_loader]
+import ../src/moepkg/[editor, config, config_loader, lsp_service, signature_help]
 import ../src/moepkg/editor_signaturehelp
 
 proc createTestEditor(): Editor =
@@ -52,3 +52,159 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
     e.requestSignatureHelpFromLsp()
 
     check e.state.lspCache.pendingSignatureHelpRequestId == 0
+
+  test "Does nothing when outside parens and popup inactive":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.state.mode = EditorMode.Insert
+    # parenDepth defaults to 0 and the manager is inactive -> gated out
+    e.requestSignatureHelpFromLsp()
+
+    check e.state.lspCache.pendingSignatureHelpRequestId == 0
+
+  test "Timed-out response clears pending and invalidates change tracking":
+    # A timed-out in-flight request must reset the tracked changeSeq so the next
+    # eligible frame can retry instead of being suppressed by change detection.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.state.mode = EditorMode.Insert
+    e.handlerManager.insertHandler.signatureHelpManager.parenDepth = 1
+
+    const reqId = 4242
+    e.state.lspCache.pendingSignatureHelpRequestId = reqId
+    e.state.lspCache.signatureHelp.cursorLine = 3
+    e.state.lspCache.signatureHelp.cursorColumn = 5
+    e.state.lspCache.signatureHelp.changeSeq = 7
+
+    # Inject an already-expired in-flight request so checkResponse -> lrsTimeout
+    e.lsp.service.activeRequests[reqId] = LspPendingRequest(
+      requestId: reqId,
+      langId: "",
+      methodName: "textDocument/signatureHelp",
+      startTime: 0.0,
+      timeoutMs: 1,
+    )
+
+    e.requestSignatureHelpFromLsp()
+
+    check e.state.lspCache.pendingSignatureHelpRequestId == 0
+    check e.state.lspCache.signatureHelp.changeSeq == -1
+    # The failure must bump the backoff counter so retries slow down.
+    check e.state.lspCache.signatureHelp.consecutiveErrors == 1
+
+  test "Successful response shows popup, clears pending and resets backoff":
+    # Guards the post-success fall-through: the response is still applied (popup
+    # shown), the pending id is cleared, and the failure backoff is reset. The
+    # tracked position matches the cursor so the fall-through is gated out by
+    # change detection rather than spinning a fresh request.
+    privateAccess(LspService)
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.state.mode = EditorMode.Insert
+    let mgr = e.handlerManager.insertHandler.signatureHelpManager
+    mgr.parenDepth = 1
+
+    const reqId = 99
+    e.state.lspCache.pendingSignatureHelpRequestId = reqId
+    e.state.lspCache.signatureHelp.consecutiveErrors = 3
+    e.state.lspCache.signatureHelp.cursorLine = e.activeWindow.cursor.line
+    e.state.lspCache.signatureHelp.cursorColumn = e.activeWindow.cursor.column
+    e.state.lspCache.signatureHelp.changeSeq = e.activeBuffer.changeSeq
+
+    e.lsp.service.pendingResponses[reqId] = (
+      result: some(
+        %*{
+          "signatures": [{"label": "foo(a: int, b: int)"}],
+          "activeSignature": 0,
+          "activeParameter": 0,
+        }
+      ),
+      error: none(string),
+    )
+
+    e.requestSignatureHelpFromLsp()
+
+    check e.state.lspCache.pendingSignatureHelpRequestId == 0
+    check mgr.isActive()
+    check e.state.lspCache.signatureHelp.consecutiveErrors == 0
+
+suite "editor_signaturehelp - shouldRequestSignatureHelp":
+  # Decision logic for the auto request path: change detection + debounce.
+  let t0 = getMonoTime()
+  let tracked = SignatureHelpRequestState(
+    lastUpdate: t0, interval: 100, cursorLine: 5, cursorColumn: 10, changeSeq: 3
+  )
+
+  test "Skips when cursor and changeSeq are unchanged (even past debounce)":
+    check not shouldRequestSignatureHelp(
+      tracked, 5, 10, 3, t0 + initDuration(seconds = 10)
+    )
+
+  test "Requests when cursor line changed and debounce elapsed":
+    check shouldRequestSignatureHelp(
+      tracked, 6, 10, 3, t0 + initDuration(milliseconds = 150)
+    )
+
+  test "Requests when cursor column changed and debounce elapsed":
+    check shouldRequestSignatureHelp(
+      tracked, 5, 11, 3, t0 + initDuration(milliseconds = 150)
+    )
+
+  test "Requests when changeSeq changed and debounce elapsed":
+    check shouldRequestSignatureHelp(
+      tracked, 5, 10, 4, t0 + initDuration(milliseconds = 150)
+    )
+
+  test "Suppresses changed position while inside the debounce window":
+    check not shouldRequestSignatureHelp(
+      tracked, 6, 10, 3, t0 + initDuration(milliseconds = 50)
+    )
+
+  test "Fires exactly at the debounce boundary (elapsed == interval)":
+    check shouldRequestSignatureHelp(
+      tracked, 6, 10, 3, t0 + initDuration(milliseconds = 100)
+    )
+
+  test "Invalidated tracking (changeSeq -1) re-requests once debounce elapses":
+    let invalidated = SignatureHelpRequestState(
+      lastUpdate: t0, interval: 100, cursorLine: 5, cursorColumn: 10, changeSeq: -1
+    )
+    check shouldRequestSignatureHelp(
+      invalidated, 5, 10, 3, t0 + initDuration(milliseconds = 150)
+    )
+
+  test "Backoff: one prior error doubles the debounce window":
+    let onceFailed = SignatureHelpRequestState(
+      lastUpdate: t0,
+      interval: 100,
+      cursorLine: 5,
+      cursorColumn: 10,
+      changeSeq: 3,
+      consecutiveErrors: 1,
+    )
+    # 150ms would fire at the base interval, but the doubled window suppresses it.
+    check not shouldRequestSignatureHelp(
+      onceFailed, 6, 10, 3, t0 + initDuration(milliseconds = 150)
+    )
+    # Fires once the doubled (200ms) window elapses.
+    check shouldRequestSignatureHelp(
+      onceFailed, 6, 10, 3, t0 + initDuration(milliseconds = 200)
+    )
+
+  test "Backoff is capped at 16x the base interval":
+    let manyFailed = SignatureHelpRequestState(
+      lastUpdate: t0,
+      interval: 100,
+      cursorLine: 5,
+      cursorColumn: 10,
+      changeSeq: 3,
+      consecutiveErrors: 99,
+    )
+    # Still suppressed just before the 16x (1600ms) cap ...
+    check not shouldRequestSignatureHelp(
+      manyFailed, 6, 10, 3, t0 + initDuration(milliseconds = 1599)
+    )
+    # ... and fires at the cap rather than growing further.
+    check shouldRequestSignatureHelp(
+      manyFailed, 6, 10, 3, t0 + initDuration(milliseconds = 1600)
+    )
