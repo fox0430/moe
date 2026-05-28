@@ -871,6 +871,62 @@ suite "Buffer - isExternallyModified":
 
     check buf.isExternallyModified()
 
+suite "Buffer - saveFile external modification guard":
+  test "Refuses save when checkExternalMod and file changed externally":
+    let path = getTempDir() / "moe_test_saveFile_toctou_refuse.txt"
+    writeFile(path, "hello")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+
+    # Simulate external modification after load.
+    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    writeFile(path, "external change")
+
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "mine ")
+    let res = buf.saveFile(path, checkExternalMod = true)
+    check res.isErr
+    check res.error == ExternalModErrorMsg
+    # On-disk content must be left untouched.
+    check readFile(path) == "external change"
+
+  test "Default save ignores external modification":
+    let path = getTempDir() / "moe_test_saveFile_toctou_default.txt"
+    writeFile(path, "hello")
+    defer:
+      removeFile(path)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(path)
+    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    writeFile(path, "external change")
+
+    # checkExternalMod defaults to false, so the write proceeds.
+    let res = buf.saveFile(path)
+    check res.isOk
+
+  test "checkExternalMod does not block save-as to a different path":
+    let original = getTempDir() / "moe_test_saveFile_toctou_orig.txt"
+    let target = getTempDir() / "moe_test_saveFile_toctou_target.txt"
+    writeFile(original, "hello")
+    defer:
+      removeFile(original)
+      if fileExists(target):
+        removeFile(target)
+
+    let buf = newTextBuffer()
+    discard buf.loadFile(original)
+    # The original file changes externally...
+    buf.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    writeFile(original, "external change")
+
+    # ...but we are saving to a different path, so it must not be blocked.
+    let res = buf.saveFile(target, checkExternalMod = true)
+    check res.isOk
+    check fileExists(target)
+
 suite "Buffer - reloadFile":
   test "Returns error when buffer has no file path":
     let buf = newTextBuffer("hello")

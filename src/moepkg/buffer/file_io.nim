@@ -27,7 +27,10 @@ import pkg/[celina, results]
 
 import ../[encoding, highlight, logger, uri_utils]
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
-import ./core
+import core
+
+const ExternalModErrorMsg* =
+  "File was modified externally. Use :w! to force save, or :e! to reload."
 
 proc detectAndNormalizeLineEnding(b: TextBuffer, content: var string) =
   ## Detect line ending style, detect trailing newline, and normalize \r
@@ -237,31 +240,6 @@ proc getFileContent*(buffer: TextBuffer): string =
       elif result.endsWith("\n") or result.endsWith("\r"):
         result.setLen(result.len - 1)
 
-proc saveFile*(buffer: TextBuffer, path: string): Result[(), string] =
-  case buffer.backendKind
-  of GapBuffer, SqrtDecomp, Rope, PieceTable:
-    let content = buffer.getFileContent
-
-    # Write to file
-    try:
-      writeFile(path, content)
-      logDebug("buffer", "File written successfully: " & path)
-    except IOError as e:
-      logError("buffer", "Failed to write file " & path & ": " & e.msg)
-      return Result[(), string].err e.msg
-
-    buffer.markSaved()
-    buffer.filePath = some(path)
-
-    # Update file modification time after saving
-    try:
-      buffer.lastFileModTime = some(getFileInfo(path).lastWriteTime)
-    except OSError:
-      buffer.lastFileModTime = none(Time)
-    buffer.externalModWarned = false
-
-  return Result[(), string].ok ()
-
 proc isExternallyModified*(b: TextBuffer): bool =
   ## Check if the file was modified externally (outside the editor)
   ## Returns true if:
@@ -283,6 +261,41 @@ proc isExternallyModified*(b: TextBuffer): bool =
     return currentModTime > b.lastFileModTime.get
   except OSError:
     return false
+
+proc saveFile*(
+    buffer: TextBuffer, path: string, checkExternalMod: bool = false
+): Result[(), string] =
+  case buffer.backendKind
+  of GapBuffer, SqrtDecomp, Rope, PieceTable:
+    let content = buffer.getFileContent
+
+    # Re-check external modification right before writing to shrink the
+    # check-to-write TOCTOU window (callers may have checked earlier).
+    # Only guards writes back to the buffer's own file; a save-as to a
+    # different path has no external-mod baseline to compare against.
+    if checkExternalMod and buffer.filePath == some(path) and
+        buffer.isExternallyModified():
+      return Result[(), string].err ExternalModErrorMsg
+
+    # Write to file
+    try:
+      writeFile(path, content)
+      logDebug("buffer", "File written successfully: " & path)
+    except IOError as e:
+      logError("buffer", "Failed to write file " & path & ": " & e.msg)
+      return Result[(), string].err e.msg
+
+    buffer.markSaved()
+    buffer.filePath = some(path)
+
+    # Update file modification time after saving
+    try:
+      buffer.lastFileModTime = some(getFileInfo(path).lastWriteTime)
+    except OSError:
+      buffer.lastFileModTime = none(Time)
+    buffer.externalModWarned = false
+
+  return Result[(), string].ok ()
 
 proc reloadFile*(b: TextBuffer): Result[(), string] =
   ## Reload file from disk, preserving the file path

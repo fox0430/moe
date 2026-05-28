@@ -224,17 +224,20 @@ proc saveFile*(
       logError("editor", "Save failed: No file path specified")
       return err("No file path specified")
 
-  # Check for external modification (unless force is true)
-  if not force and activeBuffer.isExternallyModified():
+  # Check for external modification (unless force is true). Only guard saves
+  # that write back to the buffer's own file; a save-as to a different path
+  # has no external-mod baseline to compare against.
+  if not force and activeBuffer.filePath == some(savePath) and
+      activeBuffer.isExternallyModified():
     logError("editor", "Save failed: File was modified externally: " & savePath)
-    return err("File was modified externally. Use :w! to force save, or :e! to reload.")
+    return err(ExternalModErrorMsg)
 
   # Trim trailing whitespace if EditorConfig says so
   trimTrailingWhitespaceIfConfigured(activeBuffer)
 
   # Save the file
   logDebug("editor", "Saving file: " & savePath)
-  let saveResult = activeBuffer.saveFile(savePath)
+  let saveResult = activeBuffer.saveFile(savePath, checkExternalMod = not force)
   if saveResult.isErr:
     logError("editor", "Failed to save file " & savePath & ": " & saveResult.error)
     return err(saveResult.error)
@@ -276,7 +279,7 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
     # Mirror saveFile: honor EditorConfig trim_trailing_whitespace per buffer.
     trimTrailingWhitespaceIfConfigured(buffer)
 
-    let saveResult = buffer.saveFile(savePath)
+    let saveResult = buffer.saveFile(savePath, checkExternalMod = not force)
     if saveResult.isErr:
       logError("editor", "Save all failed for " & savePath & ": " & saveResult.error)
       result.failures.add((path: savePath, error: saveResult.error))
@@ -344,7 +347,7 @@ proc autoSave*(e: Editor) =
         )
         continue
 
-      let saveResult = buffer.saveFile(savePath)
+      let saveResult = buffer.saveFile(savePath, checkExternalMod = true)
 
       if saveResult.isOk:
         savedBuffers.add(buffer)
