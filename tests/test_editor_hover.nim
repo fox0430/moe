@@ -19,10 +19,13 @@
 
 ## Tests for editor_hover.nim
 
-import std/[unittest, monotimes, times]
+import std/[unittest, monotimes, times, json, options, importutils]
 
 import ../src/moepkg/[editor, buffer, config, config_loader, types, hover_popup]
 import ../src/moepkg/editor_hover
+import ../src/moepkg/lsp_service
+
+privateAccess(LspService)
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -79,6 +82,45 @@ suite "editor_hover - pollLspHover":
 
     e.pollLspHover()
     # No crash means success
+
+  test "Shows popup when the response buffer still matches":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    const reqId = 42
+    e.lsp.service.pendingResponses[reqId] = (
+      result: some(%*{"contents": {"kind": "plaintext", "value": "hover text"}}),
+      error: none(string),
+    )
+    e.state.lspCache.pendingHoverRequestId = reqId
+    e.state.lspCache.pendingHoverBufferId = e.activeBuffer().id
+    e.state.lspCache.pendingHoverCursorLine = 0
+    e.state.lspCache.pendingHoverCursorCol = 0
+
+    e.pollLspHover()
+
+    check e.state.lspCache.pendingHoverRequestId == 0
+    check e.state.lspCache.hoverPopup.isActive
+
+  test "Discards response when the active buffer changed while waiting":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    const reqId = 43
+    e.lsp.service.pendingResponses[reqId] = (
+      result: some(%*{"contents": {"kind": "plaintext", "value": "hover text"}}),
+      error: none(string),
+    )
+    e.state.lspCache.pendingHoverRequestId = reqId
+    # Request was made for a different buffer than the current active one.
+    e.state.lspCache.pendingHoverBufferId = BufferId(int(e.activeBuffer().id) + 1)
+    e.state.lspCache.pendingHoverCursorLine = 0
+    e.state.lspCache.pendingHoverCursorCol = 0
+
+    e.pollLspHover()
+
+    check e.state.lspCache.pendingHoverRequestId == 0
+    check not e.state.lspCache.hoverPopup.isActive
 
 suite "editor_hover - hideHoverPopup":
   test "Hides the hover popup":
