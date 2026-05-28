@@ -959,6 +959,14 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         documentHighlightUpdateInterval: 200, # 200ms debounce
         lastSemanticTokensUpdate: getMonoTime(),
         semanticTokensUpdateInterval: 500, # 500ms debounce for semantic tokens
+        signatureHelp: SignatureHelpRequestState(
+          lastUpdate: getMonoTime(),
+          interval: 100, # 100ms debounce for signature help
+          cursorLine: -1,
+          cursorColumn: -1,
+          changeSeq: -1,
+          consecutiveErrors: 0,
+        ),
       ),
       notificationPopup: newNotificationPopupManager(),
     ),

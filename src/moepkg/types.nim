@@ -239,6 +239,22 @@ type
     bracketSplit*: BracketSplitMode
       # Enter behavior when cursor sits between () [] {} pairs
 
+  SignatureHelpRequestState* = object
+    ## Debounce + change-detection state for auto signature help requests.
+    ## "Debounce" here is a minimum-interval gate measured from the last issued
+    ## request (same shape as documentHighlight/semanticTokens), not a
+    ## reset-on-change timer. Sentinel -1 for the cursor/changeSeq fields means
+    ## "no request issued yet".
+    lastUpdate*: MonoTime # Timestamp of last signature help request
+    interval*: int64 # Base debounce interval (milliseconds)
+    cursorLine*: int # Cursor line of last request
+    cursorColumn*: int # Cursor column of last request
+    changeSeq*: int # Buffer changeSeq of last request
+    consecutiveErrors*: int
+      # Failed/timed-out requests since the last success. Widens the effective
+      # interval (exponential backoff) so a persistently failing server is not
+      # retried every base interval.
+
   LspCacheState* = object ## LSP cache and picker state grouped together
     codeLensCache*: CodeLensCache # Cached CodeLens items for current buffer
     codeLensPicker*: CodeLensPicker # CodeLens selection UI state
@@ -257,6 +273,7 @@ type
       # Debounce interval for document highlight updates
     lastSemanticTokensUpdate*: MonoTime # Timestamp of last semantic tokens update
     semanticTokensUpdateInterval*: int64 # Debounce interval for semantic tokens updates
+    signatureHelp*: SignatureHelpRequestState # Auto signature help request tracking
     # Pending async request IDs for non-blocking LSP operations
     pendingSignatureHelpRequestId*: int
       # Request ID for pending signature help request (0 = none)
