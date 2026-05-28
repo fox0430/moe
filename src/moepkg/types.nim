@@ -249,6 +249,9 @@ type
       # LSP locations for references/definitions picker
     lastCodeLensUpdate*: MonoTime # Timestamp of last CodeLens update
     codeLensUpdateInterval*: int64 # Debounce interval for CodeLens updates
+    codeLensResponseGen*: int
+      # Generation counter for in-flight CodeLens response processing; a spawned
+      # processCodeLensResponse only writes the cache if it is still the latest generation
     lastDocumentHighlightUpdate*: MonoTime # Timestamp of last document highlight update
     documentHighlightUpdateInterval*: int64
       # Debounce interval for document highlight updates

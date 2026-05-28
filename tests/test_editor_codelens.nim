@@ -17,10 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, tables]
+import std/[unittest, tables, options]
+
+import pkg/chronos
 
 import ../src/moepkg/editor
-import ../src/moepkg/editor_codelens
+import ../src/moepkg/editor_codelens {.all.}
 import ../src/moepkg/config
 import ../src/moepkg/types
 import ../src/moepkg/buffer
@@ -334,6 +336,23 @@ suite "CodeLens Cache Validation":
     check e.state.lspCache.codeLensCache.isValid
     check e.state.lspCache.codeLensCache.filePath == "/path/to/file.nim"
     check e.state.lspCache.codeLensCache.changeSeq == 5
+
+suite "CodeLens Response Generation":
+  test "stale generation does not overwrite a newer cache":
+    let e = createTestEditor()
+    e.activeBuffer().filePath = some("/test/file.nim")
+
+    # Generation 2 represents the latest in-flight response.
+    e.state.lspCache.codeLensResponseGen = 2
+    check not e.state.lspCache.codeLensCache.isValid
+
+    # An older (slower) response with a stale generation must not write the cache.
+    waitFor e.processCodeLensResponse(@[], 1)
+    check not e.state.lspCache.codeLensCache.isValid
+
+    # The latest generation is allowed to write the cache.
+    waitFor e.processCodeLensResponse(@[], 2)
+    check e.state.lspCache.codeLensCache.isValid
 
 suite "Document Highlight Item":
   test "DocumentHighlightItem kinds":

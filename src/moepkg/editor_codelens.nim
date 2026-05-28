@@ -33,9 +33,13 @@ proc hasCodeLensSupport*(e: Editor): bool =
   return e.lsp.hasCodeLensSupport(activeBuffer)
 
 proc processCodeLensResponse(
-    e: Editor, lenses: seq[CodeLens]
+    e: Editor, lenses: seq[CodeLens], gen: int
 ): Future[void] {.async: (raises: []).} =
   ## Internal: Process code lens response from LSP
+  ## `gen` is the response generation captured at spawn time. Because resolving
+  ## lenses awaits the LSP, multiple invocations can be in flight at once; only the
+  ## latest generation is allowed to write the cache so an older (slower) response
+  ## cannot clobber a newer one.
   {.cast(raises: []).}:
     try:
       let activeBuffer = e.activeBuffer()
@@ -74,6 +78,11 @@ proc processCodeLensResponse(
           if item.line notin itemsByLine:
             itemsByLine[item.line] = @[]
           itemsByLine[item.line].add(item)
+
+      # A newer response has been spawned while we were awaiting resolves; discard
+      # this stale result rather than overwriting the newer cache.
+      if gen != e.state.lspCache.codeLensResponseGen:
+        return
 
       e.state.lspCache.codeLensCache = CodeLensCache(
         itemsByLine: itemsByLine,
@@ -131,7 +140,10 @@ proc updateCodeLensCache*(e: Editor) =
       e.state.lspCache.pendingCodeLensRequestId = 0
       if resultOpt.isSome:
         let lenses = parseCodeLensResponse(resultOpt.get)
-        asyncSpawn e.processCodeLensResponse(lenses)
+        inc e.state.lspCache.codeLensResponseGen
+        asyncSpawn e.processCodeLensResponse(
+          lenses, e.state.lspCache.codeLensResponseGen
+        )
       # Continue to check if we need to start a new request (buffer might have changed)
     of lrsError, lrsTimeout:
       # Request failed or timed out, mark cache as valid but empty to prevent retry loop
