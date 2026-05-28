@@ -138,7 +138,7 @@ proc keyComboToBytes*(keyCombo: KeyCombo): string =
       return keyCombo.char
 
 proc handleTerminalModeKey*(
-    handler: SubStateHandler, termState: TerminalState, keyCombo: KeyCombo
+    termState: TerminalState, keyCombo: KeyCombo
 ): TerminalResult =
   ## Handle a key press in Terminal mode.
 

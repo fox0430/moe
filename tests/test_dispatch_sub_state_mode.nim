@@ -36,6 +36,7 @@ import ../src/moepkg/registers {.all.}
 import ../src/moepkg/command_line {.all.}
 import ../src/moepkg/command_config {.all.}
 import ../src/moepkg/filer {.all.}
+import ../src/moepkg/filetree {.all.}
 import ../src/moepkg/editor_types except Command
 import ../src/moepkg/command_handlers/handler_manager {.all.}
 import ../src/moepkg/command_handlers/mode_dispatchers {.all.}
@@ -100,7 +101,6 @@ proc createTestManager(): HandlerManager =
     commandHandler: commandHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
-    subStates: initSubStates(),
   )
 
 proc setupDispatchTest(mode: EditorMode): (HandlerManager, Editor, KeyCombo) =
@@ -238,7 +238,7 @@ suite "dispatchSubStateMode - early-return branches":
 # LogViewer is intentionally not covered here: it uses buffer-based dispatch
 # instead of logViewerState (see TODO in mode_dispatchers.nim), and the
 # underlying handler dereferences fields that are nil in a minimal test
-# harness. LogViewer behavior is owned by SubStateHandler-specific tests.
+# harness. LogViewer behavior is owned by log_viewer_handler tests.
 
 suite "dispatchSubStateMode - Config search highlight clear":
   test "Config double-Escape disables the global hlsearch gate":
@@ -281,3 +281,28 @@ suite "dispatchSubStateMode - Config search highlight clear":
     let r = manager.dispatchSubStateMode(editor, n)
     check r.kind == hrHandled
     check not editor.state.search.hlsearchTempDisabled
+
+suite "dispatchSubStateMode - FileTree search highlight clear":
+  test "FileTree double-Escape clears the search via the dispatcher":
+    # FileTree search is self-contained (its own match list, not the global
+    # hlsearch gate), so the handler only reports the clear intent and the
+    # dispatcher performs the actual clearSearch.
+    let (manager, editor, keyCombo) = setupDispatchTest(EditorMode.FileTree)
+    let fileTreeState = newFileTreeState(getTempDir())
+    fileTreeState.searchText = "x"
+    fileTreeState.searchMatches = @[0]
+    fileTreeState.searchMatchIndex = 0
+    editor.activeWindow.modeState =
+      ModeState(kind: mskFileTree, fileTree: fileTreeState)
+
+    let esc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    # First Escape only arms; the search state is untouched.
+    let r1 = manager.dispatchSubStateMode(editor, esc)
+    check r1.kind == hrHandled
+    check fileTreeState.searchText == "x"
+    # Second Escape clears the search state.
+    let r2 = manager.dispatchSubStateMode(editor, esc)
+    check r2.kind == hrHandled
+    check fileTreeState.searchText == ""
+    check fileTreeState.searchMatches.len == 0
+    check fileTreeState.searchMatchIndex == -1

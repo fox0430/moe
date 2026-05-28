@@ -42,6 +42,7 @@ type
     selectedIndex*: int # Currently selected item index
     topLine*: int # Scroll position (first visible line)
     filePath*: string # File path for the symbols
+    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc symbolKindToString*(kind: SymbolKind): string =
   ## Convert SymbolKind to a short display string

@@ -86,15 +86,12 @@ proc newHandlerManager*(
   )
   let replaceHandler =
     newReplaceModeHandler(keyBindingRegistry, motionController, commandRegistry)
-  # All sub-state modes share the SubStateHandler type and start zero-valued,
-  # so initSubStates() replaces the former 15 newXxxHandler() calls.
   HandlerManager(
     normalHandler: normalHandler,
     insertHandler: insertHandler,
     commandHandler: commandHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
-    subStates: initSubStates(),
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,

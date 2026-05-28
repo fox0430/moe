@@ -114,6 +114,8 @@ type HelpViewerState* = ref object
   selectedIndex*: int # Currently selected line index (cursor position)
   topLine*: int # Scroll position (first visible line)
   searchQuery*: string # Current search query
+  waitingForG*: bool # Waiting for second 'g' for 'gg' command
+  lastKeyWasEscape*: bool # Waiting for second Escape to clear highlight
 
 proc newHelpViewerState*(): HelpViewerState =
   ## Create a new help viewer state

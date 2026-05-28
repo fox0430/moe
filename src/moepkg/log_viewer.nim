@@ -29,6 +29,7 @@ type
 
   LogViewerState* = ref object
     contentKind*: LogContentKind # Type of log content (for refresh)
+    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newLogViewerState*(kind: LogContentKind = lckEditor): LogViewerState =
   ## Create a new log viewer state

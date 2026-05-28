@@ -40,6 +40,7 @@ type
     topLine*: int ## Scroll position (first visible line)
     viewKind*: CallHierarchyViewKind ## Type of view (prepare/incoming/outgoing)
     title*: string ## Title for the list
+    waitingForG*: bool ## Waiting for second 'g' for 'gg' command
 
 proc newCallHierarchyViewerState*(
     items: seq[lspTypes.CallHierarchyItem], viewKind: CallHierarchyViewKind

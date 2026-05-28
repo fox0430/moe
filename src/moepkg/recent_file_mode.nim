@@ -37,6 +37,7 @@ type
     files*: seq[RecentFileEntry]
     selectedIndex*: int
     topLine*: int
+    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newRecentFileModeState*(): RecentFileModeState =
   ## Create a new RecentFileModeState

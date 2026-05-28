@@ -37,6 +37,7 @@ type
     selectedIndex*: int # Currently selected entry index
     topLine*: int # Scroll position (first visible line)
     previousWindowIndex*: int # Window index to return to when closing
+    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newBookmarkManagerState*(): BookmarkManagerState =
   BookmarkManagerState(

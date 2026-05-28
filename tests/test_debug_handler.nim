@@ -220,8 +220,3 @@ suite "Debug handler - Other keys":
     let result = handleDebugModeKey(debugState, viewportHeight, keyCombo)
 
     check result.kind == dvrHandled
-
-suite "Debug handler - newSubStateHandler":
-  test "Create handler":
-    let handler = newSubStateHandler()
-    check handler != nil

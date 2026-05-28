@@ -49,6 +49,10 @@ type
     width*: int # Default sidebar width
     lastError*: string # Last error message (e.g. permission denied)
     childrenCache*: Table[string, seq[FileTreeNode]]
+    waitingForG*: bool # Waiting for second 'g' for 'gg' command
+    waitingForCtrlW*: bool # Waiting for second key after Ctrl-w
+    lastKeyWasEscape*: bool # Waiting for second Escape to clear search highlight
+    isSearching*: bool # In search input mode
     searchText*: string # Current search text
     searchMatches*: seq[int] # Indices in flatList that match
     searchMatchIndex*: int # Current position in searchMatches (-1 = none)

@@ -36,6 +36,7 @@ type
     ftrPrevWindow # Switch to previous window
     ftrIncreaseWindowWidth # Increase active window width
     ftrDecreaseWindowWidth # Decrease active window width
+    ftrClearSearchHighlight # Clear the persisted search highlight
     ftrUnhandled # Command was not handled
     ftrError # Error occurred
 
@@ -50,27 +51,22 @@ type
       discard
 
 proc handleFileTreeModeKey*(
-    handler: SubStateHandler,
-    fileTreeState: FileTreeState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
+    fileTreeState: FileTreeState, viewportHeight: int, keyCombo: KeyCombo
 ): FileTreeResult =
   ## Handle a key press in FileTree mode
 
   # Search input mode
-  if handler.isSearching:
+  if fileTreeState.isSearching:
     if keyCombo.isSpecial:
       case keyCombo.special
       of skEscape:
         # Cancel search
-        handler.isSearching = false
-        handler.searchBuffer = ""
+        fileTreeState.isSearching = false
         fileTreeState.clearSearch()
         return FileTreeResult(kind: ftrHandled, statusMessage: "")
       of skEnter:
-        # Confirm search
-        handler.isSearching = false
-        handler.searchBuffer = ""
+        # Confirm search (keep searchText so the match highlight persists)
+        fileTreeState.isSearching = false
         let msg =
           if fileTreeState.searchText.len > 0:
             "/" & fileTreeState.searchText
@@ -78,29 +74,30 @@ proc handleFileTreeModeKey*(
             ""
         return FileTreeResult(kind: ftrHandled, statusMessage: msg)
       of skBackspace:
-        if handler.searchBuffer.len > 0:
-          handler.searchBuffer.setLen(handler.searchBuffer.len - 1)
-          fileTreeState.searchText = handler.searchBuffer
+        if fileTreeState.searchText.len > 0:
+          fileTreeState.searchText.setLen(fileTreeState.searchText.len - 1)
           fileTreeState.updateSearchMatches()
           if fileTreeState.searchMatches.len > 0:
             fileTreeState.jumpToFirstMatch(viewportHeight)
-        return
-          FileTreeResult(kind: ftrHandled, statusMessage: "/" & handler.searchBuffer)
+        return FileTreeResult(
+          kind: ftrHandled, statusMessage: "/" & fileTreeState.searchText
+        )
       else:
-        return
-          FileTreeResult(kind: ftrHandled, statusMessage: "/" & handler.searchBuffer)
+        return FileTreeResult(
+          kind: ftrHandled, statusMessage: "/" & fileTreeState.searchText
+        )
     else:
       # Normal character input
-      handler.searchBuffer.add(keyCombo.char)
-      fileTreeState.searchText = handler.searchBuffer
+      fileTreeState.searchText.add(keyCombo.char)
       fileTreeState.updateSearchMatches()
       if fileTreeState.searchMatches.len > 0:
         fileTreeState.jumpToFirstMatch(viewportHeight)
-      return FileTreeResult(kind: ftrHandled, statusMessage: "/" & handler.searchBuffer)
+      return
+        FileTreeResult(kind: ftrHandled, statusMessage: "/" & fileTreeState.searchText)
 
   # Handle 'gg' command
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if fileTreeState.waitingForG:
+    fileTreeState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       fileTreeState.moveToFirst()
       fileTreeState.ensureSelectedVisible(viewportHeight)
@@ -108,8 +105,8 @@ proc handleFileTreeModeKey*(
     # Non-g key cancels the pending g and falls through to handle it normally
 
   # Handle Ctrl-w + second key for window operations
-  if handler.waitingForCtrlW:
-    handler.waitingForCtrlW = false
+  if fileTreeState.waitingForCtrlW:
+    fileTreeState.waitingForCtrlW = false
     if not keyCombo.isSpecial:
       case keyCombo.char
       of ">":
@@ -125,9 +122,19 @@ proc handleFileTreeModeKey*(
     else:
       return FileTreeResult(kind: ftrUnhandled)
 
-  # Escape does nothing
+  # Double-Escape clears the search highlight (single Escape just arms it).
+  # The handler only reports the intent; the dispatcher performs the clear,
+  # mirroring the Config/Help handlers.
   if keyCombo.isSpecial and keyCombo.special == skEscape:
-    return FileTreeResult(kind: ftrHandled)
+    if fileTreeState.lastKeyWasEscape:
+      fileTreeState.lastKeyWasEscape = false
+      return FileTreeResult(kind: ftrClearSearchHighlight, statusMessage: "")
+    else:
+      fileTreeState.lastKeyWasEscape = true
+      return FileTreeResult(kind: ftrHandled)
+
+  # Any non-Escape key resets the Escape counter
+  fileTreeState.lastKeyWasEscape = false
 
   # Special keys
   if keyCombo.isSpecial:
@@ -154,16 +161,16 @@ proc handleFileTreeModeKey*(
   else:
     # Ctrl-w starts window command sequence
     if kmCtrl in keyCombo.modifiers and keyCombo.char == "w":
-      handler.waitingForCtrlW = true
+      fileTreeState.waitingForCtrlW = true
       return FileTreeResult(kind: ftrHandled)
 
     case keyCombo.char
     of ":":
       return FileTreeResult(kind: ftrEnterCommand)
     of "/":
-      # Start search
-      handler.isSearching = true
-      handler.searchBuffer = ""
+      # Start search (clear searchText so typed input does not append to the old word)
+      fileTreeState.isSearching = true
+      fileTreeState.searchText = ""
       return FileTreeResult(kind: ftrHandled, statusMessage: "/")
     of "n":
       # Next search match
@@ -235,7 +242,7 @@ proc handleFileTreeModeKey*(
       fileTreeState.ensureSelectedVisible(viewportHeight)
       return FileTreeResult(kind: ftrHandled)
     of "g":
-      handler.waitingForG = true
+      fileTreeState.waitingForG = true
       return FileTreeResult(kind: ftrHandled)
     of "G":
       fileTreeState.moveToLast()

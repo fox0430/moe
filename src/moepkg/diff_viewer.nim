@@ -45,6 +45,7 @@ type
     sourceFilePath*: string # Path of the source file (current version)
     backupFilePath*: string # Path of the backup file (old version)
     errorMessage*: string # Error message if diff failed
+    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newDiffViewerState*(): DiffViewerState =
   DiffViewerState(

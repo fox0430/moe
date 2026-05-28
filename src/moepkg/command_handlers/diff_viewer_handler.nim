@@ -52,18 +52,15 @@ type
       discard
 
 proc handleDiffViewerModeKey*(
-    handler: SubStateHandler,
-    dvState: DiffViewerState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
+    dvState: DiffViewerState, viewportHeight: int, keyCombo: KeyCombo
 ): DiffViewerResult =
   ## Handle a key press in Diff Viewer mode
   ##
   ## Returns a DiffViewerResult indicating what action should be taken
 
   # Handle 'gg' command (two g presses)
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if dvState.waitingForG:
+    dvState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       dvState.moveToFirst()
       return DiffViewerResult(kind: dvrHandled)
@@ -113,7 +110,7 @@ proc handleDiffViewerModeKey*(
       return DiffViewerResult(kind: dvrHandled)
     of "g":
       # Start waiting for second 'g'
-      handler.waitingForG = true
+      dvState.waitingForG = true
       return DiffViewerResult(kind: dvrHandled)
     of "G":
       dvState.moveToLast()

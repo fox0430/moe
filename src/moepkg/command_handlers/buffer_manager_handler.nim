@@ -50,18 +50,15 @@ type
       discard
 
 proc handleBufferManagerModeKey*(
-    handler: SubStateHandler,
-    bmState: BufferManagerState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
+    bmState: BufferManagerState, viewportHeight: int, keyCombo: KeyCombo
 ): BufferManagerResult =
   ## Handle a key press in Buffer Manager mode
   ##
   ## Returns a BufferManagerResult indicating what action should be taken
 
   # Handle 'gg' command (two g presses)
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if bmState.waitingForG:
+    bmState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       bmState.selectedIndex = 0
       bmState.topLine = 0
@@ -128,7 +125,7 @@ proc handleBufferManagerModeKey*(
       return BufferManagerResult(kind: bmrHandled)
     of "g":
       # Start waiting for second 'g'
-      handler.waitingForG = true
+      bmState.waitingForG = true
       return BufferManagerResult(kind: bmrHandled)
     of "G":
       bmState.selectedIndex = max(0, bmState.entries.len - 1)

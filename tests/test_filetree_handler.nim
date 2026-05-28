@@ -38,17 +38,27 @@ proc makeCtrlKeyCombo(ch: string): KeyCombo =
 proc makeSpecialKeyCombo(special: SpecialKey): KeyCombo =
   KeyCombo(isSpecial: true, special: special, fnNum: 0, modifiers: {})
 
-suite "SubStateHandler":
+suite "FileTree handler":
+  test "fresh state has key-sequence flags reset (entry auto-reset invariant)":
+    let tmpDir = createTestTree()
+    defer:
+      removeDir(tmpDir)
+
+    let state = newFileTreeState(tmpDir)
+    check state.waitingForG == false
+    check state.waitingForCtrlW == false
+    check state.lastKeyWasEscape == false
+    check state.isSearching == false
+
   test "j moves down":
     let tmpDir = createTestTree()
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
     let startIdx = state.selectedIndex
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("j"))
+    let result = state.handleFileTreeModeKey(20, makeKeyCombo("j"))
     check result.kind == ftrHandled
     check state.selectedIndex == startIdx + 1
 
@@ -57,11 +67,10 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
     state.moveDown() # Move to index 1 first
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("k"))
+    let result = state.handleFileTreeModeKey(20, makeKeyCombo("k"))
     check result.kind == ftrHandled
     check state.selectedIndex == 0
 
@@ -70,14 +79,13 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Select "src" directory (should be first entry since dirs come first)
     state.selectedIndex = 0
     let prevLen = state.flatList.len
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("o"))
+    let result = state.handleFileTreeModeKey(20, makeKeyCombo("o"))
     check result.kind == ftrHandled
     # If it was a directory, it should have expanded
     if state.flatList[0].isDirectory:
@@ -88,7 +96,6 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Find a file entry
@@ -97,7 +104,7 @@ suite "SubStateHandler":
         state.selectedIndex = i
         break
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("o"))
+    let result = state.handleFileTreeModeKey(20, makeKeyCombo("o"))
     check result.kind == ftrOpenFile
     check result.filePath.len > 0
 
@@ -106,7 +113,6 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Select a directory
@@ -114,14 +120,14 @@ suite "SubStateHandler":
     check state.flatList[0].isDirectory
 
     # First l: expand
-    let r1 = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("l"))
+    let r1 = state.handleFileTreeModeKey(20, makeKeyCombo("l"))
     check r1.kind == ftrHandled
     let expandedLen = state.flatList.len
     check expandedLen > 1
 
     # Second l on same directory: should NOT collapse (still expanded)
     state.selectedIndex = 0
-    let r2 = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("l"))
+    let r2 = state.handleFileTreeModeKey(20, makeKeyCombo("l"))
     check r2.kind == ftrHandled
     check state.flatList.len == expandedLen
 
@@ -130,7 +136,6 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Find a file entry
@@ -139,7 +144,7 @@ suite "SubStateHandler":
         state.selectedIndex = i
         break
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("l"))
+    let result = state.handleFileTreeModeKey(20, makeKeyCombo("l"))
     check result.kind == ftrOpenFile
     check result.filePath.len > 0
 
@@ -148,10 +153,9 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo(":"))
+    let result = state.handleFileTreeModeKey(20, makeKeyCombo(":"))
     check result.kind == ftrEnterCommand
 
   test "G moves to last":
@@ -159,10 +163,9 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("G"))
+    let result = state.handleFileTreeModeKey(20, makeKeyCombo("G"))
     check result.kind == ftrHandled
     check state.selectedIndex == state.flatList.len - 1
 
@@ -171,16 +174,15 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
     state.moveToLast()
 
     # First g
-    let r1 = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("g"))
+    let r1 = state.handleFileTreeModeKey(20, makeKeyCombo("g"))
     check r1.kind == ftrHandled
 
     # Second g
-    let r2 = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("g"))
+    let r2 = state.handleFileTreeModeKey(20, makeKeyCombo("g"))
     check r2.kind == ftrHandled
     check state.selectedIndex == 0
 
@@ -192,12 +194,11 @@ suite "SubStateHandler":
     # Add a hidden file
     writeFile(tmpDir / ".hidden", "hidden")
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     check state.showHidden == false
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("."))
+    let result = state.handleFileTreeModeKey(20, makeKeyCombo("."))
     check result.kind == ftrHandled
     check state.showHidden == true
 
@@ -206,15 +207,13 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Select "src" directory
     state.selectedIndex = 0
     if state.flatList[0].isDirectory:
       let prevLen = state.flatList.len
-      let result =
-        handler.handleFileTreeModeKey(state, 20, makeSpecialKeyCombo(skEnter))
+      let result = state.handleFileTreeModeKey(20, makeSpecialKeyCombo(skEnter))
       check result.kind == ftrHandled
       check state.flatList.len > prevLen
 
@@ -223,7 +222,6 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Expand src first
@@ -234,7 +232,7 @@ suite "SubStateHandler":
 
       # Now collapse with x
       state.selectedIndex = 0
-      let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("x"))
+      let result = state.handleFileTreeModeKey(20, makeKeyCombo("x"))
       check result.kind == ftrHandled
       check state.flatList.len < expandedLen
 
@@ -243,34 +241,32 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("/"))
+    let result = state.handleFileTreeModeKey(20, makeKeyCombo("/"))
     check result.kind == ftrHandled
     check result.statusMessage == "/"
-    check handler.isSearching == true
+    check state.isSearching == true
 
   test "typing characters during search does incremental matching":
     let tmpDir = createTestTree()
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Start search
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("/"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("/"))
 
     # Type "R"
-    let r1 = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("R"))
+    let r1 = state.handleFileTreeModeKey(20, makeKeyCombo("R"))
     check r1.kind == ftrHandled
     check r1.statusMessage == "/R"
     check state.searchText == "R"
     check state.searchMatches.len >= 1 # README.md should match
 
     # Type "E"
-    let r2 = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("E"))
+    let r2 = state.handleFileTreeModeKey(20, makeKeyCombo("E"))
     check r2.kind == ftrHandled
     check r2.statusMessage == "/RE"
     check state.searchText == "RE"
@@ -280,18 +276,17 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Start search and type
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("/"))
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("s"))
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("r"))
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("c"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("/"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("s"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("r"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("c"))
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeSpecialKeyCombo(skEnter))
+    let result = state.handleFileTreeModeKey(20, makeSpecialKeyCombo(skEnter))
     check result.kind == ftrHandled
-    check handler.isSearching == false
+    check state.isSearching == false
     check state.searchText == "src" # Search text preserved
     check result.statusMessage == "/src"
 
@@ -300,25 +295,69 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Start search and type
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("/"))
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("x"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("/"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("x"))
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeSpecialKeyCombo(skEscape))
+    let result = state.handleFileTreeModeKey(20, makeSpecialKeyCombo(skEscape))
     check result.kind == ftrHandled
-    check handler.isSearching == false
+    check state.isSearching == false
     check state.searchText == "" # Search cleared
     check state.searchMatches.len == 0
+
+  test "double Escape requests highlight clear and keeps the search text":
+    let tmpDir = createTestTree()
+    defer:
+      removeDir(tmpDir)
+
+    let state = newFileTreeState(tmpDir)
+
+    # Search "src" and confirm with Enter (highlight persists)
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("/"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("s"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("r"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("c"))
+    discard state.handleFileTreeModeKey(20, makeSpecialKeyCombo(skEnter))
+    check state.isSearching == false
+    check state.searchText == "src" # highlight still active
+
+    # First Escape just arms — highlight stays
+    let r1 = state.handleFileTreeModeKey(20, makeSpecialKeyCombo(skEscape))
+    check r1.kind == ftrHandled
+    check state.lastKeyWasEscape == true
+    check state.searchText == "src"
+
+    # Second Escape requests the clear. The handler reports the intent and
+    # keeps searchText; the dispatcher performs the actual clearSearch.
+    let r2 = state.handleFileTreeModeKey(20, makeSpecialKeyCombo(skEscape))
+    check r2.kind == ftrClearSearchHighlight
+    check state.lastKeyWasEscape == false
+    check state.searchText == "src"
+
+  test "non-Escape key resets the Escape counter":
+    let tmpDir = createTestTree()
+    defer:
+      removeDir(tmpDir)
+
+    let state = newFileTreeState(tmpDir)
+    state.searchText = "s"
+    state.updateSearchMatches()
+
+    # Escape, then a movement key, then Escape — must NOT clear (not consecutive)
+    discard state.handleFileTreeModeKey(20, makeSpecialKeyCombo(skEscape))
+    check state.lastKeyWasEscape == true
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("j"))
+    check state.lastKeyWasEscape == false
+    discard state.handleFileTreeModeKey(20, makeSpecialKeyCombo(skEscape))
+    check state.searchText == "s" # still highlighted (only one Escape since reset)
 
   test "n jumps to next match":
     let tmpDir = createTestTree()
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Set up a search with matches
@@ -327,7 +366,7 @@ suite "SubStateHandler":
     # "src" should match
     check state.searchMatches.len >= 1
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("n"))
+    let result = state.handleFileTreeModeKey(20, makeKeyCombo("n"))
     check result.kind == ftrHandled
     check state.searchMatchIndex >= 0
 
@@ -336,7 +375,6 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Set up a search with matches
@@ -344,7 +382,7 @@ suite "SubStateHandler":
     state.updateSearchMatches()
     check state.searchMatches.len >= 1
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("N"))
+    let result = state.handleFileTreeModeKey(20, makeKeyCombo("N"))
     check result.kind == ftrHandled
     check state.searchMatchIndex >= 0
 
@@ -353,20 +391,17 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Start search and type "ab"
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("/"))
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("a"))
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("b"))
-    check handler.searchBuffer == "ab"
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("/"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("a"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("b"))
+    check state.searchText == "ab"
 
     # Backspace
-    let result =
-      handler.handleFileTreeModeKey(state, 20, makeSpecialKeyCombo(skBackspace))
+    let result = state.handleFileTreeModeKey(20, makeSpecialKeyCombo(skBackspace))
     check result.kind == ftrHandled
-    check handler.searchBuffer == "a"
     check state.searchText == "a"
     check result.statusMessage == "/a"
 
@@ -375,35 +410,31 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Start search (buffer is empty)
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("/"))
-    check handler.searchBuffer == ""
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("/"))
+    check state.searchText == ""
 
     # Backspace on empty buffer
-    let result =
-      handler.handleFileTreeModeKey(state, 20, makeSpecialKeyCombo(skBackspace))
+    let result = state.handleFileTreeModeKey(20, makeSpecialKeyCombo(skBackspace))
     check result.kind == ftrHandled
-    check handler.searchBuffer == ""
+    check state.searchText == ""
     check result.statusMessage == "/"
 
-  test "Enter confirms search and clears searchBuffer":
+  test "Enter confirms search and exits search mode":
     let tmpDir = createTestTree()
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("/"))
-    discard handler.handleFileTreeModeKey(state, 20, makeKeyCombo("R"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("/"))
+    discard state.handleFileTreeModeKey(20, makeKeyCombo("R"))
 
-    let result = handler.handleFileTreeModeKey(state, 20, makeSpecialKeyCombo(skEnter))
+    let result = state.handleFileTreeModeKey(20, makeSpecialKeyCombo(skEnter))
     check result.kind == ftrHandled
-    check handler.isSearching == false
-    check handler.searchBuffer == ""
+    check state.isSearching == false
     check state.searchText == "R" # searchText preserved in state
 
   test "g then non-g key cancels gg and processes the key":
@@ -411,19 +442,18 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
     # Press g
-    let r1 = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("g"))
+    let r1 = state.handleFileTreeModeKey(20, makeKeyCombo("g"))
     check r1.kind == ftrHandled
-    check handler.waitingForG == true
+    check state.waitingForG == true
 
     # Press j instead of g — should cancel gg and move down
     let startIdx = state.selectedIndex
-    let r2 = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("j"))
+    let r2 = state.handleFileTreeModeKey(20, makeKeyCombo("j"))
     check r2.kind == ftrHandled
-    check handler.waitingForG == false
+    check state.waitingForG == false
     check state.selectedIndex == startIdx + 1
 
   test "Ctrl-w > returns ftrIncreaseWindowWidth":
@@ -431,11 +461,10 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
-    discard handler.handleFileTreeModeKey(state, 20, makeCtrlKeyCombo("w"))
-    let r = handler.handleFileTreeModeKey(state, 20, makeKeyCombo(">"))
+    discard state.handleFileTreeModeKey(20, makeCtrlKeyCombo("w"))
+    let r = state.handleFileTreeModeKey(20, makeKeyCombo(">"))
     check r.kind == ftrIncreaseWindowWidth
 
   test "Ctrl-w < returns ftrDecreaseWindowWidth":
@@ -443,11 +472,10 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
-    discard handler.handleFileTreeModeKey(state, 20, makeCtrlKeyCombo("w"))
-    let r = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("<"))
+    discard state.handleFileTreeModeKey(20, makeCtrlKeyCombo("w"))
+    let r = state.handleFileTreeModeKey(20, makeKeyCombo("<"))
     check r.kind == ftrDecreaseWindowWidth
 
   test "Ctrl-w w returns ftrNextWindow":
@@ -455,11 +483,10 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
-    discard handler.handleFileTreeModeKey(state, 20, makeCtrlKeyCombo("w"))
-    let r = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("w"))
+    discard state.handleFileTreeModeKey(20, makeCtrlKeyCombo("w"))
+    let r = state.handleFileTreeModeKey(20, makeKeyCombo("w"))
     check r.kind == ftrNextWindow
 
   test "Ctrl-w p returns ftrPrevWindow":
@@ -467,11 +494,10 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
-    discard handler.handleFileTreeModeKey(state, 20, makeCtrlKeyCombo("w"))
-    let r = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("p"))
+    discard state.handleFileTreeModeKey(20, makeCtrlKeyCombo("w"))
+    let r = state.handleFileTreeModeKey(20, makeKeyCombo("p"))
     check r.kind == ftrPrevWindow
 
   test "Ctrl-w with unknown key returns ftrUnhandled":
@@ -479,10 +505,9 @@ suite "SubStateHandler":
     defer:
       removeDir(tmpDir)
 
-    let handler = newSubStateHandler()
     let state = newFileTreeState(tmpDir)
 
-    discard handler.handleFileTreeModeKey(state, 20, makeCtrlKeyCombo("w"))
-    let r = handler.handleFileTreeModeKey(state, 20, makeKeyCombo("z"))
+    discard state.handleFileTreeModeKey(20, makeCtrlKeyCombo("w"))
+    let r = state.handleFileTreeModeKey(20, makeKeyCombo("z"))
     check r.kind == ftrUnhandled
-    check handler.waitingForCtrlW == false
+    check state.waitingForCtrlW == false

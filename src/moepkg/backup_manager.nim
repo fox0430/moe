@@ -40,6 +40,7 @@ type
     sourceFilePath*: string # Path of the source file being backed up
     backupDir*: string # Directory containing backup files
     baseBackupDir*: string # Base backup directory from config
+    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newBackupManagerState*(): BackupManagerState =
   BackupManagerState(

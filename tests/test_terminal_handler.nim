@@ -29,11 +29,6 @@ proc charKey(c: string, mods: set[KeyModifier] = {}): KeyCombo =
 proc specialKey(sk: SpecialKey, mods: set[KeyModifier] = {}): KeyCombo =
   KeyCombo(isSpecial: true, special: sk, modifiers: mods)
 
-suite "SubStateHandler - Creation":
-  test "newSubStateHandler creates handler":
-    let handler = newSubStateHandler()
-    check handler != nil
-
 suite "keyComboToBytes - Regular characters":
   test "Simple character 'a'":
     check keyComboToBytes(charKey("a")) == "a"
@@ -102,47 +97,42 @@ suite "keyComboToBytes - Ctrl combinations":
 
 suite "handleTerminalModeKey - Terminal-Input sub-mode":
   test "Regular key in Input mode returns trHandled":
-    let handler = newSubStateHandler()
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
-      let result = handler.handleTerminalModeKey(termState.get, charKey("a"))
+      let result = handleTerminalModeKey(termState.get, charKey("a"))
       check result.kind == trHandled
       termState.get.cleanup()
 
   test "Ctrl-backslash sets waitingForCtrlN":
-    let handler = newSubStateHandler()
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
-      let result = handler.handleTerminalModeKey(termState.get, charKey("\\", {kmCtrl}))
+      let result = handleTerminalModeKey(termState.get, charKey("\\", {kmCtrl}))
       check result.kind == trHandled
       check termState.get.waitingForCtrlN == true
       termState.get.cleanup()
 
 suite "handleTerminalModeKey - Terminal-Normal sub-mode":
   test "'i' in Normal sub-mode returns trReturnToInput":
-    let handler = newSubStateHandler()
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
       discard termState.get.enterNormalSubMode()
-      let result = handler.handleTerminalModeKey(termState.get, charKey("i"))
+      let result = handleTerminalModeKey(termState.get, charKey("i"))
       check result.kind == trReturnToInput
       termState.get.cleanup()
 
   test "'a' in Normal sub-mode returns trReturnToInput":
-    let handler = newSubStateHandler()
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
       discard termState.get.enterNormalSubMode()
-      let result = handler.handleTerminalModeKey(termState.get, charKey("a"))
+      let result = handleTerminalModeKey(termState.get, charKey("a"))
       check result.kind == trReturnToInput
       termState.get.cleanup()
 
   test "':' in Normal sub-mode returns trEnterCommand":
-    let handler = newSubStateHandler()
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
       discard termState.get.enterNormalSubMode()
-      let result = handler.handleTerminalModeKey(termState.get, charKey(":"))
+      let result = handleTerminalModeKey(termState.get, charKey(":"))
       check result.kind == trEnterCommand
       termState.get.cleanup()
 

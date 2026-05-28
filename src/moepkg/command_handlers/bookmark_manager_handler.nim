@@ -51,16 +51,13 @@ type
       discard
 
 proc handleBookmarkManagerModeKey*(
-    handler: SubStateHandler,
-    bmState: BookmarkManagerState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
+    bmState: BookmarkManagerState, viewportHeight: int, keyCombo: KeyCombo
 ): BookmarkManagerResult =
   ## Handle a key press in Bookmark Manager mode
 
   # Handle 'gg' command (two g presses)
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if bmState.waitingForG:
+    bmState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       bmState.selectedIndex = 0
       bmState.topLine = 0
@@ -125,7 +122,7 @@ proc handleBookmarkManagerModeKey*(
       bmState.moveUp()
       return BookmarkManagerResult(kind: bkmrHandled)
     of "g":
-      handler.waitingForG = true
+      bmState.waitingForG = true
       return BookmarkManagerResult(kind: bkmrHandled)
     of "G":
       bmState.selectedIndex = max(0, bmState.entries.len - 1)

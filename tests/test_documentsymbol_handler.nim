@@ -70,195 +70,178 @@ proc specialKeyCombo(key: SpecialKey): KeyCombo =
   ## Create a special key combo
   KeyCombo(isSpecial: true, special: key, modifiers: {})
 
-suite "SubStateHandler - newSubStateHandler":
-  test "Create new handler":
-    let handler = newSubStateHandler()
+suite "DocumentSymbolViewerState - waitingForG initial value":
+  test "fresh DocumentSymbolViewerState has waitingForG reset":
+    let state = createTestState()
 
-    check handler != nil
-    check handler.waitingForG == false
+    check state.waitingForG == false
 
-suite "SubStateHandler - handleDocumentSymbolModeKey - Quit commands":
+suite "documentsymbol_handler: handleDocumentSymbolModeKey - Quit commands":
   test "Escape key quits":
-    let handler = newSubStateHandler()
     let state = createTestState()
     let keyCombo = specialKeyCombo(skEscape)
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrQuit
 
   test "'q' key quits":
-    let handler = newSubStateHandler()
     let state = createTestState()
     let keyCombo = charKeyCombo("q")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrQuit
 
-suite "SubStateHandler - handleDocumentSymbolModeKey - Command mode":
+suite "documentsymbol_handler: handleDocumentSymbolModeKey - Command mode":
   test "':' key enters command mode":
-    let handler = newSubStateHandler()
     let state = createTestState()
     let keyCombo = charKeyCombo(":")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrEnterCommand
 
-suite "SubStateHandler - handleDocumentSymbolModeKey - Navigation with j/k":
+suite "documentsymbol_handler: handleDocumentSymbolModeKey - Navigation with j/k":
   test "'j' key moves down":
-    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 0
     let keyCombo = charKeyCombo("j")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 1
 
   test "'k' key moves up":
-    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 2
     let keyCombo = charKeyCombo("k")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 1
 
   test "'j' at last item stays at last":
-    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 2
     let keyCombo = charKeyCombo("j")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 2
 
   test "'k' at first item stays at first":
-    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 0
     let keyCombo = charKeyCombo("k")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 0
 
-suite "SubStateHandler - handleDocumentSymbolModeKey - Navigation with arrow keys":
+suite "documentsymbol_handler: handleDocumentSymbolModeKey - Navigation with arrow keys":
   test "Down arrow moves down":
-    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 0
     let keyCombo = specialKeyCombo(skDown)
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 1
 
   test "Up arrow moves up":
-    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 2
     let keyCombo = specialKeyCombo(skUp)
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 1
 
-suite "SubStateHandler - handleDocumentSymbolModeKey - G and gg commands":
+suite "documentsymbol_handler: handleDocumentSymbolModeKey - G and gg commands":
   test "'G' moves to last":
-    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 0
     let keyCombo = charKeyCombo("G")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 2
 
   test "'g' sets waitingForG":
-    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 2
     let keyCombo = charKeyCombo("g")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrHandled
-    check handler.waitingForG == true
+    check state.waitingForG == true
 
   test "'gg' moves to first":
-    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 2
     let keyComboG = charKeyCombo("g")
 
     # First 'g'
-    discard handler.handleDocumentSymbolModeKey(state, 10, keyComboG)
-    check handler.waitingForG == true
+    discard handleDocumentSymbolModeKey(state, 10, keyComboG)
+    check state.waitingForG == true
 
     # Second 'g'
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyComboG)
+    let result = handleDocumentSymbolModeKey(state, 10, keyComboG)
 
     check result.kind == dsvrHandled
-    check handler.waitingForG == false
+    check state.waitingForG == false
     check state.selectedIndex == 0
 
   test "'g' followed by other key resets state":
-    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 2
     let keyComboG = charKeyCombo("g")
     let keyComboJ = charKeyCombo("j")
 
     # First 'g'
-    discard handler.handleDocumentSymbolModeKey(state, 10, keyComboG)
-    check handler.waitingForG == true
+    discard handleDocumentSymbolModeKey(state, 10, keyComboG)
+    check state.waitingForG == true
 
     # 'j' after 'g' - should reset waitingForG and handle j normally
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyComboJ)
+    let result = handleDocumentSymbolModeKey(state, 10, keyComboJ)
 
-    check handler.waitingForG == false
+    check state.waitingForG == false
     check result.kind == dsvrHandled
     # j should move down (but already at last, so stays at 2)
     check state.selectedIndex == 2
 
-suite "SubStateHandler - handleDocumentSymbolModeKey - Enter key":
+suite "documentsymbol_handler: handleDocumentSymbolModeKey - Enter key":
   test "Enter key jumps to selected symbol":
-    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 1
     let keyCombo = specialKeyCombo(skEnter)
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrJumpToSymbol
     check result.targetItem.name == "func1"
     check result.targetItem.line == 10
 
   test "Enter key with empty state returns error":
-    let handler = newSubStateHandler()
     let state = createEmptyState()
     let keyCombo = specialKeyCombo(skEnter)
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrError
     check result.errorMessage == "No symbol selected"
 
-suite "SubStateHandler - handleDocumentSymbolModeKey - Half page navigation":
+suite "documentsymbol_handler: handleDocumentSymbolModeKey - Half page navigation":
   test "Ctrl+d moves half page down":
-    let handler = newSubStateHandler()
     var symbols: seq[lspTypes.DocumentSymbol] = @[]
     for i in 0 ..< 20:
       symbols.add(makeDocumentSymbol("func" & $i, skFunction, i, 0))
@@ -268,13 +251,12 @@ suite "SubStateHandler - handleDocumentSymbolModeKey - Half page navigation":
     state.selectedIndex = 5
     let keyCombo = ctrlKeyCombo("d")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 10
 
   test "Ctrl+u moves half page up":
-    let handler = newSubStateHandler()
     var symbols: seq[lspTypes.DocumentSymbol] = @[]
     for i in 0 ..< 20:
       symbols.add(makeDocumentSymbol("func" & $i, skFunction, i, 0))
@@ -284,13 +266,12 @@ suite "SubStateHandler - handleDocumentSymbolModeKey - Half page navigation":
     state.selectedIndex = 15
     let keyCombo = ctrlKeyCombo("u")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 10
 
   test "Ctrl+d at bottom stays at bottom":
-    let handler = newSubStateHandler()
     var symbols: seq[lspTypes.DocumentSymbol] = @[]
     for i in 0 ..< 20:
       symbols.add(makeDocumentSymbol("func" & $i, skFunction, i, 0))
@@ -300,44 +281,40 @@ suite "SubStateHandler - handleDocumentSymbolModeKey - Half page navigation":
     state.selectedIndex = 19
     let keyCombo = ctrlKeyCombo("d")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 19
 
   test "Ctrl+u at top stays at top":
-    let handler = newSubStateHandler()
     let state = createTestState()
     state.selectedIndex = 0
     let keyCombo = ctrlKeyCombo("u")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 0
 
-suite "SubStateHandler - handleDocumentSymbolModeKey - Unhandled keys":
+suite "documentsymbol_handler: handleDocumentSymbolModeKey - Unhandled keys":
   test "Unknown character key returns unhandled":
-    let handler = newSubStateHandler()
     let state = createTestState()
     let keyCombo = charKeyCombo("x")
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrUnhandled
 
   test "Unknown special key returns unhandled":
-    let handler = newSubStateHandler()
     let state = createTestState()
     let keyCombo = specialKeyCombo(skPageUp)
 
-    let result = handler.handleDocumentSymbolModeKey(state, 10, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 10, keyCombo)
 
     check result.kind == dsvrUnhandled
 
-suite "SubStateHandler - handleDocumentSymbolModeKey - Viewport adjustment":
+suite "documentsymbol_handler: handleDocumentSymbolModeKey - Viewport adjustment":
   test "Navigation adjusts viewport when needed":
-    let handler = newSubStateHandler()
     var symbols: seq[lspTypes.DocumentSymbol] = @[]
     for i in 0 ..< 20:
       symbols.add(makeDocumentSymbol("func" & $i, skFunction, i, 0))
@@ -349,7 +326,7 @@ suite "SubStateHandler - handleDocumentSymbolModeKey - Viewport adjustment":
     let keyCombo = charKeyCombo("G")
 
     # G moves to last (index 19), which should be outside viewport height of 5
-    let result = handler.handleDocumentSymbolModeKey(state, 5, keyCombo)
+    let result = handleDocumentSymbolModeKey(state, 5, keyCombo)
 
     check result.kind == dsvrHandled
     check state.selectedIndex == 19
