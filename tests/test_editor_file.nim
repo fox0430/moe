@@ -212,6 +212,28 @@ suite "Editor - saveFile":
     let result = e.saveFile(force = true)
     check result.isOk
 
+  test "Save-as to a different path is not blocked by external modification":
+    let e = createTestEditor()
+    let original = getTempDir() / "moe_test_saveas_orig.txt"
+    let target = getTempDir() / "moe_test_saveas_target.txt"
+
+    writeFile(original, "Original content")
+    defer:
+      removeFile(original)
+      if fileExists(target):
+        removeFile(target)
+
+    discard e.loadFile(original)
+
+    # Simulate external modification of the original file.
+    e.textBuffer.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    writeFile(original, "Externally modified")
+
+    # Saving to a different path must succeed without force.
+    let result = e.saveFile(some(target))
+    check result.isOk
+    check fileExists(target)
+
 suite "Editor - saveBufferCursorPosition":
   test "Save cursor position when enabled":
     var config = newEditorConfig()
