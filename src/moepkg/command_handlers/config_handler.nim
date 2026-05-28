@@ -131,10 +131,7 @@ proc handleEnumPopupKey(
       return ConfigModeResult(kind: cmrHandled)
 
 proc handleConfigModeKey*(
-    handler: SubStateHandler,
-    configState: ConfigModeState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
+    configState: ConfigModeState, viewportHeight: int, keyCombo: KeyCombo
 ): ConfigModeResult =
   ## Handle a key press in Configuration mode
   ##
@@ -149,8 +146,8 @@ proc handleConfigModeKey*(
     return handleEnumPopupKey(configState, keyCombo)
 
   # Handle 'gg' command (two g presses)
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if configState.waitingForG:
+    configState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       configState.moveToFirst()
       return ConfigModeResult(kind: cmrHandled)
@@ -158,19 +155,19 @@ proc handleConfigModeKey*(
 
   # Handle Escape key for double-Escape search highlight clear
   if keyCombo.isSpecial and keyCombo.special == skEscape:
-    if handler.lastKeyWasEscape:
+    if configState.lastKeyWasEscape:
       # Second Escape press - clear search highlight.
       # Display is gated by the global hlsearch flags (set by the dispatcher),
       # so searchQuery is kept as the match target (like buffer lastText).
-      handler.lastKeyWasEscape = false
+      configState.lastKeyWasEscape = false
       return ConfigModeResult(kind: cmrClearSearchHighlight)
     else:
       # First Escape press - just mark it
-      handler.lastKeyWasEscape = true
+      configState.lastKeyWasEscape = true
       return ConfigModeResult(kind: cmrHandled)
 
   # Any non-Escape key resets the Escape counter
-  handler.lastKeyWasEscape = false
+  configState.lastKeyWasEscape = false
 
   # Check for special keys first
   if keyCombo.isSpecial:
@@ -278,7 +275,7 @@ proc handleConfigModeKey*(
       return ConfigModeResult(kind: cmrHandled)
     of "g":
       # Start waiting for second 'g'
-      handler.waitingForG = true
+      configState.waitingForG = true
       return ConfigModeResult(kind: cmrHandled)
     of "G":
       configState.moveToLast()

@@ -64,18 +64,15 @@ type
       discard
 
 proc handleBackupManagerModeKey*(
-    handler: SubStateHandler,
-    bkState: BackupManagerState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
+    bkState: BackupManagerState, viewportHeight: int, keyCombo: KeyCombo
 ): BackupManagerResult =
   ## Handle a key press in Backup Manager mode
   ##
   ## Returns a BackupManagerResult indicating what action should be taken
 
   # Handle 'gg' command (two g presses)
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if bkState.waitingForG:
+    bkState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       bkState.moveToFirst()
       return BackupManagerResult(kind: bkmrHandled)
@@ -135,7 +132,7 @@ proc handleBackupManagerModeKey*(
       return BackupManagerResult(kind: bkmrHandled)
     of "g":
       # Start waiting for second 'g'
-      handler.waitingForG = true
+      bkState.waitingForG = true
       return BackupManagerResult(kind: bkmrHandled)
     of "G":
       bkState.moveToLast()

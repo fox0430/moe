@@ -97,7 +97,6 @@ proc createTestManager(): HandlerManager =
     commandHandler: commandHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
-    subStates: initSubStates(),
   )
 
 suite "HandlerManager - Overlay Transitions":
@@ -1251,7 +1250,6 @@ proc createTestManagerWithMotion(
     commandHandler: commandHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
-    subStates: initSubStates(),
   )
 
 suite "HandlerManager - Ctrl+O Insert-Normal mode":
@@ -2307,7 +2305,7 @@ suite "HandlerManager - FileTree search statusMessage":
     let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
     let r1 = manager.handleFileTreeMode(fileTreeState, state, 20, slashKey)
     check r1.kind == hrHandled
-    check manager.fileTreeHandler.isSearching == true
+    check fileTreeState.isSearching == true
     # statusMessage should show the search prompt
     check state.statusMessage == "/"
 
@@ -2352,7 +2350,7 @@ suite "HandlerManager - FileTree search statusMessage":
 
     let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
     discard manager.handleFileTreeMode(fileTreeState, state, 20, enterKey)
-    check manager.fileTreeHandler.isSearching == false
+    check fileTreeState.isSearching == false
     check state.statusMessage == "/R"
 
   test "Escape cancels search and clears statusMessage":
@@ -2375,7 +2373,7 @@ suite "HandlerManager - FileTree search statusMessage":
 
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
     discard manager.handleFileTreeMode(fileTreeState, state, 20, escKey)
-    check manager.fileTreeHandler.isSearching == false
+    check fileTreeState.isSearching == false
     # After cancel, statusMessage should be empty (clearSearch returns "")
     check state.statusMessage == ""
 

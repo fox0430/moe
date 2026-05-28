@@ -36,14 +36,14 @@ proc createTestBufferManagerState(): BufferManagerState =
   state.updateEntries(bufferInfos)
   result = state
 
-suite "SubStateHandler - Constructor":
-  test "Create SubStateHandler":
-    let handler = newSubStateHandler()
+suite "buffer_manager_handler: Constructor":
+  test "fresh BufferManagerState has waitingForG reset":
+    let bmState = newBufferManagerState()
 
-    check handler != nil
-    check handler.waitingForG == false
+    check bmState != nil
+    check bmState.waitingForG == false
 
-suite "SubStateHandler - Result Types":
+suite "buffer_manager_handler: Result Types":
   test "bmrHandled result":
     let result = BufferManagerResult(kind: bmrHandled)
     check result.kind == bmrHandled
@@ -75,92 +75,85 @@ suite "SubStateHandler - Result Types":
     check result.kind == bmrError
     check result.errorMessage == "test error"
 
-suite "SubStateHandler - Navigation":
+suite "buffer_manager_handler: Navigation":
   test "Move down with j":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
     check bmState.selectedIndex == 1
 
   test "Move up with k":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 1
 
     let keyCombo = KeyCombo(isSpecial: false, char: "k", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
     check bmState.selectedIndex == 0
 
   test "Move down with Down arrow":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
     let keyCombo = KeyCombo(isSpecial: true, special: skDown, fnNum: 0, modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
     check bmState.selectedIndex == 1
 
   test "Move up with Up arrow":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 1
 
     let keyCombo = KeyCombo(isSpecial: true, special: skUp, fnNum: 0, modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
     check bmState.selectedIndex == 0
 
   test "Move to last with G":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
     let keyCombo = KeyCombo(isSpecial: false, char: "G", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
     check bmState.selectedIndex == bmState.entries.len - 1
 
   test "Move to first with gg":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 2
 
     # First 'g' starts waiting
     let keyCombo1 = KeyCombo(isSpecial: false, char: "g", modifiers: {})
-    let result1 = handler.handleBufferManagerModeKey(bmState, 24, keyCombo1)
+    let result1 = handleBufferManagerModeKey(bmState, 24, keyCombo1)
 
     check result1.kind == bmrHandled
-    check handler.waitingForG == true
+    check bmState.waitingForG == true
 
     # Second 'g' completes the command
     let keyCombo2 = KeyCombo(isSpecial: false, char: "g", modifiers: {})
-    let result2 = handler.handleBufferManagerModeKey(bmState, 24, keyCombo2)
+    let result2 = handleBufferManagerModeKey(bmState, 24, keyCombo2)
 
     check result2.kind == bmrHandled
     check bmState.selectedIndex == 0
     check bmState.topLine == 0
-    check handler.waitingForG == false
+    check bmState.waitingForG == false
 
   test "Half page down with Ctrl+d":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
     let viewportHeight = 4
     let expectedMove = max(1, viewportHeight div 2)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "d", modifiers: {kmCtrl})
-    let result = handler.handleBufferManagerModeKey(bmState, viewportHeight, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, viewportHeight, keyCombo)
 
     check result.kind == bmrHandled
     # Should move down by half page (capped by entries count)
@@ -168,390 +161,361 @@ suite "SubStateHandler - Navigation":
     check bmState.selectedIndex == expectedIndex
 
   test "Half page up with Ctrl+u":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 2
     let viewportHeight = 4
     let expectedMove = max(1, viewportHeight div 2)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "u", modifiers: {kmCtrl})
-    let result = handler.handleBufferManagerModeKey(bmState, viewportHeight, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, viewportHeight, keyCombo)
 
     check result.kind == bmrHandled
     # Should move up by half page
     let expectedIndex = max(0, 2 - expectedMove)
     check bmState.selectedIndex == expectedIndex
 
-suite "SubStateHandler - Buffer Selection":
+suite "buffer_manager_handler: Buffer Selection":
   test "Select buffer with Enter":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 1
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrSelectBuffer
     check result.bufferIndex == 1
 
   test "Open buffer with o":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 2
 
     let keyCombo = KeyCombo(isSpecial: false, char: "o", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrSelectBuffer
     check result.bufferIndex == 2
 
   test "Select buffer with empty entries returns handled":
-    let handler = newSubStateHandler()
     let bmState = newBufferManagerState()
     # Empty state
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
 
   test "Open buffer with o on empty entries returns handled":
-    let handler = newSubStateHandler()
     let bmState = newBufferManagerState()
     # Empty state
 
     let keyCombo = KeyCombo(isSpecial: false, char: "o", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
 
-suite "SubStateHandler - Buffer Deletion":
+suite "buffer_manager_handler: Buffer Deletion":
   test "Delete buffer with D":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 1
 
     let keyCombo = KeyCombo(isSpecial: false, char: "D", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrDeleteBuffer
     check result.deleteBufferIndex == 1
 
   test "Delete buffer with D on empty entries returns handled":
-    let handler = newSubStateHandler()
     let bmState = newBufferManagerState()
     # Empty state
 
     let keyCombo = KeyCombo(isSpecial: false, char: "D", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
 
-suite "SubStateHandler - Mode Transitions":
+suite "buffer_manager_handler: Mode Transitions":
   test "Quit with Escape":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrQuit
 
   test "Quit with q":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "q", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrQuit
 
   test "Enter command mode with :":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: ":", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrEnterCommand
 
-suite "SubStateHandler - Window Navigation (Unhandled)":
+suite "buffer_manager_handler: Window Navigation (Unhandled)":
   test "Ctrl+k returns unhandled":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "k", modifiers: {kmCtrl})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrUnhandled
 
   test "Ctrl+j returns unhandled":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {kmCtrl})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrUnhandled
 
-suite "SubStateHandler - Waiting for G State":
+suite "buffer_manager_handler: Waiting for G State":
   test "First g sets waitingForG true":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "g", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
-    check handler.waitingForG == true
+    check bmState.waitingForG == true
 
   test "Waiting for G cancelled on non-g key":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
     # First 'g' starts waiting
     let keyCombo1 = KeyCombo(isSpecial: false, char: "g", modifiers: {})
-    discard handler.handleBufferManagerModeKey(bmState, 24, keyCombo1)
-    check handler.waitingForG == true
+    discard handleBufferManagerModeKey(bmState, 24, keyCombo1)
+    check bmState.waitingForG == true
 
     # Press something other than 'g' (j for move down)
     let keyCombo2 = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo2)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo2)
 
     # waitingForG should be cleared and j should be handled normally
-    check handler.waitingForG == false
+    check bmState.waitingForG == false
     check result.kind == bmrHandled
     check bmState.selectedIndex == 1
 
   test "Waiting for G with special key cancels and handles key":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     # First 'g' starts waiting
     let keyCombo1 = KeyCombo(isSpecial: false, char: "g", modifiers: {})
-    discard handler.handleBufferManagerModeKey(bmState, 24, keyCombo1)
-    check handler.waitingForG == true
+    discard handleBufferManagerModeKey(bmState, 24, keyCombo1)
+    check bmState.waitingForG == true
 
     # Press Escape
     let keyCombo2 =
       KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo2)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo2)
 
-    check handler.waitingForG == false
+    check bmState.waitingForG == false
     check result.kind == bmrQuit
 
-suite "SubStateHandler - Unhandled Keys":
+suite "buffer_manager_handler: Unhandled Keys":
   test "Unhandled special key returns bmrUnhandled":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     # PageUp is not handled
     let keyCombo = KeyCombo(isSpecial: true, special: skPageUp, fnNum: 0, modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrUnhandled
 
   test "Unhandled character key returns bmrUnhandled":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     # 'z' is not handled
     let keyCombo = KeyCombo(isSpecial: false, char: "z", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrUnhandled
 
   test "Unhandled function key returns bmrUnhandled":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     # F5 is not handled
     let keyCombo =
       KeyCombo(isSpecial: true, special: skFunction, fnNum: 5, modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrUnhandled
 
-suite "SubStateHandler - Edge Cases":
+suite "buffer_manager_handler: Edge Cases":
   test "Navigation at top boundary":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
     let keyCombo = KeyCombo(isSpecial: false, char: "k", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
     check bmState.selectedIndex == 0 # Should stay at 0
 
   test "Navigation at bottom boundary":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = bmState.entries.len - 1
 
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
     check bmState.selectedIndex == bmState.entries.len - 1 # Should stay at last
 
   test "G with empty entries":
-    let handler = newSubStateHandler()
     let bmState = newBufferManagerState()
     # Empty state
 
     let keyCombo = KeyCombo(isSpecial: false, char: "G", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrHandled
     check bmState.selectedIndex == 0 # max(0, -1) = 0
 
   test "gg with empty entries":
-    let handler = newSubStateHandler()
     let bmState = newBufferManagerState()
     # Empty state
 
     # First 'g'
     let keyCombo1 = KeyCombo(isSpecial: false, char: "g", modifiers: {})
-    discard handler.handleBufferManagerModeKey(bmState, 24, keyCombo1)
+    discard handleBufferManagerModeKey(bmState, 24, keyCombo1)
 
     # Second 'g'
     let keyCombo2 = KeyCombo(isSpecial: false, char: "g", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo2)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo2)
 
     check result.kind == bmrHandled
     check bmState.selectedIndex == 0
     check bmState.topLine == 0
 
   test "Ctrl+d with large half page":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
     # Large viewport - half page is larger than entries count
     let viewportHeight = 100
 
     let keyCombo = KeyCombo(isSpecial: false, char: "d", modifiers: {kmCtrl})
-    let result = handler.handleBufferManagerModeKey(bmState, viewportHeight, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, viewportHeight, keyCombo)
 
     check result.kind == bmrHandled
     # Should be capped at last entry
     check bmState.selectedIndex == bmState.entries.len - 1
 
   test "Ctrl+u at top":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
     let viewportHeight = 4
 
     let keyCombo = KeyCombo(isSpecial: false, char: "u", modifiers: {kmCtrl})
-    let result = handler.handleBufferManagerModeKey(bmState, viewportHeight, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, viewportHeight, keyCombo)
 
     check result.kind == bmrHandled
     check bmState.selectedIndex == 0
 
   test "Select buffer at index 0":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrSelectBuffer
     check result.bufferIndex == 0
 
   test "Delete buffer at index 0":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
     let keyCombo = KeyCombo(isSpecial: false, char: "D", modifiers: {})
-    let result = handler.handleBufferManagerModeKey(bmState, 24, keyCombo)
+    let result = handleBufferManagerModeKey(bmState, 24, keyCombo)
 
     check result.kind == bmrDeleteBuffer
     check result.deleteBufferIndex == 0
 
-suite "SubStateHandler - Integration":
+suite "buffer_manager_handler: Integration":
   test "Full workflow: navigate, select, quit":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
     # Move down
     let keyJ = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let result1 = handler.handleBufferManagerModeKey(bmState, 24, keyJ)
+    let result1 = handleBufferManagerModeKey(bmState, 24, keyJ)
     check result1.kind == bmrHandled
     check bmState.selectedIndex == 1
 
     # Move down again
-    let result2 = handler.handleBufferManagerModeKey(bmState, 24, keyJ)
+    let result2 = handleBufferManagerModeKey(bmState, 24, keyJ)
     check result2.kind == bmrHandled
     check bmState.selectedIndex == 2
 
     # Go to top with gg
     let keyG = KeyCombo(isSpecial: false, char: "g", modifiers: {})
-    discard handler.handleBufferManagerModeKey(bmState, 24, keyG)
-    let result3 = handler.handleBufferManagerModeKey(bmState, 24, keyG)
+    discard handleBufferManagerModeKey(bmState, 24, keyG)
+    let result3 = handleBufferManagerModeKey(bmState, 24, keyG)
     check result3.kind == bmrHandled
     check bmState.selectedIndex == 0
 
     # Go to last with G
     let keyShiftG = KeyCombo(isSpecial: false, char: "G", modifiers: {})
-    let result4 = handler.handleBufferManagerModeKey(bmState, 24, keyShiftG)
+    let result4 = handleBufferManagerModeKey(bmState, 24, keyShiftG)
     check result4.kind == bmrHandled
     check bmState.selectedIndex == 2
 
     # Select buffer
     let keyEnter = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
-    let result5 = handler.handleBufferManagerModeKey(bmState, 24, keyEnter)
+    let result5 = handleBufferManagerModeKey(bmState, 24, keyEnter)
     check result5.kind == bmrSelectBuffer
     check result5.bufferIndex == 2
 
   test "Navigate with arrow keys and half-page scrolling":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
     bmState.selectedIndex = 0
 
     # Down arrow
     let keyDown = KeyCombo(isSpecial: true, special: skDown, fnNum: 0, modifiers: {})
-    let result1 = handler.handleBufferManagerModeKey(bmState, 24, keyDown)
+    let result1 = handleBufferManagerModeKey(bmState, 24, keyDown)
     check result1.kind == bmrHandled
     check bmState.selectedIndex == 1
 
     # Up arrow
     let keyUp = KeyCombo(isSpecial: true, special: skUp, fnNum: 0, modifiers: {})
-    let result2 = handler.handleBufferManagerModeKey(bmState, 24, keyUp)
+    let result2 = handleBufferManagerModeKey(bmState, 24, keyUp)
     check result2.kind == bmrHandled
     check bmState.selectedIndex == 0
 
     # Ctrl+d (half page down)
     let keyCtrlD = KeyCombo(isSpecial: false, char: "d", modifiers: {kmCtrl})
-    let result3 = handler.handleBufferManagerModeKey(bmState, 4, keyCtrlD)
+    let result3 = handleBufferManagerModeKey(bmState, 4, keyCtrlD)
     check result3.kind == bmrHandled
     check bmState.selectedIndex == 2 # Half of 4 = 2, but capped at last entry
 
     # Ctrl+u (half page up)
     let keyCtrlU = KeyCombo(isSpecial: false, char: "u", modifiers: {kmCtrl})
-    let result4 = handler.handleBufferManagerModeKey(bmState, 4, keyCtrlU)
+    let result4 = handleBufferManagerModeKey(bmState, 4, keyCtrlU)
     check result4.kind == bmrHandled
     check bmState.selectedIndex == 0 # Back to top
 
   test "Mode transitions workflow":
-    let handler = newSubStateHandler()
     let bmState = createTestBufferManagerState()
 
     # Enter command mode
     let keyColon = KeyCombo(isSpecial: false, char: ":", modifiers: {})
-    let result1 = handler.handleBufferManagerModeKey(bmState, 24, keyColon)
+    let result1 = handleBufferManagerModeKey(bmState, 24, keyColon)
     check result1.kind == bmrEnterCommand
 
     # Quit with q
     let keyQ = KeyCombo(isSpecial: false, char: "q", modifiers: {})
-    let result2 = handler.handleBufferManagerModeKey(bmState, 24, keyQ)
+    let result2 = handleBufferManagerModeKey(bmState, 24, keyQ)
     check result2.kind == bmrQuit
 
     # Quit with Escape
     let keyEsc = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let result3 = handler.handleBufferManagerModeKey(bmState, 24, keyEsc)
+    let result3 = handleBufferManagerModeKey(bmState, 24, keyEsc)
     check result3.kind == bmrQuit

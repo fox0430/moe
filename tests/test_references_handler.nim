@@ -22,16 +22,19 @@ import ../src/moepkg/references_viewer
 import ../src/moepkg/command_handlers/references_handler
 import ../src/moepkg/key_bindings
 
-suite "SubStateHandler - Handler creation":
-  test "newSubStateHandler creates handler":
-    let handler = newSubStateHandler()
+suite "references_handler: Handler creation":
+  test "fresh ReferencesViewerState has waitingForG reset":
+    let items = @[
+      ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
+      ReferenceItem(path: "/c.nim", line: 0, column: 0, text: ""),
+    ]
+    let state = newReferencesViewerState(items)
 
-    check handler != nil
-    check handler.waitingForG == false
+    check state.waitingForG == false
 
-suite "SubStateHandler - Navigation keys":
+suite "references_handler: Navigation keys":
   test "j key moves down":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -40,13 +43,12 @@ suite "SubStateHandler - Navigation keys":
     let state = newReferencesViewerState(items)
     let keyCombo = toKeyCombo('j')
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrHandled
     check state.selectedIndex == 1
 
   test "k key moves up":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -56,13 +58,12 @@ suite "SubStateHandler - Navigation keys":
     state.selectedIndex = 2
     let keyCombo = toKeyCombo('k')
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrHandled
     check state.selectedIndex == 1
 
   test "Down arrow key moves down":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -70,13 +71,12 @@ suite "SubStateHandler - Navigation keys":
     let state = newReferencesViewerState(items)
     let keyCombo = toSpecialKeyCombo(skDown)
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrHandled
     check state.selectedIndex == 1
 
   test "Up arrow key moves up":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -85,14 +85,13 @@ suite "SubStateHandler - Navigation keys":
     state.selectedIndex = 1
     let keyCombo = toSpecialKeyCombo(skUp)
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrHandled
     check state.selectedIndex == 0
 
-suite "SubStateHandler - Go to first/last":
+suite "references_handler: Go to first/last":
   test "gg moves to first item":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -103,22 +102,21 @@ suite "SubStateHandler - Go to first/last":
 
     # First g
     let firstG = toKeyCombo('g')
-    let result1 = handler.handleReferencesModeKey(state, 10, firstG)
+    let result1 = handleReferencesModeKey(state, 10, firstG)
 
     check result1.kind == rvrHandled
-    check handler.waitingForG == true
+    check state.waitingForG == true
     check state.selectedIndex == 2
 
     # Second g
     let secondG = toKeyCombo('g')
-    let result2 = handler.handleReferencesModeKey(state, 10, secondG)
+    let result2 = handleReferencesModeKey(state, 10, secondG)
 
     check result2.kind == rvrHandled
-    check handler.waitingForG == false
+    check state.waitingForG == false
     check state.selectedIndex == 0
 
   test "G moves to last item":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -128,13 +126,12 @@ suite "SubStateHandler - Go to first/last":
     state.selectedIndex = 0
     let keyCombo = toKeyCombo('G')
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrHandled
     check state.selectedIndex == 2
 
   test "g followed by non-g cancels gg sequence":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -145,21 +142,20 @@ suite "SubStateHandler - Go to first/last":
 
     # First g
     let firstG = toKeyCombo('g')
-    discard handler.handleReferencesModeKey(state, 10, firstG)
+    discard handleReferencesModeKey(state, 10, firstG)
 
-    check handler.waitingForG == true
+    check state.waitingForG == true
 
     # j instead of g - should cancel gg and move down
     let jKey = toKeyCombo('j')
-    discard handler.handleReferencesModeKey(state, 10, jKey)
+    discard handleReferencesModeKey(state, 10, jKey)
 
-    check handler.waitingForG == false
+    check state.waitingForG == false
     # The j key should be processed normally after gg cancellation
     # Position doesn't change because we're at last index (2) and moveDown does nothing
 
-suite "SubStateHandler - Half page navigation":
+suite "references_handler: Half page navigation":
   test "Ctrl+d moves half page down":
-    let handler = newSubStateHandler()
     var itemList: seq[ReferenceItem]
     for i in 0 ..< 20:
       itemList.add ReferenceItem(
@@ -170,13 +166,12 @@ suite "SubStateHandler - Half page navigation":
     state.selectedIndex = 5
     let keyCombo = toKeyCombo('d', ctrl = true)
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrHandled
     check state.selectedIndex == 10
 
   test "Ctrl+u moves half page up":
-    let handler = newSubStateHandler()
     var itemList: seq[ReferenceItem]
     for i in 0 ..< 20:
       itemList.add ReferenceItem(
@@ -187,46 +182,42 @@ suite "SubStateHandler - Half page navigation":
     state.selectedIndex = 15
     let keyCombo = toKeyCombo('u', ctrl = true)
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrHandled
     check state.selectedIndex == 10
 
-suite "SubStateHandler - Quit commands":
+suite "references_handler: Quit commands":
   test "q key returns quit result":
-    let handler = newSubStateHandler()
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
     let state = newReferencesViewerState(items)
     let keyCombo = toKeyCombo('q')
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrUnhandled
 
   test "Escape key returns quit result":
-    let handler = newSubStateHandler()
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
     let state = newReferencesViewerState(items)
     let keyCombo = toSpecialKeyCombo(skEscape)
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrUnhandled
 
-suite "SubStateHandler - Enter command mode":
+suite "references_handler: Enter command mode":
   test ": key returns enter command result":
-    let handler = newSubStateHandler()
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
     let state = newReferencesViewerState(items)
     let keyCombo = toKeyCombo(':')
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrEnterCommand
 
-suite "SubStateHandler - Jump to reference":
+suite "references_handler: Jump to reference":
   test "Enter key returns jump result with selected item":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/first.nim", line: 10, column: 5, text: "first"),
       ReferenceItem(path: "/second.nim", line: 20, column: 10, text: "second"),
@@ -235,7 +226,7 @@ suite "SubStateHandler - Jump to reference":
     state.selectedIndex = 1
     let keyCombo = toSpecialKeyCombo(skEnter)
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrJumpToReference
     check result.targetItem.path == "/second.nim"
@@ -244,39 +235,35 @@ suite "SubStateHandler - Jump to reference":
     check result.targetItem.text == "second"
 
   test "Enter key on empty state returns error":
-    let handler = newSubStateHandler()
     let state = newReferencesViewerState(@[])
     let keyCombo = toSpecialKeyCombo(skEnter)
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrError
     check result.errorMessage == "No reference selected"
 
-suite "SubStateHandler - Unhandled keys":
+suite "references_handler: Unhandled keys":
   test "unhandled key returns unhandled result":
-    let handler = newSubStateHandler()
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
     let state = newReferencesViewerState(items)
     let keyCombo = toKeyCombo('x') # x is not a handled key
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrUnhandled
 
   test "unhandled special key returns unhandled result":
-    let handler = newSubStateHandler()
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
     let state = newReferencesViewerState(items)
     let keyCombo = toSpecialKeyCombo(skPageUp) # PageUp is not handled
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrUnhandled
 
-suite "SubStateHandler - Viewport scrolling":
+suite "references_handler: Viewport scrolling":
   test "navigation ensures selected item is visible":
-    let handler = newSubStateHandler()
     var itemList: seq[ReferenceItem]
     for i in 0 ..< 30:
       itemList.add ReferenceItem(
@@ -290,7 +277,7 @@ suite "SubStateHandler - Viewport scrolling":
     # Move down many times to go beyond viewport
     for _ in 0 ..< 15:
       let keyCombo = toKeyCombo('j')
-      discard handler.handleReferencesModeKey(state, 10, keyCombo)
+      discard handleReferencesModeKey(state, 10, keyCombo)
 
     check state.selectedIndex == 15
     # topLine should have scrolled to keep selection visible
@@ -298,9 +285,8 @@ suite "SubStateHandler - Viewport scrolling":
     check state.selectedIndex >= state.topLine
     check state.selectedIndex < state.topLine + 10
 
-suite "SubStateHandler - Boundary conditions":
+suite "references_handler: Boundary conditions":
   test "k at first item stays at first":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -309,13 +295,12 @@ suite "SubStateHandler - Boundary conditions":
     state.selectedIndex = 0
     let keyCombo = toKeyCombo('k')
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrHandled
     check state.selectedIndex == 0
 
   test "j at last item stays at last":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -324,13 +309,12 @@ suite "SubStateHandler - Boundary conditions":
     state.selectedIndex = 1
     let keyCombo = toKeyCombo('j')
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrHandled
     check state.selectedIndex == 1
 
   test "Up arrow at first item stays at first":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -339,13 +323,12 @@ suite "SubStateHandler - Boundary conditions":
     state.selectedIndex = 0
     let keyCombo = toSpecialKeyCombo(skUp)
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrHandled
     check state.selectedIndex == 0
 
   test "Down arrow at last item stays at last":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -354,14 +337,13 @@ suite "SubStateHandler - Boundary conditions":
     state.selectedIndex = 1
     let keyCombo = toSpecialKeyCombo(skDown)
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrHandled
     check state.selectedIndex == 1
 
-suite "SubStateHandler - gg with special key":
+suite "references_handler: gg with special key":
   test "g followed by Escape cancels gg and quits":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -371,20 +353,19 @@ suite "SubStateHandler - gg with special key":
 
     # First g
     let firstG = toKeyCombo('g')
-    discard handler.handleReferencesModeKey(state, 10, firstG)
+    discard handleReferencesModeKey(state, 10, firstG)
 
-    check handler.waitingForG == true
+    check state.waitingForG == true
 
     # Escape - should cancel gg and quit
     let escKey = toSpecialKeyCombo(skEscape)
-    let result = handler.handleReferencesModeKey(state, 10, escKey)
+    let result = handleReferencesModeKey(state, 10, escKey)
 
-    check handler.waitingForG == false
+    check state.waitingForG == false
     check result.kind == rvrUnhandled
     check state.selectedIndex == 1 # Position unchanged
 
   test "g followed by Enter cancels gg and jumps":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 1, column: 2, text: "target"),
@@ -394,20 +375,19 @@ suite "SubStateHandler - gg with special key":
 
     # First g
     let firstG = toKeyCombo('g')
-    discard handler.handleReferencesModeKey(state, 10, firstG)
+    discard handleReferencesModeKey(state, 10, firstG)
 
-    check handler.waitingForG == true
+    check state.waitingForG == true
 
     # Enter - should cancel gg and jump to reference
     let enterKey = toSpecialKeyCombo(skEnter)
-    let result = handler.handleReferencesModeKey(state, 10, enterKey)
+    let result = handleReferencesModeKey(state, 10, enterKey)
 
-    check handler.waitingForG == false
+    check state.waitingForG == false
     check result.kind == rvrJumpToReference
     check result.targetItem.path == "/b.nim"
 
   test "g followed by Down cancels gg and moves down":
-    let handler = newSubStateHandler()
     let items = @[
       ReferenceItem(path: "/a.nim", line: 0, column: 0, text: ""),
       ReferenceItem(path: "/b.nim", line: 0, column: 0, text: ""),
@@ -418,21 +398,20 @@ suite "SubStateHandler - gg with special key":
 
     # First g
     let firstG = toKeyCombo('g')
-    discard handler.handleReferencesModeKey(state, 10, firstG)
+    discard handleReferencesModeKey(state, 10, firstG)
 
-    check handler.waitingForG == true
+    check state.waitingForG == true
 
     # Down arrow - should cancel gg and move down
     let downKey = toSpecialKeyCombo(skDown)
-    let result = handler.handleReferencesModeKey(state, 10, downKey)
+    let result = handleReferencesModeKey(state, 10, downKey)
 
-    check handler.waitingForG == false
+    check state.waitingForG == false
     check result.kind == rvrHandled
     check state.selectedIndex == 1
 
-suite "SubStateHandler - G with viewport":
+suite "references_handler: G with viewport":
   test "G scrolls viewport to show last item":
-    let handler = newSubStateHandler()
     var itemList: seq[ReferenceItem]
     for i in 0 ..< 30:
       itemList.add ReferenceItem(
@@ -444,7 +423,7 @@ suite "SubStateHandler - G with viewport":
     state.selectedIndex = 0
     let keyCombo = toKeyCombo('G')
 
-    let result = handler.handleReferencesModeKey(state, 10, keyCombo)
+    let result = handleReferencesModeKey(state, 10, keyCombo)
 
     check result.kind == rvrHandled
     check state.selectedIndex == 29

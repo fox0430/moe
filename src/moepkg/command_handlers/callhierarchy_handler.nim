@@ -50,18 +50,15 @@ type
       discard
 
 proc handleCallHierarchyModeKey*(
-    handler: SubStateHandler,
-    chState: CallHierarchyViewerState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
+    chState: CallHierarchyViewerState, viewportHeight: int, keyCombo: KeyCombo
 ): CallHierarchyResult =
   ## Handle a key press in Call Hierarchy Viewer mode
   ##
   ## Returns a CallHierarchyResult indicating what action should be taken
 
   # Handle 'gg' command (two g presses)
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if chState.waitingForG:
+    chState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       chState.moveToFirst()
       chState.ensureSelectedVisible(viewportHeight)
@@ -121,7 +118,7 @@ proc handleCallHierarchyModeKey*(
       return CallHierarchyResult(kind: chvrHandled)
     of "g":
       # Start waiting for second 'g'
-      handler.waitingForG = true
+      chState.waitingForG = true
       return CallHierarchyResult(kind: chvrHandled)
     of "G":
       chState.moveToLast()

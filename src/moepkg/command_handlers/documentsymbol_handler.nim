@@ -47,18 +47,15 @@ type
       discard
 
 proc handleDocumentSymbolModeKey*(
-    handler: SubStateHandler,
-    symState: DocumentSymbolViewerState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
+    symState: DocumentSymbolViewerState, viewportHeight: int, keyCombo: KeyCombo
 ): DocumentSymbolResult =
   ## Handle a key press in Document Symbol Viewer mode
   ##
   ## Returns a DocumentSymbolResult indicating what action should be taken
 
   # Handle 'gg' command (two g presses)
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if symState.waitingForG:
+    symState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       symState.moveToFirst()
       return DocumentSymbolResult(kind: dsvrHandled)
@@ -117,7 +114,7 @@ proc handleDocumentSymbolModeKey*(
       return DocumentSymbolResult(kind: dsvrHandled)
     of "g":
       # Start waiting for second 'g'
-      handler.waitingForG = true
+      symState.waitingForG = true
       return DocumentSymbolResult(kind: dsvrHandled)
     of "G":
       symState.moveToLast()

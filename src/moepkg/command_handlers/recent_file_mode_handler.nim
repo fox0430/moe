@@ -55,16 +55,13 @@ type
     overlayTransition*: Option[OverlayKind]
 
 proc handleRecentFileModeKey*(
-    handler: SubStateHandler,
-    state: RecentFileModeState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
+    state: RecentFileModeState, viewportHeight: int, keyCombo: KeyCombo
 ): RecentFileModeResult =
   ## Handle a key press in Recent File mode
 
   # Handle 'gg' command (second g)
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if state.waitingForG:
+    state.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       state.moveToFirst()
       return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
@@ -117,7 +114,7 @@ proc handleRecentFileModeKey*(
       state.ensureSelectedVisible(viewportHeight)
       return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
     of "g":
-      handler.waitingForG = true
+      state.waitingForG = true
       return RecentFileModeResult(kind: rfmrHandled, modeTransition: none(EditorMode))
     of ":":
       return

@@ -39,6 +39,7 @@ type
     selectedIndex*: int # Currently selected item index
     topLine*: int # Scroll position (first visible line)
     title*: string # Title for the list (e.g., "References", "Definitions")
+    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newReferencesViewerState*(
     items: seq[ReferenceItem], title: string = "References"

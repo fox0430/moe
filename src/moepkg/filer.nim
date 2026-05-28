@@ -51,6 +51,7 @@ type
     topLine*: int # Scroll position (first visible line)
     previousPath*: Option[string] # Path to return to when closing filer
     needsBufferRefresh*: bool # Flag to trigger buffer regeneration after state changes
+    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc isHiddenFile(name: string): bool =
   ## Check if a file is hidden (starts with .)

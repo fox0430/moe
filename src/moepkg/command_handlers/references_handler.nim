@@ -46,18 +46,15 @@ type
       discard
 
 proc handleReferencesModeKey*(
-    handler: SubStateHandler,
-    refState: ReferencesViewerState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
+    refState: ReferencesViewerState, viewportHeight: int, keyCombo: KeyCombo
 ): ReferencesResult =
   ## Handle a key press in References Viewer mode
   ##
   ## Returns a ReferencesResult indicating what action should be taken
 
   # Handle 'gg' command (two g presses)
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if refState.waitingForG:
+    refState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       refState.moveToFirst()
       return ReferencesResult(kind: rvrHandled)
@@ -108,7 +105,7 @@ proc handleReferencesModeKey*(
       return ReferencesResult(kind: rvrHandled)
     of "g":
       # Start waiting for second 'g'
-      handler.waitingForG = true
+      refState.waitingForG = true
       return ReferencesResult(kind: rvrHandled)
     of "G":
       refState.moveToLast()

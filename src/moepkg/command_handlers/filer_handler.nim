@@ -56,18 +56,15 @@ type
       discard
 
 proc handleFilerModeKey*(
-    handler: SubStateHandler,
-    filerState: FilerState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
+    filerState: FilerState, viewportHeight: int, keyCombo: KeyCombo
 ): FilerResult =
   ## Handle a key press in Filer mode
   ##
   ## Returns a FilerResult indicating what action should be taken
 
   # Handle 'gg' command (two g presses)
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if filerState.waitingForG:
+    filerState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       filerState.moveToFirst()
       return FilerResult(kind: frHandled)
@@ -137,7 +134,7 @@ proc handleFilerModeKey*(
       return FilerResult(kind: frHandled)
     of "g":
       # Start waiting for second 'g'
-      handler.waitingForG = true
+      filerState.waitingForG = true
       return FilerResult(kind: frHandled)
     of "G":
       filerState.moveToLast()

@@ -123,6 +123,8 @@ type
     searchQuery*: string # Active search query ("" when no search)
     searchStartIndex*: int # Selection index when the current search began
     config*: EditorConfig # Reference to the config being edited
+    waitingForG*: bool # Waiting for second 'g' for 'gg' command
+    lastKeyWasEscape*: bool # Waiting for second Escape to clear highlight
 
 # Theme color entries that only have a background (no foreground).
 const ColorBgOnlyEntries* =

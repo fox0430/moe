@@ -48,18 +48,15 @@ type
       discard
 
 proc handleHelpViewerModeKey*(
-    handler: SubStateHandler,
-    helpState: HelpViewerState,
-    viewportHeight: int,
-    keyCombo: KeyCombo,
+    helpState: HelpViewerState, viewportHeight: int, keyCombo: KeyCombo
 ): HelpViewerResult =
   ## Handle a key press in Help Viewer mode
   ##
   ## Returns a HelpViewerResult indicating what action should be taken
 
   # Handle 'gg' command (two g presses)
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if helpState.waitingForG:
+    helpState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       helpState.moveToFirst()
       return HelpViewerResult(kind: hvrHandled)
@@ -69,18 +66,18 @@ proc handleHelpViewerModeKey*(
 
   # Handle Escape key for double-Escape search highlight clear
   if keyCombo.isSpecial and keyCombo.special == skEscape:
-    if handler.lastKeyWasEscape:
+    if helpState.lastKeyWasEscape:
       # Second Escape press - clear search highlight
-      handler.lastKeyWasEscape = false
+      helpState.lastKeyWasEscape = false
       helpState.clearSearch()
       return HelpViewerResult(kind: hvrClearSearchHighlight)
     else:
       # First Escape press - just mark it
-      handler.lastKeyWasEscape = true
+      helpState.lastKeyWasEscape = true
       return HelpViewerResult(kind: hvrHandled)
 
   # Any non-Escape key resets the Escape counter
-  handler.lastKeyWasEscape = false
+  helpState.lastKeyWasEscape = false
 
   # Check for special keys first
   if keyCombo.isSpecial:
@@ -137,7 +134,7 @@ proc handleHelpViewerModeKey*(
       return HelpViewerResult(kind: hvrHandled)
     of "g":
       # Start waiting for second 'g'
-      handler.waitingForG = true
+      helpState.waitingForG = true
       return HelpViewerResult(kind: hvrHandled)
     of "G":
       helpState.moveToLast()

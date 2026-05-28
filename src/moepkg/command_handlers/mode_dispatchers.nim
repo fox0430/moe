@@ -632,7 +632,7 @@ proc handleFilerMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Filer mode input
-  let r = manager.filerHandler.handleFilerModeKey(filerState, viewportHeight, keyCombo)
+  let r = handleFilerModeKey(filerState, viewportHeight, keyCombo)
   case r.kind
   of frHandled:
     return HandlerResult(
@@ -674,9 +674,7 @@ proc handleFileTreeMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle FileTree mode input
-  let r = manager.fileTreeHandler.handleFileTreeModeKey(
-    fileTreeState, viewportHeight, keyCombo
-  )
+  let r = handleFileTreeModeKey(fileTreeState, viewportHeight, keyCombo)
 
   # Transfer any error from fileTree operations to the status message
   if fileTreeState.lastError.len > 0:
@@ -684,8 +682,8 @@ proc handleFileTreeMode*(
     fileTreeState.lastError = ""
 
   # Display search prompt or status message
-  if manager.fileTreeHandler.isSearching:
-    state.statusMessage = "/" & manager.fileTreeHandler.searchBuffer
+  if fileTreeState.isSearching:
+    state.statusMessage = "/" & fileTreeState.searchText
   else:
     state.statusMessage = r.statusMessage
 
@@ -710,6 +708,14 @@ proc handleFileTreeMode*(
     return HandlerResult(kind: hrIncreaseWindowWidth)
   of ftrDecreaseWindowWidth:
     return HandlerResult(kind: hrDecreaseWindowWidth)
+  of ftrClearSearchHighlight:
+    # Double-Escape: clear the persisted search highlight. FileTree search is
+    # self-contained (its own match list, not the global hlsearch gate), so the
+    # clear is applied here rather than through state.search.
+    fileTreeState.clearSearch()
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
   of ftrUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of ftrError:
@@ -717,15 +723,14 @@ proc handleFileTreeMode*(
 
 proc handleLogViewerMode*(
     manager: HandlerManager,
+    logState: LogViewerState,
     buffer: TextBuffer,
     state: EditorState,
     viewportHeight: int,
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Log Viewer mode input
-  let r = manager.logViewerHandler.handleLogViewerModeKey(
-    buffer, state, viewportHeight, keyCombo
-  )
+  let r = handleLogViewerModeKey(logState, buffer, state, viewportHeight, keyCombo)
   case r.kind
   of lvrHandled:
     return HandlerResult(
@@ -767,9 +772,7 @@ proc handleReferencesMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle References Viewer mode input
-  let r = manager.referencesHandler.handleReferencesModeKey(
-    refState, viewportHeight, keyCombo
-  )
+  let r = handleReferencesModeKey(refState, viewportHeight, keyCombo)
   case r.kind
   of rvrHandled:
     return HandlerResult(
@@ -802,9 +805,7 @@ proc handleDocumentSymbolMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Document Symbol Viewer mode input
-  let r = manager.documentSymbolHandler.handleDocumentSymbolModeKey(
-    symState, viewportHeight, keyCombo
-  )
+  let r = handleDocumentSymbolModeKey(symState, viewportHeight, keyCombo)
   case r.kind
   of dsvrHandled:
     return HandlerResult(
@@ -838,9 +839,7 @@ proc handleCallHierarchyMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Call Hierarchy Viewer mode input
-  let r = manager.callHierarchyHandler.handleCallHierarchyModeKey(
-    chState, viewportHeight, keyCombo
-  )
+  let r = handleCallHierarchyModeKey(chState, viewportHeight, keyCombo)
   case r.kind
   of chvrHandled:
     return HandlerResult(
@@ -883,9 +882,7 @@ proc handleHelpViewerMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Help Viewer mode input
-  let r = manager.helpViewerHandler.handleHelpViewerModeKey(
-    helpState, viewportHeight, keyCombo
-  )
+  let r = handleHelpViewerModeKey(helpState, viewportHeight, keyCombo)
   case r.kind
   of hvrHandled:
     return HandlerResult(
@@ -941,9 +938,7 @@ proc handleBufferManagerMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Buffer Manager mode input
-  let r = manager.bufferManagerHandler.handleBufferManagerModeKey(
-    bmState, viewportHeight, keyCombo
-  )
+  let r = handleBufferManagerModeKey(bmState, viewportHeight, keyCombo)
   case r.kind
   of bmrHandled:
     return HandlerResult(
@@ -978,9 +973,7 @@ proc handleBookmarkManagerMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Bookmark Manager mode input
-  let r = manager.bookmarkManagerHandler.handleBookmarkManagerModeKey(
-    bmState, viewportHeight, keyCombo
-  )
+  let r = handleBookmarkManagerModeKey(bmState, viewportHeight, keyCombo)
   case r.kind
   of bkmrHandled:
     return HandlerResult(
@@ -1017,9 +1010,7 @@ proc handleBackupManagerMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Backup Manager mode input
-  let r = manager.backupManagerHandler.handleBackupManagerModeKey(
-    bkState, viewportHeight, keyCombo
-  )
+  let r = handleBackupManagerModeKey(bkState, viewportHeight, keyCombo)
   case r.kind
   of bkmrHandled:
     return HandlerResult(
@@ -1054,9 +1045,7 @@ proc handleDiffViewerMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Diff Viewer mode input
-  let r = manager.diffViewerHandler.handleDiffViewerModeKey(
-    diffState, viewportHeight, keyCombo
-  )
+  let r = handleDiffViewerModeKey(diffState, viewportHeight, keyCombo)
   case r.kind
   of dvrHandled:
     return HandlerResult(
@@ -1084,8 +1073,7 @@ proc handleConfigMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Configuration mode input
-  let r =
-    manager.configModeHandler.handleConfigModeKey(configState, viewportHeight, keyCombo)
+  let r = handleConfigModeKey(configState, viewportHeight, keyCombo)
   case r.kind
   of cmrHandled:
     return HandlerResult(
@@ -1144,9 +1132,7 @@ proc handleRecentFileMode*(
     keyCombo: KeyCombo,
 ): HandlerResult =
   ## Handle Recent File mode input
-  let r = manager.recentFileModeHandler.handleRecentFileModeKey(
-    state, viewportHeight, keyCombo
-  )
+  let r = handleRecentFileModeKey(state, viewportHeight, keyCombo)
   case r.kind
   of rfmrHandled:
     return HandlerResult(
@@ -1171,7 +1157,7 @@ proc handleTerminalMode*(
     window: EditorWindow,
 ): HandlerResult =
   ## Handle Terminal mode input
-  let r = manager.terminalHandler.handleTerminalModeKey(termState, keyCombo)
+  let r = handleTerminalModeKey(termState, keyCombo)
   case r.kind
   of trHandled:
     return HandlerResult(
@@ -1261,9 +1247,15 @@ proc dispatchSubStateMode*(
     dispatchSubState(mskFileTree, fileTree, handleFileTreeMode, "FileTree")
   of EditorMode.LogViewer:
     # Non-standard handler signature: takes the buffer directly because log
-    # content lives in the TextBuffer; LogViewerState only carries contentKind
-    # and is not threaded through the handler.
-    return manager.handleLogViewerMode(buffer, state, viewport.height, keyCombo)
+    # content lives in the TextBuffer. LogViewerState is threaded for the
+    # per-window key-sequence flags (waitingForG).
+    if activeWindow.modeState.kind == mskLogViewer:
+      return manager.handleLogViewerMode(
+        activeWindow.modeState.logViewer, buffer, state, viewport.height, keyCombo
+      )
+    else:
+      return
+        HandlerResult(kind: hrError, errorMessage: "Log viewer state not initialized")
   of EditorMode.Help:
     dispatchSubState(mskHelp, help, handleHelpViewerMode, "Help viewer")
   of EditorMode.BufferManager:

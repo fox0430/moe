@@ -56,456 +56,349 @@ proc newTestBackupManagerState(entryCount: int = 10): BackupManagerState =
       )
     )
 
-suite "backup_manager_handler: newSubStateHandler":
-  test "Create new handler":
-    let handler = newSubStateHandler()
-    check handler != nil
-    check handler.waitingForG == false
+suite "backup_manager_handler: BackupManagerState":
+  test "fresh BackupManagerState has waitingForG reset":
+    let bkState = newBackupManagerState()
+    check bkState.waitingForG == false
 
 suite "backup_manager_handler: handleBackupManagerModeKey - Basic movement keys":
   test "j key moves down":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
     check bkState.selectedIndex == 0
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 1
 
   test "k key moves up":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 3
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 2
 
   test "k key does not move above first entry":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
     check bkState.selectedIndex == 0
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 0
 
   test "j key does not move below last entry":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 4
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 4
 
 suite "backup_manager_handler: handleBackupManagerModeKey - Arrow keys":
   test "Down arrow moves down":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
     check bkState.selectedIndex == 0
 
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, specialKey(skDown)
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, specialKey(skDown))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 1
 
   test "Up arrow moves up":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 3
 
     let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, specialKey(skUp))
+      handleBackupManagerModeKey(bkState, TestViewportHeight, specialKey(skUp))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 2
 
 suite "backup_manager_handler: handleBackupManagerModeKey - gg and G commands":
   test "gg moves to first entry":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 5
 
     # First 'g' - starts waiting
-    let result1 =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    let result1 = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
     check result1.kind == bkmrHandled
-    check handler.waitingForG == true
+    check bkState.waitingForG == true
     check bkState.selectedIndex == 5 # Not moved yet
 
     # Second 'g' - executes gg
-    let result2 =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    let result2 = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
     check result2.kind == bkmrHandled
-    check handler.waitingForG == false
+    check bkState.waitingForG == false
     check bkState.selectedIndex == 0
     check bkState.topLine == 0
 
   test "g followed by non-g cancels and falls through":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 3
 
     # First 'g' - starts waiting
-    let result1 =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    let result1 = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
     check result1.kind == bkmrHandled
-    check handler.waitingForG == true
+    check bkState.waitingForG == true
 
     # Non-'g' key - cancels waiting and falls through to normal handling
-    let result2 =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
-    check handler.waitingForG == false
+    let result2 = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
+    check bkState.waitingForG == false
     # The key falls through and 'j' is handled normally
     check result2.kind == bkmrHandled
     check bkState.selectedIndex == 4 # moved down from 3 to 4
 
   test "G moves to last entry":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     check bkState.selectedIndex == 0
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("G"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("G"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 9 # Last entry (0-indexed)
 
 suite "backup_manager_handler: handleBackupManagerModeKey - Half page movement":
   test "Ctrl+d moves half page down":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(50)
+    let bkState = newTestBackupManagerState(50)
     check bkState.selectedIndex == 0
 
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, charKey("d", {kmCtrl})
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("d", {kmCtrl}))
 
     check result.kind == bkmrHandled
     # Half page is viewportHeight / 2 = 12
     check bkState.selectedIndex == TestViewportHeight div 2
 
   test "Ctrl+u moves half page up":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(50)
+    let bkState = newTestBackupManagerState(50)
     bkState.selectedIndex = 30
 
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, charKey("u", {kmCtrl})
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("u", {kmCtrl}))
 
     check result.kind == bkmrHandled
     # Half page is viewportHeight / 2 = 12
     check bkState.selectedIndex == 30 - (TestViewportHeight div 2)
 
   test "Ctrl+u does not go below 0":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 3
 
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, charKey("u", {kmCtrl})
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("u", {kmCtrl}))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 0
 
   test "Ctrl+d does not exceed last entry":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 8
 
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, charKey("d", {kmCtrl})
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("d", {kmCtrl}))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 9 # Last entry
 
 suite "backup_manager_handler: handleBackupManagerModeKey - Mode transitions":
   test ": enters command mode":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey(":"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey(":"))
 
     check result.kind == bkmrEnterCommand
 
   test "q quits backup manager":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("q"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("q"))
 
     check result.kind == bkmrUnhandled
 
   test "Escape quits backup manager":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
 
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, specialKey(skEscape)
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, specialKey(skEscape))
 
     check result.kind == bkmrUnhandled
 
 suite "backup_manager_handler: handleBackupManagerModeKey - Backup actions":
   test "R returns restore with index when entry selected":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 2
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("R"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("R"))
 
     check result.kind == bkmrRestore
     check result.restoreIndex == 2
 
   test "R returns handled when no entries":
-    let
-      handler = newSubStateHandler()
-      bkState = newBackupManagerState()
+    let bkState = newBackupManagerState()
     check bkState.entries.len == 0
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("R"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("R"))
 
     check result.kind == bkmrHandled
 
   test "D returns delete with index when entry selected":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 3
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("D"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("D"))
 
     check result.kind == bkmrDelete
     check result.deleteIndex == 3
 
   test "D returns handled when no entries":
-    let
-      handler = newSubStateHandler()
-      bkState = newBackupManagerState()
+    let bkState = newBackupManagerState()
     check bkState.entries.len == 0
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("D"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("D"))
 
     check result.kind == bkmrHandled
 
   test "r returns refresh":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("r"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("r"))
 
     check result.kind == bkmrRefresh
 
   test "Enter returns openDiff with index when entry selected":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 1
 
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, specialKey(skEnter)
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, specialKey(skEnter))
 
     check result.kind == bkmrOpenDiff
     check result.diffIndex == 1
 
   test "Enter returns handled when no entries":
-    let
-      handler = newSubStateHandler()
-      bkState = newBackupManagerState()
+    let bkState = newBackupManagerState()
     check bkState.entries.len == 0
 
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, specialKey(skEnter)
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, specialKey(skEnter))
 
     check result.kind == bkmrHandled
 
 suite "backup_manager_handler: handleBackupManagerModeKey - Window switching":
   test "Ctrl+k returns unhandled for window switching":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
 
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, charKey("k", {kmCtrl})
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k", {kmCtrl}))
 
     check result.kind == bkmrUnhandled
 
   test "Ctrl+j returns unhandled for window switching":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
 
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, charKey("j", {kmCtrl})
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j", {kmCtrl}))
 
     check result.kind == bkmrUnhandled
 
 suite "backup_manager_handler: handleBackupManagerModeKey - Unhandled keys":
   test "Unbound key returns unhandled":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("z"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("z"))
 
     check result.kind == bkmrUnhandled
 
   test "Unbound special key returns unhandled":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
 
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, specialKey(skPageUp)
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, specialKey(skPageUp))
 
     check result.kind == bkmrUnhandled
 
   test "Character with unbound modifier returns unhandled":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
 
     # Ctrl+X - not a standard binding
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, charKey("x", {kmCtrl})
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("x", {kmCtrl}))
 
     check result.kind == bkmrUnhandled
 
 suite "backup_manager_handler: handleBackupManagerModeKey - Edge cases":
   test "Empty state - j does not crash":
-    let
-      handler = newSubStateHandler()
-      bkState = newBackupManagerState()
+    let bkState = newBackupManagerState()
     check bkState.entries.len == 0
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 0
 
   test "Empty state - G stays at 0":
-    let
-      handler = newSubStateHandler()
-      bkState = newBackupManagerState()
+    let bkState = newBackupManagerState()
     check bkState.entries.len == 0
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("G"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("G"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 0
 
   test "Empty state - gg stays at 0":
-    let
-      handler = newSubStateHandler()
-      bkState = newBackupManagerState()
+    let bkState = newBackupManagerState()
 
     # First 'g'
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
     # Second 'g'
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 0
 
   test "g followed by special key cancels":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(5)
+    let bkState = newTestBackupManagerState(5)
     bkState.selectedIndex = 3
 
     # First 'g' - starts waiting
-    let result1 =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    let result1 = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
     check result1.kind == bkmrHandled
-    check handler.waitingForG == true
+    check bkState.waitingForG == true
 
     # Special key - cancels waiting
-    let result2 = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, specialKey(skDown)
-    )
-    check handler.waitingForG == false
+    let result2 =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, specialKey(skDown))
+    check bkState.waitingForG == false
     # Down arrow is handled
     check result2.kind == bkmrHandled
     check bkState.selectedIndex == 4
 
 suite "backup_manager_handler: handleBackupManagerModeKey - Scroll position":
   test "k updates topLine when going above visible area":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(30)
+    let bkState = newTestBackupManagerState(30)
     bkState.selectedIndex = 5
     bkState.topLine = 5 # First visible line is 5
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 4
     check bkState.topLine == 4 # topLine adjusted to keep cursor visible
 
   test "gg resets topLine to 0":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(30)
+    let bkState = newTestBackupManagerState(30)
     bkState.selectedIndex = 20
     bkState.topLine = 15
 
     # First 'g'
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
     # Second 'g'
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 0
@@ -550,338 +443,259 @@ suite "backup_manager_handler: BackupManagerResult kinds":
 
 suite "backup_manager_handler: Multiple consecutive operations":
   test "Multiple j presses move cursor down":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
 
     for i in 0 ..< 5:
-      discard
-        handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
+      discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
 
     check bkState.selectedIndex == 5
 
   test "Multiple k presses move cursor up":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 8
 
     for i in 0 ..< 5:
-      discard
-        handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k"))
+      discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k"))
 
     check bkState.selectedIndex == 3
 
   test "j at last entry followed by k moves up":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 9 # Last entry
 
     # j should not move
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
     check bkState.selectedIndex == 9
 
     # k should move up
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k"))
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k"))
     check bkState.selectedIndex == 8
 
   test "G followed by gg":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
 
     # G moves to last entry
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("G"))
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("G"))
     check bkState.selectedIndex == 9
 
     # gg moves to first entry
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
     check bkState.selectedIndex == 0
 
 suite "backup_manager_handler: Single entry state":
   test "j on single entry state":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(1)
+    let bkState = newTestBackupManagerState(1)
     check bkState.entries.len == 1
     check bkState.selectedIndex == 0
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("j"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 0 # Can't move down
 
   test "k on single entry state":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(1)
+    let bkState = newTestBackupManagerState(1)
     check bkState.selectedIndex == 0
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("k"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 0 # Can't move up
 
   test "G on single entry state":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(1)
+    let bkState = newTestBackupManagerState(1)
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("G"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("G"))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 0 # Last entry is also entry 0
 
   test "Ctrl+d on single entry state":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(1)
+    let bkState = newTestBackupManagerState(1)
 
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, charKey("d", {kmCtrl})
-    )
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("d", {kmCtrl}))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 0 # Can't go beyond last entry
 
   test "R on single entry state returns restore":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(1)
+    let bkState = newTestBackupManagerState(1)
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("R"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("R"))
 
     check result.kind == bkmrRestore
     check result.restoreIndex == 0
 
   test "D on single entry state returns delete":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(1)
+    let bkState = newTestBackupManagerState(1)
 
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("D"))
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("D"))
 
     check result.kind == bkmrDelete
     check result.deleteIndex == 0
 
 suite "backup_manager_handler: Small viewport":
   test "Ctrl+d with viewportHeight = 1 moves at least 1 entry":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     check bkState.selectedIndex == 0
 
-    let result = handler.handleBackupManagerModeKey(bkState, 1, charKey("d", {kmCtrl}))
+    let result = handleBackupManagerModeKey(bkState, 1, charKey("d", {kmCtrl}))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 1 # max(1, 1 div 2) = 1
 
   test "Ctrl+u with viewportHeight = 1 moves at least 1 entry":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 5
 
-    let result = handler.handleBackupManagerModeKey(bkState, 1, charKey("u", {kmCtrl}))
+    let result = handleBackupManagerModeKey(bkState, 1, charKey("u", {kmCtrl}))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 4 # max(1, 1 div 2) = 1
 
   test "Ctrl+d with viewportHeight = 0 moves at least 1 entry":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     check bkState.selectedIndex == 0
 
-    let result = handler.handleBackupManagerModeKey(bkState, 0, charKey("d", {kmCtrl}))
+    let result = handleBackupManagerModeKey(bkState, 0, charKey("d", {kmCtrl}))
 
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 1 # max(1, 0 div 2) = 1
 
 suite "backup_manager_handler: waitingForG with modifier keys":
   test "g followed by Ctrl+d cancels g and executes Ctrl+d":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(30)
+    let bkState = newTestBackupManagerState(30)
     bkState.selectedIndex = 5
 
     # First 'g' - starts waiting
-    let result1 =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    let result1 = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
     check result1.kind == bkmrHandled
-    check handler.waitingForG == true
+    check bkState.waitingForG == true
     check bkState.selectedIndex == 5
 
     # Ctrl+d - cancels waiting and executes half page down
-    let result2 = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, charKey("d", {kmCtrl})
-    )
-    check handler.waitingForG == false
+    let result2 =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("d", {kmCtrl}))
+    check bkState.waitingForG == false
     check result2.kind == bkmrHandled
     check bkState.selectedIndex == 5 + (TestViewportHeight div 2)
 
   test "g followed by Ctrl+u cancels g and executes Ctrl+u":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(30)
+    let bkState = newTestBackupManagerState(30)
     bkState.selectedIndex = 20
 
     # First 'g' - starts waiting
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
-    check handler.waitingForG == true
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    check bkState.waitingForG == true
 
     # Ctrl+u - cancels waiting and executes half page up
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, charKey("u", {kmCtrl})
-    )
-    check handler.waitingForG == false
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("u", {kmCtrl}))
+    check bkState.waitingForG == false
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 20 - (TestViewportHeight div 2)
 
   test "g followed by : cancels g and enters command mode":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
 
     # First 'g'
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
-    check handler.waitingForG == true
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    check bkState.waitingForG == true
 
     # : - cancels waiting and enters command mode
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey(":"))
-    check handler.waitingForG == false
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey(":"))
+    check bkState.waitingForG == false
     check result.kind == bkmrEnterCommand
 
   test "g followed by q cancels g and quits":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
 
     # First 'g'
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
-    check handler.waitingForG == true
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    check bkState.waitingForG == true
 
     # q - cancels waiting and quits
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("q"))
-    check handler.waitingForG == false
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("q"))
+    check bkState.waitingForG == false
     check result.kind == bkmrUnhandled
 
   test "g followed by G cancels g and moves to last entry":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 3
 
     # First 'g'
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
-    check handler.waitingForG == true
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    check bkState.waitingForG == true
 
     # G - cancels waiting and moves to last entry
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("G"))
-    check handler.waitingForG == false
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("G"))
+    check bkState.waitingForG == false
     check result.kind == bkmrHandled
     check bkState.selectedIndex == 9
 
   test "g followed by Escape cancels g and quits":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
 
     # First 'g'
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
-    check handler.waitingForG == true
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    check bkState.waitingForG == true
 
     # Escape - cancels waiting and quits
-    let result = handler.handleBackupManagerModeKey(
-      bkState, TestViewportHeight, specialKey(skEscape)
-    )
-    check handler.waitingForG == false
+    let result =
+      handleBackupManagerModeKey(bkState, TestViewportHeight, specialKey(skEscape))
+    check bkState.waitingForG == false
     check result.kind == bkmrUnhandled
 
   test "g followed by unknown key cancels g and returns unhandled":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
 
     # First 'g'
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
-    check handler.waitingForG == true
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    check bkState.waitingForG == true
 
     # Unknown key - cancels waiting and returns unhandled
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("z"))
-    check handler.waitingForG == false
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("z"))
+    check bkState.waitingForG == false
     check result.kind == bkmrUnhandled
 
   test "g followed by R cancels g and returns restore":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 5
 
     # First 'g'
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
-    check handler.waitingForG == true
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    check bkState.waitingForG == true
 
     # R - cancels waiting and returns restore
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("R"))
-    check handler.waitingForG == false
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("R"))
+    check bkState.waitingForG == false
     check result.kind == bkmrRestore
     check result.restoreIndex == 5
 
   test "g followed by D cancels g and returns delete":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
     bkState.selectedIndex = 7
 
     # First 'g'
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
-    check handler.waitingForG == true
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    check bkState.waitingForG == true
 
     # D - cancels waiting and returns delete
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("D"))
-    check handler.waitingForG == false
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("D"))
+    check bkState.waitingForG == false
     check result.kind == bkmrDelete
     check result.deleteIndex == 7
 
   test "g followed by r cancels g and returns refresh":
-    let
-      handler = newSubStateHandler()
-      bkState = newTestBackupManagerState(10)
+    let bkState = newTestBackupManagerState(10)
 
     # First 'g'
-    discard
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
-    check handler.waitingForG == true
+    discard handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("g"))
+    check bkState.waitingForG == true
 
     # r - cancels waiting and returns refresh
-    let result =
-      handler.handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("r"))
-    check handler.waitingForG == false
+    let result = handleBackupManagerModeKey(bkState, TestViewportHeight, charKey("r"))
+    check bkState.waitingForG == false
     check result.kind == bkmrRefresh

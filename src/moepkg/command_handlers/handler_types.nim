@@ -28,7 +28,7 @@
 import
   ../[
     motion, key_bindings, command_registry, command_line, command_config, config,
-    completion, signature_help, lsp_integration, modes,
+    completion, signature_help, lsp_integration,
   ]
 
 type
@@ -66,100 +66,14 @@ type
     motionController*: MotionController
     commandRegistry*: CommandRegistry
 
-  SubStateHandler* = ref object
-    ## Unified handler state for all sub-state modes (Filer, FileTree, the
-    ## various viewers/managers, Terminal, Debug). These modes share a tiny,
-    ## flat set of transient key-sequence flags, so a single superset type
-    ## replaces what used to be 15 near-identical ref object types. Stored in
-    ## `HandlerManager.subStates` indexed by `EditorMode` and reached through the
-    ## per-mode accessor procs below.
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
-    lastKeyWasEscape*: bool # Help: waiting for second Escape to clear highlight
-    waitingForCtrlW*: bool # FileTree: waiting for second key after Ctrl-w
-    isSearching*: bool # FileTree: in search input mode
-    searchBuffer*: string # FileTree: text being typed during search
-
   HandlerManager* = ref object ## Unified manager for all mode handlers
     normalHandler*: NormalModeHandler
     insertHandler*: InsertModeHandler
     commandHandler*: CommandModeHandler
     visualHandler*: VisualModeHandler
     replaceHandler*: ReplaceModeHandler
-    subStates*: array[EditorMode, SubStateHandler]
-      ## Per-mode handler state for all sub-state modes, replacing the former
-      ## 14 individual handler fields. Indexed directly by the (dense, pure)
-      ## EditorMode enum: sub-state modes hold a handler, the rest stay nil.
-      ## Access via the `filerHandler`, `fileTreeHandler`, ... accessor procs
-      ## below, which preserve the old `manager.<mode>Handler` call sites.
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandLineParser*: CommandLineParser
     commandConfig*: CommandConfig
     commandRegistry*: CommandRegistry
-
-# Sub-state handler accessors. Each returns the shared SubStateHandler ref for a
-# mode, so existing `manager.<mode>Handler.<field>` reads and writes keep working
-# (the ref means writes hit the stored object). initSubStates populates every
-# slot these accessors read, so the lookup never returns nil.
-proc newSubStateHandler*(): SubStateHandler =
-  ## Create a sub-state handler with all flags at their zero values. Shared by
-  ## every sub-state mode (Filer, FileTree, the viewers/managers, Terminal,
-  ## Debug).
-  SubStateHandler()
-
-proc initSubStates*(): array[EditorMode, SubStateHandler] =
-  ## Build the sub-state handler array, allocating a handler for every sub-state
-  ## mode (each with all flags at their zero values). Modes without a sub-state
-  ## handler (Normal, Insert, ...) stay nil; their accessors are never called.
-  ## Used by newHandlerManager (and tests) so the per-mode accessor procs below
-  ## never return nil.
-  for m in [
-    EditorMode.Filer, EditorMode.FileTree, EditorMode.LogViewer, EditorMode.Help,
-    EditorMode.BufferManager, EditorMode.BookmarkManager, EditorMode.BackupManager,
-    EditorMode.DiffViewer, EditorMode.RecentFile, EditorMode.Config,
-    EditorMode.References, EditorMode.DocumentSymbol, EditorMode.CallHierarchy,
-    EditorMode.Terminal,
-  ]:
-    result[m] = newSubStateHandler()
-
-proc filerHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.Filer]
-
-proc fileTreeHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.FileTree]
-
-proc logViewerHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.LogViewer]
-
-proc helpViewerHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.Help]
-
-proc bufferManagerHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.BufferManager]
-
-proc bookmarkManagerHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.BookmarkManager]
-
-proc backupManagerHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.BackupManager]
-
-proc diffViewerHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.DiffViewer]
-
-proc recentFileModeHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.RecentFile]
-
-proc configModeHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.Config]
-
-proc referencesHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.References]
-
-proc documentSymbolHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.DocumentSymbol]
-
-proc callHierarchyHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.CallHierarchy]
-
-proc terminalHandler*(m: HandlerManager): SubStateHandler =
-  m.subStates[EditorMode.Terminal]

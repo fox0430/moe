@@ -52,7 +52,7 @@ type
       discard
 
 proc handleLogViewerModeKey*(
-    handler: SubStateHandler,
+    logState: LogViewerState,
     buffer: TextBuffer,
     state: EditorState,
     viewportHeight: int,
@@ -72,8 +72,8 @@ proc handleLogViewerModeKey*(
     contentHeight = max(1, viewportHeight - state.windowDisplay.viewportReservedLines)
 
   # Handle 'gg' command (two g presses)
-  if handler.waitingForG:
-    handler.waitingForG = false
+  if logState.waitingForG:
+    logState.waitingForG = false
     if not keyCombo.isSpecial and keyCombo.char == "g":
       state.cursor.line = 0
       state.cursor.column = 0
@@ -341,7 +341,7 @@ proc handleLogViewerModeKey*(
       return LogViewerResult(kind: lvrHandled)
     of "g":
       # Start waiting for second 'g'
-      handler.waitingForG = true
+      logState.waitingForG = true
       return LogViewerResult(kind: lvrHandled)
     of "G":
       state.cursor.line = maxLine
