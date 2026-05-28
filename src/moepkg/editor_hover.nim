@@ -49,6 +49,9 @@ proc startLspHover*(e: Editor): bool =
     return false
 
   e.state.lspCache.pendingHoverRequestId = reqResult.get
+  e.state.lspCache.pendingHoverBufferId = activeBuffer.id
+  e.state.lspCache.pendingHoverCursorLine = e.activeWindow.cursor.line
+  e.state.lspCache.pendingHoverCursorCol = e.activeWindow.cursor.column
   return true
 
 proc pollLspHover*(e: Editor) =
@@ -72,14 +75,21 @@ proc pollLspHover*(e: Editor) =
     discard # Still waiting
   of lrsSuccess:
     e.state.lspCache.pendingHoverRequestId = 0
+
+    # Discard the response if the active buffer changed while waiting: the hover
+    # text is for the originating buffer, so merging it with another buffer's
+    # diagnostics (or showing it over unrelated content) would be wrong.
+    if e.activeBuffer().id != e.state.lspCache.pendingHoverBufferId:
+      return
+
     var hoverText = ""
     if resultOpt.isSome:
       let hoverOpt = parseHoverResponse(resultOpt.get)
       if hoverOpt.isSome:
         hoverText = getHoverText(hoverOpt.get)
 
-    let cursorLine = e.activeWindow.cursor.line
-    let cursorCol = e.activeWindow.cursor.column
+    let cursorLine = e.state.lspCache.pendingHoverCursorLine
+    let cursorCol = e.state.lspCache.pendingHoverCursorCol
     let diags = e.activeBuffer().getDiagnosticsAt(cursorLine, cursorCol)
     let diagText = formatDiagnosticsForHover(diags)
 

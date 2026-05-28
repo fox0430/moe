@@ -266,6 +266,9 @@ type
     pendingSemanticTokensRequestId*: int
       # Request ID for pending semantic tokens request (0 = none)
     pendingHoverRequestId*: int # Request ID for pending hover request (0 = none)
+    pendingHoverBufferId*: BufferId # BufferId the pending hover request was made for
+    pendingHoverCursorLine*: int # Cursor line when the hover request was made
+    pendingHoverCursorCol*: int # Cursor column when the hover request was made
     autoHoverCursorLine*: int # Last cursor line for auto-hover debounce
     autoHoverCursorCol*: int # Last cursor column for auto-hover debounce
     lastAutoHoverUpdate*: MonoTime # Timestamp of last auto-hover request
