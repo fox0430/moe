@@ -203,8 +203,8 @@ proc executeCodeLensItem*(
 
     e.state.statusMessage = "Executed: " & item.title
     return ok()
-  except CancelledError:
-    raise
+  except CancelledError as err:
+    raise err
   except Exception as err:
     return err("Failed to execute CodeLens: " & err.msg)
 

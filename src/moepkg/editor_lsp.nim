@@ -85,8 +85,8 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
         "Formatted (" & $edits.len & " edit" & (if edits.len > 1: "s" else: "") & ")"
       e.state.windowDisplay.needsFullRedraw = true
       return true
-    except CancelledError:
-      raise
+    except CancelledError as err:
+      raise err
     except Exception as err:
       e.state.statusMessage = "LSP format error: " & err.msg
       return false
