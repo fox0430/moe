@@ -56,8 +56,8 @@ proc pollLspCompletion*(e: Editor) =
 proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledError]).} =
   ## Request LSP document formatting and apply edits
   ## Returns true if successful
-  {.cast(raises: [CancelledError]).}:
-    {.cast(gcsafe).}:
+  {.cast(gcsafe).}:
+    try:
       if not e.lsp.enabled:
         e.state.statusMessage = "LSP not enabled"
         return false
@@ -85,6 +85,11 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
         "Formatted (" & $edits.len & " edit" & (if edits.len > 1: "s" else: "") & ")"
       e.state.windowDisplay.needsFullRedraw = true
       return true
+    except CancelledError as err:
+      raise err
+    except Exception as err:
+      e.state.statusMessage = "LSP format error: " & err.msg
+      return false
 
 proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
   ## Request LSP folding ranges and update buffer fold markers
@@ -110,43 +115,44 @@ proc requestLspRename*(
     e: Editor, newName: string
 ): Future[void] {.async: (raises: []).} =
   ## Request LSP rename and apply workspace edits
-  {.cast(raises: []).}:
-    {.cast(gcsafe).}:
-      try:
-        if not e.lsp.enabled:
-          e.state.statusMessage = "LSP not enabled"
-          return
+  {.cast(gcsafe).}:
+    try:
+      if not e.lsp.enabled:
+        e.state.statusMessage = "LSP not enabled"
+        return
 
-        let activeBuffer = e.activeBuffer()
-        let line = e.state.renameState.cursorLine
-        let col = e.state.renameState.cursorColumn
+      let activeBuffer = e.activeBuffer()
+      let line = e.state.renameState.cursorLine
+      let col = e.state.renameState.cursorColumn
 
-        # Get rename result from LSP
-        let renameResult = await e.lsp.requestRename(activeBuffer, line, col, newName)
-        if renameResult.isErr:
-          e.state.statusMessage = "LSP rename failed: " & renameResult.error
-          return
+      # Get rename result from LSP
+      let renameResult = await e.lsp.requestRename(activeBuffer, line, col, newName)
+      if renameResult.isErr:
+        e.state.statusMessage = "LSP rename failed: " & renameResult.error
+        return
 
-        let workspaceEditOpt = renameResult.get
-        if workspaceEditOpt.isNone:
-          e.state.statusMessage = "No rename changes"
-          return
+      let workspaceEditOpt = renameResult.get
+      if workspaceEditOpt.isNone:
+        e.state.statusMessage = "No rename changes"
+        return
 
-        let workspaceEdit = workspaceEditOpt.get
+      let workspaceEdit = workspaceEditOpt.get
 
-        # Apply the workspace edits to all affected buffers
-        let applyResult = applyWorkspaceEdit(e.buffers, workspaceEdit)
-        if applyResult.isErr:
-          e.state.statusMessage = "Failed to apply rename: " & applyResult.error
-          return
+      # Apply the workspace edits to all affected buffers
+      let applyResult = applyWorkspaceEdit(e.buffers, workspaceEdit)
+      if applyResult.isErr:
+        e.state.statusMessage = "Failed to apply rename: " & applyResult.error
+        return
 
-        let modifiedCount = applyResult.get
-        e.state.statusMessage =
-          "Renamed '" & e.state.renameState.originalWord & "' to '" & newName & "' (" &
-          $modifiedCount & " file" & (if modifiedCount > 1: "s" else: "") & " modified)"
-        e.state.windowDisplay.needsFullRedraw = true
-      except CancelledError:
-        discard
+      let modifiedCount = applyResult.get
+      e.state.statusMessage =
+        "Renamed '" & e.state.renameState.originalWord & "' to '" & newName & "' (" &
+        $modifiedCount & " file" & (if modifiedCount > 1: "s" else: "") & " modified)"
+      e.state.windowDisplay.needsFullRedraw = true
+    except CancelledError:
+      discard
+    except Exception as err:
+      e.state.statusMessage = "LSP rename error: " & err.msg
 
 proc restartLspServer*(e: Editor): bool =
   ## Restart LSP server for the current buffer's language
@@ -191,36 +197,37 @@ proc requestLspExecuteCommand*(
     e: Editor, command: string, args: seq[string] = @[]
 ): Future[void] {.async: (raises: []).} =
   ## Execute an LSP workspace command
-  {.cast(raises: []).}:
-    {.cast(gcsafe).}:
-      try:
-        if not e.lsp.enabled:
-          e.state.statusMessage = "LSP not enabled"
-          return
+  {.cast(gcsafe).}:
+    try:
+      if not e.lsp.enabled:
+        e.state.statusMessage = "LSP not enabled"
+        return
 
-        let activeBuffer = e.activeBuffer()
+      let activeBuffer = e.activeBuffer()
 
-        # Check if execute command is supported
-        if not e.lsp.hasExecuteCommandSupport(activeBuffer):
-          e.state.statusMessage = "Execute command not supported by LSP server"
-          return
+      # Check if execute command is supported
+      if not e.lsp.hasExecuteCommandSupport(activeBuffer):
+        e.state.statusMessage = "Execute command not supported by LSP server"
+        return
 
-        # Convert string arguments to JSON
-        var jsonArgs: seq[JsonNode] = @[]
-        for arg in args:
-          jsonArgs.add(%arg)
+      # Convert string arguments to JSON
+      var jsonArgs: seq[JsonNode] = @[]
+      for arg in args:
+        jsonArgs.add(%arg)
 
-        # Execute the command
-        let execResult =
-          await e.lsp.requestExecuteCommand(activeBuffer, command, jsonArgs)
-        if execResult.isErr:
-          e.state.statusMessage = "LSP executeCommand failed: " & execResult.error
-          return
+      # Execute the command
+      let execResult =
+        await e.lsp.requestExecuteCommand(activeBuffer, command, jsonArgs)
+      if execResult.isErr:
+        e.state.statusMessage = "LSP executeCommand failed: " & execResult.error
+        return
 
-        let response = execResult.get
-        if response.kind == JNull:
-          e.state.statusMessage = "Executed: " & command
-        else:
-          e.state.statusMessage = "Executed: " & command & " -> " & $response
-      except CancelledError:
-        discard
+      let response = execResult.get
+      if response.kind == JNull:
+        e.state.statusMessage = "Executed: " & command
+      else:
+        e.state.statusMessage = "Executed: " & command & " -> " & $response
+    except CancelledError:
+      discard
+    except Exception as err:
+      e.state.statusMessage = "LSP executeCommand error: " & err.msg
