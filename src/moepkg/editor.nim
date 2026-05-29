@@ -1648,7 +1648,8 @@ proc tick*(e: Editor) =
   ## Background processing: LSP, file watching, autosave, etc.
   ## Should be called each frame before rendering.
 
-  # Poll LSP for messages (non-blocking)
+  # Poll LSP for messages (non-blocking). This is the single per-frame poll:
+  # the pollLspXxx helpers below rely on this and must not poll again themselves.
   e.lsp.poll(0)
 
   # Cleanup stale progress entries (handles missing 'end' notifications)

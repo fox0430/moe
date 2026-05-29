@@ -75,10 +75,7 @@ proc pollLspCallHierarchy*(e: Editor) =
   if kind == chrkNone:
     return
 
-  # Poll LSP service for events
-  e.lsp.poll(0)
-
-  # Check for response
+  # Check for response (events were already polled at the top of tick())
   let (status, resultOpt, errorOpt) = e.lsp.checkResponse(requestId)
 
   case status
