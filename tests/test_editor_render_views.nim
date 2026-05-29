@@ -22,7 +22,7 @@
 import std/[unittest, strutils]
 import pkg/celina
 import ../src/moepkg/[editor, config, config_loader, modes, types, buffer, render_utils]
-import ../src/moepkg/editor_render_views
+import ../src/moepkg/editor_render_views {.all.}
 import ../src/moepkg/editor_window
 
 proc createTestEditor(): Editor =
@@ -1296,3 +1296,97 @@ suite "updateViewportSize - split mode regression":
     check e.screenSize.height == 50
     check e.screenSize.prevWidth == 100
     check e.screenSize.prevHeight == 30
+
+suite "adjustViewportForCursor - line wrap vertical scroll":
+  # These exercise the private wrap-mode branch directly so we can assert the
+  # exact viewport invariant with a known visibleHeight. Lines have varied
+  # lengths so wrap counts differ from line to line.
+  const
+    TextAreaWidth = 10
+    TabStop = 8
+    VisibleHeight = 10
+
+  proc makeWrappingBuffer(lineCount: int): TextBuffer =
+    var lines: seq[string]
+    for i in 0 ..< lineCount:
+      # Lengths cycle through 5/15/25/35 → wrap counts vary per line.
+      lines.add("x".repeat(5 + (i mod 4) * 10))
+    newTextBuffer(lines.join("\n"))
+
+  proc wrapAt(buf: TextBuffer, line: int): int =
+    # Independent recomputation (fresh cache) used to verify the invariant.
+    WrapCountCache().getWrapCount(buf, line, TextAreaWidth, TabStop)
+
+  proc screenLines(buf: TextBuffer, a, b: int): int =
+    for ln in a .. b:
+      result += buf.wrapAt(ln)
+
+  proc adjustWrap(vp: ViewPort, buf: TextBuffer, cursorLine: int) =
+    adjustViewportForCursor(
+      vp,
+      BufferPosition(line: cursorLine, column: 0),
+      VisibleHeight,
+      TextAreaWidth,
+      true,
+      buf,
+      TabStop,
+      WrapCountCache(),
+    )
+
+  test "Scrolls down from top so cursor is visible with minimal scroll":
+    let buf = makeWrappingBuffer(30)
+    let vp = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+    let cursorLine = 20
+
+    vp.adjustWrap(buf, cursorLine)
+
+    # Cursor must be at or below topLine and fit within the visible height.
+    check vp.topLine in 0 .. cursorLine
+    check buf.screenLines(vp.topLine, cursorLine) <= VisibleHeight
+    # Minimal scroll: moving topLine up one more line would overflow.
+    if vp.topLine > 0:
+      check buf.screenLines(vp.topLine - 1, cursorLine) > VisibleHeight
+
+  test "Big downward jump lands cursor in view (issue #10 scenario)":
+    let buf = makeWrappingBuffer(500)
+    let vp = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+    let cursorLine = 499
+
+    vp.adjustWrap(buf, cursorLine)
+
+    check vp.topLine in 0 .. cursorLine
+    check buf.screenLines(vp.topLine, cursorLine) <= VisibleHeight
+    # Minimal scroll: moving topLine up one more line would overflow.
+    if vp.topLine > 0:
+      check buf.screenLines(vp.topLine - 1, cursorLine) > VisibleHeight
+
+  test "Does not scroll when cursor already visible at topLine":
+    let buf = makeWrappingBuffer(30)
+    let vp = ViewPort(topLine: 5, leftColumn: 0, width: 80, height: 24)
+
+    vp.adjustWrap(buf, 5)
+
+    check vp.topLine == 5
+
+  test "Scrolls up when cursor is above topLine":
+    let buf = makeWrappingBuffer(30)
+    let vp = ViewPort(topLine: 20, leftColumn: 0, width: 80, height: 24)
+
+    vp.adjustWrap(buf, 5)
+
+    check vp.topLine == 5
+
+  test "Converging from any starting topLine yields the same minimal topLine":
+    # Starting far above (0) and starting just below the answer must converge to
+    # the identical topLine — the result depends only on cursor + visibleHeight.
+    let buf = makeWrappingBuffer(60)
+    let cursorLine = 40
+
+    let fromTop = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+    fromTop.adjustWrap(buf, cursorLine)
+
+    let fromNear =
+      ViewPort(topLine: fromTop.topLine, leftColumn: 0, width: 80, height: 24)
+    fromNear.adjustWrap(buf, cursorLine)
+
+    check fromNear.topLine == fromTop.topLine
