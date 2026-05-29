@@ -19,7 +19,7 @@
 
 ## File operation procedures (load, save, auto-save, auto-backup)
 
-import std/[options, strformat, os, monotimes, times, tables]
+import std/[options, strformat, os, monotimes, times, tables, sets]
 
 import pkg/results
 
@@ -326,14 +326,14 @@ proc autoSave*(e: Editor) =
   # Check all windows for modified buffers and save them
   var savedCount = 0
   var savedPaths: seq[string] = @[]
-  var savedBuffers: seq[TextBuffer] =
-    @[] # Track already saved buffers to avoid duplicates
+  var savedBufferIds = initHashSet[BufferId]()
+    # Track already saved buffers to avoid duplicates
 
   for window in e.windowManager.windows:
     let buffer = window.buffer
 
     # Skip if already saved (same buffer in multiple windows)
-    if buffer in savedBuffers:
+    if buffer.id in savedBufferIds:
       continue
 
     # Check if buffer is modified and has a file path
@@ -350,7 +350,7 @@ proc autoSave*(e: Editor) =
       let saveResult = buffer.saveFile(savePath, checkExternalMod = true)
 
       if saveResult.isOk:
-        savedBuffers.add(buffer)
+        savedBufferIds.incl(buffer.id)
         savedCount += 1
         savedPaths.add(savePath)
 
@@ -419,14 +419,14 @@ proc autoBackup*(e: Editor) =
   # Backup all modified buffers
   var backupCount = 0
   var backupPaths: seq[string] = @[]
-  var backedUpBuffers: seq[TextBuffer] =
-    @[] # Track already backed up buffers to avoid duplicates
+  var backedUpBufferIds = initHashSet[BufferId]()
+    # Track already backed up buffers to avoid duplicates
 
   for window in e.windowManager.windows:
     let buffer = window.buffer
 
     # Skip if already backed up (same buffer in multiple windows)
-    if buffer in backedUpBuffers:
+    if buffer.id in backedUpBufferIds:
       continue
 
     # Only backup modified buffers with a file path
@@ -435,7 +435,7 @@ proc autoBackup*(e: Editor) =
         backupBuffer(buffer.filePath, buffer.getFileContent(), e.config.autoBackup)
 
       if backupResult.isOk:
-        backedUpBuffers.add(buffer)
+        backedUpBufferIds.incl(buffer.id)
         backupCount += 1
         backupPaths.add(backupResult.get)
 
