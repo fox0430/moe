@@ -58,17 +58,25 @@ proc adjustViewportForCursor(
     if cursor.line < viewport.topLine:
       viewport.topLine = cursor.line
     else:
-      wrapCache.ensureFresh(textBuffer, maxWidth, tabStop)
-      var totalScreenLines = 0
-      for lineIdx in viewport.topLine .. min(cursor.line, textBuffer.len - 1):
-        totalScreenLines += wrapCache.cachedWrapCount(textBuffer, lineIdx)
-
-      if totalScreenLines > visibleHeight:
-        # Cursor is below viewport — scroll down incrementally (O(n))
-        var newTopLine = viewport.topLine
-        while totalScreenLines > visibleHeight and newTopLine < cursor.line:
-          totalScreenLines -= wrapCache.cachedWrapCount(textBuffer, newTopLine)
-          newTopLine += 1
+      # Cursor is at or below topLine. Walk backward from the cursor line,
+      # accumulating screen (wrapped) lines until we either reach visibleHeight
+      # or hit the current topLine. The stopping line is the highest topLine
+      # that still keeps the cursor visible — i.e. the minimal downward scroll,
+      # identical to what the previous forward-sum loop produced. Bounding the
+      # walk by visibleHeight makes this O(visibleHeight) per frame regardless
+      # of how far the cursor jumped (e.g. `G` on a huge file), instead of
+      # O(cursor.line - topLine), and only touches lines that become visible.
+      let cursorLine = min(cursor.line, textBuffer.len - 1)
+      if cursorLine >= viewport.topLine:
+        wrapCache.ensureFresh(textBuffer, maxWidth, tabStop)
+        var screenLines = wrapCache.cachedWrapCount(textBuffer, cursorLine)
+        var newTopLine = cursorLine
+        while newTopLine > viewport.topLine:
+          let prevCount = wrapCache.cachedWrapCount(textBuffer, newTopLine - 1)
+          if screenLines + prevCount > visibleHeight:
+            break
+          screenLines += prevCount
+          newTopLine -= 1
         viewport.topLine = newTopLine
   else:
     if cursor.line >= viewport.topLine + visibleHeight:
