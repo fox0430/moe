@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, tables, options]
+import std/[unittest, tables, options, monotimes, times]
 
 import pkg/chronos
 
@@ -99,6 +99,20 @@ suite "CodeLens Cache":
     check not e.state.lspCache.codeLensCache.isValid
     # Items still exist but cache is marked invalid
     check e.state.lspCache.codeLensCache.itemsByLine.len == 1
+
+  test "doUpdateCodeLensCache advances the debounce timer at initiation":
+    # Regression: the debounce timer must advance when a request is initiated,
+    # not only when the async response handler completes. Otherwise the gate in
+    # updateCodeLensCache reads a stale timestamp on the frame a response
+    # arrives and fires a fresh request on every round-trip, defeating the
+    # debounce.
+    let e = createTestEditor()
+    let old = getMonoTime() - initDuration(seconds = 10)
+    e.state.lspCache.lastCodeLensUpdate = old
+
+    e.doUpdateCodeLensCache()
+
+    check e.state.lspCache.lastCodeLensUpdate > old
 
   test "getCodeLensDisplayText - no items":
     let e = createTestEditor()
