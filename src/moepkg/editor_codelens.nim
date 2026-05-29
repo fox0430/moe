@@ -87,14 +87,25 @@ proc processCodeLensResponse(
       filePath: filePath,
       isValid: true,
     )
-
-    # Update timestamp after successful update
-    e.state.lspCache.lastCodeLensUpdate = getMonoTime()
+    # Note: the debounce timer is advanced at request initiation in
+    # `doUpdateCodeLensCache`, not here. This handler runs async and can be
+    # skipped, so it must not be relied on to gate the debounce.
   except CancelledError:
     discard
 
 proc doUpdateCodeLensCache(e: Editor) =
   ## Internal: Start an async CodeLens request (non-blocking)
+  ##
+  ## Anchor the debounce timer here, at request initiation. The response is
+  ## handled asynchronously in `processCodeLensResponse` (via `asyncSpawn`) and
+  ## may never reach the stamp at all (cancelled, stale generation, missing
+  ## filePath). Stamping only on completion would let the debounce gate in
+  ## `updateCodeLensCache` read a stale timestamp on the frame a response
+  ## arrives and fire a fresh request on every round-trip. Stamping on
+  ## initiation guarantees at most one request per `codeLensUpdateInterval`,
+  ## regardless of async completion timing.
+  e.state.lspCache.lastCodeLensUpdate = getMonoTime()
+
   let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
     return
