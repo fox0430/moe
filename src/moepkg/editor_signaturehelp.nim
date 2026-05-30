@@ -60,7 +60,7 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
 
   # Check if there's a pending request - try to get response
   if e.state.lspCache.pendingSignatureHelpRequestId != 0:
-    let (status, resultOpt, _) =
+    let (status, resultOpt, errorOpt) =
       e.lsp.checkResponse(e.state.lspCache.pendingSignatureHelpRequestId)
     case status
     of lrsPending:
@@ -85,7 +85,10 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
       # Request failed or timed out. Invalidate tracking so the next eligible
       # frame retries instead of being suppressed by change detection, and bump
       # the failure counter so the retry cadence backs off (see
-      # shouldRequestSignatureHelp).
+      # shouldRequestSignatureHelp). Log only the first failure of a streak so a
+      # persistently failing server does not flood the LSP log on every retry.
+      if e.state.lspCache.signatureHelp.consecutiveErrors == 0:
+        logLspDegraded("Signature help", status, errorOpt.get(""))
       e.state.lspCache.pendingSignatureHelpRequestId = 0
       e.state.lspCache.signatureHelp.changeSeq = -1
       inc e.state.lspCache.signatureHelp.consecutiveErrors

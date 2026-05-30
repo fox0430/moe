@@ -116,7 +116,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   if e.lsp.enabled:
     let lspResult = e.lsp.onBufferOpen(e.textBuffer)
     if lspResult.isErr:
-      logDebug("editor", "LSP onBufferOpen failed for " & path & ": " & lspResult.error)
+      logLspDegraded("didOpen", lspResult.error & " (" & path & ")")
     else:
       e.lastLspChangeSeq = e.textBuffer.changeSeq
 
@@ -251,9 +251,7 @@ proc saveFile*(
   if e.lsp.enabled:
     let lspResult = e.lsp.onBufferSave(activeBuffer)
     if lspResult.isErr:
-      logDebug(
-        "editor", "LSP onBufferSave failed for " & savePath & ": " & lspResult.error
-      )
+      logLspDegraded("didSave", lspResult.error & " (" & savePath & ")")
 
   ok(())
 
@@ -296,9 +294,7 @@ proc saveAllBuffers*(e: Editor, force: bool = false): SaveAllBuffersResult =
     if e.lsp.enabled:
       let lspResult = e.lsp.onBufferSave(buffer)
       if lspResult.isErr:
-        logDebug(
-          "editor", "LSP onBufferSave failed for " & savePath & ": " & lspResult.error
-        )
+        logLspDegraded("didSave", lspResult.error & " (" & savePath & ")")
 
 proc autoSave*(e: Editor) =
   ## Automatically save modified buffers if auto save is enabled and interval has passed
@@ -360,7 +356,9 @@ proc autoSave*(e: Editor) =
 
         # Notify LSP that a document was saved
         if e.lsp.enabled:
-          discard e.lsp.onBufferSave(buffer)
+          let lspResult = e.lsp.onBufferSave(buffer)
+          if lspResult.isErr:
+            logLspDegraded("didSave", lspResult.error & " (" & savePath & ")")
       else:
         logError("editor", "Auto save failed for " & savePath & ": " & saveResult.error)
 

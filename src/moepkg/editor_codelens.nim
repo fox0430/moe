@@ -137,7 +137,7 @@ proc updateCodeLensCache*(e: Editor) =
 
   # Check if there's a pending request - try to get response
   if e.state.lspCache.pendingCodeLensRequestId != 0:
-    let (status, resultOpt, _) =
+    let (status, resultOpt, errorOpt) =
       e.lsp.checkResponse(e.state.lspCache.pendingCodeLensRequestId)
     case status
     of lrsPending:
@@ -155,6 +155,7 @@ proc updateCodeLensCache*(e: Editor) =
       # Continue to check if we need to start a new request (buffer might have changed)
     of lrsError, lrsTimeout:
       # Request failed or timed out, mark cache as valid but empty to prevent retry loop
+      logLspDegraded("CodeLens", status, errorOpt.get(""))
       e.state.lspCache.pendingCodeLensRequestId = 0
       e.state.lspCache.codeLensCache = CodeLensCache(
         isValid: true, filePath: filePath, changeSeq: activeBuffer.changeSeq
@@ -337,7 +338,7 @@ proc updateDocumentHighlightCache*(e: Editor) =
 
   # Check if there's a pending request - try to get response
   if e.state.lspCache.pendingDocumentHighlightRequestId != 0:
-    let (status, resultOpt, _) =
+    let (status, resultOpt, errorOpt) =
       e.lsp.checkResponse(e.state.lspCache.pendingDocumentHighlightRequestId)
     case status
     of lrsPending:
@@ -352,6 +353,7 @@ proc updateDocumentHighlightCache*(e: Editor) =
       # Continue to check if we need to start a new request (cursor might have moved)
     of lrsError, lrsTimeout:
       # Request failed or timed out, clear and continue
+      logLspDegraded("Document highlight", status, errorOpt.get(""))
       e.state.lspCache.pendingDocumentHighlightRequestId = 0
 
   # Check if cursor position changed
@@ -446,7 +448,7 @@ proc updateSemanticTokensCache*(e: Editor) =
 
   # Check if there's a pending request - try to get response
   if e.state.lspCache.pendingSemanticTokensRequestId != 0:
-    let (status, resultOpt, _) =
+    let (status, resultOpt, errorOpt) =
       e.lsp.checkResponse(e.state.lspCache.pendingSemanticTokensRequestId)
     case status
     of lrsPending:
@@ -460,7 +462,7 @@ proc updateSemanticTokensCache*(e: Editor) =
       # Continue to check if we need to start a new request
     of lrsError, lrsTimeout:
       # Request failed or timed out, clear and continue
-      logDebug("editor", "Semantic tokens request failed or timed out")
+      logLspDegraded("Semantic tokens", status, errorOpt.get(""))
       e.state.lspCache.pendingSemanticTokensRequestId = 0
 
   # Check if cache is still valid

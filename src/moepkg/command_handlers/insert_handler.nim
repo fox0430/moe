@@ -448,7 +448,7 @@ proc pollLspCompletion*(handler: InsertModeHandler) =
   handler.lsp.poll()
 
   # Check for response
-  let (status, resultOpt, _) = handler.lsp.checkResponse(reqIdOpt.get)
+  let (status, resultOpt, errorOpt) = handler.lsp.checkResponse(reqIdOpt.get)
 
   case status
   of lrsPending:
@@ -459,6 +459,7 @@ proc pollLspCompletion*(handler: InsertModeHandler) =
       handler.completionManager.setLspItems(items, rawJsonItems, isIncomplete)
   of lrsError, lrsTimeout:
     # Clear pending state on error/timeout
+    logLspDegraded("Completion", status, errorOpt.get(""))
     handler.completionManager.setLspItems(@[])
 
 proc triggerResolveRequest*(handler: InsertModeHandler, buffer: TextBuffer) =
@@ -495,7 +496,7 @@ proc pollLspResolve*(handler: InsertModeHandler) =
 
   handler.lsp.poll()
 
-  let (status, resultOpt, _) = handler.lsp.checkResponse(reqId)
+  let (status, resultOpt, errorOpt) = handler.lsp.checkResponse(reqId)
 
   case status
   of lrsPending:
@@ -507,6 +508,7 @@ proc pollLspResolve*(handler: InsertModeHandler) =
       handler.completionManager.updateDocPanel()
     handler.completionManager.resolveRequestId = none(int)
   of lrsError, lrsTimeout:
+    logLspDegraded("Completion resolve", status, errorOpt.get(""))
     handler.completionManager.resolveRequestId = none(int)
 
 proc isCtrlN(keyCombo: KeyCombo): bool =

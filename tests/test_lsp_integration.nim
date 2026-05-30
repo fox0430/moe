@@ -21,8 +21,7 @@ import std/[unittest, json, options, tables, times, strutils, importutils, deque
 
 import pkg/results
 
-import ../src/moepkg/lsp_integration
-import ../src/moepkg/buffer
+import ../src/moepkg/[lsp_integration, buffer, message_log]
 import ../src/moepkg/lsp/protocol/types
 
 suite "LspIntegration - UTF-16/UTF-8 Conversion":
@@ -1283,3 +1282,40 @@ suite "LspIntegration - getSemanticTokensLegend":
     let lsp = newLspIntegration()
     let buffer = newTextBuffer("test")
     check lsp.getSemanticTokensLegend(buffer).isNone
+
+suite "LspIntegration - logLspDegraded":
+  setup:
+    clearLspMessageLog()
+
+  test "lspDegradeReason describes a timeout":
+    check lspDegradeReason(lrsTimeout) == "timed out"
+
+  test "lspDegradeReason describes an error with detail":
+    check lspDegradeReason(lrsError, "boom") == "failed: boom"
+
+  test "lspDegradeReason describes an error without detail":
+    check lspDegradeReason(lrsError) == "failed"
+
+  test "logLspDegraded records a feature failure to the LSP message log":
+    logLspDegraded("CodeLens", "failed")
+    let log = getLspMessageLog()
+    check log.len == 1
+    check log[0] == "[LSP] CodeLens: failed"
+
+  test "logLspDegraded status overload formats reason from the status":
+    logLspDegraded("Completion", lrsTimeout)
+    let log = getLspMessageLog()
+    check log.len == 1
+    check log[0] == "[LSP] Completion: timed out"
+
+  test "logLspDegraded status overload includes error detail":
+    logLspDegraded("Semantic tokens", lrsError, "parse failed")
+    let log = getLspMessageLog()
+    check log.len == 1
+    check log[0] == "[LSP] Semantic tokens: failed: parse failed"
+
+  test "logLspDegraded does not touch the general message log":
+    clearMessageLog()
+    logLspDegraded("CodeLens", "failed")
+    check getMessageLog().len == 0
+    check getLspMessageLog().len == 1
