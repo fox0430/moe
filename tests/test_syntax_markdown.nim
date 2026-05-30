@@ -69,6 +69,14 @@ suite "syntax_markdown - backtick (inline code)":
     g.markdownNextToken()
     check g.kind == gtSpecialVar
 
+  test "unclosed inline code does not span newline":
+    # An unclosed backtick must stop at the end of the line rather than
+    # bleeding into the next line; otherwise incremental re-parsing from a
+    # later line cannot know it is inside a code span.
+    let tokens = collectTokens("a `code\nnext line")
+    check tokens[2] == (gtSpecialVar, "`code")
+    check tokens[3][0] == gtWhitespace # newline, not part of the code span
+
 suite "syntax_markdown - triple backtick (code block)":
   test "opening ``` emits gtSpecialVar":
     var g: GeneralTokenizer

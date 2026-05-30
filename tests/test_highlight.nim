@@ -1754,3 +1754,114 @@ suite "Highlight - URI Underline on Load":
     let uriCol = "// ".len
     let mods = buf.highlight.getSegmentModifiers(1, uriCol)
     check Underline in mods
+
+suite "Highlight - Markdown Incremental":
+  # Regression coverage for multi-line Markdown constructs whose highlighting
+  # used to break after an edit because their state was not preserved across
+  # line boundaries during incremental re-parsing.
+  proc checkIncrMatchesFull(buffer: seq[string], ih: IncrementalHighlight) =
+    let incrResult = Highlight(colorSegments: ih.segments)
+    var runesBuffer: seq[Runes]
+    for line in buffer:
+      runesBuffer.add(line.toRunes)
+    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langMarkdown)
+    for row in 0 ..< buffer.len:
+      for col in 0 ..< buffer[row].len:
+        check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
+
+  test "edit inside frontmatter keeps following lines highlighted":
+    # The reported bug: editing a line after `---` broke the highlight of the
+    # rest of the frontmatter block (and everything below it).
+    var buffer = @[
+      "---", "title: Hello", "author: Me", "date: 2024", "tags: a", "---", "",
+      "# Heading", "body text",
+    ]
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
+    )
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+    checkIncrMatchesFull(buffer, ih)
+
+    # Edit a line in the middle of the frontmatter block.
+    buffer[4] = "tags: ab"
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      4,
+      1,
+      @[],
+      SourceLanguage.langMarkdown,
+    )
+    checkIncrMatchesFull(buffer, ih)
+
+  test "edit after a thematic-break --- keeps lines highlighted":
+    var buffer =
+      @["# Title", "", "para one", "---", "para two", "more text", "even more"]
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
+    )
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+    checkIncrMatchesFull(buffer, ih)
+
+    buffer[5] = "more text edited"
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      5,
+      1,
+      @[],
+      SourceLanguage.langMarkdown,
+    )
+    checkIncrMatchesFull(buffer, ih)
+
+  test "edit a second indented code line does not crash":
+    # Previously asserted with "produced an empty token (indented code)".
+    var buffer = @["text", "", "    code line one", "    code line two", "", "more"]
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
+    )
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+    buffer[3] = "    code line TWO"
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      3,
+      1,
+      @[],
+      SourceLanguage.langMarkdown,
+    )
+    checkIncrMatchesFull(buffer, ih)
+
+  test "edit far below an unclosed inline backtick":
+    var buffer =
+      @["a `code here", "line 1", "line 2", "line 3", "line 4", "line 5", "line 6"]
+    let (seg0, ls0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langMarkdown
+    )
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+    buffer[5] = "line FIVE"
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      5,
+      1,
+      @[],
+      SourceLanguage.langMarkdown,
+    )
+    checkIncrMatchesFull(buffer, ih)

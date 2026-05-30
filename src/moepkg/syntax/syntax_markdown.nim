@@ -201,6 +201,34 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     lexer.pos = position
     return
 
+  # Inside frontmatter (---...---): emit each line as gtPreprocessor until the
+  # closing `---` line. Tracked line-by-line via `mdInFrontmatter` (rather than
+  # consumed greedily in one token) so the state is captured at line boundaries
+  # and incremental re-parsing can resume correctly from inside the block.
+  if lexer.mdInFrontmatter:
+    case lexer.buf[position]
+    of '\0':
+      lexer.kind = gtEof
+      lexer.mdInFrontmatter = false
+    of '\n', '\r':
+      lexer.kind = gtWhitespace
+      while lexer.buf[position] in {'\n', '\r'}:
+        lexer.state = gtWhitespace
+        inc position
+    else:
+      # Content line or the closing delimiter line.
+      lexer.kind = gtPreprocessor
+      if lexer.buf[position] == '-' and lexer.buf[position + 1] == '-' and
+          lexer.buf[position + 2] == '-':
+        lexer.mdInFrontmatter = false
+      position = lexer.endLine(position)
+
+    lexer.length = position - lexer.pos
+    if lexer.kind != gtEof and lexer.length <= 0:
+      assert false, "markdownNextToken: produced an empty token (frontmatter)"
+    lexer.pos = position
+    return
+
   # Normal markdown parsing
   case lexer.buf[position]
   of '\0':
@@ -245,12 +273,15 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
           else:
             inc position
     else:
-      # Inline code `...`
+      # Inline code `...`. Stops at the closing backtick or the end of the
+      # line: an unclosed span must not bleed into the following line. This
+      # matches the triple-backtick inline case above and keeps the token
+      # single-line, so incremental re-parsing from a later line stays correct.
       lexer.kind = gtSpecialVar
       inc position
       while true:
         case lexer.buf[position]
-        of '\0':
+        of '\0', '\n', '\r':
           break
         of '`':
           inc position
@@ -270,21 +301,13 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
       if lexer.buf[position + 1] == '-' and lexer.buf[position + 2] == '-':
         inc position, 3
         if lexer.buf[position] != '-':
-          # Frontmatter ---...---
+          # Frontmatter start (--- on its own line). Only the opening
+          # delimiter line is emitted here; the `mdInFrontmatter` branch near
+          # the top of this proc handles the body and the closing delimiter so
+          # that the multi-line state survives incremental re-parsing.
           lexer.kind = gtPreprocessor
-          while true:
-            case lexer.buf[position]
-            of '\0':
-              break
-            of '-':
-              inc position
-              if lexer.buf[position] == '-':
-                inc position
-                if lexer.buf[position] == '-':
-                  inc position
-                  break
-            else:
-              inc position
+          lexer.mdInFrontmatter = true
+          position = lexer.endLine(position)
         else:
           lexer.kind = gtBuiltin
           while lexer.buf[position] == '-':
