@@ -29,11 +29,9 @@ import
 
 import
   status_line, render_utils, git_diff, git_conflict, logger, config_loader,
-  keybind_config, search_utils, completion, signature_help, hover_popup,
-  command_completion, motion, color, debug_viewer, message_log, unicode_utils,
-  highlight, sidebar
+  search_utils, completion, signature_help, hover_popup, command_completion, motion,
+  color, debug_viewer, message_log, unicode_utils, highlight, sidebar
 
-import key_bindings except Command
 import command_handlers/handler_manager
 
 export
