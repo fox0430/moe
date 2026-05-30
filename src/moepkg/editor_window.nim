@@ -40,14 +40,13 @@ proc saveActiveWindowState*(e: Editor) =
       e.activeWindow.mode = e.state.baseMode
 
 proc syncActiveWindow*(e: Editor) =
-  ## Sync the active window's buffer and viewport with the executor and motion controller
-  ## Viewport is shared by reference - reassigning shares the active window's viewport
+  ## Refresh editor-level caches after the active window changes.
+  ## The per-window buffer/viewport/wrapCountCache that the executor caches are
+  ## re-aliased in a single place via `bindToWindow`, so split / navigation /
+  ## close / resize paths only have to call this hook.
   e.state.activeWindow = e.activeWindow
-  e.executer.buffer = e.activeWindow.buffer
-  e.executer.motionController.executor.buffer = e.activeWindow.buffer
-  e.executer.motionController.viewportManager.viewport = e.activeWindow.viewport
-  e.executer.motionController.viewportManager.wrapCountCache =
-    e.activeWindow.wrapCountCache
+  e.executer.bindToWindow(e.activeWindow)
+  # Viewport is shared by reference - reassigning shares the active window's viewport
   e.viewport = e.activeWindow.viewport
   # Keep state.windowDisplay.currentBufferId aligned with the active window's buffer so that
   # window-switch / split / close paths automatically refresh the Jump List
