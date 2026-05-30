@@ -170,6 +170,42 @@ proc typescriptCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc markdownCorpus(): seq[seq[string]] =
+  ## Markdown snippets covering the state-heavy multi-line constructs:
+  ## frontmatter (---...---), fenced and indented code blocks, and math
+  ## ($...$, $$...$$). These all carry state across line boundaries, so an
+  ## edit inside or after one must restore that state on incremental reparse.
+  result = @[
+    @[
+      "---", "title: Hello World", "author: Me", "date: 2024-01-01", "tags:", "  - nim",
+      "  - editor", "---", "", "# Heading", "", "Some body text here.",
+    ],
+    @[
+      "---", "draft: true", "---", "## Section", "", "para one", "", "para two", "",
+      "more text after frontmatter",
+    ],
+    @[
+      "# Title", "", "Intro paragraph.", "", "---", "", "After a thematic break.",
+      "Another line.", "Yet another.",
+    ],
+    @[
+      "# Code", "", "```nim", "proc add(a, b: int): int =", "  result = a + b", "```",
+      "", "And `inline code` too.",
+    ],
+    @[
+      "Indented code follows:", "", "    let x = 1", "    let y = 2", "",
+      "Back to normal text.",
+    ],
+    @[
+      "Math: $a + b = c$ inline.", "", "$$", "\\sum_{i=0}^n i", "$$", "",
+      "Done with math.",
+    ],
+    @[
+      "---", "key: value", "---", "", "- item one", "- item two", "", "> a blockquote",
+      "", "**bold** and *italic*",
+    ],
+  ]
+
 # Random edits
 
 const PrintableAscii =
@@ -426,3 +462,6 @@ suite "Incremental Highlight Fuzz":
 
   test "TypeScript: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langTypeScript, typescriptCorpus(), iters, baseSeed)
+
+  test "Markdown: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langMarkdown, markdownCorpus(), iters, baseSeed)

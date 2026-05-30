@@ -60,9 +60,15 @@ type
     astroFirstLine*: bool
     yamlIsKey*: bool
     mdInCodeBlock*: bool
-    mdInIndentedCode*: bool
+    # NOTE: `mdInIndentedCode` is intentionally NOT tracked here. It is a
+    # per-line transient flag (set while consuming a line's leading indent and
+    # cleared at the line's content), so it is always false at a line boundary.
+    # Persisting it would let a cached boundary state restore it as true and
+    # produce an empty token on reparse; the normal path re-detects each line's
+    # indentation instead.
     mdInMathMode*: bool
     mdInDisplayMath*: bool
+    mdInFrontmatter*: bool
     latexInMathMode*: bool
     latexInDisplayMath*: bool
     rustRawStringHashCount*: int
@@ -105,9 +111,9 @@ proc captureTokenizerState*(g: GeneralTokenizer): TokenizerState =
     astroFirstLine: g.astroFirstLine,
     yamlIsKey: g.yamlIsKey,
     mdInCodeBlock: g.mdInCodeBlock,
-    mdInIndentedCode: g.mdInIndentedCode,
     mdInMathMode: g.mdInMathMode,
     mdInDisplayMath: g.mdInDisplayMath,
+    mdInFrontmatter: g.mdInFrontmatter,
     latexInMathMode: g.latexInMathMode,
     latexInDisplayMath: g.latexInDisplayMath,
     rustRawStringHashCount: g.rustRawStringHashCount,
@@ -132,9 +138,9 @@ proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
   g.astroFirstLine = state.astroFirstLine
   g.yamlIsKey = state.yamlIsKey
   g.mdInCodeBlock = state.mdInCodeBlock
-  g.mdInIndentedCode = state.mdInIndentedCode
   g.mdInMathMode = state.mdInMathMode
   g.mdInDisplayMath = state.mdInDisplayMath
+  g.mdInFrontmatter = state.mdInFrontmatter
   g.latexInMathMode = state.latexInMathMode
   g.latexInDisplayMath = state.latexInDisplayMath
   g.rustRawStringHashCount = state.rustRawStringHashCount
