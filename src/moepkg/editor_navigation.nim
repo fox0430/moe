@@ -24,9 +24,11 @@
 
 import std/[options, strutils]
 
+import pkg/results
+
 import
-  editor_types, editor_window_state, editor_file, lsp_service, lsp_integration,
-  references_viewer, buffer, unicode_utils
+  editor_types, editor_window_state, lsp_service, lsp_integration, references_viewer,
+  buffer, unicode_utils, editorconfig_helper
 import lsp/protocol/types as lspTypes
 
 proc switchToBufferForLsp*(e: Editor, index: int) =
@@ -51,6 +53,38 @@ proc switchToBufferForLsp*(e: Editor, index: int) =
 
   e.state.windowDisplay.currentBufferId = targetBuffer.id
   e.state.windowDisplay.needsFullRedraw = true
+
+proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string] =
+  ## Open `path` in the active window and return the buffer now shown there.
+  ##
+  ## If a buffer already holds this file, switch the active window to it.
+  ## Otherwise create a new buffer, load the file, apply EditorConfig and
+  ## reserved-word highlighting, register it, switch to it, and notify the LSP.
+  ##
+  ## Shared by the LSP/jump/document-link navigation paths so they all open
+  ## files into the *active* window's buffer with identical setup. Unlike the
+  ## legacy `e.loadFile`, content is loaded into a freshly registered buffer
+  ## rather than mutating the stale initial `e.textBuffer` in place.
+  for i, buf in e.buffers:
+    if buf.filePath.isSome and buf.filePath.get == path:
+      e.switchToBufferForLsp(i)
+      return ok(buf)
+
+  let newBuffer = newTextBuffer()
+  let loadResult = newBuffer.loadFile(path)
+  if loadResult.isErr:
+    return err(loadResult.error)
+
+  applyEditorConfigToBuffer(newBuffer, e.config)
+  newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
+  e.addBuffer(newBuffer)
+  e.switchToBufferForLsp(e.buffers.high)
+
+  # Notify LSP about the newly opened file (best-effort; failure is non-fatal)
+  if e.lsp.enabled:
+    discard e.lsp.onBufferOpen(newBuffer)
+
+  ok(newBuffer)
 
 proc addToJumpList*(e: Editor) =
   ## Add current cursor position to jump list before a jump
@@ -101,25 +135,10 @@ proc jumpToLspLocation*(e: Editor, loc: lspTypes.Location, resultKind: string): 
     e.state.statusMessage = resultKind & " at line " & $(targetLine + 1)
   else:
     # Different file - open it in a new buffer (or switch to existing)
-    # Check if buffer already exists in the buffer list
-    var existingIndex = -1
-    for i, buf in e.buffers:
-      if buf.filePath.isSome and buf.filePath.get == path:
-        existingIndex = i
-        break
-
-    if existingIndex >= 0:
-      # Buffer already exists, switch to it
-      e.switchToBufferForLsp(existingIndex)
-    else:
-      # Create new buffer and load file
-      let newBuffer = newTextBuffer()
-      let loadResult = newBuffer.loadFile(path)
-      if loadResult.isErr:
-        e.state.statusMessage = "Failed to open file: " & loadResult.error
-        return false
-      e.addBuffer(newBuffer)
-      e.switchToBufferForLsp(e.buffers.high)
+    let opened = e.openFileInActiveWindow(path)
+    if opened.isErr:
+      e.state.statusMessage = "Failed to open file: " & opened.error
+      return false
 
     # Set cursor with boundary checks
     let newActiveBuffer = e.activeBuffer()
@@ -206,16 +225,17 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
     e.activeWindow.cursor.line = targetLine
     e.activeWindow.cursor.column = max(0, targetCol)
   else:
-    # Different file - open it
-    let loadResult = e.loadFile(path)
-    if loadResult.isErr:
-      e.state.statusMessage = "Failed to open file: " & loadResult.error
+    # Different file - open it in a new buffer (or switch to existing)
+    let opened = e.openFileInActiveWindow(path)
+    if opened.isErr:
+      e.state.statusMessage = "Failed to open file: " & opened.error
       return false
-    # Set cursor with boundary checks (loadFile already loaded into e.textBuffer)
-    let targetLine = min(line, max(0, e.textBuffer.len - 1))
+    # Set cursor with boundary checks against the now-active buffer
+    let newActiveBuffer = e.activeBuffer()
+    let targetLine = min(line, max(0, newActiveBuffer.len - 1))
     let lineText =
-      if e.textBuffer.len > 0:
-        e.textBuffer.getLine(targetLine)
+      if newActiveBuffer.len > 0:
+        newActiveBuffer.getLine(targetLine)
       else:
         ""
     # Convert LSP UTF-16 character offset to character index
