@@ -66,6 +66,31 @@ type
 
 const ProgressCleanupIntervalSeconds* = 1.0 ## Interval between stale progress checks
 
+proc lspDegradeReason*(status: LspResponseStatus, detail = ""): string =
+  ## Human-readable reason for a failed or timed-out LSP response.
+  case status
+  of lrsTimeout:
+    "timed out"
+  of lrsError:
+    if detail.len > 0:
+      "failed: " & detail
+    else:
+      "failed"
+  else:
+    # lrsPending/lrsSuccess are not failures; describe defensively.
+    "failed"
+
+proc logLspDegraded*(feature, reason: string) =
+  ## Record a degraded LSP feature to the LSP message log so the degradation
+  ## stays visible in the LSP log viewer even when file logging is disabled.
+  ## Use for background features where interrupting the user is undesirable;
+  ## for user-initiated features also set `statusMessage` at the call site.
+  addLspMessageLog("[LSP] " & feature & ": " & reason)
+
+proc logLspDegraded*(feature: string, status: LspResponseStatus, detail = "") =
+  ## Overload taking an LspResponseStatus (and optional error detail) directly.
+  logLspDegraded(feature, lspDegradeReason(status, detail))
+
 proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
   ## Create a new LSP integration
   let svc = newLspService(workspaceRoot)

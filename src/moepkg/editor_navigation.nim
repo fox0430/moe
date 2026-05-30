@@ -80,9 +80,12 @@ proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string
   e.addBuffer(newBuffer)
   e.switchToBufferForLsp(e.buffers.high)
 
-  # Notify LSP about the newly opened file (best-effort; failure is non-fatal)
+  # Notify LSP about the newly opened file (best-effort; failure is non-fatal,
+  # but record it so the resulting feature degradation is not silent)
   if e.lsp.enabled:
-    discard e.lsp.onBufferOpen(newBuffer)
+    let openResult = e.lsp.onBufferOpen(newBuffer)
+    if openResult.isErr:
+      logLspDegraded("didOpen", openResult.error)
 
   ok(newBuffer)
 

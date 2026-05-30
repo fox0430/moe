@@ -174,8 +174,11 @@ proc restartLspServer*(e: Editor): bool =
 
   let langId = langIdOpt.get
 
-  # Stop the worker if it exists (ignore errors)
-  discard e.lsp.service.stopWorker(langId)
+  # Stop the worker if it exists. Stopping a not-yet-running server is benign,
+  # so keep this quiet (LSP log only) rather than surfacing to the status line.
+  let stopResult = e.lsp.service.stopWorker(langId)
+  if stopResult.isErr:
+    logLspDegraded("restart: stop " & langId, stopResult.error)
 
   # Start the worker
   let startResult = e.lsp.service.startWorker(langId)
@@ -183,14 +186,25 @@ proc restartLspServer*(e: Editor): bool =
     e.state.statusMessage = "Failed to start LSP server: " & startResult.error
     return false
 
-  # Re-notify about open buffers for this language
+  # Re-notify about open buffers for this language. A re-open failure leaves that
+  # buffer untracked by the server, so surface it: the user explicitly requested
+  # the restart and otherwise has no way to know the feature silently degraded.
+  var renotifyFailures = 0
   for buf in e.buffers:
     if buf.filePath.isSome:
       let bufLangIdOpt = e.lsp.service.getLanguageIdFromPath(buf.filePath.get)
       if bufLangIdOpt.isSome and bufLangIdOpt.get == langId:
-        discard e.lsp.onBufferOpen(buf)
+        let openResult = e.lsp.onBufferOpen(buf)
+        if openResult.isErr:
+          inc renotifyFailures
+          logLspDegraded("restart: re-open " & buf.filePath.get, openResult.error)
 
-  e.state.statusMessage = "Restarted LSP server for " & langId
+  if renotifyFailures > 0:
+    e.state.statusMessage =
+      "Restarted LSP server for " & langId & " (" & $renotifyFailures &
+      " buffer(s) failed to re-open; see LSP log)"
+  else:
+    e.state.statusMessage = "Restarted LSP server for " & langId
   return true
 
 proc requestLspExecuteCommand*(
