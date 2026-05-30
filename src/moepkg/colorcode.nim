@@ -63,6 +63,19 @@ proc scanLineForColorCodes*(line: string): seq[ColorCodeMatch] =
   ## Returns matches with pre-computed styles.
   ## startCol/endCol are in Rune (character) units for use with renderChar.
 
+  # Fast path: a color code requires a '#', so a line without one can hold no
+  # match. Bail out before allocating the byteToRune mapping. '#' (0x23) only
+  # ever appears as a standalone ASCII byte in UTF-8, so a raw byte scan is
+  # safe. This is the common case on the render hot path (most lines have no
+  # '#'), so it skips a line-length allocation per visible line, per frame.
+  var hasHash = false
+  for c in line:
+    if c == '#':
+      hasHash = true
+      break
+  if not hasHash:
+    return @[]
+
   # Build a mapping from byte offset to rune index, and collect byte offsets
   # of '#' characters for efficient scanning.
   var

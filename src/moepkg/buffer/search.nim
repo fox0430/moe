@@ -26,7 +26,7 @@ import std/[options, strutils, unicode]
 import pkg/regex
 
 import ../[primitives, search_utils, unicode_utils]
-import ./core
+import core
 
 type CachedRegex = object
   pattern: string
@@ -340,6 +340,26 @@ proc isPositionInSearchMatch*(
       return false
   return false
 
+template byteSliceEqualsWord(
+    line: string, startByte, endByte: int, word: string
+): bool =
+  ## Compare `line[startByte ..< endByte]` to `word` without allocating a
+  ## substring. UTF-8 byte equality is exact string equality, so this stays
+  ## correct for multibyte and is allocation-free on the render hot path.
+  ##
+  ## Expression-bodied (a `block` that yields its last value, no `return`) so it
+  ## composes inside the larger boolean expressions at the call sites. Arguments
+  ## are substituted, not bound, so pass only side-effect-free expressions — the
+  ## call sites pass plain locals.
+  block:
+    var eq = endByte - startByte == word.len
+    if eq:
+      for k in 0 ..< word.len:
+        if line[startByte + k] != word[k]:
+          eq = false
+          break
+    eq
+
 proc findWordMatchRanges*(
     b: TextBuffer, lineIndex: int, word: string, excludeCol: int = -1
 ): seq[ColumnRange] =
@@ -354,33 +374,35 @@ proc findWordMatchRanges*(
     return @[]
 
   let line = b.getLine(lineIndex)
-  var runes: seq[Rune] = @[]
-  for r in line.runes:
-    runes.add(r)
-
-  if runes.len == 0:
+  if line.len == 0:
     return @[]
 
-  var i = 0
-  while i < runes.len:
-    # Skip non-word characters
-    if not isWordChar(runes[i]):
-      inc i
-      continue
+  # Scan runes left-to-right, tracking each maximal word run by its rune-column
+  # span [runStartCol, col) and byte span [runStartByte, bytePos). Comparing the
+  # byte slice against `word` avoids materializing the line into a seq[Rune] and
+  # building a fresh string for every candidate word — both of which the old
+  # implementation allocated for every visible line, every frame.
+  var
+    col = 0
+    bytePos = 0
+    runStartCol = -1
+    runStartByte = 0
 
-    # Found word start
-    let startCol = i
-    while i < runes.len and isWordChar(runes[i]):
-      inc i
-    let endCol = i # exclusive
+  for r in line.runes:
+    if isWordChar(r):
+      if runStartCol < 0:
+        runStartCol = col
+        runStartByte = bytePos
+    elif runStartCol >= 0:
+      # Word run [runStartCol, col) ends here; emit it when it matches.
+      if byteSliceEqualsWord(line, runStartByte, bytePos, word) and
+          not (excludeCol >= 0 and excludeCol >= runStartCol and excludeCol < col):
+        result.add(ColumnRange(startCol: runStartCol, endCol: col))
+      runStartCol = -1
+    bytePos += r.size
+    inc col
 
-    # Build word at this range
-    var wordAtPos = ""
-    for j in startCol ..< endCol:
-      wordAtPos.add($runes[j])
-
-    if wordAtPos == word:
-      # Check exclude
-      if excludeCol >= 0 and excludeCol >= startCol and excludeCol < endCol:
-        continue
-      result.add(ColumnRange(startCol: startCol, endCol: endCol))
+  # A word run reaching end-of-line is not closed by the loop above.
+  if runStartCol >= 0 and byteSliceEqualsWord(line, runStartByte, bytePos, word) and
+      not (excludeCol >= 0 and excludeCol >= runStartCol and excludeCol < col):
+    result.add(ColumnRange(startCol: runStartCol, endCol: col))
