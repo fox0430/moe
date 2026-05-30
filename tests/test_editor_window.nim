@@ -17,10 +17,10 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options]
+import std/[unittest, options, os]
 
 import ../src/moepkg/editor
-import ../src/moepkg/editor_window
+import ../src/moepkg/editor_window {.all.}
 import ../src/moepkg/editor_window_state
 import ../src/moepkg/config
 import ../src/moepkg/types
@@ -642,3 +642,92 @@ suite "Help viewer - split window open and close":
     # windows.len == 1, so skip closing
     check e.windowManager.windows.len == 1
     check activeWin.modeState.kind == mskNone
+
+suite "registerSplitBuffer":
+  const editorConfigContent = """
+root = true
+
+[*.py]
+indent_style = space
+indent_size = 4
+"""
+
+  test "adds a new buffer to the buffer list":
+    let e = createTestEditor()
+    let initialCount = e.buffers.len
+    let newBuffer = newTextBuffer("split content")
+
+    e.registerSplitBuffer(newBuffer, applyConfig = true, context = "test")
+
+    check e.buffers.len == initialCount + 1
+    check newBuffer in e.buffers
+
+  test "does not add a buffer that is already tracked":
+    let e = createTestEditor()
+    let existing = e.textBuffer
+    let initialCount = e.buffers.len
+
+    e.registerSplitBuffer(existing, applyConfig = true, context = "test")
+
+    check e.buffers.len == initialCount
+
+  test "sets reserved words from config on the new buffer":
+    let e = createTestEditor()
+    e.config.highlight.reservedWord = @["TODO", "FIXME"]
+    let newBuffer = newTextBuffer()
+
+    e.registerSplitBuffer(newBuffer, applyConfig = false, context = "test")
+
+    check newBuffer.reservedWords == toReservedWords(@["TODO", "FIXME"])
+    check newBuffer.highlightNeedsUpdate
+
+  test "leaves an already-tracked buffer untouched (early return)":
+    let e = createTestEditor()
+    let existing = e.textBuffer
+    existing.setReservedWords(toReservedWords(@["KEEP"]))
+    existing.highlightNeedsUpdate = false
+    # Config differs from the words currently on the buffer; if the early
+    # return were skipped, the buffer would be re-tagged with these instead.
+    e.config.highlight.reservedWord = @["TODO"]
+
+    e.registerSplitBuffer(existing, applyConfig = false, context = "test")
+
+    check existing.reservedWords == toReservedWords(@["KEEP"])
+    check not existing.highlightNeedsUpdate
+
+  test "applyConfig = true applies EditorConfig to the new buffer":
+    let testDir = getTempDir() / "moe_register_split_buffer_apply"
+    let testFile = testDir / "main.py"
+    createDir(testDir)
+    defer:
+      removeDir(testDir)
+    writeFile(testDir / ".editorconfig", editorConfigContent)
+    writeFile(testFile, "print('hi')\n")
+
+    let e = createTestEditor()
+    let newBuffer = newTextBuffer(filePath = some(testFile))
+
+    e.registerSplitBuffer(newBuffer, applyConfig = true, context = "test")
+
+    check newBuffer in e.buffers
+    check newBuffer.editorConfig.isSome
+    check newBuffer.editorConfig.get.expandTab == some(true)
+    check newBuffer.editorConfig.get.shiftWidth == some(4)
+
+  test "applyConfig = false skips EditorConfig on the new buffer":
+    let testDir = getTempDir() / "moe_register_split_buffer_skip"
+    let testFile = testDir / "main.py"
+    createDir(testDir)
+    defer:
+      removeDir(testDir)
+    writeFile(testDir / ".editorconfig", editorConfigContent)
+    writeFile(testFile, "print('hi')\n")
+
+    let e = createTestEditor()
+    let newBuffer = newTextBuffer(filePath = some(testFile))
+
+    e.registerSplitBuffer(newBuffer, applyConfig = false, context = "test")
+
+    # Buffer is still registered, but EditorConfig is not applied.
+    check newBuffer in e.buffers
+    check newBuffer.editorConfig.isNone
