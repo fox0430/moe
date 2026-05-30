@@ -77,27 +77,10 @@ proc jumpToDocumentLink(e: Editor, link: lspTypes.DocumentLink): bool =
       e.state.statusMessage = "Already in this file"
       return true
 
-    # Check if buffer already exists
-    var existingIndex = -1
-    for i, buf in e.buffers:
-      if buf.filePath.isSome and buf.filePath.get == path:
-        existingIndex = i
-        break
-
-    if existingIndex >= 0:
-      e.switchToBufferForLsp(existingIndex)
-    else:
-      let newBuffer = newTextBuffer()
-      let loadResult = newBuffer.loadFile(path)
-      if loadResult.isErr:
-        e.state.statusMessage = "Failed to open file: " & loadResult.error
-        return false
-      e.addBuffer(newBuffer)
-      e.switchToBufferForLsp(e.buffers.high)
-
-      # Notify LSP about the newly opened file
-      if e.lsp.enabled:
-        discard e.lsp.onBufferOpen(newBuffer)
+    let opened = e.openFileInActiveWindow(path)
+    if opened.isErr:
+      e.state.statusMessage = "Failed to open file: " & opened.error
+      return false
 
     e.state.statusMessage = "Opened: " & path.split('/')[^1]
     return true
