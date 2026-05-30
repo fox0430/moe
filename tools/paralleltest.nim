@@ -5,12 +5,18 @@
 import std/[osproc, os, strutils, sequtils]
 
 const
-  DefaultJobs = 4
+  # Fallback when the number of CPUs cannot be detected (countProcessors() == 0).
+  FallbackJobs = 4
   DefaultTimeoutSec = 120
 
   # Flaky tests that must be run sequentially after the parallel batch
   # so concurrent file/clipboard/etc. usage cannot perturb them.
   SequentialTests = ["test_registers.nim"]
+
+proc defaultJobs(): int =
+  # Default to the number of logical CPUs (hardware threads) available.
+  let cpus = osproc.countProcessors()
+  if cpus > 0: cpus else: FallbackJobs
 
 proc main() =
   let jobs =
@@ -19,7 +25,7 @@ proc main() =
     elif getEnv("MOE_TEST_JOBS").len > 0:
       parseInt(getEnv("MOE_TEST_JOBS"))
     else:
-      DefaultJobs
+      defaultJobs()
 
   # Per-file timeout (compile + run) to protect CI from hanging tests.
   # Set MOE_TEST_TIMEOUT=0 to disable. Requires GNU coreutils `timeout`.
