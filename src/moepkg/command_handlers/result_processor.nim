@@ -366,8 +366,7 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
 
         # Update executor if current buffer was deleted
         if e.activeBuffer() != e.executer.buffer:
-          e.executer.buffer = e.activeBuffer()
-          e.executer.motionController.executor.buffer = e.activeBuffer()
+          e.executer.setBuffer(e.activeBuffer())
 
         # Keep state.windowDisplay.currentBufferId off the deleted buffer so subsequent
         # Jump List (Ctrl-o/Ctrl-i) compares don't false-match a dead id.

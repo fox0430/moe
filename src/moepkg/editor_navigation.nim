@@ -27,8 +27,8 @@ import std/[options, strutils]
 import pkg/results
 
 import
-  editor_types, editor_window_state, lsp_service, lsp_integration, references_viewer,
-  buffer, unicode_utils, editorconfig_helper
+  editor_types, editor_window, editor_window_state, lsp_service, lsp_integration,
+  references_viewer, buffer, unicode_utils, editorconfig_helper
 import lsp/protocol/types as lspTypes
 
 proc switchToBufferForLsp*(e: Editor, index: int) =
@@ -47,12 +47,9 @@ proc switchToBufferForLsp*(e: Editor, index: int) =
   activeWindow.viewport.topLine = 0
   activeWindow.viewport.leftColumn = 0
 
-  # Sync executor and motion controller
-  e.executer.buffer = targetBuffer
-  e.executer.motionController.executor.buffer = targetBuffer
-
-  e.state.windowDisplay.currentBufferId = targetBuffer.id
-  e.state.windowDisplay.needsFullRedraw = true
+  # Re-sync executor, motion controller, jump-list anchor and per-buffer
+  # EditorConfig now that the active window's buffer changed.
+  e.syncActiveWindow()
 
 proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string] =
   ## Open `path` in the active window and return the buffer now shown there.

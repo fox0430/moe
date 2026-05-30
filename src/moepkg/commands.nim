@@ -25,13 +25,19 @@ import types, buffer, motion, command_registry, key_bindings, config
 
 type CommandExecutor* = ref object
   motionController*: MotionController
-  buffer*: buffer.TextBuffer
   state*: EditorState
-  viewport*: ViewPort
   commandRegistry*: CommandRegistry
   keyBindingRegistry*: KeyBindingRegistry
   clipboardConfig*: ClipboardConfig
   notificationConfig*: NotificationConfig
+
+proc buffer*(e: CommandExecutor): buffer.TextBuffer {.inline.} =
+  ## Buffer forwarded to the motion controller (single internal source of truth).
+  e.motionController.executor.buffer
+
+proc viewport*(e: CommandExecutor): ViewPort {.inline.} =
+  ## Viewport forwarded to the motion controller (single internal source of truth).
+  e.motionController.viewportManager.viewport
 
 proc cursor*(e: CommandExecutor): var BufferPosition {.inline.} =
   ## Cursor position forwarded to EditorState (which delegates to activeWindow)
@@ -39,6 +45,18 @@ proc cursor*(e: CommandExecutor): var BufferPosition {.inline.} =
 
 proc `cursor=`*(e: CommandExecutor, pos: BufferPosition) {.inline.} =
   e.state.cursor = pos
+
+proc setBuffer*(e: CommandExecutor, b: buffer.TextBuffer) {.inline.} =
+  ## Point the executor's motion controller at `b`. `buffer` derives from this.
+  e.motionController.executor.buffer = b
+
+proc bindToWindow*(e: CommandExecutor, win: EditorWindow) =
+  ## Bind this executor's motion controller to `win`'s buffer/viewport.
+  ## Single place that re-aliases the per-window state the executor caches,
+  ## so window switch / split / close / resize only update one method.
+  e.setBuffer(win.buffer)
+  e.motionController.viewportManager.viewport = win.viewport
+  e.motionController.viewportManager.wrapCountCache = win.wrapCountCache
 
 proc newCommandExecutor*(
     buffer: buffer.TextBuffer,
@@ -70,9 +88,7 @@ proc newCommandExecutor*(
 
   CommandExecutor(
     motionController: newMotionController(buffer, state, viewport),
-    buffer: buffer,
     state: state,
-    viewport: viewport,
     commandRegistry: cmdReg,
     keyBindingRegistry: keyReg,
     clipboardConfig: clipboardConfig,
