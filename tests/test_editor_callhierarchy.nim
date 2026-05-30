@@ -22,13 +22,27 @@
 import std/[unittest, os]
 
 import ../src/moepkg/[editor, config, config_loader, types]
-import ../src/moepkg/editor_callhierarchy
+import ../src/moepkg/callhierarchy_viewer
+import ../src/moepkg/editor_callhierarchy {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
   let vr = newValidationResult()
   result = newEditor(config, vr)
+
+proc makeCallHierarchyItem(
+    name, uri: string, line, col: int
+): lspTypes.CallHierarchyItem =
+  ## Helper to create a CallHierarchyItem for testing
+  result.name = name
+  result.kind = skFunction
+  result.uri = uri
+  result.range = lspTypes.Range(
+    start: lspTypes.Position(line: line, character: col),
+    `end`: lspTypes.Position(line: line, character: col + name.len),
+  )
+  result.selectionRange = result.range
 
 proc createTestEditorWithLspDisabled(): Editor =
   let config = newEditorConfig()
@@ -69,6 +83,39 @@ suite "editor_callhierarchy - pollLspCallHierarchy":
 
     e.pollLspCallHierarchy()
     # No crash means success
+
+suite "editor_callhierarchy - enterCallHierarchyMode":
+  test "Fresh entry saves originalBuffer and previousMode":
+    let e = createTestEditor()
+    let startMode = e.state.mode
+    let items = @[makeCallHierarchyItem("foo", "file:///test.nim", 0, 0)]
+
+    e.enterCallHierarchyMode(items, chvkIncoming)
+
+    check e.state.mode == EditorMode.CallHierarchy
+    check e.activeWindow.modeState.kind == mskCallHierarchy
+    check e.activeWindow.modeState.callHierarchy.viewKind == chvkIncoming
+    check e.state.previousMode == startMode
+    check e.activeWindow.originalBuffer != nil
+    check e.state.statusMessage == "1 incoming calls found"
+
+  test "Switching Incoming -> Outgoing preserves originalBuffer and previousMode":
+    let e = createTestEditor()
+    let startMode = e.state.mode
+    let items = @[makeCallHierarchyItem("foo", "file:///test.nim", 0, 0)]
+
+    e.enterCallHierarchyMode(items, chvkIncoming)
+    let savedOriginal = e.activeWindow.originalBuffer
+
+    e.enterCallHierarchyMode(items, chvkOutgoing)
+
+    # originalBuffer must NOT be re-saved on the second entry: the previous
+    # CallHierarchy original is still live, and overwriting it would lose the
+    # real buffer (and emit a saveOriginalBuffer warning).
+    check e.activeWindow.originalBuffer == savedOriginal
+    check e.state.previousMode == startMode
+    check e.activeWindow.modeState.callHierarchy.viewKind == chvkOutgoing
+    check e.state.statusMessage == "1 outgoing calls found"
 
 suite "editor_callhierarchy - requestCallHierarchyIncomingForItem":
   test "Returns false when LSP is disabled":

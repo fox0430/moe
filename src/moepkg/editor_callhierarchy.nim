@@ -61,6 +61,34 @@ proc startCallHierarchyRequest(e: Editor, kind: CallHierarchyRequestKind): bool 
   e.state.lspCache.pendingCallHierarchyKind = kind
   return true
 
+proc enterCallHierarchyMode(
+    e: Editor, items: seq[lspTypes.CallHierarchyItem], viewKind: CallHierarchyViewKind
+) =
+  ## Enter (or refresh) CallHierarchy mode with the given items.
+  ## Preserve originalBuffer from the previous CallHierarchy entry when
+  ## switching between Incoming and Outgoing views; otherwise we are entering
+  ## CallHierarchy fresh and should save the current buffer.
+  let
+    chState = newCallHierarchyViewerState(items, viewKind)
+    activeWin = e.activeWindow
+
+  if e.state.mode == EditorMode.CallHierarchy and
+      activeWin.modeState.kind == mskCallHierarchy and activeWin.originalBuffer != nil:
+    discard # activeWin.originalBuffer is already set
+  else:
+    e.state.previousMode = e.state.mode
+    activeWin.saveOriginalBuffer()
+
+  e.setMode(EditorMode.CallHierarchy)
+  activeWin.buffer = chState.createCallHierarchyTextBuffer()
+  activeWin.cursor = BufferPosition(line: 0, column: 0)
+  activeWin.viewport.topLine = 0
+  activeWin.viewport.leftColumn = 0
+  activeWin.modeState = ModeState(kind: mskCallHierarchy, callHierarchy: chState)
+
+  let direction = if viewKind == chvkIncoming: "incoming" else: "outgoing"
+  e.state.statusMessage = $items.len & " " & direction & " calls found"
+
 proc pollLspCallHierarchy*(e: Editor) =
   ## Poll for pending call hierarchy request response
   ## Handles 2-stage request: prepare -> incoming/outgoing
@@ -132,26 +160,7 @@ proc pollLspCallHierarchy*(e: Editor) =
         for call in calls:
           items.add(call.`from`)
 
-        # Enter CallHierarchy mode (only set previousMode if not already in CallHierarchy)
-        let chState = newCallHierarchyViewerState(items, chvkIncoming)
-        let activeWin = e.activeWindow
-        # Preserve originalBuffer from the previous CallHierarchy entry when
-        # switching between Incoming and Outgoing views; otherwise we are
-        # entering CallHierarchy fresh and should save the current buffer.
-        if e.state.mode == EditorMode.CallHierarchy and
-            activeWin.modeState.kind == mskCallHierarchy and
-            activeWin.originalBuffer != nil:
-          discard # activeWin.originalBuffer is already set
-        else:
-          e.state.previousMode = e.state.mode
-          activeWin.saveOriginalBuffer()
-        e.setMode(EditorMode.CallHierarchy)
-        activeWin.buffer = chState.createCallHierarchyTextBuffer()
-        activeWin.cursor = BufferPosition(line: 0, column: 0)
-        activeWin.viewport.topLine = 0
-        activeWin.viewport.leftColumn = 0
-        activeWin.modeState = ModeState(kind: mskCallHierarchy, callHierarchy: chState)
-        e.state.statusMessage = $items.len & " incoming calls found"
+        e.enterCallHierarchyMode(items, chvkIncoming)
       else:
         e.state.statusMessage = "No incoming calls found"
     of chrkOutgoingCalls:
@@ -170,26 +179,7 @@ proc pollLspCallHierarchy*(e: Editor) =
         for call in calls:
           items.add(call.to)
 
-        # Enter CallHierarchy mode (only set previousMode if not already in CallHierarchy)
-        let chState = newCallHierarchyViewerState(items, chvkOutgoing)
-        let activeWin = e.activeWindow
-        # Preserve originalBuffer from the previous CallHierarchy entry when
-        # switching between Incoming and Outgoing views; otherwise we are
-        # entering CallHierarchy fresh and should save the current buffer.
-        if e.state.mode == EditorMode.CallHierarchy and
-            activeWin.modeState.kind == mskCallHierarchy and
-            activeWin.originalBuffer != nil:
-          discard # activeWin.originalBuffer is already set
-        else:
-          e.state.previousMode = e.state.mode
-          activeWin.saveOriginalBuffer()
-        e.setMode(EditorMode.CallHierarchy)
-        activeWin.buffer = chState.createCallHierarchyTextBuffer()
-        activeWin.cursor = BufferPosition(line: 0, column: 0)
-        activeWin.viewport.topLine = 0
-        activeWin.viewport.leftColumn = 0
-        activeWin.modeState = ModeState(kind: mskCallHierarchy, callHierarchy: chState)
-        e.state.statusMessage = $items.len & " outgoing calls found"
+        e.enterCallHierarchyMode(items, chvkOutgoing)
       else:
         e.state.statusMessage = "No outgoing calls found"
     of chrkNone:
