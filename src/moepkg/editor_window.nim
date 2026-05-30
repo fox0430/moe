@@ -97,6 +97,23 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
 
 # Window split procedures
 
+proc registerSplitBuffer(
+    e: Editor, newBuffer: TextBuffer, applyConfig: bool, context: string
+) =
+  ## Add a newly split buffer to the global buffer list if it isn't already
+  ## tracked, then initialize syntax highlighting (and EditorConfig settings
+  ## when requested) on it. `context` only labels the debug log.
+  if newBuffer in e.buffers:
+    return
+
+  e.addBuffer(newBuffer)
+  # Set reserved words for syntax highlighting on new buffer
+  newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
+  # Apply EditorConfig settings to the new buffer
+  if applyConfig:
+    applyEditorConfigToBuffer(newBuffer, e.config)
+  logDebug("editor", context & ": buffer added, buffers.len: " & $e.buffers.len)
+
 proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
   ## Create a vertical split window
   # Save current window state before splitting
@@ -110,18 +127,7 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   let newBuffer = bufferResult.get
 
   # Add the new buffer to the global buffer list if it's not already there
-  var found = false
-  for buf in e.buffers:
-    if buf == newBuffer:
-      found = true
-      break
-  if not found:
-    e.addBuffer(newBuffer)
-    # Set reserved words for syntax highlighting on new buffer
-    newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
-    # Apply EditorConfig settings to the new buffer
-    applyEditorConfigToBuffer(newBuffer, e.config)
-    logDebug("editor", "vsplit: buffer added, buffers.len: " & $e.buffers.len)
+  e.registerSplitBuffer(newBuffer, applyConfig = true, context = "vsplit")
 
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
@@ -150,16 +156,7 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   let newBuffer = bufferResult.get
 
   # Add the new buffer to the buffer list if it's not already there
-  var found = false
-  for buf in e.buffers:
-    if buf == newBuffer:
-      found = true
-      break
-  if not found:
-    e.addBuffer(newBuffer)
-    # Set reserved words for syntax highlighting on new buffer
-    newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
-    logDebug("editor", "vsplitWithBuffer: buffer added, buffers.len: " & $e.buffers.len)
+  e.registerSplitBuffer(newBuffer, applyConfig = false, context = "vsplitWithBuffer")
 
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
@@ -189,18 +186,7 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   let newBuffer = bufferResult.get
 
   # Add the new buffer to the buffer list if it's not already there
-  var found = false
-  for buf in e.buffers:
-    if buf == newBuffer:
-      found = true
-      break
-  if not found:
-    e.addBuffer(newBuffer)
-    # Set reserved words for syntax highlighting on new buffer
-    newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
-    # Apply EditorConfig settings to the new buffer
-    applyEditorConfigToBuffer(newBuffer, e.config)
-    logDebug("editor", "hsplit: buffer added, buffers.len: " & $e.buffers.len)
+  e.registerSplitBuffer(newBuffer, applyConfig = true, context = "hsplit")
 
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
@@ -236,16 +222,7 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   let newBuffer = bufferResult.get
 
   # Add the new buffer to the buffer list if it's not already there
-  var found = false
-  for buf in e.buffers:
-    if buf == newBuffer:
-      found = true
-      break
-  if not found:
-    e.addBuffer(newBuffer)
-    # Set reserved words for syntax highlighting on new buffer
-    newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
-    logDebug("editor", "hsplitWithBuffer: buffer added, buffers.len: " & $e.buffers.len)
+  e.registerSplitBuffer(newBuffer, applyConfig = false, context = "hsplitWithBuffer")
 
   # Sync active window state (buffer, viewport, cursor) with executor
   e.syncActiveWindow()
