@@ -213,17 +213,22 @@ proc collectFilePaths*(basePath: string, prefix: string): seq[CommandCompletionE
       filterPrefix = extractFilename(expandedPrefix)
   else:
     # Relative path
-    let fullPath =
+    let base =
       if basePath.len > 0:
-        basePath / prefix
+        basePath
       else:
-        getCurrentDir() / prefix
+        getCurrentDir()
+    let fullPath = base / prefix
     # Only enter directory if prefix ends with /
     if prefix.endsWith("/") and dirExists(fullPath):
       searchDir = fullPath
       filterPrefix = ""
     else:
-      searchDir = parentDir(fullPath)
+      # Derive the directory to search from the prefix itself, not from
+      # `parentDir(base / prefix)`: `base / "."` normalizes to `base`, so the
+      # latter would ascend above `base` for dot prefixes (e.g. "."). Joining
+      # `parentDir(prefix)` onto `base` keeps the search inside `base`.
+      searchDir = base / parentDir(prefix)
       filterPrefix = extractFilename(prefix)
 
   if not dirExists(searchDir):
