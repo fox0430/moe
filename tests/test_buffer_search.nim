@@ -515,6 +515,42 @@ suite "Buffer Search - findWordMatchRanges":
     check ranges[1].startCol == 4
     check ranges[1].endCol == 5
 
+  test "findWordMatchRanges multibyte CJK word - rune columns":
+    # '変'/'数' are 3 bytes each; columns must be reported in rune units.
+    let buf = newTextBuffer("変数 foo 変数")
+    let ranges = buf.findWordMatchRanges(0, "変数")
+    check ranges.len == 2
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 2
+    check ranges[1].startCol == 7
+    check ranges[1].endCol == 9
+
+  test "findWordMatchRanges multibyte accented Latin":
+    # 'é' is 2 bytes; byte-slice comparison must stay exact across runs.
+    let buf = newTextBuffer("café résumé café")
+    let ranges = buf.findWordMatchRanges(0, "café")
+    check ranges.len == 2
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 4
+    check ranges[1].startCol == 12
+    check ranges[1].endCol == 16
+
+  test "findWordMatchRanges multibyte excludeCol uses rune column":
+    let buf = newTextBuffer("café résumé café")
+    # excludeCol 13 falls inside the second "café" (rune cols 12..15).
+    let ranges = buf.findWordMatchRanges(0, "café", excludeCol = 13)
+    check ranges.len == 1
+    check ranges[0].startCol == 0
+    check ranges[0].endCol == 4
+
+  test "findWordMatchRanges multibyte prefix not a false match":
+    # "変" must not match the longer word run "変数".
+    let buf = newTextBuffer("変数 変")
+    let ranges = buf.findWordMatchRanges(0, "変")
+    check ranges.len == 1
+    check ranges[0].startCol == 3
+    check ranges[0].endCol == 4
+
 suite "Buffer Search - compileSearchRegex":
   test "compileSearchRegex returns compiled regex for valid pattern":
     let result = compileSearchRegex("hello", false)
