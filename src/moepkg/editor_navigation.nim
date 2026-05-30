@@ -108,6 +108,25 @@ proc addToJumpList*(e: Editor) =
   # Reset jump list index when adding new position
   e.state.jumpListIndex = -1
 
+proc moveCursorToLspPosition(e: Editor, buffer: TextBuffer, lspLine, lspColumn: int) =
+  ## Move the active window's cursor to an LSP location within `buffer`,
+  ## clamped to the buffer/line bounds.
+  ##
+  ## `lspLine`/`lspColumn` are LSP coordinates: a 0-based line and a UTF-16
+  ## code unit offset, which is converted to a character column here.
+  let targetLine = min(lspLine, max(0, buffer.len - 1))
+  let lineText =
+    if buffer.len > 0:
+      buffer.getLine(targetLine)
+    else:
+      ""
+  # Convert LSP UTF-16 character offset to character index
+  let utf8Col = utf16OffsetToUtf8(lineText, lspColumn)
+  let charCol = byteToCharPos(lineText, utf8Col)
+  let targetCol = min(charCol, max(0, lineText.charLen - 1))
+  e.activeWindow.cursor.line = targetLine
+  e.activeWindow.cursor.column = max(0, targetCol)
+
 proc jumpToLspLocation*(e: Editor, loc: lspTypes.Location, resultKind: string): bool =
   ## Jump to a single LSP location
   ## Returns true if successful
@@ -120,19 +139,10 @@ proc jumpToLspLocation*(e: Editor, loc: lspTypes.Location, resultKind: string): 
   # Check if it's the same file
   if activeBuffer.filePath.isSome and activeBuffer.filePath.get == path:
     # Same file - just move cursor with boundary checks
-    let targetLine = min(loc.range.start.line, max(0, activeBuffer.len - 1))
-    let lineText =
-      if activeBuffer.len > 0:
-        activeBuffer.getLine(targetLine)
-      else:
-        ""
-    # Convert LSP UTF-16 character offset to character index
-    let utf8Col = utf16OffsetToUtf8(lineText, loc.range.start.character)
-    let charCol = byteToCharPos(lineText, utf8Col)
-    let targetCol = min(charCol, max(0, lineText.charLen - 1))
-    e.activeWindow.cursor.line = targetLine
-    e.activeWindow.cursor.column = max(0, targetCol)
-    e.state.statusMessage = resultKind & " at line " & $(targetLine + 1)
+    e.moveCursorToLspPosition(
+      activeBuffer, loc.range.start.line, loc.range.start.character
+    )
+    e.state.statusMessage = resultKind & " at line " & $(e.activeWindow.cursor.line + 1)
   else:
     # Different file - open it in a new buffer (or switch to existing)
     let opened = e.openFileInActiveWindow(path)
@@ -140,20 +150,10 @@ proc jumpToLspLocation*(e: Editor, loc: lspTypes.Location, resultKind: string): 
       e.state.statusMessage = "Failed to open file: " & opened.error
       return false
 
-    # Set cursor with boundary checks
-    let newActiveBuffer = e.activeBuffer()
-    let targetLine = min(loc.range.start.line, max(0, newActiveBuffer.len - 1))
-    let lineText =
-      if newActiveBuffer.len > 0:
-        newActiveBuffer.getLine(targetLine)
-      else:
-        ""
-    # Convert LSP UTF-16 character offset to character index
-    let utf8Col = utf16OffsetToUtf8(lineText, loc.range.start.character)
-    let charCol = byteToCharPos(lineText, utf8Col)
-    let targetCol = min(charCol, max(0, lineText.charLen - 1))
-    e.activeWindow.cursor.line = targetLine
-    e.activeWindow.cursor.column = max(0, targetCol)
+    # Set cursor with boundary checks against the now-active buffer
+    e.moveCursorToLspPosition(
+      e.activeBuffer(), loc.range.start.line, loc.range.start.character
+    )
     e.state.statusMessage = resultKind & " in " & path
 
   # Update viewport to follow cursor
@@ -212,18 +212,7 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
   # Check if it's the same file
   if activeBuffer.filePath.isSome and activeBuffer.filePath.get == path:
     # Same file - just move cursor with boundary checks
-    let targetLine = min(line, max(0, activeBuffer.len - 1))
-    let lineText =
-      if activeBuffer.len > 0:
-        activeBuffer.getLine(targetLine)
-      else:
-        ""
-    # Convert LSP UTF-16 character offset to character index
-    let utf8Col = utf16OffsetToUtf8(lineText, column)
-    let charCol = byteToCharPos(lineText, utf8Col)
-    let targetCol = min(charCol, max(0, lineText.charLen - 1))
-    e.activeWindow.cursor.line = targetLine
-    e.activeWindow.cursor.column = max(0, targetCol)
+    e.moveCursorToLspPosition(activeBuffer, line, column)
   else:
     # Different file - open it in a new buffer (or switch to existing)
     let opened = e.openFileInActiveWindow(path)
@@ -231,19 +220,7 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
       e.state.statusMessage = "Failed to open file: " & opened.error
       return false
     # Set cursor with boundary checks against the now-active buffer
-    let newActiveBuffer = e.activeBuffer()
-    let targetLine = min(line, max(0, newActiveBuffer.len - 1))
-    let lineText =
-      if newActiveBuffer.len > 0:
-        newActiveBuffer.getLine(targetLine)
-      else:
-        ""
-    # Convert LSP UTF-16 character offset to character index
-    let utf8Col = utf16OffsetToUtf8(lineText, column)
-    let charCol = byteToCharPos(lineText, utf8Col)
-    let targetCol = min(charCol, max(0, lineText.charLen - 1))
-    e.activeWindow.cursor.line = targetLine
-    e.activeWindow.cursor.column = max(0, targetCol)
+    e.moveCursorToLspPosition(e.activeBuffer(), line, column)
 
   # Update viewport to follow cursor
   e.state.windowDisplay.needsFullRedraw = true

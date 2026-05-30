@@ -440,7 +440,7 @@ suite "editor_navigation - jumpToLspLocation":
 suite "editor_navigation - UTF-16 to UTF-8 conversion":
   test "openFileAndJumpTo handles UTF-16 column offset":
     let e = createTestEditor()
-    let testFile = "/tmp/moe_test_utf16.txt"
+    let testFile = getTempDir() / "moe_test_utf16.txt"
 
     # Contains Japanese characters (multi-byte in UTF-8)
     writeFile(testFile, "こんにちは world\n")
@@ -454,4 +454,44 @@ suite "editor_navigation - UTF-16 to UTF-8 conversion":
     let result = e.openFileAndJumpTo(testFile, 0, 6)
 
     check result
-    # Cursor should be at the byte position of 'w'
+    # Cursor lands on 'w', which is the 6th character (0-based) of the line.
+    # The UTF-16 offset (6) and the character column (6) coincide here only
+    # because every preceding rune is in the BMP; the conversion still has to
+    # walk multi-byte runes to land on the right column.
+    check e.cursor.column == 6
+
+suite "editor_navigation - cursor clamping":
+  test "Clamps target line to last line when out of bounds":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_clamp_line.txt"
+
+    writeFile(testFile, "line 0\nline 1\nline 2\n")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+    let lastLine = e.activeBuffer().len - 1
+
+    # Request a line far beyond the buffer end
+    let result = e.openFileAndJumpTo(testFile, 999, 0)
+
+    check result
+    check e.cursor.line == lastLine
+
+  test "Clamps target column to last column when out of bounds":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_clamp_col.txt"
+
+    writeFile(testFile, "abc\n")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+
+    # Request a column far beyond the line end ("abc" has 3 chars)
+    let result = e.openFileAndJumpTo(testFile, 0, 999)
+
+    check result
+    check e.cursor.line == 0
+    # Clamped to the last character index (charLen - 1 == 2)
+    check e.cursor.column == 2
