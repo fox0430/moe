@@ -25,7 +25,7 @@ import
   editor_types, editor_window, editor_window_state, editor_file, editor_lsp,
   editor_codelens, editor_selectionrange, editor_documentsymbol, editor_documentlink,
   editor_signaturehelp, editor_hover, editor_callhierarchy, editor_navigation,
-  editor_render, editorconfig_helper, emergency
+  editor_render, editorconfig_helper, editor_init, emergency
 
 import
   status_line, render_utils, git_diff, git_conflict, logger, config_loader,
@@ -675,132 +675,11 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # file are recorded in configVr so they surface in the startup status message.
   initTheme(editorConfig, configVr)
 
-  # Create registries and configuration first
-  let
-    cmdRegistry = newCommandRegistry()
-    keyRegistry = newKeyBindingRegistry()
-    cmdConfig = newCommandConfig()
-    cmdLineParser = newCommandLineParser()
-
-  # Register built-in commands and default bindings
-  cmdRegistry.registerBuiltinCommands
-  keyRegistry.setupDefaultBindings
-
-  # Load custom key_bindings from TOML
-  keyRegistry.loadDefaultKeybindings(configVr)
-
-  # Apply key mappings from config (moerc.toml [KeyMapping] section)
-  # Apply "All" mappings to every mode first (mode-specific mappings can override)
-  for lhs, rhs in editorConfig.keyMapping.all:
-    for mode in EditorMode:
-      if mode == EditorMode.Command:
-        continue
-      let err = keyRegistry.addRuntimeMapping(mode, lhs, rhs)
-      if err.len > 0:
-        logWarn("editor", "KeyMapping.All error (" & $mode & "): " & err)
-
-  for lhs, rhs in editorConfig.keyMapping.normal:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.Normal, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.Normal error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.insert:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.Insert, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.Insert error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.visualAll:
-    for mode in [EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine]:
-      let err = keyRegistry.addRuntimeMapping(mode, lhs, rhs)
-      if err.len > 0:
-        logWarn("editor", "KeyMapping.VisualAll error (" & $mode & "): " & err)
-  for lhs, rhs in editorConfig.keyMapping.visual:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.Visual, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.Visual error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.visualLine:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.VisualLine, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.VisualLine error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.visualBlock:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.VisualBlock, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.VisualBlock error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.replace:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.Replace, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.Replace error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.command:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.Command, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.Command error: " & err)
-
-  for lhs, rhs in editorConfig.keyMapping.filer:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.Filer, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.Filer error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.logViewer:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.LogViewer, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.LogViewer error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.help:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.Help, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.Help error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.bufferManager:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.BufferManager, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.BufferManager error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.backupManager:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.BackupManager, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.BackupManager error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.diffViewer:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.DiffViewer, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.DiffViewer error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.config:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.Config, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.Config error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.references:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.References, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.References error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.documentSymbol:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.DocumentSymbol, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.DocumentSymbol error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.callHierarchy:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.CallHierarchy, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.CallHierarchy error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.recentFile:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.RecentFile, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.RecentFile error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.debug:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.Debug, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.Debug error: " & err)
-  for lhs, rhs in editorConfig.keyMapping.terminal:
-    let err = keyRegistry.addRuntimeMapping(EditorMode.Terminal, lhs, rhs)
-    if err.len > 0:
-      logWarn("editor", "KeyMapping.Terminal error: " & err)
-
-  # Load command configuration
-  cmdConfig.loadDefaultConfig
-
-  # Load user-defined command aliases from editor config
-  for alias, entry in editorConfig.commandAliases.pairs:
-    let action = resolveCommandName(entry.command)
-    if action.isSome:
-      cmdConfig.addAlias(alias, action.get, entry.description)
-
-  # Load shell commands from editor config
-  for name, entry in editorConfig.shellCommands.pairs:
-    cmdConfig.addShellCommand(name, entry.command, entry.description)
-
-  # Apply configuration to parser
-  cmdConfig.applyToParser(cmdLineParser)
+  # Create the command/keybinding registries and load all config-driven
+  # built-in commands, default bindings, [KeyMapping] overrides, command
+  # aliases, and shell commands (see editor_init.nim).
+  let (cmdRegistry, keyRegistry, cmdConfig, cmdLineParser) =
+    newEditorRegistries(editorConfig, configVr)
 
   # Set buffer backend from configuration
   case editorConfig.standard.bufferBackend
