@@ -21,7 +21,7 @@
 ## (prepare → incoming/outgoing) plus per-item incoming/outgoing requests
 ## driven from CallHierarchy mode.
 
-import std/[options, json]
+import std/options
 
 import
   editor_types, editor_window_state, lsp_integration, callhierarchy_viewer,
@@ -46,7 +46,6 @@ proc startCallHierarchyRequest(e: Editor, kind: CallHierarchyRequestKind): bool 
     e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
     e.state.lspCache.pendingCallHierarchyRequestId = 0
   e.state.lspCache.pendingCallHierarchyKind = chrkNone
-  e.state.lspCache.pendingCallHierarchyPrepareResult = none(JsonNode)
 
   # Start with prepare request
   let reqResult = e.lsp.startCallHierarchyPrepareRequest(

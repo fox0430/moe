@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, monotimes, times, tables, strutils, json]
+import std/[options, monotimes, times, tables, strutils]
 
 import pkg/celina
 
@@ -299,8 +299,6 @@ type
     # Pending call hierarchy request (2-stage: prepare -> incoming/outgoing)
     pendingCallHierarchyRequestId*: int # Request ID (0 = none)
     pendingCallHierarchyKind*: CallHierarchyRequestKind # incoming or outgoing
-    pendingCallHierarchyPrepareResult*: Option[JsonNode]
-      # Cached prepare result for 2nd stage
     # Pending code action request
     pendingCodeActionRequestId*: int # Request ID (0 = none)
     # Pending document link request
