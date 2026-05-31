@@ -800,6 +800,35 @@ suite "syntax_c - cNextToken string continuation":
     check g.kind == gtEscapeSequence
     check g.state == gtNone
 
+  test "string continuation resumed on empty line emits EOF":
+    # A backslash continued a string onto a line that turns out to be empty.
+    # Resuming in `gtStringLit` must not emit a zero-length string token (which
+    # used to trip the empty-token assertion); it should just report EOF and
+    # drop the stale state. Regression for the C tokenizer crash.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("")
+    g.state = gtStringLit
+
+    g.cNextToken()
+    check g.kind == gtEof
+    check g.state == gtNone
+
+  test "string continuation resumed at newline does not produce empty token":
+    # The full-reparse path joins lines with '\n', so a resumed string state
+    # can meet a leading newline (an empty continuation line). The newline must
+    # tokenize as whitespace, not a zero-length string token.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\nx")
+    g.state = gtStringLit
+
+    g.cNextToken()
+    check g.kind == gtWhitespace
+    check g.length == 1
+    check g.state == gtNone
+
+    g.cNextToken()
+    check g.kind == gtIdentifier
+
 suite "syntax_c - cNextToken colon handling":
   test "single colon is punctuation":
     var g: GeneralTokenizer
