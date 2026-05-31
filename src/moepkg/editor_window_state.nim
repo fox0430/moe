@@ -64,11 +64,17 @@ proc clearModeState*(win: EditorWindow, mode: EditorMode) =
 
   win.restoreOriginalBufferUnchecked()
 
-  # Terminal owns a PTY that must be cleaned up before the ref is dropped.
-  if win.modeState.kind == mskTerminal:
-    win.modeState.terminal.cleanup()
+  # Snapshot the Terminal's PTY owner before touching the variant. The reset
+  # to `mskNone` below must not be gated behind PTY teardown: resetting first
+  # keeps the window consistent even if `cleanup` ever starts to fail, and the
+  # local ref keeps the TerminalState alive until cleanup runs.
+  let term = if win.modeState.kind == mskTerminal: win.modeState.terminal else: nil
 
   if win.modeState.kind == mskFileTree:
     win.fixedWidth = none(int)
 
   win.modeState = ModeState(kind: mskNone)
+
+  # Terminal owns a PTY that must be cleaned up before the ref is dropped.
+  if term != nil:
+    term.cleanup()
