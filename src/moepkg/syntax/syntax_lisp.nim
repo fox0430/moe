@@ -111,6 +111,14 @@ proc lispNextToken*(g: var GeneralTokenizer) =
       while true:
         case g.buf[pos]
         of '\\':
+          if pos > g.start:
+            # Emit the string content accumulated so far as a gtStringLit token
+            # and let the escape sequence be its own token on the next call.
+            # This matches the main string-literal path, which breaks at the
+            # backslash; without it, a resume that begins mid-string (e.g. an
+            # incremental re-parse starting inside a multi-line string) would
+            # mislabel the leading content as gtEscapeSequence.
+            break
           g.kind = gtEscapeSequence
           inc(pos)
           case g.buf[pos]

@@ -204,6 +204,35 @@ suite "syntax_lisp - lispNextToken strings":
     g.lispNextToken()
     check g.kind == gtEscapeSequence
 
+  test "string resumed mid-line before an escape stays gtStringLit":
+    # An incremental re-parse can resume inside a multi-line string at a line
+    # that begins with plain content and only later contains a backslash
+    # escape. The leading content must be emitted as gtStringLit (the escape
+    # becomes its own token on the next call), matching the full reparse. A
+    # regression here mislabels the whole span as gtEscapeSequence, turning the
+    # preceding lines the wrong color.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("abc\\nd")
+    g.state = gtStringLit
+
+    g.lispNextToken()
+    check g.kind == gtStringLit
+    check g.length == 3 # "abc"
+    check g.state == gtStringLit
+
+    g.lispNextToken()
+    check g.kind == gtEscapeSequence
+
+  test "string resumed at escape produces escape token":
+    # When the resume position is exactly the backslash (the common case after
+    # the main path breaks at it), the first token is the escape sequence.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\\nrest")
+    g.state = gtStringLit
+
+    g.lispNextToken()
+    check g.kind == gtEscapeSequence
+
 suite "syntax_lisp - lispNextToken line comments":
   test "line comment with semicolon":
     var g: GeneralTokenizer
