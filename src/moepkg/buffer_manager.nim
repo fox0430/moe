@@ -25,24 +25,8 @@ import std/options
 import buffer
 import picker/nav
 
-type
-  BufferEntry* = object ## Represents a buffer entry in the buffer manager list
-    index*: int # Index in the window list
-    name*: string # Buffer name (file path or "No Name")
-    modified*: bool # Whether buffer has unsaved changes
-    active*: bool # Whether this is the currently active buffer
-
-  BufferManagerState* = ref object ## State for the buffer manager UI
-    entries*: seq[BufferEntry] # List of buffer entries
-    selectedIndex*: int # Currently selected entry index
-    topLine*: int # Scroll position (first visible line)
-    previousWindowIndex*: int # Window index to return to when closing
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
-
-  BufferInfo* = object ## Information about a buffer for initializing buffer manager
-    filePath*: Option[string]
-    isModified*: bool
-    isActive*: bool
+import buffer_manager_types
+export buffer_manager_types
 
 proc newBufferManagerState*(): BufferManagerState =
   BufferManagerState(entries: @[], selectedIndex: 0, topLine: 0, previousWindowIndex: 0)

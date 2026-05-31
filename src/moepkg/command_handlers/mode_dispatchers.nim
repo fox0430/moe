@@ -33,7 +33,11 @@ import std/[options, strutils, unicode]
 
 import pkg/[results, celina]
 
-import ../[types, buffer, modes, key_bindings, string_builder, filer, recent_file_mode]
+import
+  ../[
+    types, buffer, modes, key_bindings, string_builder, filer, filetree, diff_viewer,
+    recent_file_mode,
+  ]
 import ../lsp/protocol/types as lspTypes
 import ../editor_types
 import handler_types, handler_result

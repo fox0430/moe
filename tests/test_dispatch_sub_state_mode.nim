@@ -37,6 +37,7 @@ import ../src/moepkg/command_line {.all.}
 import ../src/moepkg/command_config {.all.}
 import ../src/moepkg/filer {.all.}
 import ../src/moepkg/filetree {.all.}
+import ../src/moepkg/help_viewer {.all.}
 import ../src/moepkg/editor_types except Command
 import ../src/moepkg/command_handlers/handler_manager {.all.}
 import ../src/moepkg/command_handlers/mode_dispatchers {.all.}

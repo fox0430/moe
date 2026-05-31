@@ -30,36 +30,8 @@ import
   command_line, command_line_commands, fuzzy_match, help_description, setting_options,
   unicode_utils
 
-type
-  CommandCompletionState* = enum
-    ccsIdle ## No completion active
-    ccsActive ## Popup visible, items available
-
-  CompletionMode* = enum
-    cmCommand ## Completing command names
-    cmFilePath ## Completing file/directory paths
-    cmSetOption ## Completing :set options
-
-  CommandCompletionEntry* = object ## A single completion entry
-    command*: string ## The command text (without :)
-    description*: string ## Brief description of the command
-    matchScore*: int ## Score for sorting (higher = better match)
-
-  CommandCompletionMenu* = object ## Completion popup state
-    entries*: seq[CommandCompletionEntry]
-    selectedIndex*: int ## Currently selected item (0-based, -1 = no selection)
-    scrollOffset*: int ## For scrolling long lists
-    maxVisible*: int ## Max items to show (default: 10)
-    prefix*: string ## Current filter prefix
-
-  CommandCompletionManager* = ref object ## Manages command completion state
-    state*: CommandCompletionState
-    mode*: CompletionMode ## Current completion mode
-    menu*: CommandCompletionMenu
-    allCommands*: seq[CommandCompletionEntry] ## All available commands
-    baseCommand*: string ## The command being completed (for argument mode)
-    argStartX*: int ## X position where argument starts (for popup positioning)
-    originalDirPrefix*: string ## Original directory prefix when completion started
+import command_completion_types
+export command_completion_types
 
 const
   DefaultMaxVisible* = 10

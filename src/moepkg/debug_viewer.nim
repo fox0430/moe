@@ -23,10 +23,8 @@ import std/[strutils, options, times]
 
 import modes, buffer
 
-type DebugViewerState* = ref object ## State for the debug mode viewer
-  lines*: seq[string] # Debug information lines
-  topLine*: int # Top visible line (for scrolling)
-  selectedLine*: int # Currently selected line (for navigation)
+import debug_viewer_types
+export debug_viewer_types
 
 proc newDebugViewerState*(): DebugViewerState =
   DebugViewerState(lines: @[], topLine: 0, selectedLine: 0)

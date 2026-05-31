@@ -29,15 +29,8 @@ import pkg/results
 import buffer
 import picker/nav
 
-type
-  RecentFileEntry* = object
-    path*: string
-
-  RecentFileModeState* = ref object
-    files*: seq[RecentFileEntry]
-    selectedIndex*: int
-    topLine*: int
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
+import recent_file_mode_types
+export recent_file_mode_types
 
 proc newRecentFileModeState*(): RecentFileModeState =
   ## Create a new RecentFileModeState

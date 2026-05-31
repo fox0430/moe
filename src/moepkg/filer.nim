@@ -28,30 +28,8 @@ import pkg/celina
 import buffer, highlight, color
 import syntax/tokenizer
 
-type
-  FileEntryKind* = enum
-    fekFile
-    fekDirectory
-    fekSymlink
-
-  FileEntry* = object
-    name*: string
-    kind*: FileEntryKind
-    size*: int64
-    modified*: Time
-    isHidden*: bool
-    isExecutable*: bool # Whether the file has execute permission
-    targetKind*: FileEntryKind # For symlinks: the kind of the target (fekFile if broken)
-
-  FilerState* = ref object
-    currentPath*: string # Current directory path
-    entries*: seq[FileEntry] # File/directory entries
-    selectedIndex*: int # Currently selected entry index
-    showHidden*: bool # Whether to show hidden files
-    topLine*: int # Scroll position (first visible line)
-    previousPath*: Option[string] # Path to return to when closing filer
-    needsBufferRefresh*: bool # Flag to trigger buffer regeneration after state changes
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
+import filer_types
+export filer_types
 
 proc isHiddenFile(name: string): bool =
   ## Check if a file is hidden (starts with .)

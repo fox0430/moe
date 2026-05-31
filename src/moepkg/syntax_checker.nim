@@ -24,22 +24,13 @@ import pkg/[results, chronos]
 import background_process, primitives, buffer
 import syntax/tokenizer
 
-type
-  SyntaxCheckMessageType* = enum
-    info
-    hint
-    warning
-    error
+import syntax_checker_types
+export syntax_checker_types
 
-  SyntaxCheckError* = object
-    position*: BufferPosition
-    messageType*: SyntaxCheckMessageType
-    message*: string
-
-  SyntaxCheckProcess* = object
-    command*: BackgroundProcessCommand
-    filePath*: string
-    process*: BackgroundProcess
+type SyntaxCheckProcess* = object
+  command*: BackgroundProcessCommand
+  filePath*: string
+  process*: BackgroundProcess
 
 proc syntaxCheckCommand*(
     path: string, lang: SourceLanguage

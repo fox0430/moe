@@ -26,26 +26,8 @@ import pkg/results
 
 import buffer, highlight, syntax/tokenizer
 
-type
-  DiffLineKind* = enum
-    dlkNormal # Normal (context) line
-    dlkAdded # Added line (starts with +)
-    dlkDeleted # Deleted line (starts with -)
-    dlkHeader # Header line (@@, ---, +++)
-    dlkMeta # Meta line (diff --git, index, etc.)
-
-  DiffLine* = object ## Represents a single line in the diff output
-    text*: string
-    kind*: DiffLineKind
-
-  DiffViewerState* = ref object ## State for the diff viewer UI
-    lines*: seq[DiffLine] # Diff lines
-    selectedLine*: int # Currently selected/highlighted line
-    topLine*: int # Scroll position (first visible line)
-    sourceFilePath*: string # Path of the source file (current version)
-    backupFilePath*: string # Path of the backup file (old version)
-    errorMessage*: string # Error message if diff failed
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
+import diff_viewer_types
+export diff_viewer_types
 
 proc newDiffViewerState*(): DiffViewerState =
   DiffViewerState(

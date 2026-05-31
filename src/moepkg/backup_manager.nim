@@ -25,22 +25,10 @@ import std/[options, os, times, algorithm]
 import backup, buffer
 import picker/nav
 
+import backup_manager_types
+export backup_manager_types
+
 const BackupDateFormat = "yyyy-MM-dd'T'HH:mm:sszzz"
-
-type
-  BackupEntry* = object ## Represents a backup file entry in the backup manager list
-    filename*: string # Backup filename (timestamp)
-    timestamp*: DateTime # Parsed timestamp
-    fullPath*: string # Full path to the backup file
-
-  BackupManagerState* = ref object ## State for the backup manager UI
-    entries*: seq[BackupEntry] # List of backup entries
-    selectedIndex*: int # Currently selected entry index
-    topLine*: int # Scroll position (first visible line)
-    sourceFilePath*: string # Path of the source file being backed up
-    backupDir*: string # Directory containing backup files
-    baseBackupDir*: string # Base backup directory from config
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
 
 proc newBackupManagerState*(): BackupManagerState =
   BackupManagerState(

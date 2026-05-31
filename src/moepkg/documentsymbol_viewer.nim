@@ -28,21 +28,8 @@ import lsp/protocol/[types, enums]
 import buffer
 import picker/nav
 
-type
-  SymbolItem* = object
-    name*: string # Symbol name
-    kind*: SymbolKind # Symbol kind (function, class, etc.)
-    line*: int # Line number (0-indexed)
-    column*: int # Column number (0-indexed)
-    detail*: string # Optional detail (e.g., signature)
-    depth*: int # Nesting depth for indentation
-
-  DocumentSymbolViewerState* = ref object
-    items*: seq[SymbolItem] # Flattened symbol items
-    selectedIndex*: int # Currently selected item index
-    topLine*: int # Scroll position (first visible line)
-    filePath*: string # File path for the symbols
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
+import documentsymbol_viewer_types
+export documentsymbol_viewer_types
 
 proc symbolKindToString*(kind: SymbolKind): string =
   ## Convert SymbolKind to a short display string
