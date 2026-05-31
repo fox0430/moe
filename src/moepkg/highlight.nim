@@ -924,6 +924,12 @@ proc initHighlightIncrementalFromStr*(
         let savedState = token.state
         if token.kind in {gtLongStringLit, gtLongComment, gtDocLongComment}:
           token.state = token.kind
+        elif token.kind == gtStringLit and language == SourceLanguage.langLisp:
+          # Lisp strings span lines and resume via `state == gtStringLit` (unlike
+          # Rust, which parks `gtLongStringLit` at the boundary and uses
+          # `gtStringLit` only for a mid-line pending escape). Capture the
+          # in-string state so a later reparse resumes the literal.
+          token.state = gtStringLit
         lineStates.add(captureTokenizerState(token))
         token.state = savedState
 

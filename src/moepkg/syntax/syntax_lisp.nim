@@ -102,36 +102,44 @@ proc lispNextToken*(g: var GeneralTokenizer) =
         else:
           inc(pos)
   elif g.state == gtStringLit:
-    g.kind = gtStringLit
-    while true:
-      case g.buf[pos]
-      of '\\':
-        g.kind = gtEscapeSequence
-        inc(pos)
+    if g.buf[pos] == '\0':
+      # Empty line inside a multi-line string. Emit nothing (gtEof) but keep the
+      # string state so the literal resumes on the next line.
+      g.kind = gtEof
+    else:
+      g.kind = gtStringLit
+      while true:
         case g.buf[pos]
-        of 'x', 'X':
+        of '\\':
+          g.kind = gtEscapeSequence
           inc(pos)
-          if g.buf[pos] in hexChars:
+          case g.buf[pos]
+          of 'x', 'X':
             inc(pos)
-          if g.buf[pos] in hexChars:
+            if g.buf[pos] in hexChars:
+              inc(pos)
+            if g.buf[pos] in hexChars:
+              inc(pos)
+          of '0' .. '9':
+            while g.buf[pos] in {'0' .. '9'}:
+              inc(pos)
+          of '\0':
+            # Trailing backslash at the line end: the literal still continues on
+            # the next line, so keep the string state.
+            g.state = gtStringLit
+          else:
             inc(pos)
-        of '0' .. '9':
-          while g.buf[pos] in {'0' .. '9'}:
-            inc(pos)
+          break
         of '\0':
+          # Still unterminated at the line end: keep spanning onto the next line.
+          g.state = gtStringLit
+          break
+        of '\"':
+          inc(pos)
           g.state = gtNone
+          break
         else:
           inc(pos)
-        break
-      of '\0', '\x0D', '\x0A':
-        g.state = gtNone
-        break
-      of '\"':
-        inc(pos)
-        g.state = gtNone
-        break
-      else:
-        inc(pos)
   else:
     case g.buf[pos]
     of ' ', '\x09' .. '\x0D':
@@ -236,6 +244,11 @@ proc lispNextToken*(g: var GeneralTokenizer) =
       while true:
         case g.buf[pos]
         of '\0':
+          # Unterminated at the line end. Lisp strings span lines, so keep the
+          # string state so the next line continues as a string literal. This
+          # matches the full reparse, which sees the buffer as one '\n'-joined
+          # string and runs the literal past the newline.
+          g.state = gtStringLit
           break
         of '\"':
           inc(pos)
