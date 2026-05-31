@@ -126,35 +126,35 @@ suite "editor_hover - hideHoverPopup":
   test "Hides the hover popup":
     let e = createTestEditor()
 
-    e.hideHoverPopup()
+    e.state.lspCache.hideHoverPopup()
     # No crash means success
 
 suite "editor_hover - hoverPopupScrollDown":
   test "Scrolls hover popup down":
     let e = createTestEditor()
 
-    e.hoverPopupScrollDown()
+    e.state.lspCache.hoverPopupScrollDown()
     # No crash means success
 
 suite "editor_hover - hoverPopupScrollUp":
   test "Scrolls hover popup up":
     let e = createTestEditor()
 
-    e.hoverPopupScrollUp()
+    e.state.lspCache.hoverPopupScrollUp()
     # No crash means success
 
 suite "editor_hover - hoverPopupScrollRight":
   test "Scrolls hover popup right":
     let e = createTestEditor()
 
-    e.hoverPopupScrollRight()
+    e.state.lspCache.hoverPopupScrollRight()
     # No crash means success
 
 suite "editor_hover - hoverPopupScrollLeft":
   test "Scrolls hover popup left":
     let e = createTestEditor()
 
-    e.hoverPopupScrollLeft()
+    e.state.lspCache.hoverPopupScrollLeft()
     # No crash means success
 
 suite "editor_hover - maybeAutoHoverDiagnostic":

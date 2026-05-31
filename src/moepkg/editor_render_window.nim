@@ -67,18 +67,18 @@ proc resolveLineConflict(
   else:
     cmkNone
 
-proc effectiveSearchPattern(e: Editor): string =
+proc effectiveSearchPattern(state: EditorState): string =
   ## Resolve the active hlsearch pattern based on overlay state.
   ## - Search overlay: live text being typed
   ## - Command overlay: substitute pattern if present, else last search
   ## - Otherwise: last search
-  if e.state.isSearchOverlay:
-    e.state.search.text
-  elif e.state.isCommandOverlay:
-    let subPattern = extractSubstitutePattern(e.state.commandText)
-    if subPattern.len > 0: subPattern else: e.state.search.lastText
+  if state.isSearchOverlay:
+    state.search.text
+  elif state.isCommandOverlay:
+    let subPattern = extractSubstitutePattern(state.commandText)
+    if subPattern.len > 0: subPattern else: state.search.lastText
   else:
-    e.state.search.lastText
+    state.search.lastText
 
 proc newLineStyleContext*(
     e: Editor,
@@ -99,7 +99,7 @@ proc newLineStyleContext*(
   let searchRanges =
     if textBuffer != nil and e.state.search.hlsearch and
         not e.state.search.hlsearchTempDisabled:
-      let searchPattern = e.effectiveSearchPattern()
+      let searchPattern = e.state.effectiveSearchPattern()
       if searchPattern.len > 0:
         let shouldIgnoreCase = shouldIgnoreCase(
           searchPattern, e.state.search.ignorecase, e.state.search.smartcase
@@ -177,7 +177,7 @@ proc overlayPatchSyntax(
   ## Background overlay for the syntax-highlighted code path. Syntax fg and
   ## modifiers are preserved; only the bg may be overridden.
   ## Priority: documentHighlight > gitConflict > cursorLine > cursorColumn.
-  let highlightKind = e.isPositionInDocumentHighlight(pos)
+  let highlightKind = e.state.isPositionInDocumentHighlight(pos)
   if highlightKind.isSome:
     return bgOnly(getDocumentHighlightStyle(highlightKind.get).bg)
   if lineCtx.gitConflictApplies:
@@ -210,7 +210,7 @@ proc baseStyleWithOverlay(
       e.overlayPatchSyntax(pos, lineCtx, displayCol, cursorDisplayCol, colorPair)
     )
   else:
-    let highlightKind = e.isPositionInDocumentHighlight(pos)
+    let highlightKind = e.state.isPositionInDocumentHighlight(pos)
     if highlightKind.isSome:
       getDocumentHighlightStyle(highlightKind.get)
     elif lineCtx.gitConflictApplies:
@@ -513,8 +513,10 @@ proc renderLineSegmentWithSelection*(
     buffer.setCell(screenX + displayX, screenY, " ", 1, fillStyle)
     displayX += 1
 
-proc fmtLineNum(e: Editor, lineIndex: int, cursorLine: int, width: int): string =
-  if e.state.display.relativeLineNumbers:
+proc fmtLineNum(
+    state: EditorState, lineIndex: int, cursorLine: int, width: int
+): string =
+  if state.display.relativeLineNumbers:
     formatRelativeLineNumber(lineIndex, cursorLine, width)
   else:
     formatLineNumber(lineIndex, width)
@@ -554,7 +556,7 @@ proc renderWindowLineWrapped*(
       return
     # Empty line - just render line number (if enabled)
     if lineNumOffset > 0:
-      let lineNumStr = e.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
+      let lineNumStr = e.state.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
       if lineNumScreenX + lineNumStr.len <= buffer.area.width:
         buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
     # Fill with cursor line/column highlight if on cursor line/column
@@ -600,7 +602,8 @@ proc renderWindowLineWrapped*(
     # Render line number for first wrap, empty space for others (if enabled)
     if lineNumOffset > 0:
       if wrapLineCount == 0:
-        let lineNumStr = e.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
+        let lineNumStr =
+          e.state.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
         if lineNumScreenX + lineNumStr.len <= buffer.area.width:
           buffer.setString(lineNumScreenX, currentActualScreenY, lineNumStr, lineStyle)
       else:
@@ -662,7 +665,7 @@ proc renderWindowLineNoWrap*(
 
   # Render line number (if enabled)
   if lineNumOffset > 0:
-    let lineNumStr = e.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
+    let lineNumStr = e.state.fmtLineNum(lineIndex, window.cursor.line, lineNumOffset)
     if lineNumScreenX + lineNumStr.len <= buffer.area.width:
       buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
 
@@ -750,7 +753,8 @@ proc renderFoldLine*(
 
   # Render line number (if enabled)
   if lineNumOffset > 0:
-    let lineNumStr = e.fmtLineNum(fold.startLine, window.cursor.line, lineNumOffset)
+    let lineNumStr =
+      e.state.fmtLineNum(fold.startLine, window.cursor.line, lineNumOffset)
     if lineNumScreenX + lineNumStr.len <= buffer.area.width:
       buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineNumStyle())
 

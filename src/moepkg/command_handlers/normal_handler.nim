@@ -489,12 +489,13 @@ proc fromPassthrough(k: PassthroughKind): NormalModeResult {.inline.} =
   NormalModeResult(kind: nmrPassthrough, passthroughKind: k)
 
 proc handleNormalModeKey*(
-    handler: NormalModeHandler, editor: Editor, keyCombo: KeyCombo
+    handler: NormalModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    keyCombo: KeyCombo,
 ): NormalModeResult =
   ## Main entry point for handling Normal mode key presses
-  let buffer = editor.activeBuffer
-  let state = editor.state
-  let viewport = editor.viewport
 
   # Check if we're waiting for a macro register name
   if state.macroState.waitingForRegister:

@@ -177,16 +177,16 @@ proc updateCodeLensCache*(e: Editor) =
   if elapsed >= threshold:
     e.doUpdateCodeLensCache()
 
-proc getCodeLensItemsForLine*(e: Editor, line: int): seq[CodeLensItem] =
+proc getCodeLensItemsForLine*(cache: var LspCacheState, line: int): seq[CodeLensItem] =
   ## Get cached CodeLens items for a specific line (O(1) lookup)
-  if not e.state.lspCache.codeLensCache.isValid:
+  if not cache.codeLensCache.isValid:
     return @[]
 
-  e.state.lspCache.codeLensCache.itemsByLine.getOrDefault(line, @[])
+  cache.codeLensCache.itemsByLine.getOrDefault(line, @[])
 
 proc getCodeLensItemsForCurrentLine*(e: Editor): seq[CodeLensItem] =
   ## Get cached CodeLens items for the current cursor line
-  e.getCodeLensItemsForLine(e.cursor.line)
+  e.state.lspCache.getCodeLensItemsForLine(e.cursor.line)
 
 proc executeCodeLensItem*(
     e: Editor, item: CodeLensItem
@@ -220,15 +220,15 @@ proc executeCodeLensItem*(
   except Exception as err:
     return err("Failed to execute CodeLens: " & err.msg)
 
-proc invalidateCodeLensCache*(e: Editor) =
+proc invalidateCodeLensCache*(cache: var LspCacheState) =
   ## Invalidate the CodeLens cache (call when buffer changes significantly)
-  e.state.lspCache.codeLensCache.isValid = false
+  cache.codeLensCache.isValid = false
 
 # Document Highlight support
-proc invalidateDocumentHighlightCache*(e: Editor) =
+proc invalidateDocumentHighlightCache*(cache: var LspCacheState) =
   ## Invalidate the Document Highlight cache
-  e.state.lspCache.documentHighlightCache.isValid = false
-  e.state.lspCache.documentHighlightCache.itemsByLine.clear()
+  cache.documentHighlightCache.isValid = false
+  cache.documentHighlightCache.itemsByLine.clear()
 
 proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlight]) =
   ## Internal: Process document highlights from LSP response
@@ -304,7 +304,7 @@ proc doUpdateDocumentHighlightCache(e: Editor) =
   ## Internal: Start an async Document Highlight request (non-blocking)
   let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
-    e.invalidateDocumentHighlightCache()
+    e.state.lspCache.invalidateDocumentHighlightCache()
     return
 
   # Start async request
@@ -313,7 +313,7 @@ proc doUpdateDocumentHighlightCache(e: Editor) =
   if reqResult.isOk:
     e.state.lspCache.pendingDocumentHighlightRequestId = reqResult.get
   else:
-    e.invalidateDocumentHighlightCache()
+    e.state.lspCache.invalidateDocumentHighlightCache()
 
 proc updateDocumentHighlightCache*(e: Editor) =
   ## Update the Document Highlight cache (with debouncing)
@@ -326,7 +326,7 @@ proc updateDocumentHighlightCache*(e: Editor) =
   # In Insert/Replace modes, clear highlights to avoid distraction
   if e.state.mode in {EditorMode.Insert, EditorMode.Replace}:
     if e.state.lspCache.documentHighlightCache.isValid:
-      e.invalidateDocumentHighlightCache()
+      e.state.lspCache.invalidateDocumentHighlightCache()
     if e.state.lspCache.pendingDocumentHighlightRequestId != 0:
       e.lsp.cancelRequest(e.state.lspCache.pendingDocumentHighlightRequestId)
       e.state.lspCache.pendingDocumentHighlightRequestId = 0
@@ -374,12 +374,12 @@ proc updateDocumentHighlightCache*(e: Editor) =
 
 # Semantic Tokens (LSP-based syntax highlighting)
 
-proc invalidateSemanticTokensCache*(e: Editor) =
+proc invalidateSemanticTokensCache*(lsp: LspIntegration, cache: var LspCacheState) =
   ## Invalidate the semantic tokens cache, forcing re-request on next update
-  e.state.lspCache.semanticTokensCache = SemanticTokensCache(isValid: false)
-  if e.state.lspCache.pendingSemanticTokensRequestId != 0:
-    e.lsp.cancelRequest(e.state.lspCache.pendingSemanticTokensRequestId)
-    e.state.lspCache.pendingSemanticTokensRequestId = 0
+  cache.semanticTokensCache = SemanticTokensCache(isValid: false)
+  if cache.pendingSemanticTokensRequestId != 0:
+    lsp.cancelRequest(cache.pendingSemanticTokensRequestId)
+    cache.pendingSemanticTokensRequestId = 0
 
 proc processSemanticTokensResponse(e: Editor, resp: JsonNode) =
   ## Process semantic tokens response and apply to buffer's highlight
@@ -410,7 +410,7 @@ proc doUpdateSemanticTokensCache(e: Editor) =
   ## Internal: Start an async semantic tokens request (non-blocking)
   let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
-    e.invalidateSemanticTokensCache()
+    invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
     return
 
   # Request semantic tokens for visible range (with margin)
@@ -424,7 +424,7 @@ proc doUpdateSemanticTokensCache(e: Editor) =
     e.state.lspCache.pendingSemanticTokensRequestId = reqResult.get
   else:
     logDebug("editor", "Semantic tokens request failed: " & reqResult.error)
-    e.invalidateSemanticTokensCache()
+    invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
 
 proc updateSemanticTokensCache*(e: Editor) =
   ## Update the semantic tokens cache (with debouncing)
@@ -484,7 +484,7 @@ proc updateSemanticTokensCache*(e: Editor) =
 proc getCodeLensDisplayText*(e: Editor, line: int): string =
   ## Get display text for CodeLens on a specific line
   ## Returns empty string if no CodeLens on this line
-  let items = e.getCodeLensItemsForLine(line)
+  let items = e.state.lspCache.getCodeLensItemsForLine(line)
   if items.len == 0:
     return ""
 
@@ -508,10 +508,10 @@ proc showCodeLensPicker*(e: Editor, items: seq[CodeLensItem]) =
     isActive: true,
   )
 
-proc hideCodeLensPicker*(e: Editor) =
+proc hideCodeLensPicker*(cache: var LspCacheState) =
   ## Hide the CodeLens picker
-  e.state.lspCache.codeLensPicker.isActive = false
-  e.state.lspCache.codeLensPicker.items = @[]
+  cache.codeLensPicker.isActive = false
+  cache.codeLensPicker.items = @[]
 
 proc codeLensPickerSelectNext*(e: Editor) =
   ## Move selection down in CodeLens picker
@@ -553,7 +553,7 @@ proc codeLensPickerSelectByNumber*(
       return
 
     let item = e.state.lspCache.codeLensPicker.items[index]
-    e.hideCodeLensPicker()
+    e.state.lspCache.hideCodeLensPicker()
 
     let execResult = await e.executeCodeLensItem(item)
     if execResult.isErr:
@@ -571,7 +571,7 @@ proc codeLensPickerConfirm*(e: Editor): Future[void] {.async: (raises: []).} =
     let item = e.state.lspCache.codeLensPicker.items[
       e.state.lspCache.codeLensPicker.selectedIndex
     ]
-    e.hideCodeLensPicker()
+    e.state.lspCache.hideCodeLensPicker()
 
     let execResult = await e.executeCodeLensItem(item)
     if execResult.isErr:

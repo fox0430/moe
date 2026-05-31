@@ -767,6 +767,13 @@ proc `statusMessage=`*(state: EditorState, msg: string) =
     addMessageLog(msg)
     logDebug("editorMessage", msg)
 
+proc setStatusQuiet*(state: EditorState, msg: string) =
+  ## Set the status message *without* the logging side effects of the
+  ## `statusMessage=` setter (no addMessageLog / logDebug). Use this in tests
+  ## and hot paths where the message should not be appended to the message log
+  ## or the debug log.
+  state.statusMessageStr = msg
+
 const MaxStatusMessageLines* = 10
   ## Maximum lines for multi-line status messages to prevent viewport from disappearing
 

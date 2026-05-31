@@ -178,13 +178,14 @@ proc executeCommand*(
     return VisualModeResult(kind: vmrError, errorMessage: r.error)
 
 proc handleVisualModeKey*(
-    handler: VisualModeHandler, editor: Editor, keyCombo: KeyCombo
+    handler: VisualModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    keyCombo: KeyCombo,
 ): VisualModeResult =
   ## Main entry point for handling Visual mode key presses
   ## Works for Visual, VisualBlock, and VisualLine modes
-  let buffer = editor.activeBuffer
-  let state = editor.state
-  let viewport = editor.viewport
 
   # Record key for macro if recording is active
   if state.macroState.isRecording:

@@ -291,7 +291,8 @@ proc handleNormalMode*(
   ## Handle Normal mode input
   let buffer = editor.activeBuffer
   let state = editor.state
-  let r = manager.normalHandler.handleNormalModeKey(editor, keyCombo)
+  let r =
+    manager.normalHandler.handleNormalModeKey(buffer, state, editor.viewport, keyCombo)
 
   # Trivial passthrough variants (window.*, file.*, buffer.*.tab, lsp.*
   # custom) collapse into a single shared translation table.

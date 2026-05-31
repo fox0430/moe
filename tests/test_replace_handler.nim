@@ -86,17 +86,6 @@ proc createTestViewport(): ViewPort =
   ## Create a minimal viewport for testing
   ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
 
-proc createTestEditor(buf: TextBuffer, state: EditorState): Editor =
-  ## Create a minimal Editor wrapping the given buffer and state for testing
-  state.activeWindow.buffer = buf
-  Editor(
-    textBuffer: buf,
-    state: state,
-    viewport: createTestViewport(),
-    windowManager:
-      EditorWindowManager(windows: @[state.activeWindow], activeWindowIndex: 0),
-  )
-
 proc createTestHandler(buf: TextBuffer): ReplaceModeHandler =
   ## Create a ReplaceModeHandler for testing
   let keyBindingRegistry = newKeyBindingRegistry()
@@ -412,7 +401,7 @@ suite "ReplaceModeHandler - Key Handling":
     let state = createTestState()
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check r.modeTransition.isSome
@@ -430,7 +419,7 @@ suite "ReplaceModeHandler - Key Handling":
 
     let keyCombo =
       KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check buf.getLine(0) == "hello"
@@ -443,7 +432,7 @@ suite "ReplaceModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 5)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check state.cursor.line == 1
@@ -456,7 +445,7 @@ suite "ReplaceModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 3)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skLeft, fnNum: 0, modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check state.cursor.column == 2
@@ -469,7 +458,7 @@ suite "ReplaceModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skRight, fnNum: 0, modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check state.cursor.column == 1
@@ -483,7 +472,7 @@ suite "ReplaceModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 1, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skUp, fnNum: 0, modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check state.cursor.line == 0
@@ -497,7 +486,7 @@ suite "ReplaceModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skDown, fnNum: 0, modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check state.cursor.line == 1
@@ -510,7 +499,7 @@ suite "ReplaceModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 3)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skHome, fnNum: 0, modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check state.cursor.column == 0
@@ -523,7 +512,7 @@ suite "ReplaceModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEnd, fnNum: 0, modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check state.cursor.column == 4
@@ -536,7 +525,7 @@ suite "ReplaceModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "x", modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check buf.getLine(0) == "xello"
@@ -551,7 +540,7 @@ suite "ReplaceModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 20, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skPageUp, fnNum: 0, modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check state.cursor.line < 20
@@ -567,7 +556,7 @@ suite "ReplaceModeHandler - Key Handling":
 
     let keyCombo =
       KeyCombo(isSpecial: true, special: skPageDown, fnNum: 0, modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check state.cursor.line > 5
@@ -582,7 +571,7 @@ suite "ReplaceModeHandler - Unhandled Keys":
     # Function key (F1) - not typically handled in replace mode
     let keyCombo =
       KeyCombo(isSpecial: true, special: skFunction, fnNum: 1, modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrUnhandled
 
@@ -594,7 +583,7 @@ suite "ReplaceModeHandler - Unhandled Keys":
 
     # Ctrl+X - not a standard binding in replace mode
     let keyCombo = KeyCombo(isSpecial: false, char: "x", modifiers: {kmCtrl})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrUnhandled
 
@@ -610,7 +599,7 @@ suite "ReplaceModeHandler - Macro Recording":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "x", modifiers: {})
-    discard handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    discard handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check state.macroState.recordedKeys.len >= 1
 
@@ -623,7 +612,7 @@ suite "ReplaceModeHandler - Key Binding Motions":
     state.cursor = BufferPosition(line: 0, column: 3)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "h", modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     # In Replace mode, h replaces the character (not motion like Normal mode)
     check r.kind == rmrHandled
@@ -638,7 +627,7 @@ suite "ReplaceModeHandler - Key Binding Motions":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check buf.getLine(0) == "jine1"
@@ -651,7 +640,7 @@ suite "ReplaceModeHandler - Key Binding Motions":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "k", modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check buf.getLine(0) == "kine1"
@@ -664,7 +653,7 @@ suite "ReplaceModeHandler - Key Binding Motions":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
-    let r = handler.handleReplaceModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleReplaceModeKey(buf, state, keyCombo)
 
     check r.kind == rmrHandled
     check buf.getLine(0) == "lello"

@@ -427,8 +427,7 @@ suite "NormalModeHandler - Macro Recording State":
 
     # Simulate pressing 'q'
     let keyCombo = KeyCombo(isSpecial: false, char: "q", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.macroState.waitingForRegister == true
@@ -448,8 +447,7 @@ suite "NormalModeHandler - Macro Recording State":
 
     # Press 'a' to select register
     let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.macroState.isRecording == true
@@ -468,8 +466,7 @@ suite "NormalModeHandler - Macro Recording State":
 
     # Press '1' (invalid register)
     let keyCombo = KeyCombo(isSpecial: false, char: "1", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.macroState.waitingForRegister == false
@@ -489,8 +486,7 @@ suite "NormalModeHandler - Macro Recording State":
 
     # Press 'q' to stop recording (matches recordStartKey)
     let keyCombo = KeyCombo(isSpecial: false, char: "q", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.macroState.isRecording == false
@@ -508,8 +504,7 @@ suite "NormalModeHandler - Macro Playback State":
     # Simulate pressing '@' - key binding system handles it as ctOperatorPending
     # waiting for character (register name)
     let keyCombo = KeyCombo(isSpecial: false, char: "@", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
 
@@ -526,8 +521,7 @@ suite "NormalModeHandler - Macro Playback State":
 
     # Press 'a' to play register
     let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrPlaybackMacro
     check r.macroKeys == @["d", "d"]
@@ -546,8 +540,7 @@ suite "NormalModeHandler - Macro Playback State":
 
     # Press 'z' (empty register)
     let keyCombo = KeyCombo(isSpecial: false, char: "z", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.statusMessage == "Register @z is empty"
@@ -566,8 +559,7 @@ suite "NormalModeHandler - Macro Playback State":
 
     # Press '@' to repeat last macro
     let keyCombo = KeyCombo(isSpecial: false, char: "@", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrPlaybackMacro
     check r.macroKeys == @["j", "j"]
@@ -584,8 +576,7 @@ suite "NormalModeHandler - Macro Playback State":
 
     # Press '@' when no previous macro
     let keyCombo = KeyCombo(isSpecial: false, char: "@", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.statusMessage == "No previous macro"
@@ -600,8 +591,7 @@ suite "NormalModeHandler - Register Selection":
     # Press '"' to start register selection - key binding system handles it
     # as ctOperatorPending waiting for character (register name)
     let keyCombo = KeyCombo(isSpecial: false, char: "\"", modifiers: {})
-    let result =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let result = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check result.kind == nmrHandled
 
@@ -613,11 +603,10 @@ suite "NormalModeHandler - Register Selection":
 
     # Press '"' then 'a' to select register (two-key sequence via key binding)
     let quoteKey = KeyCombo(isSpecial: false, char: "\"", modifiers: {})
-    discard
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), quoteKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, quoteKey)
 
     let aKey = KeyCombo(isSpecial: false, char: "a", modifiers: {})
-    let r = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), aKey)
+    let r = handler.handleNormalModeKey(buf, state, viewport, aKey)
 
     check r.kind == nmrHandled
     check state.pendingRegister.isSome
@@ -631,11 +620,10 @@ suite "NormalModeHandler - Register Selection":
 
     # Press '"' then '!' (invalid register)
     let quoteKey = KeyCombo(isSpecial: false, char: "\"", modifiers: {})
-    discard
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), quoteKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, quoteKey)
 
     let bangKey = KeyCombo(isSpecial: false, char: "!", modifiers: {})
-    let r = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), bangKey)
+    let r = handler.handleNormalModeKey(buf, state, viewport, bangKey)
 
     check r.kind == nmrHandled
     check state.pendingRegister.isNone
@@ -648,11 +636,10 @@ suite "NormalModeHandler - Register Selection":
 
     # Press '"' then Escape
     let quoteKey = KeyCombo(isSpecial: false, char: "\"", modifiers: {})
-    discard
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), quoteKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, quoteKey)
 
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let r = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), escKey)
+    let r = handler.handleNormalModeKey(buf, state, viewport, escKey)
 
     check r.kind == nmrHandled
     check state.pendingRegister.isNone
@@ -969,8 +956,7 @@ suite "NormalModeHandler - Jump List":
 
     # Simulate Ctrl-o
     let keyCombo = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrError
     check r.errorMessage == "Jump list is empty"
@@ -986,8 +972,7 @@ suite "NormalModeHandler - Jump List":
 
     # Simulate Ctrl-i
     let keyCombo = KeyCombo(isSpecial: false, char: "i", modifiers: {kmCtrl})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrError
     check r.errorMessage == "No newer jump position"
@@ -1012,8 +997,7 @@ suite "NormalModeHandler - Jump List":
 
     # Simulate Ctrl-o
     let keyCombo = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
 
@@ -1032,8 +1016,7 @@ suite "NormalModeHandler - Jump List":
 
     # Simulate Ctrl-o
     let keyCombo = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrJumpToBuffer
     check r.nmrJumpBufferId == BufferId(1)
@@ -1052,8 +1035,7 @@ suite "NormalModeHandler - Text Object Pending State":
 
     # Press Escape to cancel
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    discard handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check state.editState.pendingTextObject.isNone
 
@@ -1092,8 +1074,7 @@ suite "NormalModeHandler - Macro Key Recording":
 
     # Press 'j' while recording
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    discard
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    discard handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     # Key should be recorded
     check state.macroState.recordedKeys.len >= 1
@@ -1111,8 +1092,7 @@ suite "NormalModeHandler - Macro Key Recording":
     state.macroState.registers['a'] = @["j"]
 
     let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrPlaybackMacro
     check r.macroCount == 5
@@ -1220,8 +1200,7 @@ suite "NormalModeHandler - Text Object Handling":
 
     # Press 'w' for word text object
     let keyCombo = KeyCombo(isSpecial: false, char: "w", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled or r.kind == nmrError
 
@@ -1243,8 +1222,7 @@ suite "NormalModeHandler - Text Object Handling":
     )
 
     let keyCombo = KeyCombo(isSpecial: false, char: "W", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled or r.kind == nmrError
 
@@ -1267,8 +1245,7 @@ suite "NormalModeHandler - Text Object Handling":
     )
 
     let keyCombo = KeyCombo(isSpecial: false, char: "\"", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled or r.kind == nmrError
 
@@ -1291,8 +1268,7 @@ suite "NormalModeHandler - Text Object Handling":
     )
 
     let keyCombo = KeyCombo(isSpecial: false, char: "'", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled or r.kind == nmrError
 
@@ -1315,8 +1291,7 @@ suite "NormalModeHandler - Text Object Handling":
     )
 
     let keyCombo = KeyCombo(isSpecial: false, char: "(", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled or r.kind == nmrError
 
@@ -1339,8 +1314,7 @@ suite "NormalModeHandler - Text Object Handling":
     )
 
     let keyCombo = KeyCombo(isSpecial: false, char: "[", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled or r.kind == nmrError
 
@@ -1363,8 +1337,7 @@ suite "NormalModeHandler - Text Object Handling":
     )
 
     let keyCombo = KeyCombo(isSpecial: false, char: "{", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled or r.kind == nmrError
 
@@ -1387,8 +1360,7 @@ suite "NormalModeHandler - Text Object Handling":
     )
 
     let keyCombo = KeyCombo(isSpecial: false, char: "<", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled or r.kind == nmrError
 
@@ -1411,8 +1383,7 @@ suite "NormalModeHandler - Text Object Handling":
     )
 
     let keyCombo = KeyCombo(isSpecial: false, char: "`", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled or r.kind == nmrError
 
@@ -1435,8 +1406,7 @@ suite "NormalModeHandler - Text Object Handling":
 
     # Press 'z' which is not a valid text object
     let keyCombo = KeyCombo(isSpecial: false, char: "z", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.editState.pendingTextObject.isNone
@@ -1456,8 +1426,7 @@ suite "NormalModeHandler - Jump List Edge Cases":
 
     # Simulate Ctrl-i
     let keyCombo = KeyCombo(isSpecial: false, char: "i", modifiers: {kmCtrl})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrError
     check r.errorMessage == "Already at newest jump position"
@@ -1481,8 +1450,7 @@ suite "NormalModeHandler - Jump List Edge Cases":
 
     # Simulate Ctrl-o
     let keyCombo = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.jumpListIndex == 0
@@ -1503,8 +1471,7 @@ suite "NormalModeHandler - Jump List Edge Cases":
 
     # Simulate Ctrl-i
     let keyCombo = KeyCombo(isSpecial: false, char: "i", modifiers: {kmCtrl})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrJumpToBuffer
     check r.nmrJumpBufferId == BufferId(1)
@@ -1525,8 +1492,7 @@ suite "NormalModeHandler - Macro Edge Cases":
     state.macroState.lastRegister = some('a')
 
     let keyCombo = KeyCombo(isSpecial: false, char: "@", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.statusMessage == "Register @a is empty"
@@ -1542,8 +1508,7 @@ suite "NormalModeHandler - Macro Edge Cases":
 
     # Empty char
     let keyCombo = KeyCombo(isSpecial: false, char: "", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.statusMessage == "Invalid register (use a-z)"
@@ -1559,8 +1524,7 @@ suite "NormalModeHandler - Macro Edge Cases":
 
     # Press Escape
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.macroState.waitingForRegister == false
@@ -1577,8 +1541,7 @@ suite "NormalModeHandler - Macro Edge Cases":
 
     # Press '!' (invalid for playback)
     let keyCombo = KeyCombo(isSpecial: false, char: "!", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.statusMessage == "Invalid register (use a-z, @, or :)"
@@ -1598,8 +1561,7 @@ suite "NormalModeHandler - Macro Edge Cases":
 
     # Press ':' to trigger @:
     let keyCombo = KeyCombo(isSpecial: false, char: ":", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrExecCommand
     check r.execCommandText == "set number"
@@ -1620,8 +1582,7 @@ suite "NormalModeHandler - Macro Edge Cases":
 
     # Press ':' to trigger @:
     let keyCombo = KeyCombo(isSpecial: false, char: ":", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.statusMessage == "No previous Command mode command"
@@ -1638,10 +1599,9 @@ suite "NormalModeHandler - Command mode command alias dispatch (#2597)":
 
     let state = createTestState()
     let viewport = createTestViewport()
-    let editor = createTestEditor(buf, state, viewport, handler.keyBindingRegistry)
     let keyCombo = KeyCombo(isSpecial: false, char: "K", modifiers: {})
 
-    let r = handler.handleNormalModeKey(editor, keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrExecCommand
     check r.execCommandText == "bdelete"
@@ -1657,10 +1617,9 @@ suite "NormalModeHandler - Command mode command alias dispatch (#2597)":
 
     let state = createTestState()
     let viewport = createTestViewport()
-    let editor = createTestEditor(buf, state, viewport, handler.keyBindingRegistry)
     let keyCombo = KeyCombo(isSpecial: false, char: "D", modifiers: {})
 
-    let r = handler.handleNormalModeKey(editor, keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrExecCommand
     check r.execCommandText == "bd"
@@ -1680,8 +1639,7 @@ suite "NormalModeHandler - updateCursorToJumpPosition":
 
     # Jump to position - cursor should be clamped
     let keyCombo = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     # Either handled (cursor clamped) or error
     check r.kind == nmrHandled or r.kind == nmrError
@@ -1700,8 +1658,7 @@ suite "NormalModeHandler - updateCursorToJumpPosition":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     # Cursor should be clamped to valid position
@@ -1723,8 +1680,7 @@ suite "NormalModeHandler - updateCursorToJumpPosition":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
     check state.cursor.column == 0
@@ -1739,8 +1695,7 @@ suite "NormalModeHandler - Command Types":
 
     # Press '2' to start numeric prefix
     let keyCombo = KeyCombo(isSpecial: false, char: "2", modifiers: {})
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == nmrHandled
 
@@ -1771,8 +1726,7 @@ suite "NormalModeHandler - File operation commands":
     check err == ""
 
     let keyCombo = KeyCombo(isSpecial: false, char: "Q")
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
     check r.kind == nmrPassthrough
     check r.passthroughKind == ptNewFile
 
@@ -1788,8 +1742,7 @@ suite "NormalModeHandler - File operation commands":
     check err == ""
 
     let keyCombo = KeyCombo(isSpecial: false, char: "Q")
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
     check r.kind == nmrPassthrough
     check r.passthroughKind == ptBufferDelete
 
@@ -1805,8 +1758,7 @@ suite "NormalModeHandler - File operation commands":
     check err == ""
 
     let keyCombo = KeyCombo(isSpecial: false, char: "Q")
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
     check r.kind == nmrPassthrough
     check r.passthroughKind == ptEnterFiler
 
@@ -1822,8 +1774,7 @@ suite "NormalModeHandler - File operation commands":
     check err == ""
 
     let keyCombo = KeyCombo(isSpecial: false, char: "Q")
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
     check r.kind == nmrPassthrough
     check r.passthroughKind == ptEnterFiler
 
@@ -1836,8 +1787,7 @@ suite "NormalModeHandler - Macro/Register/Window commands":
     let viewport = createTestViewport()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "q")
-    let r =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleNormalModeKey(buf, state, viewport, keyCombo)
     check r.kind == nmrHandled
     check state.macroState.waitingForRegister == true
     check state.macroState.commandType == "record"
@@ -1855,12 +1805,12 @@ suite "NormalModeHandler - Macro/Register/Window commands":
 
     # Press @
     let atKey = KeyCombo(isSpecial: false, char: "@")
-    let r1 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), atKey)
+    let r1 = handler.handleNormalModeKey(buf, state, viewport, atKey)
     check r1.kind == nmrHandled # waiting for char
 
     # Press 'a' (register name)
     let aKey = KeyCombo(isSpecial: false, char: "a")
-    let r2 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), aKey)
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, aKey)
     check r2.kind == nmrPlaybackMacro
 
   test "register-select (\"a) sets pendingRegister":
@@ -1872,13 +1822,12 @@ suite "NormalModeHandler - Macro/Register/Window commands":
 
     # Press "
     let quoteKey = KeyCombo(isSpecial: false, char: "\"")
-    let r1 =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), quoteKey)
+    let r1 = handler.handleNormalModeKey(buf, state, viewport, quoteKey)
     check r1.kind == nmrHandled # waiting for char
 
     # Press 'a' (register name)
     let aKey = KeyCombo(isSpecial: false, char: "a")
-    let r2 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), aKey)
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, aKey)
     check r2.kind == nmrHandled
     check state.pendingRegister == some('a')
 
@@ -1891,13 +1840,12 @@ suite "NormalModeHandler - Macro/Register/Window commands":
 
     # Press \ (sequence prefix)
     let backslashKey = KeyCombo(isSpecial: false, char: "\\")
-    let r1 =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), backslashKey)
+    let r1 = handler.handleNormalModeKey(buf, state, viewport, backslashKey)
     check r1.kind == nmrHandled # consumed as sequence prefix
 
     # Press r
     let rKey = KeyCombo(isSpecial: false, char: "r")
-    let r2 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), rKey)
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, rKey)
     check r2.kind == nmrPassthrough
     check r2.passthroughKind == ptQuickRun
 
@@ -1910,12 +1858,12 @@ suite "NormalModeHandler - Macro/Register/Window commands":
 
     # Press C-w
     let cwKey = KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl})
-    let r1 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), cwKey)
+    let r1 = handler.handleNormalModeKey(buf, state, viewport, cwKey)
     check r1.kind == nmrHandled # consumed as sequence prefix
 
     # Press k
     let kKey = KeyCombo(isSpecial: false, char: "k")
-    let r2 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), kKey)
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, kKey)
     check r2.kind == nmrPassthrough
     check r2.passthroughKind == ptNextWindow
 
@@ -1928,12 +1876,12 @@ suite "NormalModeHandler - Macro/Register/Window commands":
 
     # Press C-w
     let cwKey = KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl})
-    let r1 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), cwKey)
+    let r1 = handler.handleNormalModeKey(buf, state, viewport, cwKey)
     check r1.kind == nmrHandled # consumed as sequence prefix
 
     # Press j
     let jKey = KeyCombo(isSpecial: false, char: "j")
-    let r2 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), jKey)
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, jKey)
     check r2.kind == nmrPassthrough
     check r2.passthroughKind == ptPrevWindow
 
@@ -1946,24 +1894,24 @@ suite "NormalModeHandler - Macro/Register/Window commands":
 
     # Start recording: press q
     let qKey = KeyCombo(isSpecial: false, char: "q")
-    let r1 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), qKey)
+    let r1 = handler.handleNormalModeKey(buf, state, viewport, qKey)
     check r1.kind == nmrHandled
     check state.macroState.waitingForRegister == true
 
     # Select register 'a'
     let aKey = KeyCombo(isSpecial: false, char: "a")
-    let r2 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), aKey)
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, aKey)
     check r2.kind == nmrHandled
     check state.macroState.isRecording == true
     check state.macroState.register == 'a'
 
     # Press j (recorded)
     let jKey = KeyCombo(isSpecial: false, char: "j")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), jKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, jKey)
     check state.macroState.recordedKeys.len == 1
 
     # Stop recording: press q
-    let r3 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), qKey)
+    let r3 = handler.handleNormalModeKey(buf, state, viewport, qKey)
     check r3.kind == nmrHandled
     check state.macroState.isRecording == false
     check state.macroState.registers.hasKey('a')
@@ -1984,27 +1932,25 @@ suite "NormalModeHandler - Macro/Register/Window commands":
 
     # Start recording: press Q (remapped key)
     let bigQKey = KeyCombo(isSpecial: false, char: "Q")
-    let r1 =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), bigQKey)
+    let r1 = handler.handleNormalModeKey(buf, state, viewport, bigQKey)
     check r1.kind == nmrHandled
     check state.macroState.waitingForRegister == true
     check state.macroState.recordStartKey == "Q"
 
     # Select register 'b'
     let bKey = KeyCombo(isSpecial: false, char: "b")
-    let r2 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), bKey)
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, bKey)
     check r2.kind == nmrHandled
     check state.macroState.isRecording == true
     check state.macroState.register == 'b'
 
     # Press j (recorded)
     let jKey = KeyCombo(isSpecial: false, char: "j")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), jKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, jKey)
     check state.macroState.recordedKeys.len == 1
 
     # Stop recording: press Q (matches recordStartKey "Q")
-    let r3 =
-      handler.handleNormalModeKey(createTestEditor(buf, state, viewport), bigQKey)
+    let r3 = handler.handleNormalModeKey(buf, state, viewport, bigQKey)
     check r3.kind == nmrHandled
     check state.macroState.isRecording == false
     check state.macroState.registers.hasKey('b')
@@ -2024,11 +1970,11 @@ suite "NormalModeHandler - Macro/Register/Window commands":
 
     # Press @ (first key - key binding enters waitingForChar)
     let atKey = KeyCombo(isSpecial: false, char: "@")
-    let r1 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), atKey)
+    let r1 = handler.handleNormalModeKey(buf, state, viewport, atKey)
     check r1.kind == nmrHandled
 
     # Press @ again (second key - @@ = repeat last macro)
-    let r2 = handler.handleNormalModeKey(createTestEditor(buf, state, viewport), atKey)
+    let r2 = handler.handleNormalModeKey(buf, state, viewport, atKey)
     check r2.kind == nmrPlaybackMacro
     check r2.macroKeys == @["j", "k"]
 
@@ -2041,9 +1987,9 @@ suite "NormalModeHandler - Change List Navigation":
   ): NormalModeResult =
     ## Simulate g; key sequence
     let gKey = KeyCombo(isSpecial: false, char: "g")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), gKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
     let semiKey = KeyCombo(isSpecial: false, char: ";")
-    handler.handleNormalModeKey(createTestEditor(buf, state, viewport), semiKey)
+    handler.handleNormalModeKey(buf, state, viewport, semiKey)
 
   proc pressGComma(
       handler: NormalModeHandler,
@@ -2053,9 +1999,9 @@ suite "NormalModeHandler - Change List Navigation":
   ): NormalModeResult =
     ## Simulate g, key sequence
     let gKey = KeyCombo(isSpecial: false, char: "g")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), gKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
     let commaKey = KeyCombo(isSpecial: false, char: ",")
-    handler.handleNormalModeKey(createTestEditor(buf, state, viewport), commaKey)
+    handler.handleNormalModeKey(buf, state, viewport, commaKey)
 
   test "g; with empty change list returns error":
     let buf = newTextBuffer()
@@ -2197,8 +2143,8 @@ suite "NormalModeHandler - Bookmark Navigation":
   ): NormalModeResult =
     ## Simulate m m key sequence (bookmark toggle)
     let mKey = KeyCombo(isSpecial: false, char: "m")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), mKey)
-    handler.handleNormalModeKey(createTestEditor(buf, state, viewport), mKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, mKey)
+    handler.handleNormalModeKey(buf, state, viewport, mKey)
 
   proc pressMN(
       handler: NormalModeHandler,
@@ -2208,9 +2154,9 @@ suite "NormalModeHandler - Bookmark Navigation":
   ): NormalModeResult =
     ## Simulate m n key sequence (bookmark next)
     let mKey = KeyCombo(isSpecial: false, char: "m")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), mKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, mKey)
     let nKey = KeyCombo(isSpecial: false, char: "n")
-    handler.handleNormalModeKey(createTestEditor(buf, state, viewport), nKey)
+    handler.handleNormalModeKey(buf, state, viewport, nKey)
 
   proc pressMP(
       handler: NormalModeHandler,
@@ -2220,9 +2166,9 @@ suite "NormalModeHandler - Bookmark Navigation":
   ): NormalModeResult =
     ## Simulate m p key sequence (bookmark prev)
     let mKey = KeyCombo(isSpecial: false, char: "m")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), mKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, mKey)
     let pKey = KeyCombo(isSpecial: false, char: "p")
-    handler.handleNormalModeKey(createTestEditor(buf, state, viewport), pKey)
+    handler.handleNormalModeKey(buf, state, viewport, pKey)
 
   proc pressMC(
       handler: NormalModeHandler,
@@ -2232,9 +2178,9 @@ suite "NormalModeHandler - Bookmark Navigation":
   ): NormalModeResult =
     ## Simulate m c key sequence (bookmark clear)
     let mKey = KeyCombo(isSpecial: false, char: "m")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), mKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, mKey)
     let cKey = KeyCombo(isSpecial: false, char: "c")
-    handler.handleNormalModeKey(createTestEditor(buf, state, viewport), cKey)
+    handler.handleNormalModeKey(buf, state, viewport, cKey)
 
   test "mm toggles bookmark on current line":
     let buf = newTextBuffer()
@@ -2340,9 +2286,9 @@ suite "NormalModeHandler - gn (search next select)":
       viewport: ViewPort,
   ): NormalModeResult =
     let gKey = KeyCombo(isSpecial: false, char: "g")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), gKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
     let nKey = KeyCombo(isSpecial: false, char: "n")
-    handler.handleNormalModeKey(createTestEditor(buf, state, viewport), nKey)
+    handler.handleNormalModeKey(buf, state, viewport, nKey)
 
   test "gn with no previous search returns error":
     let buf = newTextBuffer()
@@ -2493,9 +2439,9 @@ suite "NormalModeHandler - gN (search prev select)":
       viewport: ViewPort,
   ): NormalModeResult =
     let gKey = KeyCombo(isSpecial: false, char: "g")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), gKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
     let nKey = KeyCombo(isSpecial: false, char: "N")
-    handler.handleNormalModeKey(createTestEditor(buf, state, viewport), nKey)
+    handler.handleNormalModeKey(buf, state, viewport, nKey)
 
   test "gN with no previous search returns error":
     let buf = newTextBuffer()
@@ -2589,11 +2535,11 @@ suite "NormalModeHandler - dgn (delete search match forward)":
       viewport: ViewPort,
   ): NormalModeResult =
     let dKey = KeyCombo(isSpecial: false, char: "d")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), dKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, dKey)
     let gKey = KeyCombo(isSpecial: false, char: "g")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), gKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
     let nKey = KeyCombo(isSpecial: false, char: "n")
-    handler.handleNormalModeKey(createTestEditor(buf, state, viewport), nKey)
+    handler.handleNormalModeKey(buf, state, viewport, nKey)
 
   test "dgn with no previous search returns error":
     let buf = newTextBuffer()
@@ -2677,11 +2623,11 @@ suite "NormalModeHandler - dgN (delete search match backward)":
       viewport: ViewPort,
   ): NormalModeResult =
     let dKey = KeyCombo(isSpecial: false, char: "d")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), dKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, dKey)
     let gKey = KeyCombo(isSpecial: false, char: "g")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), gKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
     let nKey = KeyCombo(isSpecial: false, char: "N")
-    handler.handleNormalModeKey(createTestEditor(buf, state, viewport), nKey)
+    handler.handleNormalModeKey(buf, state, viewport, nKey)
 
   test "dgN deletes previous match":
     let buf = newTextBuffer()
@@ -2704,11 +2650,11 @@ suite "NormalModeHandler - cgn (change search match forward)":
       viewport: ViewPort,
   ): NormalModeResult =
     let cKey = KeyCombo(isSpecial: false, char: "c")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), cKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, cKey)
     let gKey = KeyCombo(isSpecial: false, char: "g")
-    discard handler.handleNormalModeKey(createTestEditor(buf, state, viewport), gKey)
+    discard handler.handleNormalModeKey(buf, state, viewport, gKey)
     let nKey = KeyCombo(isSpecial: false, char: "n")
-    handler.handleNormalModeKey(createTestEditor(buf, state, viewport), nKey)
+    handler.handleNormalModeKey(buf, state, viewport, nKey)
 
   test "cgn deletes match and enters Insert mode":
     let buf = newTextBuffer()

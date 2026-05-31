@@ -162,22 +162,22 @@ proc maybeAutoHoverDiagnostic*(e: Editor) =
     e.state.lspCache.hoverPopup.show(diagText, cursorLine, cursorCol)
     e.state.lspCache.hoverPopup.isAutoHover = true
 
-proc hideHoverPopup*(e: Editor) =
+proc hideHoverPopup*(cache: var LspCacheState) =
   ## Hide the hover popup
-  e.state.lspCache.hoverPopup.hide()
+  cache.hoverPopup.hide()
 
-proc hoverPopupScrollDown*(e: Editor) =
+proc hoverPopupScrollDown*(cache: var LspCacheState) =
   ## Scroll hover popup down
-  e.state.lspCache.hoverPopup.scrollDown()
+  cache.hoverPopup.scrollDown()
 
-proc hoverPopupScrollUp*(e: Editor) =
+proc hoverPopupScrollUp*(cache: var LspCacheState) =
   ## Scroll hover popup up
-  e.state.lspCache.hoverPopup.scrollUp()
+  cache.hoverPopup.scrollUp()
 
-proc hoverPopupScrollRight*(e: Editor) =
+proc hoverPopupScrollRight*(cache: var LspCacheState) =
   ## Scroll hover popup right
-  e.state.lspCache.hoverPopup.scrollRight()
+  cache.hoverPopup.scrollRight()
 
-proc hoverPopupScrollLeft*(e: Editor) =
+proc hoverPopupScrollLeft*(cache: var LspCacheState) =
   ## Scroll hover popup left
-  e.state.lspCache.hoverPopup.scrollLeft()
+  cache.hoverPopup.scrollLeft()
