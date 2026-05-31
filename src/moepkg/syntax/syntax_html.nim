@@ -67,7 +67,13 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
     while true:
       case g.buf[pos]
       of '\0':
-        g.kind = gtLongComment
+        if pos == g.pos:
+          # Nothing left to consume on this line; terminate without emitting an
+          # empty token. State stays gtLongComment so the next line continues
+          # the comment.
+          g.kind = gtEof
+        else:
+          g.kind = gtLongComment
         # Keep state as gtLongComment for continuation on next line
         break
       of '-':
