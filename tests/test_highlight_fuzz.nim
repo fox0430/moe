@@ -206,6 +206,88 @@ proc markdownCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc pythonCorpus(): seq[seq[string]] =
+  ## Python snippets covering the cross-line state carried in `commentDepth`:
+  ## triple-quoted strings with both `"""` and `'''` delimiters (docstrings),
+  ## plus line comments and f-strings.
+  result = @[
+    @[
+      "def add(a, b):", "    \"\"\"Add two integers.\"\"\"", "    return a + b", "",
+      "print(add(1, 2))",
+    ],
+    @[
+      "x = \"\"\"", "multi-line", "string spanning", "several lines", "\"\"\"",
+      "print(x)",
+    ],
+    @[
+      "y = '''", "another multi-line", "with 'single' quotes inside", "'''",
+      "# trailing line comment", "z = 42",
+    ],
+    @[
+      "class Point:", "    '''A point in 2D space.'''", "    def __init__(self, x, y):",
+      "        self.x = x", "        self.y = y", "", "    def __repr__(self):",
+      "        return f\"Point({self.x}, {self.y})\"",
+    ],
+    @[
+      "import os", "", "def parse(s):", "    # parse the value",
+      "    n = int(s.strip())", "    return n * 2", "", "if __name__ == '__main__':",
+      "    print(parse(\"21\"))",
+    ],
+  ]
+
+proc latexCorpus(): seq[seq[string]] =
+  ## LaTeX snippets covering math-mode state across lines (`latexInMathMode`,
+  ## `latexInDisplayMath`): inline math ($...$), display math ($$...$$),
+  ## environments, and line comments (%).
+  result = @[
+    @[
+      "\\documentclass{article}", "\\begin{document}", "Hello, \\LaTeX{}.",
+      "Inline math $a + b = c$ here.", "\\end{document}",
+    ],
+    @[
+      "$$", "\\sum_{i=0}^{n} i = \\frac{n(n+1)}{2}", "$$", "",
+      "% trailing comment line", "Some text after display math.",
+    ],
+    @[
+      "\\begin{equation}", "  E = mc^2", "\\end{equation}", "",
+      "The famous equation above.",
+    ],
+    @[
+      "\\section{Intro}", "% a comment", "Text with $x^2 + y^2 = r^2$ inline.", "",
+      "\\begin{itemize}", "  \\item first", "  \\item second", "\\end{itemize}",
+    ],
+    @[
+      "Mixed: $\\alpha$ then", "$$", "\\int_0^1 f(x)\\,dx", "$$",
+      "and back to $\\beta$ inline.",
+    ],
+  ]
+
+proc lispCorpus(): seq[seq[string]] =
+  ## Lisp snippets covering nested block comments (#| |#, which nest via
+  ## `commentDepth`), line comments (;), and string literals.
+  result = @[
+    @[
+      "(defun add (a b)", "  \"Add two numbers.\"", "  (+ a b))", "",
+      "(princ (add 1 2))",
+    ],
+    @[
+      "#| outer comment", "   #| nested", "      still inside |#",
+      "   back to outer |#", "(defun after () 0)", "; trailing line comment",
+    ],
+    @[
+      "(defstruct point", "  (x 0.0)", "  (y 0.0))", "",
+      "(defparameter *origin* (make-point))",
+    ],
+    @[
+      "(let ((xs '(1 2 3)))", "  (mapcar (lambda (n) (* n 2)) xs))", "",
+      "; double each element", "(defvar *count* 0)",
+    ],
+    @[
+      "(defun factorial (n)", "  (if (<= n 1)", "      1",
+      "      (* n (factorial (- n 1)))))", "", "(format t \"~a~%\" (factorial 5))",
+    ],
+  ]
+
 # Random edits
 
 const PrintableAscii =
@@ -465,3 +547,12 @@ suite "Incremental Highlight Fuzz":
 
   test "Markdown: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langMarkdown, markdownCorpus(), iters, baseSeed)
+
+  test "Python: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langPython, pythonCorpus(), iters, baseSeed)
+
+  test "LaTeX: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langLatex, latexCorpus(), iters, baseSeed)
+
+  test "Lisp: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langLisp, lispCorpus(), iters, baseSeed)
