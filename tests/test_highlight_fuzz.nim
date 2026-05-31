@@ -352,6 +352,34 @@ proc cppCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc htmlCorpus(): seq[seq[string]] =
+  ## HTML snippets covering the cross-line state carried in `inComment` /
+  ## `gtLongComment`: multi-line `<!-- ... -->` comments, plus tags,
+  ## attributes with quoted values, DOCTYPE, and entities.
+  result = @[
+    @[
+      "<!DOCTYPE html>", "<html lang=\"en\">", "  <head>", "    <title>Hello</title>",
+      "  </head>", "  <body>", "    <h1>Hi</h1>", "  </body>", "</html>",
+    ],
+    @[
+      "<!-- outer comment", "   still inside the comment", "   third line -->",
+      "<p>back to markup</p>", "<!-- single line comment -->",
+    ],
+    @[
+      "<div class=\"box\" id='main'>", "  <a href=\"https://example.com\">link</a>",
+      "  <img src=\"pic.png\" alt=\"a picture\" />", "</div>",
+    ],
+    @[
+      "<ul>", "  <li>first &amp; foremost</li>", "  <li>second &lt; third</li>",
+      "  <li>&#169; 2024</li>", "</ul>",
+    ],
+    @[
+      "<form action=\"/submit\" method=\"post\">", "  <!-- TODO: validate",
+      "       these inputs", "       before submit -->",
+      "  <input type=\"text\" name=\"q\" />", "  <button>Go</button>", "</form>",
+    ],
+  ]
+
 # Random edits
 
 const PrintableAscii =
@@ -626,3 +654,6 @@ suite "Incremental Highlight Fuzz":
 
   test "C++: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langCpp, cppCorpus(), iters, baseSeed)
+
+  test "HTML: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langHtml, htmlCorpus(), iters, baseSeed)
