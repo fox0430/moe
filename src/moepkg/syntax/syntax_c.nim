@@ -51,7 +51,8 @@ proc clikeNextToken*(
     symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
-  if g.state == gtStringLit:
+  if g.state == gtStringLit and g.buf[pos] notin {'\0', '\r', '\n'}:
+    # A backslash at the end of the previous line continued the string here.
     g.kind = gtStringLit
     while true:
       case g.buf[pos]
@@ -108,6 +109,14 @@ proc clikeNextToken*(
       else:
         inc(pos)
   else:
+    # A `gtStringLit` resume state that reached here means the string's
+    # line-continuation was broken by an (empty) line with no preceding
+    # backslash. Drop the stale state so it does not leak into the next line,
+    # then tokenize the terminator normally (EOF / whitespace) — this also
+    # avoids emitting a zero-length string token that would trip the
+    # empty-token assertion below.
+    if g.state == gtStringLit:
+      g.state = gtNone
     case g.buf[pos]
     of ' ', '\t' .. '\r':
       g.kind = gtWhitespace
