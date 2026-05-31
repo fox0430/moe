@@ -25,6 +25,9 @@ import std/[strutils, options]
 
 import buffer, help_generator
 
+import help_viewer_types
+export help_viewer_types
+
 const HelpSentences* =
   "# Exiting\n\n" & renderExitingSection() & "\n# Changing modes\n\n" &
   renderChangingModesSection() & "\n# Normal mode\n\n" & renderNormalModeSection() &
@@ -108,14 +111,6 @@ All keystrokes are forwarded to the running shell/command.
 
 """ &
   renderTerminalNormalSection()
-
-type HelpViewerState* = ref object
-  lines*: seq[string] # Help lines to display
-  selectedIndex*: int # Currently selected line index (cursor position)
-  topLine*: int # Scroll position (first visible line)
-  searchQuery*: string # Current search query
-  waitingForG*: bool # Waiting for second 'g' for 'gg' command
-  lastKeyWasEscape*: bool # Waiting for second Escape to clear highlight
 
 proc newHelpViewerState*(): HelpViewerState =
   ## Create a new help viewer state

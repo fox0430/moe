@@ -27,35 +27,8 @@ import pkg/celina
 
 import buffer, highlight, color, filer, logger, unicode_utils
 
-type
-  FileTreeNode* = object
-    name*: string
-    path*: string # Absolute path
-    kind*: FileEntryKind # Reuse from filer.nim
-    depth*: int # Indentation level
-    isHidden*: bool
-    isExecutable*: bool
-    targetKind*: FileEntryKind # For symlinks
-
-  FileTreeState* = ref object
-    rootPath*: string
-    rootNodes*: seq[FileTreeNode]
-    flatList*: seq[FileTreeNode] # Flattened visible nodes
-    selectedIndex*: int
-    topLine*: int
-    showHidden*: bool
-    expandedDirs*: HashSet[string] # Set of expanded directory paths
-    needsBufferRefresh*: bool
-    width*: int # Default sidebar width
-    lastError*: string # Last error message (e.g. permission denied)
-    childrenCache*: Table[string, seq[FileTreeNode]]
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
-    waitingForCtrlW*: bool # Waiting for second key after Ctrl-w
-    lastKeyWasEscape*: bool # Waiting for second Escape to clear search highlight
-    isSearching*: bool # In search input mode
-    searchText*: string # Current search text
-    searchMatches*: seq[int] # Indices in flatList that match
-    searchMatchIndex*: int # Current position in searchMatches (-1 = none)
+import filetree_types
+export filetree_types
 
 const DefaultFileTreeWidth* = 30
 

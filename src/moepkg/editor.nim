@@ -30,7 +30,7 @@ import
 import
   status_line, render_utils, git_diff, git_conflict, logger, config_loader,
   search_utils, completion, signature_help, hover_popup, command_completion, motion,
-  color, debug_viewer, message_log, unicode_utils, highlight, sidebar
+  color, debug_viewer, message_log, unicode_utils, highlight, sidebar, recent_file_mode
 
 import command_handlers/handler_manager
 

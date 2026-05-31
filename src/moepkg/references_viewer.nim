@@ -27,19 +27,8 @@ import std/[strformat, strutils, options]
 import buffer
 import picker/nav
 
-type
-  ReferenceItem* = object
-    path*: string # File path
-    line*: int # Line number (0-indexed)
-    column*: int # Column number (0-indexed)
-    text*: string # Optional context text
-
-  ReferencesViewerState* = ref object
-    items*: seq[ReferenceItem] # Reference items to display
-    selectedIndex*: int # Currently selected item index
-    topLine*: int # Scroll position (first visible line)
-    title*: string # Title for the list (e.g., "References", "Definitions")
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
+import references_viewer_types
+export references_viewer_types
 
 proc newReferencesViewerState*(
     items: seq[ReferenceItem], title: string = "References"

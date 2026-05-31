@@ -32,9 +32,10 @@ import pkg/[results, chronos]
 
 import
   ../[
-    editor, editor_window_state, modes, buffer, logger, types, filer, buffer_manager,
-    bookmark_manager, backup_manager, backup, diff_viewer, config_loader, message_log,
-    uri_utils, primitives, syntax_checker, status_line, cursor_util, quick_run_utils,
+    editor, editor_window_state, modes, buffer, logger, types, filer, filetree,
+    buffer_manager, bookmark_manager, backup_manager, backup, diff_viewer,
+    config_loader, message_log, uri_utils, primitives, syntax_checker, status_line,
+    cursor_util, quick_run_utils,
   ]
 import ../key_bindings except Command
 import ./[command_mode_handler, handler_result]

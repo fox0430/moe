@@ -25,19 +25,8 @@ import std/[options, unicode]
 import buffer
 import picker/nav
 
-type
-  BookmarkEntry* = object ## Represents a bookmark entry in the bookmark manager list
-    bufferIndex*: int # Index in the buffer list
-    filePath*: string # File path ("No Name" if none)
-    line*: int # Line number (0-based)
-    text*: string # Line text preview (truncated to 50 chars)
-
-  BookmarkManagerState* = ref object ## State for the bookmark manager UI
-    entries*: seq[BookmarkEntry] # List of bookmark entries
-    selectedIndex*: int # Currently selected entry index
-    topLine*: int # Scroll position (first visible line)
-    previousWindowIndex*: int # Window index to return to when closing
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
+import bookmark_manager_types
+export bookmark_manager_types
 
 proc newBookmarkManagerState*(): BookmarkManagerState =
   BookmarkManagerState(

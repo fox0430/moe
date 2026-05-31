@@ -28,19 +28,8 @@ import lsp/protocol/types as lspTypes
 import buffer
 import picker/nav
 
-type
-  CallHierarchyViewKind* = enum
-    chvkPrepare ## Initial prepare result
-    chvkIncoming ## Incoming calls view
-    chvkOutgoing ## Outgoing calls view
-
-  CallHierarchyViewerState* = ref object
-    items*: seq[lspTypes.CallHierarchyItem] ## Call hierarchy items to display
-    selectedIndex*: int ## Currently selected item index
-    topLine*: int ## Scroll position (first visible line)
-    viewKind*: CallHierarchyViewKind ## Type of view (prepare/incoming/outgoing)
-    title*: string ## Title for the list
-    waitingForG*: bool ## Waiting for second 'g' for 'gg' command
+import callhierarchy_viewer_types
+export callhierarchy_viewer_types
 
 proc newCallHierarchyViewerState*(
     items: seq[lspTypes.CallHierarchyItem], viewKind: CallHierarchyViewKind

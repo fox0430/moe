@@ -22,18 +22,20 @@ import std/[options, monotimes, times, tables, strutils]
 import pkg/celina
 
 import
-  modes, buffer, registers, filer, filetree, log_viewer, help_viewer,
-  command_completion, message_log, logger, buffer_manager, bookmark_manager,
-  backup_manager, diff_viewer, debug_viewer, config_mode, references_viewer,
-  documentsymbol_viewer, callhierarchy_viewer, hover_popup, notification_popup,
-  primitives, syntax_checker, recent_file_mode, terminal_mode, config
+  modes, buffer, registers, filer_types, filetree_types, log_viewer, help_viewer_types,
+  command_completion_types, message_log, logger, buffer_manager_types,
+  bookmark_manager_types, backup_manager_types, diff_viewer_types, debug_viewer_types,
+  config_mode, references_viewer_types, documentsymbol_viewer_types,
+  callhierarchy_viewer_types, hover_popup, notification_popup, primitives,
+  syntax_checker_types, recent_file_mode_types, terminal_mode, config
 
 export
-  buffer.LineMarkerKind, registers, command_completion, filer, filetree, log_viewer,
-  help_viewer, buffer_manager, bookmark_manager, backup_manager, diff_viewer,
-  debug_viewer, config_mode, references_viewer, documentsymbol_viewer,
-  callhierarchy_viewer, hover_popup, notification_popup, primitives, syntax_checker,
-  recent_file_mode, terminal_mode, config.BracketSplitMode
+  buffer.LineMarkerKind, registers, command_completion_types, filer_types,
+  filetree_types, log_viewer, help_viewer_types, buffer_manager_types,
+  bookmark_manager_types, backup_manager_types, diff_viewer_types, debug_viewer_types,
+  config_mode, references_viewer_types, documentsymbol_viewer_types,
+  callhierarchy_viewer_types, hover_popup, notification_popup, primitives,
+  syntax_checker_types, recent_file_mode_types, terminal_mode, config.BracketSplitMode
 
 type
   SidebarItem* = object ## Single cell in the sidebar
