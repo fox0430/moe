@@ -204,8 +204,24 @@ proc clikeNextToken*(
       while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
         inc(pos)
     of '\'':
-      pos = generalStrLit(g, pos)
+      # A char literal never spans lines. Stop at the line boundary so the
+      # line-by-line incremental tokenizer and the full reparse (which sees the
+      # buffer as one '\n'-joined string) agree on where the token ends.
+      inc(pos)
       g.kind = gtCharLit
+      while true:
+        case g.buf[pos]
+        of '\0', '\r', '\n':
+          break
+        of '\'':
+          inc(pos)
+          break
+        of '\\':
+          inc(pos)
+          if g.buf[pos] notin {'\0', '\r', '\n'}:
+            inc(pos)
+        else:
+          inc(pos)
     of '\"':
       inc(pos)
       g.kind = gtStringLit
