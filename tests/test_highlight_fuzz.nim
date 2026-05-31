@@ -288,6 +288,70 @@ proc lispCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc cCorpus(): seq[seq[string]] =
+  ## C snippets covering the cross-line state carried in `gtLongComment` /
+  ## `gtDocLongComment`: multi-line block comments and doc comments (C block
+  ## comments do NOT nest), plus line comments, preprocessor directives with
+  ## line continuation, and string/char literals.
+  result = @[
+    @[
+      "#include <stdio.h>", "", "int main(void) {", "    int x = 42;",
+      "    char c = 'x';", "    printf(\"value = %d\\n\", x);", "    return 0;", "}",
+    ],
+    @[
+      "/* outer block comment", "   /* C does not nest these */",
+      "   still inside the first */", "int after(void) { return 0; }",
+      "// trailing line comment",
+    ],
+    @[
+      "/**", " * Doc comment for add.", " * @param a first operand",
+      " * @param b second operand", " */", "int add(int a, int b) {",
+      "    return a + b;", "}",
+    ],
+    @[
+      "#define SQUARE(x) ((x) * (x))", "#define LONG_MACRO(a, b) \\",
+      "    do {              \\", "        (a) += (b);   \\", "    } while (0)", "",
+      "static const char *msg = \"hello\";",
+    ],
+    @[
+      "#include <string.h>", "", "struct Point {", "    double x;", "    double y;",
+      "};", "", "enum Color { RED, GREEN, BLUE };", "typedef unsigned long size_type;",
+    ],
+  ]
+
+proc cppCorpus(): seq[seq[string]] =
+  ## C++ snippets covering multi-line block/doc comments (no nesting), line
+  ## comments, preprocessor directives, templates, namespaces, and string/char
+  ## literals. C++ shares the C tokenizer path, so the same cross-line block
+  ## comment state is the primary target.
+  result = @[
+    @[
+      "#include <iostream>", "", "int main() {", "    int x = 42;",
+      "    std::cout << \"value = \" << x << std::endl;", "    return 0;", "}",
+    ],
+    @[
+      "/* outer block comment", "   /* C++ does not nest these */",
+      "   still inside the first */", "int after() { return 0; }",
+      "// trailing line comment",
+    ],
+    @[
+      "/**", " * Doc comment for a templated max.", " * @tparam T element type", " */",
+      "template <typename T>", "T maxValue(T a, T b) {", "    return a > b ? a : b;",
+      "}",
+    ],
+    @[
+      "#pragma once", "namespace geom {", "", "class Point {", "public:",
+      "    Point(double x, double y) : x_(x), y_(y) {}", "private:",
+      "    double x_, y_;", "};", "", "}  // namespace geom",
+    ],
+    @[
+      "#include <vector>", "#include <string>", "",
+      "auto greet(const std::string &name) -> std::string {",
+      "    return \"Hello, \" + name + '!';", "}", "",
+      "std::vector<int> xs = {1, 2, 3};",
+    ],
+  ]
+
 # Random edits
 
 const PrintableAscii =
@@ -556,3 +620,9 @@ suite "Incremental Highlight Fuzz":
 
   test "Lisp: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langLisp, lispCorpus(), iters, baseSeed)
+
+  test "C: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langC, cCorpus(), iters, baseSeed)
+
+  test "C++: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langCpp, cppCorpus(), iters, baseSeed)
