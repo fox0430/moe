@@ -581,11 +581,12 @@ proc shouldRetriggerSignatureHelp*(keyCombo: KeyCombo): bool =
     isRetriggerChar(keyCombo.char[0])
 
 proc handleInsertModeKey*(
-    handler: InsertModeHandler, editor: Editor, keyCombo: KeyCombo
+    handler: InsertModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
+    keyCombo: KeyCombo,
 ): InsertModeResult =
   ## Main entry point for handling Insert mode key presses
-  let buffer = editor.activeBuffer
-  let state = editor.state
 
   # Record key for macro if recording is active
   if state.macroState.isRecording:

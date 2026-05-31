@@ -40,13 +40,13 @@ suite "CodeLens Cache":
 
   test "getCodeLensItemsForLine - empty cache":
     let e = createTestEditor()
-    let items = e.getCodeLensItemsForLine(0)
+    let items = e.state.lspCache.getCodeLensItemsForLine(0)
     check items.len == 0
 
   test "getCodeLensItemsForLine - invalid cache":
     let e = createTestEditor()
     e.state.lspCache.codeLensCache.isValid = false
-    let items = e.getCodeLensItemsForLine(0)
+    let items = e.state.lspCache.getCodeLensItemsForLine(0)
     check items.len == 0
 
   test "getCodeLensItemsForLine - valid cache with items":
@@ -62,18 +62,18 @@ suite "CodeLens Cache":
     }.toTable
 
     # Line 0 has one item
-    let items0 = e.getCodeLensItemsForLine(0)
+    let items0 = e.state.lspCache.getCodeLensItemsForLine(0)
     check items0.len == 1
     check items0[0].title == "5 references"
 
     # Line 5 has two items
-    let items5 = e.getCodeLensItemsForLine(5)
+    let items5 = e.state.lspCache.getCodeLensItemsForLine(5)
     check items5.len == 2
     check items5[0].title == "Run Test"
     check items5[1].title == "Debug Test"
 
     # Line 10 has no items
-    let items10 = e.getCodeLensItemsForLine(10)
+    let items10 = e.state.lspCache.getCodeLensItemsForLine(10)
     check items10.len == 0
 
   test "getCodeLensItemsForCurrentLine":
@@ -94,7 +94,7 @@ suite "CodeLens Cache":
     e.state.lspCache.codeLensCache.itemsByLine =
       {0: @[CodeLensItem(line: 0, title: "Item", command: "cmd")]}.toTable
 
-    e.invalidateCodeLensCache()
+    e.state.lspCache.invalidateCodeLensCache()
 
     check not e.state.lspCache.codeLensCache.isValid
     # Items still exist but cache is marked invalid
@@ -164,7 +164,7 @@ suite "CodeLens Picker":
     e.state.lspCache.codeLensPicker.items =
       @[CodeLensItem(line: 0, title: "Item", command: "cmd")]
 
-    e.hideCodeLensPicker()
+    e.state.lspCache.hideCodeLensPicker()
 
     check not e.state.lspCache.codeLensPicker.isActive
     check e.state.lspCache.codeLensPicker.items.len == 0
@@ -274,7 +274,7 @@ suite "Document Highlight Cache":
       0: @[DocumentHighlightItem(line: 0, startColumn: 0, endColumn: 5, kind: 1)]
     }.toTable
 
-    e.invalidateDocumentHighlightCache()
+    e.state.lspCache.invalidateDocumentHighlightCache()
 
     check not e.state.lspCache.documentHighlightCache.isValid
     check e.state.lspCache.documentHighlightCache.itemsByLine.len == 0
@@ -309,7 +309,7 @@ suite "Semantic Tokens Cache":
     e.state.lspCache.semanticTokensCache.filePath = "/test/file.nim"
     e.state.lspCache.pendingSemanticTokensRequestId = 123
 
-    e.invalidateSemanticTokensCache()
+    invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
 
     check not e.state.lspCache.semanticTokensCache.isValid
     check e.state.lspCache.pendingSemanticTokensRequestId == 0

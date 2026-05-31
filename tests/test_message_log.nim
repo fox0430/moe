@@ -19,7 +19,7 @@
 
 import std/unittest
 
-import ../src/moepkg/message_log
+import ../src/moepkg/[types, message_log]
 
 suite "message_log - Message Log":
   setup:
@@ -107,3 +107,21 @@ suite "message_log - Isolation":
 
     clearLspMessageLog()
     check lspMessageLogLen() == 0
+
+suite "EditorState - statusMessage logging side effects":
+  setup:
+    clearMessageLog()
+
+  test "statusMessage= appends non-empty messages to the message log":
+    let state = EditorState()
+    state.statusMessage = "hello"
+
+    check state.statusMessage == "hello"
+    check getMessageLog() == @["hello"]
+
+  test "setStatusQuiet sets the message without touching the log":
+    let state = EditorState()
+    state.setStatusQuiet("quiet")
+
+    check state.statusMessage == "quiet"
+    check messageLogLen() == 0

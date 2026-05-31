@@ -92,17 +92,6 @@ proc createTestViewport(): ViewPort =
   ## Create a minimal viewport for testing
   ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
 
-proc createTestEditor(buf: TextBuffer, state: EditorState): Editor =
-  ## Create a minimal Editor wrapping the given buffer/state for testing
-  state.activeWindow.buffer = buf
-  Editor(
-    textBuffer: buf,
-    state: state,
-    viewport: createTestViewport(),
-    windowManager:
-      EditorWindowManager(windows: @[state.activeWindow], activeWindowIndex: 0),
-  )
-
 proc createTestHandler(buf: TextBuffer): InsertModeHandler =
   ## Create an InsertModeHandler for testing
   let keyBindingRegistry = newKeyBindingRegistry()
@@ -852,7 +841,7 @@ suite "InsertModeHandler - Key Handling":
     let state = createTestState()
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check r.modeTransition.isSome
@@ -867,7 +856,7 @@ suite "InsertModeHandler - Key Handling":
 
     let keyCombo =
       KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(0) == "helo"
@@ -880,7 +869,7 @@ suite "InsertModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 2)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skDelete, fnNum: 0, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(0) == "helo"
@@ -894,7 +883,7 @@ suite "InsertModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 5)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check state.cursor.line == 1
@@ -909,7 +898,7 @@ suite "InsertModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(0) == "  hello"
@@ -922,7 +911,7 @@ suite "InsertModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 3)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skLeft, fnNum: 0, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check state.cursor.column == 2
@@ -935,7 +924,7 @@ suite "InsertModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skRight, fnNum: 0, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check state.cursor.column == 1
@@ -948,7 +937,7 @@ suite "InsertModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "x", modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(0) == "xhello"
@@ -961,7 +950,7 @@ suite "InsertModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 3)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skHome, fnNum: 0, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check state.cursor.column == 0
@@ -974,7 +963,7 @@ suite "InsertModeHandler - Key Handling":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEnd, fnNum: 0, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     # Motion.End moves to last character position (Normal mode behavior)
@@ -989,7 +978,7 @@ suite "InsertModeHandler - Ctrl Key Combinations":
     state.cursor = BufferPosition(line: 0, column: 11)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "w", modifiers: {kmCtrl})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(0) == "hello "
@@ -1002,7 +991,7 @@ suite "InsertModeHandler - Ctrl Key Combinations":
     state.cursor = BufferPosition(line: 0, column: 6)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "u", modifiers: {kmCtrl})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(0) == "world"
@@ -1017,7 +1006,7 @@ suite "InsertModeHandler - Ctrl Key Combinations":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "t", modifiers: {kmCtrl})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(0) == "  hello"
@@ -1032,7 +1021,7 @@ suite "InsertModeHandler - Ctrl Key Combinations":
     state.cursor = BufferPosition(line: 0, column: 2)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "d", modifiers: {kmCtrl})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(0) == "hello"
@@ -1046,7 +1035,7 @@ suite "InsertModeHandler - Ctrl Key Combinations":
     state.cursor = BufferPosition(line: 1, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "y", modifiers: {kmCtrl})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(1) == "hworld"
@@ -1060,7 +1049,7 @@ suite "InsertModeHandler - Ctrl Key Combinations":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "e", modifiers: {kmCtrl})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(0) == "whello"
@@ -1075,7 +1064,7 @@ suite "InsertModeHandler - Ctrl Key Combinations":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "i", modifiers: {kmCtrl})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(0) == "  hello"
@@ -1092,7 +1081,7 @@ suite "InsertModeHandler - Macro Recording":
     state.cursor = BufferPosition(line: 0, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "x", modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    discard handler.handleInsertModeKey(buf, state, keyCombo)
 
     check state.macroState.recordedKeys.len >= 1
 
@@ -1142,7 +1131,7 @@ suite "InsertModeHandler - Completion":
     state.cursor = BufferPosition(line: 0, column: 3)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "n", modifiers: {kmCtrl})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
 
@@ -1154,7 +1143,7 @@ suite "InsertModeHandler - Completion":
     state.cursor = BufferPosition(line: 0, column: 3)
 
     let keyCombo = KeyCombo(isSpecial: false, char: " ", modifiers: {kmCtrl})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
 
@@ -1166,7 +1155,7 @@ suite "InsertModeHandler - Completion":
     state.cursor = BufferPosition(line: 0, column: 5)
 
     let keyCombo = KeyCombo(isSpecial: false, char: "r", modifiers: {kmCtrl})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
 
@@ -1181,7 +1170,7 @@ suite "InsertModeHandler - PageUp/PageDown":
     state.cursor = BufferPosition(line: 20, column: 0)
 
     let keyCombo = KeyCombo(isSpecial: true, special: skPageUp, fnNum: 0, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check state.cursor.line < 20
@@ -1197,7 +1186,7 @@ suite "InsertModeHandler - PageUp/PageDown":
 
     let keyCombo =
       KeyCombo(isSpecial: true, special: skPageDown, fnNum: 0, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check state.cursor.line > 5
@@ -1212,7 +1201,7 @@ suite "InsertModeHandler - Unhandled Keys":
     # Function key (F1) - not typically handled in insert mode
     let keyCombo =
       KeyCombo(isSpecial: true, special: skFunction, fnNum: 1, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrUnhandled
 
@@ -1224,7 +1213,7 @@ suite "InsertModeHandler - Unhandled Keys":
 
     # Ctrl+Shift+X - not a standard binding
     let keyCombo = KeyCombo(isSpecial: false, char: "x", modifiers: {kmCtrl, kmShift})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     # May be handled or unhandled depending on key_bindings
     check r.kind in {imrHandled, imrUnhandled}
@@ -1297,7 +1286,7 @@ suite "InsertModeHandler - Completion Active Key Handling":
     if handler.completionManager.isActive():
       # Now press Tab
       let keyCombo = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
-      let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+      let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
       check r.kind == imrHandled
       check handler.completionManager.menu.hasSelection == true
@@ -1320,7 +1309,7 @@ suite "InsertModeHandler - Completion Active Key Handling":
 
     # Press Escape
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check r.modeTransition.isSome
@@ -1344,7 +1333,7 @@ suite "InsertModeHandler - Completion Active Key Handling":
       # Press Enter
       let keyCombo =
         KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
-      let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+      let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
       check r.kind == imrHandled
       check handler.completionManager.isActive() == false
@@ -1368,7 +1357,7 @@ suite "InsertModeHandler - Completion Active Key Handling":
       # Press Backspace
       let keyCombo =
         KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
-      let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+      let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
       check r.kind == imrHandled
       check buf.getLine(1) == "hell"
@@ -1391,7 +1380,7 @@ suite "InsertModeHandler - Completion Active Key Handling":
     if handler.completionManager.isActive():
       # Type a character
       let keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
-      let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+      let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
       check r.kind == imrHandled
       check buf.getLine(1) == "hell"
@@ -1414,7 +1403,7 @@ suite "InsertModeHandler - Completion Active Key Handling":
     if handler.completionManager.isActive():
       # Press Down
       let keyCombo = KeyCombo(isSpecial: true, special: skDown, fnNum: 0, modifiers: {})
-      let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+      let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
       check r.kind == imrHandled
     else:
@@ -1436,7 +1425,7 @@ suite "InsertModeHandler - Completion Active Key Handling":
     if handler.completionManager.isActive():
       # Press Up
       let keyCombo = KeyCombo(isSpecial: true, special: skUp, fnNum: 0, modifiers: {})
-      let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+      let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
       check r.kind == imrHandled
     else:
@@ -1458,7 +1447,7 @@ suite "InsertModeHandler - Completion Active Key Handling":
     if handler.completionManager.isActive():
       # Press Ctrl+N
       let keyCombo = KeyCombo(isSpecial: false, char: "n", modifiers: {kmCtrl})
-      let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+      let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
       check r.kind == imrHandled
     else:
@@ -1480,7 +1469,7 @@ suite "InsertModeHandler - Completion Active Key Handling":
     if handler.completionManager.isActive():
       # Press Ctrl+P
       let keyCombo = KeyCombo(isSpecial: false, char: "p", modifiers: {kmCtrl})
-      let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+      let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
       check r.kind == imrHandled
     else:
@@ -1503,7 +1492,7 @@ suite "InsertModeHandler - Completion Active Key Handling":
       # Press Shift+Tab
       let keyCombo =
         KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {kmShift})
-      let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+      let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
       check r.kind == imrHandled
     else:
@@ -1526,7 +1515,7 @@ suite "InsertModeHandler - Completion Active Key Handling":
       # Press BackTab (how terminals actually send Shift+Tab)
       let keyCombo =
         KeyCombo(isSpecial: true, special: skBackTab, fnNum: 0, modifiers: {})
-      let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+      let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
       check r.kind == imrHandled
       check handler.completionManager.menu.hasSelection
@@ -1549,16 +1538,16 @@ suite "InsertModeHandler - Completion Active Key Handling":
         handler.completionManager.menu.entries.len >= 2:
       # First Tab selects item 0
       let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
-      discard handler.handleInsertModeKey(createTestEditor(buf, state), tabKey)
+      discard handler.handleInsertModeKey(buf, state, tabKey)
       let firstWord = handler.completionManager.menu.entries[0].word
 
       # Second Tab selects item 1
-      discard handler.handleInsertModeKey(createTestEditor(buf, state), tabKey)
+      discard handler.handleInsertModeKey(buf, state, tabKey)
 
       # BackTab goes back to item 0
       let backTabKey =
         KeyCombo(isSpecial: true, special: skBackTab, fnNum: 0, modifiers: {})
-      discard handler.handleInsertModeKey(createTestEditor(buf, state), backTabKey)
+      discard handler.handleInsertModeKey(buf, state, backTabKey)
 
       check buf.getLine(1) == firstWord
     else:
@@ -1572,7 +1561,7 @@ suite "InsertModeHandler - Path completion":
 
     # Type "/" character
     let keyCombo = KeyCombo(isSpecial: false, char: "/", modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check handler.completionManager.isPathCompletion
@@ -1584,11 +1573,11 @@ suite "InsertModeHandler - Path completion":
 
     # Type "." first
     let dotKey = KeyCombo(isSpecial: false, char: ".", modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), dotKey)
+    discard handler.handleInsertModeKey(buf, state, dotKey)
 
     # Then type "/"
     let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), slashKey)
+    let r = handler.handleInsertModeKey(buf, state, slashKey)
 
     check r.kind == imrHandled
     check handler.completionManager.isPathCompletion
@@ -1601,7 +1590,7 @@ suite "InsertModeHandler - Path completion":
     # Type "hello"
     for ch in "hello":
       let keyCombo = KeyCombo(isSpecial: false, char: $ch, modifiers: {})
-      discard handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+      discard handler.handleInsertModeKey(buf, state, keyCombo)
 
     check not handler.completionManager.isPathCompletion
 
@@ -1642,7 +1631,7 @@ suite "InsertModeHandler - Path completion":
 
     # Tab selects first entry (directory "src/")
     let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), tabKey)
+    discard handler.handleInsertModeKey(buf, state, tabKey)
 
     # Directory should be inserted without trailing '/'
     check buf.getLine(0) == "./src"
@@ -1677,7 +1666,7 @@ suite "InsertModeHandler - Path completion":
 
     # Tab selects file entry
     let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), tabKey)
+    discard handler.handleInsertModeKey(buf, state, tabKey)
 
     # File should be inserted with full name
     check buf.getLine(0) == "./setup.nim"
@@ -1728,15 +1717,15 @@ suite "InsertModeHandler - Path completion":
     let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
 
     # First Tab: selects "docs/" -> inserts "docs"
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), tabKey)
+    discard handler.handleInsertModeKey(buf, state, tabKey)
     check buf.getLine(0) == "./docs"
 
     # Second Tab: selects "src/" -> inserts "src"
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), tabKey)
+    discard handler.handleInsertModeKey(buf, state, tabKey)
     check buf.getLine(0) == "./src"
 
     # Third Tab: selects "README.md" -> inserts full name
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), tabKey)
+    discard handler.handleInsertModeKey(buf, state, tabKey)
     check buf.getLine(0) == "./README.md"
 
   test "Escape cancels path completion":
@@ -1746,12 +1735,12 @@ suite "InsertModeHandler - Path completion":
 
     # Type "/" to trigger path completion
     let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), slashKey)
+    discard handler.handleInsertModeKey(buf, state, slashKey)
     check handler.completionManager.isPathCompletion
 
     # Press Escape
     let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), escKey)
+    discard handler.handleInsertModeKey(buf, state, escKey)
 
     check not handler.completionManager.isPathCompletion
     check not handler.completionManager.isActive()
@@ -1763,12 +1752,12 @@ suite "InsertModeHandler - Path completion":
 
     # Type "~"
     let tildeKey = KeyCombo(isSpecial: false, char: "~", modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), tildeKey)
+    discard handler.handleInsertModeKey(buf, state, tildeKey)
     check not handler.completionManager.isPathCompletion
 
     # Type "/"
     let slashKey = KeyCombo(isSpecial: false, char: "/", modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), slashKey)
+    discard handler.handleInsertModeKey(buf, state, slashKey)
 
     check handler.completionManager.isPathCompletion
     check buf.getLine(0) == "~/"
@@ -1802,7 +1791,7 @@ suite "InsertModeHandler - Path completion":
 
     # Backspace deletes 'r', leaving "./s" — still a path context
     let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), bsKey)
+    discard handler.handleInsertModeKey(buf, state, bsKey)
 
     check buf.getLine(0) == "./s"
     check handler.completionManager.isPathCompletion
@@ -1837,7 +1826,7 @@ suite "InsertModeHandler - Path completion":
 
     # Backspace deletes '/', leaving "" — no path context
     let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), bsKey)
+    discard handler.handleInsertModeKey(buf, state, bsKey)
 
     check buf.getLine(0) == ""
     check not handler.completionManager.isPathCompletion
@@ -1872,7 +1861,7 @@ suite "InsertModeHandler - Path completion":
 
     # Type space — not a path character
     let spaceKey = KeyCombo(isSpecial: false, char: " ", modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), spaceKey)
+    discard handler.handleInsertModeKey(buf, state, spaceKey)
 
     check buf.getLine(0) == "./src "
     check not handler.completionManager.isPathCompletion
@@ -1893,7 +1882,7 @@ suite "InsertModeHandler - imap action commands":
     check err == ""
 
     let keyCombo = KeyCombo(isSpecial: false, char: "Q")
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(0) == "Hell"
@@ -1912,7 +1901,7 @@ suite "InsertModeHandler - imap action commands":
     check err == ""
 
     let keyCombo = KeyCombo(isSpecial: false, char: "Q")
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.getLine(0) == "ello"
@@ -1931,7 +1920,7 @@ suite "InsertModeHandler - imap action commands":
     check err == ""
 
     let keyCombo = KeyCombo(isSpecial: false, char: "Q")
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrHandled
     check buf.len == 2
@@ -1951,7 +1940,7 @@ suite "InsertModeHandler - Command mode command alias bridge":
 
     let state = createTestState()
     let keyCombo = KeyCombo(isSpecial: false, char: "K")
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrExecCommand
     check r.execCommandText == "bdelete"
@@ -1963,7 +1952,7 @@ suite "InsertModeHandler - Command mode command alias bridge":
 
     let state = createTestState()
     let keyCombo = KeyCombo(isSpecial: false, char: "D")
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), keyCombo)
+    let r = handler.handleInsertModeKey(buf, state, keyCombo)
 
     check r.kind == imrExecCommand
     check r.execCommandText == "bd"
@@ -1977,7 +1966,7 @@ suite "InsertModeHandler - Ctrl+O (Insert-Normal mode)":
     state.cursor = BufferPosition(line: 0, column: 3)
 
     let ctrlO = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), ctrlO)
+    let r = handler.handleInsertModeKey(buf, state, ctrlO)
 
     check r.kind == imrHandled
     check r.modeTransition.isSome
@@ -1995,7 +1984,7 @@ suite "InsertModeHandler - Ctrl+O (Insert-Normal mode)":
     handler.completionManager.triggerCompletion(buf, 0, 5, SourceLanguage.langNone)
 
     let ctrlO = KeyCombo(isSpecial: false, char: "o", modifiers: {kmCtrl})
-    let r = handler.handleInsertModeKey(createTestEditor(buf, state), ctrlO)
+    let r = handler.handleInsertModeKey(buf, state, ctrlO)
 
     check r.kind == imrHandled
     check r.modeTransition.get == EditorMode.Normal
@@ -2044,15 +2033,15 @@ suite "InsertModeHandler - textEdit with keepPopupOpen":
 
     # First Tab: activates selection (idx=0 "vec!")
     let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), tabKey)
+    discard handler.handleInsertModeKey(buf, state, tabKey)
     check buf.getLine(0) == "    vec!"
 
     # Second Tab: selects next (idx=1 "version")
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), tabKey)
+    discard handler.handleInsertModeKey(buf, state, tabKey)
     check buf.getLine(0) == "    version"
 
     # Third Tab: wraps back (idx=0 "vec!")
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), tabKey)
+    discard handler.handleInsertModeKey(buf, state, tabKey)
     check buf.getLine(0) == "    vec!"
 
   test "Commit with textEdit applies textEdit on final confirm":
@@ -2125,7 +2114,7 @@ suite "InsertModeHandler - LSP debounce prefix staleness":
 
     # Type 't' at col 0 of a fresh line — first call, no debounce
     let typeT = KeyCombo(isSpecial: false, char: "t", modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), typeT)
+    discard handler.handleInsertModeKey(buf, state, typeT)
     check handler.completionManager.isActive()
     check handler.completionManager.menu.prefix == "t"
 
@@ -2138,11 +2127,11 @@ suite "InsertModeHandler - LSP debounce prefix staleness":
     # and leaves menu.prefix at "t". With the fix it refreshes the buffer
     # completion menu so menu.prefix becomes "te".
     let typeE = KeyCombo(isSpecial: false, char: "e", modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), typeE)
+    discard handler.handleInsertModeKey(buf, state, typeE)
     check handler.completionManager.menu.prefix == "te"
 
     let tab = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
-    discard handler.handleInsertModeKey(createTestEditor(buf, state), tab)
+    discard handler.handleInsertModeKey(buf, state, tab)
 
     check buf.getLine(1) == "template"
     check state.cursor.column == 8

@@ -881,7 +881,7 @@ proc handlePopupEvent(e: Editor, event: Event): Option[bool] =
 
       # Escape - cancel picker
       if keyCombo.isSpecial and keyCombo.special == skEscape:
-        e.hideCodeLensPicker()
+        e.state.lspCache.hideCodeLensPicker()
         e.state.statusMessage = ""
         return some(true)
 
@@ -914,7 +914,7 @@ proc handlePopupEvent(e: Editor, event: Event): Option[bool] =
           return some(true)
 
       # Any other key closes picker
-      e.hideCodeLensPicker()
+      e.state.lspCache.hideCodeLensPicker()
       e.state.statusMessage = ""
       # Don't return - let the key be processed normally
 
@@ -926,42 +926,42 @@ proc handlePopupEvent(e: Editor, event: Event): Option[bool] =
 
       # Escape always closes the popup
       if keyCombo.isSpecial and keyCombo.special == skEscape:
-        e.hideHoverPopup()
+        e.state.lspCache.hideHoverPopup()
         return some(true)
 
       # Manual hover (K key): allow j/k/h/l and arrow keys for scrolling
       if not e.state.lspCache.hoverPopup.isAutoHover:
         if not keyCombo.isSpecial:
           if keyCombo.char == "j":
-            e.hoverPopupScrollDown()
+            e.state.lspCache.hoverPopupScrollDown()
             return some(true)
           if keyCombo.char == "k":
-            e.hoverPopupScrollUp()
+            e.state.lspCache.hoverPopupScrollUp()
             return some(true)
           if keyCombo.char == "l":
-            e.hoverPopupScrollRight()
+            e.state.lspCache.hoverPopupScrollRight()
             return some(true)
           if keyCombo.char == "h":
-            e.hoverPopupScrollLeft()
+            e.state.lspCache.hoverPopupScrollLeft()
             return some(true)
 
         if keyCombo.isSpecial:
           if keyCombo.special == skDown:
-            e.hoverPopupScrollDown()
+            e.state.lspCache.hoverPopupScrollDown()
             return some(true)
           if keyCombo.special == skUp:
-            e.hoverPopupScrollUp()
+            e.state.lspCache.hoverPopupScrollUp()
             return some(true)
           if keyCombo.special == skRight:
-            e.hoverPopupScrollRight()
+            e.state.lspCache.hoverPopupScrollRight()
             return some(true)
           if keyCombo.special == skLeft:
-            e.hoverPopupScrollLeft()
+            e.state.lspCache.hoverPopupScrollLeft()
             return some(true)
 
       # Close popup and fall through to normal key processing.
       # Auto-hover popup will reappear if cursor is still on a diagnostic.
-      e.hideHoverPopup()
+      e.state.lspCache.hideHoverPopup()
       # Don't return - let the key be processed normally
 
   return none(bool)

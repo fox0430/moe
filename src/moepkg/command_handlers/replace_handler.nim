@@ -200,11 +200,12 @@ proc handleModeSwitch*(
   return ReplaceModeResult(kind: rmrHandled, modeTransition: some(targetMode))
 
 proc handleReplaceModeKey*(
-    handler: ReplaceModeHandler, editor: Editor, keyCombo: KeyCombo
+    handler: ReplaceModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
+    keyCombo: KeyCombo,
 ): ReplaceModeResult =
   ## Main entry point for handling Replace mode key presses
-  let buffer = editor.activeBuffer
-  let state = editor.state
 
   # Record key for macro if recording is active
   if state.macroState.isRecording:

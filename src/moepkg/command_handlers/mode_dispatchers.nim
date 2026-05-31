@@ -89,7 +89,7 @@ proc handleInsertMode*(
   ## Handle Insert mode input
   let buffer = editor.activeBuffer
   let state = editor.state
-  let r = manager.insertHandler.handleInsertModeKey(editor, keyCombo)
+  let r = manager.insertHandler.handleInsertModeKey(buffer, state, keyCombo)
   case r.kind
   of imrHandled:
     # Check if we're leaving Insert mode
@@ -557,7 +557,8 @@ proc handleVisualMode*(
   ## Handle Visual mode input
   let buffer = editor.activeBuffer
   let state = editor.state
-  let r = manager.visualHandler.handleVisualModeKey(editor, keyCombo)
+  let r =
+    manager.visualHandler.handleVisualModeKey(buffer, state, editor.viewport, keyCombo)
   case r.kind
   of vmrHandled:
     # Check if we're entering Insert mode (e.g., visual block I command)
@@ -602,7 +603,7 @@ proc handleReplaceMode*(
 ): HandlerResult =
   ## Handle Replace mode input
   let buffer = editor.activeBuffer
-  let r = manager.replaceHandler.handleReplaceModeKey(editor, keyCombo)
+  let r = manager.replaceHandler.handleReplaceModeKey(buffer, editor.state, keyCombo)
   case r.kind
   of rmrHandled:
     # Check if we're leaving Replace mode

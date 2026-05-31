@@ -426,8 +426,7 @@ suite "VisualModeHandler - handleVisualModeKey":
     let viewport = createTestViewport()
 
     let keyCombo = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
-    discard
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    discard handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check state.visualSelection.active == false
 
@@ -442,8 +441,7 @@ suite "VisualModeHandler - handleVisualModeKey":
 
     # Use a key that is unlikely to be bound
     let keyCombo = KeyCombo(isSpecial: false, char: "\x00", modifiers: {})
-    let r =
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrUnhandled or r.kind == vmrHandled
 
@@ -460,8 +458,7 @@ suite "VisualModeHandler - handleVisualModeKey":
     let viewport = createTestViewport()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "h", modifiers: {})
-    discard
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    discard handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check state.macroState.recordedKeys.len >= 1
 
@@ -476,8 +473,7 @@ suite "VisualModeHandler - handleVisualModeKey":
 
     # Try a key that should be handled by Visual mode bindings
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r =
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrHandled or r.kind == vmrUnhandled
 
@@ -491,8 +487,7 @@ suite "VisualModeHandler - handleVisualModeKey":
     let viewport = createTestViewport()
 
     let keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
-    let r =
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrHandled or r.kind == vmrUnhandled
 
@@ -514,8 +509,7 @@ suite "VisualModeHandler - Mode Transitions":
 
     # 'y' key for yank
     let keyCombo = KeyCombo(isSpecial: false, char: "y", modifiers: {})
-    let r =
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrHandled
     check r.modeTransition.isSome
@@ -538,8 +532,7 @@ suite "VisualModeHandler - Mode Transitions":
 
     # 'd' key for delete
     let keyCombo = KeyCombo(isSpecial: false, char: "d", modifiers: {})
-    let r =
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrHandled
 
@@ -559,8 +552,7 @@ suite "VisualModeHandler - Mode Transitions":
 
     # 'c' key for change
     let keyCombo = KeyCombo(isSpecial: false, char: "c", modifiers: {})
-    let r =
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrHandled
     # Mode should transition to Insert
@@ -584,8 +576,7 @@ suite "VisualModeHandler - Selection Types":
 
     # Move right
     let keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
-    let r =
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrHandled
     # After 'l', cursor moves from column 4 to 5
@@ -608,8 +599,7 @@ suite "VisualModeHandler - Selection Types":
 
     # Move down
     let keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r =
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrHandled
     check state.visualSelection.current.line == 1
@@ -631,11 +621,9 @@ suite "VisualModeHandler - Selection Types":
 
     # Move right then down
     var keyCombo = KeyCombo(isSpecial: false, char: "l", modifiers: {})
-    discard
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    discard handler.handleVisualModeKey(buf, state, viewport, keyCombo)
     keyCombo = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r =
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrHandled
     check state.visualSelection.current.line == 1
@@ -653,8 +641,7 @@ suite "VisualModeHandler - Waiting for Input":
 
     # Try 'r' for replace - should wait for char input
     let keyCombo = KeyCombo(isSpecial: false, char: "r", modifiers: {})
-    let r =
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     # Either waiting for input or handled depending on implementation
     check r.kind in {vmrWaitingForInput, vmrHandled, vmrUnhandled}
@@ -697,8 +684,7 @@ suite "VisualModeHandler - Command mode command alias bridge":
     let viewport = createTestViewport()
     let keyCombo = KeyCombo(isSpecial: false, char: "K", modifiers: {})
 
-    let r =
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrExecCommand
     check r.execCommandText == "bdelete"
@@ -715,8 +701,7 @@ suite "VisualModeHandler - Command mode command alias bridge":
     let viewport = createTestViewport()
     let keyCombo = KeyCombo(isSpecial: false, char: "D", modifiers: {})
 
-    let r =
-      handler.handleVisualModeKey(createTestEditor(buf, state, viewport), keyCombo)
+    let r = handler.handleVisualModeKey(buf, state, viewport, keyCombo)
 
     check r.kind == vmrExecCommand
     check r.execCommandText == "bd"

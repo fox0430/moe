@@ -1521,9 +1521,13 @@ proc notify*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
   else:
     e.state.statusMessage = msg
 
-proc tick*(e: Editor) =
-  ## Background processing: LSP, file watching, autosave, etc.
-  ## Should be called each frame before rendering.
+proc tickLsp(e: Editor) =
+  ## Per-frame LSP processing: poll the server, surface its messages, push
+  ## buffer changes, then drain all response caches/pollers.
+  ##
+  ## Ordering within this phase matters: `maybeUpdateLsp` notifies the server of
+  ## the latest buffer state, and the `pollLsp*` helpers below read the resulting
+  ## responses, so the update must run before the polls.
 
   # Poll LSP for messages (non-blocking). This is the single per-frame poll:
   # the pollLspXxx helpers below rely on this and must not poll again themselves.
@@ -1580,25 +1584,47 @@ proc tick*(e: Editor) =
   e.pollLspDocumentLinks()
   e.pollLspDocumentLinkResolve()
 
-  # File and config monitoring
+proc tickFileAndConfig(e: Editor) =
+  ## Detect external edits and config changes and reload them.
+  ## `maybeReloadExternallyModifiedFile` refreshes the conflict scan state that
+  ## `tickGitAndDebug` later consumes, and `maybeReloadConfig` may rewrite
+  ## `e.config`, which `tickAutoSave` reads — so this phase must run before both.
   e.maybeReloadExternallyModifiedFile()
   e.maybeReloadConfig()
 
-  # Git and debug updates. The diff subprocess itself is scheduled lazily
-  # from status_line.cachedGitDiffCounts (called during status-line
-  # rendering); here we just consume the most recent diff result for the
-  # sidebar gutter, gated on the user's showGitDiff flag.
+proc tickGitAndDebug(e: Editor) =
+  ## Git and debug updates. The diff subprocess itself is scheduled lazily
+  ## from status_line.cachedGitDiffCounts (called during status-line
+  ## rendering); here we just consume the most recent diff result for the
+  ## sidebar gutter, gated on the user's showGitDiff flag.
+  ## Depends on `tickFileAndConfig` having refreshed the conflict scan first.
   if e.state.display.showGitDiff:
     maybeApplyGitMarkers(e.activeBuffer())
   e.maybeUpdateConflicts()
   e.maybeUpdateDebugBuffer()
 
-  # Auto save/backup
+proc tickAutoSave(e: Editor) =
+  ## Auto save/backup. Reads `e.config`, so it must run after
+  ## `tickFileAndConfig` has applied any reloaded config.
   e.autoSave()
   e.autoBackup()
 
-  # Dismiss expired popup notifications
+proc tickNotifications(e: Editor) =
+  ## Dismiss expired popup notifications.
   e.state.notificationPopup.tick()
+
+proc tick*(e: Editor) =
+  ## Background processing: LSP, file watching, autosave, etc.
+  ## Should be called each frame before rendering.
+  ##
+  ## Each phase is a self-contained proc; the call order below is significant
+  ## (see the per-phase docs for the dependencies between them) and must match
+  ## the original sequence.
+  e.tickLsp()
+  e.tickFileAndConfig()
+  e.tickGitAndDebug()
+  e.tickAutoSave()
+  e.tickNotifications()
 
 proc prepareFrame(e: Editor, buffer: var Buffer): bool =
   ## Prepare for rendering: clear buffer, update animations, prepare highlights.
@@ -1648,7 +1674,7 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
       highlightChanged = true
     # If highlight was modified, we need to re-apply semantic tokens
     if highlightChanged:
-      e.invalidateSemanticTokensCache()
+      invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
     # Apply semantic tokens after local highlight is ready
     e.updateSemanticTokensCache()
 

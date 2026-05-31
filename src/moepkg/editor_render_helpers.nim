@@ -73,17 +73,19 @@ proc analyzeIndentation*(lineText: string): IndentInfo =
       break
     charIdx += 1
 
-proc isPositionInDocumentHighlight*(e: Editor, pos: BufferPosition): Option[int] =
+proc isPositionInDocumentHighlight*(
+    state: EditorState, pos: BufferPosition
+): Option[int] =
   ## Check if position is within any document highlight range
   ## Returns the highlight kind (1=Text, 2=Read, 3=Write) if found, none otherwise
   ## Uses O(1) line lookup + O(m) column search where m is highlights on that line
-  if not e.state.display.showDocumentHighlight or
-      not e.state.lspCache.documentHighlightCache.isValid:
+  if not state.display.showDocumentHighlight or
+      not state.lspCache.documentHighlightCache.isValid:
     return none(int)
 
   # O(1) lookup by line
   let items =
-    e.state.lspCache.documentHighlightCache.itemsByLine.getOrDefault(pos.line, @[])
+    state.lspCache.documentHighlightCache.itemsByLine.getOrDefault(pos.line, @[])
   for item in items:
     if pos.column >= item.startColumn and pos.column < item.endColumn:
       return some(item.kind)
