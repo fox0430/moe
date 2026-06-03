@@ -517,6 +517,47 @@ suite "Highlight - Incremental Update After Edit":
       for col in 0 ..< buffer[row].len:
         check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
 
+  test "Astro incremental reparse keeps frontmatter fence state":
+    # Editing a line below the frontmatter makes the reparse start mid-file
+    # (reparseStart > 0), so it must restore the boundary state instead of
+    # treating the closing `---` fence as an opening one. Regression test for
+    # the template region being misparsed as JavaScript frontmatter.
+    var buffer = @[
+      "---", "const color = \"red\";", "---", "<style>", "  body { color: var(--c); }",
+      "</style>",
+    ]
+
+    let (segments0, lineStates0) = initHighlightIncremental(
+      buffer, 0, buffer.high, TokenizerState(), @[], SourceLanguage.langAstro
+    )
+    var incrHighlight = IncrementalHighlight(
+      segments: segments0, lineStates: LineStateCache(states: lineStates0, version: 0)
+    )
+
+    # Within-line edit in the template body, well below the closing fence.
+    buffer[4] = "  body { color: var(--cc); }"
+
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      incrHighlight,
+      4,
+      1,
+      @[],
+      SourceLanguage.langAstro,
+    )
+
+    let incrResult = Highlight(colorSegments: incrHighlight.segments)
+    var runesBuffer: seq[Runes]
+    for line in buffer:
+      runesBuffer.add(line.toRunes)
+    let fullResult = initHighlight(runesBuffer, @[], SourceLanguage.langAstro)
+
+    for row in 0 ..< buffer.len:
+      for col in 0 ..< buffer[row].len:
+        check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
+
   test "multiline comment edit propagates state to end of file":
     # Opening a multiline comment affects all subsequent lines.
     # The incremental highlighter must re-parse to the end.

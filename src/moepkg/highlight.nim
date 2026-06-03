@@ -953,6 +953,13 @@ proc initHighlightIncrementalFromStr*(
   # Restore initial tokenizer state
   token.restoreTokenizerState(initialState)
 
+  if startLine == 0:
+    # `astroFirstLine`'s fresh-start value is `true`, unlike every other field
+    # (zero-value `false`), so the zero-valued seed `TokenizerState()` restores it
+    # as `false` and the frontmatter `---` fence is missed. Re-assert it at file
+    # line 0; captured states for `startLine > 0` are always `false`.
+    token.astroFirstLine = true
+
   while true:
     token.getNextToken(language)
 

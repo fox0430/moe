@@ -38,10 +38,10 @@ import tokenizer, syntax_javascript, syntax_html
 proc astroNextToken*(g: var GeneralTokenizer) =
   ## Astro syntax tokenizer that handles frontmatter and JSX template sections
 
-  # Reset state when starting fresh
-  if g.pos == 0:
-    g.astroInFrontmatter = false
-    g.astroFirstLine = true
+  # Don't reset astro state on `g.pos == 0`: incremental reparse builds a chunk
+  # buffer that also starts at `pos == 0`, then restores the boundary state via
+  # `restoreTokenizerState`. Resetting here would clobber it and make a mid-file
+  # reparse mistake a closing `---` fence for an opening one.
 
   var pos = g.pos
   g.start = g.pos
