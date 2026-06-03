@@ -380,6 +380,38 @@ proc htmlCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc astroCorpus(): seq[seq[string]] =
+  ## Astro snippets covering the cross-line state carried in
+  ## `astroInFrontmatter` / `astroFirstLine`, plus the state delegated to the
+  ## JavaScript tokenizer inside frontmatter (`templateLiteralDepth`,
+  ## `commentDepth`) and to the HTML tokenizer in the template (`inComment`,
+  ## `inScript`, `inStyle`). The `---...---` frontmatter fence and the
+  ## frontmatter/template boundary are the primary targets.
+  result = @[
+    @[
+      "---", "const name = \"world\";", "const items = [1, 2, 3];", "---", "<html>",
+      "  <body>", "    <h1>Hello, {name}!</h1>", "  </body>", "</html>",
+    ],
+    @[
+      "---", "import Layout from \"../layouts/Layout.astro\";", "/* outer block",
+      "   still inside */", "const sql = `", "  SELECT * FROM users",
+      "  WHERE id = ${id}", "`;", "---", "<p set:html={sql}></p>",
+    ],
+    @[
+      "---", "const title = \"Page\";", "---", "<!-- outer comment",
+      "     still inside", "     third line -->", "<main>", "  <h1>{title}</h1>",
+      "</main>",
+    ],
+    @[
+      "---", "const color = \"red\";", "---", "<style>", "  body { color: var(--c); }",
+      "</style>", "<script>", "  console.log(`loaded`);", "</script>",
+    ],
+    @[
+      "---", "const xs = [1, 2, 3];", "---", "<ul>", "  {xs.map((n) => (",
+      "    <li>item {n}</li>", "  ))}", "</ul>",
+    ],
+  ]
+
 # Random edits
 
 const PrintableAscii =
@@ -657,3 +689,6 @@ suite "Incremental Highlight Fuzz":
 
   test "HTML: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langHtml, htmlCorpus(), iters, baseSeed)
+
+  test "Astro: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langAstro, astroCorpus(), iters, baseSeed)
