@@ -412,6 +412,47 @@ proc astroCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc yamlCorpus(): seq[seq[string]] =
+  ## YAML snippets covering the state-heavy multi-line constructs: block
+  ## scalars (`|`, `>` with chomping/indent indicators, which carry `gtCommand`
+  ## then `gtLongStringLit` across lines), multi-line double-quoted (`gtStringLit`)
+  ## and single-quoted (`gtCharLit`) strings, the document-marker state toggle
+  ## (`---`/`...` flipping between the in-document `gtOther` and out-of-document
+  ## states), directives, and the `yamlIsKey` flag set on quoted keys.
+  result = @[
+    @[
+      "key: value", "name: example", "description: |",
+      "  This is a literal block scalar.", "  It spans multiple lines.",
+      "  Indentation determines the end.", "trailing: done",
+    ],
+    @[
+      "---", "config: >-", "  folded scalar text", "  that wraps across lines", "list:",
+      "  - one", "  - two", "...",
+    ],
+    @[
+      "multi: \"this string", "  continues on the next line\"",
+      "single: 'it''s got an escaped quote", "  and wraps too'",
+      "plain: just a plain scalar",
+    ],
+    @[
+      "%YAML 1.2", "---", "anchored: &id value", "ref: *id", "tagged: !!str 123",
+      "nested:", "  inner: !<tag:example.com,2002:foo> bar",
+    ],
+    @[
+      "steps:", "  - name: build", "    run: |", "      echo \"building\"",
+      "      make all", "  # comment after the block scalar", "  - name: test",
+      "    run: |", "      make test",
+    ],
+    @[
+      "flags: [true, false, null]", "matrix: {x: 1, y: 2.5, z: 0xFF}",
+      "when: 2024-01-01", "ratio: .inf", "empty: ~",
+    ],
+    @[
+      "data: |2", "    indented content", "    more content", "after: value",
+      "literal: |+", "  keep trailing", "", "", "next: done",
+    ],
+  ]
+
 # Random edits
 
 const PrintableAscii =
@@ -692,3 +733,6 @@ suite "Incremental Highlight Fuzz":
 
   test "Astro: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langAstro, astroCorpus(), iters, baseSeed)
+
+  test "YAML: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langYaml, yamlCorpus(), iters, baseSeed)
