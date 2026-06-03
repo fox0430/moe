@@ -1516,3 +1516,117 @@ suite "syntax_yaml - block scalar stale state recovery":
     check g.state == gtLongStringLit
     g.yamlNextToken() # block scalar content
     check g.kind == gtLongStringLit
+
+suite "syntax_yaml - multi-line scalars fold across lines":
+  test "unterminated single-quoted scalar at end of buffer does not read past it":
+    # Regression: the single-quoted continuation loop lacked a NUL terminator,
+    # so an unterminated string ran off the end of the buffer, producing a token
+    # whose length overshoots the buffer (which later raised RangeDefect when the
+    # highlighter sliced it). Every token must stay within the buffer.
+    let src = "single: 'it''s open\nmore text"
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(src)
+    g.state = gtOther
+    var kinds: seq[TokenClass]
+    for _ in 0 .. 40:
+      g.yamlNextToken()
+      check g.start + g.length <= src.len # never extends past the buffer
+      kinds.add(g.kind)
+      if g.kind == gtEof:
+        break
+    # Must terminate at EOF instead of looping/crashing.
+    check kinds[^1] == gtEof
+
+  test "single-quoted scalar folds across a line keeping gtCharLit":
+    # The content reader breaks at the newline but stays in gtCharLit, so the
+    # next line resumes the same string. This keeps the closing-quote token (the
+    # one that returns to gtOther) on its own line, which is what lets an
+    # incremental reparse mark the intervening lines as inside the string.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'first\nsecond'")
+    g.state = gtOther
+    g.yamlNextToken() # opening '
+    check g.kind == gtNone
+    check g.state == gtCharLit
+    g.yamlNextToken() # 'first<newline>
+    check g.kind == gtStringLit
+    check g.state == gtCharLit # still inside the single-quoted scalar
+    g.yamlNextToken() # second'
+    check g.kind == gtStringLit
+    check g.state == gtOther # closing quote ends the scalar
+
+  test "double-quoted scalar folds across a line keeping gtStringLit":
+    # After an escape splits the opening run, the resumed reader must also break
+    # at the newline while staying in gtStringLit. Otherwise a run that reaches
+    # end of buffer parks gtOther and back-fills it onto the intervening lines.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\nb\nc\"")
+    g.state = gtOther
+    g.yamlNextToken() # "a
+    check g.kind == gtStringLit
+    check g.state == gtStringLit
+    g.yamlNextToken() # \n escape
+    check g.kind == gtEscapeSequence
+    g.yamlNextToken() # b<newline>
+    check g.kind == gtStringLit
+    check g.state == gtStringLit # still inside the double-quoted scalar
+    g.yamlNextToken() # c"
+    check g.state == gtOther # closing quote ends the scalar
+
+  test "simple multi-line double-quoted scalar still parses as one run":
+    # Without an escape the opening reader spans the lines in a single token and
+    # never resets mid-string; the fold support must not regress this.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"line one\nline two\"")
+    g.state = gtOther
+    g.yamlNextToken() # "line one<newline>
+    check g.kind == gtStringLit
+    check g.state == gtStringLit
+
+suite "syntax_yaml - block scalar parent indentation":
+  test "inline block scalar header at buffer start does not swallow the next key":
+    # `key: |` as the very first line: the block body's indentation is derived
+    # from the header line itself, so a following same-indent key must stay a
+    # key rather than being absorbed as block content.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("description: |\n  body line\nname: value")
+    g.state = gtOther
+    var keyCount = 0
+    while true:
+      g.yamlNextToken()
+      if g.kind == gtEof:
+        break
+      if g.kind == gtKey:
+        inc keyCount
+    check keyCount == 2 # "description" and "name"
+
+  test "alone block scalar header honours a parent that is the first line":
+    # Mirrors an incremental reparse whose chunk begins on the block scalar's
+    # parent line: the parent's indentation must be honoured rather than reset
+    # to top level. `lookbehind` reaching the buffer start here means "the parent
+    # is the first line", NOT "there is no parent", so the empty `>` block must
+    # not swallow the following key.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("  keep trailing\n\n\n>\nnext: done")
+    g.state = gtOther
+    var tokens: seq[TokenClass]
+    while true:
+      g.yamlNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+    check gtKey in tokens # "next" stays a key
+
+  test "alone block scalar header at top level consumes following content":
+    # With genuinely no parent above it, an alone header sits at top level and
+    # the block scalar owns the rest of the document.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(">\n  folded content\n  more content\n")
+    g.state = gtOther
+    var tokens: seq[TokenClass]
+    while true:
+      g.yamlNextToken()
+      if g.kind == gtEof:
+        break
+      tokens.add(g.kind)
+    check gtLongStringLit in tokens

@@ -196,6 +196,12 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       of '\0':
         g.state = gtOther
         break
+      of '\n', '\r':
+        # Fold across the line keeping `gtStringLit`/`gtKey`: one token per line
+        # so the incremental boundary state marks each as inside the string,
+        # rather than parking `gtOther` at end of buffer and back-filling it.
+        inc(pos)
+        break
       of '\"':
         inc(pos)
         g.state = gtOther
@@ -213,6 +219,16 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       inc(pos) # skip the starting '
       while true:
         case g.buf[pos]
+        of '\0':
+          # Unterminated at end of buffer; stop so we don't read past it.
+          g.state = gtOther
+          break
+        of '\n', '\r':
+          # Fold across the line keeping `gtCharLit`: one token per line so the
+          # closing-quote token (which resets to `gtOther`) stays on its own
+          # line and the lines between are marked as inside the string.
+          inc(pos)
+          break
         of '\'':
           if g.buf[pos + 1] == '\'':
             # Escape sequence, return content first if any
@@ -230,6 +246,12 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       # Continue reading after previous token
       while true:
         case g.buf[pos]
+        of '\0':
+          g.state = gtOther
+          break
+        of '\n', '\r':
+          inc(pos)
+          break
         of '\'':
           if g.buf[pos + 1] == '\'':
             # Escape sequence, return content first if any
@@ -290,7 +312,9 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
     var indentation = 1
     while g.buf[lookbehind + indentation] == ' ':
       inc(indentation)
-    if g.buf[lookbehind + indentation] in {'|', '>'}:
+    let headerAlone = g.buf[lookbehind + indentation] in {'|', '>'}
+    var foundParent = false
+    if headerAlone:
       # when the header is alone in a line, this line does not show the parent's
       # indentation, so we must go further. search the first previous line with
       # non-whitespace content.
@@ -298,6 +322,9 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         dec(lookbehind)
         while lookbehind >= 0 and g.buf[lookbehind] in {' ', '\t'}:
           dec(lookbehind)
+      # `>= 0`: landed on a real parent line whose indentation we honour.
+      # `-1`: ran off the top, so there is no parent and the block is top level.
+      foundParent = lookbehind >= 0
       # now, find the beginning of the line...
       while lookbehind >= 0 and g.buf[lookbehind] notin {'\n', '\r'}:
         dec(lookbehind)
@@ -305,11 +332,17 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       indentation = 1
       while g.buf[lookbehind + indentation] == ' ':
         inc(indentation)
-    if lookbehind == -1:
-      indentation = 0 # top level
-    elif g.buf[lookbehind + 1] == '-' and g.buf[lookbehind + 2] == '-' and
-        g.buf[lookbehind + 3] == '-' and g.buf[lookbehind + 4] in {'\t' .. '\r', ' '}:
-      # this is a document start, therefore, we are at top level
+    if headerAlone and not foundParent:
+      # Alone header with nothing above it: top level. Keyed on `foundParent`,
+      # not `lookbehind == -1`, because a reparse chunk can start on the parent
+      # line itself (parent found, yet `lookbehind` still hits the buffer start);
+      # forcing top level there would let the block swallow following keys. An
+      # inline header (`key: |`) keeps its own indentation and is never forced.
+      indentation = 0
+    elif lookbehind >= 0 and g.buf[lookbehind + 1] == '-' and
+        g.buf[lookbehind + 2] == '-' and g.buf[lookbehind + 3] == '-' and
+        g.buf[lookbehind + 4] in {'\t' .. '\r', ' '}:
+      # the parent line is a document start marker, therefore we are at top level
       indentation = 0
     # because lookbehind was at newline char when calculating indentation, we're
     # off by one. fix that. top level's parent will have indentation of -1.
