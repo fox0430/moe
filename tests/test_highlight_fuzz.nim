@@ -403,9 +403,8 @@ proc astroCorpus(): seq[seq[string]] =
       "</main>",
     ],
     @[
-      "---", "const color = \"red\";", "---", "<style>",
-      "  body { color: var(--c); }", "</style>", "<script>",
-      "  console.log(`loaded`);", "</script>",
+      "---", "const color = \"red\";", "---", "<style>", "  body { color: var(--c); }",
+      "</style>", "<script>", "  console.log(`loaded`);", "</script>",
     ],
     @[
       "---", "const xs = [1, 2, 3];", "---", "<ul>", "  {xs.map((n) => (",
