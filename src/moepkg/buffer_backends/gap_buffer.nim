@@ -131,8 +131,10 @@ proc findLineEnd*(gb: GapBuffer, lineNumber: int): int =
 proc ensureGapSize(gb: GapBuffer, minSize: int) =
   ## Ensure gap has at least minSize lines
   ##
-  ## Performance: O(n) when resize needed (amortized O(1) with 2x growth)
-  ## Memory: Nim's string is COW, so assignment is efficient (O(1) pointer copy)
+  ## Performance: O(n) when resize needed (amortized O(1) with 2x growth).
+  ## Under ORC `seq[string]` assignment deep-copies the payload, so the old
+  ## buffer (replaced just below) is drained with `move`: each line's payload
+  ## is transferred in O(1) rather than copying every line's bytes.
   if gb.gapSize >= minSize:
     return
 
@@ -143,14 +145,14 @@ proc ensureGapSize(gb: GapBuffer, minSize: int) =
 
   var newLines = newSeq[string](newCapacity)
 
-  # Copy prefix (before gap) - Nim strings are COW, so this is efficient
+  # Move prefix (before gap); the old buffer is discarded below, so this is safe.
   for i in 0 ..< gb.gapStart:
-    newLines[i] = gb.lines[i]
+    newLines[i] = move(gb.lines[i])
 
-  # Copy suffix (after gap) to end of new buffer
+  # Move suffix (after gap) to end of new buffer.
   let suffixStart = newCapacity - (gb.capacity() - gb.gapEnd)
   for i in gb.gapEnd ..< gb.capacity():
-    newLines[suffixStart + (i - gb.gapEnd)] = gb.lines[i]
+    newLines[suffixStart + (i - gb.gapEnd)] = move(gb.lines[i])
 
   gb.lines = newLines
   gb.gapEnd = suffixStart
@@ -399,11 +401,11 @@ proc charAtLineCol*(gb: GapBuffer, line: int, col: int): char =
   else:
     raise newException(IndexDefect, "GapBuffer column out of bounds")
 
-proc charAt*(gb: GapBuffer, index: int): char =
-  ## Get character at linear index position
-  ## Treats buffer as a flat sequence of characters with newlines between lines
+proc indexToLineCol*(gb: GapBuffer, index: int): tuple[line: int, col: int] =
+  ## Convert linear index to (line, column) position
+  ## Returns (-1, -1) for invalid index
   if index < 0:
-    raise newException(IndexDefect, "GapBuffer index out of bounds: " & $index)
+    return (-1, -1)
 
   var
     remaining = index
@@ -415,20 +417,32 @@ proc charAt*(gb: GapBuffer, index: int): char =
       lineObj = gb.lines[physicalLine]
       lineLen = lineObj.len
 
-    if remaining < lineLen:
-      # Character is within this line
-      return lineObj[remaining]
-    elif remaining == lineLen and lineNum < gb.len - 1:
-      # At end of line (not last line) - return newline
-      return '\n'
+    if remaining <= lineLen:
+      return (lineNum, remaining)
     else:
-      # Move to next line
       remaining -= lineLen
       if lineNum < gb.len - 1:
         remaining -= 1 # Account for newline
       inc lineNum
 
-  raise newException(IndexDefect, "GapBuffer index out of bounds: " & $index)
+  # Past end of buffer - return position at end of last line
+  if gb.len > 0:
+    let lastLine = gb.len - 1
+    let physicalLine = gb.logicalToPhysical(lastLine)
+    return (lastLine, gb.lines[physicalLine].len)
+  return (0, 0)
+
+proc charAt*(gb: GapBuffer, index: int): char =
+  ## Get character at linear index position.
+  ## Treats the buffer as a flat sequence of characters with newlines between
+  ## lines. Shares the index->(line, col) scan with `indexToLineCol`; a column
+  ## equal to the line length maps to the trailing newline (or out-of-bounds on
+  ## the last line) via `charAtLineCol`.
+  if index < 0:
+    raise newException(IndexDefect, "GapBuffer index out of bounds: " & $index)
+
+  let (line, col) = gb.indexToLineCol(index)
+  gb.charAtLineCol(line, col)
 
 proc replaceLine*(gb: GapBuffer, lineNumber: int, content: string) =
   ## Replace the content of a specific line
@@ -502,37 +516,6 @@ proc modifyLineContent*(gb: GapBuffer, lineNumber: int, f: proc(s: var string)) 
   gb.lines[physicalLine] = line
 
 # Linear index operations
-
-proc indexToLineCol*(gb: GapBuffer, index: int): tuple[line: int, col: int] =
-  ## Convert linear index to (line, column) position
-  ## Returns (-1, -1) for invalid index
-  if index < 0:
-    return (-1, -1)
-
-  var
-    remaining = index
-    lineNum = 0
-
-  while lineNum < gb.len:
-    let
-      physicalLine = gb.logicalToPhysical(lineNum)
-      lineObj = gb.lines[physicalLine]
-      lineLen = lineObj.len
-
-    if remaining <= lineLen:
-      return (lineNum, remaining)
-    else:
-      remaining -= lineLen
-      if lineNum < gb.len - 1:
-        remaining -= 1 # Account for newline
-      inc lineNum
-
-  # Past end of buffer - return position at end of last line
-  if gb.len > 0:
-    let lastLine = gb.len - 1
-    let physicalLine = gb.logicalToPhysical(lastLine)
-    return (lastLine, gb.lines[physicalLine].len)
-  return (0, 0)
 
 proc insert*(gb: GapBuffer, index: int, text: string) =
   ## Insert text at linear index position
@@ -685,13 +668,16 @@ iterator lines*(gb: GapBuffer): string =
 
 proc estimateMemoryUsage*(gb: GapBuffer): int =
   ## Estimate memory usage in bytes
+  ## `capacity * sizeof(string)` already covers every slot's inline string
+  ## header (used + gap), so the per-line term counts only the heap content
+  ## bytes — adding sizeof(string) again here would double-count the header.
   result = sizeof(GapBuffer) + gb.capacity * sizeof(string)
 
   for i in 0 ..< gb.len:
     let
       physicalLine = gb.logicalToPhysical(i)
       line = gb.lines[physicalLine]
-    result += sizeof(string) + line.len
+    result += line.len
 
 # Debug information
 
