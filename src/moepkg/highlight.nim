@@ -947,6 +947,14 @@ proc initHighlightIncrementalFromStr*(
     if not empty:
       colorSegments.add(cs)
 
+    if str.len > 0 and str[^1] == '\n' and lineStates.len > 0:
+      # When a token ends on a newline, the next line is OUTSIDE it, so its
+      # entering state is the token's real post-state — not the multi-line
+      # continuation kind the boundary capture above forced. Re-capture it. Matters
+      # for tokens that eat their trailing newline (a YAML block scalar `|`/`>`
+      # ending at the dedent, back in `gtOther`); a no-op otherwise.
+      lineStates[^1] = captureTokenizerState(token)
+
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(bufferStr)
 
@@ -1074,8 +1082,39 @@ proc updateHighlightIncremental*(
   # constructs (Rust `/* /* */ */`, Nim `#[ #[ ]# ]#`). To stay correct,
   # rewind to the line where the multi-line token actually opens, which is
   # the first line whose preceding state is NOT a multi-line continuation.
-  const MultiLineKinds = {gtLongComment, gtDocLongComment, gtLongStringLit}
-  while reparseStart > 0 and initialState.state in MultiLineKinds:
+  #
+  # `gtStringLit`/`gtKey`/`gtCharLit` cover tokenizers whose string literals span
+  # lines and resume via these states (YAML `"..."` scalars/keys, its `'...'`
+  # scalars parked in `gtCharLit`, Lisp strings); a reparse starting mid-string
+  # must rewind to its opening line. Single-line strings never leave these states
+  # at a boundary, so the rewind never fires for them.
+  const MultiLineKinds =
+    {gtLongComment, gtDocLongComment, gtLongStringLit, gtStringLit, gtKey, gtCharLit}
+
+  template yamlNeedsMoreContext(row: int): bool =
+    ## A YAML block scalar's extent depends on lines BELOW its header but is resolved
+    ## by scanning ABOVE it, which the cached state cannot express:
+    ##   * blank lines after a header carry plain `gtOther`, so an edit adding the
+    ##     first indented content has nothing pointing back to the header;
+    ##   * an alone header (`|`/`>` on its own line) takes its indentation from the
+    ##     nearest non-blank line above, missing if the chunk starts on the header.
+    ## So for YAML, also rewind across blank lines and alone headers to the parent
+    ## line. Rewinding too early is always safe (the reparse restarts from a cached,
+    ## correct state); scoped to YAML so other languages keep a minimal window.
+    block:
+      var needs = false
+      if language == SourceLanguage.langYaml:
+        var firstNonSpace = '\0'
+        for ch in getLine(row):
+          if ch != ' ' and ch != '\t':
+            firstNonSpace = ch
+            break
+        # Blank line (no non-space char) or an alone block-scalar header.
+        needs = firstNonSpace == '\0' or firstNonSpace == '|' or firstNonSpace == '>'
+      needs
+
+  while reparseStart > 0 and
+      (initialState.state in MultiLineKinds or yamlNeedsMoreContext(reparseStart)):
     dec reparseStart
     if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
       initialState = incrHighlight.lineStates.states[reparseStart - 1]
