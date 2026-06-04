@@ -19,12 +19,12 @@
 
 ## KeyRouter: single owner of the key-dispatch decision pipeline.
 ##
-## In the current phase the router handles runtime-mapping dispatch decisions
-## (the `feedKey` entry point and the `flushTimeout` follow-up). Built-in
-## command resolution (multi-key sequences, single bindings, numeric prefix,
-## f/t/r operand waits) still lives in `KeyBindingRegistry.processKey` and is
-## invoked from each mode-specific dispatcher; a future phase can pull that
-## into the router by extending `RouteResult` with a `rrCommand` variant.
+## The router handles runtime-mapping dispatch decisions (the `feedKey` entry
+## point and the `flushTimeout` follow-up). Built-in command resolution
+## (multi-key sequences, single bindings, numeric prefix, f/t/r operand waits)
+## lives in `KeyBindingRegistry.processKey`; `resolveBuiltin` (below) wraps it
+## into a `RouteResult` via the `rrCommand` variant and is invoked from the
+## Normal-mode dispatcher (the only mode that uses sequence resolution).
 ##
 ## The router does *not* own the accumulator storage — it borrows
 ## `KeyBindingRegistry.runtimeMappingState`. Moving the physical storage into
@@ -155,3 +155,40 @@ proc flushTimeout*(router: KeyRouter, mode: EditorMode): RouteResult =
     RouteResult(kind: rrExecuteRuntimeKeySequence, targetKeys: plan.targetKeys)
   of rmfReplayPerKey:
     RouteResult(kind: rrUnhandledBatch, keys: plan.keysToReplay)
+
+proc resolveBuiltin*(
+    registry: KeyBindingRegistry, mode: EditorMode, combo: KeyCombo
+): RouteResult =
+  ## Resolve a built-in binding/sequence/operand to a `RouteResult`. Thin
+  ## wrapper over `KeyBindingRegistry.processKey`: a resolved command becomes
+  ## `rrCommand`; the `none` cases are classified by observing the registry's
+  ## sequence state — an active sequence means "still accumulating" (`rrWaiting`),
+  ## an Escape that consumed an active sequence is `rrCancelled`, and anything
+  ## else is `rrUnhandled`.
+  ##
+  ## Built-in sequence prefixes never time out (Vim spec), so `rrWaiting`
+  ## carries `waitsForTimeout = false` — unlike runtime-mapping prefixes.
+  ##
+  ## NOTE: `rrUnhandled` here is *not* a pure pass-through. `combo` may already
+  ## have been consumed by `processKey` as the terminator of an invalid sequence
+  ## (e.g. `z` after `g` when only `gg` is bound) or as bad operand input. The
+  ## current Normal-mode caller collapses every non-`rrCommand` result to
+  ## "handled, no re-processing", so this is harmless today; a future caller
+  ## must NOT feed `route.key` back into built-in processing or it would
+  ## double-handle the terminator key.
+  ##
+  ## Lives in the router module (not `key_bindings`) because it returns the
+  ## router-owned `RouteResult`; moving it into `key_bindings` would require
+  ## that module to import `key_router/types`, which already imports
+  ## `key_bindings` — a cycle. It takes a `KeyBindingRegistry` only because the
+  ## built-in accumulator state still lives there.
+  let wasEscapeOnActive =
+    combo.isSpecial and combo.special == skEscape and registry.hasActiveSequence()
+  let cmdOpt = registry.processKey(mode, combo)
+  if cmdOpt.isSome:
+    return RouteResult(kind: rrCommand, command: cmdOpt.get)
+  if wasEscapeOnActive:
+    return RouteResult(kind: rrCancelled)
+  if registry.hasActiveSequence():
+    return RouteResult(kind: rrWaiting, waitsForTimeout: false)
+  return RouteResult(kind: rrUnhandled, key: combo)

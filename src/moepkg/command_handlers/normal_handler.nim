@@ -651,14 +651,14 @@ proc handleNormalModeKey*(
       state.statusMessage = ""
       # Fall through to process the key normally
 
-  # Process the key (handles numeric prefixes, sequences, etc.)
-  let cmdOption = handler.keyBindingRegistry.processKey(EditorMode.Normal, keyCombo)
-
-  if cmdOption.isNone:
-    # Key was consumed (e.g., building numeric prefix or sequence)
+  # Resolve the key through the router (numeric prefixes, sequences, f/t/r, etc.)
+  let route = handler.keyBindingRegistry.resolveBuiltin(EditorMode.Normal, keyCombo)
+  if route.kind != rrCommand:
+    # Key consumed (waiting / cancelled) or unhandled: all collapse to the
+    # previous `cmdOption.isNone` behaviour (handled, no mode transition).
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
-  let cmd = cmdOption.get
+  let cmd = route.command
 
   case cmd.kind
   of ctMotion:

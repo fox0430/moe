@@ -19,12 +19,13 @@
 
 ## Public types for the KeyRouter dispatcher.
 ##
-## Phase 3 scope: KeyRouter owns runtime-mapping dispatch decisions. Built-in
-## command resolution (sequence/single binding) still happens inside the
-## mode-specific dispatchers via `KeyBindingRegistry.processKey`, so the
-## current `RouteResult` set does not include a `rrCommand` variant. A future
-## phase that pulls built-in resolution into the router can extend this enum
-## with `rrCommand` (carrying a `Command` value) without breaking callers.
+## KeyRouter owns runtime-mapping dispatch decisions. Built-in command
+## resolution (sequence / single binding / numeric prefix / `f t r` operand
+## waits) is wrapped by `resolveBuiltin` (key_router.nim), which maps
+## `KeyBindingRegistry.processKey` onto the `rrCommand` variant carrying the
+## resolved `Command`. `Command` is intentionally *not* re-exported (only
+## `options` is) so the `editor_types` `except Command` guard keeps working
+## through `import key_router`.
 
 import std/options
 
@@ -53,11 +54,17 @@ type
       ## time out (Vim spec).
     rrCancelled ## Escape consumed pending state.
     rrUnhandled
-      ## Router has nothing to say about this key; caller should proceed with
-      ## normal (built-in) processing.
+      ## From `feedKey`: the router has nothing to say about this key; the
+      ## caller should proceed with normal (built-in) processing. From
+      ## `resolveBuiltin`: the key may already have been *consumed* as an
+      ## invalid-sequence terminator — see that proc's note; do not blindly
+      ## re-process `key`.
     rrUnhandledBatch
       ## Accumulator was flushed without a match. Caller replays these keys
       ## one by one with `isReplayingMapping = true`.
+    rrCommand
+      ## A built-in binding/sequence was resolved. `command` carries the
+      ## resolved `Command`; the caller executes it (Normal-mode dispatcher).
 
   RouteResult* = object
     case kind*: RouteResultKind
@@ -73,3 +80,5 @@ type
       keys*: seq[KeyCombo]
     of rrCancelled:
       discard
+    of rrCommand:
+      command*: Command
