@@ -17,9 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, options, re]
+import std/[strutils, options]
 
-import pkg/[results, chronos]
+import pkg/[results, chronos, regex]
 
 import background_process, primitives, buffer
 import syntax/tokenizer
@@ -45,7 +45,7 @@ proc syntaxCheckCommand*(
       "Syntax check not supported for this language"
     )
 
-let nimCheckPosPattern = re(r"\((\d+), (\d+)\)")
+let nimCheckPosPattern = re2(r"\((\d+), (\d+)\)")
 
 proc parseNimCheckResult*(path: string, output: seq[string]): seq[SyntaxCheckError] =
   ## Parse `nim check` output into SyntaxCheckError objects.
@@ -57,14 +57,13 @@ proc parseNimCheckResult*(path: string, output: seq[string]): seq[SyntaxCheckErr
     if not line.contains(path & "("):
       continue
     # Extract position
-    var matches: array[2, string]
-    let posIdx = line.find(nimCheckPosPattern, matches)
-    if posIdx < 0:
+    var m = RegexMatch2()
+    if not line.find(nimCheckPosPattern, m):
       continue
-    let lineNum = parseInt(matches[0]) - 1 # 0-based
-    let col = parseInt(matches[1])
+    let lineNum = parseInt(line[m.group(0)]) - 1 # 0-based
+    let col = parseInt(line[m.group(1)])
     # Extract message type and message after the position
-    let afterPos = posIdx + line[posIdx ..< line.len].find(')') + 1
+    let afterPos = m.boundaries.b + 1
     let rest = line[afterPos ..< line.len].strip()
     var msgType: SyntaxCheckMessageType
     var msg: string
