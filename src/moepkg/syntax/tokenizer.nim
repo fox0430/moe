@@ -139,6 +139,7 @@ type
     mdInMathMode*: bool
     mdInDisplayMath*: bool
     mdInFrontmatter*: bool
+    mdFirstLine*: bool
     latexInMathMode*: bool
     latexInDisplayMath*: bool
     rustRawStringHashCount*: int
@@ -237,6 +238,7 @@ proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.mdInMathMode = false
   g.mdInDisplayMath = false
   g.mdInFrontmatter = false
+  g.mdFirstLine = true
   g.latexInMathMode = false
   g.latexInDisplayMath = false
   g.rustRawStringHashCount = 0
