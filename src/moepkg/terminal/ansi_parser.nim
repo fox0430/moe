@@ -83,6 +83,18 @@ type
     utf8Buffer*: string # Incomplete UTF-8 bytes from previous read
     # Responses to write back to PTY (e.g. DA1, DA2, DSR replies)
     pendingResponses*: seq[string]
+    # Alternate screen buffer (DEC private modes 47/1047/1049)
+    altScreenActive*: bool
+    inactiveCells: seq[seq[TerminalCell]] # The other screen buffer while one is active
+    # Scrolling region (DECSTBM), 0-based inclusive
+    scrollTop*: int
+    scrollBottom*: int
+    # Saved cursor/SGR state (DECSC/DECRC via ESC 7/8, modes 1048/1049)
+    savedCursorRow*: int
+    savedCursorCol*: int
+    savedFg*: TerminalColor
+    savedBg*: TerminalColor
+    savedAttrs*: set[TerminalAttr]
     # Flags
     needsRedraw*: bool
     title*: string
@@ -127,6 +139,10 @@ proc newTerminalGrid*(cols, rows: int): TerminalGrid =
     parserState: apsNormal,
     escapeBuffer: "",
     pendingResponses: @[],
+    altScreenActive: false,
+    inactiveCells: @[],
+    scrollTop: 0,
+    scrollBottom: rows - 1,
     needsRedraw: false,
     title: "",
   )
@@ -134,51 +150,126 @@ proc newTerminalGrid*(cols, rows: int): TerminalGrid =
   for i in 0 ..< rows:
     result.cells[i] = newRow(cols)
 
+proc resizeCells(
+    old: seq[seq[TerminalCell]], oldCols, oldRows, cols, rows: int
+): seq[seq[TerminalCell]] =
+  ## Resize a single cell grid, preserving content where possible.
+  result = newSeq[seq[TerminalCell]](rows)
+  for r in 0 ..< rows:
+    result[r] = newRow(cols)
+    if r < oldRows:
+      for c in 0 ..< min(cols, oldCols):
+        result[r][c] = old[r][c]
+      # Clean up wide char split at the new right edge:
+      # If the cell just past the boundary (old col `cols`) was a padding cell,
+      # its main cell at cols-1 has lost its padding — clear it.
+      if cols < oldCols and cols > 0 and old[r][cols].widePadding:
+        result[r][cols - 1] = defaultCell()
+
 proc resize*(grid: TerminalGrid, cols, rows: int) =
   ## Resize the grid, preserving content where possible.
   let
     oldRows = grid.rows
     oldCols = grid.cols
 
-  # Create new cells grid
-  var newCells = newSeq[seq[TerminalCell]](rows)
-  for r in 0 ..< rows:
-    newCells[r] = newRow(cols)
-    if r < oldRows:
-      for c in 0 ..< min(cols, oldCols):
-        newCells[r][c] = grid.cells[r][c]
-      # Clean up wide char split at the new right edge:
-      # If the cell just past the boundary (old col `cols`) was a padding cell,
-      # its main cell at cols-1 has lost its padding — clear it.
-      if cols < oldCols and cols > 0 and grid.cells[r][cols].widePadding:
-        newCells[r][cols - 1] = defaultCell()
+  grid.cells = resizeCells(grid.cells, oldCols, oldRows, cols, rows)
+  # Keep the saved (inactive) screen buffer in sync so restoring it after an
+  # alternate-screen exit doesn't index out of bounds at the new size.
+  if grid.inactiveCells.len > 0:
+    grid.inactiveCells = resizeCells(grid.inactiveCells, oldCols, oldRows, cols, rows)
 
-  grid.cells = newCells
   grid.cols = cols
   grid.rows = rows
 
-  # Clamp cursor
+  # Resizing resets the scrolling region to the full screen (xterm behavior).
+  grid.scrollTop = 0
+  grid.scrollBottom = rows - 1
+
+  # Clamp cursors (live and saved) to the new bounds
   grid.cursorRow = min(grid.cursorRow, rows - 1)
   grid.cursorCol = min(grid.cursorCol, cols - 1)
+  grid.savedCursorRow = clamp(grid.savedCursorRow, 0, rows - 1)
+  grid.savedCursorCol = clamp(grid.savedCursorCol, 0, cols - 1)
   grid.needsRedraw = true
 
+proc blankCells(cols, rows: int): seq[seq[TerminalCell]] =
+  result = newSeq[seq[TerminalCell]](rows)
+  for r in 0 ..< rows:
+    result[r] = newRow(cols)
+
 proc scrollUp(grid: TerminalGrid) =
-  ## Scroll the grid up by one line: top line goes to scrollback,
-  ## new blank line at bottom.
+  ## Scroll the scrolling region up by one line, inserting a blank line at the
+  ## bottom of the region. The displaced top line is pushed to scrollback only
+  ## when the region spans the full screen on the primary buffer; region scrolls
+  ## and the alternate screen never touch the scrollback.
   if grid.rows == 0:
     return
 
-  # Push top line to scrollback
-  grid.scrollbackBuffer.addLast(grid.cells[0])
-  if grid.scrollbackBuffer.len > grid.maxScrollback:
-    grid.scrollbackBuffer.shrink(fromFirst = 1)
+  if grid.scrollTop == 0 and grid.scrollBottom == grid.rows - 1 and
+      not grid.altScreenActive:
+    grid.scrollbackBuffer.addLast(grid.cells[grid.scrollTop])
+    if grid.scrollbackBuffer.len > grid.maxScrollback:
+      grid.scrollbackBuffer.shrink(fromFirst = 1)
 
-  # Shift rows up
-  for r in 0 ..< grid.rows - 1:
+  for r in grid.scrollTop ..< grid.scrollBottom:
     grid.cells[r] = grid.cells[r + 1]
+  grid.cells[grid.scrollBottom] = newRow(grid.cols)
 
-  # New blank line at bottom
-  grid.cells[grid.rows - 1] = newRow(grid.cols)
+proc scrollDown(grid: TerminalGrid) =
+  ## Scroll the scrolling region down by one line, inserting a blank line at the
+  ## top of the region. Never pushes to scrollback.
+  if grid.rows == 0:
+    return
+  for r in countdown(grid.scrollBottom, grid.scrollTop + 1):
+    grid.cells[r] = grid.cells[r - 1]
+  grid.cells[grid.scrollTop] = newRow(grid.cols)
+
+proc lineFeed(grid: TerminalGrid) =
+  ## Move the cursor down one line, scrolling the region when at the bottom
+  ## margin. Only the row changes; the column is preserved by the caller.
+  if grid.cursorRow == grid.scrollBottom:
+    grid.scrollUp()
+  elif grid.cursorRow < grid.rows - 1:
+    grid.cursorRow += 1
+
+proc saveCursor(grid: TerminalGrid) =
+  ## DECSC: save cursor position and SGR state (ESC 7, modes 1048/1049).
+  grid.savedCursorRow = grid.cursorRow
+  grid.savedCursorCol = grid.cursorCol
+  grid.savedFg = grid.currentFg
+  grid.savedBg = grid.currentBg
+  grid.savedAttrs = grid.currentAttrs
+
+proc restoreCursor(grid: TerminalGrid) =
+  ## DECRC: restore cursor position and SGR state (ESC 8, modes 1048/1049).
+  grid.cursorRow = clamp(grid.savedCursorRow, 0, grid.rows - 1)
+  grid.cursorCol = clamp(grid.savedCursorCol, 0, grid.cols - 1)
+  grid.currentFg = grid.savedFg
+  grid.currentBg = grid.savedBg
+  grid.currentAttrs = grid.savedAttrs
+
+proc enterAltScreen(grid: TerminalGrid) =
+  ## Switch to the alternate screen buffer (DEC private modes 47/1047/1049).
+  ## The primary buffer is saved aside and the alternate buffer starts blank.
+  if grid.altScreenActive:
+    return
+  grid.inactiveCells = grid.cells
+  grid.cells = blankCells(grid.cols, grid.rows)
+  grid.altScreenActive = true
+  grid.scrollTop = 0
+  grid.scrollBottom = grid.rows - 1
+  grid.needsRedraw = true
+
+proc exitAltScreen(grid: TerminalGrid) =
+  ## Switch back to the primary screen buffer, restoring its saved contents.
+  if not grid.altScreenActive:
+    return
+  grid.cells = grid.inactiveCells
+  grid.inactiveCells = @[]
+  grid.altScreenActive = false
+  grid.scrollTop = 0
+  grid.scrollBottom = grid.rows - 1
+  grid.needsRedraw = true
 
 proc putChar(grid: TerminalGrid, ch: string) =
   ## Place a character at the current cursor position, advancing the cursor.
@@ -191,20 +282,14 @@ proc putChar(grid: TerminalGrid, ch: string) =
   # Wrap if at right edge
   if grid.cursorCol >= grid.cols:
     grid.cursorCol = 0
-    grid.cursorRow += 1
-    if grid.cursorRow >= grid.rows:
-      grid.scrollUp()
-      grid.cursorRow = grid.rows - 1
+    grid.lineFeed()
 
   # Wide character that doesn't fit on this line — pad the remaining cell and wrap
   if width == 2 and grid.cursorCol + 1 >= grid.cols:
     # Fill the last cell with a space and wrap
     grid.cells[grid.cursorRow][grid.cursorCol] = defaultCell()
     grid.cursorCol = 0
-    grid.cursorRow += 1
-    if grid.cursorRow >= grid.rows:
-      grid.scrollUp()
-      grid.cursorRow = grid.rows - 1
+    grid.lineFeed()
 
   let col = grid.cursorCol
   let row = grid.cursorRow
@@ -363,6 +448,19 @@ proc processCsi(grid: TerminalGrid, buf: string) =
         case p
         of 25:
           grid.cursorVisible = true
+        of 47, 1047:
+          # Switch to alternate screen (no cursor save)
+          grid.enterAltScreen()
+        of 1048:
+          # Save cursor (DECSC), no buffer switch
+          grid.saveCursor()
+        of 1049:
+          # Save cursor, then switch to (cleared) alternate screen. Skip
+          # entirely when already on the alt screen so a redundant 1049h can't
+          # overwrite the saved primary cursor with the alt-screen position.
+          if not grid.altScreenActive:
+            grid.saveCursor()
+            grid.enterAltScreen()
         else:
           discard
     of 'l':
@@ -371,6 +469,19 @@ proc processCsi(grid: TerminalGrid, buf: string) =
         case p
         of 25:
           grid.cursorVisible = false
+        of 47, 1047:
+          # Switch back to primary screen (no cursor restore)
+          grid.exitAltScreen()
+        of 1048:
+          # Restore cursor (DECRC), no buffer switch
+          grid.restoreCursor()
+        of 1049:
+          # Switch back to primary screen, then restore cursor. Skip entirely
+          # when not on the alt screen so a redundant 1049l can't clobber the
+          # live cursor with a stale saved position.
+          if grid.altScreenActive:
+            grid.exitAltScreen()
+            grid.restoreCursor()
         else:
           discard
     else:
@@ -493,27 +604,27 @@ proc processCsi(grid: TerminalGrid, buf: string) =
     else:
       discard
   of 'S':
-    # Scroll Up
-    let n =
+    # Scroll Up - clamp to the region height; scrolling more lines than the
+    # region holds just blanks it, so extra passes are pointless.
+    let rawN =
       if params.len > 0 and params[0] > 0:
         params[0]
       else:
         1
+    let n = min(rawN, grid.scrollBottom - grid.scrollTop + 1)
     for _ in 0 ..< n:
       grid.scrollUp()
   of 'T':
-    # Scroll Down
-    let n =
+    # Scroll Down - clamp to the region height; scrolling more lines than the
+    # region holds just blanks it, so extra passes are pointless.
+    let rawN =
       if params.len > 0 and params[0] > 0:
         params[0]
       else:
         1
+    let n = min(rawN, grid.scrollBottom - grid.scrollTop + 1)
     for _ in 0 ..< n:
-      if grid.rows > 0:
-        # Shift rows down, insert blank at top
-        for r in countdown(grid.rows - 1, 1):
-          grid.cells[r] = grid.cells[r - 1]
-        grid.cells[0] = newRow(grid.cols)
+      grid.scrollDown()
   of 'd':
     # Vertical Position Absolute
     let row =
@@ -597,29 +708,37 @@ proc processCsi(grid: TerminalGrid, buf: string) =
     for c in grid.cursorCol ..< min(grid.cursorCol + n, grid.cols):
       grid.cells[row][c] = defaultCell()
   of 'L':
-    # Insert Line
-    let n =
+    # Insert Line - acts only when the cursor is inside the scrolling region;
+    # the lower bound is the region bottom margin, not the screen bottom.
+    let rawN =
       if params.len > 0 and params[0] > 0:
         params[0]
       else:
         1
-    for _ in 0 ..< n:
-      if grid.cursorRow < grid.rows:
-        for r in countdown(grid.rows - 1, grid.cursorRow + 1):
+    if grid.cursorRow >= grid.scrollTop and grid.cursorRow <= grid.scrollBottom:
+      # Inserting more lines than fit between the cursor and the bottom margin
+      # just blanks the rest of the region, so clamp to avoid pointless passes.
+      let n = min(rawN, grid.scrollBottom - grid.cursorRow + 1)
+      for _ in 0 ..< n:
+        for r in countdown(grid.scrollBottom, grid.cursorRow + 1):
           grid.cells[r] = grid.cells[r - 1]
         grid.cells[grid.cursorRow] = newRow(grid.cols)
   of 'M':
-    # Delete Line
-    let n =
+    # Delete Line - acts only when the cursor is inside the scrolling region;
+    # the lower bound is the region bottom margin, not the screen bottom.
+    let rawN =
       if params.len > 0 and params[0] > 0:
         params[0]
       else:
         1
-    for _ in 0 ..< n:
-      if grid.cursorRow < grid.rows:
-        for r in grid.cursorRow ..< grid.rows - 1:
+    if grid.cursorRow >= grid.scrollTop and grid.cursorRow <= grid.scrollBottom:
+      # Deleting more lines than remain in the region just blanks the rest, so
+      # clamp to the region height below the cursor to skip redundant passes.
+      let n = min(rawN, grid.scrollBottom - grid.cursorRow + 1)
+      for _ in 0 ..< n:
+        for r in grid.cursorRow ..< grid.scrollBottom:
           grid.cells[r] = grid.cells[r + 1]
-        grid.cells[grid.rows - 1] = newRow(grid.cols)
+        grid.cells[grid.scrollBottom] = newRow(grid.cols)
   of 'c':
     # DA1 - Primary Device Attributes
     # Reply: VT102 with no options
@@ -643,7 +762,25 @@ proc processCsi(grid: TerminalGrid, buf: string) =
     else:
       discard
   of 'r':
-    # Set Scrolling Region (DECSTSR) - simplified: just reset cursor
+    # DECSTBM - Set Top and Bottom Margins (scrolling region), 1-based params.
+    let top =
+      if params.len > 0 and params[0] > 0:
+        params[0] - 1
+      else:
+        0
+    let bottom =
+      if params.len > 1 and params[1] > 0:
+        params[1] - 1
+      else:
+        grid.rows - 1
+    if top >= 0 and top < bottom and bottom <= grid.rows - 1:
+      grid.scrollTop = top
+      grid.scrollBottom = bottom
+    else:
+      # Invalid region resets to the full screen
+      grid.scrollTop = 0
+      grid.scrollBottom = grid.rows - 1
+    # Cursor moves to the home position (origin mode/DECOM not supported)
     grid.cursorRow = 0
     grid.cursorCol = 0
   else:
@@ -669,10 +806,7 @@ proc processOutput*(grid: TerminalGrid, data: string) =
       of '\r':
         grid.cursorCol = 0
       of '\n':
-        grid.cursorRow += 1
-        if grid.cursorRow >= grid.rows:
-          grid.scrollUp()
-          grid.cursorRow = grid.rows - 1
+        grid.lineFeed()
       of '\t':
         # Tab: move to next tab stop (every 8 columns)
         let nextTab = ((grid.cursorCol div 8) + 1) * 8
@@ -730,28 +864,39 @@ proc processOutput*(grid: TerminalGrid, data: string) =
         i += 1
         grid.parserState = apsNormal
       of 'M':
-        # Reverse Index (scroll down)
-        if grid.cursorRow == 0:
-          # Insert line at top
-          for r in countdown(grid.rows - 1, 1):
-            grid.cells[r] = grid.cells[r - 1]
-          grid.cells[0] = newRow(grid.cols)
-        else:
+        # Reverse Index (RI): move up, scrolling the region down at the top margin
+        if grid.cursorRow == grid.scrollTop:
+          grid.scrollDown()
+        elif grid.cursorRow > 0:
           grid.cursorRow -= 1
         grid.parserState = apsNormal
       of '7':
-        # Save cursor - simplified (no-op for now)
+        # DECSC - Save cursor and SGR state
+        grid.saveCursor()
         grid.parserState = apsNormal
       of '8':
-        # Restore cursor - simplified (no-op for now)
+        # DECRC - Restore cursor and SGR state
+        grid.restoreCursor()
         grid.parserState = apsNormal
       of 'c':
-        # Reset terminal
+        # RIS - Reset terminal to its initial state
         grid.currentFg = defaultColor()
         grid.currentBg = defaultColor()
         grid.currentAttrs = {}
         grid.cursorRow = 0
         grid.cursorCol = 0
+        grid.cursorVisible = true
+        grid.altScreenActive = false
+        grid.inactiveCells = @[]
+        grid.scrollTop = 0
+        grid.scrollBottom = grid.rows - 1
+        # Reset the full saved cursor/SGR state so a later DECRC can't restore
+        # stale colors or attributes left over from before the reset.
+        grid.savedCursorRow = 0
+        grid.savedCursorCol = 0
+        grid.savedFg = defaultColor()
+        grid.savedBg = defaultColor()
+        grid.savedAttrs = {}
         for r in 0 ..< grid.rows:
           grid.cells[r] = newRow(grid.cols)
         grid.parserState = apsNormal
@@ -827,17 +972,20 @@ proc toPlainText*(grid: TerminalGrid): string =
       dec endIdx
     line[0 ..< endIdx]
 
-  # Include scrollback first
-  for row in grid.scrollbackBuffer:
-    var line = ""
-    for cell in row:
-      if cell.widePadding:
-        continue
-      if cell.ch.len > 0:
-        line.add(cell.ch)
-      else:
-        line.add(' ')
-    lines.add(stripTrailingSpaces(line))
+  # Include scrollback first, but only on the primary screen. While the
+  # alternate screen is active the scrollback holds unrelated primary-buffer
+  # history, so mixing it into the snapshot would misrepresent what's on screen.
+  if not grid.altScreenActive:
+    for row in grid.scrollbackBuffer:
+      var line = ""
+      for cell in row:
+        if cell.widePadding:
+          continue
+        if cell.ch.len > 0:
+          line.add(cell.ch)
+        else:
+          line.add(' ')
+      lines.add(stripTrailingSpaces(line))
 
   # Then current grid (only up to the last row with content)
   var lastNonEmptyRow = -1
