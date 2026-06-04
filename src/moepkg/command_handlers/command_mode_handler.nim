@@ -407,8 +407,8 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
     else:
       let route = e.keyRouter.feedKey(EditorMode.Command, keyCombo)
       case route.kind
-      of rrUnhandled, rrCancelled:
-        discard # Fall through to normal handling
+      of rrUnhandled, rrCancelled, rrCommand:
+        discard # Fall through to normal handling (rrCommand never from feedKey)
       of rrExecuteRuntimeCommand:
         # Unreachable: the Command overlay's mappings table is filtered to
         # key-seq only (see `KeyRouter.mappingsFor`), so `feedKey` never

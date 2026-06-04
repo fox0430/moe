@@ -198,7 +198,9 @@ proc checkRuntimeKeySeqMapping(
   let state = editor.state
   let route = editor.keyRouter.feedKey(state.mode, keyCombo)
   case route.kind
-  of rrUnhandled, rrCancelled:
+  of rrUnhandled, rrCancelled, rrCommand:
+    # rrCommand is produced only by resolveBuiltin (Normal dispatcher), never by
+    # feedKey; listed for exhaustiveness. Fall through to built-in resolution.
     return none(HandlerResult)
   of rrExecuteRuntimeCommand:
     let cmdResult = manager.executeCommandDirect(route.commandName)

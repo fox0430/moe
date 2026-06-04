@@ -28,6 +28,7 @@ import std/[unittest, options]
 import ../src/moepkg/key_bindings {.all.}
 import ../src/moepkg/key_router {.all.}
 import ../src/moepkg/modes
+import ../src/moepkg/types
 
 proc newRouter(): KeyRouter =
   let reg = newKeyBindingRegistry()
@@ -293,3 +294,96 @@ suite "KeyRouter - withReplay and flushPendingAccumulator":
   test "flushPendingAccumulator returns @[] on empty accumulator":
     let router = newRouter()
     check router.flushPendingAccumulator(EditorMode.Command).len == 0
+
+proc newBuiltinRegistry(): KeyBindingRegistry =
+  ## Registry seeded with a few Normal-mode built-in bindings so resolveBuiltin
+  ## can be exercised: 'j' (single binding), 'gg' (sequence), 'f' (operand wait).
+  result = newKeyBindingRegistry()
+
+  let down =
+    Command(name: "move-down", description: "", kind: ctMotion, motion: Motion.Down)
+  result.registerCommand(down)
+  result.bindKey(EditorMode.Normal, toKeyCombo('j'), down)
+
+  let gotoStart = Command(
+    name: "goto-start", description: "", kind: ctMotion, motion: Motion.FirstLine
+  )
+  result.registerCommand(gotoStart)
+  result.bindSequence(EditorMode.Normal, @[toKeyCombo('g'), toKeyCombo('g')], gotoStart)
+
+  let findChar = Command(
+    name: "find-char",
+    description: "",
+    kind: ctOperatorPending,
+    operatorType: "find",
+    reverse: false,
+    targetChar: "",
+  )
+  result.registerCommand(findChar)
+  result.bindKey(EditorMode.Normal, toKeyCombo('f'), findChar)
+
+suite "KeyRouter - resolveBuiltin":
+  test "single-key binding resolves to rrCommand":
+    let reg = newBuiltinRegistry()
+    let route = reg.resolveBuiltin(EditorMode.Normal, toKeyCombo('j'))
+    check route.kind == rrCommand
+    check route.command.name == "move-down"
+
+  test "two-key sequence waits (no timeout) then resolves":
+    let reg = newBuiltinRegistry()
+    let first = reg.resolveBuiltin(EditorMode.Normal, toKeyCombo('g'))
+    check first.kind == rrWaiting
+    # Built-in sequences never time out (Vim spec), unlike runtime mappings.
+    check first.waitsForTimeout == false
+
+    let second = reg.resolveBuiltin(EditorMode.Normal, toKeyCombo('g'))
+    check second.kind == rrCommand
+    check second.command.name == "goto-start"
+
+  test "numeric prefix is carried into the resolved command's count":
+    let reg = newBuiltinRegistry()
+    check reg.resolveBuiltin(EditorMode.Normal, toKeyCombo('2')).kind == rrWaiting
+    check reg.resolveBuiltin(EditorMode.Normal, toKeyCombo('3')).kind == rrWaiting
+    let route = reg.resolveBuiltin(EditorMode.Normal, toKeyCombo('j'))
+    check route.kind == rrCommand
+    check route.command.count == 23
+
+  test "operator-pending waits then resolves with the operand char":
+    let reg = newBuiltinRegistry()
+    let waiting = reg.resolveBuiltin(EditorMode.Normal, toKeyCombo('f'))
+    check waiting.kind == rrWaiting
+    check waiting.waitsForTimeout == false
+
+    let fired = reg.resolveBuiltin(EditorMode.Normal, toKeyCombo('x'))
+    check fired.kind == rrCommand
+    check fired.command.targetChar == "x"
+
+  test "Escape on an active sequence resolves to rrCancelled":
+    let reg = newBuiltinRegistry()
+    check reg.resolveBuiltin(EditorMode.Normal, toKeyCombo('g')).kind == rrWaiting
+    let route = reg.resolveBuiltin(EditorMode.Normal, toSpecialKeyCombo(skEscape))
+    check route.kind == rrCancelled
+
+  test "unbound single key resolves to rrUnhandled":
+    let reg = newBuiltinRegistry()
+    let route = reg.resolveBuiltin(EditorMode.Normal, toKeyCombo('z'))
+    check route.kind == rrUnhandled
+    check route.key == toKeyCombo('z')
+
+  test "invalid second key terminates the sequence as rrUnhandled":
+    # Only `gg` is bound, so `gz` is invalid. processKey consumes `z` as the
+    # sequence terminator and returns none; resolveBuiltin reports rrUnhandled
+    # even though `z` was *consumed* (not a pure pass-through — see its note).
+    let reg = newBuiltinRegistry()
+    check reg.resolveBuiltin(EditorMode.Normal, toKeyCombo('g')).kind == rrWaiting
+    let route = reg.resolveBuiltin(EditorMode.Normal, toKeyCombo('z'))
+    check route.kind == rrUnhandled
+    check route.key == toKeyCombo('z')
+
+  test "Escape with no active sequence is rrUnhandled, not rrCancelled":
+    # rrCancelled is reserved for an Escape that consumed pending state; a bare
+    # Escape with nothing accumulated falls through as rrUnhandled.
+    let reg = newBuiltinRegistry()
+    let route = reg.resolveBuiltin(EditorMode.Normal, toSpecialKeyCombo(skEscape))
+    check route.kind == rrUnhandled
+    check route.key == toSpecialKeyCombo(skEscape)

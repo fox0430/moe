@@ -1373,7 +1373,7 @@ proc handleKeyMappingTimeout*(e: Editor): bool =
     # `flushTimeout` returns rrCancelled when the accumulator was already
     # empty; nothing to do, do not request a redraw.
     return true
-  of rrUnhandled, rrWaiting:
+  of rrUnhandled, rrWaiting, rrCommand:
     # `flushTimeout` never returns these variants; guard for exhaustiveness.
     return true
   of rrExecuteRuntimeCommand:
