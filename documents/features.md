@@ -187,18 +187,21 @@ Best for small to medium files with sequential/localized edits.
 
 ### SqrtDecomp
 
-A block list (sqrt decomposition). Lines are partitioned into blocks of up to 1024 lines. Blocks split when they grow too large and merge when they shrink too small, keeping block sizes balanced at roughly sqrt(n).
+A sqrt-decomposition. Lines are partitioned into blocks whose size is kept at ≈ sqrt(n): the target block size is recomputed and the whole structure rebalanced whenever the line count doubles or halves, and blocks split (above 2×target) or merge (below target/2) per edit. There are ≈ sqrt(n) blocks of ≈ sqrt(n) lines, so locating a line scans ≈ sqrt(n) blocks. Each block also caches its content length, letting linear char-index lookups skip whole blocks.
 
-Best for large files with scattered (random-access) edit patterns.
+Best for large files with scattered (random-access) edit patterns, where balanced O(sqrt(n)) access avoids the gap-movement cost of GapBuffer.
 
 | Operation | Time Complexity |
 |---|---|
 | Get line | O(sqrt(n)) |
-| Insert/Delete line | O(sqrt(n)) |
+| Insert/Delete line | O(sqrt(n)) (amortized, incl. rebalance) |
 | Insert into line | O(sqrt(n) + L) |
-| Delete range | O(sqrt(n) * k) |
+| Delete range | O(sqrt(n) * k) (k = lines spanned) |
+| Find line start | O(sqrt(n)) |
 | Line count / Char count | O(1) (cached) |
 | Undo/Redo | O(operation cost) |
+
+(Both the block size and the block count are kept at Θ(sqrt(n)); rebalancing on line-count doubling/halving is amortized O(1). L = line length.)
 
 ### Rope
 
@@ -243,9 +246,9 @@ Best for any file size; particularly suited when undo/redo performance matters.
 | Feature | GapBuffer | SqrtDecomp | Rope | PieceTable |
 |---|---|---|---|---|
 | Line access | **O(1)** | O(sqrt n) | O(log n) | O(log P) |
-| Line insert/delete | O(1) amort | O(sqrt n) | O(log n) | O(log P) |
+| Line insert/delete | O(1) amort | O(sqrt n) amort | O(log n) | O(log P) |
 | Char count | O(n) | **O(1)** | **O(1)** | **O(1)** |
-| Find line start | O(n) | O(n) | O(log n) | O(log P) |
+| Find line start | O(n) | O(sqrt n) | O(log n) | O(log P) |
 | Undo/Redo | O(op) | O(op) | O(op) | **O(1)** |
 | Structure | Mutable array | Mutable blocks | Mutable B-tree | Persistent RB-tree |
 | Ideal file size | Small–Medium | Large | Large | Any |

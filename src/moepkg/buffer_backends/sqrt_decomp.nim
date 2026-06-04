@@ -17,40 +17,64 @@
 #                                                                              #
 #[############################################################################]#
 
-## Sqrt Decomposition (Block List) buffer backend
+## Sqrt-decomposition (block list) buffer backend
 ##
-## Stores lines in blocks of approximately √n lines each.
-## All operations are O(√n). No gap movement needed for random access,
-## making this suitable for large files with scattered edit patterns.
+## Lines are partitioned into blocks whose size is kept at ≈ ceil(sqrt(lineCount)).
+## The target block size is recomputed and the whole structure rebalanced whenever
+## the line count doubles or halves; between rebalances blocks split (when they
+## exceed 2*target) and merge (when they fall below target/2) per edit. Thus there
+## are Θ(sqrt n) blocks of Θ(sqrt n) lines at all times, so `findBlock` scans
+## Θ(sqrt n) blocks. Each block also caches the sum of its line lengths
+## (`cachedCharLen`, content only — no newlines), which lets the linear char-index
+## ops (charAt / indexToLineCol / substring / findLineStart) skip whole blocks in
+## O(sqrt n). Line and char counts are cached for O(1).
+##
+## Flat-string semantics (POSIX terminator, newline BETWEEN lines, no trailing
+## newline after the final line except the explicit empty-final-line case) are
+## identical to GapBuffer.
 
-const
-  DEFAULT_BLOCK_SIZE* = 256
-  MAX_BLOCK_SIZE = 1024
-  MERGE_THRESHOLD = 32
+import std/math
+
+const MIN_REBALANCE_LINES = 4 # below this many lines, skip rebalancing (anti-thrash)
 
 type
   Block = object
     lines: seq[string]
+    cachedCharLen: int # Sum of this block's line lengths (content only, no newlines)
 
   SqrtDecomp* = ref object
     blocks: seq[Block]
     cachedLineCount: int
     cachedCharLen: int # Total character count including newlines between lines
+    targetBlockSize: int # ≈ ceil(sqrt(cachedLineCount)); set at build and rebalance
+    lineCountAtLastRebalance: int # cachedLineCount snapshot at the last rebalance
+
+proc computeTargetBlockSize(lineCount: int): int =
+  ## Target block size for a buffer of `lineCount` lines: ceil(sqrt(lineCount)).
+  max(1, int(ceil(sqrt(lineCount.float))))
 
 proc recalcCharLen(sd: SqrtDecomp) =
-  ## Recalculate total character length (including newlines between lines)
+  ## Recompute the global cachedCharLen AND every block's cachedCharLen from scratch.
   sd.cachedCharLen = 0
-  for b in sd.blocks:
-    for line in b.lines:
-      sd.cachedCharLen += line.len
+  for bi in 0 ..< sd.blocks.len:
+    var blockSum = 0
+    for line in sd.blocks[bi].lines:
+      blockSum += line.len
+    sd.blocks[bi].cachedCharLen = blockSum
+    sd.cachedCharLen += blockSum
   # Add newlines between lines (lineCount - 1 newlines for lineCount lines)
   if sd.cachedLineCount > 1:
     sd.cachedCharLen += sd.cachedLineCount - 1
 
 proc newSqrtDecomp*(): SqrtDecomp =
   ## Create an empty SqrtDecomp buffer with a single empty line
-  result =
-    SqrtDecomp(blocks: @[Block(lines: @[""])], cachedLineCount: 1, cachedCharLen: 0)
+  result = SqrtDecomp(
+    blocks: @[Block(lines: @[""], cachedCharLen: 0)],
+    cachedLineCount: 1,
+    cachedCharLen: 0,
+    targetBlockSize: 1,
+    lineCountAtLastRebalance: 1,
+  )
 
 proc newSqrtDecomp*(text: sink string): SqrtDecomp =
   ## Create a SqrtDecomp buffer from text string.
@@ -75,16 +99,23 @@ proc newSqrtDecomp*(text: sink string): SqrtDecomp =
   if currentLine.len > 0 or linesList.len == 0:
     linesList.add(currentLine)
 
-  # Distribute lines into blocks of DEFAULT_BLOCK_SIZE
+  # Distribute lines into blocks of the sqrt-sized target
+  let tbs = computeTargetBlockSize(linesList.len)
   var blocks: seq[Block] = @[]
   var i = 0
   while i < linesList.len:
-    let blockEnd = min(i + DEFAULT_BLOCK_SIZE, linesList.len)
+    let blockEnd = min(i + tbs, linesList.len)
     blocks.add(Block(lines: linesList[i ..< blockEnd]))
     i = blockEnd
 
-  result = SqrtDecomp(blocks: blocks, cachedLineCount: linesList.len, cachedCharLen: 0)
-  result.recalcCharLen()
+  result = SqrtDecomp(
+    blocks: blocks,
+    cachedLineCount: linesList.len,
+    cachedCharLen: 0,
+    targetBlockSize: tbs,
+    lineCountAtLastRebalance: linesList.len,
+  )
+  result.recalcCharLen() # also fills each block's cachedCharLen
 
 proc findBlock(sd: SqrtDecomp, lineNumber: int): tuple[blockIdx, localIdx: int] =
   ## Find which block contains the given logical line number.
@@ -102,42 +133,97 @@ proc findBlock(sd: SqrtDecomp, lineNumber: int): tuple[blockIdx, localIdx: int] 
   return (0, 0)
 
 proc maybeSplit(sd: SqrtDecomp, blockIdx: int) =
-  ## Split a block if it exceeds MAX_BLOCK_SIZE
+  ## Split a block in half when it grows beyond 2*targetBlockSize.
   if blockIdx >= sd.blocks.len:
     return
-  if sd.blocks[blockIdx].lines.len <= MAX_BLOCK_SIZE:
+  if sd.blocks[blockIdx].lines.len <= 2 * sd.targetBlockSize:
     return
 
   let
     mid = sd.blocks[blockIdx].lines.len div 2
     secondHalf = sd.blocks[blockIdx].lines[mid .. ^1]
 
+  var secondSum = 0
+  for s in secondHalf:
+    secondSum += s.len
+  let firstSum = sd.blocks[blockIdx].cachedCharLen - secondSum
+
   sd.blocks[blockIdx].lines.setLen(mid)
-  sd.blocks.insert(Block(lines: secondHalf), blockIdx + 1)
+  sd.blocks[blockIdx].cachedCharLen = firstSum
+  sd.blocks.insert(Block(lines: secondHalf, cachedCharLen: secondSum), blockIdx + 1)
 
 proc maybeMerge(sd: SqrtDecomp, blockIdx: int) =
-  ## Merge a block with its neighbor if it's below MERGE_THRESHOLD
+  ## Merge an under-full block (< target/2 lines) with a neighbor, provided the
+  ## combined block stays within 2*targetBlockSize.
   if blockIdx >= sd.blocks.len:
     return
-  if sd.blocks[blockIdx].lines.len >= MERGE_THRESHOLD:
+  if sd.blocks[blockIdx].lines.len >= max(1, sd.targetBlockSize div 2):
     return
   if sd.blocks.len <= 1:
     return # Don't merge the last block
 
+  let cap = 2 * sd.targetBlockSize
+
   # Try merging with next block
   if blockIdx < sd.blocks.len - 1:
     let combinedLen = sd.blocks[blockIdx].lines.len + sd.blocks[blockIdx + 1].lines.len
-    if combinedLen <= MAX_BLOCK_SIZE:
+    if combinedLen <= cap:
       sd.blocks[blockIdx].lines.add(sd.blocks[blockIdx + 1].lines)
+      sd.blocks[blockIdx].cachedCharLen += sd.blocks[blockIdx + 1].cachedCharLen
       sd.blocks.delete(blockIdx + 1)
       return
 
   # Try merging with previous block
   if blockIdx > 0:
     let combinedLen = sd.blocks[blockIdx - 1].lines.len + sd.blocks[blockIdx].lines.len
-    if combinedLen <= MAX_BLOCK_SIZE:
+    if combinedLen <= cap:
       sd.blocks[blockIdx - 1].lines.add(sd.blocks[blockIdx].lines)
+      sd.blocks[blockIdx - 1].cachedCharLen += sd.blocks[blockIdx].cachedCharLen
       sd.blocks.delete(blockIdx)
+
+proc blockSpan(sd: SqrtDecomp, bi: int): int =
+  ## Number of flat-string char positions owned by block `bi` for index-math:
+  ## its content plus a trailing newline per line, EXCEPT the buffer's final line
+  ## (in the last block) has no trailing newline.
+  let m = sd.blocks[bi].lines.len
+  if bi < sd.blocks.len - 1:
+    sd.blocks[bi].cachedCharLen + m # content + (m-1 internal + 1 trailing) newlines
+  else:
+    max(0, sd.blocks[bi].cachedCharLen + m - 1) # last block: no trailing newline
+
+proc rebalance(sd: SqrtDecomp) =
+  ## Re-chunk all lines into blocks of the freshly computed targetBlockSize and
+  ## recompute each block's cachedCharLen. Pure structural op: leaves the global
+  ## cachedLineCount / cachedCharLen untouched. O(n).
+  sd.targetBlockSize = computeTargetBlockSize(sd.cachedLineCount)
+  var flat = newSeqOfCap[string](sd.cachedLineCount)
+  for b in sd.blocks:
+    for line in b.lines:
+      flat.add(line)
+
+  var newBlocks: seq[Block] = @[]
+  var i = 0
+  while i < flat.len:
+    let stop = min(i + sd.targetBlockSize, flat.len)
+    var c = 0
+    for k in i ..< stop:
+      c += flat[k].len
+    newBlocks.add(Block(lines: flat[i ..< stop], cachedCharLen: c))
+    i = stop
+  if newBlocks.len == 0:
+    newBlocks = @[Block(lines: @[""], cachedCharLen: 0)]
+
+  sd.blocks = newBlocks
+  sd.lineCountAtLastRebalance = sd.cachedLineCount
+
+proc maybeRebalance(sd: SqrtDecomp) =
+  ## Rebalance when the line count has doubled or halved since the last rebalance.
+  ## Amortized O(1): a rebalance is O(n) and only fires after Θ(n) line-count ops.
+  if sd.cachedLineCount < MIN_REBALANCE_LINES:
+    return
+  if sd.cachedLineCount >= 2 * sd.lineCountAtLastRebalance or
+      sd.cachedLineCount * 2 <= sd.lineCountAtLastRebalance:
+    sd.rebalance()
 
 proc lineCount*(sd: SqrtDecomp): int {.inline.} =
   ## Count number of lines
@@ -158,8 +244,15 @@ proc findLineStart*(sd: SqrtDecomp, lineNumber: int): int =
 
   result = 0
   var lineNum = 0
-  for b in sd.blocks:
-    for line in b.lines:
+  for bi in 0 ..< sd.blocks.len:
+    let m = sd.blocks[bi].lines.len
+    # Skip whole blocks before the target line (O(sqrt n)). A fully-skipped block
+    # is never the last block, so every one of its lines has a trailing newline.
+    if lineNumber >= lineNum + m:
+      result += sd.blocks[bi].cachedCharLen + m
+      lineNum += m
+      continue
+    for line in sd.blocks[bi].lines:
       if lineNum == lineNumber:
         return result
       result += line.len + 1 # +1 for newline
@@ -196,6 +289,7 @@ proc `[]=`*(sd: SqrtDecomp, lineNumber: int, content: string) =
   let oldLen = sd.blocks[blockIdx].lines[localIdx].len
   sd.blocks[blockIdx].lines[localIdx] = content
   sd.cachedCharLen += content.len - oldLen
+  sd.blocks[blockIdx].cachedCharLen += content.len - oldLen
 
 proc replaceLine*(sd: SqrtDecomp, lineNumber: int, content: string) =
   ## Replace the content of a specific line
@@ -207,6 +301,7 @@ proc replaceLine*(sd: SqrtDecomp, lineNumber: int, content: string) =
   let oldLen = sd.blocks[blockIdx].lines[localIdx].len
   sd.blocks[blockIdx].lines[localIdx] = content
   sd.cachedCharLen += content.len - oldLen
+  sd.blocks[blockIdx].cachedCharLen += content.len - oldLen
 
 proc modifyLineContent*(sd: SqrtDecomp, lineNumber: int, f: proc(s: var string)) =
   ## Modify line content in-place using a function
@@ -220,6 +315,7 @@ proc modifyLineContent*(sd: SqrtDecomp, lineNumber: int, f: proc(s: var string))
   f(line)
   sd.blocks[blockIdx].lines[localIdx] = line
   sd.cachedCharLen += line.len - oldLen
+  sd.blocks[blockIdx].cachedCharLen += line.len - oldLen
 
 proc charAtLineCol*(sd: SqrtDecomp, line: int, col: int): char =
   ## Get character at (line, column) position
@@ -246,8 +342,14 @@ proc charAt*(sd: SqrtDecomp, index: int): char =
   var remaining = index
   var lineNum = 0
 
-  for b in sd.blocks:
-    for line in b.lines:
+  for bi in 0 ..< sd.blocks.len:
+    # Skip whole blocks the index lies past (O(sqrt n)).
+    let span = sd.blockSpan(bi)
+    if remaining >= span:
+      remaining -= span
+      lineNum += sd.blocks[bi].lines.len
+      continue
+    for line in sd.blocks[bi].lines:
       let lineLen = line.len
 
       if remaining < lineLen:
@@ -272,8 +374,14 @@ proc indexToLineCol*(sd: SqrtDecomp, index: int): tuple[line: int, col: int] =
     remaining = index
     lineNum = 0
 
-  for b in sd.blocks:
-    for line in b.lines:
+  for bi in 0 ..< sd.blocks.len:
+    # Skip whole blocks the index lies strictly past (O(sqrt n)).
+    let span = sd.blockSpan(bi)
+    if remaining > span:
+      remaining -= span
+      lineNum += sd.blocks[bi].lines.len
+      continue
+    for line in sd.blocks[bi].lines:
       let lineLen = line.len
 
       if remaining <= lineLen:
@@ -305,6 +413,11 @@ proc substring*(sd: SqrtDecomp, start: int, length: int): string =
     globalLine = 0
 
   for bi in 0 ..< sd.blocks.len:
+    # Skip whole blocks that end before startLine (O(sqrt n)).
+    let m = sd.blocks[bi].lines.len
+    if startLine >= globalLine + m:
+      globalLine += m
+      continue
     for li in 0 ..< sd.blocks[bi].lines.len:
       if globalLine < startLine:
         inc globalLine
@@ -355,9 +468,11 @@ proc `[]`*[T, U: Ordinal](sd: SqrtDecomp, x: HSlice[T, U]): string =
   let length = endIdx - start + 1
   sd.substring(start, length)
 
-proc insertLine*(sd: SqrtDecomp, lineNumber: int, content: string) =
-  ## Insert a new line at the specified line number
-  ## Raises IndexDefect if lineNumber is out of valid range [0..len]
+proc insertLineCore(sd: SqrtDecomp, lineNumber: int, content: string) =
+  ## insertLine without the trailing maybeRebalance, so a multi-line insert(text)
+  ## pays for at most one O(n) rebalance (at the op end) instead of one per line.
+  ## Each call re-resolves its block via findBlock, so the deferral is purely an
+  ## efficiency choice, not a correctness requirement.
   if lineNumber < 0 or lineNumber > sd.cachedLineCount:
     raise newException(
       IndexDefect,
@@ -368,6 +483,7 @@ proc insertLine*(sd: SqrtDecomp, lineNumber: int, content: string) =
     # Append to the last block
     let lastBlock = sd.blocks.len - 1
     sd.blocks[lastBlock].lines.add(content)
+    sd.blocks[lastBlock].cachedCharLen += content.len
     sd.cachedLineCount += 1
     # Update charLen: add the line content + 1 newline (between previous last and new)
     sd.cachedCharLen += content.len
@@ -377,21 +493,29 @@ proc insertLine*(sd: SqrtDecomp, lineNumber: int, content: string) =
   else:
     let (blockIdx, localIdx) = sd.findBlock(lineNumber)
     sd.blocks[blockIdx].lines.insert(content, localIdx)
+    sd.blocks[blockIdx].cachedCharLen += content.len
     sd.cachedLineCount += 1
     sd.cachedCharLen += content.len
     if sd.cachedLineCount > 1:
       sd.cachedCharLen += 1
     sd.maybeSplit(blockIdx)
 
-proc deleteLine*(sd: SqrtDecomp, lineNumber: int) =
-  ## Delete the specified line
-  ## Raises IndexDefect if lineNumber is out of bounds
+proc insertLine*(sd: SqrtDecomp, lineNumber: int, content: string) =
+  ## Insert a new line at the specified line number
+  ## Raises IndexDefect if lineNumber is out of valid range [0..len]
+  sd.insertLineCore(lineNumber, content)
+  sd.maybeRebalance()
+
+proc deleteLineCore(sd: SqrtDecomp, lineNumber: int) =
+  ## deleteLine without the trailing maybeRebalance, so a caller doing several
+  ## line deletes can rebalance once at the end instead of per line.
   if lineNumber < 0 or lineNumber >= sd.cachedLineCount:
     raise newException(IndexDefect, "SqrtDecomp line out of bounds")
 
   let (blockIdx, localIdx) = sd.findBlock(lineNumber)
   let deletedLen = sd.blocks[blockIdx].lines[localIdx].len
   sd.blocks[blockIdx].lines.delete(localIdx)
+  sd.blocks[blockIdx].cachedCharLen -= deletedLen
   sd.cachedLineCount -= 1
   sd.cachedCharLen -= deletedLen
   if sd.cachedLineCount > 0:
@@ -404,6 +528,12 @@ proc deleteLine*(sd: SqrtDecomp, lineNumber: int) =
     # else: keep the empty block so blocks is never empty
   else:
     sd.maybeMerge(blockIdx)
+
+proc deleteLine*(sd: SqrtDecomp, lineNumber: int) =
+  ## Delete the specified line
+  ## Raises IndexDefect if lineNumber is out of bounds
+  sd.deleteLineCore(lineNumber)
+  sd.maybeRebalance()
 
 proc insertIntoLine*(sd: SqrtDecomp, line, col: int, text: string) =
   ## Insert text into an existing line at (line, column) position
@@ -423,6 +553,7 @@ proc insertIntoLine*(sd: SqrtDecomp, line, col: int, text: string) =
   lineObj.insert(text, col)
   sd.blocks[blockIdx].lines[localIdx] = lineObj
   sd.cachedCharLen += text.len
+  sd.blocks[blockIdx].cachedCharLen += text.len
 
 proc deleteAtLineCol*(sd: SqrtDecomp, line: int, col: int, count: int = 1) =
   ## Delete 'count' bytes starting from (line, column) position
@@ -484,6 +615,7 @@ proc deleteAtLineCol*(sd: SqrtDecomp, line: int, col: int, count: int = 1) =
     let oldLen = lineObj.len
     sd.blocks[bi].lines[li] = prefix & suffix
     sd.cachedCharLen -= (oldLen - sd.blocks[bi].lines[li].len)
+    sd.blocks[bi].cachedCharLen -= (oldLen - sd.blocks[bi].lines[li].len)
   else:
     # Multi-line deletion
     let (startBi, startLi) = sd.findBlock(line)
@@ -506,6 +638,9 @@ proc deleteAtLineCol*(sd: SqrtDecomp, line: int, col: int, count: int = 1) =
     let mergedLine = prefix & suffix
     let (bi, li) = sd.findBlock(line)
     sd.blocks[bi].lines[li] = mergedLine
+    # (bi stays valid through the loop below: intermediate deletes target lines
+    #  after `line`, so they never empty or shift the start line's block.)
+    sd.blocks[bi].cachedCharLen -= (startLineObj.len - mergedLine.len)
 
     # Delete lines from line+1 to endLine (inclusive) in reverse order
     let linesToDelete = endLine - line
@@ -515,6 +650,7 @@ proc deleteAtLineCol*(sd: SqrtDecomp, line: int, col: int, count: int = 1) =
         let (dBi, dLi) = sd.findBlock(delLine)
         let deletedLen = sd.blocks[dBi].lines[dLi].len
         sd.blocks[dBi].lines.delete(dLi)
+        sd.blocks[dBi].cachedCharLen -= deletedLen
         sd.cachedLineCount -= 1
         sd.cachedCharLen -= deletedLen
         if sd.cachedLineCount > 0:
@@ -527,9 +663,18 @@ proc deleteAtLineCol*(sd: SqrtDecomp, line: int, col: int, count: int = 1) =
     # Update charLen for the start line replacement
     sd.cachedCharLen -= (startLineObj.len - mergedLine.len)
 
-    # Rebalance the block containing the start line
+    # Both ends of the splice can be left under-full: the block holding the start
+    # line (it lost its trailing lines) and the block now holding the following
+    # line (it lost its leading lines). Merge each if needed; findBlock is
+    # re-resolved between the two because the first merge may delete a block and
+    # shift indices.
     let (finalBi, _) = sd.findBlock(line)
     sd.maybeMerge(finalBi)
+    if line + 1 < sd.cachedLineCount:
+      let (afterBi, _) = sd.findBlock(line + 1)
+      sd.maybeMerge(afterBi)
+
+  sd.maybeRebalance()
 
 proc insert*(sd: SqrtDecomp, index: int, text: string) =
   ## Insert text at linear index position
@@ -577,14 +722,19 @@ proc insert*(sd: SqrtDecomp, index: int, text: string) =
     # Update first line with prefix + content before first newline
     let oldLen = sd.blocks[blockIdx].lines[localIdx].len
     sd.blocks[blockIdx].lines[localIdx] = prefix & parts[0]
-    sd.cachedCharLen += sd.blocks[blockIdx].lines[localIdx].len - oldLen
+    let firstDelta = sd.blocks[blockIdx].lines[localIdx].len - oldLen
+    sd.cachedCharLen += firstDelta
+    sd.blocks[blockIdx].cachedCharLen += firstDelta
 
-    # Insert new lines for content between newlines
+    # Insert new lines for content between newlines. Use the *Core variant so the
+    # whole multi-line insert triggers at most one rebalance (below) rather than
+    # one per line; each call re-resolves its own block via findBlock.
     for i in 1 ..< parts.len:
-      sd.insertLine(line + i, parts[i])
+      sd.insertLineCore(line + i, parts[i])
 
     # Insert final new line with remaining content + suffix
-    sd.insertLine(line + parts.len, currentPart & suffix)
+    sd.insertLineCore(line + parts.len, currentPart & suffix)
+    sd.maybeRebalance()
 
 proc insert*(sd: SqrtDecomp, index: int, ch: char) =
   ## Insert a single character at linear index position
@@ -609,9 +759,11 @@ proc delete*(sd: SqrtDecomp, index: int, count: int = 1) =
 
 proc clear*(sd: SqrtDecomp) =
   ## Clear all content and reset to single empty line
-  sd.blocks = @[Block(lines: @[""])]
+  sd.blocks = @[Block(lines: @[""], cachedCharLen: 0)]
   sd.cachedLineCount = 1
   sd.cachedCharLen = 0
+  sd.targetBlockSize = 1
+  sd.lineCountAtLastRebalance = 1
 
 proc `$`*(sd: SqrtDecomp): string =
   ## Convert entire buffer to string
