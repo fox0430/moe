@@ -122,7 +122,7 @@ suite "KeyRouter - flushTimeout":
     discard router.feedKey(EditorMode.Insert, toKeyCombo('j')) # rrWaiting
 
     # Manually accumulate the second 'j' so timeout finds an exact match
-    router.registry.runtimeMappingState.keys.add(toKeyCombo('j'))
+    router.dispatchState.keys.add(toKeyCombo('j'))
 
     let route = router.flushTimeout(EditorMode.Insert)
     check route.kind == rrExecuteRuntimeKeySequence
@@ -279,17 +279,17 @@ suite "KeyRouter - withReplay and flushPendingAccumulator":
     # Accumulator now holds one key, mappings table is non-empty.
     let drained = router.flushPendingAccumulator(EditorMode.Insert)
     check drained.len == 0
-    check router.registry.runtimeMappingState.keys.len == 1 # untouched
+    check router.dispatchState.keys.len == 1 # untouched
 
   test "flushPendingAccumulator drains accumulator when mappings table is empty":
     let router = newRouter()
     # Seed leftover keys directly without registering any mappings.
-    router.registry.runtimeMappingState.keys = @[toKeyCombo('j'), toKeyCombo('k')]
+    router.dispatchState.keys = @[toKeyCombo('j'), toKeyCombo('k')]
     let drained = router.flushPendingAccumulator(EditorMode.Command)
     check drained.len == 2
     check drained[0] == toKeyCombo('j')
     check drained[1] == toKeyCombo('k')
-    check router.registry.runtimeMappingState.keys.len == 0
+    check router.dispatchState.keys.len == 0
 
   test "flushPendingAccumulator returns @[] on empty accumulator":
     let router = newRouter()
