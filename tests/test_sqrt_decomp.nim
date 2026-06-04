@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils]
+import std/[unittest, strutils, random, math]
 
 import ../src/moepkg/buffer_backends/sqrt_decomp {.all.}
 
@@ -329,6 +329,53 @@ suite "SqrtDecomp - Block Rebalancing":
     check sd.len == 2
     check sd[0] == "line 0"
     check sd[1] == "last"
+
+  test "block structure stays Theta(sqrt n) under mixed insert/delete stress":
+    # Locks in the "true sqrt-decomposition" guarantee: across a long run of
+    # mixed edits the block COUNT (and hence block size) stays at Theta(sqrt n),
+    # rather than drifting toward O(n) blocks. The delete branch uses cross-block
+    # multi-line deletes, which exercise the under-full merge at BOTH ends of a
+    # splice; without that the block count would creep above the band between
+    # rebalances. Also asserts the global charLen cache stays exact after every
+    # op (guards the per-block cachedCharLen bookkeeping the backend relies on).
+    proc recomputedCharLen(sd: SqrtDecomp): int =
+      for ln in sd.lines:
+        result += ln.len
+      if sd.lineCount > 1:
+        result += sd.lineCount - 1
+
+    var r = initRand(20240604)
+    let sd = newSqrtDecomp()
+    for i in 0 ..< 2000:
+      sd.insertLine(sd.lineCount, "line" & $i)
+
+    for step in 0 ..< 1500:
+      let n = sd.lineCount
+      case r.rand(0 .. 3)
+      of 0, 1:
+        if n > 64:
+          # Cross-block multi-line delete (spans a block boundary for large counts)
+          let ls = sd.findLineStart(r.rand(0 ..< n - 1))
+          sd.delete(ls, r.rand(1 .. 40))
+        else:
+          sd.insertLine(n, "refill" & $step)
+      else:
+        # Multi-line insert to add lines back and keep n in a healthy range
+        let idx = r.rand(0 .. sd.charLen)
+        sd.insert(idx, "a\nbb\nccc")
+
+      # The charLen cache must match a from-scratch recomputation every step.
+      check sd.charLen == sd.recomputedCharLen
+
+      let info = sd.getBlockInfo()
+      check info.totalLines == sd.lineCount
+      # Theta(sqrt n) band, checked only where the asymptotics are clean. The
+      # bounds are deliberately loose (observed ratio ~0.4..1.4) so they never
+      # flake, but still catch an O(n)-blocks regression or a broken split/merge.
+      if sd.lineCount >= 256:
+        let s = sqrt(sd.lineCount.float)
+        check info.blockCount.float <= 3.0 * s + 8.0 # not too many blocks
+        check info.blockCount.float >= s / 8.0 # not too few (split is working)
 
 suite "SqrtDecomp - Edge Cases":
   test "empty line operations":
