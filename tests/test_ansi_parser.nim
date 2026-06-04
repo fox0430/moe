@@ -663,3 +663,290 @@ suite "TerminalGrid - Terminal Query Responses":
     check grid.pendingResponses[0] == "\x1b[?6c"
     check grid.pendingResponses[1] == "\x1b[>0;0;0c"
     check grid.pendingResponses[2] == "\x1b[1;1R"
+
+suite "TerminalGrid - Alternate screen buffer":
+  test "1049 enters a blank alt screen and restores the primary on exit":
+    let grid = newTerminalGrid(10, 4)
+    grid.processOutput("PRIMARY")
+    grid.processOutput("\x1b[?1049h")
+    check grid.altScreenActive == true
+    check grid.cells[0][0].ch == "" # alt starts blank
+    grid.processOutput("\x1b[HALT")
+    check grid.cells[0][0].ch == "A"
+    grid.processOutput("\x1b[?1049l")
+    check grid.altScreenActive == false
+    check grid.cells[0][0].ch == "P"
+    check grid.cells[0][6].ch == "Y"
+
+  test "alternate screen does not pollute scrollback":
+    let grid = newTerminalGrid(10, 4)
+    grid.processOutput("A\r\nB\r\nC\r\nD\r\nE\r\nF")
+    let before = grid.scrollbackBuffer.len
+    check before > 0
+    grid.processOutput("\x1b[?1049h")
+    for _ in 0 ..< 20:
+      grid.processOutput("X\r\n")
+    check grid.scrollbackBuffer.len == before
+    grid.processOutput("\x1b[?1049l")
+    check grid.scrollbackBuffer.len == before
+
+  test "redundant 1049h does not destroy the primary buffer":
+    let grid = newTerminalGrid(10, 4)
+    grid.processOutput("PRIMARY")
+    grid.processOutput("\x1b[?1049h\x1b[?1049h")
+    grid.processOutput("\x1b[HALT")
+    grid.processOutput("\x1b[?1049l")
+    check grid.cells[0][0].ch == "P"
+    check grid.cells[0][6].ch == "Y"
+
+  test "1049 restores cursor position on exit":
+    let grid = newTerminalGrid(20, 10)
+    grid.processOutput("\x1b[6;11H")
+    check grid.cursorRow == 5
+    check grid.cursorCol == 10
+    grid.processOutput("\x1b[?1049h")
+    grid.processOutput("\x1b[1;1H")
+    check grid.cursorRow == 0
+    grid.processOutput("\x1b[?1049l")
+    check grid.cursorRow == 5
+    check grid.cursorCol == 10
+
+  test "redundant 1049h after moving the alt cursor preserves the saved cursor":
+    let grid = newTerminalGrid(20, 10)
+    grid.processOutput("\x1b[6;11H") # primary cursor at row 5, col 10
+    grid.processOutput("\x1b[?1049h") # save (5,10), enter alt
+    grid.processOutput("\x1b[1;1H") # move the alt cursor to home
+    grid.processOutput("\x1b[?1049h") # redundant: must NOT re-save (0,0)
+    grid.processOutput("\x1b[?1049l") # exit, restore
+    check grid.cursorRow == 5
+    check grid.cursorCol == 10
+
+  test "redundant 1049l on the primary screen does not clobber the cursor":
+    let grid = newTerminalGrid(20, 10)
+    grid.processOutput("\x1b[6;11H")
+    grid.processOutput("\x1b[?1049l") # already primary: must be a no-op
+    check grid.cursorRow == 5
+    check grid.cursorCol == 10
+
+  test "47 switches buffers without touching the cursor":
+    let grid = newTerminalGrid(20, 10)
+    grid.processOutput("HELLO\x1b[6;11H")
+    grid.processOutput("\x1b[?47h")
+    check grid.cells[0][0].ch == "" # alt blank
+    grid.processOutput("\x1b[1;1HALT")
+    grid.processOutput("\x1b[?47l")
+    check grid.cells[0][0].ch == "H" # primary restored
+    check grid.cursorRow == 0 # cursor NOT restored
+    check grid.cursorCol == 3
+
+  test "1048 saves and restores cursor without switching buffers":
+    let grid = newTerminalGrid(20, 10)
+    grid.processOutput("\x1b[3;4H")
+    grid.processOutput("\x1b[?1048h")
+    grid.processOutput("\x1b[8;9H")
+    check grid.altScreenActive == false
+    grid.processOutput("\x1b[?1048l")
+    check grid.cursorRow == 2
+    check grid.cursorCol == 3
+
+suite "TerminalGrid - Scrolling region (DECSTBM)":
+  test "DECSTBM confines scrolling to the region":
+    let grid = newTerminalGrid(10, 6)
+    grid.processOutput("R0\r\nR1\r\nR2\r\nR3\r\nR4\r\nR5")
+    grid.processOutput("\x1b[2;4r") # region rows 1..3
+    grid.processOutput("\x1b[4;1H") # cursor to region bottom (row 3)
+    grid.processOutput("\n")
+    check grid.cells[0][1].ch == "0" # row 0 untouched
+    check grid.cells[4][1].ch == "4" # row 4 untouched
+    check grid.cells[5][1].ch == "5" # row 5 untouched
+    check grid.cells[1][1].ch == "2" # old R2 scrolled up
+    check grid.cells[3][0].ch == "" # blank at region bottom
+
+  test "region scroll does not push to scrollback":
+    let grid = newTerminalGrid(10, 6)
+    grid.processOutput("\x1b[2;4r")
+    grid.processOutput("\x1b[4;1H")
+    for _ in 0 ..< 10:
+      grid.processOutput("\n")
+    check grid.scrollbackBuffer.len == 0
+
+  test "top-anchored partial region does not push to scrollback":
+    let grid = newTerminalGrid(10, 6)
+    grid.processOutput("\x1b[1;3r") # top=0, bottom=2 (not full height)
+    grid.processOutput("\x1b[3;1H")
+    for _ in 0 ..< 10:
+      grid.processOutput("\n")
+    check grid.scrollbackBuffer.len == 0
+
+  test "DECSTBM with no params resets region and scrollback resumes":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("\x1b[2;3r")
+    grid.processOutput("\x1b[r")
+    check grid.scrollTop == 0
+    check grid.scrollBottom == 2
+    grid.processOutput("A\r\nB\r\nC\r\nD")
+    check grid.scrollbackBuffer.len >= 1
+
+  test "RI scrolls the region down at the top margin":
+    let grid = newTerminalGrid(10, 6)
+    grid.processOutput("R0\r\nR1\r\nR2\r\nR3\r\nR4\r\nR5")
+    grid.processOutput("\x1b[2;4r") # region 1..3
+    grid.processOutput("\x1b[2;1H") # region top (row 1)
+    grid.processOutput("\x1bM") # Reverse Index
+    check grid.cells[1][0].ch == "" # blank at region top
+    check grid.cells[2][1].ch == "1" # old R1 moved down
+    check grid.cells[3][1].ch == "2" # old R2 moved down
+    check grid.cells[0][1].ch == "0" # row 0 untouched
+    check grid.cells[4][1].ch == "4" # row 4 untouched
+
+  test "scroll down (CSI T) respects the region":
+    let grid = newTerminalGrid(10, 6)
+    grid.processOutput("R0\r\nR1\r\nR2\r\nR3\r\nR4\r\nR5")
+    grid.processOutput("\x1b[2;4r")
+    grid.processOutput("\x1b[T")
+    check grid.cells[1][0].ch == "" # blank at region top
+    check grid.cells[2][1].ch == "1"
+    check grid.cells[3][1].ch == "2"
+    check grid.cells[0][1].ch == "0"
+    check grid.cells[4][1].ch == "4"
+
+  test "scroll up/down counts beyond the region just blank it (clamped)":
+    let grid = newTerminalGrid(10, 6)
+    grid.processOutput("R0\r\nR1\r\nR2\r\nR3\r\nR4\r\nR5")
+    grid.processOutput("\x1b[2;4r") # region rows 1..3
+    grid.processOutput("\x1b[999S") # scroll up far past the region height
+    check grid.cells[1][0].ch == "" # region fully blanked
+    check grid.cells[2][0].ch == ""
+    check grid.cells[3][0].ch == ""
+    check grid.cells[0][1].ch == "0" # rows outside the region untouched
+    check grid.cells[4][1].ch == "4"
+    check grid.cells[5][1].ch == "5"
+    grid.processOutput("\x1b[999T") # scroll down far past the region height
+    check grid.cells[1][0].ch == ""
+    check grid.cells[2][0].ch == ""
+    check grid.cells[3][0].ch == ""
+    check grid.cells[0][1].ch == "0"
+    check grid.cells[4][1].ch == "4"
+    check grid.cells[5][1].ch == "5"
+    check grid.scrollbackBuffer.len == 0 # region scroll never touches scrollback
+
+suite "TerminalGrid - Insert/Delete line within region":
+  test "insert line uses the region bottom margin":
+    let grid = newTerminalGrid(10, 6)
+    grid.processOutput("R0\r\nR1\r\nR2\r\nR3\r\nR4\r\nR5")
+    grid.processOutput("\x1b[2;4r") # region 1..3
+    grid.processOutput("\x1b[3;1H") # row 2 (inside region)
+    grid.processOutput("\x1b[L") # insert line
+    check grid.cells[2][0].ch == "" # blank inserted
+    check grid.cells[3][1].ch == "2" # old R2 pushed to region bottom
+    check grid.cells[4][1].ch == "4" # row 4 (below region) untouched
+    check grid.cells[1][1].ch == "1" # row 1 untouched
+
+  test "delete line uses the region bottom margin and is a no-op outside":
+    let grid = newTerminalGrid(10, 6)
+    grid.processOutput("R0\r\nR1\r\nR2\r\nR3\r\nR4\r\nR5")
+    grid.processOutput("\x1b[2;4r") # region 1..3
+    grid.processOutput("\x1b[2;1H") # row 1 (region top)
+    grid.processOutput("\x1b[M") # delete line
+    check grid.cells[1][1].ch == "2" # old R2 up
+    check grid.cells[2][1].ch == "3" # old R3 up
+    check grid.cells[3][0].ch == "" # blank at region bottom
+    check grid.cells[4][1].ch == "4" # row 4 untouched
+    grid.processOutput("\x1b[6;1H") # row 5 (outside region)
+    grid.processOutput("\x1b[M") # no-op
+    check grid.cells[5][1].ch == "5"
+
+suite "TerminalGrid - Resize with region and alt screen":
+  test "resize resets the scrolling region":
+    let grid = newTerminalGrid(10, 6)
+    grid.processOutput("\x1b[2;4r")
+    check grid.scrollBottom == 3
+    grid.resize(20, 8)
+    check grid.scrollTop == 0
+    check grid.scrollBottom == 7
+
+  test "resize during alt screen keeps primary readable after exit":
+    let grid = newTerminalGrid(10, 4)
+    grid.processOutput("PRIMARY")
+    grid.processOutput("\x1b[?1049h")
+    grid.resize(20, 6)
+    grid.processOutput("ALT")
+    grid.processOutput("\x1b[?1049l")
+    check grid.cols == 20
+    check grid.rows == 6
+    check grid.cells.len == 6
+    check grid.cells[0].len == 20
+    check grid.cells[0][0].ch == "P"
+    check grid.cells[0][6].ch == "Y"
+
+  test "saved cursor is clamped on resize":
+    let grid = newTerminalGrid(20, 20)
+    grid.processOutput("\x1b[18;18H")
+    grid.processOutput("\x1b7") # DECSC
+    grid.resize(10, 10)
+    grid.processOutput("\x1b8") # DECRC
+    check grid.cursorRow >= 0
+    check grid.cursorRow <= 9
+    check grid.cursorCol >= 0
+    check grid.cursorCol <= 9
+
+suite "TerminalGrid - RIS reset completeness":
+  test "RIS clears saved cursor/SGR state and restores cursor visibility":
+    let grid = newTerminalGrid(20, 10)
+    # Move, set bold+red SGR, hide the cursor, then save it all with DECSC
+    grid.processOutput("\x1b[5;6H\x1b[1;31m\x1b[?25l")
+    grid.processOutput("\x1b7") # DECSC saves cursor + SGR
+    check grid.cursorVisible == false
+    grid.processOutput("\x1bc") # RIS
+    check grid.cursorVisible == true
+    check grid.savedCursorRow == 0
+    check grid.savedCursorCol == 0
+    check grid.savedFg.kind == ckDefault
+    check grid.savedBg.kind == ckDefault
+    check grid.savedAttrs == {}
+    # A later DECRC must not resurrect the pre-reset cursor or SGR state
+    grid.processOutput("\x1b[3;4H\x1b8") # move, then DECRC
+    check grid.cursorRow == 0
+    check grid.cursorCol == 0
+    check grid.currentFg.kind == ckDefault
+    check grid.currentAttrs == {}
+
+suite "TerminalGrid - toPlainText with alt screen":
+  test "alt screen snapshot excludes primary scrollback":
+    let grid = newTerminalGrid(10, 3)
+    grid.processOutput("L0\r\nL1\r\nL2\r\nL3\r\nL4") # spills into scrollback
+    check grid.scrollbackBuffer.len > 0
+    grid.processOutput("\x1b[?1049h") # enter alt screen
+    grid.processOutput("\x1b[HALTLINE")
+    let snap = grid.toPlainText()
+    check "ALTLINE" in snap
+    check "L0" notin snap # primary scrollback must not bleed through
+    grid.processOutput("\x1b[?1049l") # back to primary
+    check "L0" in grid.toPlainText() # scrollback visible again
+
+suite "TerminalGrid - Insert/Delete line clamps large counts":
+  test "insert line count beyond the region just blanks it":
+    let grid = newTerminalGrid(10, 6)
+    grid.processOutput("R0\r\nR1\r\nR2\r\nR3\r\nR4\r\nR5")
+    grid.processOutput("\x1b[2;4r") # region rows 1..3
+    grid.processOutput("\x1b[2;1H") # region top (row 1)
+    grid.processOutput("\x1b[999L") # far more lines than the region holds
+    check grid.cells[1][0].ch == "" # region fully blanked
+    check grid.cells[2][0].ch == ""
+    check grid.cells[3][0].ch == ""
+    check grid.cells[0][1].ch == "0" # rows outside the region untouched
+    check grid.cells[4][1].ch == "4"
+    check grid.cells[5][1].ch == "5"
+
+  test "delete line count beyond the region just blanks it":
+    let grid = newTerminalGrid(10, 6)
+    grid.processOutput("R0\r\nR1\r\nR2\r\nR3\r\nR4\r\nR5")
+    grid.processOutput("\x1b[2;4r") # region rows 1..3
+    grid.processOutput("\x1b[2;1H") # region top (row 1)
+    grid.processOutput("\x1b[999M") # far more lines than the region holds
+    check grid.cells[1][0].ch == "" # region fully blanked
+    check grid.cells[2][0].ch == ""
+    check grid.cells[3][0].ch == ""
+    check grid.cells[0][1].ch == "0" # rows outside the region untouched
+    check grid.cells[4][1].ch == "4"
+    check grid.cells[5][1].ch == "5"
