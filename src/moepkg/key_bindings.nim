@@ -254,9 +254,10 @@ proc listRuntimeMappings*(registry: KeyBindingRegistry, mode: EditorMode): seq[s
   for m in registry.runtimeMappings[mode]:
     result.add(m.triggerStr & " -> " & m.targetStr)
 
-proc clearRuntimeMappingState*(registry: KeyBindingRegistry) =
-  ## Clear the runtime mapping key accumulator
-  registry.runtimeMappingState.keys = @[]
+proc clearRuntimeMappingState*(state: var DispatchState) =
+  ## Clear the runtime mapping key accumulator. The accumulator is owned by the
+  ## `KeyRouter` (`dispatchState`) and passed in by the router.
+  state.keys = @[]
 
 proc getRuntimeKeySeqMappings*(
     registry: KeyBindingRegistry, mode: EditorMode
@@ -277,10 +278,10 @@ proc getAllRuntimeMappings*(
   return registry.runtimeMappings[mode]
 
 proc routeRuntimeMapping*(
-    registry: KeyBindingRegistry, keyCombo: KeyCombo, mappings: seq[RuntimeKeyMapping]
+    state: var DispatchState, keyCombo: KeyCombo, mappings: seq[RuntimeKeyMapping]
 ): RuntimeMappingDecision =
   ## Decide what to do with `keyCombo` given the runtime mapping table for the
-  ## current mode. The accumulator (`registry.runtimeMappingState`) is mutated
+  ## current mode. The accumulator (`state`, owned by the `KeyRouter`) is mutated
   ## as appropriate:
   ## - on exact match or no-match flush: cleared before returning
   ## - on prefix match: extended with `keyCombo`
@@ -293,12 +294,12 @@ proc routeRuntimeMapping*(
   ## be expressed from the same decision.
 
   if mappings.len == 0:
-    if registry.runtimeMappingState.keys.len > 0:
-      registry.clearRuntimeMappingState()
+    if state.keys.len > 0:
+      clearRuntimeMappingState(state)
     return RuntimeMappingDecision(kind: rmdNoMatchPassThrough)
 
-  registry.runtimeMappingState.keys.add(keyCombo)
-  let accKeys = registry.runtimeMappingState.keys
+  state.keys.add(keyCombo)
+  let accKeys = state.keys
 
   var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
   var hasLongerMatch = false
@@ -316,7 +317,7 @@ proc routeRuntimeMapping*(
 
   if exactMatch.isSome and not hasLongerMatch:
     let matched = exactMatch.get
-    registry.clearRuntimeMappingState()
+    clearRuntimeMappingState(state)
     case matched.kind
     of rmkCommand:
       return RuntimeMappingDecision(
@@ -334,30 +335,31 @@ proc routeRuntimeMapping*(
     return RuntimeMappingDecision(kind: rmdWaitForMore)
 
   if accKeys.len == 1:
-    registry.clearRuntimeMappingState()
+    clearRuntimeMappingState(state)
     return RuntimeMappingDecision(kind: rmdNoMatchPassThrough)
 
   let flushed = accKeys
-  registry.clearRuntimeMappingState()
+  clearRuntimeMappingState(state)
   return RuntimeMappingDecision(kind: rmdNoMatchFlush, accumulatedKeys: flushed)
 
 proc flushRuntimeMapping*(
-    registry: KeyBindingRegistry, mappings: seq[RuntimeKeyMapping]
+    state: var DispatchState, mappings: seq[RuntimeKeyMapping]
 ): RuntimeMappingFlushPlan =
   ## When the key-mapping timeout fires, decide how to flush the accumulator.
   ## Caller passes the appropriate mappings table for the current mode/overlay.
-  ## The accumulator is cleared before returning (unless it was already empty).
-  if registry.runtimeMappingState.keys.len == 0:
+  ## The accumulator (`state`, owned by the `KeyRouter`) is cleared before
+  ## returning (unless it was already empty).
+  if state.keys.len == 0:
     return RuntimeMappingFlushPlan(kind: rmfNothing)
 
-  let accKeys = registry.runtimeMappingState.keys
+  let accKeys = state.keys
   var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
   for m in mappings:
     if m.triggerKeys == accKeys:
       exactMatch = some(m)
       break
 
-  registry.clearRuntimeMappingState()
+  clearRuntimeMappingState(state)
 
   if exactMatch.isSome:
     let matched = exactMatch.get

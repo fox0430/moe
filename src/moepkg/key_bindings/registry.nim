@@ -137,9 +137,15 @@ type
     of rmkKeySequence:
       targetKeys*: seq[string] ## Key strings for playbackMacro
 
-  ## State for accumulating keys for runtime key-seq mapping matching
-  RuntimeMappingState* = object
-    keys*: seq[KeyCombo] ## Keys accumulated so far
+  ## Runtime key-sequence mapping accumulator. Owned by the `KeyRouter`
+  ## (`KeyRouter.dispatchState`), *not* by the registry — runtime-mapping
+  ## dispatch is the router's concern. The separate built-in sequence
+  ## accumulator (`KeySequenceState` / `sequenceState`) remains registry-owned
+  ## because `processKey`'s sequence FSM lives here. The type is defined in this
+  ## low-level module so both the router and the routing helpers can name it
+  ## without an import cycle.
+  DispatchState* = object
+    keys*: seq[KeyCombo] ## Runtime-mapping keys accumulated so far
 
   ## Result of matching a single key against the runtime mapping table.
   ## `routeRuntimeMapping` returns this; the caller executes the decision.
@@ -192,9 +198,8 @@ type
     bindings*: Table[EditorMode, seq[KeyBinding]]
     sequences*: Table[EditorMode, Table[seq[KeyCombo], Command]] ## Multi-key sequences
     commandRegistry*: Table[string, Command]
-    sequenceState*: KeySequenceState ## Current sequence being built
+    sequenceState*: KeySequenceState ## Current built-in sequence being built
     runtimeMappings*: Table[EditorMode, seq[RuntimeKeyMapping]]
-    runtimeMappingState*: RuntimeMappingState ## Key-seq accumulator
     isReplayingMapping*: bool ## When true, skip mapping expansion (noremap)
 
 proc `==`*(a, b: KeyCombo): bool =
@@ -561,7 +566,6 @@ proc newKeyBindingRegistry*(): KeyBindingRegistry =
       hasNumericPrefix: false,
     ),
     runtimeMappings: initTable[EditorMode, seq[RuntimeKeyMapping]](),
-    runtimeMappingState: RuntimeMappingState(keys: @[]),
     isReplayingMapping: false,
   )
 

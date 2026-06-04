@@ -22,6 +22,7 @@
 import std/[unittest, tables, strutils, options]
 
 import ../src/moepkg/key_bindings {.all.}
+import ../src/moepkg/key_router
 import ../src/moepkg/modes
 import ../src/moepkg/types {.all.}
 import ../src/moepkg/motion {.all.}
@@ -543,13 +544,14 @@ suite "getRuntimeKeySeqMappings":
 
 suite "clearRuntimeMappingState":
   test "Clears accumulated keys":
-    var registry = newKeyBindingRegistry()
+    # The runtime-mapping accumulator is now a router-owned DispatchState.
+    var state = DispatchState(keys: @[])
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    registry.runtimeMappingState.keys.add(j)
-    check registry.runtimeMappingState.keys.len == 1
+    state.keys.add(j)
+    check state.keys.len == 1
 
-    registry.clearRuntimeMappingState()
-    check registry.runtimeMappingState.keys.len == 0
+    clearRuntimeMappingState(state)
+    check state.keys.len == 0
 
 suite "Command mode command parsing - map commands":
   setup:
@@ -899,22 +901,20 @@ suite "Integration - handleKeyCombo with runtime key-seq mapping":
     let err = manager.keyBindingRegistry.addRuntimeMapping(Insert, "j j", "Escape")
     check err == ""
 
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+
     # First 'j' should be accumulated (waiting for more keys)
     let j1 = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r1 = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), j1
-    )
+    let r1 = manager.handleKeyCombo(editor, j1)
     check r1.kind == hrHandled
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 1
+    check editor.keyRouter.dispatchState.keys.len == 1
 
     # Second 'j' should trigger the mapping (Escape → Normal mode)
     let j2 = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r2 = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), j2
-    )
+    let r2 = manager.handleKeyCombo(editor, j2)
     check r2.kind == hrHandled
     # Accumulator should be cleared after match
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
+    check editor.keyRouter.dispatchState.keys.len == 0
 
   test "Non-matching key after accumulation flushes":
     let manager = createTestManager()
@@ -927,20 +927,18 @@ suite "Integration - handleKeyCombo with runtime key-seq mapping":
     let err = manager.keyBindingRegistry.addRuntimeMapping(Insert, "j j", "Escape")
     check err == ""
 
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+
     # First 'j' accumulates
     let j1 = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r1 = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), j1
-    )
+    let r1 = manager.handleKeyCombo(editor, j1)
     check r1.kind == hrHandled
 
     # 'k' does not match 'j j' → flush 'j' and process 'k' normally
     let k = KeyCombo(isSpecial: false, char: "k", modifiers: {})
-    discard manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), k
-    )
+    discard manager.handleKeyCombo(editor, k)
     # Accumulator should be cleared after flush
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
+    check editor.keyRouter.dispatchState.keys.len == 0
 
   test "No mappings registered passes through immediately":
     let manager = createTestManager()
@@ -970,12 +968,11 @@ suite "Integration - handleKeyCombo with runtime key-seq mapping":
 
     # Pressing C-a should be consumed by the mapping and Escape replayed
     let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let r = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), keyCombo
-    )
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let r = manager.handleKeyCombo(editor, keyCombo)
     check r.kind == hrHandled
     # Accumulator should be cleared
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
+    check editor.keyRouter.dispatchState.keys.len == 0
 
 suite "Integration - noremap verification":
   test "Mapping A→B does not recursively expand B→C":
@@ -1026,12 +1023,11 @@ suite "Integration - noremap verification":
     # With isReplayingMapping = true, handleKeyCombo should skip mapping precheck
     manager.keyBindingRegistry.isReplayingMapping = true
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    discard manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), keyA
-    )
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    discard manager.handleKeyCombo(editor, keyA)
     # The key should have been processed normally (not consumed by mapping)
     # Accumulator should remain empty
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
+    check editor.keyRouter.dispatchState.keys.len == 0
     manager.keyBindingRegistry.isReplayingMapping = false
 
   test "Mapping does not expand in wrong mode":
@@ -1047,11 +1043,10 @@ suite "Integration - noremap verification":
 
     # Press C-a in Insert mode: should NOT trigger the Normal mapping
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    discard manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), keyA
-    )
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    discard manager.handleKeyCombo(editor, keyA)
     # Accumulator should be empty (no key-seq mappings registered for Insert)
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
+    check editor.keyRouter.dispatchState.keys.len == 0
 
 suite "Integration - Vim-style jj mapping":
   test "Vim-style jj accumulates then triggers":
@@ -1065,21 +1060,19 @@ suite "Integration - Vim-style jj mapping":
     let err = manager.keyBindingRegistry.addRuntimeMapping(Insert, "jj", "Escape")
     check err == ""
 
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+
     # First 'j' should accumulate
     let j1 = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r1 = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), j1
-    )
+    let r1 = manager.handleKeyCombo(editor, j1)
     check r1.kind == hrHandled
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 1
+    check editor.keyRouter.dispatchState.keys.len == 1
 
     # Second 'j' should trigger the mapping
     let j2 = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r2 = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), j2
-    )
+    let r2 = manager.handleKeyCombo(editor, j2)
     check r2.kind == hrHandled
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
+    check editor.keyRouter.dispatchState.keys.len == 0
 
   test "Vim-style jj and space-separated j j produce same trigger":
     ## Both notations should create mappings with identical trigger keys
@@ -1103,11 +1096,10 @@ suite "Integration - Normal mode key-seq mapping":
     check err == ""
 
     let keyCombo = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    let r = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), keyCombo
-    )
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let r = manager.handleKeyCombo(editor, keyCombo)
     check r.kind == hrHandled
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
+    check editor.keyRouter.dispatchState.keys.len == 0
 
   test "Normal mode multi-key mapping accumulates":
     let manager = createTestManager()
@@ -1120,21 +1112,19 @@ suite "Integration - Normal mode key-seq mapping":
     let err = manager.keyBindingRegistry.addRuntimeMapping(Normal, "zz", "Escape")
     check err == ""
 
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+
     # First 'z' should accumulate
     let z1 = KeyCombo(isSpecial: false, char: "z", modifiers: {})
-    let r1 = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), z1
-    )
+    let r1 = manager.handleKeyCombo(editor, z1)
     check r1.kind == hrHandled
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 1
+    check editor.keyRouter.dispatchState.keys.len == 1
 
     # Second 'z' should trigger
     let z2 = KeyCombo(isSpecial: false, char: "z", modifiers: {})
-    let r2 = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), z2
-    )
+    let r2 = manager.handleKeyCombo(editor, z2)
     check r2.kind == hrHandled
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
+    check editor.keyRouter.dispatchState.keys.len == 0
 
 suite "Integration - mapping removal and clear":
   test "Removed mapping no longer triggers":
@@ -1154,10 +1144,9 @@ suite "Integration - mapping removal and clear":
 
     # Key should pass through to normal insert handler
     let keyA = KeyCombo(isSpecial: false, char: "a", modifiers: {kmCtrl})
-    discard manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), keyA
-    )
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    discard manager.handleKeyCombo(editor, keyA)
+    check editor.keyRouter.dispatchState.keys.len == 0
 
   test "Cleared mappings no longer trigger":
     let manager = createTestManager()
@@ -1201,11 +1190,10 @@ suite "Timeout flush - exact match with longer match pending":
 
     # Press 'j': should accumulate because both exact and longer match exist
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    let r = manager.handleKeyCombo(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), j
-    )
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+    let r = manager.handleKeyCombo(editor, j)
     check r.kind == hrHandled
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 1
+    check editor.keyRouter.dispatchState.keys.len == 1
 
   test "Timeout flush finds exact match for accumulated keys":
     ## Simulate what handleKeyMappingTimeout does:
@@ -1222,12 +1210,14 @@ suite "Timeout flush - exact match with longer match pending":
     let err2 = manager.keyBindingRegistry.addRuntimeMapping(Insert, "jj", "Escape")
     check err2 == ""
 
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+
     # Simulate accumulated state (as if 'j' was pressed and we're waiting)
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    manager.keyBindingRegistry.runtimeMappingState.keys = @[j]
+    editor.keyRouter.dispatchState.keys = @[j]
 
     # Simulate timeout flush logic: find exact match
-    let accKeys = manager.keyBindingRegistry.runtimeMappingState.keys
+    let accKeys = editor.keyRouter.dispatchState.keys
     let mappings = manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
     var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
     for m in mappings:
@@ -1240,12 +1230,9 @@ suite "Timeout flush - exact match with longer match pending":
     check exactMatch.get.targetKeys[0] == "a"
 
     # Execute the exact match via playbackMacro
-    manager.keyBindingRegistry.clearRuntimeMappingState()
+    clearRuntimeMappingState(editor.keyRouter.dispatchState)
     manager.keyBindingRegistry.isReplayingMapping = true
-    let r = manager.playbackMacro(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
-      exactMatch.get.targetKeys,
-    )
+    let r = manager.playbackMacro(editor, exactMatch.get.targetKeys)
     manager.keyBindingRegistry.isReplayingMapping = false
     check r.kind == hrHandled
     # Should still be in Insert mode (mapping target was 'a', not Escape)
@@ -1265,12 +1252,14 @@ suite "Timeout flush - exact match with longer match pending":
     let err2 = manager.keyBindingRegistry.addRuntimeMapping(Insert, "jj", "a")
     check err2 == ""
 
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+
     # Simulate accumulated state
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    manager.keyBindingRegistry.runtimeMappingState.keys = @[j]
+    editor.keyRouter.dispatchState.keys = @[j]
 
     # Find exact match
-    let accKeys = manager.keyBindingRegistry.runtimeMappingState.keys
+    let accKeys = editor.keyRouter.dispatchState.keys
     let mappings = manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
     var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
     for m in mappings:
@@ -1281,12 +1270,9 @@ suite "Timeout flush - exact match with longer match pending":
     check exactMatch.isSome
 
     # Execute via playbackMacro (mirrors handleKeyMappingTimeout logic)
-    manager.keyBindingRegistry.clearRuntimeMappingState()
+    clearRuntimeMappingState(editor.keyRouter.dispatchState)
     manager.keyBindingRegistry.isReplayingMapping = true
-    discard manager.playbackMacro(
-      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry),
-      exactMatch.get.targetKeys,
-    )
+    discard manager.playbackMacro(editor, exactMatch.get.targetKeys)
     manager.keyBindingRegistry.isReplayingMapping = false
 
     # playbackMacro applies mode transitions internally
@@ -1304,12 +1290,14 @@ suite "Timeout flush - exact match with longer match pending":
     let err = manager.keyBindingRegistry.addRuntimeMapping(Insert, "jj", "Escape")
     check err == ""
 
+    let editor = createTestEditor(buffer, state, viewport, manager.keyBindingRegistry)
+
     # Simulate accumulated state
     let j = KeyCombo(isSpecial: false, char: "j", modifiers: {})
-    manager.keyBindingRegistry.runtimeMappingState.keys = @[j]
+    editor.keyRouter.dispatchState.keys = @[j]
 
     # Simulate timeout flush logic: find exact match
-    let accKeys = manager.keyBindingRegistry.runtimeMappingState.keys
+    let accKeys = editor.keyRouter.dispatchState.keys
     let mappings = manager.keyBindingRegistry.getRuntimeKeySeqMappings(state.mode)
     var exactMatch: Option[RuntimeKeyMapping] = none(RuntimeKeyMapping)
     for m in mappings:
@@ -1320,12 +1308,10 @@ suite "Timeout flush - exact match with longer match pending":
     check exactMatch.isNone
 
     # No exact match: replay keys individually
-    manager.keyBindingRegistry.clearRuntimeMappingState()
+    clearRuntimeMappingState(editor.keyRouter.dispatchState)
     manager.keyBindingRegistry.isReplayingMapping = true
     for k in accKeys:
-      let r = manager.handleKeyCombo(
-        createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), k
-      )
+      let r = manager.handleKeyCombo(editor, k)
       check r.kind == hrHandled
     manager.keyBindingRegistry.isReplayingMapping = false
 
@@ -1337,8 +1323,11 @@ suite "Timeout flush - exact match with longer match pending":
 
   test "Empty accumulated keys: timeout flush is no-op":
     let manager = createTestManager()
+    let router = newKeyRouter(
+      manager.keyBindingRegistry, TimeoutPolicy(timeoutlen: 1000, enabled: true)
+    )
     # No keys accumulated
-    check manager.keyBindingRegistry.runtimeMappingState.keys.len == 0
+    check router.dispatchState.keys.len == 0
     # Nothing to flush - this is the guard check in handleKeyMappingTimeout
 
 suite "All mapping commands are valid":

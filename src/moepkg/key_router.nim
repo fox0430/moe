@@ -26,10 +26,14 @@
 ## into a `RouteResult` via the `rrCommand` variant and is invoked from the
 ## Normal-mode dispatcher (the only mode that uses sequence resolution).
 ##
-## The router does *not* own the accumulator storage — it borrows
-## `KeyBindingRegistry.runtimeMappingState`. Moving the physical storage into
-## a `DispatchState` here is a follow-up refactor whose only benefit is API
-## hygiene; the current code path is unaffected.
+## The router owns the runtime-mapping accumulator directly via its
+## `dispatchState` field (a `DispatchState`); the routing helpers
+## (`routeRuntimeMapping`/`flushRuntimeMapping`/`clearRuntimeMappingState`) take
+## it as a `var` parameter. The built-in sequence accumulator
+## (`KeyBindingRegistry.sequenceState`) stays registry-owned because
+## `processKey`'s sequence FSM lives there — `resolveBuiltin` reaches it through
+## the registry. Folding that built-in accumulator into `dispatchState` too is a
+## further follow-up (option A) that requires reworking `processKey`.
 
 import key_router/types
 import key_bindings except Command
@@ -40,9 +44,12 @@ export types
 type KeyRouter* = ref object
   registry*: KeyBindingRegistry
   policy*: TimeoutPolicy
+  dispatchState*: DispatchState
+    ## Runtime-mapping key accumulator, owned by the router (no longer borrowed
+    ## from the registry). See `key_bindings/registry.DispatchState`.
 
 proc newKeyRouter*(registry: KeyBindingRegistry, policy: TimeoutPolicy): KeyRouter =
-  KeyRouter(registry: registry, policy: policy)
+  KeyRouter(registry: registry, policy: policy, dispatchState: DispatchState(keys: @[]))
 
 proc updatePolicy*(router: KeyRouter, policy: TimeoutPolicy) {.inline.} =
   ## Update the timeout policy (call when config reloads).
@@ -53,13 +60,13 @@ proc nextTimeoutMs*(router: KeyRouter): int =
   ## for. Zero means no timeout is needed.
   if not router.policy.enabled or router.policy.timeoutlen <= 0:
     return 0
-  if router.registry.runtimeMappingState.keys.len > 0:
+  if router.dispatchState.keys.len > 0:
     return router.policy.timeoutlen
   return 0
 
 proc hasRuntimeMappingPending*(router: KeyRouter): bool {.inline.} =
   ## True while a runtime mapping prefix is being accumulated.
-  router.registry.runtimeMappingState.keys.len > 0
+  router.dispatchState.keys.len > 0
 
 proc cancel*(router: KeyRouter): bool {.discardable.} =
   ## Cancel pending dispatch state that Escape should clear. Currently this
@@ -114,9 +121,9 @@ proc flushPendingAccumulator*(router: KeyRouter, mode: EditorMode): seq[KeyCombo
   ## The caller is expected to wrap the replay in `withReplay` so re-entrant
   ## feedKey calls observe `isReplayingMapping = true`.
   let mappings = router.mappingsFor(mode)
-  if mappings.len == 0 and router.registry.runtimeMappingState.keys.len > 0:
-    result = router.registry.runtimeMappingState.keys
-    router.registry.clearRuntimeMappingState()
+  if mappings.len == 0 and router.dispatchState.keys.len > 0:
+    result = router.dispatchState.keys
+    clearRuntimeMappingState(router.dispatchState)
 
 proc decisionToRoute(decision: RuntimeMappingDecision, key: KeyCombo): RouteResult =
   case decision.kind
@@ -136,7 +143,7 @@ proc feedKey*(router: KeyRouter, mode: EditorMode, keyCombo: KeyCombo): RouteRes
   ## tells the caller what to do next: execute a runtime mapping, wait for
   ## more keys, replay the accumulator, or fall through to normal handling.
   let mappings = router.mappingsFor(mode)
-  let decision = routeRuntimeMapping(router.registry, keyCombo, mappings)
+  let decision = routeRuntimeMapping(router.dispatchState, keyCombo, mappings)
   result = decisionToRoute(decision, keyCombo)
 
 proc flushTimeout*(router: KeyRouter, mode: EditorMode): RouteResult =
@@ -145,7 +152,7 @@ proc flushTimeout*(router: KeyRouter, mode: EditorMode): RouteResult =
   ## mapping; otherwise the caller must replay the accumulator one key at a
   ## time (mode dispatch differs between base mode and Command overlay).
   let mappings = router.mappingsFor(mode)
-  let plan = flushRuntimeMapping(router.registry, mappings)
+  let plan = flushRuntimeMapping(router.dispatchState, mappings)
   case plan.kind
   of rmfNothing:
     RouteResult(kind: rrCancelled)
