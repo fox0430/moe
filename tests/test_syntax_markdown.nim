@@ -710,10 +710,60 @@ suite "syntax_markdown - frontmatter edge cases":
     g.markdownNextToken()
     check g.kind == gtBuiltin
 
-  test "--- not at line start is builtin":
+  test "--- after content is a thematic break, not frontmatter":
     let tokens = collectTokens("a\n---\nb")
-    # After newline, --- is at line start → preprocessor
-    check tokens[2][0] == gtPreprocessor
+    # `---` is only frontmatter on the very first line of the document. Here it
+    # follows content, so it is a thematic break (gtBuiltin) and must NOT flip
+    # the rest of the document into preprocessor styling.
+    check tokens[2] == (gtBuiltin, "---")
+    check tokens[^1] == (gtIdentifier, "b")
+
+  test "--- on first line is frontmatter":
+    let tokens = collectTokens("---\ntitle: t\n---\nbody")
+    # Opening fence, the body line, and the closing fence are all frontmatter;
+    # content after the closing fence returns to normal markdown.
+    check tokens[0] == (gtPreprocessor, "---")
+    check tokens[2] == (gtPreprocessor, "title: t")
+    check tokens[4] == (gtPreprocessor, "---")
+    check tokens[^1] == (gtIdentifier, "body")
+
+  test "blank line before --- is a thematic break, not frontmatter":
+    # Frontmatter must be the very first line. A leading blank line demotes the
+    # opening `---` to a thematic break and nothing becomes frontmatter.
+    let tokens = collectTokens("\n---\ntitle: t\n---\nbody")
+    check tokens[1] == (gtBuiltin, "---")
+    for (kind, _) in tokens:
+      check kind != gtPreprocessor
+
+  test "leading spaces before --- is not frontmatter":
+    # Frontmatter starts at column 0 of the first line; an indented `---` is
+    # never a frontmatter opener.
+    let tokens = collectTokens("   ---\nbody")
+    for (kind, _) in tokens:
+      check kind != gtPreprocessor
+
+  test "closing fence must be exactly --- (4 dashes stays content)":
+    # The closing fence mirrors the opening one: a `----` line is frontmatter
+    # content, so the block stays open through the rest of the file.
+    let tokens = collectTokens("---\ntitle: t\n----\nstill inside")
+    check tokens[4] == (gtPreprocessor, "----")
+    check tokens[^1] == (gtPreprocessor, "still inside")
+    for (kind, _) in tokens:
+      check kind != gtBuiltin
+
+  test "thematic breaks do not leak frontmatter styling":
+    # Regression: a document with no frontmatter but several `---` rules used to
+    # alternate whole blocks into gtPreprocessor. Every `---` here is a thematic
+    # break and the surrounding text stays normal markdown.
+    let tokens = collectTokens("# H\n\n---\n\npara\n\n---\n\nmore")
+    var dashCount, preprocessorCount = 0
+    for (kind, lexeme) in tokens:
+      if kind == gtBuiltin and lexeme == "---":
+        inc dashCount
+      if kind == gtPreprocessor:
+        inc preprocessorCount
+    check dashCount == 2
+    check preprocessorCount == 0
 
 suite "syntax_markdown - left-flanking delimiter guards":
   test "** with space after is not bold":

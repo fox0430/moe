@@ -216,10 +216,13 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
         lexer.state = gtWhitespace
         inc position
     else:
-      # Content line or the closing delimiter line.
+      # Content line or the closing delimiter line. The closing fence mirrors
+      # the opening one: exactly `---` closes the block, while a 4th `-` makes
+      # it a frontmatter content line (matching the `buf[position] != '-'`
+      # opening check in the `of '-'` branch, which rejects `----`).
       lexer.kind = gtPreprocessor
       if lexer.buf[position] == '-' and lexer.buf[position + 1] == '-' and
-          lexer.buf[position + 2] == '-':
+          lexer.buf[position + 2] == '-' and lexer.buf[position + 3] != '-':
         lexer.mdInFrontmatter = false
       position = lexer.endLine(position)
 
@@ -300,8 +303,12 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     if lexer.isLineStart:
       if lexer.buf[position + 1] == '-' and lexer.buf[position + 2] == '-':
         inc position, 3
-        if lexer.buf[position] != '-':
-          # Frontmatter start (--- on its own line). Only the opening
+        if lexer.buf[position] != '-' and lexer.mdFirstLine:
+          # Frontmatter start (--- on the very first line of the document).
+          # YAML frontmatter is only valid at the document start; a `---` line
+          # anywhere else is a thematic break (handled by the `else` below),
+          # not frontmatter — otherwise every horizontal rule would flip the
+          # rest of the file into preprocessor styling. Only the opening
           # delimiter line is emitted here; the `mdInFrontmatter` branch near
           # the top of this proc handles the body and the closing delimiter so
           # that the multi-line state survives incremental re-parsing.
@@ -309,6 +316,7 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
           lexer.mdInFrontmatter = true
           position = lexer.endLine(position)
         else:
+          # Thematic break / horizontal rule (`---`, `----`, ...).
           lexer.kind = gtBuiltin
           while lexer.buf[position] == '-':
             inc position
@@ -590,6 +598,12 @@ proc markdownNextToken*(lexer: var GeneralTokenizer) =
     # Without this, tokens like punctuation (`"`, `)`, etc.) leave state unchanged,
     # causing a subsequent `-` to be incorrectly treated as a line-start list marker.
     lexer.state = lexer.kind
+
+  # After the document's first token the `---` frontmatter window has closed: any
+  # later `---` is a thematic break, not frontmatter. The first call always lands
+  # in this normal-parsing path (every continuation branch above returns early and
+  # only runs once a multi-line state is already set), so clearing it here is enough.
+  lexer.mdFirstLine = false
 
   lexer.length = position - lexer.pos
 

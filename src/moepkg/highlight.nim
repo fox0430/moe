@@ -69,6 +69,7 @@ type
     mdInMathMode*: bool
     mdInDisplayMath*: bool
     mdInFrontmatter*: bool
+    mdFirstLine*: bool
     latexInMathMode*: bool
     latexInDisplayMath*: bool
     rustRawStringHashCount*: int
@@ -114,6 +115,7 @@ proc captureTokenizerState*(g: GeneralTokenizer): TokenizerState =
     mdInMathMode: g.mdInMathMode,
     mdInDisplayMath: g.mdInDisplayMath,
     mdInFrontmatter: g.mdInFrontmatter,
+    mdFirstLine: g.mdFirstLine,
     latexInMathMode: g.latexInMathMode,
     latexInDisplayMath: g.latexInDisplayMath,
     rustRawStringHashCount: g.rustRawStringHashCount,
@@ -141,6 +143,7 @@ proc restoreTokenizerState*(g: var GeneralTokenizer, state: TokenizerState) =
   g.mdInMathMode = state.mdInMathMode
   g.mdInDisplayMath = state.mdInDisplayMath
   g.mdInFrontmatter = state.mdInFrontmatter
+  g.mdFirstLine = state.mdFirstLine
   g.latexInMathMode = state.latexInMathMode
   g.latexInDisplayMath = state.latexInDisplayMath
   g.rustRawStringHashCount = state.rustRawStringHashCount
@@ -962,11 +965,13 @@ proc initHighlightIncrementalFromStr*(
   token.restoreTokenizerState(initialState)
 
   if startLine == 0:
-    # `astroFirstLine`'s fresh-start value is `true`, unlike every other field
-    # (zero-value `false`), so the zero-valued seed `TokenizerState()` restores it
-    # as `false` and the frontmatter `---` fence is missed. Re-assert it at file
-    # line 0; captured states for `startLine > 0` are always `false`.
+    # `astroFirstLine`/`mdFirstLine`'s fresh-start value is `true`, unlike every
+    # other field (zero-value `false`), so the zero-valued seed `TokenizerState()`
+    # restores them as `false` and the frontmatter `---` fence is missed.
+    # Re-assert at file line 0; captured states for `startLine > 0` are always
+    # `false`.
     token.astroFirstLine = true
+    token.mdFirstLine = true
 
   while true:
     token.getNextToken(language)
