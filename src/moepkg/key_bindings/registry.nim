@@ -118,8 +118,11 @@ type
     possibleSequences*: seq[seq[KeyCombo]] ## Sequences that match current prefix
     pendingCommand*: Option[Command] ## Command waiting for additional input
     waitingForChar*: bool ## Whether we're waiting for an arbitrary character
-    numericPrefix*: string ## For building numeric prefixes like "2", "23", etc
-    hasNumericPrefix*: bool ## Whether we have a numeric prefix to apply
+    numericPrefix*: string
+      ## For building numeric prefixes like "2", "23", etc.
+      ## Non-empty iff a count prefix is active — there is deliberately no
+      ## separate bool; "0" alone is never accumulated (vim treats it as a
+      ## command), so `len > 0` is the single source of truth.
 
   ## Kind of runtime key mapping
   RuntimeMappingKind* = enum
@@ -563,7 +566,6 @@ proc newKeyBindingRegistry*(): KeyBindingRegistry =
       pendingCommand: none(Command),
       waitingForChar: false,
       numericPrefix: "",
-      hasNumericPrefix: false,
     ),
     runtimeMappings: initTable[EditorMode, seq[RuntimeKeyMapping]](),
     isReplayingMapping: false,

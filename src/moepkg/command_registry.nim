@@ -209,7 +209,9 @@ proc executeCommand*(
     return ok(())
   of ctOperatorPending:
     # Handle operators that need character input (f, t, r, etc)
-    # The character should have been set by processKey
+    # The character should have been set by processKey, which also applied
+    # the count and cleared the numeric prefix (applyCountToCommand) before
+    # the command reached us — no prefix bookkeeping is needed here.
     let count = cmd.count
     case cmd.operatorType
     of "find":
@@ -223,11 +225,6 @@ proc executeCommand*(
           MotionCommand(
             motion: Motion.FindChar, targetChar: cmd.targetChar, count: count
           )
-      # Clear the numeric prefix after using it
-      if ctx.keyBindingRegistry != nil:
-        ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
-        ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
-
       # Check if we have a pending operator (e.g., df{char})
       if ctx.state.editState.pendingOperator.isSome:
         let op = ctx.state.editState.pendingOperator.get
@@ -296,11 +293,6 @@ proc executeCommand*(
           MotionCommand(
             motion: Motion.TillChar, targetChar: cmd.targetChar, count: count
           )
-      # Clear the numeric prefix after using it
-      if ctx.keyBindingRegistry != nil:
-        ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
-        ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
-
       # Check if we have a pending operator (e.g., dt{char})
       if ctx.state.editState.pendingOperator.isSome:
         let op = ctx.state.editState.pendingOperator.get
@@ -444,11 +436,6 @@ proc executeCommand*(
       # Move cursor to the last replaced character (Vim behavior)
       ctx.cursor.column += charsToReplace - 1
 
-      # Clear the numeric prefix
-      if ctx.keyBindingRegistry != nil:
-        ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
-        ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
-
       ctx.state.windowDisplay.needsFullRedraw = true
       return ok(())
     of "visual-replace":
@@ -463,11 +450,6 @@ proc executeCommand*(
       # Call visualReplace with the target character
       visualReplace(ctx.buffer, ctx.state, cmd.targetChar[0])
 
-      # Clear the numeric prefix after using it
-      if ctx.keyBindingRegistry != nil:
-        ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
-        ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
-
       return ok(())
     of "visual-surround":
       # Execute visual surround action (S command in visual mode)
@@ -478,10 +460,6 @@ proc executeCommand*(
         return err("No visual selection active")
 
       visualSurround(ctx.buffer, ctx.state, cmd.targetChar[0])
-
-      if ctx.keyBindingRegistry != nil:
-        ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
-        ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
 
       return ok(())
     else:
@@ -499,11 +477,6 @@ proc executeCommand*(
     if count > 1:
       finalArgs = @[$count] & cmd.args
     logDebug("command", "finalArgs (count=" & $count & "): " & $finalArgs)
-
-    # Clear the numeric prefix after using it
-    if ctx.keyBindingRegistry != nil:
-      ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
-      ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
 
     # First try as alias, then as custom command
     let cmdResult = registry.findCommand(cmd.commandId)

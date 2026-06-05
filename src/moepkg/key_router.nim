@@ -30,10 +30,20 @@
 ## `dispatchState` field (a `DispatchState`); the routing helpers
 ## (`routeRuntimeMapping`/`flushRuntimeMapping`/`clearRuntimeMappingState`) take
 ## it as a `var` parameter. The built-in sequence accumulator
-## (`KeyBindingRegistry.sequenceState`) stays registry-owned because
-## `processKey`'s sequence FSM lives there — `resolveBuiltin` reaches it through
-## the registry. Folding that built-in accumulator into `dispatchState` too is a
-## further follow-up (option A) that requires reworking `processKey`.
+## (`KeyBindingRegistry.sequenceState`) is *deliberately* registry-owned — this
+## split is the intended end state, not a pending migration:
+##
+## - `processKey`'s sequence FSM lives in `key_bindings` and is the only writer;
+##   every other toucher goes through named registry APIs (`isWaitingForChar`,
+##   `clearSequence`, `hasActiveSequence`).
+## - All of those callers (the Normal dispatcher included) hold the registry but
+##   not the router. Relocating the storage into `dispatchState` would force
+##   either router wiring into `NormalModeHandler`/`CommandExecutionContext`/
+##   `VisualModeHandler` (shotgun surgery) or a registry back-reference to
+##   router state (a cosmetic move).
+## - The router already fronts the accumulator where dispatch needs it
+##   (`hasActiveBuiltinSequence`/`clearBuiltinSequence`/`cancel` below), so
+##   "router = single decode entry point" holds at the API level as-is.
 
 import key_router/types
 import key_bindings except Command
@@ -187,8 +197,10 @@ proc resolveBuiltin*(
   ## Lives in the router module (not `key_bindings`) because it returns the
   ## router-owned `RouteResult`; moving it into `key_bindings` would require
   ## that module to import `key_router/types`, which already imports
-  ## `key_bindings` — a cycle. It takes a `KeyBindingRegistry` only because the
-  ## built-in accumulator state still lives there.
+  ## `key_bindings` — a cycle. It takes a `KeyBindingRegistry` (not a
+  ## `KeyRouter`) by design: the built-in accumulator is registry-owned and the
+  ## Normal dispatcher holds the registry, not the router (see the module
+  ## docstring for why that ownership split is the intended end state).
   let wasEscapeOnActive =
     combo.isSpecial and combo.special == skEscape and registry.hasActiveSequence()
   let cmdOpt = registry.processKey(mode, combo)
