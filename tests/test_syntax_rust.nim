@@ -1035,6 +1035,33 @@ suite "syntax_rust - rustNextToken escape sequences":
     g.rustNextToken()
     check g.kind == gtEscapeSequence
 
+  test "string chars before a second escape stay a string token":
+    # Regression: the gtStringLit resume loop used to call rustReadEscape
+    # when it hit a `\` after consuming string chars, overwriting `kind`
+    # and folding the preceding chars into the escape token (`bc\t` was
+    # one gtEscapeSequence token instead of `bc` + `\t`).
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\nbc\\td\"")
+
+    g.rustNextToken() # "a
+    check g.kind == gtStringLit
+
+    g.rustNextToken() # \n
+    check g.kind == gtEscapeSequence
+    check g.length == 2
+
+    g.rustNextToken() # bc — its own string token
+    check g.kind == gtStringLit
+    check g.length == 2
+
+    g.rustNextToken() # \t
+    check g.kind == gtEscapeSequence
+    check g.length == 2
+
+    g.rustNextToken() # d"
+    check g.kind == gtStringLit
+    check g.state == gtNone
+
 suite "syntax_rust - rustNextToken EOF":
   test "empty string returns EOF":
     var g: GeneralTokenizer
@@ -2073,3 +2100,104 @@ suite "syntax_rust - rustNextToken block doc comments":
     g.rustNextToken()
     check g.kind == gtLongComment
     check g.state == gtNone
+
+suite "syntax_rust - line-bounded escapes and buffer-end safety":
+  # Regression tests for the fuzz crash at seed 214015 (in-sequence): an
+  # escaped newline inside a multi-line string left `state = gtStringLit`
+  # at buffer end, producing an empty non-EOF token whose recovery stepped
+  # past the NUL terminator (out-of-bounds read on the cstring buffer).
+
+  test "escaped newline ends the sub-token and parks gtLongStringLit":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\\nb\"")
+
+    g.rustNextToken() # "a
+    check g.kind == gtStringLit
+    check g.state == gtStringLit
+
+    g.rustNextToken() # \<newline> — the line-continuation escape
+    check g.kind == gtEscapeSequence
+    check g.length == 2
+    check g.state == gtLongStringLit
+    check g.rustRawStringHashCount == 0
+
+    g.rustNextToken() # b" resumes the string on the next line
+    check g.kind == gtLongStringLit
+    check g.state == gtNone
+
+    g.rustNextToken()
+    check g.kind == gtEof
+
+  test "buffer ending right after an escaped newline reaches EOF":
+    # Distilled from the fuzz failure: open string, next line ends with a
+    # lone `\`, then a final empty line. Must terminate at gtEof without
+    # ever emitting an empty non-EOF token or scanning past the buffer.
+    var g: GeneralTokenizer
+    let src = "\"a }\n}\\\n"
+    g.initGeneralTokenizer(src)
+    var steps = 0
+    while true:
+      g.rustNextToken()
+      if g.kind == gtEof:
+        break
+      check g.length > 0
+      check g.start + g.length <= src.len
+      inc steps
+      check steps < 100
+
+  test "string escape consumed up to buffer end yields EOF next":
+    # `\x` at the very end of the buffer leaves state = gtStringLit with the
+    # scan position at the terminator; the next call must yield gtEof
+    # instead of an empty gtStringLit token.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\x")
+
+    g.rustNextToken() # "a
+    check g.kind == gtStringLit
+    check g.state == gtStringLit
+
+    g.rustNextToken() # \x
+    check g.kind == gtEscapeSequence
+
+    g.rustNextToken()
+    check g.kind == gtEof
+
+  test "char-literal escape never crosses the newline":
+    # `'\` at end of line must not pull the next line's identifier into the
+    # char-literal token; that would invalidate per-line state captures.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\\\nabc")
+
+    g.rustNextToken() # '\
+    check g.kind == gtCharLit
+    check g.length == 2
+
+    g.rustNextToken() # the newline as whitespace
+    check g.kind == gtWhitespace
+
+    g.rustNextToken() # abc on its own line
+    check g.kind == gtIdentifier
+    check g.length == 3
+
+  test "bare quote at end of line never absorbs the next line's quote":
+    # `'` + newline + `'` used to form a single cross-line gtCharLit via
+    # the closing-quote lookahead. gtCharLit is not a boundary-captured
+    # kind, so the line boundary inside the token saved the post-token
+    # state and an incremental reparse of the next line diverged from a
+    # full reparse (`'x` became one identifier instead of charlit + ident).
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("'\n'x")
+
+    g.rustNextToken() # ' alone — lifetime/identifier fallback
+    check g.kind == gtIdentifier
+    check g.length == 1
+
+    g.rustNextToken() # the newline as whitespace
+    check g.kind == gtWhitespace
+
+    g.rustNextToken() # 'x on its own line
+    check g.kind == gtIdentifier
+    check g.length == 2
+
+    g.rustNextToken()
+    check g.kind == gtEof

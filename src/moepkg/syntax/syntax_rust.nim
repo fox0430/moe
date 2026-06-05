@@ -193,6 +193,11 @@ proc rustCharOrLifetime(g: var GeneralTokenizer, pos: var int) =
           inc(pos)
     of '\0':
       discard
+    of '\n':
+      # Never cross the line: `'\` at end of line is malformed code, and a
+      # token containing content beyond the newline would invalidate the
+      # per-line state captures the incremental re-highlight relies on.
+      discard
     else:
       inc(pos)
     # `\` after `'` rules out a lifetime, so any trailing identifier-like
@@ -204,10 +209,15 @@ proc rustCharOrLifetime(g: var GeneralTokenizer, pos: var int) =
     if g.buf[pos] == '\'':
       inc(pos)
     g.kind = gtCharLit
-  elif g.buf[pos] != '\0' and g.buf[pos] != '\'':
+  elif g.buf[pos] != '\0' and g.buf[pos] != '\'' and g.buf[pos] != '\n':
     # UTF-8 lead byte → infer width, then check for closing `'`. Treats
     # malformed continuation/invalid leads as 1 byte so a stray high byte
     # falls back to the lifetime path instead of overshooting the buffer.
+    # A newline is excluded above: `'` + newline + `'` must not form a
+    # cross-line char literal (gtCharLit is not a boundary-captured kind,
+    # so a token crossing the newline would make incremental re-highlight
+    # resume the next line from the wrong state). The bare `'` falls back
+    # to the lifetime path and tokenizes alone, like any unclosed quote.
     let lead = g.buf[pos].uint8
     let width =
       if lead < 0x80'u8:
@@ -276,6 +286,18 @@ proc rustReadEscape(g: var GeneralTokenizer, pos: var int) =
           inc(pos)
   of '\0':
     g.state = gtLongStringLit
+    g.rustRawStringHashCount = 0
+  of '\n':
+    # `\` followed by a newline is Rust's line-continuation escape. End the
+    # sub-token at the newline and park `gtLongStringLit`, exactly like the
+    # other in-string sub-token paths. Leaving the state as the caller's
+    # `gtStringLit` here used to produce an empty non-EOF token when the
+    # buffer ended right after the newline, and the recovery in
+    # `rustNextToken` then walked past the NUL terminator (out-of-bounds
+    # read on the cstring buffer).
+    inc(pos)
+    g.state = gtLongStringLit
+    g.rustRawStringHashCount = 0
   else:
     inc(pos)
 
@@ -325,31 +347,48 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
   var pos = g.pos
   g.start = g.pos
   if g.state == gtStringLit:
-    g.kind = gtStringLit
-    while true:
-      case g.buf[pos]
-      of '\\':
-        rustReadEscape(g, pos)
-        break
-      of '\0':
-        g.state = gtLongStringLit
-        g.rustRawStringHashCount = 0
-        break
-      of '\n':
-        # End the sub-token at the newline and park state so the next line
-        # resumes inside the same string. Routing through gtLongStringLit
-        # (not gtStringLit) signals "no escape pending" to the resume path.
-        inc(pos)
-        g.state = gtLongStringLit
-        g.rustRawStringHashCount = 0
-        break
-      of '\"':
-        inc(pos)
-        g.state = gtNone
-        g.rustInByteString = false
-        break
-      else:
-        inc(pos)
+    if g.buf[pos] == '\0':
+      # Entering at buffer end (e.g. the buffer ends right after a consumed
+      # escape like `\x`) must yield EOF, mirroring the gtLongStringLit
+      # branch below. Falling into the loop would emit an empty non-EOF
+      # token and trip the recovery at the bottom of `rustNextToken`.
+      g.kind = gtEof
+    elif g.buf[pos] == '\\':
+      # Entering at the pending escape — the usual case: the previous
+      # sub-token broke at the `\` without consuming it.
+      rustReadEscape(g, pos)
+    else:
+      g.kind = gtStringLit
+      while true:
+        case g.buf[pos]
+        of '\\':
+          # End the string sub-token before the escape; state stays
+          # gtStringLit so the next call emits the escape on its own
+          # (mirrors rustNormalString). Calling rustReadEscape here would
+          # overwrite `kind` and fold the preceding string chars into the
+          # escape token's color.
+          break
+        of '\0':
+          # Reached only after at least one char was consumed; the token is
+          # non-empty and the next call lands in the EOF guard above.
+          g.state = gtLongStringLit
+          g.rustRawStringHashCount = 0
+          break
+        of '\n':
+          # End the sub-token at the newline and park state so the next line
+          # resumes inside the same string. Routing through gtLongStringLit
+          # (not gtStringLit) signals "no escape pending" to the resume path.
+          inc(pos)
+          g.state = gtLongStringLit
+          g.rustRawStringHashCount = 0
+          break
+        of '\"':
+          inc(pos)
+          g.state = gtNone
+          g.rustInByteString = false
+          break
+        else:
+          inc(pos)
   elif g.state == gtLongStringLit:
     if g.buf[pos] == '\0':
       g.kind = gtEof
@@ -626,6 +665,13 @@ proc rustNextToken*(g: var GeneralTokenizer, flags: TokenizerFlags = {}) =
     # visible without taking the editor down in release builds.
     when defined(debug):
       doAssert false, "rustNextToken: produced an empty token"
-    inc(pos)
-    g.length = pos - g.pos
+    if g.buf[pos] == '\0':
+      # Never step past the NUL terminator: `buf` is a cstring, so reading
+      # beyond it is an out-of-bounds heap read and `g.start` would point
+      # past the buffer, crashing the highlighter's slicing. Convert the
+      # empty token to EOF instead.
+      g.kind = gtEof
+    else:
+      inc(pos)
+      g.length = pos - g.pos
   g.pos = pos
