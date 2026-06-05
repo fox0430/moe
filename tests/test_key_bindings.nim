@@ -496,7 +496,6 @@ suite "KeyBindingRegistry - numeric prefix":
     # Enter numeric prefix
     discard registry.processKey(EditorMode.Normal, toKeyCombo('5'))
     check registry.sequenceState.numericPrefix == "5"
-    check registry.sequenceState.hasNumericPrefix == true
 
     # Execute command with prefix
     let result = registry.processKey(EditorMode.Normal, toKeyCombo('j'))
@@ -592,16 +591,40 @@ suite "KeyBindingRegistry - clearSequence":
     # Set up some state
     registry.sequenceState.keys = @[toKeyCombo('g')]
     registry.sequenceState.numericPrefix = "42"
-    registry.sequenceState.hasNumericPrefix = true
     registry.sequenceState.waitingForChar = true
 
     registry.clearSequence()
 
     check registry.sequenceState.keys.len == 0
     check registry.sequenceState.numericPrefix == ""
-    check registry.sequenceState.hasNumericPrefix == false
     check registry.sequenceState.waitingForChar == false
     check registry.sequenceState.pendingCommand.isNone
+
+suite "KeyBindingRegistry - clearNumericPrefix / isWaitingForChar":
+  test "clearNumericPrefix clears only the count prefix":
+    let registry = newKeyBindingRegistry()
+
+    registry.sequenceState.keys = @[toKeyCombo('g')]
+    registry.sequenceState.numericPrefix = "42"
+    registry.sequenceState.waitingForChar = true
+
+    registry.clearNumericPrefix()
+
+    check registry.sequenceState.numericPrefix == ""
+    # Other sequence state must be untouched
+    check registry.sequenceState.keys.len == 1
+    check registry.sequenceState.waitingForChar == true
+
+  test "isWaitingForChar reflects sequenceState.waitingForChar":
+    let registry = newKeyBindingRegistry()
+
+    check registry.isWaitingForChar == false
+
+    registry.sequenceState.waitingForChar = true
+    check registry.isWaitingForChar == true
+
+    registry.clearSequence()
+    check registry.isWaitingForChar == false
 
 suite "KeyBindingRegistry - bindKey string overload":
   test "Bind single key with string":
@@ -1147,11 +1170,10 @@ suite "KeyBindingRegistry - processKey additional cases":
 
     # Enter numeric prefix
     discard registry.processKey(EditorMode.Normal, toKeyCombo('5'))
-    check registry.sequenceState.hasNumericPrefix == true
+    check registry.sequenceState.numericPrefix == "5"
 
     # Cancel with Escape
     discard registry.processKey(EditorMode.Normal, toSpecialKeyCombo(skEscape))
-    check registry.sequenceState.hasNumericPrefix == false
     check registry.sequenceState.numericPrefix == ""
 
   test "Digits do not accumulate numeric prefix in Insert mode":
@@ -1162,7 +1184,6 @@ suite "KeyBindingRegistry - processKey additional cases":
     let result = registry.processKey(EditorMode.Insert, toKeyCombo('8'))
     # processKey returns none (no binding for '8' in Insert mode) but
     # numeric prefix must NOT be set
-    check registry.sequenceState.hasNumericPrefix == false
     check registry.sequenceState.numericPrefix == ""
 
   test "Digits do not accumulate numeric prefix in Replace mode":
@@ -1170,7 +1191,6 @@ suite "KeyBindingRegistry - processKey additional cases":
     registry.setupDefaultBindings()
 
     let result = registry.processKey(EditorMode.Replace, toKeyCombo('5'))
-    check registry.sequenceState.hasNumericPrefix == false
     check registry.sequenceState.numericPrefix == ""
 
   test "Escape after digit in Insert mode triggers switch-to-normal":
@@ -1274,10 +1294,8 @@ suite "KeyBindingRegistry - edge cases":
     let registry2 = newKeyBindingRegistry()
 
     registry1.sequenceState.numericPrefix = "5"
-    registry1.sequenceState.hasNumericPrefix = true
 
     check registry2.sequenceState.numericPrefix == ""
-    check registry2.sequenceState.hasNumericPrefix == false
 
 suite "Command - count field":
   test "Default count is 0":
@@ -1347,7 +1365,6 @@ suite "KeySequenceState structure":
     check state.pendingCommand.isNone
     check state.waitingForChar == false
     check state.numericPrefix == ""
-    check state.hasNumericPrefix == false
 
 suite "Default bindings coverage":
   test "Arrow keys are bound in Normal mode":

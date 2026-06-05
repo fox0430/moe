@@ -51,12 +51,24 @@ proc clearSequence*(registry: KeyBindingRegistry) =
   registry.sequenceState.pendingCommand = none(Command)
   registry.sequenceState.waitingForChar = false
   registry.sequenceState.numericPrefix = ""
-  registry.sequenceState.hasNumericPrefix = false
 
 proc hasActiveSequence*(registry: KeyBindingRegistry): bool =
   ## Check if there is an active key sequence in progress
   registry.sequenceState.keys.len > 0 or registry.sequenceState.waitingForChar or
-    registry.sequenceState.hasNumericPrefix
+    registry.sequenceState.numericPrefix.len > 0
+
+proc clearNumericPrefix*(registry: KeyBindingRegistry) =
+  ## Clear the accumulated count prefix once a command has consumed it.
+  ## Every command `processKey` emits passes through `applyCountToCommand`,
+  ## which calls this — the prefix never outlives the command that consumed
+  ## it, so command execution never needs to clear it remotely.
+  registry.sequenceState.numericPrefix = ""
+
+proc isWaitingForChar*(registry: KeyBindingRegistry): bool =
+  ## True while `processKey` holds a pending command waiting for its operand
+  ## character (`f`/`t`/`r`, ...). Named API for the same reason as
+  ## `clearNumericPrefix`.
+  registry.sequenceState.waitingForChar
 
 proc clearAllPending*(registry: KeyBindingRegistry): bool {.discardable.} =
   ## Clear all key-dispatch pending state that Escape should cancel. Currently
@@ -383,12 +395,9 @@ proc isDigitKey*(combo: KeyCombo): bool =
 proc getNumericPrefix*(registry: KeyBindingRegistry): int =
   ## Get the numeric prefix as integer, defaulting to 1
   logDebug(
-    "keybind",
-    "getNumericPrefix: hasPrefix=" & $registry.sequenceState.hasNumericPrefix &
-      ", prefix='" & registry.sequenceState.numericPrefix & "'",
+    "keybind", "getNumericPrefix: prefix='" & registry.sequenceState.numericPrefix & "'"
   )
-  if registry.sequenceState.hasNumericPrefix and
-      registry.sequenceState.numericPrefix.len > 0:
+  if registry.sequenceState.numericPrefix.len > 0:
     try:
       let num = parseInt(registry.sequenceState.numericPrefix)
       let prefixValue = if num > 0: num else: 1
@@ -406,8 +415,7 @@ proc applyCountToCommand(registry: KeyBindingRegistry, cmd: Command): Command =
   result = cmd
   result.count = registry.getNumericPrefix()
   # Clear numeric prefix after applying
-  registry.sequenceState.numericPrefix = ""
-  registry.sequenceState.hasNumericPrefix = false
+  registry.clearNumericPrefix()
   logDebug("keybind", "Applied count=" & $result.count & " to command: " & cmd.name)
 
 proc updatePossibleSequences*(registry: KeyBindingRegistry, mode: EditorMode) =
@@ -482,13 +490,11 @@ proc processKey*(
     else:
       # Add digit to numeric prefix
       registry.sequenceState.numericPrefix.add(combo.char)
-      registry.sequenceState.hasNumericPrefix = true
       return none(Command) # Wait for command key
 
   # Check for ESC key - cancel any current sequence
   if combo.isSpecial and combo.special == skEscape:
-    if registry.sequenceState.keys.len > 0 or registry.sequenceState.waitingForChar or
-        registry.sequenceState.hasNumericPrefix:
+    if registry.hasActiveSequence():
       registry.clearSequence()
       return none(Command) # Sequence cancelled
     # If no sequence active, treat ESC as normal key

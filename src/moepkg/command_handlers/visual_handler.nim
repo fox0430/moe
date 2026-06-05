@@ -249,7 +249,7 @@ proc handleVisualModeKey*(
 
   if binding.isNone:
     # Check if we're waiting for character input (e.g., after pressing 'r')
-    if handler.keyBindingRegistry.sequenceState.waitingForChar:
+    if handler.keyBindingRegistry.isWaitingForChar:
       return VisualModeResult(kind: vmrWaitingForInput)
     return VisualModeResult(kind: vmrUnhandled)
 
