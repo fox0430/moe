@@ -716,6 +716,9 @@ proc getEditorColorPair(
   of gtCharLit: EditorColorPairIndex.charLit
   of gtStringLit: EditorColorPairIndex.stringLit
   of gtLongStringLit: EditorColorPairIndex.stringLit
+  # XML CDATA is raw character data — color the whole section (delimiters
+  # included) like a long string so it stands out from parsed markup.
+  of gtCData: EditorColorPairIndex.stringLit
   of gtBinNumber: EditorColorPairIndex.binNumber
   of gtDecNumber: EditorColorPairIndex.decNumber
   of gtFloatNumber: EditorColorPairIndex.floatNumber
@@ -920,12 +923,18 @@ proc initHighlightIncrementalFromStr*(
           colorSegments.add(cs)
 
         # Capture tokenizer state at line boundary.
-        # For multi-line tokens (long strings, long/doc block comments),
-        # temporarily set the state to the token kind so incremental
-        # re-parsing can correctly resume from inside the multi-line
-        # construct via the backward-scan in `updateHighlightIncremental`.
+        # For multi-line tokens (long strings, long/doc block comments, XML
+        # CDATA sections), temporarily set the state to the token kind so
+        # incremental re-parsing can correctly resume from inside the
+        # multi-line construct. Kinds in `MultiLineKinds` additionally rewind
+        # to the construct's opening line via the backward-scan in
+        # `updateHighlightIncremental`; `gtCData` (XML CDATA, emitted by no
+        # other tokenizer) is deliberately NOT in that set — CDATA carries no
+        # auxiliary per-line state (no depth/hash counters), so the tokenizer
+        # resumes mid-section directly through its `g.state == gtCData`
+        # branch, no rewind needed.
         let savedState = token.state
-        if token.kind in {gtLongStringLit, gtLongComment, gtDocLongComment}:
+        if token.kind in {gtLongStringLit, gtLongComment, gtDocLongComment, gtCData}:
           token.state = token.kind
         elif token.kind == gtStringLit and language == SourceLanguage.langLisp:
           # Lisp strings span lines and resume via `state == gtStringLit` (unlike
@@ -1100,6 +1109,12 @@ proc updateHighlightIncremental*(
   # scalars parked in `gtCharLit`, Lisp strings); a reparse starting mid-string
   # must rewind to its opening line. Single-line strings never leave these states
   # at a boundary, so the rewind never fires for them.
+  #
+  # `gtCData` (XML CDATA) is considered and deliberately excluded: CDATA
+  # carries no auxiliary per-line state, so resuming mid-section via the
+  # tokenizer's `g.state == gtCData` branch is always correct without a
+  # rewind. A future multi-line construct that parks `gtCData` AND needs
+  # auxiliary state (depth, delimiter length, ...) must be added here.
   const MultiLineKinds =
     {gtLongComment, gtDocLongComment, gtLongStringLit, gtStringLit, gtKey, gtCharLit}
 
@@ -1168,7 +1183,15 @@ proc updateHighlightIncremental*(
     # Check for convergence: if the tokenizer state at the end of this chunk
     # matches the old cached state, all subsequent lines will produce the same
     # segments as before — no need to continue parsing.
-    if canConverge and chunkEnd < lastLine and newLineStates.len > 0 and
+    #
+    # Only sound once the reparse has passed the changed line: the
+    # MultiLineKinds rewind can move reparseStart more than a chunk above
+    # `changedStartLine` (a construct opening far above the edit). The first
+    # chunk then re-parses identical pre-edit content, so its end state
+    # always matches the cache and an unguarded break would stop BEFORE
+    # reaching the change, leaving stale segments at and below it.
+    if canConverge and chunkEnd >= changedStartLine and chunkEnd < lastLine and
+        newLineStates.len > 0 and
         newLineStates[^1] == incrHighlight.lineStates.states[chunkEnd]:
       break
 
@@ -1298,6 +1321,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langLog
   of ".hl":
     return SourceLanguage.langHyprland
+  of ".xml", ".svg", ".xsd", ".xsl", ".xslt", ".rss", ".atom", ".plist":
+    return SourceLanguage.langXml
   else:
     return SourceLanguage.langNone
 

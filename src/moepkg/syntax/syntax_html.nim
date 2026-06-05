@@ -64,33 +64,18 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
 
   # Handle comment state
   if g.state == gtLongComment or g.inComment:
-    while true:
-      case g.buf[pos]
-      of '\0':
-        if pos == g.pos:
-          # Nothing left to consume on this line; terminate without emitting an
-          # empty token. State stays gtLongComment so the next line continues
-          # the comment.
-          g.kind = gtEof
-        else:
-          g.kind = gtLongComment
-        # Keep state as gtLongComment for continuation on next line
-        break
-      of '-':
-        if pos + 2 < g.buf.len and g.buf[pos + 1] == '-' and g.buf[pos + 2] == '>':
-          # End of comment
-          inc(pos, 3)
-          g.kind = gtLongComment
-          g.state = gtNone
-          g.inComment = false
-          break
-        else:
-          inc(pos)
-      else:
-        inc(pos)
+    let terminated = scanToTerminator(g.buf, pos, '-', '-', '>')
+    if pos == g.pos:
+      # Nothing left to consume on this line; terminate without emitting an
+      # empty token. State stays gtLongComment so the next line continues
+      # the comment.
+      g.kind = gtEof
+    else:
+      g.kind = gtLongComment
+      if terminated:
+        g.state = gtNone
+        g.inComment = false
     g.length = pos - g.pos
-    if g.kind != gtEof and g.length <= 0:
-      assert false, "htmlNextToken: produced an empty token"
     g.pos = pos
     return
 
@@ -103,31 +88,19 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
       inc(pos)
   of '<':
     inc(pos)
-    if pos + 2 < g.buf.len and g.buf[pos] == '!' and g.buf[pos + 1] == '-' and
-        g.buf[pos + 2] == '-':
+    # NUL-safe lookahead without `g.buf.len` (strlen): each byte below is
+    # only read after the previous one matched a non-NUL char.
+    if g.buf[pos] == '!' and g.buf[pos + 1] == '-' and g.buf[pos + 2] == '-':
       # HTML comment <!--
-      pos = g.pos
       g.kind = gtLongComment
-      g.state = gtLongComment
-      g.inComment = true
-      inc(pos, 4) # Skip <!--
-      # Continue parsing the comment
-      while true:
-        case g.buf[pos]
-        of '\0':
-          # Keep state for continuation
-          break
-        of '-':
-          if pos + 2 < g.buf.len and g.buf[pos + 1] == '-' and g.buf[pos + 2] == '>':
-            # End of comment
-            inc(pos, 3)
-            g.state = gtNone
-            g.inComment = false
-            break
-          else:
-            inc(pos)
-        else:
-          inc(pos)
+      inc(pos, 3) # Skip !-- (the < is already consumed)
+      if scanToTerminator(g.buf, pos, '-', '-', '>'):
+        g.state = gtNone
+        g.inComment = false
+      else:
+        # Unterminated on this line; the state continues it on the next line.
+        g.state = gtLongComment
+        g.inComment = true
     elif g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
       # Tag start: <tag, </tag, or <!DOCTYPE
       g.kind = gtTagStart
@@ -174,7 +147,9 @@ proc htmlNextToken*(g: var GeneralTokenizer) =
     inc(pos)
     g.kind = gtOperator
   of '/':
-    if pos + 1 < g.buf.len and g.buf[pos + 1] == '>':
+    # `g.buf[pos]` is '/', so reading `pos + 1` is at most the NUL
+    # terminator — no length check needed.
+    if g.buf[pos + 1] == '>':
       # Self-closing tag />
       inc(pos, 2)
       g.kind = gtTagEnd

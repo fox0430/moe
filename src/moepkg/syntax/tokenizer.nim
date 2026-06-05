@@ -94,6 +94,7 @@ type
     gtKey
     gtValue
     gtRawData
+    gtCData
     gtAssembler
     gtPreprocessor
     gtDirective
@@ -180,6 +181,7 @@ type
     langJsonc
     langTypeScript
     langTsx
+    langXml
     langZsh
 
 const
@@ -206,7 +208,7 @@ const
     "git-rebase-todo", "gitignore", "Haskell", "HTML", "Hyprland", "Java", "JavaScript",
     "JavaScriptReact", "LaTeX", "Lisp", "Log", "Markdown", "Nim", "Python", "Rust",
     "Shell", "Tcl", "Toml", "Yaml", "Json", "Jsonc", "TypeScript", "TypeScriptReact",
-    "Zsh",
+    "XML", "Zsh",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
@@ -246,6 +248,24 @@ proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.rustInRawString = false
   g.rustAttrBracketDepth = 0
   g.pos = 0
+
+proc scanToTerminator*(buf: cstring, pos: var int, t0, t1, t2: char): bool =
+  ## Advance `pos` until the 3-byte terminator `t0 t1 t2` (consumed) or the
+  ## end of the buffer. Returns true if the terminator was found. Used for
+  ## the `-->` / `]]>` scans of HTML/XML comments and CDATA sections.
+  ##
+  ## NUL-safe without a length check: `buf[pos + 1]` is only read after
+  ## `buf[pos]` matched a non-NUL char (so `pos + 1` is at most the NUL
+  ## terminator), and `buf[pos + 2]` likewise only after `buf[pos + 1]`
+  ## matched. Guarding with `buf.len` instead would be a `strlen` over the
+  ## whole buffer — O(n) per call — and turn tokenization quadratic on
+  ## terminator-char runs.
+  while buf[pos] != '\0':
+    if buf[pos] == t0 and buf[pos + 1] == t1 and buf[pos + 2] == t2:
+      inc(pos, 3)
+      return true
+    inc(pos)
+  false
 
 proc generalNumber*(g: var GeneralTokenizer, position: int): int =
   const decChars = {'0' .. '9'}
@@ -312,7 +332,7 @@ import
   syntax_haskell, syntax_html, syntax_java, syntax_javascript, syntax_latex,
   syntax_lisp, syntax_markdown, syntax_nim, syntax_python, syntax_rust, syntax_fish,
   syntax_hyprland, syntax_shell, syntax_tcl, syntax_yaml, syntax_toml, syntax_json,
-  syntax_jsonc, syntax_typescript, syntax_log, syntax_zsh
+  syntax_jsonc, syntax_typescript, syntax_log, syntax_xml, syntax_zsh
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -345,5 +365,6 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langJson: g.jsonNextToken
   of langJsonc: g.jsoncNextToken
   of langTypeScript, langTsx: g.typescriptNextToken
+  of langXml: g.xmlNextToken
   of langZsh: g.zshNextToken
   else: discard
