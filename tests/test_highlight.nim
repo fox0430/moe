@@ -923,6 +923,115 @@ suite "Highlight - Block Comment Multiline State":
     )
     checkBlockCommentMatch(buffer, ih, SourceLanguage.langToml)
 
+suite "Highlight - JS/TS String Line Bounding":
+  # JS/TS string tokens (and the isKey lookahead) must not cross a newline:
+  # a line's tokens may depend only on the tokenizer state at the line's
+  # start, never on later lines, or incremental re-parsing (which resumes
+  # from per-line states) diverges from a full reparse.
+  proc checkIncrMatchesFull(
+      buffer: seq[string], ih: IncrementalHighlight, lang: SourceLanguage
+  ) =
+    let incrResult = Highlight(colorSegments: ih.segments)
+    var runesBuffer: seq[Runes]
+    for line in buffer:
+      runesBuffer.add(line.toRunes)
+    let fullResult = initHighlight(runesBuffer, @[], lang)
+    for row in 0 ..< buffer.len:
+      for col in 0 ..< buffer[row].len:
+        check incrResult.getColorPair(row, col) == fullResult.getColorPair(row, col)
+
+  proc runEditBelow(
+      lang: SourceLanguage, buffer0: seq[string], editRow: int, newLine: string
+  ) =
+    var buffer = buffer0
+    let (seg0, ls0) =
+      initHighlightIncremental(buffer, 0, buffer.high, TokenizerState(), @[], lang)
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+    buffer[editRow] = newLine
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      editRow,
+      1,
+      @[],
+      lang,
+    )
+    checkIncrMatchesFull(buffer, ih, lang)
+
+  proc runColonBelowString(lang: SourceLanguage) =
+    # Fuzz seed 180608 shape: an unterminated string on row 0 with a closing
+    # quote + colon appearing rows below. A newline-crossing isKey lookahead
+    # made row 0 gtKey in a full reparse, while the incremental pass (which
+    # never re-tokenizes row 0 for an edit on row 4) kept gtStringLit.
+    var buffer = @["s = \"abc", "1", "2", "3", "q\" 1"]
+    let (seg0, ls0) =
+      initHighlightIncremental(buffer, 0, buffer.high, TokenizerState(), @[], lang)
+    var ih = IncrementalHighlight(
+      segments: seg0, lineStates: LineStateCache(states: ls0, version: 0)
+    )
+    # Introduce the colon after the closing quote on row 4
+    buffer[4] = "q\": 1"
+    updateHighlightIncremental(
+      buffer.len,
+      proc(i: int): string =
+        buffer[i],
+      ih,
+      4,
+      1,
+      @[],
+      lang,
+    )
+    checkIncrMatchesFull(buffer, ih, lang)
+    # Row 0's string must stay a string: its color may not depend on row 4.
+    check Highlight(colorSegments: ih.segments).getColorPair(0, 4) ==
+      EditorColorPairIndex.stringLit
+
+  test "JS: escaped newline ends the string at EOL (edit below the margin)":
+    # `"a\` once continued onto the next line; the continuation line's state
+    # was captured as plain code, so an edit 3+ lines below (outside
+    # updateHighlightIncremental's 2-line backward margin) resumed the
+    # continuation line fresh and diverged from a full reparse.
+    runEditBelow(
+      SourceLanguage.langJavaScript,
+      @["x = \"a\\", "b\" + 1", "foo()", "bar()"],
+      3,
+      "bar(1)",
+    )
+
+  test "JS: escaped-newline chain longer than the backward margin":
+    runEditBelow(
+      SourceLanguage.langJavaScript,
+      @["x = \"a\\", "b\\", "c\\", "d\" + 1"],
+      3,
+      "d\" + 11",
+    )
+
+  test "TS: escaped newline ends the string at EOL (edit below the margin)":
+    runEditBelow(
+      SourceLanguage.langTypeScript,
+      @["x = \"a\\", "b\" + 1", "foo()", "bar()"],
+      3,
+      "bar(1)",
+    )
+
+  test "TS: escaped-newline chain longer than the backward margin":
+    runEditBelow(
+      SourceLanguage.langTypeScript,
+      @["x = \"a\\", "b\\", "c\\", "d\" + 1"],
+      3,
+      "d\" + 11",
+    )
+
+  test "JS: isKey lookahead must not see a colon on a later line":
+    runColonBelowString(SourceLanguage.langJavaScript)
+
+  test "TS: isKey lookahead must not see a colon on a later line":
+    runColonBelowString(SourceLanguage.langTypeScript)
+
 suite "Highlight - detectLanguage":
   test "detectLanguage for Rust":
     check detectLanguage("test.rs") == SourceLanguage.langRust

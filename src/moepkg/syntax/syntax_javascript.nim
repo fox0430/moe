@@ -349,11 +349,14 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
       add(id, g.buf[pos])
       inc(pos)
 
-    # Check if this identifier is a key (followed by colon)
+    # Check if this identifier is a key (followed by colon). The lookahead
+    # must stay on the current line: scanning past `\n` would make this
+    # line's color depend on later lines, which an incremental re-highlight
+    # (resuming from per-line states) can never observe.
     var isKey = false
     var tempPos = pos
-    # Skip whitespace after identifier
-    while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t', '\n', '\r'}:
+    # Skip spaces/tabs after identifier (same line only)
+    while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t'}:
       inc(tempPos)
     # Check if next non-whitespace character is colon
     if tempPos < g.buf.len and g.buf[tempPos] == ':':
@@ -411,17 +414,24 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
     let quote = g.buf[pos]
     inc(pos)
 
-    # Check if this string is a key (for object literals with quotes)
+    # Check if this string is a key (for object literals with quotes).
+    # The string token itself is line-bounded (see the scan loop below), so
+    # the lookahead must also stop at the end of the line: scanning past
+    # `\n` would make this line's color depend on later lines, which an
+    # incremental re-highlight (resuming from per-line states) can never
+    # observe.
     var isKey = false
     var tempPos = pos
-    # Skip to end of string to check if it's followed by colon
+    # Scan to the closing quote (same line only) to check for a colon
     while tempPos < g.buf.len and g.buf[tempPos] != '\0':
       case g.buf[tempPos]
+      of '\r', '\n':
+        break
       of '\"', '\'':
         if g.buf[tempPos] == quote:
           inc(tempPos)
-          # Skip whitespace after closing quote
-          while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t', '\n', '\r'}:
+          # Skip spaces/tabs after closing quote (same line only)
+          while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t'}:
             inc(tempPos)
           # Check if next non-whitespace character is colon
           if tempPos < g.buf.len and g.buf[tempPos] == ':':
@@ -430,6 +440,8 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
         else:
           inc(tempPos)
       of '\\':
+        if tempPos + 1 < g.buf.len and g.buf[tempPos + 1] in {'\r', '\n'}:
+          break
         inc(tempPos, 2) # Skip escape sequence
       else:
         inc(tempPos)
@@ -456,6 +468,13 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
         else:
           inc(pos)
       of '\\':
+        if g.buf[pos + 1] in {'\r', '\n'}:
+          # An escaped newline would continue the string onto the next line;
+          # end the token at EOL instead (consuming the backslash) to keep
+          # the line-bounded design above. The isKey lookahead makes the
+          # matching choice and stops before an escaped newline.
+          inc(pos)
+          break
         inc(pos)
         if g.buf[pos] == '\0':
           break
