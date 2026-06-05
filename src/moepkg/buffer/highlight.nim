@@ -39,9 +39,57 @@ proc continueInitialHighlight*(b: TextBuffer): bool =
   if parsedUpTo >= b.len - 1:
     return false
 
-  let startLine = parsedUpTo + 1
-  let endLine = min(startLine + ChunkSize - 1, b.len - 1)
-  let lastState = b.incrementalHighlight.lineStates.states[^1]
+  var startLine = parsedUpTo + 1
+
+  # The stored boundary state may sit inside a construct that cannot enter a
+  # fresh buffer (a YAML block scalar resumes by re-reading the header and
+  # parent lines above the resume point), or the next line may itself resolve
+  # against lines above (blank line, alone header). Rewind to a safe line and
+  # re-parse the tail of the previous chunk together with the new one.
+  while startLine > 0 and
+      chunkHandoffUnsafe(
+        b.language,
+        b.incrementalHighlight.lineStates.states[startLine - 1].state,
+        b.getLine(startLine),
+      )
+  :
+    dec startLine
+
+  # Grow the window past the old frontier proportionally to the rewound
+  # prefix: inside a construct spanning many chunks every tick rewinds to its
+  # header, so a fixed window advances the frontier only ChunkSize per tick
+  # and re-parses the growing prefix every time — quadratic total. Doubling
+  # makes the construct converge in O(log) ticks (linear total), the same
+  # geometric idea as the `chunkLen *= 2` retry in
+  # `updateHighlightIncremental`; like there, the last tick still pays one
+  # near-construct-sized parse, which is what an edit inside the construct
+  # costs anyway.
+  let reparsedLines = parsedUpTo + 1 - startLine
+  let endLine = min(startLine + max(ChunkSize, 2 * reparsedLines) - 1, b.len - 1)
+
+  var lastState = TokenizerState()
+  if startLine > 0:
+    lastState = b.incrementalHighlight.lineStates.states[startLine - 1]
+
+  if b.incrementalHighlight.lineStates.states.len > startLine:
+    # Drop cached results from `startLine` on. Covers the rewound lines
+    # (re-parsed below) and rows beyond the frontier: an edit during the
+    # progressive load runs `updateHighlightIncremental`, which fills the
+    # caches to EOF without advancing `parsedUpTo`, and the unconditional
+    # appends below would then duplicate those rows — leaving `states` longer
+    # than the buffer and `segments` unsorted, breaking the sorted-input
+    # contracts of `segmentCutIndex` and the splice's binary search.
+    b.incrementalHighlight.lineStates.states.setLen(startLine)
+    b.incrementalHighlight.segments.setLen(
+      b.incrementalHighlight.segments.segmentCutIndex(startLine)
+    )
+    b.highlight.colorSegments.setLen(
+      b.highlight.colorSegments.segmentCutIndex(startLine)
+    )
+    # URI underlines on the dropped rows went with their segments; let the
+    # progressive URI scan re-cover them.
+    if b.uriScanParsedUpTo >= startLine:
+      b.uriScanParsedUpTo = startLine - 1
 
   var chunkLines = newSeq[string](endLine - startLine + 1)
   for i in startLine .. endLine:
@@ -59,6 +107,26 @@ proc continueInitialHighlight*(b: TextBuffer): bool =
   # Append new segments to the existing highlight (preserving earlier URI
   # underlines) rather than rebuilding from incrementalHighlight.segments.
   b.highlight.colorSegments.add(newSegments)
+
+  if b.diagnostics.len > 0:
+    # Diagnostic styling lives only in the display highlight (applied by
+    # `updateHighlight` behind `highlightNeedsUpdate`): the truncation above
+    # drops it for the dropped rows and the plain re-append doesn't restore
+    # it — unlike URI underlines (re-covered via `uriScanParsedUpTo`) and
+    # semantic tokens (invalidated by the caller). Re-apply directly so
+    # undercurls survive the progressive load; this also covers diagnostics
+    # on the freshly parsed rows, which had no segments to style until now.
+    # Only diagnostics touching [startLine, endLine] need it: rows below
+    # startLine kept their styling (the truncation only drops rows >=
+    # startLine), rows past endLine get theirs when a later tick parses them,
+    # and re-applying an already-styled diagnostic rebuilds the whole segment
+    # seq (O(segments) per diagnostic, every tick of a large-file load).
+    var affected: seq[BufferDiagnostic]
+    for d in b.diagnostics:
+      if d.endLine >= startLine and d.startLine <= endLine:
+        affected.add(d)
+    if affected.len > 0:
+      applyDiagnosticHighlights(b.highlight, affected)
 
   return true
 

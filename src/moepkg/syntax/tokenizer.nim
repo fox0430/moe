@@ -267,6 +267,16 @@ proc scanToTerminator*(buf: cstring, pos: var int, t0, t1, t2: char): bool =
     inc(pos)
   false
 
+template skipEscapedChar*(g: GeneralTokenizer, pos: var int) =
+  ## Step over the char that follows an escape backslash, but never past the
+  ## NUL terminator or across a newline: a trailing `\` at the end of the
+  ## buffer must not push `pos` out of the buffer (out-of-bounds reads and
+  ## negative-length tokens downstream), and an escaped newline must stay
+  ## line-bounded so the per-line incremental state capture still sees the
+  ## boundary.
+  if g.buf[pos] notin eolChars:
+    inc(pos)
+
 proc generalNumber*(g: var GeneralTokenizer, position: int): int =
   const decChars = {'0' .. '9'}
   var pos = position

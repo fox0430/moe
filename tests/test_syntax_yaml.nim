@@ -21,6 +21,37 @@ import std/[unittest, sequtils]
 
 import ../src/moepkg/syntax/[tokenizer, syntax_yaml]
 
+proc drainTokens(
+    input: string, initialState = gtOther, maxTokens = 200
+): tuple[kinds: seq[TokenClass], finalState: TokenClass] =
+  ## Tokenize `input` to gtEof, collecting the non-EOF token kinds and the
+  ## final tokenizer state (the value a chunked parse hands to the next
+  ## chunk). Bounded so a non-progressing tokenizer fails the test instead of
+  ## hanging it, and asserts the tokenizer never leaves the buffer (`g.start +
+  ## g.length == g.pos` holds by construction, so `g.pos` is the only
+  ## independent bounds invariant). Mirrors collectKinds in
+  ## test_syntax_markdown / collectTokens in test_syntax_latex.
+  var g: GeneralTokenizer
+  g.initGeneralTokenizer(input)
+  g.state = initialState
+  for _ in 0 ..< maxTokens:
+    g.yamlNextToken()
+    check g.pos <= input.len
+    if g.kind == gtEof:
+      break
+    result.kinds.add(g.kind)
+  check g.kind == gtEof
+  result.finalState = g.state
+
+proc collectKinds(input: string, maxTokens = 200): seq[TokenClass] =
+  drainTokens(input, maxTokens = maxTokens).kinds
+
+proc checkTokenizesInBounds(buf: string, initialState = gtOther) =
+  discard drainTokens(buf, initialState)
+
+proc finalStateAtEof(input: string, initialState = gtOther): TokenClass =
+  drainTokens(input, initialState).finalState
+
 suite "syntax_yaml - yamlNextToken whitespace":
   test "single space":
     var g: GeneralTokenizer
@@ -1496,6 +1527,44 @@ suite "syntax_yaml - block scalar stale state recovery":
     # Should reach EOF without crashing.
     check kinds[^1] == gtEof
 
+  test "stale gtLongStringLit on an empty buffer stays in bounds":
+    # Regression: the fallback did `inc(pos)` even when the first char was the
+    # NUL terminator, setting `g.pos = len + 1` so the next call read past the
+    # end of the cstring (out-of-bounds garbage tokenized as gtIdentifier).
+    checkTokenizesInBounds("", initialState = gtLongStringLit)
+
+  test "stale fallback consumes nothing and reports zero length":
+    # Regression: the fallback consumed the first char but returned without
+    # setting `g.length`, leaving the previous token's stale length on a token
+    # that swallowed one char — shifting every following segment on the line.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: value")
+    g.state = gtLongStringLit
+    g.yamlNextToken() # recovery token
+    check g.kind == gtNone
+    check g.length == 0
+    check g.pos == 0
+    g.yamlNextToken() # 'key' must be intact, not 'ey'
+    check g.kind == gtKey
+    check g.start == 0
+    check g.length == 3
+
+  test "stale fallback at a headerless newline keeps the newline":
+    # Regression: the headerStart == -1 fallback consumed the newline with a
+    # stale length, so the consumer never saw it and attributed every following
+    # segment one row too high.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\nkey: value")
+    g.state = gtLongStringLit
+    g.yamlNextToken() # recovery token
+    check g.kind == gtNone
+    check g.length == 0
+    check g.pos == 0
+    g.yamlNextToken() # the newline survives as whitespace
+    check g.kind == gtWhitespace
+    check g.start == 0
+    check g.length == 1
+
   test "gtCommand with non-newline char transitions to gtOther":
     # When in gtCommand state (block scalar header) and the current char is
     # not whitespace/comment/newline, state should reset to gtOther.
@@ -1516,6 +1585,81 @@ suite "syntax_yaml - block scalar stale state recovery":
     check g.state == gtLongStringLit
     g.yamlNextToken() # block scalar content
     check g.kind == gtLongStringLit
+
+suite "syntax_yaml - in-string state survives end of buffer":
+  # A chunked parse (updateHighlightIncremental / continueInitialHighlight)
+  # hands the buffer-final tokenizer state to the next chunk. Resetting to
+  # gtOther at the NUL while still inside a string made every quoted string
+  # crossing a chunk boundary resume as plain YAML.
+
+  test "double-quoted continuation keeps gtStringLit at end of buffer":
+    # not gtOther: the string is still open
+    check finalStateAtEof("multi: \"open string\nstill inside") == gtStringLit
+
+  test "single-quoted continuation keeps gtCharLit at end of buffer":
+    # not gtOther: the string is still open
+    check finalStateAtEof("single: 'open string\nstill inside") == gtCharLit
+
+  test "end of buffer reports gtEof without a zero-length string token":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"abc")
+    g.state = gtOther
+    g.yamlNextToken() # the unterminated opener run
+    check g.kind == gtStringLit
+    g.yamlNextToken() # directly gtEof, not a zero-length gtStringLit first
+    check g.kind == gtEof
+    check g.state == gtStringLit
+
+  test "block scalar keeps gtLongStringLit at end of buffer":
+    # The scalar's extent decision is incomplete when the buffer ends while
+    # scanning it: whether it continues depends on lines a chunked parse does
+    # not contain. The truthful state lets the chunked drivers rewind the
+    # handoff (a fresh buffer cannot resume a scalar without its header).
+    # not gtOther: the scalar is still open
+    check finalStateAtEof("key: |\n  content\n  more content") == gtLongStringLit
+
+  test "block scalar still resets to gtOther at a dedent inside the buffer":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: |\n  content\nother: x")
+    g.state = gtOther
+    var sawScalar = false
+    for i in 0 .. 100:
+      g.yamlNextToken()
+      if g.kind == gtLongStringLit:
+        sawScalar = true
+        check g.state == gtOther # the dedent line ended the scalar for real
+      if g.kind == gtEof:
+        break
+    check sawScalar
+    check g.state == gtOther
+
+  test "block scalar header keeps gtCommand at end of buffer":
+    # A header line as the buffer's last line previously fell into the
+    # "illegal here" arm at the NUL and parked gtOther, losing the pending
+    # scalar at a chunk boundary.
+    check finalStateAtEof("key: |") == gtCommand
+
+  test "closed string at end of buffer still resets to gtOther":
+    check finalStateAtEof("done: \"closed\"") == gtOther
+
+  test "gtCommand resume on a newline does not leak a phantom gtEof":
+    # Regression: resuming a fresh tokenizer from a captured gtCommand state
+    # with the buffer starting on a newline hit the header branch's '\n' arm,
+    # which never assigned `kind` — the init value gtEof leaked out of the
+    # first call, so the consumer stopped before reading anything and the
+    # whole chunk's highlighting was lost.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\n  content")
+    g.state = gtCommand
+    g.yamlNextToken() # the zero-length header→scalar transition token
+    check g.kind != gtEof
+    check g.state == gtLongStringLit
+    # Tokenization still reaches a true EOF afterwards.
+    for i in 0 .. 100:
+      g.yamlNextToken()
+      if g.kind == gtEof:
+        break
+    check g.kind == gtEof
 
 suite "syntax_yaml - multi-line scalars fold across lines":
   test "unterminated single-quoted scalar at end of buffer does not read past it":
@@ -1630,3 +1774,107 @@ suite "syntax_yaml - block scalar parent indentation":
         break
       tokens.add(g.kind)
     check gtLongStringLit in tokens
+
+  test "document marker as parent line is honoured at buffer start":
+    # Fuzz seed 59437: an incremental reparse chunk can begin on the `---`
+    # line itself, so there is no newline before it (`lookbehind == -1`). The
+    # document-marker check must still fire: the alone header is then at top
+    # level and the block scalar owns the rest of the document — including a
+    # less-indented line — exactly as a full reparse sees it.
+    let tokens = collectKinds("---\n>\n  folded scalar text\nlist")
+    check gtLongStringLit in tokens
+    check gtIdentifier notin tokens # "list" stays inside the block scalar
+
+  test "document marker with inline header at buffer start forces top level":
+    # `--- |` — the marker and the header share the line, so the doc-marker
+    # check applies to the header's own line. The scalar is then at top level
+    # (parent indentation -1) and owns following column-0 lines, exactly as a
+    # full parse treats the same construct mid-buffer. Pins the behavior
+    # change from removing the `lookbehind >= 0` guard: previously a buffer
+    # STARTING with `--- |` kept parent indentation 0 and released the
+    # column-0 line below.
+    let tokens = collectKinds("--- |\n  text\nkey: value")
+    check gtLongStringLit in tokens
+    check gtKey notin tokens # swallowed by the top-level scalar
+
+suite "syntax_yaml - escape at buffer and line boundaries":
+  test "trailing backslash at end of buffer stays in bounds":
+    # Fuzz seeds 4309/114098/208087: an unterminated double-quoted string
+    # earlier in the buffer leaves the tokenizer in string state, and a `\` as
+    # the very last char made the escape reader consume past the NUL
+    # terminator (`g.pos = len + 1`), producing a negative-length slice in the
+    # incremental highlighter (RangeDefect).
+    checkTokenizesInBounds("multi: \"this string\ntrailing: done\\")
+
+  test "escaped newline in string continuation stays line-bounded":
+    # The escape token must stop before the newline so the per-line fold still
+    # captures the boundary state for incremental re-highlighting.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"abc\\\ndef\"")
+    g.state = gtOther
+    g.yamlNextToken() # "abc
+    check g.kind == gtStringLit
+    g.yamlNextToken() # the lone backslash
+    check g.kind == gtEscapeSequence
+    check g.length == 1 # does not swallow the newline
+    g.yamlNextToken() # fold across the newline
+    check g.kind == gtStringLit
+    check g.state == gtStringLit
+
+  test "key lookahead does not cross an escaped newline":
+    # Skipping `\<newline>` during the opener's key lookahead would make this
+    # line's key-ness depend on a later line — a backward dependency the
+    # incremental highlighter cannot observe (same pattern as the JS isKey bug).
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("\"a\\\nb\": c")
+    g.state = gtOther
+    g.yamlNextToken() # "a
+    check g.kind == gtStringLit # NOT gtKey: the quote does not close on line 0
+    check g.yamlIsKey == false
+
+  test "key lookahead with backslash as last buffer char stays in bounds":
+    # NOTE: the lookahead is a pure read (`tempPos` never feeds `g.pos`), so
+    # the bounds checks below cannot detect a reverted guard by themselves —
+    # only a sanitizer would. The kind/yamlIsKey pins are the deterministic
+    # part: with the guard the lookahead stops at the backslash and the
+    # opener cannot be a key; without it the result depends on out-of-buffer
+    # garbage.
+    let buf = "\"a\\"
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(buf)
+    g.state = gtOther
+    g.yamlNextToken() # the opener run
+    check g.kind == gtStringLit # NOT gtKey
+    check g.yamlIsKey == false
+    check g.pos <= buf.len
+    # Drain the rest (re-tokenizes from the start, covering the opener too).
+    checkTokenizesInBounds(buf)
+
+  test "colon as first char of a chunk does not read before the buffer":
+    # `pos > 0` guarded `g.buf[pos - 2]`, but after consuming the ':' the
+    # previous char is at `pos - 2`, so a ':' at buffer start read `g.buf[-1]`.
+    # An incremental chunk can start at any line, so this garbage read could
+    # diverge from the full reparse. The plain scalar `:x` must be classified
+    # deterministically.
+    # NOTE: this pins the classification only. The byte before the buffer is
+    # 0x00 in practice, so the old out-of-bounds read usually classified `:x`
+    # the same way — the read itself is only observable under a sanitizer.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer(":x")
+    g.state = gtOther
+    g.yamlNextToken()
+    check g.kind == gtIdentifier
+    check g.length == 2
+
+  test "colon as second char still consults the previous char":
+    # The tightened `pos > 1` guard must not over-guard: with the ':' at
+    # index 1 the previous char exists (index 0), and a flow terminator there
+    # makes the colon punctuation.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("}:x")
+    g.state = gtOther
+    g.yamlNextToken() # }
+    check g.kind == gtPunctuation
+    g.yamlNextToken() # ':' preceded by '}' → punctuation, not a plain scalar
+    check g.kind == gtPunctuation
+    check g.length == 1

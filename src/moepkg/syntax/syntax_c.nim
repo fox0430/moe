@@ -227,8 +227,7 @@ proc clikeNextToken*(
           break
         of '\\':
           inc(pos)
-          if g.buf[pos] notin {'\0', '\r', '\n'}:
-            inc(pos)
+          g.skipEscapedChar(pos)
         else:
           inc(pos)
     of '\"':

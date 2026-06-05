@@ -162,6 +162,12 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
   const hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
   var pos = g.pos
   g.start = g.pos
+  # Default kind so no zero-consume arm can leak the previous token's kind —
+  # or, on a fresh tokenizer resuming from a captured state, the init value
+  # gtEof, which would stop the consumer's token loop before it read anything
+  # (phantom EOF, the whole chunk lost). Every arm that produces a real token
+  # overwrites this; no branch reads the previous call's kind.
+  g.kind = gtNone
   if g.state in {gtStringLit, gtKey}:
     g.kind = g.state
     while true:
@@ -191,10 +197,21 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
               inc(pos)
           break
         else:
-          inc(pos)
+          # Never consume the terminator or a newline (see skipEscapedChar):
+          # the per-line fold below must still capture the boundary state.
+          g.skipEscapedChar(pos)
         break
       of '\0':
-        g.state = gtOther
+        # End of buffer is NOT end of string: keep the in-string state so the
+        # final boundary capture stays truthful. A chunked parse
+        # (`updateHighlightIncremental`/`continueInitialHighlight`) hands this
+        # state to the next chunk; parking `gtOther` here made every
+        # double-quoted string crossing a chunk boundary resume as plain YAML.
+        # When nothing was consumed this IS the end of the token stream —
+        # report gtEof directly (state preserved) instead of a zero-length
+        # string token.
+        if pos == g.pos:
+          g.kind = gtEof
         break
       of '\n', '\r':
         # Fold across the line keeping `gtStringLit`/`gtKey`: one token per line
@@ -221,7 +238,9 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         case g.buf[pos]
         of '\0':
           # Unterminated at end of buffer; stop so we don't read past it.
-          g.state = gtOther
+          # Keep gtCharLit: end of buffer is not end of string, and a chunked
+          # parse resumes the next chunk from this state (see the gtStringLit
+          # continuation above).
           break
         of '\n', '\r':
           # Fold across the line keeping `gtCharLit`: one token per line so the
@@ -247,7 +266,10 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       while true:
         case g.buf[pos]
         of '\0':
-          g.state = gtOther
+          # Keep gtCharLit at end of buffer (chunk resume; see the gtStringLit
+          # continuation above) and report gtEof when nothing was consumed.
+          if pos == g.pos:
+            g.kind = gtEof
           break
         of '\n', '\r':
           inc(pos)
@@ -275,7 +297,17 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
     of '#':
       pos = g.lexHash(pos, flagsYaml)
     of '\n', '\r':
-      discard
+      # Consume nothing; the state flip below moves parsing into the scalar.
+      # The proc-entry default already rules out a phantom gtEof here; report
+      # the zero-length header→scalar transition as whitespace explicitly.
+      g.kind = gtWhitespace
+    of '\0':
+      # End of buffer right after the header line: keep gtCommand so the chunk
+      # boundary capture is truthful. A chunked driver must rewind this
+      # handoff — a fresh buffer cannot resume the scalar without the header
+      # line. At a true end of file nothing follows, so keeping it is
+      # harmless.
+      g.kind = gtEof
     else:
       # illegal here. just don't parse a block scalar
       g.kind = gtNone
@@ -289,12 +321,26 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
     g.kind = gtLongStringLit
     # first, we have to find the parent indentation of the block scalar, so that
     # we know when to stop
+    if g.buf[pos] == '\0':
+      # End of buffer while still inside the scalar (the cut-by-EOF exit below
+      # keeps gtLongStringLit): report gtEof with the state preserved so the
+      # final boundary capture stays truthful, instead of letting the stale
+      # fallback below flip it to gtOther.
+      g.kind = gtEof
+      g.length = 0
+      return
     if g.buf[pos] notin {'\n', '\r'}:
       # Buffer was modified and state is stale; fall back to normal parsing.
+      # Consume nothing: flipping to `gtOther` already guarantees progress
+      # (matching the gtCommand else arm), the next call re-parses this char
+      # through the regular branches instead of silently swallowing it, and a
+      # NUL here must not be stepped over (`inc` would push `pos` to `len + 1`
+      # and the next call would read past the terminator). `g.length` must be
+      # set explicitly — returning early skips the shared epilogue and would
+      # leave the previous token's length on this zero-progress token.
       g.kind = gtNone
       g.state = gtOther
-      inc(pos)
-      g.pos = pos
+      g.length = 0
       return
     var lookbehind = pos - 1
     var headerStart = -1
@@ -303,11 +349,13 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         headerStart = lookbehind
       dec(lookbehind)
     if headerStart == -1:
-      # Block scalar header not found; buffer was modified. Fall back.
+      # Block scalar header not found; buffer was modified. Fall back without
+      # consuming the newline at `pos` (the gtOther whitespace branch tokenizes
+      # it on the next call, keeping the consumer's row accounting intact) and
+      # with `g.length` set, for the same reasons as the fallback above.
       g.kind = gtNone
       g.state = gtOther
-      inc(pos)
-      g.pos = pos
+      g.length = 0
       return
     var indentation = 1
     while g.buf[lookbehind + indentation] == ' ':
@@ -337,12 +385,19 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
       # not `lookbehind == -1`, because a reparse chunk can start on the parent
       # line itself (parent found, yet `lookbehind` still hits the buffer start);
       # forcing top level there would let the block swallow following keys. An
-      # inline header (`key: |`) keeps its own indentation and is never forced.
+      # inline header (`key: |`) keeps its own indentation here — though the
+      # document-marker check below still forces top level when the header's
+      # own line is a `---` marker (`--- |`).
       indentation = 0
-    elif lookbehind >= 0 and g.buf[lookbehind + 1] == '-' and
-        g.buf[lookbehind + 2] == '-' and g.buf[lookbehind + 3] == '-' and
-        g.buf[lookbehind + 4] in {'\t' .. '\r', ' '}:
-      # the parent line is a document start marker, therefore we are at top level
+    elif g.buf[lookbehind + 1] == '-' and g.buf[lookbehind + 2] == '-' and
+        g.buf[lookbehind + 3] == '-' and g.buf[lookbehind + 4] in {'\t' .. '\r', ' '}:
+      # The line at `lookbehind + 1` — the parent line for an alone header,
+      # otherwise the header's own line (`--- |`) — is a document start
+      # marker, therefore we are at top level. No `lookbehind >= 0` guard:
+      # `lookbehind` is the newline BEFORE that line, so it is -1 when the
+      # line starts the buffer — which an incremental reparse chunk regularly
+      # does. `lookbehind + 1` is the line's first char either way (>= 0,
+      # never out of bounds).
       indentation = 0
     # because lookbehind was at newline char when calculating indentation, we're
     # off by one. fix that. top level's parent will have indentation of -1.
@@ -382,7 +437,17 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
           indentation = 0
         inc(pos)
 
-    g.state = gtOther
+    if g.buf[pos] != '\0':
+      # The scalar genuinely ended inside this buffer (dedent line, comment,
+      # or `...` document end found at `pos`).
+      g.state = gtOther
+    # else: the buffer ended while scanning the scalar's extent — whether it
+    # continues depends on lines this buffer does not contain (a chunked parse
+    # cuts here). Keep gtLongStringLit so the boundary capture is truthful;
+    # the chunked drivers rewind the handoff because a fresh buffer cannot
+    # resume a block scalar (its extent needs the header and parent lines
+    # above). At a true end of file nothing follows, so keeping it is
+    # harmless.
   elif g.state == gtOther:
     # gtOther means 'inside YAML document'
     case g.buf[pos]
@@ -441,8 +506,13 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
         yamlClassifyToken(g, pos)
     of ':':
       inc(pos)
+      # `pos > 1`, not `pos > 0`: `pos` is already past the ':', so the char
+      # before it is `pos - 2`, which only exists from `pos == 2` on. With the
+      # ':' at buffer start (`pos == 1`) the old guard read `g.buf[-1]` —
+      # out-of-bounds garbage that differs between a full parse and an
+      # incremental chunk starting at that line.
       if g.buf[pos] in {'\0', '\t' .. '\r', ' ', '\'', '\"'} or
-          (pos > 0 and g.buf[pos - 2] in {'}', ']', '\"', '\''}):
+          (pos > 1 and g.buf[pos - 2] in {'}', ']', '\"', '\''}):
         g.kind = gtPunctuation
       else:
         yamlPlainStrLit(g, pos)
@@ -464,6 +534,12 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
             g.yamlIsKey = true
           break
         of '\\':
+          # Keep the lookahead line-bounded: skipping `\<newline>` would make
+          # this line's key-ness depend on later lines (a backward dependency
+          # incremental re-highlighting cannot see), and `\` at end of buffer
+          # would jump past the NUL terminator (same rule as `skipEscapedChar`).
+          if g.buf[tempPos + 1] in eolChars:
+            break
           inc(tempPos, 2)
         of '\n', '\r':
           break
@@ -471,7 +547,12 @@ proc yamlNextToken*(g: var GeneralTokenizer) =
           inc(tempPos)
       g.state = if g.yamlIsKey: gtKey else: gtStringLit
       g.kind = if g.yamlIsKey: gtKey else: gtStringLit
-      # Continue reading string content until escape or end quote
+      # Continue reading string content until escape or end quote. This
+      # deliberately does NOT stop at newlines, so the opener token can span
+      # lines (unlike the per-line fold in the continuation branch above).
+      # Still chunk-consistent: `g.state` is already gtStringLit/gtKey here,
+      # so each interior line-boundary capture stores the correct resumable
+      # state.
       while g.buf[pos] notin {'\0', '\\', '\"'}:
         inc(pos)
     of '\'':
