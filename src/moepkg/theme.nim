@@ -70,6 +70,102 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.statusLineExModeLabel: makeColorPair("#000000", "#ffffff"),
   EditorColorPairIndex.statusLineExModeInactive: makeColorPair("#61afef", "#ffffff"),
 
+  # Status line - QuickRun mode
+  EditorColorPairIndex.statusLineQuickRunMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineQuickRunModeLabel: makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineQuickRunModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - Log viewer mode
+  EditorColorPairIndex.statusLineLogViewerMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineLogViewerModeLabel: makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineLogViewerModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - Help mode
+  EditorColorPairIndex.statusLineHelpMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineHelpModeLabel: makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineHelpModeInactive: makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - Buffer manager mode
+  EditorColorPairIndex.statusLineBufferManagerMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineBufferManagerModeLabel:
+    makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineBufferManagerModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - Bookmark manager mode
+  EditorColorPairIndex.statusLineBookmarkManagerMode:
+    makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineBookmarkManagerModeLabel:
+    makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineBookmarkManagerModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - Backup manager mode
+  EditorColorPairIndex.statusLineBackupManagerMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineBackupManagerModeLabel:
+    makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineBackupManagerModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - Diff viewer mode
+  EditorColorPairIndex.statusLineDiffViewerMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineDiffViewerModeLabel:
+    makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineDiffViewerModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - Recent file mode
+  EditorColorPairIndex.statusLineRecentFileMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineRecentFileModeLabel:
+    makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineRecentFileModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - Debug mode
+  EditorColorPairIndex.statusLineDebugMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineDebugModeLabel: makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineDebugModeInactive: makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - Configuration mode
+  EditorColorPairIndex.statusLineConfigMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineConfigModeLabel: makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineConfigModeInactive: makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - References mode
+  EditorColorPairIndex.statusLineReferencesMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineReferencesModeLabel:
+    makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineReferencesModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - Document symbol mode
+  EditorColorPairIndex.statusLineDocumentSymbolMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineDocumentSymbolModeLabel:
+    makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineDocumentSymbolModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - Call hierarchy mode
+  EditorColorPairIndex.statusLineCallHierarchyMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineCallHierarchyModeLabel:
+    makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineCallHierarchyModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - Terminal mode
+  EditorColorPairIndex.statusLineTerminalMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineTerminalModeLabel: makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineTerminalModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
+  # Status line - File tree mode
+  EditorColorPairIndex.statusLineFileTreeMode: makeColorPair("#ffffff", "#61afef"),
+  EditorColorPairIndex.statusLineFileTreeModeLabel: makeColorPair("#000000", "#ffffff"),
+  EditorColorPairIndex.statusLineFileTreeModeInactive:
+    makeColorPair("#61afef", "#ffffff"),
+
   # Status line - Git info
   EditorColorPairIndex.statusLineGitChangedLines: makeColorPair("#ffffff", "#3d59a1"),
   EditorColorPairIndex.statusLineGitBranch: makeColorPair("#ffffff", "#3d59a1"),

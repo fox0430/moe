@@ -38,6 +38,66 @@ statusLineExMode = { fg = "#ffffff", bg = "#61afef" }
 statusLineExModeLabel = { fg = "#000000", bg = "#ffffff" }
 statusLineExModeInactive = { fg = "#61afef", bg = "#ffffff" }
 
+statusLineQuickRunMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineQuickRunModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineQuickRunModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineLogViewerMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineLogViewerModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineLogViewerModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineHelpMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineHelpModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineHelpModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineBufferManagerMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineBufferManagerModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineBufferManagerModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineBookmarkManagerMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineBookmarkManagerModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineBookmarkManagerModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineBackupManagerMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineBackupManagerModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineBackupManagerModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineDiffViewerMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineDiffViewerModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineDiffViewerModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineRecentFileMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineRecentFileModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineRecentFileModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineDebugMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineDebugModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineDebugModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineConfigMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineConfigModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineConfigModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineReferencesMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineReferencesModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineReferencesModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineDocumentSymbolMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineDocumentSymbolModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineDocumentSymbolModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineCallHierarchyMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineCallHierarchyModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineCallHierarchyModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineTerminalMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineTerminalModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineTerminalModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
+statusLineFileTreeMode = { fg = "#ffffff", bg = "#61afef" }
+statusLineFileTreeModeLabel = { fg = "#000000", bg = "#ffffff" }
+statusLineFileTreeModeInactive = { fg = "#61afef", bg = "#ffffff" }
+
 statusLineGitChangedLines = { fg = "#ffffff", bg = "#3d59a1" }
 statusLineGitBranch = { fg = "#ffffff", bg = "#3d59a1" }
 

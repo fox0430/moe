@@ -1365,6 +1365,51 @@ Notes:
 | statusLineExMode | Status line in Command mode (active) |
 | statusLineExModeLabel | Status line mode label in Command mode |
 | statusLineExModeInactive | Status line in Command mode (inactive) |
+| statusLineQuickRunMode | Status line in QuickRun mode (active) |
+| statusLineQuickRunModeLabel | Status line mode label in QuickRun mode |
+| statusLineQuickRunModeInactive | Status line in QuickRun mode (inactive) |
+| statusLineLogViewerMode | Status line in Log viewer mode (active) |
+| statusLineLogViewerModeLabel | Status line mode label in Log viewer mode |
+| statusLineLogViewerModeInactive | Status line in Log viewer mode (inactive) |
+| statusLineHelpMode | Status line in Help mode (active) |
+| statusLineHelpModeLabel | Status line mode label in Help mode |
+| statusLineHelpModeInactive | Status line in Help mode (inactive) |
+| statusLineBufferManagerMode | Status line in Buffer manager mode (active) |
+| statusLineBufferManagerModeLabel | Status line mode label in Buffer manager mode |
+| statusLineBufferManagerModeInactive | Status line in Buffer manager mode (inactive) |
+| statusLineBookmarkManagerMode | Status line in Bookmark manager mode (active) |
+| statusLineBookmarkManagerModeLabel | Status line mode label in Bookmark manager mode |
+| statusLineBookmarkManagerModeInactive | Status line in Bookmark manager mode (inactive) |
+| statusLineBackupManagerMode | Status line in Backup manager mode (active) |
+| statusLineBackupManagerModeLabel | Status line mode label in Backup manager mode |
+| statusLineBackupManagerModeInactive | Status line in Backup manager mode (inactive) |
+| statusLineDiffViewerMode | Status line in Diff viewer mode (active) |
+| statusLineDiffViewerModeLabel | Status line mode label in Diff viewer mode |
+| statusLineDiffViewerModeInactive | Status line in Diff viewer mode (inactive) |
+| statusLineRecentFileMode | Status line in Recent file mode (active) |
+| statusLineRecentFileModeLabel | Status line mode label in Recent file mode |
+| statusLineRecentFileModeInactive | Status line in Recent file mode (inactive) |
+| statusLineDebugMode | Status line in Debug mode (active) |
+| statusLineDebugModeLabel | Status line mode label in Debug mode |
+| statusLineDebugModeInactive | Status line in Debug mode (inactive) |
+| statusLineConfigMode | Status line in Configuration mode (active) |
+| statusLineConfigModeLabel | Status line mode label in Configuration mode |
+| statusLineConfigModeInactive | Status line in Configuration mode (inactive) |
+| statusLineReferencesMode | Status line in References mode (active) |
+| statusLineReferencesModeLabel | Status line mode label in References mode |
+| statusLineReferencesModeInactive | Status line in References mode (inactive) |
+| statusLineDocumentSymbolMode | Status line in Document symbol mode (active) |
+| statusLineDocumentSymbolModeLabel | Status line mode label in Document symbol mode |
+| statusLineDocumentSymbolModeInactive | Status line in Document symbol mode (inactive) |
+| statusLineCallHierarchyMode | Status line in Call hierarchy mode (active) |
+| statusLineCallHierarchyModeLabel | Status line mode label in Call hierarchy mode |
+| statusLineCallHierarchyModeInactive | Status line in Call hierarchy mode (inactive) |
+| statusLineTerminalMode | Status line in Terminal mode (active) |
+| statusLineTerminalModeLabel | Status line mode label in Terminal mode |
+| statusLineTerminalModeInactive | Status line in Terminal mode (inactive) |
+| statusLineFileTreeMode | Status line in File tree mode (active) |
+| statusLineFileTreeModeLabel | Status line mode label in File tree mode |
+| statusLineFileTreeModeInactive | Status line in File tree mode (inactive) |
 | statusLineGitChangedLines | Status line git changed-lines counter |
 | statusLineGitBranch | Status line git branch name |
 | tab | Tab title in the tab line |

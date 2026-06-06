@@ -81,6 +81,81 @@ type
     statusLineExModeLabel
     statusLineExModeInactive
 
+    # Status line - QuickRun mode
+    statusLineQuickRunMode
+    statusLineQuickRunModeLabel
+    statusLineQuickRunModeInactive
+
+    # Status line - Log viewer mode
+    statusLineLogViewerMode
+    statusLineLogViewerModeLabel
+    statusLineLogViewerModeInactive
+
+    # Status line - Help mode
+    statusLineHelpMode
+    statusLineHelpModeLabel
+    statusLineHelpModeInactive
+
+    # Status line - Buffer manager mode
+    statusLineBufferManagerMode
+    statusLineBufferManagerModeLabel
+    statusLineBufferManagerModeInactive
+
+    # Status line - Bookmark manager mode
+    statusLineBookmarkManagerMode
+    statusLineBookmarkManagerModeLabel
+    statusLineBookmarkManagerModeInactive
+
+    # Status line - Backup manager mode
+    statusLineBackupManagerMode
+    statusLineBackupManagerModeLabel
+    statusLineBackupManagerModeInactive
+
+    # Status line - Diff viewer mode
+    statusLineDiffViewerMode
+    statusLineDiffViewerModeLabel
+    statusLineDiffViewerModeInactive
+
+    # Status line - Recent file mode
+    statusLineRecentFileMode
+    statusLineRecentFileModeLabel
+    statusLineRecentFileModeInactive
+
+    # Status line - Debug mode
+    statusLineDebugMode
+    statusLineDebugModeLabel
+    statusLineDebugModeInactive
+
+    # Status line - Configuration mode
+    statusLineConfigMode
+    statusLineConfigModeLabel
+    statusLineConfigModeInactive
+
+    # Status line - References mode
+    statusLineReferencesMode
+    statusLineReferencesModeLabel
+    statusLineReferencesModeInactive
+
+    # Status line - Document symbol mode
+    statusLineDocumentSymbolMode
+    statusLineDocumentSymbolModeLabel
+    statusLineDocumentSymbolModeInactive
+
+    # Status line - Call hierarchy mode
+    statusLineCallHierarchyMode
+    statusLineCallHierarchyModeLabel
+    statusLineCallHierarchyModeInactive
+
+    # Status line - Terminal mode
+    statusLineTerminalMode
+    statusLineTerminalModeLabel
+    statusLineTerminalModeInactive
+
+    # Status line - File tree mode
+    statusLineFileTreeMode
+    statusLineFileTreeModeLabel
+    statusLineFileTreeModeInactive
+
     # Status line - Git info
     statusLineGitChangedLines
     statusLineGitBranch
@@ -345,6 +420,91 @@ const
     EditorColorPairIndex.statusLineExModeLabel: "Status line mode label in Command mode",
     EditorColorPairIndex.statusLineExModeInactive:
       "Status line in Command mode (inactive)",
+    EditorColorPairIndex.statusLineQuickRunMode: "Status line in QuickRun mode (active)",
+    EditorColorPairIndex.statusLineQuickRunModeLabel:
+      "Status line mode label in QuickRun mode",
+    EditorColorPairIndex.statusLineQuickRunModeInactive:
+      "Status line in QuickRun mode (inactive)",
+    EditorColorPairIndex.statusLineLogViewerMode:
+      "Status line in Log viewer mode (active)",
+    EditorColorPairIndex.statusLineLogViewerModeLabel:
+      "Status line mode label in Log viewer mode",
+    EditorColorPairIndex.statusLineLogViewerModeInactive:
+      "Status line in Log viewer mode (inactive)",
+    EditorColorPairIndex.statusLineHelpMode: "Status line in Help mode (active)",
+    EditorColorPairIndex.statusLineHelpModeLabel: "Status line mode label in Help mode",
+    EditorColorPairIndex.statusLineHelpModeInactive:
+      "Status line in Help mode (inactive)",
+    EditorColorPairIndex.statusLineBufferManagerMode:
+      "Status line in Buffer manager mode (active)",
+    EditorColorPairIndex.statusLineBufferManagerModeLabel:
+      "Status line mode label in Buffer manager mode",
+    EditorColorPairIndex.statusLineBufferManagerModeInactive:
+      "Status line in Buffer manager mode (inactive)",
+    EditorColorPairIndex.statusLineBookmarkManagerMode:
+      "Status line in Bookmark manager mode (active)",
+    EditorColorPairIndex.statusLineBookmarkManagerModeLabel:
+      "Status line mode label in Bookmark manager mode",
+    EditorColorPairIndex.statusLineBookmarkManagerModeInactive:
+      "Status line in Bookmark manager mode (inactive)",
+    EditorColorPairIndex.statusLineBackupManagerMode:
+      "Status line in Backup manager mode (active)",
+    EditorColorPairIndex.statusLineBackupManagerModeLabel:
+      "Status line mode label in Backup manager mode",
+    EditorColorPairIndex.statusLineBackupManagerModeInactive:
+      "Status line in Backup manager mode (inactive)",
+    EditorColorPairIndex.statusLineDiffViewerMode:
+      "Status line in Diff viewer mode (active)",
+    EditorColorPairIndex.statusLineDiffViewerModeLabel:
+      "Status line mode label in Diff viewer mode",
+    EditorColorPairIndex.statusLineDiffViewerModeInactive:
+      "Status line in Diff viewer mode (inactive)",
+    EditorColorPairIndex.statusLineRecentFileMode:
+      "Status line in Recent file mode (active)",
+    EditorColorPairIndex.statusLineRecentFileModeLabel:
+      "Status line mode label in Recent file mode",
+    EditorColorPairIndex.statusLineRecentFileModeInactive:
+      "Status line in Recent file mode (inactive)",
+    EditorColorPairIndex.statusLineDebugMode: "Status line in Debug mode (active)",
+    EditorColorPairIndex.statusLineDebugModeLabel:
+      "Status line mode label in Debug mode",
+    EditorColorPairIndex.statusLineDebugModeInactive:
+      "Status line in Debug mode (inactive)",
+    EditorColorPairIndex.statusLineConfigMode:
+      "Status line in Configuration mode (active)",
+    EditorColorPairIndex.statusLineConfigModeLabel:
+      "Status line mode label in Configuration mode",
+    EditorColorPairIndex.statusLineConfigModeInactive:
+      "Status line in Configuration mode (inactive)",
+    EditorColorPairIndex.statusLineReferencesMode:
+      "Status line in References mode (active)",
+    EditorColorPairIndex.statusLineReferencesModeLabel:
+      "Status line mode label in References mode",
+    EditorColorPairIndex.statusLineReferencesModeInactive:
+      "Status line in References mode (inactive)",
+    EditorColorPairIndex.statusLineDocumentSymbolMode:
+      "Status line in Document symbol mode (active)",
+    EditorColorPairIndex.statusLineDocumentSymbolModeLabel:
+      "Status line mode label in Document symbol mode",
+    EditorColorPairIndex.statusLineDocumentSymbolModeInactive:
+      "Status line in Document symbol mode (inactive)",
+    EditorColorPairIndex.statusLineCallHierarchyMode:
+      "Status line in Call hierarchy mode (active)",
+    EditorColorPairIndex.statusLineCallHierarchyModeLabel:
+      "Status line mode label in Call hierarchy mode",
+    EditorColorPairIndex.statusLineCallHierarchyModeInactive:
+      "Status line in Call hierarchy mode (inactive)",
+    EditorColorPairIndex.statusLineTerminalMode: "Status line in Terminal mode (active)",
+    EditorColorPairIndex.statusLineTerminalModeLabel:
+      "Status line mode label in Terminal mode",
+    EditorColorPairIndex.statusLineTerminalModeInactive:
+      "Status line in Terminal mode (inactive)",
+    EditorColorPairIndex.statusLineFileTreeMode:
+      "Status line in File tree mode (active)",
+    EditorColorPairIndex.statusLineFileTreeModeLabel:
+      "Status line mode label in File tree mode",
+    EditorColorPairIndex.statusLineFileTreeModeInactive:
+      "Status line in File tree mode (inactive)",
     EditorColorPairIndex.statusLineGitChangedLines:
       "Status line git changed-lines counter",
     EditorColorPairIndex.statusLineGitBranch: "Status line git branch name",
