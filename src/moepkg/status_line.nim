@@ -72,37 +72,79 @@ proc setMultiStatusLine*(state: var EditorState, enabled: bool) =
   ## Set multi status line mode
   state.display.multiStatusLine = enabled
 
-proc getStatusLineModeStyle(mode: EditorMode): Style =
-  ## Get the status line background style based on current mode
+static:
+  # Verify the `statusLine<Mode>Mode` → `statusLine<Mode>ModeLabel` →
+  # `statusLine<Mode>ModeInactive` triplet layout in `EditorColorPairIndex`
+  # that `toStatusLineModeLabelColorIndex` depends on.
+  for i in EditorColorPairIndex:
+    let name = $i
+    if name.startsWith("statusLine") and name.endsWith("Mode"):
+      doAssert $succ(i) == name & "Label",
+        "expected " & name & "Label to follow " & name
+      doAssert $succ(i, 2) == name & "Inactive",
+        "expected " & name & "Inactive to follow " & name & "Label"
+
+proc toStatusLineModeColorIndex(mode: EditorMode): EditorColorPairIndex =
+  ## Map an editor mode to its status line background color pair.
+  ## The label/inactive variants directly follow this index in
+  ## `EditorColorPairIndex` (see `toStatusLineModeLabelColorIndex`).
   case mode
   of EditorMode.Normal:
-    getThemeStyle(EditorColorPairIndex.statusLineNormalMode, {StyleModifier.Bold})
+    EditorColorPairIndex.statusLineNormalMode
   of EditorMode.Insert:
-    getThemeStyle(EditorColorPairIndex.statusLineInsertMode, {StyleModifier.Bold})
+    EditorColorPairIndex.statusLineInsertMode
   of EditorMode.Visual, EditorMode.VisualLine, EditorMode.VisualBlock:
-    getThemeStyle(EditorColorPairIndex.statusLineVisualMode, {StyleModifier.Bold})
+    EditorColorPairIndex.statusLineVisualMode
   of EditorMode.Replace:
-    getThemeStyle(EditorColorPairIndex.statusLineReplaceMode, {StyleModifier.Bold})
+    EditorColorPairIndex.statusLineReplaceMode
+  of EditorMode.Command:
+    EditorColorPairIndex.statusLineExMode
   of EditorMode.Filer:
-    getThemeStyle(EditorColorPairIndex.statusLineFilerMode, {StyleModifier.Bold})
-  else:
-    getThemeStyle(EditorColorPairIndex.statusLineNormalMode, {StyleModifier.Bold})
+    EditorColorPairIndex.statusLineFilerMode
+  of EditorMode.QuickRun:
+    EditorColorPairIndex.statusLineQuickRunMode
+  of EditorMode.LogViewer:
+    EditorColorPairIndex.statusLineLogViewerMode
+  of EditorMode.Help:
+    EditorColorPairIndex.statusLineHelpMode
+  of EditorMode.BufferManager:
+    EditorColorPairIndex.statusLineBufferManagerMode
+  of EditorMode.BookmarkManager:
+    EditorColorPairIndex.statusLineBookmarkManagerMode
+  of EditorMode.BackupManager:
+    EditorColorPairIndex.statusLineBackupManagerMode
+  of EditorMode.DiffViewer:
+    EditorColorPairIndex.statusLineDiffViewerMode
+  of EditorMode.RecentFile:
+    EditorColorPairIndex.statusLineRecentFileMode
+  of EditorMode.Debug:
+    EditorColorPairIndex.statusLineDebugMode
+  of EditorMode.Config:
+    EditorColorPairIndex.statusLineConfigMode
+  of EditorMode.References:
+    EditorColorPairIndex.statusLineReferencesMode
+  of EditorMode.DocumentSymbol:
+    EditorColorPairIndex.statusLineDocumentSymbolMode
+  of EditorMode.CallHierarchy:
+    EditorColorPairIndex.statusLineCallHierarchyMode
+  of EditorMode.Terminal:
+    EditorColorPairIndex.statusLineTerminalMode
+  of EditorMode.FileTree:
+    EditorColorPairIndex.statusLineFileTreeMode
+
+proc toStatusLineModeLabelColorIndex(mode: EditorMode): EditorColorPairIndex =
+  ## Map an editor mode to its status line mode label color pair.
+  ## Relies on the enum layout `statusLine<Mode>Mode` →
+  ## `statusLine<Mode>ModeLabel` → `statusLine<Mode>ModeInactive`.
+  succ(toStatusLineModeColorIndex(mode))
+
+proc getStatusLineModeStyle(mode: EditorMode): Style =
+  ## Get the status line background style based on current mode
+  getThemeStyle(toStatusLineModeColorIndex(mode), {StyleModifier.Bold})
 
 proc getStatusLineModeLabelStyle(mode: EditorMode): Style =
   ## Get the status line mode label style based on current mode
-  case mode
-  of EditorMode.Normal:
-    getThemeStyle(EditorColorPairIndex.statusLineNormalModeLabel, {StyleModifier.Bold})
-  of EditorMode.Insert:
-    getThemeStyle(EditorColorPairIndex.statusLineInsertModeLabel, {StyleModifier.Bold})
-  of EditorMode.Visual, EditorMode.VisualLine, EditorMode.VisualBlock:
-    getThemeStyle(EditorColorPairIndex.statusLineVisualModeLabel, {StyleModifier.Bold})
-  of EditorMode.Replace:
-    getThemeStyle(EditorColorPairIndex.statusLineReplaceModeLabel, {StyleModifier.Bold})
-  of EditorMode.Filer:
-    getThemeStyle(EditorColorPairIndex.statusLineFilerModeLabel, {StyleModifier.Bold})
-  else:
-    getThemeStyle(EditorColorPairIndex.statusLineNormalModeLabel, {StyleModifier.Bold})
+  getThemeStyle(toStatusLineModeLabelColorIndex(mode), {StyleModifier.Bold})
 
 proc getOverlayStyle(overlay: OverlayKind): Style =
   ## Get the status line background style for overlay modes

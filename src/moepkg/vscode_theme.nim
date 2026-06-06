@@ -27,6 +27,17 @@ import pkg/results
 
 import color, theme
 
+# All `statusLine*` entries (per-mode triplets plus the git info pair) form a
+# contiguous block in `EditorColorPairIndex`; the statusBar.* mapping below
+# relies on that layout.
+const StatusLineColorIndexes =
+  EditorColorPairIndex.statusLineNormalMode .. EditorColorPairIndex.statusLineGitBranch
+
+static:
+  for i in EditorColorPairIndex:
+    doAssert ($i).startsWith("statusLine") == (i in StatusLineColorIndexes),
+      "statusLine* entries must form a contiguous block in EditorColorPairIndex"
+
 type VsCodeFlavor* = enum
   VSCodium
   CodeOss
@@ -413,73 +424,13 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
   # Status bar colors
   if colors != nil and colors.contains("statusBar.foreground"):
     let fg = colorFromNode(colors{"statusBar.foreground"})
-    result[EditorColorPairIndex.statusLineNormalMode].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineNormalModeLabel].foreground =
-      ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineNormalModeInactive].foreground =
-      ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineInsertMode].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineInsertModeLabel].foreground =
-      ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineInsertModeInactive].foreground =
-      ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineVisualMode].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineVisualModeLabel].foreground =
-      ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineVisualModeInactive].foreground =
-      ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineReplaceMode].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineReplaceModeLabel].foreground =
-      ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineReplaceModeInactive].foreground =
-      ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineFilerMode].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineFilerModeLabel].foreground =
-      ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineFilerModeInactive].foreground =
-      ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineExMode].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineExModeLabel].foreground = ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineExModeInactive].foreground =
-      ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineGitChangedLines].foreground =
-      ThemeColor(rgb: fg)
-    result[EditorColorPairIndex.statusLineGitBranch].foreground = ThemeColor(rgb: fg)
+    for index in StatusLineColorIndexes:
+      result[index].foreground = ThemeColor(rgb: fg)
 
   if colors != nil and colors.contains("statusBar.background"):
     let bg = colorFromNode(colors{"statusBar.background"})
-    result[EditorColorPairIndex.statusLineNormalMode].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineNormalModeLabel].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineNormalModeInactive].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineInsertMode].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineInsertModeLabel].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineInsertModeInactive].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineVisualMode].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineVisualModeLabel].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineVisualModeInactive].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineReplaceMode].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineReplaceModeLabel].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineReplaceModeInactive].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineFilerMode].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineFilerModeLabel].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineFilerModeInactive].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineExMode].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineExModeLabel].background = ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineExModeInactive].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineGitChangedLines].background =
-      ThemeColor(rgb: bg)
-    result[EditorColorPairIndex.statusLineGitBranch].background = ThemeColor(rgb: bg)
+    for index in StatusLineColorIndexes:
+      result[index].background = ThemeColor(rgb: bg)
 
   # Tab bar colors
   if colors != nil and colors.contains("tab.inactiveForeground"):
