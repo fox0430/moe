@@ -135,8 +135,7 @@ proc logNextToken*(g: var GeneralTokenizer) =
       of '\\':
         # Skip escape sequence
         inc pos
-        if g.buf[pos] notin {'\0', '\n', '\r'}:
-          inc pos
+        g.skipEscapedChar(pos)
       of '"', '\'':
         inc pos
         g.state = gtNone
@@ -190,8 +189,7 @@ proc logNextToken*(g: var GeneralTokenizer) =
         break
       of '\\':
         inc pos
-        if g.buf[pos] notin {'\0', '\n', '\r'}:
-          inc pos
+        g.skipEscapedChar(pos)
       else:
         if g.buf[pos] == quote:
           inc pos

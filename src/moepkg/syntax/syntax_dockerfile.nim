@@ -70,8 +70,7 @@ proc dockerfileNextToken*(g: var GeneralTokenizer) =
         break
       of '\\':
         inc(pos)
-        if g.buf[pos] notin {'\0', '\n', '\r'}:
-          inc(pos)
+        g.skipEscapedChar(pos)
       of '"':
         inc(pos)
         break

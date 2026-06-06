@@ -775,6 +775,20 @@ proc getEditorColorPair(
   else:
     EditorColorPairIndex.default
 
+func tokenizerLeftBuffer(first, last: int): bool =
+  ## True when the tokenizer left the buffer (start past the end, or a
+  ## negative length) — slicing would raise RangeDefect. The class was fixed
+  ## point-wise in the YAML tokenizer, but most language tokenizers are
+  ## unaudited; callers truncate to end-of-input instead of crashing. A
+  ## zero-length in-bounds token is `first == last + 1` and harmlessly
+  ## continues. Shared by the full and incremental consumer loops so the two
+  ## cannot drift on truncation behavior; loud under `debugHighlight` so the
+  ## next tokenizer bounds bug fails a fuzz run with a trace instead of
+  ## silently un-highlighting the rest of the chunk.
+  result = first > last + 1
+  when defined(debugHighlight):
+    doAssert not result, "tokenizer left the buffer: first=" & $first & " last=" & $last
+
 proc initHighlight*(
     buffer: seq[Runes] = @[], color = EditorColorPairIndex.default
 ): Highlight {.inline.} =
@@ -881,6 +895,9 @@ proc initHighlight*(
         else:
           first + token.length - 1
 
+    if tokenizerLeftBuffer(first, last):
+      break
+
     block:
       # Increment `currentRow` if newlines only.
       let str = bufferStr[first .. last]
@@ -907,6 +924,27 @@ proc initHighlight*(
 
   return Highlight(colorSegments: colorSegments)
 
+func capturedBoundaryState(
+    token: GeneralTokenizer, language: SourceLanguage
+): TokenClass =
+  ## The state stored at a line boundary INSIDE `token`. Multi-line token
+  ## kinds force the kind itself so an incremental reparse entering one of
+  ## the spanned lines resumes the construct (the tokenizer's post-state is
+  ## the value after the token completes, not the per-line value). `gtCData`
+  ## (XML CDATA, emitted by no other tokenizer) resumes mid-section directly
+  ## through the tokenizer's `g.state == gtCData` branch — forced here, but
+  ## deliberately NOT in `MultiLineKinds` (no rewind needed; see the comment
+  ## there). Lisp strings span lines and resume via `state == gtStringLit`
+  ## (unlike Rust, which parks `gtLongStringLit` at the boundary and uses
+  ## `gtStringLit` only for a mid-line pending escape). Everything else
+  ## resumes from the tokenizer's own state. Shared by the boundary capture
+  ## and the `debugHighlight` resumability assertion so the two cannot drift.
+  if token.kind in {gtLongStringLit, gtLongComment, gtDocLongComment, gtCData} or
+      (token.kind == gtStringLit and language == SourceLanguage.langLisp):
+    token.kind
+  else:
+    token.state
+
 proc initHighlightIncrementalFromStr*(
     bufferStr: string,
     startLine: int,
@@ -916,6 +954,12 @@ proc initHighlightIncrementalFromStr*(
     language: SourceLanguage,
 ): tuple[segments: seq[ColorSegment], lineStates: seq[TokenizerState]] =
   ## Core implementation that works directly with a pre-built buffer string.
+  ##
+  ## Guarantees `lineStates.len == endLine - startLine + 1` — one entry per
+  ## line in the range, where `lineStates[i]` is the state entering line
+  ## `startLine + i + 1` — even when the tokenizer stops before the end of
+  ## the buffer (interior NUL, defensive break). Consumers index into it
+  ## positionally and must be able to rely on this.
 
   var
     currentRow = startLine
@@ -954,26 +998,10 @@ proc initHighlightIncrementalFromStr*(
         else:
           colorSegments.add(cs)
 
-        # Capture tokenizer state at line boundary.
-        # For multi-line tokens (long strings, long/doc block comments, XML
-        # CDATA sections), temporarily set the state to the token kind so
-        # incremental re-parsing can correctly resume from inside the
-        # multi-line construct. Kinds in `MultiLineKinds` additionally rewind
-        # to the construct's opening line via the backward-scan in
-        # `updateHighlightIncremental`; `gtCData` (XML CDATA, emitted by no
-        # other tokenizer) is deliberately NOT in that set — CDATA carries no
-        # auxiliary per-line state (no depth/hash counters), so the tokenizer
-        # resumes mid-section directly through its `g.state == gtCData`
-        # branch, no rewind needed.
+        # Capture tokenizer state at line boundary, forcing a resumable
+        # state for multi-line tokens — see `capturedBoundaryState`.
         let savedState = token.state
-        if token.kind in {gtLongStringLit, gtLongComment, gtDocLongComment, gtCData}:
-          token.state = token.kind
-        elif token.kind == gtStringLit and language == SourceLanguage.langLisp:
-          # Lisp strings span lines and resume via `state == gtStringLit` (unlike
-          # Rust, which parks `gtLongStringLit` at the boundary and uses
-          # `gtStringLit` only for a mid-line pending escape). Capture the
-          # in-string state so a later reparse resumes the literal.
-          token.state = gtStringLit
+        token.state = capturedBoundaryState(token, language)
         lineStates.add(captureTokenizerState(token))
         token.state = savedState
 
@@ -1029,6 +1057,9 @@ proc initHighlightIncrementalFromStr*(
         else:
           first + token.length - 1
 
+    if tokenizerLeftBuffer(first, last):
+      break
+
     block:
       # Increment `currentRow` if newlines only
       let str = bufferStr[first .. last]
@@ -1045,6 +1076,28 @@ proc initHighlightIncrementalFromStr*(
         currentColumn = 0
         continue
 
+    when defined(debugHighlight):
+      block:
+        # Invariant: a token carrying an interior newline must be resumable at
+        # every line boundary it spans — the boundary capture below stores
+        # either the token kind (forced multi-line set, incl. the Lisp string
+        # case) or the tokenizer's post-state, and if that value is a plain
+        # gtOther/gtNone an incremental reparse entering one of those lines
+        # loses the construct and diverges from a full parse (the bug class
+        # behind the YAML chunk-boundary fixes). Newlines-only tokens are
+        # handled by the dedicated branch above.
+        # gtWhitespace runs legitimately span blank lines in a neutral state:
+        # resuming a fresh parse at a blank line reproduces them, so they are
+        # exempt (YAML's blank-line-after-header hazard is handled by the
+        # drivers' rewind, not by state).
+        let txt = bufferStr[first .. last]
+        let nl = txt.find('\n')
+        if token.kind != gtWhitespace and nl >= 0 and nl < txt.high:
+          let captured = capturedBoundaryState(token, language)
+          doAssert captured notin {gtOther, gtNone},
+            "non-resumable multi-line token: kind=" & $token.kind & " state=" &
+              $token.state & " lang=" & $language
+
     let color = getEditorColorPair(token.kind, language)
 
     if token.kind == gtComment:
@@ -1056,9 +1109,26 @@ proc initHighlightIncrementalFromStr*(
 
     splitByNewlineWithState(bufferStr[first .. last], color)
 
-  # Capture final state for the last line
-  if currentRow <= endLine:
+  # Capture final state for the last line. When the tokenizer stopped early
+  # (gtEof at an interior NUL byte, or the defensive out-of-bounds break
+  # above), this also pads the remaining line boundaries with the stop state:
+  # consumers rely on one state per line in [startLine, endLine] — a short
+  # array would index out of bounds in the chunked drivers' handoff scans and
+  # desynchronize `parsedUpTo` from the cache (see `continueInitialHighlight`).
+  # The padded lines carry no segments (un-highlighted) and resume from the
+  # stop state — degraded but stable, matching the break's intent.
+  while currentRow <= endLine:
     lineStates.add(captureTokenizerState(token))
+    inc currentRow
+
+  when defined(debugHighlight):
+    # The padding above only fixes the short direction; over-length would mean
+    # a tokenizer emitted overlapping tokens re-covering a newline, silently
+    # desynchronizing the consumers' positional indexing. Pin the documented
+    # guarantee in both directions.
+    doAssert lineStates.len == endLine - startLine + 1,
+      "lineStates length contract violated: " & $lineStates.len & " states for " &
+        $(endLine - startLine + 1) & " lines"
 
   return (segments: colorSegments, lineStates: lineStates)
 
@@ -1096,6 +1166,53 @@ proc initHighlightIncremental*(
     reservedWords,
     language,
   )
+
+proc segmentCutIndex*(segs: openArray[ColorSegment], row: int): int =
+  ## Index `i` such that `segs[0 ..< i]` keeps every segment on rows below
+  ## `row` and drops the rest. `segs` must be sorted by `firstRow` (the
+  ## parsers emit single-row segments in row order). The same "first index
+  ## with `firstRow >= row`" query as the splice search in
+  ## `updateHighlightIncremental`, kept named for the cut semantics.
+  segs.lowerBound(row) do(seg: ColorSegment, line: int) -> int:
+    cmp(seg.firstRow, line)
+
+proc yamlLineNeedsContextAbove(line: string): bool =
+  ## A YAML block scalar's extent depends on lines BELOW its header but is
+  ## resolved by scanning ABOVE it, which a saved state cannot express:
+  ##   * blank lines after a header carry plain `gtOther`, so a parse starting
+  ##     at the first indented content has nothing pointing back to the header;
+  ##   * an alone header (`|`/`>` on its own line) takes its indentation from
+  ##     the nearest non-blank line above, missing if a parse starts on the
+  ##     header.
+  var firstNonSpace = '\0'
+  for ch in line:
+    if ch notin {' ', '\t'}:
+      firstNonSpace = ch
+      break
+  # Blank line (no non-space char) or an alone block-scalar header.
+  firstNonSpace in {'\0', '|', '>'}
+
+proc chunkHandoffUnsafe*(
+    language: SourceLanguage, state: TokenClass, nextLine: string
+): bool =
+  ## True when a chunked parse must not hand `state` to a fresh chunk starting
+  ## at `nextLine`. The single dispatch point for all chunked drivers (the
+  ## entry rewind and the internal handoff scan in `updateHighlightIncremental`,
+  ## the resume rewind in `continueInitialHighlight`): a language whose
+  ## constructs resolve against lines above the resume point gets an arm here,
+  ## not a new predicate wired into each driver.
+  case language
+  of SourceLanguage.langYaml:
+    # YAML block scalars resume by re-reading the header and parent lines
+    # ABOVE the resume point — context a fresh buffer does not contain — so a
+    # handoff inside a scalar (gtLongStringLit), right after a header
+    # (gtCommand), or onto a line that itself resolves against lines above
+    # must rewind to a safe line instead. Quoted-string states are safe to
+    # hand off: their resume is position-independent (the state alone
+    # suffices).
+    state in {gtLongStringLit, gtCommand} or yamlLineNeedsContextAbove(nextLine)
+  else:
+    false
 
 proc updateHighlightIncremental*(
     lineCount: int,
@@ -1150,30 +1267,14 @@ proc updateHighlightIncremental*(
   const MultiLineKinds =
     {gtLongComment, gtDocLongComment, gtLongStringLit, gtStringLit, gtKey, gtCharLit}
 
-  template yamlNeedsMoreContext(row: int): bool =
-    ## A YAML block scalar's extent depends on lines BELOW its header but is resolved
-    ## by scanning ABOVE it, which the cached state cannot express:
-    ##   * blank lines after a header carry plain `gtOther`, so an edit adding the
-    ##     first indented content has nothing pointing back to the header;
-    ##   * an alone header (`|`/`>` on its own line) takes its indentation from the
-    ##     nearest non-blank line above, missing if the chunk starts on the header.
-    ## So for YAML, also rewind across blank lines and alone headers to the parent
-    ## line. Rewinding too early is always safe (the reparse restarts from a cached,
-    ## correct state); scoped to YAML so other languages keep a minimal window.
-    block:
-      var needs = false
-      if language == SourceLanguage.langYaml:
-        var firstNonSpace = '\0'
-        for ch in getLine(row):
-          if ch != ' ' and ch != '\t':
-            firstNonSpace = ch
-            break
-        # Blank line (no non-space char) or an alone block-scalar header.
-        needs = firstNonSpace == '\0' or firstNonSpace == '|' or firstNonSpace == '>'
-      needs
-
-  while reparseStart > 0 and
-      (initialState.state in MultiLineKinds or yamlNeedsMoreContext(reparseStart)):
+  # Also rewind across chunk-handoff hazards (YAML mid-scalar states, blank
+  # lines, alone headers — see chunkHandoffUnsafe). Rewinding too early is
+  # always safe: the reparse restarts from a cached, correct state.
+  while reparseStart > 0 and (
+    initialState.state in MultiLineKinds or
+    chunkHandoffUnsafe(language, initialState.state, getLine(reparseStart))
+  )
+  :
     dec reparseStart
     if reparseStart > 0 and reparseStart - 1 < incrHighlight.lineStates.states.len:
       initialState = incrHighlight.lineStates.states[reparseStart - 1]
@@ -1191,9 +1292,10 @@ proc updateHighlightIncremental*(
     allNewSegments: seq[ColorSegment]
     allNewLineStates: seq[TokenizerState]
     reparseEnd = reparseStart - 1
+    chunkLen = ChunkSize
 
   while currentStart <= lastLine:
-    let chunkEnd = min(currentStart + ChunkSize - 1, lastLine)
+    let chunkEnd = min(currentStart + chunkLen - 1, lastLine)
 
     # Build buffer string only for this chunk
     var chunkLines = newSeq[string](chunkEnd - currentStart + 1)
@@ -1205,14 +1307,43 @@ proc updateHighlightIncremental*(
       bufferStr, currentStart, chunkEnd, currentState, reservedWords, language
     )
 
-    allNewSegments.add(newSegments)
-    allNewLineStates.add(newLineStates)
-    reparseEnd = chunkEnd
+    # `newLineStates[i]` is the state entering line `currentStart + i + 1`, so
+    # the last entry is what the next chunk would start with (the producer
+    # pads on early tokenizer stops, so the positional indexing never goes out
+    # of bounds). A handoff inside a YAML block scalar — or onto a line that
+    # resolves against lines above — must move back to a safe line: the
+    # rewound lines are re-parsed by the next iteration together with their
+    # context (the scalar's header and parent lines) in one buffer. The final
+    # chunk has no handoff to protect, so `handoff` stays past it and the
+    # slices below keep the whole chunk.
+    var handoff = chunkEnd + 1
+    if chunkEnd < lastLine:
+      while handoff > currentStart and
+          chunkHandoffUnsafe(
+            language, newLineStates[handoff - currentStart - 1].state, getLine(handoff)
+          )
+      :
+        dec handoff
 
-    if newLineStates.len > 0:
-      currentState = newLineStates[^1]
+      if handoff == currentStart:
+        # The whole chunk sits inside one construct. Re-parse it with a larger
+        # window until a safe handoff (or the end of the buffer) fits inside;
+        # geometric growth keeps the total re-parse cost linear.
+        chunkLen *= 2
+        continue
 
-    # Check for convergence: if the tokenizer state at the end of this chunk
+    # Keep only lines currentStart .. handoff - 1.
+    allNewSegments.add(newSegments[0 ..< newSegments.segmentCutIndex(handoff)])
+    allNewLineStates.add(newLineStates[0 ..< (handoff - currentStart)])
+    reparseEnd = handoff - 1
+
+    if chunkEnd >= lastLine:
+      break
+
+    currentState = allNewLineStates[^1]
+    chunkLen = ChunkSize
+
+    # Check for convergence: if the tokenizer state entering the next line
     # matches the old cached state, all subsequent lines will produce the same
     # segments as before — no need to continue parsing.
     #
@@ -1222,12 +1353,11 @@ proc updateHighlightIncremental*(
     # chunk then re-parses identical pre-edit content, so its end state
     # always matches the cache and an unguarded break would stop BEFORE
     # reaching the change, leaving stale segments at and below it.
-    if canConverge and chunkEnd >= changedStartLine and chunkEnd < lastLine and
-        newLineStates.len > 0 and
-        newLineStates[^1] == incrHighlight.lineStates.states[chunkEnd]:
+    if canConverge and reparseEnd >= changedStartLine and
+        currentState == incrHighlight.lineStates.states[handoff - 1]:
       break
 
-    currentStart = chunkEnd + 1
+    currentStart = handoff
 
   # Find the splice range in the sorted segments using binary search.
   # Remove segments that overlap [reparseStart, reparseEnd] or exceed buffer,

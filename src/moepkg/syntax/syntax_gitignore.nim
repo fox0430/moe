@@ -63,8 +63,7 @@ proc gitignoreNextToken*(g: var GeneralTokenizer) =
     # Escape sequence: \X
     g.kind = gtEscapeSequence
     inc pos
-    if g.buf[pos] notin {'\0', '\n'}:
-      inc pos
+    g.skipEscapedChar(pos)
     g.length = pos - g.start
     g.state = gtEscapeSequence
     g.pos = pos
@@ -95,8 +94,9 @@ proc gitignoreNextToken*(g: var GeneralTokenizer) =
     g.kind = gtRegularExpression
     inc pos
     while g.buf[pos] notin {'\0', '\n', ']'}:
-      if g.buf[pos] == '\\' and g.buf[pos + 1] notin {'\0', '\n'}:
-        inc pos, 2
+      if g.buf[pos] == '\\':
+        inc pos
+        g.skipEscapedChar(pos)
       else:
         inc pos
     if g.buf[pos] == ']':
