@@ -1082,6 +1082,23 @@ suite "renderWindow - Edge cases":
 
     e.renderWindow(buffer, window, 4, true, true, 0)
 
+  test "Tiny terminal: visibleHeight clamped to 0 to prevent negative value":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+
+    let window = e.windowManager.windows[0]
+    # Viewport height is smaller than reservedLines + tabLineOffset
+    window.viewport.height = 0
+
+    # Must not crash
+    e.renderWindow(
+      buffer, window, 0, isBottomWindow = true, isActiveWindow = true, tabLineOffset = 0
+    )
+
 suite "Cursor line highlight - Window boundary clipping":
   test "Cursor line highlight does not exceed window right edge (no-wrap)":
     let e = createTestEditor()
