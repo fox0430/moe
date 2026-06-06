@@ -1210,6 +1210,15 @@ proc resizeWindows*(
   if oldWidth <= 0 or oldHeight <= 0 or newWidth <= 0 or newHeight <= 0:
     return
 
+  # Compute adjacency groups BEFORE scaling: the pre-resize layout tiles
+  # exactly, while integer truncation during ratio-scaling can widen the
+  # gaps between windows beyond the ±1 adjacency tolerance (e.g. scaling
+  # the startup 80x20 layout up to the real terminal size), which would
+  # split each window into its own group and make them overlap.
+  let
+    horizontalGroups = wm.groupAdjacentWindowsHorizontally()
+    verticalGroups = wm.groupAdjacentWindowsVertically()
+
   let
     widthRatio = newWidth.float / oldWidth.float
     heightRatio = newHeight.float / oldHeight.float
@@ -1228,12 +1237,10 @@ proc resizeWindows*(
       window.viewport.topLine = window.cursor.line
 
   # Horizontal groups (same y coordinate AND height, horizontally adjacent)
-  let horizontalGroups = wm.groupAdjacentWindowsHorizontally()
   for group in horizontalGroups:
     wm.equalizeWidthsForResize(group, newWidth)
 
   # Vertical groups (same x and width, vertically adjacent)
-  let verticalGroups = wm.groupAdjacentWindowsVertically()
   for group in verticalGroups:
     wm.equalizeHeightsForResize(group, newHeight, multiStatusLine)
 

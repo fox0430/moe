@@ -455,6 +455,74 @@ suite "EditorWindowManager - resizeWindows":
 
     check wm.windows[0].viewport.topLine < wm.windows[0].buffer.len
 
+  test "vsplit layout survives large upscale without overlap":
+    # Regression test: integer truncation during ratio-scaling used to
+    # widen the separator gap beyond the ±1 adjacency tolerance, so the
+    # windows were no longer grouped and each was stretched to the full
+    # screen width (visible when startup splits from `moe file1 file2`
+    # were rescaled from the default 80x20 to the real terminal size).
+    let wm = newEditorWindowManager()
+    # Geometry produced by vsplit at the default 80x20 screen size
+    wm.windows.add(createTestWindow(0, 0, 39, 20))
+    wm.windows.add(createTestWindow(40, 0, 40, 20, active = true))
+    wm.activeWindowIndex = 1
+
+    wm.resizeWindows(180, 45, 80, 20, multiStatusLine = false)
+
+    let
+      left = wm.windows[0]
+      right = wm.windows[1]
+    # No overlap and full-width tiling
+    check left.viewport.x == 0
+    check right.viewport.x >= left.viewport.x + left.viewport.width
+    check right.viewport.x + right.viewport.width == 180
+    # Roughly equal widths
+    check abs(left.viewport.width - right.viewport.width) <= WindowSeparatorWidth + 1
+    # Both span the full height above the command line
+    for win in [left, right]:
+      check win.viewport.y == 0
+      check win.viewport.height == 45 - CommandLineHeight
+
+  test "hsplit layout survives large upscale without overlap":
+    let wm = newEditorWindowManager()
+    # Geometry produced by hsplit at the default 80x20 screen size
+    wm.windows.add(createTestWindow(0, 0, 80, 9, active = true))
+    wm.windows.add(createTestWindow(0, 10, 80, 10))
+    wm.activeWindowIndex = 0
+
+    wm.resizeWindows(180, 45, 80, 20, multiStatusLine = false)
+
+    let
+      top = wm.windows[0]
+      bottom = wm.windows[1]
+    # No overlap and full-height tiling above the command line row
+    check top.viewport.y == 0
+    check bottom.viewport.y >= top.viewport.y + top.viewport.height
+    check bottom.viewport.y + bottom.viewport.height == 45 - CommandLineHeight
+    # Both span the full width
+    for win in [top, bottom]:
+      check win.viewport.x == 0
+      check win.viewport.width == 180
+
+  test "downscale keeps vsplit windows tiled":
+    let wm = newEditorWindowManager()
+    # Even tiling at 180x45
+    wm.windows.add(createTestWindow(0, 0, 89, 44))
+    wm.windows.add(createTestWindow(90, 0, 90, 44, active = true))
+    wm.activeWindowIndex = 1
+
+    wm.resizeWindows(100, 30, 180, 45, multiStatusLine = false)
+
+    let
+      left = wm.windows[0]
+      right = wm.windows[1]
+    check left.viewport.x == 0
+    check right.viewport.x >= left.viewport.x + left.viewport.width
+    check right.viewport.x + right.viewport.width == 100
+    for win in [left, right]:
+      check win.viewport.y == 0
+      check win.viewport.height == 30 - CommandLineHeight
+
 suite "EditorWindowManager - Integration":
   test "Multiple vsplits create equal width windows":
     let wm = createSingleWindowManager(80, 24)

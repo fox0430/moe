@@ -105,20 +105,9 @@ proc handleStartUpWindows(e: Editor, termWidth, termHeight: int) =
     return
   e.state.startUpWindowsDone = true
 
-  # Reserve the command line row (status line and command line share it).
-  let viewportHeight = termHeight - CommandLineHeight
-
-  # Set viewport to real terminal size with command line reserved.
-  let win = e.activeWindow
-  win.viewport.width = termWidth
-  win.viewport.height = viewportHeight
-
-  # Sync screenSize so the subsequent render does NOT trigger resizeWindows,
-  # which would ratio-scale from the initial 80x20 and break the layout.
-  e.screenSize.width = termWidth
-  e.screenSize.height = termHeight
-  e.screenSize.prevWidth = termWidth
-  e.screenSize.prevHeight = termHeight
+  # Apply the real terminal size to the startup window layout and sync
+  # screenSize so the subsequent render does not re-trigger resizeWindows.
+  e.applyStartUpScreenSize(termWidth, termHeight)
 
   # Open file tree sidebar if configured
   if e.config.startUpFileTree.enable:
