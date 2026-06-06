@@ -837,7 +837,9 @@ proc renderWindow*(
   let
     lineCount = window.buffer.len
     reservedLines = e.calculateReservedLines(isBottomWindow)
-    visibleHeight = window.viewport.height - reservedLines - tabLineOffset
+
+    # Clamp to 0: on a tiny terminal the reserves can exceed the viewport
+    visibleHeight = max(0, window.viewport.height - reservedLines - tabLineOffset)
 
   # Generate sidebar dynamically from buffer markers if enabled
   # Note: sidebar needs visibleHeight rows (screenY goes from tabLineOffset to visibleHeight + tabLineOffset)
