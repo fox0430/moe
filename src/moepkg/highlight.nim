@@ -708,40 +708,72 @@ proc getEditorColorPair(
       else: EditorColorPairIndex.default
 
   case kind
-  of gtOperator: EditorColorPairIndex.operator
-  of gtBuiltin: EditorColorPairIndex.builtin
-  of gtKeyword: EditorColorPairIndex.keyword
-  of gtBoolean: EditorColorPairIndex.boolean
-  of gtSpecialVar: EditorColorPairIndex.specialVar
-  of gtCharLit: EditorColorPairIndex.charLit
-  of gtStringLit: EditorColorPairIndex.stringLit
-  of gtLongStringLit: EditorColorPairIndex.stringLit
+  of gtOperator:
+    EditorColorPairIndex.operator
+  of gtBuiltin:
+    EditorColorPairIndex.builtin
+  of gtKeyword:
+    EditorColorPairIndex.keyword
+  of gtBoolean:
+    EditorColorPairIndex.boolean
+  of gtSpecialVar:
+    EditorColorPairIndex.specialVar
+  of gtCharLit:
+    EditorColorPairIndex.charLit
+  of gtStringLit:
+    EditorColorPairIndex.stringLit
+  of gtLongStringLit:
+    EditorColorPairIndex.stringLit
   # XML CDATA is raw character data — color the whole section (delimiters
   # included) like a long string so it stands out from parsed markup.
-  of gtCData: EditorColorPairIndex.stringLit
-  of gtBinNumber: EditorColorPairIndex.binNumber
-  of gtDecNumber: EditorColorPairIndex.decNumber
-  of gtFloatNumber: EditorColorPairIndex.floatNumber
-  of gtHexNumber: EditorColorPairIndex.hexNumber
-  of gtOctNumber: EditorColorPairIndex.octNumber
-  of gtComment: EditorColorPairIndex.comment
-  of gtLongComment: EditorColorPairIndex.longComment
-  of gtDocComment: EditorColorPairIndex.docComment
-  of gtDocLongComment: EditorColorPairIndex.docLongComment
-  of gtPreprocessor: EditorColorPairIndex.preprocessor
-  of gtFunctionName: EditorColorPairIndex.functionName
-  of gtTypeName: EditorColorPairIndex.typeName
-  of gtWhitespace: EditorColorPairIndex.whitespace
-  of gtPragma: EditorColorPairIndex.pragma
-  of gtIdentifier: EditorColorPairIndex.identifier
-  of gtTable: EditorColorPairIndex.table
-  of gtDate: EditorColorPairIndex.date
-  of gtLogError: EditorColorPairIndex.logError
-  of gtLogWarning: EditorColorPairIndex.logWarning
-  of gtLogInfo: EditorColorPairIndex.logInfo
-  of gtLogUuid: EditorColorPairIndex.logUuid
-  of gtKey: EditorColorPairIndex.property
-  else: EditorColorPairIndex.default
+  of gtCData:
+    EditorColorPairIndex.stringLit
+  of gtBinNumber:
+    EditorColorPairIndex.binNumber
+  of gtDecNumber:
+    EditorColorPairIndex.decNumber
+  of gtFloatNumber:
+    EditorColorPairIndex.floatNumber
+  of gtHexNumber:
+    EditorColorPairIndex.hexNumber
+  of gtOctNumber:
+    EditorColorPairIndex.octNumber
+  of gtComment:
+    EditorColorPairIndex.comment
+  of gtLongComment:
+    EditorColorPairIndex.longComment
+  of gtDocComment:
+    EditorColorPairIndex.docComment
+  of gtDocLongComment:
+    EditorColorPairIndex.docLongComment
+  of gtPreprocessor:
+    EditorColorPairIndex.preprocessor
+  of gtFunctionName:
+    EditorColorPairIndex.functionName
+  of gtTypeName:
+    EditorColorPairIndex.typeName
+  of gtWhitespace:
+    EditorColorPairIndex.whitespace
+  of gtPragma:
+    EditorColorPairIndex.pragma
+  of gtIdentifier:
+    EditorColorPairIndex.identifier
+  of gtTable:
+    EditorColorPairIndex.table
+  of gtDate:
+    EditorColorPairIndex.date
+  of gtLogError:
+    EditorColorPairIndex.logError
+  of gtLogWarning:
+    EditorColorPairIndex.logWarning
+  of gtLogInfo:
+    EditorColorPairIndex.logInfo
+  of gtLogUuid:
+    EditorColorPairIndex.logUuid
+  of gtKey:
+    EditorColorPairIndex.property
+  else:
+    EditorColorPairIndex.default
 
 proc initHighlight*(
     buffer: seq[Runes] = @[], color = EditorColorPairIndex.default
