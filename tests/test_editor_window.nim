@@ -731,3 +731,109 @@ indent_size = 4
     # Buffer is still registered, but EditorConfig is not applied.
     check newBuffer in e.buffers
     check newBuffer.editorConfig.isNone
+
+suite "applyStartUpScreenSize":
+  ## First-render sizing: the startup window layout is built against the
+  ## initial default screen size (80x20) before the real terminal size is
+  ## known. applyStartUpScreenSize must rescale it without breaking the
+  ## layout (startup multi-file splits previously overlapped because only
+  ## the active window was resized to the real terminal size).
+  const
+    TermWidth = 180
+    TermHeight = 45
+
+  proc checkScreenSizeSynced(e: Editor) =
+    check e.screenSize.width == TermWidth
+    check e.screenSize.height == TermHeight
+    check e.screenSize.prevWidth == TermWidth
+    check e.screenSize.prevHeight == TermHeight
+
+  test "single window fills the terminal":
+    let e = createTestEditor()
+
+    e.applyStartUpScreenSize(TermWidth, TermHeight)
+
+    check e.windowManager.windows.len == 1
+    let win = e.activeWindow
+    check win.viewport.x == 0
+    check win.viewport.y == 0
+    check win.viewport.width == TermWidth
+    check win.viewport.height == TermHeight - CommandLineHeight
+    e.checkScreenSizeSynced()
+
+  test "startup vsplit windows are rescaled without overlap":
+    let e = createTestEditor()
+    check e.vsplit().isOk
+
+    e.applyStartUpScreenSize(TermWidth, TermHeight)
+
+    check e.windowManager.windows.len == 2
+    var wins = @[e.windowManager.windows[0], e.windowManager.windows[1]]
+    if wins[0].viewport.x > wins[1].viewport.x:
+      swap(wins[0], wins[1])
+    let (left, right) = (wins[0], wins[1])
+
+    # Tile the full width with no overlap
+    check left.viewport.x == 0
+    check right.viewport.x >= left.viewport.x + left.viewport.width
+    check right.viewport.x + right.viewport.width == TermWidth
+
+    # Roughly equal widths
+    check abs(left.viewport.width - right.viewport.width) <= WindowSeparatorWidth + 1
+
+    # Side-by-side windows span the full height above the command line
+    for win in wins:
+      check win.viewport.y == 0
+      check win.viewport.height == TermHeight - CommandLineHeight
+
+    e.checkScreenSizeSynced()
+
+  test "startup hsplit windows are rescaled without overlap":
+    let e = createTestEditor()
+    check e.hsplit().isOk
+
+    e.applyStartUpScreenSize(TermWidth, TermHeight)
+
+    check e.windowManager.windows.len == 2
+    var wins = @[e.windowManager.windows[0], e.windowManager.windows[1]]
+    if wins[0].viewport.y > wins[1].viewport.y:
+      swap(wins[0], wins[1])
+    let (top, bottom) = (wins[0], wins[1])
+
+    # Tile the full height with no overlap, reserving the command line row
+    check top.viewport.y == 0
+    check bottom.viewport.y >= top.viewport.y + top.viewport.height
+    check bottom.viewport.y + bottom.viewport.height == TermHeight - CommandLineHeight
+
+    # Stacked windows span the full width
+    for win in wins:
+      check win.viewport.x == 0
+      check win.viewport.width == TermWidth
+
+    e.checkScreenSizeSynced()
+
+  test "three startup vsplits tile the full width":
+    let e = createTestEditor()
+    check e.vsplit().isOk
+    check e.vsplit().isOk
+
+    e.applyStartUpScreenSize(TermWidth, TermHeight)
+
+    check e.windowManager.windows.len == 3
+    var wins = e.windowManager.windows
+    for i in 0 ..< wins.len - 1:
+      for j in i + 1 ..< wins.len:
+        if wins[i].viewport.x > wins[j].viewport.x:
+          swap(wins[i], wins[j])
+
+    check wins[0].viewport.x == 0
+    for i in 1 ..< wins.len:
+      # No horizontal overlap between neighbors
+      check wins[i].viewport.x >= wins[i - 1].viewport.x + wins[i - 1].viewport.width
+    check wins[^1].viewport.x + wins[^1].viewport.width == TermWidth
+
+    for win in wins:
+      check win.viewport.y == 0
+      check win.viewport.height == TermHeight - CommandLineHeight
+
+    e.checkScreenSizeSynced()

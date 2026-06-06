@@ -94,6 +94,30 @@ proc setActiveWindowScreenCursor*(e: Editor, window: EditorWindow) =
   e.state.screenCursor = cursorPos
   # Note: cursorVisible is set by each mode's render function
 
+proc applyStartUpScreenSize*(e: Editor, termWidth, termHeight: int) =
+  ## Apply the real terminal size on first render. The startup window layout
+  ## (including splits from `moe file1 file2`) is built against the initial
+  ## default screen size before the terminal size is known.
+  if e.windowManager.windows.len > 1:
+    # Rescale the whole split layout, same as a runtime terminal resize.
+    e.windowManager.resizeWindows(
+      termWidth, termHeight, e.screenSize.width, e.screenSize.height,
+      e.state.display.multiStatusLine,
+    )
+  else:
+    # Set viewport to real terminal size with the command line row reserved
+    # (status line and command line share it).
+    let win = e.activeWindow
+    win.viewport.width = termWidth
+    win.viewport.height = termHeight - CommandLineHeight
+
+  # Sync screenSize so the subsequent render does NOT trigger resizeWindows,
+  # which would ratio-scale from the initial default size and break the layout.
+  e.screenSize.width = termWidth
+  e.screenSize.height = termHeight
+  e.screenSize.prevWidth = termWidth
+  e.screenSize.prevHeight = termHeight
+
 # Window split procedures
 
 proc registerSplitBuffer(
