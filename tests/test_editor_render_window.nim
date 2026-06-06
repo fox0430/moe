@@ -65,12 +65,14 @@ proc getSelectionStyleAt(
     useTwoColor: bool = false,
     searchRanges: seq[ColumnRange] = @[],
     wordRanges: seq[ColumnRange] = @[],
+    isActiveWindow: bool = true,
 ): Style =
   ## Test helper that bridges the legacy per-line params to the new
   ## LineStyleContext-based signature. Optional params let tests inject
   ## conflict/search/word state symmetrically with the other *At helpers.
   let lineCtx = LineStyleContext(
     lineIndex: pos.line,
+    isActiveWindow: isActiveWindow,
     isCursorLine: pos.line == cursorLine,
     lineConflict: lineConflict,
     useTwoColor: useTwoColor,
@@ -1648,7 +1650,7 @@ suite "getSelectionStyle - Matching paren":
     discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "(hello)")
     e.state.matchingParenPos = some(BufferPosition(line: 0, column: 6))
 
-    discard e.getSelectionStyleAt(
+    let style = e.getSelectionStyleAt(
       e.textBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 6),
@@ -1656,7 +1658,25 @@ suite "getSelectionStyle - Matching paren":
       cursorCol = 0,
       windowMode = EditorMode.Normal,
     )
-    check true
+    check style == parenPairStyle()
+
+  test "No paren pair style in an inactive window":
+    # matchingParenPos is derived from the active window's cursor; an
+    # inactive window showing the same line/column must not be painted.
+    let e = createTestEditor()
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "(hello)")
+    e.state.matchingParenPos = some(BufferPosition(line: 0, column: 6))
+
+    let style = e.getSelectionStyleAt(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 6),
+      cursorLine = 0,
+      cursorCol = 0,
+      windowMode = EditorMode.Normal,
+      isActiveWindow = false,
+    )
+    check style != parenPairStyle()
 
 suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
   test "Returns findCharMatch style for matched position":
@@ -1711,6 +1731,27 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
       cursorLine = 0,
       cursorCol = 2,
       windowMode = EditorMode.Normal,
+    )
+    check style != findCharMatchStyle()
+
+  test "No findCharMatch style in an inactive window":
+    # Find-char matches are anchored to the active window's cursor line; an
+    # inactive window showing the same line/column must not be painted.
+    let e = createTestEditor()
+    e.state.display.showCursorLine = false
+    e.state.display.showSyntax = false
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    e.state.ui.findCharMatches = @[0, 2, 4, 6]
+    e.state.ui.findCharMatchLine = 0
+
+    let style = e.getSelectionStyleAt(
+      e.textBuffer,
+      hasSelection = false,
+      pos = BufferPosition(line: 0, column: 2),
+      cursorLine = 0,
+      cursorCol = 2,
+      windowMode = EditorMode.Normal,
+      isActiveWindow = false,
     )
     check style != findCharMatchStyle()
 
@@ -2391,39 +2432,59 @@ suite "render layer predicates":
   test "matchesMatchingParen: positive match":
     let e = createTestEditor()
     e.state.matchingParenPos = some(BufferPosition(line: 2, column: 7))
-    check e.matchesMatchingParen(BufferPosition(line: 2, column: 7))
+    let lineCtx = LineStyleContext(isActiveWindow: true)
+    check e.matchesMatchingParen(lineCtx, BufferPosition(line: 2, column: 7))
 
   test "matchesMatchingParen: different position":
     let e = createTestEditor()
     e.state.matchingParenPos = some(BufferPosition(line: 2, column: 7))
-    check not e.matchesMatchingParen(BufferPosition(line: 2, column: 8))
-    check not e.matchesMatchingParen(BufferPosition(line: 3, column: 7))
+    let lineCtx = LineStyleContext(isActiveWindow: true)
+    check not e.matchesMatchingParen(lineCtx, BufferPosition(line: 2, column: 8))
+    check not e.matchesMatchingParen(lineCtx, BufferPosition(line: 3, column: 7))
 
   test "matchesMatchingParen: none set":
     let e = createTestEditor()
     e.state.matchingParenPos = none(BufferPosition)
-    check not e.matchesMatchingParen(BufferPosition(line: 0, column: 0))
+    let lineCtx = LineStyleContext(isActiveWindow: true)
+    check not e.matchesMatchingParen(lineCtx, BufferPosition(line: 0, column: 0))
+
+  test "matchesMatchingParen: inactive window suppresses":
+    let e = createTestEditor()
+    e.state.matchingParenPos = some(BufferPosition(line: 2, column: 7))
+    let lineCtx = LineStyleContext(isActiveWindow: false)
+    check not e.matchesMatchingParen(lineCtx, BufferPosition(line: 2, column: 7))
 
   test "matchesFindCharMatch: in matches on right line":
     let e = createTestEditor()
     e.config.highlight.findCharHighlight = true
     e.state.ui.findCharMatchLine = 1
     e.state.ui.findCharMatches = @[3, 5, 9]
-    check e.matchesFindCharMatch(BufferPosition(line: 1, column: 5))
+    let lineCtx = LineStyleContext(isActiveWindow: true)
+    check e.matchesFindCharMatch(lineCtx, BufferPosition(line: 1, column: 5))
 
   test "matchesFindCharMatch: wrong line":
     let e = createTestEditor()
     e.config.highlight.findCharHighlight = true
     e.state.ui.findCharMatchLine = 1
     e.state.ui.findCharMatches = @[3, 5, 9]
-    check not e.matchesFindCharMatch(BufferPosition(line: 2, column: 5))
+    let lineCtx = LineStyleContext(isActiveWindow: true)
+    check not e.matchesFindCharMatch(lineCtx, BufferPosition(line: 2, column: 5))
 
   test "matchesFindCharMatch: config disabled":
     let e = createTestEditor()
     e.config.highlight.findCharHighlight = false
     e.state.ui.findCharMatchLine = 1
     e.state.ui.findCharMatches = @[5]
-    check not e.matchesFindCharMatch(BufferPosition(line: 1, column: 5))
+    let lineCtx = LineStyleContext(isActiveWindow: true)
+    check not e.matchesFindCharMatch(lineCtx, BufferPosition(line: 1, column: 5))
+
+  test "matchesFindCharMatch: inactive window suppresses":
+    let e = createTestEditor()
+    e.config.highlight.findCharHighlight = true
+    e.state.ui.findCharMatchLine = 1
+    e.state.ui.findCharMatches = @[3, 5, 9]
+    let lineCtx = LineStyleContext(isActiveWindow: false)
+    check not e.matchesFindCharMatch(lineCtx, BufferPosition(line: 1, column: 5))
 
   test "matchesCurrentWord: word in range":
     let e = createTestEditor()

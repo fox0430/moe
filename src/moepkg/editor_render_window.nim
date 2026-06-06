@@ -42,6 +42,7 @@ type LineStyleContext* = object
   ##   `lineFillPatch`, which reads `isCursorLine`, `lineConflict`, and
   ##   `useTwoColor`; the remaining fields can be left at their defaults.
   lineIndex*: int
+  isActiveWindow*: bool
   isCursorLine*: bool
   lineConflict*: ConflictMarkerKind
   useTwoColor*: bool
@@ -121,6 +122,7 @@ proc newLineStyleContext*(
 
   LineStyleContext(
     lineIndex: lineIndex,
+    isActiveWindow: ctx.isActiveWindow,
     isCursorLine: lineIndex == ctx.cursorLine,
     lineConflict: e.resolveLineConflict(textBuffer, lineIndex),
     useTwoColor: e.config.highlight.gitConflictTwoColor,
@@ -141,13 +143,24 @@ template matchesVisualSelection(
 ): bool =
   hasSelection and e.state.visualSelection.isPositionInSelection(pos)
 
-template matchesMatchingParen(e: Editor, pos: BufferPosition): bool =
-  e.state.matchingParenPos.isSome and e.state.matchingParenPos.get.line == pos.line and
+template matchesMatchingParen(
+    e: Editor, lineCtx: LineStyleContext, pos: BufferPosition
+): bool =
+  # `matchingParenPos` is derived from the active window's cursor, so the
+  # highlight must only be drawn in the active window — other windows may
+  # show an unrelated buffer at the same line/column.
+  lineCtx.isActiveWindow and e.state.matchingParenPos.isSome and
+    e.state.matchingParenPos.get.line == pos.line and
     e.state.matchingParenPos.get.column == pos.column
 
-template matchesFindCharMatch(e: Editor, pos: BufferPosition): bool =
-  e.config.highlight.findCharHighlight and e.state.ui.findCharMatches.len > 0 and
-    pos.line == e.state.ui.findCharMatchLine and pos.column in e.state.ui.findCharMatches
+template matchesFindCharMatch(
+    e: Editor, lineCtx: LineStyleContext, pos: BufferPosition
+): bool =
+  # Like matchingParen, f/F/t/T match candidates are anchored to the active
+  # window's cursor line; never paint them in inactive windows.
+  lineCtx.isActiveWindow and e.config.highlight.findCharHighlight and
+    e.state.ui.findCharMatches.len > 0 and pos.line == e.state.ui.findCharMatchLine and
+    pos.column in e.state.ui.findCharMatches
 
 template matchesCurrentWord(
     e: Editor, lineCtx: LineStyleContext, pos: BufferPosition
@@ -248,9 +261,9 @@ proc getSelectionStyle*(
       else:
         normalStyle()
     baseStyle.merge(bgOnly(visualStyle().bg))
-  elif e.matchesMatchingParen(pos):
+  elif e.matchesMatchingParen(lineCtx, pos):
     parenPairStyle()
-  elif e.matchesFindCharMatch(pos):
+  elif e.matchesFindCharMatch(lineCtx, pos):
     findCharMatchStyle()
   elif e.matchesCurrentWord(lineCtx, pos):
     currentWordStyle()
@@ -868,6 +881,7 @@ proc renderWindow*(
     selEnd: selEnd,
     windowMode: window.mode,
     windowRightEdge: window.viewport.x + window.viewport.width,
+    isActiveWindow: isActiveWindow,
   )
 
   var

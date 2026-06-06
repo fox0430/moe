@@ -85,6 +85,7 @@ type
     selEnd*: BufferPosition
     windowMode*: EditorMode ## Mode of the window being rendered
     windowRightEdge*: int ## Absolute screen X of window's right edge
+    isActiveWindow*: bool ## Whether the window being rendered is the active one
 
   IndentInfo* = object
     ## Cached indentation analysis for a line to avoid O(n²) performance
