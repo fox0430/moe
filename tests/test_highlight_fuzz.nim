@@ -380,6 +380,42 @@ proc htmlCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc xmlCorpus(): seq[seq[string]] =
+  ## XML snippets covering the cross-line state carried in `g.state`:
+  ## `gtLongComment` (multi-line `<!-- ... -->` comments) and `gtCData`
+  ## (multi-line `<![CDATA[ ... ]]>` sections), plus the XML declaration,
+  ## DOCTYPE, namespaced tags, attributes with quoted values, and entities.
+  result = @[
+    @[
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<note priority=\"high\">",
+      "  <to>Alice</to>", "  <from>Bob</from>",
+      "  <body>Don't forget &amp; remember!</body>", "</note>",
+    ],
+    @[
+      "<!-- outer comment", "   still inside the comment", "   third line -->",
+      "<config enabled=\"true\" />", "<!-- single line comment -->",
+    ],
+    @[
+      "<script>", "  <![CDATA[", "    if (a < b && b > c) {", "      print(\"raw\");",
+      "    }", "  ]]>", "</script>",
+    ],
+    @[
+      "<!DOCTYPE note SYSTEM \"note.dtd\">", "<items xmlns:x=\"http://example.com\">",
+      "  <x:item id='1'>first &lt; second</x:item>",
+      "  <x:item id='2'>&#169; 2024</x:item>", "</items>",
+    ],
+    @[
+      "<data><![CDATA[inline cdata]]></data>", "<mixed>text <b>bold</b> tail</mixed>",
+      "<empty/>", "<?target instruction?>",
+    ],
+    @[
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<蔵書 管理者=\"司書\">",
+      "  <書名 ふりがな=\"にほんご\">日本語のテキスト &amp; 実体</書名>",
+      "  <!-- 複数行コメント", "       まだコメントの中 -->",
+      "  <データ><![CDATA[生データ < & >]]></データ>", "</蔵書>",
+    ],
+  ]
+
 proc astroCorpus(): seq[seq[string]] =
   ## Astro snippets covering the cross-line state carried in
   ## `astroInFrontmatter` / `astroFirstLine`, plus the state delegated to the
@@ -471,6 +507,15 @@ proc pickEdit(buf: seq[string], corpus: seq[seq[string]], rng: var Rand): Edit =
   ## number of times if the dice roll lands on a noop combination (e.g.
   ## DeleteChar on an empty line); falls back to InsertChar as a guaranteed
   ## productive edit.
+  ##
+  ## Char edit columns are RUNE positions, not byte positions. The real
+  ## editor's buffer is `seq[Runes]`, so lines reaching the highlighter are
+  ## always valid UTF-8; byte-positioned edits could split a multibyte
+  ## sequence and create invalid UTF-8 that the editor cannot produce
+  ## (and that the full-reparse path, which round-trips through `toRunes`,
+  ## would see as a *different* string than the incremental path).
+  ## For pure-ASCII lines `runeLen == len`, so existing seeds reproduce
+  ## identically.
   for _ in 0 .. 9:
     let kind = EditKind(rng.rand(int(EditKind.high)))
     case kind
@@ -478,7 +523,7 @@ proc pickEdit(buf: seq[string], corpus: seq[seq[string]], rng: var Rand): Edit =
       if buf.len == 0:
         continue
       let row = rng.rand(buf.high)
-      let col = rng.rand(buf[row].len + 1) # inclusive end (append allowed)
+      let col = rng.rand(buf[row].runeLen + 1) # inclusive end (append allowed)
       return Edit(kind: ekInsertChar, row: row, col: col, text: randomChar(rng))
     of ekDeleteChar:
       if buf.len == 0:
@@ -486,7 +531,7 @@ proc pickEdit(buf: seq[string], corpus: seq[seq[string]], rng: var Rand): Edit =
       let row = rng.rand(buf.high)
       if buf[row].len == 0:
         continue
-      let col = rng.rand(buf[row].high)
+      let col = rng.rand(buf[row].runeLen - 1)
       return Edit(kind: ekDeleteChar, row: row, col: col)
     of ekReplaceLine:
       if buf.len == 0:
@@ -519,16 +564,25 @@ proc pickEdit(buf: seq[string], corpus: seq[seq[string]], rng: var Rand): Edit =
 
 proc applyEdit(buf: var seq[string], e: Edit): int =
   ## Apply the edit in place. Returns `changedStartLine` to pass to
-  ## `updateHighlightIncremental`.
+  ## `updateHighlightIncremental`. Char edit columns are rune positions
+  ## (see `pickEdit`); they are converted to byte offsets here so multibyte
+  ## sequences are never split.
   case e.kind
   of ekInsertChar:
     let line = buf[e.row]
-    # substr is bounds-safe for the suffix (e.col may equal line.len for append).
-    buf[e.row] = line.substr(0, e.col - 1) & e.text & line.substr(e.col)
+    let byteCol =
+      if e.col >= line.runeLen:
+        line.len # append
+      else:
+        line.runeOffset(e.col)
+    # substr is bounds-safe for the suffix (byteCol may equal line.len for append).
+    buf[e.row] = line.substr(0, byteCol - 1) & e.text & line.substr(byteCol)
     e.row
   of ekDeleteChar:
     let line = buf[e.row]
-    buf[e.row] = line.substr(0, e.col - 1) & line.substr(e.col + 1)
+    let byteCol = line.runeOffset(e.col)
+    let runeSize = line.runeLenAt(byteCol)
+    buf[e.row] = line.substr(0, byteCol - 1) & line.substr(byteCol + runeSize)
     e.row
   of ekReplaceLine:
     buf[e.row] = e.text
@@ -558,10 +612,16 @@ proc firstDivergence(
   ## token absorbs surrounding spaces (e.g. whether `  await` carries the
   ## leading two spaces in the whitespace segment or the keyword segment);
   ## those boundary choices have no visible effect to the user.
+  ##
+  ## Columns are RUNE positions: ColorSegment columns count one per rune, so
+  ## iterating bytes would misalign on multibyte lines (a divergence at a
+  ## multibyte column could be masked by a space at the same BYTE index, and
+  ## the whitespace exemption would miss spaces whose byte index holds a
+  ## UTF-8 continuation byte).
   for row in 0 ..< buf.len:
-    let line = buf[row]
-    for col in 0 ..< line.len:
-      if line[col] in {' ', '\t'}:
+    let runes = buf[row].toRunes
+    for col in 0 ..< runes.len:
+      if runes[col] == Rune(' ') or runes[col] == Rune('\t'):
         continue
       if incr.getColorPair(row, col) != full.getColorPair(row, col):
         return (false, row, col)
@@ -731,8 +791,91 @@ suite "Incremental Highlight Fuzz":
   test "HTML: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langHtml, htmlCorpus(), iters, baseSeed)
 
+  test "XML: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langXml, xmlCorpus(), iters, baseSeed)
+
   test "Astro: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langAstro, astroCorpus(), iters, baseSeed)
 
   test "YAML: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langYaml, yamlCorpus(), iters, baseSeed)
+
+# Deterministic chunk-boundary tests
+#
+# The fuzz corpus buffers all stay well under 100 lines, so the random walk
+# is structurally unable to reach the chunk boundaries of the incremental
+# machinery: `updateHighlightIncremental` re-parses in 100-line chunks with a
+# tokenizer-state handoff in between, plus an early convergence check.
+# Multi-line constructs spanning those boundaries are pinned here instead,
+# using XML, whose CDATA sections and comments carry plain `g.state` across
+# lines.
+
+proc checkChunkEquivalence(
+    buf: seq[string], incr, full: Highlight, what: string
+): bool =
+  let (ok, r, c) = firstDivergence(buf, incr, full)
+  if not ok:
+    echo &"{what}: divergence at row={r} col={c}: " &
+      &"incr={incr.getColorPair(r, c)} full={full.getColorPair(r, c)}"
+  ok
+
+suite "Incremental Highlight Chunk Boundary":
+  test "XML: opening a >100-line CDATA section hands state across the chunk boundary":
+    # Line 2 initially holds plain markup; the edit replaces it with
+    # `<![CDATA[`, so the reparse runs from the top, ends chunk 1 (lines
+    # 0..99) mid-CDATA and must hand `gtCData` over to chunk 2 for lines
+    # 100..150 to come out as raw data instead of markup.
+    var buf = @["<?xml version=\"1.0\"?>", "<data>", "<open-me>"]
+    for i in 3 .. 149:
+      buf.add(&"  <item id=\"{i}\">value &amp; more</item>")
+    buf.add("]]>")
+    buf.add("</data>")
+
+    let lang = SourceLanguage.langXml
+    let (segs0, states0) =
+      initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
+    var ih = IncrementalHighlight(
+      segments: segs0, lineStates: LineStateCache(states: states0, version: 0)
+    )
+
+    buf[2] = "<![CDATA["
+    let getLine = proc(i: int): string =
+      buf[i]
+    updateHighlightIncremental(buf.len, getLine, ih, 2, 1, @[], lang)
+
+    check checkChunkEquivalence(
+      buf, Highlight(colorSegments: ih.segments), fullHighlight(buf, lang), "CDATA open"
+    )
+
+  test "XML: edit >100 lines below a comment opening is not skipped by convergence":
+    # Regression test for the convergence guard: the MultiLineKinds rewind
+    # moves reparseStart to the comment opening (line 0), more than a chunk
+    # above the edit. Chunk 1 (lines 0..99) re-parses identical pre-edit
+    # content, so its end state matches the cache; the convergence check
+    # must not break before the reparse has passed the changed line 110.
+    var buf = @["<!-- comment opens"]
+    for i in 1 .. 120:
+      buf.add(&"   comment body line {i}")
+    buf.add("-->")
+    buf.add("<root attr=\"v\"/>")
+
+    let lang = SourceLanguage.langXml
+    let (segs0, states0) =
+      initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
+    var ih = IncrementalHighlight(
+      segments: segs0, lineStates: LineStateCache(states: states0, version: 0)
+    )
+
+    # Close the comment early: everything at and below line 110 changes
+    # color from comment to markup — but only if the reparse reaches it.
+    buf[110] = "--> <root attr=\"v\">"
+    let getLine = proc(i: int): string =
+      buf[i]
+    updateHighlightIncremental(buf.len, getLine, ih, 110, 1, @[], lang)
+
+    check checkChunkEquivalence(
+      buf,
+      Highlight(colorSegments: ih.segments),
+      fullHighlight(buf, lang),
+      "comment early close",
+    )

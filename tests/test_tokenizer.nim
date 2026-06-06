@@ -30,6 +30,7 @@ suite "tokenizer - TokenClass enum":
     check gtEof < gtNone
     check gtNone < gtWhitespace
     check gtKeyword < gtStringLit
+    check gtRawData < gtCData
 
 suite "tokenizer - SourceLanguage enum":
   test "SourceLanguage has expected values":
@@ -57,6 +58,7 @@ suite "tokenizer - sourceLanguageToStr":
     check sourceLanguageToStr[langJsx] == "JavaScriptReact"
     check sourceLanguageToStr[langTsx] == "TypeScriptReact"
     check sourceLanguageToStr[langHtml] == "HTML"
+    check sourceLanguageToStr[langXml] == "XML"
     check sourceLanguageToStr[langJson] == "Json"
     check sourceLanguageToStr[langYaml] == "Yaml"
     check sourceLanguageToStr[langToml] == "Toml"
@@ -105,6 +107,7 @@ suite "tokenizer - getSourceLanguage":
     check getSourceLanguage("Json") == langJson
     check getSourceLanguage("TypeScript") == langTypeScript
     check getSourceLanguage("TypeScriptReact") == langTsx
+    check getSourceLanguage("XML") == langXml
 
 suite "tokenizer - initGeneralTokenizer":
   test "initGeneralTokenizer with empty string":
@@ -501,6 +504,22 @@ suite "tokenizer - getNextToken with langHtml":
     g.getNextToken(langHtml)
     # Second token is the tag name (may be gtKeyword for known tags)
     check g.kind in {gtTagStart, gtKeyword}
+
+suite "tokenizer - getNextToken with langXml":
+  test "getNextToken tokenizes XML tags":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("<note>")
+    g.getNextToken(langXml)
+    # First token is gtTagStart when `<` is followed by a letter
+    check g.kind == gtTagStart
+
+  test "getNextToken tokenizes XML element names":
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("<note>")
+    g.getNextToken(langXml)
+    g.getNextToken(langXml)
+    # Second token is the element name (gtKeyword for names following `<`)
+    check g.kind == gtKeyword
 
 suite "tokenizer - getNextToken with langJson":
   test "getNextToken tokenizes JSON string":

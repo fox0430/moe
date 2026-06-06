@@ -1118,6 +1118,30 @@ suite "Highlight - detectLanguage":
   test "detectLanguage for Zsh .zprofile":
     check detectLanguage("profile.zprofile") == SourceLanguage.langZsh
 
+  test "detectLanguage for XML .xml":
+    check detectLanguage("config.xml") == SourceLanguage.langXml
+
+  test "detectLanguage for XML .svg":
+    check detectLanguage("icon.svg") == SourceLanguage.langXml
+
+  test "detectLanguage for XML .xsd":
+    check detectLanguage("schema.xsd") == SourceLanguage.langXml
+
+  test "detectLanguage for XML .xsl":
+    check detectLanguage("style.xsl") == SourceLanguage.langXml
+
+  test "detectLanguage for XML .xslt":
+    check detectLanguage("transform.xslt") == SourceLanguage.langXml
+
+  test "detectLanguage for XML .rss":
+    check detectLanguage("feed.rss") == SourceLanguage.langXml
+
+  test "detectLanguage for XML .atom":
+    check detectLanguage("feed.atom") == SourceLanguage.langXml
+
+  test "detectLanguage for XML .plist":
+    check detectLanguage("Info.plist") == SourceLanguage.langXml
+
 suite "Highlight - getSegmentModifiers":
   test "Empty highlight returns empty modifiers":
     let h = Highlight(colorSegments: @[])
@@ -1727,6 +1751,58 @@ suite "Highlight - Progressive Initial Highlighting":
 
     # Third call should return false (complete)
     check buf.continueInitialHighlight() == false
+
+  test "continueInitialHighlight hands CDATA state across the chunk boundary":
+    # A CDATA section spanning the InitialChunkSize (1000 lines) boundary:
+    # the initial chunk ends mid-CDATA and `continueInitialHighlight` must
+    # resume from the carried `gtCData` state instead of re-tokenizing the
+    # rest as markup. The fuzz corpus can never reach this boundary, so it
+    # is pinned here deterministically.
+    var buf = newTextBuffer()
+
+    let path = getTempDir() / "moe_test_progressive_cdata.xml"
+    var
+      content = ""
+      lines: seq[string]
+    for i in 0 ..< 1100:
+      let line =
+        if i == 990:
+          "<![CDATA["
+        elif i == 1010:
+          "]]>"
+        else:
+          "<item id=\"" & $i & "\"/>"
+      lines.add(line)
+      content.add(line & "\n")
+    writeFile(path, content)
+    discard buf.loadFile(path)
+    removeFile(path)
+
+    check buf.language == SourceLanguage.langXml
+    check buf.incrementalHighlight.parsedUpTo == 999
+
+    # Complete the progressive parse (lines 1000..1099).
+    check buf.continueInitialHighlight() == true
+    check buf.continueInitialHighlight() == false
+
+    # Compare against a full one-shot parse. Whitespace columns are exempt
+    # for the same reason as in the incremental fuzz: tokenizers may differ
+    # on which adjacent token absorbs spaces, with no visible effect.
+    var runes: seq[Runes]
+    for line in lines:
+      runes.add(line.toRunes)
+    let full = initHighlight(runes, @[], SourceLanguage.langXml)
+
+    var firstMismatch = (row: -1, col: -1)
+    block compare:
+      for row in 0 ..< lines.len:
+        for col in 0 ..< lines[row].len: # ASCII-only: byte cols == rune cols
+          if lines[row][col] in {' ', '\t'}:
+            continue
+          if buf.highlight.getColorPair(row, col) != full.getColorPair(row, col):
+            firstMismatch = (row: row, col: col)
+            break compare
+    check firstMismatch == (row: -1, col: -1)
 
 suite "Highlight - URI Underline on Load":
   test "loadFile applies URI underlines in initial chunk":

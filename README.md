@@ -51,6 +51,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
   - Tcl
   - Hyprland
   - Dockerfile
+  - XML
 
 - Auto-completion
 
