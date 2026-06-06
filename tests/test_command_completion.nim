@@ -681,6 +681,19 @@ suite "CommandCompletion - calculateCommandPopupPosition":
     # Position should start from argStartPos if it fits
     check pos.x >= 0
 
+  test "Popup sits above a grown bottom area":
+    let entries =
+      @[CommandCompletionEntry(command: "test", description: "Test", matchScore: 100)]
+    let single = calculateCommandPopupPosition(0, 80, 24, entries)
+    # 3 wrapped command rows + the pushed-up status line
+    let grown = calculateCommandPopupPosition(0, 80, 24, entries, bottomAreaRows = 4)
+
+    # Default (height 1): directly above the bottom row
+    check single.y == 24 - 1 - single.height
+    # Grown area (4 reserved rows incl. status line): pushed up past all of it
+    check grown.y == 24 - 4 - grown.height
+    check grown.height == single.height
+
 suite "CommandCompletion - collectFilePaths":
   test "Collect files from current directory":
     let entries = collectFilePaths(getCurrentDir(), "")

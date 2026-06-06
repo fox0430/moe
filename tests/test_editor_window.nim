@@ -758,7 +758,7 @@ suite "applyStartUpScreenSize":
     check win.viewport.x == 0
     check win.viewport.y == 0
     check win.viewport.width == TermWidth
-    check win.viewport.height == TermHeight - CommandLineHeight
+    check win.viewport.height == TermHeight - steadyBottomAreaHeight()
     e.checkScreenSizeSynced()
 
   test "startup vsplit windows are rescaled without overlap":
@@ -784,7 +784,7 @@ suite "applyStartUpScreenSize":
     # Side-by-side windows span the full height above the command line
     for win in wins:
       check win.viewport.y == 0
-      check win.viewport.height == TermHeight - CommandLineHeight
+      check win.viewport.height == TermHeight - steadyBottomAreaHeight()
 
     e.checkScreenSizeSynced()
 
@@ -803,7 +803,8 @@ suite "applyStartUpScreenSize":
     # Tile the full height with no overlap, reserving the command line row
     check top.viewport.y == 0
     check bottom.viewport.y >= top.viewport.y + top.viewport.height
-    check bottom.viewport.y + bottom.viewport.height == TermHeight - CommandLineHeight
+    check bottom.viewport.y + bottom.viewport.height ==
+      TermHeight - steadyBottomAreaHeight()
 
     # Stacked windows span the full width
     for win in wins:
@@ -834,6 +835,6 @@ suite "applyStartUpScreenSize":
 
     for win in wins:
       check win.viewport.y == 0
-      check win.viewport.height == TermHeight - CommandLineHeight
+      check win.viewport.height == TermHeight - steadyBottomAreaHeight()
 
     e.checkScreenSizeSynced()

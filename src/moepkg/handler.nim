@@ -128,7 +128,7 @@ proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
 
   # Get viewport height for the recent file list
   # Reserve: status/command line (shared row) + 1 line for title
-  let viewportHeight = max(0, e.viewport.height - StatusAndCommandReserve - 1)
+  let viewportHeight = max(0, e.viewport.height - steadyBottomAreaHeight() - 1)
 
   let activeWin = e.activeWindow
   if activeWin.modeState.kind != mskRecentFile:
@@ -252,7 +252,7 @@ proc handleDebugModeEvent(e: Editor, event: Event): bool =
 
   # Get viewport height for the debug viewer
   # Reserve: status/command line (shared row) + 1 line for title
-  let viewportHeight = max(0, e.viewport.height - StatusAndCommandReserve - 1)
+  let viewportHeight = max(0, e.viewport.height - steadyBottomAreaHeight() - 1)
 
   let activeWin = e.activeWindow
   if activeWin.modeState.kind != mskDebug:
@@ -671,11 +671,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
       sidebarWidth = e.calculateSidebarWidth(e.activeWindow.mode)
       scrollbarWidth = e.calculateScrollbarWidth(e.activeWindow.mode)
       # Status line + command line (shared row)
-      reservedLines =
-        if e.state.display.showStatusLine:
-          StatusAndCommandReserve
-        else:
-          CommandLineReserve
+      reservedLines = steadyBottomAreaHeight()
       # Account for tab line offset
       tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
       adjustedMouseY = mouse.y - tabLineOffset
@@ -701,11 +697,7 @@ proc handleMouseEvent(e: Editor, event: Event): bool =
     let filerState = e.activeWindow.modeState.filer
     let
       tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
-      reservedLines =
-        if e.state.display.showStatusLine:
-          StatusAndCommandReserve
-        else:
-          CommandLineReserve
+      reservedLines = steadyBottomAreaHeight()
       adjustedMouseY = mouse.y - tabLineOffset
 
     # Ignore clicks on tab line or status/command line area

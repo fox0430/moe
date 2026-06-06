@@ -744,7 +744,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       ),
       windowDisplay: WindowDisplayState(
         needsFullRedraw: true, # Initial render needs full draw
-        viewportReservedLines: StatusAndCommandReserve, # Status+command share same row
+        viewportReservedLines: steadyBottomAreaHeight(), # Status+command share same row
         savedViewportTopLine: 0, # Saved viewport position for operators
       ),
       # Timing state (grouped in TimingState)
@@ -1634,8 +1634,7 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
 
   # Update smooth scroll animation
   if e.state.windowDisplay.scrollAnimation.active:
-    let reservedLines =
-      if e.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
+    let reservedLines = steadyBottomAreaHeight()
     let bufferLen = e.activeBuffer().len
     let (_, cursorLine) = e.executer.motionController.viewportManager.updateScrollAnimation(
       e.state.windowDisplay.scrollAnimation, e.config.smoothScroll, reservedLines,
@@ -1696,10 +1695,13 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
       # current cursor position. This prevents the popup from shifting when
       # cycling through candidates of different lengths.
       let anchorX = e.state.screenCursor.x - displayWidth(completionMgr.menu.prefix)
+      # Stay above the (possibly grown) command-line area, plus one padding
+      # row — matches the steady-state default of 2
+      let bottomReserve = e.state.bottomAreaHeight(buffer.area.width) + 1
       let popupPos = calculatePopupPosition(
         anchorX, e.state.screenCursor.y, buffer.area.width, buffer.area.height,
         completionMgr.menu.entries, completionMgr.menu.maxVisible,
-        e.config.autocomplete.windowBorder,
+        e.config.autocomplete.windowBorder, bottomReserve,
       )
       renderCompletionPopup(
         buffer, completionMgr.menu, popupPos, e.config.autocomplete.windowBorder
@@ -1708,7 +1710,8 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
       # Render documentation panel next to completion popup
       if completionMgr.docPanel.visible:
         let docPos = calculateDocPanelPosition(
-          popupPos, buffer.area.width, buffer.area.height, completionMgr.docPanel
+          popupPos, buffer.area.width, buffer.area.height, completionMgr.docPanel,
+          bottomReserve,
         )
         renderDocPanel(buffer, completionMgr.docPanel, docPos)
 
@@ -1732,13 +1735,12 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
     )
     renderHoverPopup(buffer, hoverMgr, popupPos, true)
 
-  # Render notification popups
+  # Render notification popups: float above the (possibly grown)
+  # command-line area, plus one padding row when the status line is shown
   if e.state.notificationPopup.hasActiveNotifications():
     let bottomReserve =
-      if e.state.display.showStatusLine:
-        StatusAndCommandReserve + 1
-      else:
-        CommandLineReserve
+      e.state.bottomAreaHeight(buffer.area.width) +
+      (if e.state.display.showStatusLine: 1 else: 0)
     let rects = e.state.notificationPopup.calculateNotificationPositions(
       buffer.area.width, buffer.area.height, bottomReserve
     )

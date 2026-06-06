@@ -250,6 +250,16 @@ suite "Completion - calculatePopupPosition":
 
     check pos.y < 20 # Above cursor
 
+  test "Grown bottom reserve flips the popup above the cursor":
+    let entries = @[CompletionEntry(word: "test", matchScore: 100, source: csBuffer)]
+    # Cursor at y=15: fits below with the steady reserve (2) ...
+    let steady = calculatePopupPosition(10, 15, 80, 24, entries)
+    check steady.y == 16
+    # ... but a grown bottom area (e.g. 5-line message + status + padding)
+    # leaves no room below, so the popup must flip above the cursor
+    let grown = calculatePopupPosition(10, 15, 80, 24, entries, bottomReserve = 7)
+    check grown.y < 15
+
 suite "Completion - calculateMaxWordWidth":
   test "Calculate max width":
     let entries = @[

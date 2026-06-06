@@ -35,14 +35,16 @@ const
 
   TabLineHeight* = 1 ## Height of tab line
   StatusLineReserve* = 1
-  CommandLineReserve* = 1
-  StatusAndCommandReserve* = 1
 
   # Line number display constants
   LineNumberBase* = 1 # Convert 0-based index to 1-based display
   LineNumberSpacer* = 1 # Space after line number
   LineNumberPadding* = 1 # Padding for alignment
   LineNumberWidthExtra* = 2 # Extra width for line number area (number + spaces)
+
+  InputWrapTabStop* = 1
+    ## Tab stop used on the command-line input wrap grid. The row count, the
+    ## cursor cell and the wrapped rendering must all use this same value.
 
 # Rendering style getters - dynamically retrieve from theme
 
@@ -246,6 +248,15 @@ proc displayWidthSubstrWithTabs*(
 
   return (charCount, currentWidth)
 
+func startsNewWrapSegment*(segmentWidth, runeWidth, maxWidth: int): bool {.inline.} =
+  ## Canonical wrap-boundary rule shared by every wrap walker
+  ## (calculateWrapCount, cursorWrapPosition, displayWidthSubstrFromByte):
+  ## a rune starts a new segment when the current segment is non-empty and
+  ## the rune does not fit. Keeping a single definition guarantees the
+  ## reserved height, the cursor cell and the drawn segments stay on the
+  ## same grid.
+  segmentWidth > 0 and segmentWidth + runeWidth > maxWidth
+
 proc displayWidthSubstrFromByte*(
     text: string, startByte: int, maxWidth: int, tabStop: int
 ): (int, int, int) =
@@ -269,7 +280,7 @@ proc displayWidthSubstrFromByte*(
         else:
           runeWidth(rune)
 
-    if charCount > 0 and currentWidth + w > maxWidth:
+    if startsNewWrapSegment(currentWidth, w, maxWidth):
       # Character doesn't fit — return without including it
       return (charCount, currentWidth, bytePos)
 
@@ -330,8 +341,7 @@ proc calculateWrapCount*(text: string, maxWidth: int, tabStop: int): int =
       else:
         runeWidth(rune)
 
-    if segmentWidth > 0 and segmentWidth + w > maxWidth:
-      # This character starts a new segment
+    if startsNewWrapSegment(segmentWidth, w, maxWidth):
       result += 1
       # Recalculate width in new segment context (tab width depends on position)
       segmentWidth = if rune == TAB_CHAR: safeTabStop else: w
@@ -520,8 +530,7 @@ proc cursorWrapPosition*(
       else:
         runeWidth(rune)
 
-    if segmentWidth > 0 and segmentWidth + w > maxWidth:
-      # This character starts a new segment
+    if startsNewWrapSegment(segmentWidth, w, maxWidth):
       wrapLine += 1
       let newW = if rune == TAB_CHAR: safeTabStop else: w
 
@@ -541,6 +550,101 @@ proc cursorWrapPosition*(
 
   # Cursor is at or past end of text — return current segment position
   return (wrapLine, segmentWidth)
+
+# Dynamic command-line area height
+
+func steadyBottomAreaHeight*(): int {.inline.} =
+  ## Height of the bottom area in the steady state: no overlay active and no
+  ## multi-line status message — the single row shared by the status line and
+  ## the command line.
+  ## This is the documented floor of `bottomAreaHeight`. All PERSISTENT window
+  ## geometry (splits, equalization, PTY sizing, scroll fallbacks) must use
+  ## this value; transient growth (wrapped input, multi-line messages) must
+  ## never be baked into persistent layout.
+  1
+
+func steadyReservedBottom*(isBottomWindow: bool): int {.inline.} =
+  ## Steady bottom reserve for a window: the shared status/command row for
+  ## bottom windows, nothing for the others. The single place encoding the
+  ## `if isBottomWindow: steadyBottomAreaHeight() else: 0` rule.
+  if isBottomWindow:
+    steadyBottomAreaHeight()
+  else:
+    0
+
+proc overlayInput*(state: EditorState): tuple[text: string, cursorChar: int] =
+  ## Full display text and rune-index cursor position for the active overlay.
+  ## Matches the rendering in renderBottomLines: command text includes the
+  ## leading ':', search text is prefixed with '/' or '?', rename input is
+  ## prefixed with "Rename: " (cursor pinned at the end).
+  if state.isCommandOverlay:
+    (state.commandText, state.commandCursor + 1)
+  elif state.isSearchOverlay:
+    let prompt = if state.search.direction == Forward: "/" else: "?"
+    (prompt & state.search.text, 1 + state.search.cursor)
+  elif state.isRenameOverlay:
+    let prompt = "Rename: " & state.renameState.text
+    (prompt, prompt.runeLen)
+  else:
+    ("", 0)
+
+proc wrappedInputCursor*(
+    text: string, cursorChar: int, width: int
+): tuple[row, col: int] =
+  ## Cursor cell on the wrap grid of an input line. Like Vim, when the cursor
+  ## sits exactly at the right edge it overflows to column 0 of the next row.
+  let
+    safeWidth = max(1, width)
+    (row, col) = cursorWrapPosition(text, cursorChar, safeWidth, InputWrapTabStop)
+  if col >= safeWidth:
+    (row + 1, 0)
+  else:
+    (row, col)
+
+proc wrappedInputGrid*(
+    text: string, cursorChar: int, width: int
+): tuple[totalRows, cursorRow, cursorCol: int] =
+  ## The full input wrap grid: total rows (including the row holding the
+  ## cursor cell, which may extend one row past the text itself) plus the
+  ## cursor cell. Compute once and share between the height and the
+  ## rendering instead of re-walking the text per consumer.
+  let
+    safeWidth = max(1, width)
+    (row, col) = wrappedInputCursor(text, cursorChar, safeWidth)
+    totalRows = max(calculateWrapCount(text, safeWidth, InputWrapTabStop), row + 1)
+  (totalRows, row, col)
+
+proc wrappedInputRowCount*(text: string, cursorChar: int, width: int): int =
+  ## Number of rows the wrapped input occupies, including the row holding the
+  ## cursor cell (which may extend one row past the text itself).
+  wrappedInputGrid(text, cursorChar, width).totalRows
+
+proc commandLineAreaHeight*(state: EditorState, width: int): int =
+  ## Single source of truth for the dynamic command-line area height
+  ## (content rows, excluding the status line):
+  ## - command/search/rename overlay: wrapped rows of the input
+  ## - otherwise: status message line count
+  ## Capped at MaxStatusMessageLines, floor 1 (the bottom row always exists).
+  if width <= 0:
+    # Uninitialized viewport (e.g. synthetic test editors before first render)
+    return steadyBottomAreaHeight()
+  if state.hasOverlay:
+    let (text, cursorChar) = state.overlayInput()
+    min(MaxStatusMessageLines, wrappedInputRowCount(text, cursorChar, width))
+  else:
+    max(1, state.statusMessageLineCount())
+
+proc bottomAreaHeight*(state: EditorState, width: int): int =
+  ## Total number of rows reserved at the bottom of the screen.
+  ## When the command-line area is a single row, the status line shares it;
+  ## when it grows, the status line is pushed up onto its own extra row.
+  let h = state.commandLineAreaHeight(width)
+  if h <= 1:
+    1
+  elif state.display.showStatusLine:
+    h + 1
+  else:
+    h
 
 proc isWhitespace(rune: Rune): bool =
   ## Check if a rune is a whitespace character (space, tab, full-width space)

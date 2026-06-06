@@ -22,7 +22,7 @@
 import std/[unittest, options]
 import pkg/results
 import ../src/moepkg/window_manager {.all.}
-import ../src/moepkg/[types, buffer]
+import ../src/moepkg/[types, buffer, render_utils]
 
 proc createTestWindow(x, y, width, height: int, active = false): EditorWindow =
   ## Create a test window with specified viewport
@@ -481,7 +481,7 @@ suite "EditorWindowManager - resizeWindows":
     # Both span the full height above the command line
     for win in [left, right]:
       check win.viewport.y == 0
-      check win.viewport.height == 45 - CommandLineHeight
+      check win.viewport.height == 45 - steadyBottomAreaHeight()
 
   test "hsplit layout survives large upscale without overlap":
     let wm = newEditorWindowManager()
@@ -498,7 +498,7 @@ suite "EditorWindowManager - resizeWindows":
     # No overlap and full-height tiling above the command line row
     check top.viewport.y == 0
     check bottom.viewport.y >= top.viewport.y + top.viewport.height
-    check bottom.viewport.y + bottom.viewport.height == 45 - CommandLineHeight
+    check bottom.viewport.y + bottom.viewport.height == 45 - steadyBottomAreaHeight()
     # Both span the full width
     for win in [top, bottom]:
       check win.viewport.x == 0
@@ -521,7 +521,7 @@ suite "EditorWindowManager - resizeWindows":
     check right.viewport.x + right.viewport.width == 100
     for win in [left, right]:
       check win.viewport.y == 0
-      check win.viewport.height == 30 - CommandLineHeight
+      check win.viewport.height == 30 - steadyBottomAreaHeight()
 
 suite "EditorWindowManager - Integration":
   test "Multiple vsplits create equal width windows":
@@ -1215,7 +1215,7 @@ suite "EditorWindowManager - Only Window":
     check wm.windows[0].viewport.x == 0
     check wm.windows[0].viewport.y == 0
     check wm.windows[0].viewport.width == 80
-    check wm.windows[0].viewport.height == 23 # screenHeight - CommandLineHeight
+    check wm.windows[0].viewport.height == 23 # screenHeight - steadyBottomAreaHeight()
 
   test "onlyWindow closes all other windows after hsplit":
     let wm = createSingleWindowManager(80, 24)
@@ -1232,7 +1232,7 @@ suite "EditorWindowManager - Only Window":
     check wm.windows.len == 1
     check wm.activeWindowIndex == 0
     check wm.windows[0].viewport.width == 80
-    check wm.windows[0].viewport.height == 23 # screenHeight - CommandLineHeight
+    check wm.windows[0].viewport.height == 23 # screenHeight - steadyBottomAreaHeight()
 
   test "onlyWindow keeps the active window":
     let wm = createSingleWindowManager(80, 24)
@@ -1268,7 +1268,7 @@ suite "EditorWindowManager - Only Window":
     check wm.windows[0].viewport.x == 0
     check wm.windows[0].viewport.y == 0
     check wm.windows[0].viewport.width == 80
-    check wm.windows[0].viewport.height == 23 # screenHeight - CommandLineHeight
+    check wm.windows[0].viewport.height == 23 # screenHeight - steadyBottomAreaHeight()
 
   test "equalizeAllWindows with single window does nothing":
     let wm = createSingleWindowManager(80, 24)

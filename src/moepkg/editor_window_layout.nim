@@ -25,42 +25,38 @@ import editor_types, render_utils
 
 proc calculateReservedLines*(e: Editor, isBottomWindow: bool = true): int =
   ## Calculate number of reserved lines based on status line configuration
-  ## and multi-line status messages
-  result =
-    if e.state.display.showStatusLine:
-      if e.state.display.multiStatusLine:
-        if isBottomWindow: StatusAndCommandReserve else: StatusLineReserve
-      elif isBottomWindow:
-        StatusAndCommandReserve
-      else:
-        0
-    else:
-      if isBottomWindow: CommandLineReserve else: 0
-
-  # Add extra lines for multi-line status messages (only for bottom window)
+  ## and the dynamic command-line area height (wrapped overlay input and
+  ## multi-line status messages grow the bottom reserve)
   if isBottomWindow:
-    result += e.state.statusMessageExtraLines()
+    e.state.bottomAreaHeight(e.screenSize.width)
+  else:
+    if e.state.display.showStatusLine and e.state.display.multiStatusLine:
+      StatusLineReserve
+    else:
+      0
+
+proc terminalContentRows*(
+    window: EditorWindow, isBottomWindow: bool, tabLineOffset: int
+): int =
+  ## Rows available for a terminal grid in a window. Shared by renderTerminal
+  ## and calculateTerminalAreaDimensions so the rendered grid and the PTY size
+  ## can never diverge.
+  ## Deliberately steady, not dynamic: PTY resize sends SIGWINCH to the
+  ## shell, so transient command-line growth must not flap the PTY size.
+  window.viewport.height - steadyReservedBottom(isBottomWindow) - tabLineOffset
 
 proc calculateTerminalAreaDimensions*(
     e: Editor, window: EditorWindow
 ): tuple[cols, rows: int] =
-  ## Compute the correct PTY cols/rows for a terminal in the given window,
-  ## matching the formula used by renderTerminal.
+  ## Compute the correct PTY cols/rows for a terminal in the given window.
   let
     maxBottomY = findMaxBottomY(e.windowManager.windows)
     windowBottomY = window.viewport.y + window.viewport.height
     isBottomWindow = (windowBottomY == maxBottomY)
     tabLineOffset = if e.state.display.showTabLine: TabLineHeight else: 0
-    reservedBottom =
-      if isBottomWindow and e.state.display.showStatusLine:
-        StatusAndCommandReserve
-      elif isBottomWindow:
-        CommandLineReserve
-      else:
-        0
   result = (
     cols: window.viewport.width,
-    rows: max(1, window.viewport.height - reservedBottom - tabLineOffset),
+    rows: max(1, terminalContentRows(window, isBottomWindow, tabLineOffset)),
   )
 
 proc calculateWindowCursor*(

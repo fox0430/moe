@@ -61,7 +61,7 @@ proc createTestState(): EditorState =
       autoDeleteParen: false,
     ),
     windowDisplay: WindowDisplayState(
-      needsFullRedraw: false, viewportReservedLines: StatusAndCommandReserve
+      needsFullRedraw: false, viewportReservedLines: steadyBottomAreaHeight()
     ),
   )
 
@@ -434,11 +434,11 @@ suite "ViewportManager - Goto Line Scrolling":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
 
     # Line 100 should be visible
-    let visibleHeight = viewportManager.viewport.height - StatusAndCommandReserve
+    let visibleHeight = viewportManager.viewport.height - steadyBottomAreaHeight()
     let maxVisibleLine = viewportManager.viewport.topLine + visibleHeight - 1
 
     check targetLine >= viewportManager.viewport.topLine
@@ -459,7 +459,7 @@ suite "ViewportManager - Goto Line Scrolling":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
 
     check targetLine >= viewportManager.viewport.topLine
@@ -482,7 +482,7 @@ suite "ViewportManager - Goto Line Scrolling":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
 
     check viewportManager.viewport.topLine >= initialTopLine - 1
@@ -500,7 +500,7 @@ suite "ViewportManager - Goto Line Scrolling":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
 
     check viewportManager.viewport.topLine == 0
@@ -518,10 +518,10 @@ suite "ViewportManager - Goto Line Scrolling":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
 
-    let visibleHeight = viewportManager.viewport.height - StatusAndCommandReserve
+    let visibleHeight = viewportManager.viewport.height - steadyBottomAreaHeight()
     let maxVisibleLine = viewportManager.viewport.topLine + visibleHeight - 1
 
     check lastLine >= viewportManager.viewport.topLine
@@ -549,7 +549,7 @@ suite "ViewportManager - Line Wrap Scrolling":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
       lineWrap = true,
       buffer = buffer,
       lineNumOffset = 0,
@@ -573,7 +573,7 @@ suite "ViewportManager - Line Wrap Scrolling":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
       lineWrap = true,
       buffer = buffer,
       lineNumOffset = 0,
@@ -596,7 +596,7 @@ suite "ViewportManager - Line Wrap Scrolling":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
       lineWrap = true,
       buffer = buffer,
       lineNumOffset = 0,
@@ -618,7 +618,7 @@ suite "ViewportManager - Line Wrap Scrolling":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
       lineWrap = true,
       buffer = buffer,
       lineNumOffset = 0,
@@ -653,7 +653,7 @@ suite "ViewportManager - Line Wrap Scrolling":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
       lineWrap = true,
       buffer = buffer,
       lineNumOffset = 0,
@@ -679,7 +679,7 @@ suite "ViewportManager - Line Wrap Scrolling":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
       lineWrap = true,
       buffer = buffer,
       lineNumOffset = 0,
@@ -697,12 +697,12 @@ suite "ViewportManager - Default reservedLines":
       lines.add("Line " & $i)
     result = newTextBuffer(lines)
 
-  test "updateViewport default reservedLines matches StatusAndCommandReserve":
+  test "updateViewport default reservedLines matches steadyBottomAreaHeight()":
     ## When reservedLines is omitted (default = -1), the auto-calculated value
-    ## for showStatusLine=true should equal StatusAndCommandReserve.
+    ## for showStatusLine=true should equal steadyBottomAreaHeight().
     let buffer = createTestBuffer(100)
 
-    # Explicit reservedLines = StatusAndCommandReserve
+    # Explicit reservedLines = steadyBottomAreaHeight()
     let vmExplicit = ViewportManager(
       viewport: ViewPort(topLine: 0, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
     )
@@ -713,7 +713,7 @@ suite "ViewportManager - Default reservedLines":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
 
     # Default reservedLines (omitted → auto-calculated)

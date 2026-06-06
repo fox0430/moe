@@ -23,7 +23,7 @@ import std/[options, algorithm]
 
 import pkg/results
 
-import types, buffer, modes
+import types, buffer, modes, render_utils
 
 type EditorWindowManager* = ref object ## Manages multiple split windows
   windows*: seq[EditorWindow]
@@ -32,7 +32,6 @@ type EditorWindowManager* = ref object ## Manages multiple split windows
 const
   WindowSeparatorWidth* = 1 ## Width of separator between split windows
   StatusLineHeight* = 1 ## Height of a status line
-  CommandLineHeight* = 1 ## Height of the command line
 
 proc newEditorWindowManager*(): EditorWindowManager =
   ## Create a new window manager
@@ -311,7 +310,7 @@ proc equalizeHeightsInGroup*(
       else:
         StatusLineHeight
     totalContentHeight =
-      totalHeight - numSeparators - numStatusLines - CommandLineHeight
+      totalHeight - numSeparators - numStatusLines - steadyBottomAreaHeight()
     windowContentHeight = totalContentHeight div sortedGroup.len
     separatorOffset = if multiStatusLine: 0 else: WindowSeparatorWidth
 
@@ -343,7 +342,7 @@ proc equalizeHeightsForResize*(
       # Check if this is the bottom window
       isBottomWindow = (window.viewport.y + window.viewport.height >= newHeight - 1)
       # Reserve line for command line if this is the bottom window
-      commandLineReserve = if isBottomWindow: CommandLineHeight else: 0
+      commandLineReserve = steadyReservedBottom(isBottomWindow)
     wm.windows[idx].viewport.height = newHeight - minY - commandLineReserve
     return
 
@@ -362,7 +361,7 @@ proc equalizeHeightsForResize*(
     isBottomGroup =
       (lastWindow.viewport.y + lastWindow.viewport.height >= newHeight - 1)
     # Reserve line for command line if this is the bottom group
-    commandLineReserve = if isBottomGroup: CommandLineHeight else: 0
+    commandLineReserve = steadyReservedBottom(isBottomGroup)
     availableHeight = newHeight - minY - commandLineReserve
     numSeparators =
       if multiStatusLine:
@@ -499,7 +498,7 @@ proc onlyWindow*(wm: EditorWindowManager, screenWidth: int, screenHeight: int) =
   activeWin.viewport.x = 0
   activeWin.viewport.y = 0
   activeWin.viewport.width = screenWidth
-  activeWin.viewport.height = screenHeight - CommandLineHeight
+  activeWin.viewport.height = screenHeight - steadyBottomAreaHeight()
 
 proc vsplit*(
     wm: EditorWindowManager,
@@ -708,9 +707,9 @@ proc hsplit*(
     # - Subtract separator if needed
     numReservedLines =
       if multiStatusLine:
-        2 * StatusLineHeight + CommandLineHeight
+        2 * StatusLineHeight + steadyBottomAreaHeight()
       else:
-        StatusLineHeight + CommandLineHeight
+        StatusLineHeight + steadyBottomAreaHeight()
     availableContentHeight = origHeight - numReservedLines - separatorOffset
 
     # Split content area: favor top window (round up) to preserve scroll position
@@ -720,7 +719,7 @@ proc hsplit*(
   # Move the active window to the bottom half
   # Bottom window has status line + command line
   wm.windows[wm.activeWindowIndex].viewport.height =
-    bottomContentHeight + StatusLineHeight + CommandLineHeight
+    bottomContentHeight + StatusLineHeight + steadyBottomAreaHeight()
   wm.windows[wm.activeWindowIndex].viewport.y =
     origY + topContentHeight + (if multiStatusLine: StatusLineHeight else: 0) +
     separatorOffset
@@ -801,9 +800,9 @@ proc hsplitWithBuffer*(
 
     numReservedLines =
       if multiStatusLine:
-        2 * StatusLineHeight + CommandLineHeight
+        2 * StatusLineHeight + steadyBottomAreaHeight()
       else:
-        StatusLineHeight + CommandLineHeight
+        StatusLineHeight + steadyBottomAreaHeight()
     availableContentHeight = origHeight - numReservedLines - separatorOffset
 
     # Split content area: favor top window (round up) to preserve scroll position
@@ -812,7 +811,7 @@ proc hsplitWithBuffer*(
 
   # Move the active window to the bottom half
   wm.windows[wm.activeWindowIndex].viewport.height =
-    bottomContentHeight + StatusLineHeight + CommandLineHeight
+    bottomContentHeight + StatusLineHeight + steadyBottomAreaHeight()
   wm.windows[wm.activeWindowIndex].viewport.y =
     origY + topContentHeight + (if multiStatusLine: StatusLineHeight else: 0) +
     separatorOffset
@@ -1260,11 +1259,14 @@ proc resizeWindows*(
       windowBottomY = window.viewport.y + window.viewport.height
       isBottomWindow = (windowBottomY == maxBottomY)
 
-    # Calculate reserved lines based on window position and status line mode
-    # Status line and command line share the same row
+    # Calculate reserved lines based on window position and status line mode.
+    # Status line and command line share the same row.
+    # Deliberately steady: transient command-line growth (wrapped input,
+    # multi-line messages) is excluded from persistent geometry, matching
+    # the steady reserve adjustViewportForCursor scrolls with.
     let reservedLines =
       if isBottomWindow:
-        StatusLineHeight # Status + command share same row
+        steadyBottomAreaHeight() # Status + command share same row
       else:
         if multiStatusLine: StatusLineHeight else: 0
 

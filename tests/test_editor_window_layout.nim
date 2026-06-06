@@ -39,7 +39,7 @@ suite "calculateTerminalAreaDimensions":
     # Default viewport: width=80, height=20
     let (cols, rows) = e.calculateTerminalAreaDimensions(win)
     check cols == 80
-    # height(20) - StatusAndCommandReserve(1) - tabLineOffset(0)
+    # height(20) - steadyBottomAreaHeight()(1) - tabLineOffset(0)
     check rows == 19
 
   test "single window, status line disabled":
@@ -49,7 +49,7 @@ suite "calculateTerminalAreaDimensions":
     let win = e.activeWindow
     let (cols, rows) = e.calculateTerminalAreaDimensions(win)
     check cols == 80
-    # height(20) - CommandLineReserve(1) - tabLineOffset(0)
+    # height(20) - steadyBottomAreaHeight()(1) - tabLineOffset(0)
     check rows == 19
 
   test "single window, with tab line":
@@ -59,7 +59,7 @@ suite "calculateTerminalAreaDimensions":
     let win = e.activeWindow
     let (cols, rows) = e.calculateTerminalAreaDimensions(win)
     check cols == 80
-    # height(20) - StatusAndCommandReserve(1) - TabLineHeight(1)
+    # height(20) - steadyBottomAreaHeight()(1) - TabLineHeight(1)
     check rows == 18
 
   test "hsplit, top window (non-bottom)":
@@ -85,7 +85,7 @@ suite "calculateTerminalAreaDimensions":
     let bottomWin = e.windowManager.windows[1]
     let (cols, rows) = e.calculateTerminalAreaDimensions(bottomWin)
     check cols == bottomWin.viewport.width
-    # Bottom window: height - StatusAndCommandReserve(1)
+    # Bottom window: height - steadyBottomAreaHeight()(1)
     check rows == bottomWin.viewport.height - 1
 
   test "minimum rows is 1":
@@ -97,7 +97,7 @@ suite "calculateTerminalAreaDimensions":
     win.viewport = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 2, x: 0, y: 0)
     let (cols, rows) = e.calculateTerminalAreaDimensions(win)
     check cols == 80
-    # height(2) - StatusAndCommandReserve(1) - TabLineHeight(1) = 0, clamped to 1
+    # height(2) - steadyBottomAreaHeight()(1) - TabLineHeight(1) = 0, clamped to 1
     check rows == 1
 
 suite "calculateReservedLines":
@@ -106,7 +106,7 @@ suite "calculateReservedLines":
     e.state.display.showStatusLine = true
     e.state.display.multiStatusLine = true
     let reserved = e.calculateReservedLines(isBottomWindow = true)
-    # StatusAndCommandReserve = 1 (status line and command line share the last row)
+    # steadyBottomAreaHeight() = 1 (status line and command line share the last row)
     check reserved == 1
 
   test "status line enabled, multi status line, non-bottom window":
@@ -122,7 +122,7 @@ suite "calculateReservedLines":
     e.state.display.showStatusLine = true
     e.state.display.multiStatusLine = false
     let reserved = e.calculateReservedLines(isBottomWindow = true)
-    # StatusAndCommandReserve = 1 (status line and command line share the last row)
+    # steadyBottomAreaHeight() = 1 (status line and command line share the last row)
     check reserved == 1
 
   test "status line enabled, single status line, non-bottom window":
@@ -137,7 +137,7 @@ suite "calculateReservedLines":
     let e = createTestEditor()
     e.state.display.showStatusLine = false
     let reserved = e.calculateReservedLines(isBottomWindow = true)
-    # CommandLineReserve = 1
+    # steadyBottomAreaHeight() = 1
     check reserved == 1
 
   test "status line disabled, non-bottom window":
@@ -145,6 +145,45 @@ suite "calculateReservedLines":
     e.state.display.showStatusLine = false
     let reserved = e.calculateReservedLines(isBottomWindow = false)
     check reserved == 0
+
+  test "multi-line status message grows the bottom reserve":
+    let e = createTestEditor()
+    e.screenSize.width = 80
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = false
+    e.state.setStatusQuiet("a\nb\nc")
+    # 3 message rows + pushed-up status line row
+    check e.calculateReservedLines(isBottomWindow = true) == 4
+    # Non-bottom windows are unaffected
+    check e.calculateReservedLines(isBottomWindow = false) == 0
+
+  test "multi-line status message without status line":
+    let e = createTestEditor()
+    e.screenSize.width = 80
+    e.state.display.showStatusLine = false
+    e.state.setStatusQuiet("a\nb\nc")
+    check e.calculateReservedLines(isBottomWindow = true) == 3
+
+  test "wrapped command overlay grows the bottom reserve":
+    let e = createTestEditor()
+    e.screenSize.width = 80
+    e.state.display.showStatusLine = true
+    e.state.enterCommandOverlay()
+    # ":" + 100 chars = 101 columns -> 2 rows at width 80, + status line row
+    e.state.commandText = ":" & "a".repeat(100)
+    e.state.commandCursor = 0
+    check e.calculateReservedLines(isBottomWindow = true) == 3
+
+  test "terminal dimensions stay steady under a multi-line message":
+    let e = createTestEditor()
+    e.screenSize.width = 80
+    e.state.display.showStatusLine = true
+    e.state.display.showTabLine = false
+    e.state.setStatusQuiet("a\nb\nc")
+    let win = e.activeWindow
+    let (_, rows) = e.calculateTerminalAreaDimensions(win)
+    # PTY size must not flap on transient messages: height(20) - steady(1)
+    check rows == 19
 
 suite "calculateSidebarWidth":
   test "sidebar enabled in file edit mode":
@@ -353,7 +392,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 4 # lineNumOffset
     check pos.y == 0
@@ -371,7 +410,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 9 # lineNumOffset + 5
     check pos.y == 0
@@ -389,7 +428,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 4 # lineNumOffset
     check pos.y == 1 # second line
@@ -407,7 +446,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 0
     check pos.y == 0
@@ -425,7 +464,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 9 # lineNumOffset + (10 - 5) = 4 + 5 = 9
     check pos.y == 0
@@ -443,7 +482,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 0
     check pos.y == 0
@@ -461,7 +500,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 4
     check pos.y == 0
@@ -481,7 +520,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 0,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 1,
     )
     # maxWidth = 10 - 0 - 1 = 9
@@ -504,7 +543,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 1,
     )
     check pos.x == 9 # lineNumOffset + 5
@@ -525,7 +564,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 0,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 2,
     )
     # maxWidth = 10 - 0 - 2 = 8
@@ -548,7 +587,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 0,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 0,
     )
     check pos.x == 0
@@ -569,7 +608,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 1,
     )
     # segment 1, display col = 1, x = viewport.x + lineNumOffset + 1 = 0 + 4 + 1
@@ -593,7 +632,7 @@ suite "calculateWindowCursor":
       viewport,
       cursor,
       lineNumOffset = 0,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
       scrollbarWidth = 1,
     )
     check pos.x == 2
@@ -613,7 +652,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 4
     check pos.y == 2 # Line 0, empty line 1, Line 2
@@ -634,7 +673,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 4
     # Line 0 wraps to multiple screen lines, then Line 2
@@ -656,7 +695,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
     # Should be on wrapped line (y=1) at column 5 (15 - 10 = 5)
     check pos.y == 1
@@ -675,7 +714,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 0
     check pos.y == 0
@@ -693,7 +732,7 @@ suite "calculateWindowCursor - wrap mode edge cases":
       viewport,
       cursor,
       lineNumOffset = 4,
-      reservedLines = StatusAndCommandReserve,
+      reservedLines = steadyBottomAreaHeight(),
     )
     check pos.x == 0
     check pos.y == 0
