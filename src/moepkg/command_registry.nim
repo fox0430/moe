@@ -135,11 +135,7 @@ proc executeCommand*(
         # For page scroll motions, we want to scroll the full page amount, not just minimum to show cursor
         let viewportHeight = ctx.motionController.viewportManager.viewport.height
         let lineCount = ctx.motionController.executor.buffer.len
-        let reservedLines =
-          if ctx.state.display.showStatusLine:
-            StatusAndCommandReserve
-          else:
-            CommandLineReserve
+        let reservedLines = steadyBottomAreaHeight()
         let pageSize = max(1, viewportHeight - reservedLines - 1)
         let halfPageSize = max(1, pageSize div 2)
 

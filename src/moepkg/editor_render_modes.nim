@@ -23,7 +23,7 @@ import std/[options, strutils]
 
 import pkg/celina
 
-import editor_types, color, colorcode, render_utils, config_mode
+import editor_types, color, colorcode, render_utils, config_mode, editor_window_layout
 import terminal/ansi_parser
 
 proc renderConfig*(
@@ -37,14 +37,10 @@ proc renderConfig*(
   if window.modeState.kind != mskConfig:
     return
 
-  # Calculate reserved lines at bottom for bottom windows only
-  let reservedBottom =
-    if isBottomWindow and e.state.display.showStatusLine:
-      StatusAndCommandReserve
-    elif isBottomWindow:
-      CommandLineReserve
-    else:
-      0
+  # Calculate reserved lines at bottom for bottom windows only.
+  # Steady value: a transiently grown command-line area overdraws the view,
+  # exactly like multi-line status messages do.
+  let reservedBottom = steadyReservedBottom(isBottomWindow)
 
   let
     configState = window.modeState.config
@@ -281,20 +277,14 @@ proc renderTerminal*(
   if window.modeState.kind != mskTerminal:
     return
 
-  let reservedBottom =
-    if isBottomWindow and e.state.display.showStatusLine:
-      StatusAndCommandReserve
-    elif isBottomWindow:
-      CommandLineReserve
-    else:
-      0
-
   let
     termState = window.modeState.terminal
     grid = termState.grid
     startX = window.viewport.x
     startY = window.viewport.y + tabLineOffset
-    maxRows = window.viewport.height - reservedBottom - tabLineOffset
+    # Same formula as the PTY sizing in calculateTerminalAreaDimensions, so
+    # the rendered grid and the PTY size cannot diverge.
+    maxRows = terminalContentRows(window, isBottomWindow, tabLineOffset)
     maxCols = window.viewport.width
 
   case termState.subMode

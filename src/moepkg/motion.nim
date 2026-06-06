@@ -825,7 +825,7 @@ proc calculateNewPosition*(
     cmd: MotionCommand,
     viewportHeight: int = 24,
     viewportTopLine: int = 0,
-    reservedLines: int = StatusAndCommandReserve,
+    reservedLines: int = steadyBottomAreaHeight(),
 ): CursorPosition =
   ## Calculate new cursor position after motion, without modifying state
   case cmd.motion
@@ -987,12 +987,12 @@ proc updateViewport*(
     clampedCursorY = max(0, min(cursorPos.y, lineCount - 1))
     clampedCursorX = max(0, cursorPos.x)
 
-    # Calculate reserved lines based on status line visibility or explicit parameter
+    # Use the explicit parameter, or fall back to the steady bottom reserve
     actualReservedLines =
       if reservedLines >= 0:
         reservedLines
       else:
-        (if showStatusLine: StatusAndCommandReserve else: CommandLineReserve)
+        steadyBottomAreaHeight()
 
   # Vertical scrolling - handle line wrap mode differently
   if lineWrap and not buffer.isNil:
@@ -1159,7 +1159,7 @@ proc updateScrollAnimation*(
     mgr: ViewportManager,
     anim: var ScrollAnimation,
     config: SmoothScrollConfig,
-    reservedLines: int = StatusAndCommandReserve,
+    reservedLines: int = steadyBottomAreaHeight(),
     bufferLen: int = int.high,
 ): tuple[active: bool, cursorLine: int] =
   ## Update physics-based scroll animation each frame.
@@ -1298,11 +1298,7 @@ proc executeMotion*(
     if controller.cursorManager.state.windowDisplay.viewportReservedLines >= 0:
       controller.cursorManager.state.windowDisplay.viewportReservedLines
     else:
-      (
-        if controller.cursorManager.state.display.showStatusLine:
-        StatusAndCommandReserve
-        else: CommandLineReserve
-      )
+      steadyBottomAreaHeight()
 
   var newPos = controller.executor.calculateNewPosition(
     currentPos, cmd, controller.viewportManager.viewport.height,

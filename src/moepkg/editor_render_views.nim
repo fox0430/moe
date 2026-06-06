@@ -161,6 +161,19 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       isActiveWindow = (i == e.windowManager.activeWindowIndex)
       reservedLines = e.calculateReservedLines(isBottomWindow)
       visibleHeight = max(1, window.viewport.height - reservedLines - tabLineOffset)
+      # Viewport scrolling (topLine) is persistent state, so it must use the
+      # steady bottom reserve: a transiently grown command-line area (wrapped
+      # overlay input, multi-line status message) would otherwise scroll the
+      # view up and never scroll it back once the area shrinks again. The
+      # grown area simply covers the bottom content rows for a frame instead,
+      # like Vim.
+      steadyReservedLines =
+        if isBottomWindow:
+          steadyBottomAreaHeight()
+        else:
+          reservedLines
+      adjustHeight =
+        max(1, window.viewport.height - steadyReservedLines - tabLineOffset)
       sidebarWidth = e.calculateSidebarWidth(window.mode)
       scrollbarWidth = e.calculateScrollbarWidth(window.mode)
       textAreaWidth =
@@ -171,7 +184,7 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     # sidebar / scrollbar gating done above.
     let effectiveLineWrap = e.state.display.lineWrap and window.mode.isFileEditMode
     adjustViewportForCursor(
-      window.viewport, window.cursor, visibleHeight, textAreaWidth, effectiveLineWrap,
+      window.viewport, window.cursor, adjustHeight, textAreaWidth, effectiveLineWrap,
       window.buffer, e.state.display.tabStop, window.wrapCountCache,
     )
 
@@ -238,7 +251,18 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
     # (and merge is disabled - merge shows only one status line at bottom)
     if e.state.display.showStatusLine and e.state.display.multiStatusLine and
         not e.config.statusLine.merge:
-      let statusLineY = calculateWindowStatusLineY(window, isBottomWindow)
+      # Bottom windows: a grown command-line area reserves its own status row
+      # above it (bottomAreaHeight = grown rows + 1), so shift the status line
+      # up by the grown rows; steady state (reservedLines == 1) is unshifted
+      # and keeps sharing the bottom row with the command line.
+      let statusLineY =
+        if isBottomWindow:
+          max(
+            window.viewport.y,
+            calculateWindowStatusLineY(window, isBottomWindow) - (reservedLines - 1),
+          )
+        else:
+          calculateWindowStatusLineY(window, isBottomWindow)
       e.state.renderWindowStatusLine(
         window.buffer, buffer, statusLineY, window.viewport.x, window.viewport.width,
         isActiveWindow, window.mode, e.config.statusLine,
@@ -288,86 +312,126 @@ proc renderSplitView*(e: Editor, buffer: var Buffer, wasResized: bool) =
       # Normal, Insert, Visual, etc. - cursor should be visible
       e.state.cursorVisible = true
 
-proc renderBottomLines*(e: Editor, buffer: var Buffer) =
-  ## Render status line and command line at the bottom of the screen.
-  ## The status line and command line share the last row (y = height - 1).
-  ## When a command/search/rename overlay is active, it overwrites the status line.
-  let bottomY = buffer.area.y + buffer.area.height - 1
+proc renderWrappedInput(
+    e: Editor,
+    buffer: var Buffer,
+    areaTopY, areaH, width: int,
+    text: string,
+    grid: tuple[totalRows, cursorRow, cursorCol: int],
+) =
+  ## Render overlay input text wrapped across the command-line area and place
+  ## the screen cursor on the wrap grid (precomputed by the caller via
+  ## wrappedInputGrid). When the input exceeds the area (height cap), scrolls
+  ## within the wrap grid keeping the cursor row visible, biased to the tail
+  ## like Vim.
+  let
+    style = commandStyle()
+    (totalRows, cRow, cCol) = grid
+    firstRow = max(0, min(cRow, totalRows - areaH))
 
-  # Render global status line at the bottom:
+  if areaH > 1:
+    # Grown area: clear all rows (they cover window content).
+    # The steady single row keeps the overlay-styled status line beneath the
+    # input, matching the previous shared-row rendering.
+    buffer.fill(
+      Rect(x: buffer.area.x, y: areaTopY, width: buffer.area.width, height: areaH),
+      cell(" ", style),
+    )
+
+  # Walk the wrap segments once and draw the visible ones. Same grid as
+  # wrappedInputRowCount/wrappedInputCursor: shared boundary rule
+  # (startsNewWrapSegment inside displayWidthSubstrFromByte) and tab stop.
+  var
+    bytePos = 0
+    row = 0
+  while bytePos < text.len and row < firstRow + areaH:
+    let (_, _, endByte) =
+      displayWidthSubstrFromByte(text, bytePos, width, InputWrapTabStop)
+    if row >= firstRow:
+      buffer.setString(
+        buffer.area.x, areaTopY + (row - firstRow), text[bytePos ..< endByte], style
+      )
+    bytePos = endByte
+    row.inc
+
+  e.state.screenCursor.x = buffer.area.x + cCol
+  e.state.screenCursor.y = areaTopY + (cRow - firstRow)
+
+proc renderBottomLines*(e: Editor, buffer: var Buffer) =
+  ## Render status line and the command-line area at the bottom of the screen.
+  ## The area height is dynamic (commandLineAreaHeight): in the steady state
+  ## it is the single row shared by the status line and the command line
+  ## (overlays overwrite the status line). Wrapped overlay input and
+  ## multi-line status messages grow the area upward, pushing the status line
+  ## onto its own row above it.
+  let
+    width = buffer.area.width
+    screenBottomY = buffer.area.y + buffer.area.height - 1
+    areaH = min(e.state.commandLineAreaHeight(width), buffer.area.height)
+    areaTopY = screenBottomY - areaH + 1
+    grown = areaH > 1
+
+  # Render global status line:
   # - When multiStatusLine is disabled: single status line for all windows
   # - When merge is enabled: merged status line at bottom
   # When multiStatusLine is enabled (and merge is off), per-window status lines
-  # are rendered in renderSplitView instead.
+  # are rendered in renderSplitView instead (bottom windows shift theirs above
+  # a grown area there, so the grown branch must not add a global one on top).
   if not e.state.display.multiStatusLine or e.config.statusLine.merge:
-    e.state.renderStatusLine(e.activeBuffer(), buffer, bottomY, e.config.statusLine)
+    if grown:
+      # Pushed up onto its own row above the grown area
+      let statusY = areaTopY - 1
+      if statusY >= buffer.area.y:
+        e.state.renderStatusLine(e.activeBuffer(), buffer, statusY, e.config.statusLine)
+    else:
+      e.state.renderStatusLine(
+        e.activeBuffer(), buffer, screenBottomY, e.config.statusLine
+      )
 
-  # Handle command line based on overlay state.
-  # Overlays render at the same bottomY, overwriting the status line.
-  if e.state.isCommandOverlay:
-    buffer.setString(buffer.area.x, bottomY, e.state.commandText, commandStyle())
-    # Cursor position: display width of commandText up to cursor
-    e.state.screenCursor.x =
-      displayWidthUpTo(e.state.commandText, e.state.commandCursor + 1)
-    e.state.screenCursor.y = bottomY
+  if e.state.hasOverlay:
+    let
+      (text, cursorChar) = e.state.overlayInput()
+      grid = wrappedInputGrid(text, cursorChar, width)
+    e.renderWrappedInput(buffer, areaTopY, areaH, width, text, grid)
 
     # Render command completion popup if active
-    if e.state.commandCompletionManager.isActive():
+    if e.state.isCommandOverlay and e.state.commandCompletionManager.isActive():
       let popupPos = calculateCommandPopupPosition(
-        e.state.commandCursor, buffer.area.width, buffer.area.height,
+        e.state.commandCursor,
+        buffer.area.width,
+        buffer.area.height,
         e.state.commandCompletionManager.menu.entries,
         e.state.commandCompletionManager.menu.maxVisible,
         e.state.commandCompletionManager.argStartX,
+        # Full bottom reserve, so the popup also clears the status line
+        # pushed above a grown area
+        bottomAreaRows = e.state.bottomAreaHeight(width),
       )
       renderCommandCompletionPopup(
         buffer, e.state.commandCompletionManager.menu, popupPos
       )
-  elif e.state.isSearchOverlay:
-    let searchChar = if e.state.search.direction == Forward: "/" else: "?"
-    let searchPrompt = searchChar & e.state.search.text
-    buffer.setString(buffer.area.x, bottomY, searchPrompt, commandStyle())
-    # Cursor position: 1 for the prompt char ("/" or "?", always ASCII)
-    # plus the display width of the search text up to the cursor.
-    e.state.screenCursor.x =
-      1 + displayWidthUpTo(e.state.search.text, e.state.search.cursor)
-    e.state.screenCursor.y = bottomY
-  elif e.state.isRenameOverlay:
-    let renamePrompt = "Rename: " & e.state.renameState.text
-    buffer.setString(buffer.area.x, bottomY, renamePrompt, commandStyle())
-    e.state.screenCursor.x = displayWidth(renamePrompt)
-    e.state.screenCursor.y = bottomY
   else:
     let lineCount = e.state.statusMessageLineCount()
     if lineCount == 1:
-      # Single line: overwrite the status line
-      buffer.setString(buffer.area.x, bottomY, e.state.statusMessage, commandStyle())
+      # Single line: overwrite the status line on the shared row
+      buffer.setString(
+        buffer.area.x, screenBottomY, e.state.statusMessage, commandStyle()
+      )
     elif lineCount > 1:
-      # Multi-line: move status line up, expand message area downward to bottomY
+      # Multi-line: render the last areaH message lines into the grown area
       let
         allLines = e.state.statusMessage.split('\n')
-        # Limit to MaxStatusMessageLines, show last N lines if exceeded
         lines =
-          if allLines.len > MaxStatusMessageLines:
-            allLines[allLines.len - MaxStatusMessageLines .. ^1]
+          if allLines.len > areaH:
+            allLines[allLines.len - areaH .. ^1]
           else:
             allLines
-        # Status line moves up to make room for all message lines
-        newStatusLineY = max(0, buffer.area.height - 1 - lines.len)
-        messageStartY = newStatusLineY + 1
-
-      # Re-render status line at new position
-      e.state.renderStatusLine(
-        e.activeBuffer(), buffer, newStatusLineY, e.config.statusLine
+      buffer.fill(
+        Rect(x: buffer.area.x, y: areaTopY, width: buffer.area.width, height: lines.len),
+        cell(" ", commandStyle()),
       )
-
-      # Render message lines from messageStartY to bottomY
       for i, line in lines:
-        let y = messageStartY + i
-        if y >= messageStartY and y <= bottomY:
-          buffer.setString(
-            buffer.area.x, y, " ".repeat(buffer.area.width), commandStyle()
-          )
-          buffer.setString(buffer.area.x, y, line, commandStyle())
+        buffer.setString(buffer.area.x, areaTopY + i, line, commandStyle())
 
 proc renderTempMessages*(e: Editor, buffer: var Buffer) =
   ## Render temporary messages at the bottom of screen (like Vim's :jumps output)

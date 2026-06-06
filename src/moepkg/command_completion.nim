@@ -498,10 +498,14 @@ proc calculateCommandPopupPosition*(
     entries: seq[CommandCompletionEntry],
     maxVisible: int = DefaultMaxVisible,
     argStartPos: int = 0,
+    bottomAreaRows: int = 1,
 ): CommandPopupPosition =
   ## Calculate popup position and size for command completion
-  ## Popup appears above the command line
+  ## Popup appears above the whole reserved bottom area
   ## argStartPos: position where argument starts (for argument completion)
+  ## bottomAreaRows: total rows reserved at the bottom — the (possibly
+  ## wrapped) command-line rows plus the status line pushed above them
+  ## when the area is grown
   let visibleItems = min(entries.len, maxVisible)
   let popupHeight = visibleItems + 2 # +2 for border
 
@@ -518,8 +522,9 @@ proc calculateCommandPopupPosition*(
       max(MinPopupWidth, min(maxCmdWidth + PopupPadding, MaxPopupWidth))
   let popupWidth = contentWidth + 2 # +2 for border
 
-  # Position: above command line (which is at termHeight - 1)
-  let y = termHeight - 1 - popupHeight
+  # Position: above the reserved bottom area (its top row is at
+  # termHeight - bottomAreaRows)
+  let y = termHeight - bottomAreaRows - popupHeight
 
   # X position: start from argument position for argument completion, or 0 for command
   var x = argStartPos

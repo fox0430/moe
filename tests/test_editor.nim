@@ -22,8 +22,10 @@
 import std/[unittest, os, options, strutils]
 import pkg/results
 import
-  ../src/moepkg/
-    [editor, buffer, config, config_loader, config_mode, highlight, window_manager]
+  ../src/moepkg/[
+    editor, buffer, config, config_loader, config_mode, highlight, window_manager,
+    render_utils,
+  ]
 import ../src/moepkg/command_handlers/[command_mode_handler, handler_result]
 import ../src/moepkg/command_handlers/result_processor
 import ../src/moepkg/buffer_backends/gap_buffer
@@ -1172,7 +1174,7 @@ suite "Editor - Config mode changes sync to display via applyConfigSettings":
 
 suite "Startup window - FileTree":
   ## These tests simulate handleStartUpWindows: viewport height is set to
-  ## termHeight - CommandLineHeight (reserving the command line row) and
+  ## termHeight - steadyBottomAreaHeight() (reserving the command line row) and
   ## screenSize is synced so no ratio-based resizeWindows runs afterward.
 
   test "FileTree opens with correct layout":
@@ -1183,7 +1185,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 120
       termHeight = 40
-      viewportHeight = termHeight - CommandLineHeight
+      viewportHeight = termHeight - steadyBottomAreaHeight()
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1234,7 +1236,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 120
       termHeight = 40
-      viewportHeight = termHeight - CommandLineHeight
+      viewportHeight = termHeight - steadyBottomAreaHeight()
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1256,7 +1258,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 200
       termHeight = 50
-      viewportHeight = termHeight - CommandLineHeight
+      viewportHeight = termHeight - steadyBottomAreaHeight()
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1289,7 +1291,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 120
       termHeight = 40
-      viewportHeight = termHeight - CommandLineHeight
+      viewportHeight = termHeight - steadyBottomAreaHeight()
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1317,7 +1319,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 160
       termHeight = 48
-      viewportHeight = termHeight - CommandLineHeight
+      viewportHeight = termHeight - steadyBottomAreaHeight()
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1336,7 +1338,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 120
       termHeight = 40
-      viewportHeight = termHeight - CommandLineHeight
+      viewportHeight = termHeight - steadyBottomAreaHeight()
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1377,7 +1379,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 160
       termHeight = 40
-      viewportHeight = termHeight - CommandLineHeight
+      viewportHeight = termHeight - steadyBottomAreaHeight()
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1424,7 +1426,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 120
       termHeight = 40
-      viewportHeight = termHeight - CommandLineHeight
+      viewportHeight = termHeight - steadyBottomAreaHeight()
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1473,7 +1475,7 @@ suite "Startup window - FileTree":
     const
       termWidth = 120
       termHeight = 40
-      viewportHeight = termHeight - CommandLineHeight
+      viewportHeight = termHeight - steadyBottomAreaHeight()
 
     let win = e.activeWindow
     win.viewport.width = termWidth
@@ -1556,7 +1558,7 @@ suite "Editor - openFileInNewRightWindow":
     let config = newEditorConfig()
     let e = newEditor(config, newValidationResult())
 
-    let viewportHeight = termHeight - CommandLineHeight
+    let viewportHeight = termHeight - steadyBottomAreaHeight()
     let win = e.activeWindow
     win.viewport.width = termWidth
     win.viewport.height = viewportHeight

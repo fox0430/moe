@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils]
+import std/[unittest, strutils, unicode]
 
 import pkg/results
 
@@ -554,3 +554,157 @@ suite "getWrapCount":
       discard getWrapCount(cache, buf, 0, 5, if i mod 2 == 0: 4 else: 8)
     check cache.gens.len == 1
     check cache.currentGen > genAfterFirst
+
+proc newTestState(showStatusLine: bool = true): EditorState =
+  EditorState(
+    activeWindow: EditorWindow(),
+    display: DisplaySettings(showStatusLine: showStatusLine),
+  )
+
+suite "wrappedInputCursor":
+  test "empty text":
+    check wrappedInputCursor("", 0, 80) == (row: 0, col: 0)
+
+  test "cursor mid-text on a single row":
+    check wrappedInputCursor(":edit", 3, 80) == (row: 0, col: 3)
+
+  test "cursor at exact right edge overflows to next row":
+    # Text fills the row exactly; cursor after the last char sits at col == width
+    check wrappedInputCursor(":aaa", 4, 4) == (row: 1, col: 0)
+
+  test "cursor within a wrapped segment":
+    # "0123456789" at width 4 wraps as "0123" / "4567" / "89"
+    check wrappedInputCursor("0123456789", 5, 4) == (row: 1, col: 1)
+
+  test "wide CJK characters straddle the wrap boundary":
+    # "あい" fills 4 columns, "う" starts the next segment
+    check wrappedInputCursor("あいう", 2, 4) == (row: 1, col: 0)
+    check wrappedInputCursor("あいう", 3, 4) == (row: 1, col: 2)
+
+suite "wrappedInputRowCount":
+  test "empty text is one row":
+    check wrappedInputRowCount("", 0, 80) == 1
+
+  test "cursor at exact-width end adds a row":
+    check wrappedInputRowCount(":aaa", 4, 4) == 2
+
+  test "wrapped text counts all segments":
+    check wrappedInputRowCount("0123456789", 0, 4) == 3
+
+  test "width floor of 1 avoids division blowup":
+    check wrappedInputRowCount("abc", 0, 0) == 3
+
+suite "wrap walkers - shared grid":
+  ## The reserved height (calculateWrapCount), the cursor cell
+  ## (cursorWrapPosition) and the drawn segments (displayWidthSubstrFromByte)
+  ## must agree on the same wrap grid (startsNewWrapSegment).
+
+  proc segmentRows(text: string, width, tabStop: int): int =
+    ## Count segments the way renderWrappedInput draws them
+    if text.len == 0:
+      return 1
+    var bytePos = 0
+    while bytePos < text.len:
+      let (_, _, endByte) = displayWidthSubstrFromByte(text, bytePos, width, tabStop)
+      bytePos = endByte
+      result.inc
+
+  test "drawn segments match calculateWrapCount":
+    const Texts = [
+      ":" & "a".repeat(100), # plain ASCII
+      "/日本語のテキストです".repeat(8), # wide chars
+      ":a\tb\tc".repeat(10), # tabs
+      ":éaaa".repeat(20), # combining (zero-width) runes
+      "x", # single char
+    ]
+    for text in Texts:
+      for width in [1, 4, 10, 80]:
+        check segmentRows(text, width, InputWrapTabStop) ==
+          calculateWrapCount(text, width, InputWrapTabStop)
+
+  test "cursor row never exceeds the drawn grid":
+    let text = "/wide日本語and\ttábs".repeat(10)
+    for width in [4, 10, 80]:
+      let rows = segmentRows(text, width, InputWrapTabStop)
+      for cursorChar in 0 .. text.runeLen:
+        let (row, col) = cursorWrapPosition(text, cursorChar, width, InputWrapTabStop)
+        check row < rows
+        check col <= max(1, width)
+
+suite "overlayInput":
+  test "command overlay includes the ':' prefix":
+    let state = newTestState()
+    state.enterCommandOverlay()
+    state.commandText = ":edit file"
+    state.commandCursor = 4
+    check state.overlayInput() == (text: ":edit file", cursorChar: 5)
+
+  test "search overlay uses '/' or '?' prompt":
+    let state = newTestState()
+    state.enterSearchOverlay(Forward)
+    state.search.text = "foo"
+    state.search.cursor = 2
+    check state.overlayInput() == (text: "/foo", cursorChar: 3)
+
+    state.search.direction = Backward
+    check state.overlayInput() == (text: "?foo", cursorChar: 3)
+
+  test "rename overlay pins the cursor at the end":
+    let state = newTestState()
+    state.enterRenameOverlay("oldName", 0, 0)
+    check state.overlayInput() == (text: "Rename: oldName", cursorChar: 15)
+
+suite "commandLineAreaHeight":
+  test "steady state floor is one row":
+    let state = newTestState()
+    check state.commandLineAreaHeight(80) == 1
+
+  test "non-positive width falls back to the steady floor":
+    let state = newTestState()
+    state.enterCommandOverlay()
+    state.commandText = ":" & "a".repeat(200)
+    check state.commandLineAreaHeight(0) == 1
+    check state.commandLineAreaHeight(-1) == 1
+
+  test "long command input wraps and grows the area":
+    let state = newTestState()
+    state.enterCommandOverlay()
+    # ":"  + 9 chars = 10 columns -> 3 rows at width 4
+    state.commandText = ":" & "a".repeat(9)
+    state.commandCursor = 0
+    check state.commandLineAreaHeight(4) == 3
+
+  test "overlay growth is capped at MaxStatusMessageLines":
+    let state = newTestState()
+    state.enterCommandOverlay()
+    state.commandText = ":" & "a".repeat(80 * (MaxStatusMessageLines + 5))
+    state.commandCursor = 0
+    check state.commandLineAreaHeight(80) == MaxStatusMessageLines
+
+  test "multi-line status message grows the area":
+    let state = newTestState()
+    state.setStatusQuiet("a\nb\nc")
+    check state.commandLineAreaHeight(80) == 3
+
+  test "status message line count is capped":
+    let state = newTestState()
+    state.setStatusQuiet("x\n".repeat(MaxStatusMessageLines + 5) & "x")
+    check state.commandLineAreaHeight(80) == MaxStatusMessageLines
+
+suite "bottomAreaHeight":
+  test "steady state shares the row with the status line":
+    check newTestState().bottomAreaHeight(80) == 1
+    check newTestState(showStatusLine = false).bottomAreaHeight(80) == 1
+
+  test "grown area pushes the status line onto its own row":
+    let state = newTestState()
+    state.setStatusQuiet("a\nb\nc")
+    check state.bottomAreaHeight(80) == 4
+
+  test "no extra row without a status line":
+    let state = newTestState(showStatusLine = false)
+    state.setStatusQuiet("a\nb\nc")
+    check state.bottomAreaHeight(80) == 3
+
+  test "steadyBottomAreaHeight is the floor":
+    check steadyBottomAreaHeight() == 1

@@ -84,7 +84,7 @@ proc createTestState(): EditorState =
       autoDeleteParen: false,
     ),
     windowDisplay: WindowDisplayState(
-      needsFullRedraw: false, viewportReservedLines: StatusAndCommandReserve
+      needsFullRedraw: false, viewportReservedLines: steadyBottomAreaHeight()
     ),
     macroState: MacroState(
       isRecording: false,
@@ -121,7 +121,7 @@ suite "screenToBufferPosition - Basic":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
       vp, buffer, 0, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
@@ -136,7 +136,7 @@ suite "screenToBufferPosition - Basic":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 4 # Space for line numbers
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at x=5, which is x=1 in text area (5 - 4 = 1)
     let result = screenToBufferPosition(
@@ -152,7 +152,7 @@ suite "screenToBufferPosition - Basic":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Line 1\nLine 2\nLine 3")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
       vp, buffer, 3, 1, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
@@ -167,7 +167,7 @@ suite "screenToBufferPosition - Basic":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at y=23 is within reserved lines (height=24, reserved=2)
     let result = screenToBufferPosition(
@@ -188,7 +188,7 @@ suite "screenToBufferPosition - Basic":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 4
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at x=2 is within line number area
     let result = screenToBufferPosition(
@@ -206,7 +206,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
           "line10\nline11\nline12"
       )
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
       vp, buffer, 3, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
@@ -221,7 +221,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
       vp = createTestViewport(0, 0, 80, 24, 0, 5) # leftColumn = 5
       buffer = newTextBuffer("Hello World this is a long line")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
       vp, buffer, 3, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
@@ -239,7 +239,7 @@ suite "screenToBufferPosition - Scrolled Viewport":
           "This is line 5 with some long content for horizontal scroll"
       )
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
       vp, buffer, 5, 0, lineNumOffset, sidebarWidth = 0, reservedLines, lineWrap = false
@@ -255,7 +255,7 @@ suite "screenToBufferPosition - Column Clamping":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Hi") # Only 2 characters
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at x=50, but line only has 2 chars
     let result = screenToBufferPosition(
@@ -278,7 +278,7 @@ suite "screenToBufferPosition - Column Clamping":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Line 1\n\nLine 3") # Line 1 is empty
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click on empty line at x=10
     let result = screenToBufferPosition(
@@ -301,7 +301,7 @@ suite "screenToBufferPosition - Column Clamping":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("あいう") # 3 chars, 9 bytes
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at x=50, but line only has 3 characters
     let result = screenToBufferPosition(
@@ -325,7 +325,7 @@ suite "screenToBufferPosition - Line Clamping":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Only one line")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at y=10, but buffer only has 1 line
     let result = screenToBufferPosition(
@@ -347,7 +347,7 @@ suite "screenToBufferPosition - Line Clamping":
       vp = createTestViewport(0, 0, 80, 24, 5, 0) # topLine = 5
       buffer = newTextBuffer("line0\nline1\nline2\nline3\nline4\nline5\nline6")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at y=10, topLine=5, so bufferLine = 15, but only 7 lines
     let result = screenToBufferPosition(
@@ -370,7 +370,7 @@ suite "screenToBufferPosition - Viewport Position":
       vp = createTestViewport(10, 5, 60, 20, 0, 0) # Viewport at (10, 5)
       buffer = newTextBuffer("Hello World\nSecond line\nThird line")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at absolute (12, 6) which is relative (2, 1) to viewport
     let result = screenToBufferPosition(
@@ -393,7 +393,7 @@ suite "screenToBufferPosition - Viewport Position":
       vp = createTestViewport(10, 5, 60, 20, 0, 0)
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at y=3, viewport starts at y=5
     let result = screenToBufferPosition(
@@ -415,7 +415,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 80, 24, 0, 5) # leftColumn is set but ignored
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # With lineWrap=true, leftColumn should be ignored
     let result = screenToBufferPosition(
@@ -433,7 +433,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 5, 24, 0, 0)
       buffer = newTextBuffer("abcdefghij")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click on screen row 1 (second wrap segment), col 2 => char 7 ('h')
     let result = screenToBufferPosition(
@@ -451,7 +451,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 10, 24, 0, 0)
       buffer = newTextBuffer("abcde\nfghij")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click on screen row 1 => line 1
     let result = screenToBufferPosition(
@@ -471,7 +471,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 15, 24, 0, 0)
       buffer = newTextBuffer("abcdefghijklmno")
       lineNumOffset = 5
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at x=7 on row 1 => screenX = 7-5=2, segment 1, char 12 ('m')
     let result = screenToBufferPosition(
@@ -492,7 +492,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       buffer = newTextBuffer("abcdefghijklmno")
       lineNumOffset = 5
       sidebarWidth = 2
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at x=9 on row 1 => screenX = 9-2-5=2, segment 1, char 12 ('m')
     let result = screenToBufferPosition(
@@ -510,7 +510,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 6, 24, 0, 0)
       buffer = newTextBuffer("あいうえお")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click on row 1, col 0 => first char of segment 1 = char 3 ('え')
     let result = screenToBufferPosition(
@@ -529,7 +529,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 10, 24, 0, 0)
       buffer = newTextBuffer("\tabcdefgh")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click on row 1, col 1 => char 8 ('h')
     let result = screenToBufferPosition(
@@ -556,7 +556,7 @@ suite "screenToBufferPosition - Line Wrap Mode":
       vp = createTestViewport(0, 0, 5, 24, 0, 0)
       buffer = newTextBuffer("abcdefghij\nklmno")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click on row 2, col 1 => line 1, char 1 ('l')
     let result = screenToBufferPosition(
@@ -578,7 +578,7 @@ suite "screenToBufferPosition - Scrollbar":
       vp = createTestViewport(0, 0, 12, 24, 0, 0)
       buffer = newTextBuffer("abcdefghijklmno")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click on row 1, col 0 => char 11 ('l')
     let result = screenToBufferPosition(
@@ -608,7 +608,7 @@ suite "screenToBufferPosition - Scrollbar":
       buffer = newTextBuffer("abcdefghijklmnopqrst")
       lineNumOffset = 5
       sidebarWidth = 2
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at x=8 on row 1 => screenX = 8-2-5=1, segment 1, char 13 ('n')
     let result = screenToBufferPosition(
@@ -637,7 +637,7 @@ suite "screenToBufferPosition - Scrollbar":
       buffer = newTextBuffer("abcdefghijklmnopqrst")
       lineNumOffset = 5
       sidebarWidth = 2
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at x=8 on row 1 => screenX = 8-2-5=1, segment 1, char 14 ('o')
     let result = screenToBufferPosition(
@@ -661,7 +661,7 @@ suite "screenToBufferPosition - Scrollbar":
       vp = createTestViewport(0, 0, 80, 24, 0, 0)
       buffer = newTextBuffer("Hello World")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     let result = screenToBufferPosition(
       vp,
@@ -689,7 +689,7 @@ suite "screenToBufferPosition - Scrollbar":
       vp = createTestViewport(0, 0, 14, 24, 0, 0)
       buffer = newTextBuffer("abcdefghijklmnop")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click on row 1, col 1 => char 13 ('n')
     let result = screenToBufferPosition(
@@ -715,7 +715,7 @@ suite "screenToBufferPosition - Scrollbar":
       vp = createTestViewport(0, 0, 10, 24, 0, 0)
       buffer = newTextBuffer("abcdefghijklmno")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # 15 chars at maxWidth=10: segment 0 = 0-9, segment 1 = 10-14
     # Click on row 1, col 0 => char 10 ('k')
@@ -744,7 +744,7 @@ suite "screenToBufferPosition - Scrollbar":
       vp = createTestViewport(0, 0, 12, 24, 0, 0)
       buffer = newTextBuffer("abcdefghijk\nlmnop")
       lineNumOffset = 0
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click on row 1, col 2 => line 1, char 2 ('n')
     let result = screenToBufferPosition(
@@ -772,7 +772,7 @@ suite "screenToBufferPosition - Scrollbar":
       buffer = newTextBuffer("abcdefghijklmnopqrst")
       lineNumOffset = 4
       sidebarWidth = 2
-      reservedLines = StatusAndCommandReserve
+      reservedLines = steadyBottomAreaHeight()
 
     # Click at x=7 on row 1 => screenX = 7-2-4 = 1, segment 1, char 18 ('s')
     let result = screenToBufferPosition(

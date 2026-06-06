@@ -109,7 +109,7 @@ proc applyStartUpScreenSize*(e: Editor, termWidth, termHeight: int) =
     # (status line and command line share it).
     let win = e.activeWindow
     win.viewport.width = termWidth
-    win.viewport.height = termHeight - CommandLineHeight
+    win.viewport.height = termHeight - steadyBottomAreaHeight()
 
   # Sync screenSize so the subsequent render does NOT trigger resizeWindows,
   # which would ratio-scale from the initial default size and break the layout.

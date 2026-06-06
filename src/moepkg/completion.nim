@@ -632,10 +632,13 @@ proc calculatePopupPosition*(
     entries: seq[CompletionEntry],
     maxVisible: int = DefaultMaxVisible,
     showBorder: bool = true,
+    bottomReserve: int = 2,
 ): PopupPosition =
   ## Calculate popup position and size based on content
   ## Width is determined by longest word (with min/max constraints)
   ## Prefers below cursor, falls back to above if not enough space
+  ## bottomReserve: rows at the bottom the popup must not cross — the
+  ## (possibly grown) command-line/status area plus one padding row
   let visibleItems = min(entries.len, maxVisible)
   let borderSize = if showBorder: 2 else: 0
   let popupHeight = visibleItems + borderSize
@@ -660,7 +663,7 @@ proc calculatePopupPosition*(
     x = max(0, termWidth - popupWidth)
 
   # Check if popup fits below cursor
-  if y + popupHeight > termHeight - 2: # -2 for status/command lines
+  if y + popupHeight > termHeight - bottomReserve:
     # Try above cursor
     y = cursorY - popupHeight
     if y < 0:
@@ -823,10 +826,15 @@ proc updateDocPanel*(mgr: CompletionManager) =
   mgr.docPanel.visible = true
 
 proc calculateDocPanelPosition*(
-    completionPos: PopupPosition, termWidth, termHeight: int, docPanel: DocPanel
+    completionPos: PopupPosition,
+    termWidth, termHeight: int,
+    docPanel: DocPanel,
+    bottomReserve: int = 2,
 ): PopupPosition =
   ## Calculate documentation panel position relative to completion popup
   ## Prefers right side, falls back to left
+  ## bottomReserve: rows at the bottom the panel must not cross — the
+  ## (possibly grown) command-line/status area plus one padding row
 
   # Calculate content dimensions
   var maxLineLen = 0
@@ -855,8 +863,8 @@ proc calculateDocPanelPosition*(
 
   # Align vertically with completion popup
   var y = completionPos.y
-  if y + popupHeight > termHeight - 2:
-    y = max(0, termHeight - 2 - popupHeight)
+  if y + popupHeight > termHeight - bottomReserve:
+    y = max(0, termHeight - bottomReserve - popupHeight)
 
   PopupPosition(x: x, y: y, width: popupWidth, height: popupHeight)
 

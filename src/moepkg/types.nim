@@ -787,15 +787,6 @@ proc statusMessageLineCount*(state: EditorState): int =
   else:
     min(state.statusMessageStr.count('\n') + 1, MaxStatusMessageLines)
 
-proc statusMessageExtraLines*(state: EditorState): int =
-  ## Get extra lines needed beyond the default command line
-  ## Returns 0 for single-line or empty messages
-  let lineCount = state.statusMessageLineCount()
-  if lineCount > 1:
-    lineCount - 1
-  else:
-    0
-
 # Overlay accessors
 
 proc hasOverlay*(state: EditorState): bool =

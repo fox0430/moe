@@ -463,6 +463,102 @@ suite "renderBottomLines - Rename mode":
     check e.state.screenCursor.x == 8 # "Rename: ".len
     check e.state.screenCursor.y == buffer.area.height - 1
 
+proc rowText(buffer: Buffer, y: int, length: int): string =
+  ## Collect the symbols of a buffer row for content assertions
+  for x in 0 ..< length:
+    result.add buffer[x, y].symbol
+
+suite "renderBottomLines - Wrapped overlay input":
+  test "Long command input wraps onto a second row":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.enterCommandOverlay()
+    # ":" + 80 chars = 81 columns -> 2 rows at width 80
+    e.state.commandText = ":" & "a".repeat(80)
+    e.state.commandCursor = 80 # cursor at end
+
+    e.renderBottomLines(buffer)
+
+    # Rows 22-23 hold the wrapped input, status line is pushed up to row 21
+    check rowText(buffer, 22, 80) == ":" & "a".repeat(79)
+    check rowText(buffer, 23, 2) == "a "
+    # Cursor lands after the overflowed char on the second row
+    check e.state.screenCursor.x == 1
+    check e.state.screenCursor.y == 23
+
+  test "Cursor at the exact right edge grows an extra row":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.enterCommandOverlay()
+    # ":" + 79 chars = exactly 80 columns; the cursor cell overflows
+    e.state.commandText = ":" & "a".repeat(79)
+    e.state.commandCursor = 79
+
+    e.renderBottomLines(buffer)
+
+    check rowText(buffer, 22, 80) == ":" & "a".repeat(79)
+    # Second row is blank, holding only the cursor cell
+    check rowText(buffer, 23, 3) == "   "
+    check e.state.screenCursor.x == 0
+    check e.state.screenCursor.y == 23
+
+  test "Input exceeding the height cap scrolls to keep the cursor visible":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.enterCommandOverlay()
+    # 1 + 12*80 columns -> 13 wrap rows, capped at MaxStatusMessageLines (10)
+    e.state.commandText = ":" & "a".repeat(80 * 12)
+    e.state.commandCursor = 80 * 12
+
+    e.renderBottomLines(buffer)
+
+    # Area occupies rows 14-23; the first 3 wrap rows are scrolled out
+    check rowText(buffer, 14, 80) == "a".repeat(80)
+    # Cursor on the last row, one column past the final char
+    check e.state.screenCursor.x == 1
+    check e.state.screenCursor.y == 23
+
+  test "Long search input wraps with the prompt char":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.enterSearchOverlay(Forward)
+    e.state.search.text = "x".repeat(85)
+    e.state.search.cursor = 85
+
+    e.renderBottomLines(buffer)
+
+    check rowText(buffer, 22, 80) == "/" & "x".repeat(79)
+    check rowText(buffer, 23, 7) == "x".repeat(6) & " "
+    check e.state.screenCursor.x == 6
+    check e.state.screenCursor.y == 23
+
+  test "Multi-line message rows land in the grown area":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.state.mode = EditorMode.Normal
+    e.state.statusMessage = "Line 1\nLine 2\nLine 3"
+
+    e.renderBottomLines(buffer)
+
+    check rowText(buffer, 21, 6) == "Line 1"
+    check rowText(buffer, 22, 6) == "Line 2"
+    check rowText(buffer, 23, 6) == "Line 3"
+
 suite "renderBottomLines - Status line visibility":
   test "Render with single window":
     let e = createTestEditor()
@@ -612,6 +708,54 @@ suite "renderSplitView - Viewport adjustment":
     # Viewport should have scrolled horizontally
     let window2 = e.windowManager.windows[0]
     check window2.viewport.leftColumn > 0
+
+  test "Wrapped overlay input does not scroll the viewport (no ratchet)":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    for i in 0 ..< 100:
+      discard
+        e.textBuffer.insertText(BufferPosition(line: i, column: 0), "Line " & $i & "\n")
+
+    # Put the cursor on the bottom visible line and settle the viewport
+    e.cursor = BufferPosition(line: 50, column: 0)
+    e.renderSplitView(buffer, false)
+    let settledTopLine = e.windowManager.windows[0].viewport.topLine
+
+    # A command input long enough to wrap to multiple rows grows the
+    # bottom area, but must not scroll the persistent viewport
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":" & "a".repeat(200)
+    e.state.commandCursor = 200
+    e.renderSplitView(buffer, false)
+    check e.windowManager.windows[0].viewport.topLine == settledTopLine
+
+    # And the viewport is unchanged after the overlay closes
+    e.state.exitOverlay()
+    e.renderSplitView(buffer, false)
+    check e.windowManager.windows[0].viewport.topLine == settledTopLine
+
+  test "Multi-line status message does not scroll the viewport":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+
+    for i in 0 ..< 100:
+      discard
+        e.textBuffer.insertText(BufferPosition(line: i, column: 0), "Line " & $i & "\n")
+
+    e.cursor = BufferPosition(line: 50, column: 0)
+    e.renderSplitView(buffer, false)
+    let settledTopLine = e.windowManager.windows[0].viewport.topLine
+
+    e.state.setStatusQuiet("error line 1\nerror line 2\nerror line 3")
+    e.renderSplitView(buffer, false)
+    check e.windowManager.windows[0].viewport.topLine == settledTopLine
 
   test "Viewport does not scroll horizontally when line wrap enabled":
     let e = createTestEditor()
@@ -1185,6 +1329,69 @@ suite "Bottom area - status line and command line share last row":
     check positions.len == 2
     # Bottom window's status line should be at y=23 (last row)
     check positions[^1] == 23
+
+suite "Status line - grown area in multiStatusLine mode":
+  test "vsplit: per-window status lines shift above the grown area, no global one":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.screenSize.width = 80
+    e.screenSize.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+    e.config.statusLine.merge = false
+
+    discard e.vsplit()
+    check e.windowManager.windows.len == 2
+
+    # ":" + 100 chars -> 2 wrapped rows; status row reserved above them
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":" & "a".repeat(100)
+    e.state.commandCursor = 100
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    # Both per-window status lines sit on the pushed-up row 21
+    # (24 - 2 input rows - 1), each in its own half — not one global line
+    check buffer.getRowText(21).count("UTF-8") == 2
+    # And that is the only status row on screen
+    check statusLineYPositions(buffer) == @[21]
+
+  test "hsplit: bottom window status line shifts, top window's stays":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    e.viewport.width = 80
+    e.viewport.height = 24
+    e.screenSize.width = 80
+    e.screenSize.height = 24
+    e.state.display.showStatusLine = true
+    e.state.display.multiStatusLine = true
+    e.config.statusLine.merge = false
+
+    discard e.hsplit()
+    check e.windowManager.windows.len == 2
+
+    e.state.enterCommandOverlay()
+    e.state.commandText = ":" & "a".repeat(100)
+    e.state.commandCursor = 100
+
+    clearBuffer(buffer)
+    e.renderSplitView(buffer, false)
+    e.renderBottomLines(buffer)
+
+    let positions = statusLineYPositions(buffer)
+    # Exactly two status rows: the top window's own row and the bottom
+    # window's row pushed above the grown area (no duplicate global line)
+    check positions.len == 2
+    check positions[^1] == 21
+    # Each row holds exactly one status line
+    for y in positions:
+      check buffer.getRowText(y).count("UTF-8") == 1
 
 suite "updateViewportSize - split mode regression":
   ## Regression tests for the bug where updateViewportSize corrupted

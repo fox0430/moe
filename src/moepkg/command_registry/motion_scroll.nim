@@ -80,9 +80,8 @@ proc handleScrollCursorCenter*(
   ## Scroll the viewport to place cursor line at the center (z. or zz command)
   ## Cursor position doesn't change, only the viewport
 
-  # Calculate reserved lines (status line + command line share same row)
-  let reservedLines =
-    if ctx.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
+  # Reserved lines (status line + command line share same row)
+  let reservedLines = steadyBottomAreaHeight()
   let visibleHeight =
     ctx.motionController.viewportManager.viewport.height - reservedLines
 
@@ -100,9 +99,8 @@ proc handleScrollCursorBottom*(
   ## Scroll the viewport to place cursor line at the bottom (zb command)
   ## Cursor position doesn't change, only the viewport
 
-  # Calculate reserved lines (status line + command line share same row)
-  let reservedLines =
-    if ctx.state.display.showStatusLine: StatusAndCommandReserve else: CommandLineReserve
+  # Reserved lines (status line + command line share same row)
+  let reservedLines = steadyBottomAreaHeight()
   let visibleHeight =
     ctx.motionController.viewportManager.viewport.height - reservedLines
 
