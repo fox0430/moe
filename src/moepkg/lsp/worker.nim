@@ -326,6 +326,9 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     serverProcess: AsyncProcessRef = nil
     serverStreams: Streams = nil
     outputFuture: Future[JsonRpcResponseResult] = nil
+    # Drains the server's stderr pipe so it never blocks the child and its
+    # output never corrupts the JSON-RPC stdout stream
+    stderrDrainFut: Future[void] = nil
     lastId = 0
     # Pending document notifications to send after initialization
     pendingDidOpen: seq[LspCommand] = @[]
@@ -564,7 +567,10 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     # detecting a project based on moe's current working directory
     let workingDir = lspWorkingDir
     let env: StringTableRef = nil
-    let opts: set[AsyncProcessOption] = {UsePath, StdErrToStdOut}
+    # stderr gets its own pipe: merging it into stdout (StdErrToStdOut) would
+    # interleave server log output with the JSON-RPC framing stream and
+    # permanently desynchronize it.
+    let opts: set[AsyncProcessOption] = {UsePath}
 
     try:
       serverProcess = await startProcess(
@@ -575,6 +581,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         opts,
         stdoutHandle = AsyncProcess.Pipe,
         stdinHandle = AsyncProcess.Pipe,
+        stderrHandle = AsyncProcess.Pipe,
       )
     except CatchableError as e:
       ctx.sharedState.storeState(lwsCrashed)
@@ -585,6 +592,24 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       input: InputStream(stream: serverProcess.stdinStream),
       output: OutputStream(stream: serverProcess.stdoutStream),
     )
+
+    proc drainStderr() {.async.} =
+      ## Keep reading stderr so the child never blocks on a full pipe.
+      ## Lines are forwarded to the message log.
+      let stderrStream = serverProcess.stderrStream
+      while true:
+        try:
+          var line = await stderrStream.readLine(sep = "\n")
+          if line.len == 0 and stderrStream.atEof():
+            break
+          if line.len > 0 and line[^1] == '\r':
+            line.setLen(line.len - 1)
+          if line.len > 0:
+            sendLogMessage(mtLog, "[lsp stderr] " & line)
+        except CatchableError:
+          break
+
+    stderrDrainFut = drainStderr()
 
     outputFuture = serverStreams.output.read()
 
@@ -718,6 +743,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         discard serverProcess.kill()
     except CatchableError as e:
       sendLogMessage(mtWarning, "Failed to kill LSP server process: " & e.msg)
+
+    # Stop the stderr drain loop before closing its pipe
+    if not stderrDrainFut.isNil and not stderrDrainFut.finished:
+      try:
+        await stderrDrainFut.cancelAndWait()
+      except CatchableError:
+        discard
+    stderrDrainFut = nil
 
     if serverProcess != nil:
       # Close process pipe FDs and streams (must be called explicitly)
@@ -949,7 +982,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     try:
       let disp = getThreadDispatcher()
       disp.getIoHandler().close()
-    except CatchableError:
+    except CancelledError:
       discard
     except Defect:
       discard
