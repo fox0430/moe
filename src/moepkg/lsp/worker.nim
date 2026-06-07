@@ -1117,15 +1117,26 @@ proc isStopped*(worker: LspWorker): bool =
   not worker.sharedState.running.load(moAcquire) or
     worker.sharedState.stateVal.load(moAcquire) == lwsStopped.ord
 
+proc sendRequest*(worker: LspWorker, requestId: int, meth: string, params: JsonNode) =
+  ## Send a request to the LSP server with a caller-provided request ID.
+  ## Use pollEvents to get the response with matching requestId.
+  ## The caller is responsible for ID uniqueness; LspService allocates IDs
+  ## from a single counter shared by all workers so responses from different
+  ## language servers can never collide in its tracking tables.
+  let cmd = LspCommand(
+    kind: lcmdRequest, requestId: requestId, reqMethod: meth, reqParams: params
+  )
+  worker.commandQueue.pushAndSignal(cmd, worker.signal)
+
 proc sendRequest*(worker: LspWorker, meth: string, params: JsonNode): int =
   ## Send a request to the LSP server and return the request ID
   ## Use pollEvents to get the response with matching requestId
+  ## Note: IDs from this worker-local counter are only unique within this
+  ## worker; cross-worker callers should allocate IDs themselves and use the
+  ## explicit-ID overload.
   result = worker.nextRequestId
   worker.nextRequestId.inc
-
-  let cmd =
-    LspCommand(kind: lcmdRequest, requestId: result, reqMethod: meth, reqParams: params)
-  worker.commandQueue.pushAndSignal(cmd, worker.signal)
+  worker.sendRequest(result, meth, params)
 
 proc sendNotification*(worker: LspWorker, meth: string, params: JsonNode) =
   ## Send a notification to the LSP server (no response expected)
