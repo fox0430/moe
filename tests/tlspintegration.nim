@@ -1409,6 +1409,57 @@ suite "Buffer Lifecycle - Edge Cases":
     let result = lsp.onBufferSave(buffer)
     check result.isOk
 
+  test "document version - didOpen starts at 1":
+    let lsp = newLspIntegration("/tmp")
+    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    check lsp.sentDocumentVersion("/tmp/test.nim") == some(1)
+
+  test "document version - increases monotonically on every change":
+    let lsp = newLspIntegration("/tmp")
+    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    for expected in [2, 3, 4]:
+      check lsp.onBufferChange(buffer).isOk
+      check lsp.sentDocumentVersion("/tmp/test.nim") == some(expected)
+
+  test "document version - does not regress when changeSeq rolls back":
+    # Undo rolls buffer.changeSeq back; the version sent to the server must
+    # keep increasing regardless.
+    let lsp = newLspIntegration("/tmp")
+    let buffer = newTextBuffer("hello", some("/tmp/test.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
+    check lsp.onBufferChange(buffer).isOk
+    let versionBeforeUndo = lsp.sentDocumentVersion("/tmp/test.nim").get
+    check buffer.undo().isOk # changeSeq rolls back here
+    check lsp.onBufferChange(buffer).isOk
+    check lsp.sentDocumentVersion("/tmp/test.nim").get > versionBeforeUndo
+
+  test "document version - per-document tracking":
+    let lsp = newLspIntegration("/tmp")
+    let bufferA = newTextBuffer("a", some("/tmp/a.nim"))
+    let bufferB = newTextBuffer("b", some("/tmp/b.nim"))
+    check lsp.onBufferOpen(bufferA).isOk
+    check lsp.onBufferOpen(bufferB).isOk
+    check lsp.onBufferChange(bufferA).isOk
+    check lsp.onBufferChange(bufferA).isOk
+    check lsp.sentDocumentVersion("/tmp/a.nim") == some(3)
+    check lsp.sentDocumentVersion("/tmp/b.nim") == some(1)
+
+  test "document version - cleared on close":
+    let lsp = newLspIntegration("/tmp")
+    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    check lsp.onBufferOpen(buffer).isOk
+    check lsp.onBufferClose(buffer).isOk
+    check lsp.sentDocumentVersion("/tmp/test.nim").isNone
+
+  test "document version - change without open sends didOpen with version 1":
+    let lsp = newLspIntegration("/tmp")
+    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    check lsp.onBufferChange(buffer).isOk
+    check lsp.sentDocumentVersion("/tmp/test.nim") == some(1)
+
 suite "Misc Functions":
   test "isServerRunningForPath - unknown extension":
     let lsp = newLspIntegration("/tmp")

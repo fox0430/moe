@@ -336,7 +336,7 @@ suite "LspIntegration - newLspIntegration":
   test "creates integration with default workspace":
     let lsp = newLspIntegration()
     check lsp.enabled
-    check lsp.openBuffers.len == 0
+    check lsp.documentVersions.len == 0
     check lsp.pendingMessages.len == 0
     check lsp.activeProgress.len == 0
 
@@ -877,7 +877,7 @@ suite "LspIntegration - Shutdown":
 
   test "shutdown clears all state":
     let lsp = newLspIntegration()
-    lsp.openBuffers = @["/tmp/test.nim"]
+    lsp.documentVersions["/tmp/test.nim"] = 1
     lsp.activeProgress["token1"] = LspProgressState(
       token: "token1",
       langId: "nim",
@@ -892,7 +892,7 @@ suite "LspIntegration - Shutdown":
 
     lsp.shutdown()
 
-    check lsp.openBuffers.len == 0
+    check lsp.documentVersions.len == 0
     check lsp.activeProgress.len == 0
     check lsp.serverStatus.len == 0
 

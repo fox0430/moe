@@ -19,7 +19,7 @@
 
 ## Tests for editor_lsp.nim
 
-import std/[unittest, os, options, strutils, monotimes, times]
+import std/[unittest, os, options, strutils, monotimes, times, tables]
 
 import ../src/moepkg/[editor, buffer, config, config_loader, types, hover_popup]
 import ../src/moepkg/editor_lsp {.all.}
@@ -42,21 +42,37 @@ proc createTestEditorWithLspDisabled(): Editor =
 suite "editor_lsp - maybeUpdateLsp":
   test "Does nothing when LSP is disabled":
     let e = createTestEditorWithLspDisabled()
-    let initialSeq = e.lastLspChangeSeq
+    let activeBuffer = e.activeBuffer()
+    let initialSeq = e.lastLspChangeSeqs.getOrDefault(activeBuffer.id, 0)
 
     e.maybeUpdateLsp()
 
-    check e.lastLspChangeSeq == initialSeq
+    check e.lastLspChangeSeqs.getOrDefault(activeBuffer.id, 0) == initialSeq
 
   test "Does nothing when buffer has not changed":
     let e = createTestEditor()
     e.lsp.enabled = true
     let activeBuffer = e.activeBuffer()
-    e.lastLspChangeSeq = activeBuffer.changeSeq
+    e.lastLspChangeSeqs[activeBuffer.id] = activeBuffer.changeSeq
 
     e.maybeUpdateLsp()
 
-    check e.lastLspChangeSeq == activeBuffer.changeSeq
+    check e.lastLspChangeSeqs[activeBuffer.id] == activeBuffer.changeSeq
+
+  test "Tracking is per-buffer":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let activeBuffer = e.activeBuffer()
+    # Another buffer's entry must not affect the active buffer's tracking
+    let otherBuffer = newTextBuffer("other")
+    e.addBuffer(otherBuffer)
+    e.lastLspChangeSeqs[otherBuffer.id] = 999
+
+    e.lastLspChangeSeqs[activeBuffer.id] = activeBuffer.changeSeq
+    e.maybeUpdateLsp()
+
+    check e.lastLspChangeSeqs[activeBuffer.id] == activeBuffer.changeSeq
+    check e.lastLspChangeSeqs[otherBuffer.id] == 999
 
 suite "editor_lsp - pollLspCompletion":
   test "Does nothing when LSP is disabled":
