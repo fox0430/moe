@@ -118,7 +118,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
     if lspResult.isErr:
       logLspDegraded("didOpen", lspResult.error & " (" & path & ")")
     else:
-      e.lastLspChangeSeq = e.textBuffer.changeSeq
+      e.lastLspChangeSeqs[e.textBuffer.id] = e.textBuffer.changeSeq
 
   ok(())
 

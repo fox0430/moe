@@ -64,7 +64,10 @@ type
       ## never mutate directly.
     config*: EditorConfig
     lsp*: LspIntegration
-    lastLspChangeSeq*: int
+    lastLspChangeSeqs*: Table[BufferId, int]
+      ## Per-buffer changeSeq at the time of the last LSP didChange
+      ## notification. Keyed per buffer: a single shared value would let one
+      ## buffer's seq mask unsynced changes in another.
     app*: AsyncApp
     cursorPositions*: Table[string, CursorPositionEntry]
     savedBookmarks*: Table[string, seq[int]]
@@ -136,6 +139,7 @@ proc deleteBufferAt*(e: Editor, idx: int) =
   let id = e.buffers[idx].id
   e.buffers.delete(idx)
   e.bufferIdIndex.del(id)
+  e.lastLspChangeSeqs.del(id)
 
 proc pruneBufferIdFromAllWindows*(e: Editor, id: BufferId) =
   ## Remove `id` from every window's per-window tab list (`bufferIds`).

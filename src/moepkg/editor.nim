@@ -704,7 +704,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   result = Editor(
     textBuffer: newTextBuffer(),
     lsp: lspIntegration,
-    lastLspChangeSeq: 0,
+    lastLspChangeSeqs: initTable[BufferId, int](),
     state: EditorState(
       # activeWindow will be set after window creation below
       cursorVisible: true,

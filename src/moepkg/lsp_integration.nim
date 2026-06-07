@@ -53,8 +53,11 @@ type
   LspIntegration* = ref object ## Integration layer between LSP and Editor
     service*: LspService
     enabled*: bool
-    # Buffer tracking (path -> version)
-    openBuffers: seq[string]
+    # Open document tracking: path -> last version sent to the server.
+    # LSP requires didChange versions to increase monotonically, so this is
+    # a dedicated counter; buffer.changeSeq cannot be used because undo
+    # rolls it back.
+    documentVersions: Table[string, int]
     # Pending status messages to display in the editor
     pendingMessages*: seq[string]
     # Active progress operations (token -> state)
@@ -98,7 +101,7 @@ proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
   result = LspIntegration(
     service: svc,
     enabled: true,
-    openBuffers: @[],
+    documentVersions: initTable[string, int](),
     pendingMessages: @[],
     activeProgress: initTable[string, LspProgressState](),
     lastProgressCleanupTime: 0.0,
@@ -331,9 +334,8 @@ proc onBufferOpen*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string
   let path = buffer.filePath.get
   let text = buffer.getTextString()
 
-  # Track open buffer
-  if path notin lsp.openBuffers:
-    lsp.openBuffers.add(path)
+  # Track open buffer; didOpen is sent with version 1
+  lsp.documentVersions[path] = 1
 
   return lsp.service.notifyDocumentOpened(path, text)
 
@@ -348,9 +350,7 @@ proc onBufferClose*(lsp: LspIntegration, buffer: TextBuffer): Result[void, strin
   let path = buffer.filePath.get
 
   # Remove from tracking
-  let idx = lsp.openBuffers.find(path)
-  if idx >= 0:
-    lsp.openBuffers.delete(idx)
+  lsp.documentVersions.del(path)
 
   return lsp.service.notifyDocumentClosed(path)
 
@@ -365,17 +365,29 @@ proc onBufferChange*(lsp: LspIntegration, buffer: TextBuffer): Result[void, stri
   let path = buffer.filePath.get
 
   # Ensure buffer is tracked as open
-  if path notin lsp.openBuffers:
-    lsp.openBuffers.add(path)
-    # Send didOpen first
+  if path notin lsp.documentVersions:
+    # Send didOpen first (version 1)
+    lsp.documentVersions[path] = 1
     let text = buffer.getTextString()
     let openResult = lsp.service.notifyDocumentOpened(path, text)
     if openResult.isErr:
       return openResult
     return ok()
 
+  # LSP requires the version to increase with every change. Use a dedicated
+  # monotonic counter: buffer.changeSeq is unsuitable because undo rolls it
+  # back, and servers ignore didChange notifications with stale versions.
+  inc lsp.documentVersions[path]
   let text = buffer.getTextString()
-  return lsp.service.notifyDocumentChanged(path, buffer.changeSeq, text)
+  return lsp.service.notifyDocumentChanged(path, lsp.documentVersions[path], text)
+
+proc sentDocumentVersion*(lsp: LspIntegration, path: string): Option[int] =
+  ## The last didOpen/didChange version sent to the server for `path`,
+  ## or `none` if the document is not tracked as open. Exposed for tests.
+  if path in lsp.documentVersions:
+    some(lsp.documentVersions[path])
+  else:
+    none(int)
 
 proc onBufferSave*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string] =
   ## Called when a buffer is saved
@@ -1243,7 +1255,7 @@ proc applyLspFoldingRanges*(
 proc shutdown*(lsp: LspIntegration) =
   ## Shutdown all LSP servers
   lsp.service.stopAll()
-  lsp.openBuffers = @[]
+  lsp.documentVersions.clear()
   lsp.activeProgress.clear()
   lsp.serverStatus.clear()
 

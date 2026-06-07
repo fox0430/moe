@@ -34,11 +34,11 @@ proc maybeUpdateLsp*(e: Editor) =
 
   let activeBuffer = e.activeBuffer()
 
-  # Only notify LSP if buffer has changed since last notification
-  if activeBuffer.changeSeq != e.lastLspChangeSeq:
+  # Only notify LSP if this buffer has changed since its last notification
+  if activeBuffer.changeSeq != e.lastLspChangeSeqs.getOrDefault(activeBuffer.id, 0):
     let lspResult = e.lsp.onBufferChange(activeBuffer)
     if lspResult.isOk:
-      e.lastLspChangeSeq = activeBuffer.changeSeq
+      e.lastLspChangeSeqs[activeBuffer.id] = activeBuffer.changeSeq
 
 proc pollLspCompletion*(e: Editor) =
   ## Poll for pending LSP completion responses
