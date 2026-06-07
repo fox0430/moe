@@ -33,6 +33,10 @@ export worker, types
 const
   DefaultRequestTimeoutMs* = 5000 ## 5 second timeout for LSP requests
   PollIntervalMs = 5 ## Polling interval for async response waiting
+  RestartSuppressionSec* = 5.0
+    ## Minimum interval between automatic server restarts per language.
+    ## Prevents a crash-looping server from being respawned on every
+    ## request that funnels through getOrStartWorker.
 
 type
   LanguageServerConfig* = object ## Configuration for a language server
@@ -83,6 +87,9 @@ type
     # (starting at 1) would collide as soon as two language servers run
     # concurrently and responses could be attributed to the wrong request.
     nextRequestId: int
+    # Last automatic restart attempt per language (epochTime), for
+    # crash-loop suppression
+    lastRestartTimes: Table[string, float]
     # Global callbacks (forwarded from individual workers)
     onDiagnosticsUpdate*: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.}
     onLogMessage*:
@@ -111,6 +118,7 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
       initTable[int, tuple[result: Option[JsonNode], error: Option[string]]](),
     activeRequests: initTable[int, LspPendingRequest](),
     nextRequestId: 1,
+    lastRestartTimes: initTable[string, float](),
     # Default no-op callbacks to avoid nil checks throughout the code
     onDiagnosticsUpdate: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.} =
       discard,
@@ -227,14 +235,10 @@ proc getWorker*(svc: LspService, langId: string): Option[LspWorker] =
   return none(LspWorker)
 
 proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
-  ## Start a worker for a language (or return existing one)
+  ## Start a worker for a language (or return existing one). If the
+  ## language's server crashed or stopped, attempt a rate-limited restart.
   if not svc.enabled:
     return err("LSP service is disabled")
-
-  # Return existing worker if present. stopWorker removes from table,
-  # so any worker in the table is active (thread running).
-  if langId in svc.workers:
-    return ok(svc.workers[langId])
 
   # Get config
   if langId notin svc.configs:
@@ -243,6 +247,34 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
   let config = svc.configs[langId]
   if not config.enabled:
     return err("LSP disabled for language: " & langId)
+
+  if langId in svc.workers:
+    let worker = svc.workers[langId]
+    if worker.state != lwsCrashed:
+      # Running, starting, or the lcmdStart is still queued (lwsStopped
+      # right after creation) — return the existing worker. Only a crashed
+      # server warrants a restart; re-sending lcmdStart in other states
+      # would spawn a duplicate server process.
+      return ok(worker)
+
+    # The server crashed. Restart it, rate-limited so a crash-looping
+    # server isn't respawned by every request.
+    let now = epochTime()
+    if now - svc.lastRestartTimes.getOrDefault(langId, 0.0) < RestartSuppressionSec:
+      return err("LSP server for " & langId & " crashed recently; restart suppressed")
+    svc.lastRestartTimes[langId] = now
+
+    if worker.isThreadAlive:
+      # The worker thread survived (only the server process died); ask it to
+      # spawn a new server on the same thread.
+      worker.startServer(config.command, config.args, svc.workspaceRoot)
+      svc.onLogMessage(langId, mtInfo, "Restarting language server: " & config.command)
+      return ok(worker)
+
+    # The thread itself died (fatal error): join it and fall through to
+    # create a fresh worker.
+    worker.stop()
+    svc.workers.del(langId)
 
   # Create new worker
   let workerResult = newLspWorker(langId)

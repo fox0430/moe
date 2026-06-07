@@ -222,6 +222,17 @@ proc pop(q: var CommandQueue): Option[LspCommand] =
     else:
       result = none(LspCommand)
 
+proc hasPendingStopOrShutdown(q: var CommandQueue): bool =
+  ## True if a stop/shutdown command is waiting in the queue. Used to abort
+  ## long waits (e.g. the initialize handshake) so a queued stop can be
+  ## processed promptly; commands are handled serially, so a blocked wait
+  ## would otherwise stall editor exit on joinThread.
+  withLock(q.lock):
+    for cmd in q.queue.items:
+      if cmd.kind in {lcmdStop, lcmdShutdown}:
+        return true
+  false
+
 proc push(q: var EventQueue, evt: LspEvent) =
   withLock(q.lock):
     q.queue.addLast(evt)
@@ -554,6 +565,40 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
   let lspWorkingDir = ctx.tempDir
 
+  proc cleanupProcess(): Future[void] {.async.} =
+    ## Kill the server process, release its handles, and fail any requests
+    ## still waiting on it. Does not change the worker state; callers set
+    ## lwsStopped/lwsCrashed as appropriate.
+    try:
+      if serverProcess != nil:
+        discard serverProcess.kill()
+    except CatchableError as e:
+      sendLogMessage(mtWarning, "Failed to kill LSP server process: " & e.msg)
+
+    # Stop the stderr drain loop before closing its pipe
+    if not stderrDrainFut.isNil and not stderrDrainFut.finished:
+      try:
+        await stderrDrainFut.cancelAndWait()
+      except CatchableError:
+        discard
+    stderrDrainFut = nil
+
+    if serverProcess != nil:
+      # Close process pipe FDs and streams (must be called explicitly)
+      try:
+        await serverProcess.closeWait()
+      except CatchableError:
+        discard
+
+    serverProcess = nil
+    serverStreams = nil
+    outputFuture = nil
+    # Fail pending requests instead of leaving the main thread to hit its
+    # own response timeout for each of them
+    for lspId, (ourId, _) in pendingRequests.pairs:
+      sendResponse(ourId, none(JsonNode), some("LSP server stopped"))
+    pendingRequests.clear()
+
   proc startServer(cmd: LspCommand): Future[void] {.async.} =
     ctx.sharedState.storeState(lwsStarting)
 
@@ -640,17 +685,46 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     if reqResult.isErr:
       ctx.sharedState.storeState(lwsCrashed)
       sendError("Failed to send initialize: " & reqResult.error)
+      await cleanupProcess()
       return
 
-    # Wait for initialize response
+    # Wait for initialize response (bounded).
+    # An unresponsive server must not hang this loop: commands are processed
+    # serially, so a pending lcmdShutdown would never run and worker.stop()'s
+    # joinThread would block editor exit. Note: withTimeout is unsuitable
+    # here because it cancels the stream read on timeout, which would corrupt
+    # the framing; race + an explicitly cancelled sleeper keeps the read
+    # future alive across wait rounds.
+    const InitializeTimeoutSec = 30
+    let initDeadline = Moment.now() + chronos.seconds(InitializeTimeoutSec)
     while true:
-      let respResult = await outputFuture
-      outputFuture = serverStreams.output.read()
+      while not outputFuture.finished:
+        let sleeper = sleepAsync(chronos.seconds(1))
+        discard await race(outputFuture, sleeper)
+        if not sleeper.finished:
+          await sleeper.cancelAndWait()
+        if ctx.commandQueue[].hasPendingStopOrShutdown():
+          sendLogMessage(mtWarning, "LSP initialize aborted by stop request")
+          await cleanupProcess()
+          ctx.sharedState.storeState(lwsStopped)
+          return
+        if Moment.now() > initDeadline:
+          ctx.sharedState.storeState(lwsCrashed)
+          sendError(
+            "LSP server initialize timed out after " & $InitializeTimeoutSec & "s"
+          )
+          await cleanupProcess()
+          return
+
+      let respResult = outputFuture.read()
 
       if respResult.isErr:
         ctx.sharedState.storeState(lwsCrashed)
         sendError("Failed to read initialize response: " & respResult.error)
+        await cleanupProcess()
         return
+
+      outputFuture = serverStreams.output.read()
 
       let response = respResult.get
       # Log received JSON (pretty formatted)
@@ -687,6 +761,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         sendError(
           "Initialize error: " & response["error"]["message"].getStr("Unknown error")
         )
+        await cleanupProcess()
         return
 
       # Parse capabilities
@@ -708,6 +783,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     if initedResult.isErr:
       ctx.sharedState.storeState(lwsCrashed)
       sendError("Failed to send initialized: " & initedResult.error)
+      await cleanupProcess()
       return
 
     # Send workspace/didChangeConfiguration (some servers need this)
@@ -738,31 +814,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     # Kill the LSP server process immediately without waiting for shutdown RPC
     # response. The graceful shutdown handshake can block for up to 30 seconds
     # if the server is unresponsive, which delays editor exit unnecessarily.
-    try:
-      if serverProcess != nil:
-        discard serverProcess.kill()
-    except CatchableError as e:
-      sendLogMessage(mtWarning, "Failed to kill LSP server process: " & e.msg)
-
-    # Stop the stderr drain loop before closing its pipe
-    if not stderrDrainFut.isNil and not stderrDrainFut.finished:
-      try:
-        await stderrDrainFut.cancelAndWait()
-      except CatchableError:
-        discard
-    stderrDrainFut = nil
-
-    if serverProcess != nil:
-      # Close process pipe FDs and streams (must be called explicitly)
-      try:
-        await serverProcess.closeWait()
-      except CatchableError:
-        discard
-
-    serverProcess = nil
-    serverStreams = nil
-    outputFuture = nil
-    pendingRequests.clear()
+    await cleanupProcess()
     ctx.sharedState.storeState(lwsStopped)
 
   proc processCommand(cmd: LspCommand): Future[void] {.async.} =
@@ -854,11 +906,20 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       return
 
     let respResult = outputFuture.read()
-    outputFuture = serverStreams.output.read()
 
     if respResult.isErr:
-      sendError("Read error: " & respResult.error)
+      # The read failed: the server closed stdout (crashed or exited) or the
+      # pipe broke. Do NOT re-arm the read — it would fail again instantly
+      # and spin an error event every tick. Mark the worker crashed and
+      # reap the process so the service can restart it.
+      outputFuture = nil
+      ctx.sharedState.storeState(lwsCrashed)
+      sendError("LSP server connection lost: " & respResult.error)
+      await cleanupProcess()
       return
+
+    # Re-arm only after a successful read
+    outputFuture = serverStreams.output.read()
 
     let response = respResult.get
     # Log received JSON (pretty formatted)
@@ -1116,6 +1177,14 @@ proc isStopped*(worker: LspWorker): bool =
   ## Check if worker is stopped (thread-safe)
   not worker.sharedState.running.load(moAcquire) or
     worker.sharedState.stateVal.load(moAcquire) == lwsStopped.ord
+
+proc isThreadAlive*(worker: LspWorker): bool =
+  ## Check if the worker thread itself is still running its main loop
+  ## (thread-safe). The server process state is independent: a worker whose
+  ## server crashed (lwsCrashed) keeps its thread alive and can be asked to
+  ## start a new server without re-creating the thread.
+  worker.threadStarted and not worker.stopped and
+    worker.sharedState.running.load(moAcquire)
 
 proc sendRequest*(worker: LspWorker, requestId: int, meth: string, params: JsonNode) =
   ## Send a request to the LSP server with a caller-provided request ID.

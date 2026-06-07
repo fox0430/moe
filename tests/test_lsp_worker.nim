@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json, options]
+import std/[unittest, json, options, os, monotimes, times]
 
 import pkg/results
 
@@ -493,6 +493,63 @@ suite "LspWorker - Worker Thread Lifecycle":
     worker.stop()
     worker.stop() # Second stop should be safe
     check worker.isStopped
+
+  test "isThreadAlive reflects thread state":
+    let workerResult = newLspWorker("nim")
+    check workerResult.isOk
+    let worker = workerResult.get
+
+    check not worker.isThreadAlive
+    worker.start()
+    check worker.isThreadAlive
+    worker.stop()
+    check not worker.isThreadAlive
+
+suite "LspWorker - Server Crash Handling":
+  proc waitForState(
+      worker: LspWorker, expected: LspWorkerState, timeoutMs = 5000
+  ): bool =
+    ## Poll until the worker reaches `expected` state or the timeout expires
+    let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+    while getMonoTime() < deadline:
+      if worker.state == expected:
+        return true
+      sleep(10)
+    false
+
+  test "nonexistent command transitions to lwsCrashed":
+    let workerResult = newLspWorker("nim")
+    check workerResult.isOk
+    let worker = workerResult.get
+
+    worker.start()
+    worker.startServer("moe-test-no-such-lsp-server-binary", @[], "/tmp")
+    check worker.waitForState(lwsCrashed)
+    # Thread survives the server crash and can be asked to start again
+    check worker.isThreadAlive
+    worker.stop()
+
+  test "server that exits immediately crashes without error spam":
+    # `true` exits right away: the initialize read fails once and the worker
+    # must transition to lwsCrashed instead of re-arming the read and
+    # emitting an error event every tick.
+    let workerResult = newLspWorker("nim")
+    check workerResult.isOk
+    let worker = workerResult.get
+
+    worker.start()
+    worker.startServer("true", @[], "/tmp")
+    check worker.waitForState(lwsCrashed)
+
+    # Drain events, then confirm no further errors accumulate
+    discard worker.pollEvents()
+    sleep(300)
+    var lateErrors = 0
+    for evt in worker.pollEvents():
+      if evt.kind == levError:
+        inc lateErrors
+    check lateErrors == 0
+    worker.stop()
 
 suite "LspWorker - Document Notification Commands":
   test "didOpen queues command":
