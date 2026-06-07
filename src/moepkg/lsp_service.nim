@@ -78,6 +78,11 @@ type
     pendingResponses: Table[int, tuple[result: Option[JsonNode], error: Option[string]]]
     # Active pending requests for timeout tracking
     activeRequests*: Table[int, LspPendingRequest]
+    # Single request-ID counter shared by all workers. Both tables above are
+    # keyed by the bare ID, so letting each worker allocate its own IDs
+    # (starting at 1) would collide as soon as two language servers run
+    # concurrently and responses could be attributed to the wrong request.
+    nextRequestId: int
     # Global callbacks (forwarded from individual workers)
     onDiagnosticsUpdate*: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.}
     onLogMessage*:
@@ -105,6 +110,7 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
     pendingResponses:
       initTable[int, tuple[result: Option[JsonNode], error: Option[string]]](),
     activeRequests: initTable[int, LspPendingRequest](),
+    nextRequestId: 1,
     # Default no-op callbacks to avoid nil checks throughout the code
     onDiagnosticsUpdate: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.} =
       discard,
@@ -507,7 +513,11 @@ proc startTrackedRequest(
     timeoutMs: int = DefaultRequestTimeoutMs,
 ): int =
   ## Start a request and track it for timeout checking
-  let requestId = worker.sendRequest(methodName, params)
+  ## IDs are allocated from the service-wide counter so requests to
+  ## different workers never share an ID in the tracking tables.
+  let requestId = svc.nextRequestId
+  inc svc.nextRequestId
+  worker.sendRequest(requestId, methodName, params)
   svc.activeRequests[requestId] = LspPendingRequest(
     requestId: requestId,
     langId: worker.languageId,

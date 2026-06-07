@@ -424,6 +424,18 @@ suite "LspWorker - sendRequest (without starting worker)":
       "textDocument/hover", %*{"textDocument": {"uri": "file:///test.nim"}}
     )
 
+  test "sendRequest with explicit caller-provided id":
+    # The service allocates IDs from a shared counter so different workers'
+    # requests never collide; the worker must use the given ID as-is.
+    let workerResult = newLspWorker("nim")
+    check workerResult.isOk
+    let worker = workerResult.get
+
+    worker.sendRequest(42, "textDocument/hover", %*{})
+    # The internal counter is unaffected by explicit IDs
+    let autoId = worker.sendRequest("textDocument/completion", %*{})
+    check autoId == 1
+
 suite "LspWorker - Worker Thread Lifecycle":
   test "start and stop worker thread":
     let workerResult = newLspWorker("nim")
