@@ -21,7 +21,7 @@
 ## Manages multiple LSP workers and provides high-level API for editor integration
 ## Uses thread-based workers to avoid blocking the UI event loop
 
-import std/[tables, options, os, strutils, json, times]
+import std/[tables, options, os, strutils, json, times, uri]
 
 import pkg/[results, chronos]
 
@@ -206,15 +206,22 @@ proc getLanguageIdFromExtension*(svc: LspService, ext: string): Option[string] =
   return none(string)
 
 proc pathToUri*(path: string): string =
-  ## Convert file path to URI
+  ## Convert file path to a percent-encoded file:// URI.
+  ## Encoding is applied per path segment (encodeUrl would also encode the
+  ## separators). Servers echo URIs back percent-encoded, so without proper
+  ## encoding/decoding paths with spaces or non-ASCII characters fail to
+  ## match open buffers.
   if path.startsWith("file://"):
     return path
-  return "file://" & path.absolutePath()
+  var segments: seq[string]
+  for segment in path.absolutePath().split('/'):
+    segments.add(encodeUrl(segment, usePlus = false))
+  return "file://" & segments.join("/")
 
 proc uriToPath*(uri: string): string =
-  ## Convert URI to file path
+  ## Convert a file:// URI to a file path, percent-decoding it
   if uri.startsWith("file://"):
-    return uri[7 ..^ 1]
+    return decodeUrl(uri[7 ..^ 1], decodePlus = false)
   return uri
 
 proc getWorker*(svc: LspService, langId: string): Option[LspWorker] =
