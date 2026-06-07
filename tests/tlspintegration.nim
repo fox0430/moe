@@ -389,6 +389,75 @@ suite "UTF-16 Position Conversion":
       let backToUtf8 = utf16OffsetToUtf8(line, utf16)
       check backToUtf8 == utf8Offset
 
+  test "runeIndexToUtf16 - empty string":
+    check runeIndexToUtf16("", 0) == 0
+    check runeIndexToUtf16("", 5) == 0
+
+  test "runeIndexToUtf16 - ASCII":
+    let line = "hello world"
+    check runeIndexToUtf16(line, 0) == 0
+    check runeIndexToUtf16(line, 5) == 5
+    check runeIndexToUtf16(line, 11) == 11
+
+  test "runeIndexToUtf16 - BMP characters (Japanese)":
+    # Each hiragana is 1 rune = 1 UTF-16 unit = 3 UTF-8 bytes
+    let line = "こんにちは"
+    check runeIndexToUtf16(line, 0) == 0
+    check runeIndexToUtf16(line, 1) == 1
+    check runeIndexToUtf16(line, 5) == 5
+
+  test "runeIndexToUtf16 - mixed ASCII and Japanese":
+    let line = "ABCあいう"
+    check runeIndexToUtf16(line, 3) == 3 # After ABC
+    check runeIndexToUtf16(line, 4) == 4 # After first hiragana
+    check runeIndexToUtf16(line, 6) == 6 # After all
+
+  test "runeIndexToUtf16 - surrogate pairs (emoji)":
+    # 'a' + 😀 (2 UTF-16 units) + 'b'
+    let line = "a😀b"
+    check runeIndexToUtf16(line, 0) == 0
+    check runeIndexToUtf16(line, 1) == 1 # After 'a'
+    check runeIndexToUtf16(line, 2) == 3 # After emoji
+    check runeIndexToUtf16(line, 3) == 4 # After 'b'
+
+  test "runeIndexToUtf16 - clamps to line length":
+    check runeIndexToUtf16("abc", 100) == 3
+    check runeIndexToUtf16("a😀b", 100) == 4
+
+  test "utf16ToRuneIndex - empty string":
+    check utf16ToRuneIndex("", 0) == 0
+    check utf16ToRuneIndex("", 5) == 0
+
+  test "utf16ToRuneIndex - ASCII":
+    let line = "hello"
+    check utf16ToRuneIndex(line, 0) == 0
+    check utf16ToRuneIndex(line, 3) == 3
+    check utf16ToRuneIndex(line, 5) == 5
+
+  test "utf16ToRuneIndex - BMP characters (Japanese)":
+    let line = "こんにちは"
+    check utf16ToRuneIndex(line, 0) == 0
+    check utf16ToRuneIndex(line, 2) == 2
+    check utf16ToRuneIndex(line, 5) == 5
+
+  test "utf16ToRuneIndex - surrogate pairs (emoji)":
+    let line = "a😀b"
+    check utf16ToRuneIndex(line, 0) == 0
+    check utf16ToRuneIndex(line, 1) == 1 # After 'a'
+    check utf16ToRuneIndex(line, 3) == 2 # After emoji (2 UTF-16 units)
+    check utf16ToRuneIndex(line, 4) == 3 # After 'b'
+
+  test "utf16ToRuneIndex - clamps to rune count":
+    check utf16ToRuneIndex("abc", 100) == 3
+    check utf16ToRuneIndex("a😀b", 100) == 3
+
+  test "rune/UTF-16 roundtrip":
+    let line = "hello世界🌍end"
+    # Rune indexes: h(0) e(1) l(2) l(3) o(4) 世(5) 界(6) 🌍(7) e(8) n(9) d(10), total 11
+    for runeIndex in [0, 3, 5, 6, 7, 8, 11]:
+      let utf16 = runeIndexToUtf16(line, runeIndex)
+      check utf16ToRuneIndex(line, utf16) == runeIndex
+
 suite "TextEdit Application":
   test "applyTextEdits - empty edits":
     let buffer = newTextBuffer("hello world")
@@ -466,6 +535,34 @@ suite "TextEdit Application":
     let result = applyTextEdits(buffer, @[edit])
     check result.isOk
     check buffer.getTextString() == "abcXY"
+
+  test "applyTextEdits - multibyte prefix (rune vs byte columns)":
+    # Start position is after multibyte characters, where rune index (1)
+    # differs from the UTF-8 byte offset (3). Regression test for treating
+    # UTF-16 offsets as byte offsets.
+    let buffer = newTextBuffer("あいうえお")
+    # Replace "いう" (UTF-16 positions 1-3; each hiragana is 1 unit)
+    let edit = TextEdit(range: newRange(0, 1, 0, 3), newText: "X")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isOk
+    check buffer.getTextString() == "あXえお"
+
+  test "applyTextEdits - insertion after multibyte characters":
+    let buffer = newTextBuffer("日本語abc")
+    # Insert at UTF-16 position 3 (after 日本語 = rune index 3)
+    let edit = TextEdit(range: newRange(0, 3, 0, 3), newText: "X")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isOk
+    check buffer.getTextString() == "日本語Xabc"
+
+  test "applyTextEdits - surrogate pair handling":
+    # 😀 is 2 UTF-16 units but 1 rune
+    let buffer = newTextBuffer("a😀bc")
+    # Replace the emoji: UTF-16 range (1, 3)
+    let edit = TextEdit(range: newRange(0, 1, 0, 3), newText: "Z")
+    let result = applyTextEdits(buffer, @[edit])
+    check result.isOk
+    check buffer.getTextString() == "aZbc"
 
 suite "Folding Range Application":
   test "applyLspFoldingRanges - empty ranges":
@@ -748,11 +845,49 @@ suite "Diagnostics Application":
     check buffer.diagnostics[0].startLine == 1
     check buffer.diagnostics[0].startCol == 2
     check buffer.diagnostics[0].endLine == 1
-    check buffer.diagnostics[0].endCol == 8
+    # endCol 8 exceeds "line2" (5 runes) and is clamped to the line length
+    check buffer.diagnostics[0].endCol == 5
     check buffer.diagnostics[0].severity == bdsError
     check buffer.diagnostics[0].message == "undeclared identifier"
     check buffer.diagnostics[1].severity == bdsWarning
     check buffer.diagnostics[1].message == "unused variable"
+
+  test "applyDiagnosticsToBuffer - converts UTF-16 columns to rune indexes":
+    # "あいう abc": each hiragana is 1 UTF-16 unit = 1 rune, so a diagnostic
+    # on "abc" starts at UTF-16 column 4 = rune index 4 (but byte offset 10).
+    # With an emoji, UTF-16 units (2) differ from runes (1).
+    let buffer = newTextBuffer("あいう abc\na😀bc")
+    let diagnostics = @[
+      Diagnostic(
+        range: newRange(0, 4, 0, 7), # "abc" in UTF-16 units
+        severity: some(dsError),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "error on abc",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+      Diagnostic(
+        range: newRange(1, 3, 1, 5), # "bc" after the emoji (UTF-16)
+        severity: some(dsWarning),
+        code: none(JsonNode),
+        codeDescription: none(JsonNode),
+        source: none(string),
+        message: "warning on bc",
+        tags: none(seq[DiagnosticTag]),
+        relatedInformation: none(seq[DiagnosticRelatedInformation]),
+        data: none(JsonNode),
+      ),
+    ]
+    applyDiagnosticsToBuffer(buffer, diagnostics)
+    check buffer.diagnostics.len == 2
+    # Rune indexes, not UTF-16 units or bytes
+    check buffer.diagnostics[0].startCol == 4
+    check buffer.diagnostics[0].endCol == 7
+    check buffer.diagnostics[1].startCol == 2 # a(0) 😀(1) b(2)
+    check buffer.diagnostics[1].endCol == 4
 
 suite "getDiagnosticsAt":
   test "returns diagnostics at cursor position":

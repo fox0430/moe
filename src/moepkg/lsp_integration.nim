@@ -396,8 +396,9 @@ proc poll*(lsp: LspIntegration, timeoutMs: int = 0) =
     lsp.service.poll(timeoutMs)
 
 # UTF-16 position conversion helpers
-# LSP uses UTF-16 code units for character positions, but the editor uses UTF-8 bytes.
-# These functions convert between the two representations.
+# LSP uses UTF-16 code units for character positions. Buffer columns are rune
+# indexes (see BufferPosition), while some callers work with UTF-8 byte
+# offsets. These functions convert between the representations.
 
 proc utf16OffsetToUtf8*(line: string, utf16Offset: int): int =
   ## Convert LSP UTF-16 code unit offset to UTF-8 byte offset
@@ -448,14 +449,51 @@ proc utf8OffsetToUtf16*(line: string, utf8Offset: int): int =
 
   return utf16Count
 
+proc runeIndexToUtf16*(line: string, runeIndex: int): int =
+  ## Convert a rune (character) index to a UTF-16 code unit offset.
+  ## Buffer columns are rune indexes; LSP positions are UTF-16 code units.
+  ## Clamped to the number of UTF-16 units in the line.
+  if runeIndex <= 0 or line.len == 0:
+    return 0
+
+  var runeCount = 0
+  for rune in line.runes:
+    if runeCount >= runeIndex:
+      break
+    # BMP characters (U+0000 to U+FFFF) use 1 UTF-16 code unit
+    # Characters above U+FFFF (surrogate pairs) use 2 UTF-16 code units
+    if rune.int >= 0x10000:
+      result += 2 # Surrogate pair
+    else:
+      result.inc
+    runeCount.inc
+
+proc utf16ToRuneIndex*(line: string, utf16Offset: int): int =
+  ## Convert a UTF-16 code unit offset to a rune (character) index.
+  ## Buffer columns are rune indexes; LSP positions are UTF-16 code units.
+  ## Clamped to the number of runes in the line.
+  if utf16Offset <= 0 or line.len == 0:
+    return 0
+
+  var utf16Count = 0
+
+  for rune in line.runes:
+    if utf16Count >= utf16Offset:
+      break
+    if rune.int >= 0x10000:
+      utf16Count += 2 # Surrogate pair
+    else:
+      utf16Count += 1
+    result.inc
+
 proc toUtf16Column(buffer: TextBuffer, line, column: int): int =
-  ## Helper to convert buffer position (UTF-8 byte offset) to UTF-16 code unit offset
+  ## Helper to convert a buffer position (rune index) to a UTF-16 code unit offset
   let lineText =
     if line >= 0 and line < buffer.len:
       buffer.getLine(line)
     else:
       ""
-  utf8OffsetToUtf16(lineText, column)
+  runeIndexToUtf16(lineText, column)
 
 template requireBufferPath(lsp: LspIntegration, buffer: TextBuffer): string =
   ## Guard for sync LSP request wrappers: checks `enabled` and `filePath`,
@@ -490,7 +528,7 @@ proc requireLangId(lsp: LspIntegration, buffer: TextBuffer): Option[string] =
 
 # Async (non-blocking) feature requests
 # These return immediately with a request ID. Use poll() and checkResponse() to get results.
-# Note: All position-based requests convert UTF-8 column to UTF-16 for LSP protocol compliance.
+# Note: All position-based requests convert rune-index columns to UTF-16 for LSP protocol compliance.
 
 proc startCompletionRequest*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
@@ -709,7 +747,7 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
   ## Apply a sequence of TextEdits to the buffer
   ## Edits are applied in reverse order (back to front) to preserve positions
   ## Note: LSP TextEdit.range.end is exclusive, buffer.deleteRange is inclusive
-  ## Note: LSP character positions are in UTF-16 code units, converted to UTF-8 bytes
+  ## Note: LSP character positions are in UTF-16 code units, converted to rune indexes
   ## Edits are wrapped in a single undo entry. If the caller already opened a
   ## transaction (e.g. Insert mode completion, workspace edit), we join that
   ## one; otherwise we open and commit our own so a single Ctrl-r/u reverts
@@ -745,13 +783,13 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
     let startLine = edit.range.start.line
     let lspEndPos = edit.range.`end`
 
-    # Convert UTF-16 character offset to UTF-8 byte offset
+    # Convert UTF-16 character offset to rune index
     let startLineText =
       if startLine >= 0 and startLine < buffer.len:
         buffer.getLine(startLine)
       else:
         ""
-    let startCol = utf16OffsetToUtf8(startLineText, edit.range.start.character)
+    let startCol = utf16ToRuneIndex(startLineText, edit.range.start.character)
     let startPos = BufferPosition(line: startLine, column: startCol)
 
     # Check if range is empty (LSP exclusive end == start means empty range)
@@ -772,17 +810,11 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
           ""
 
       if lspEndPos.character > 0:
-        # Convert UTF-16 to UTF-8 and decrement by 1 byte for inclusive end
-        let utf8EndCol = utf16OffsetToUtf8(endLineText, lspEndPos.character)
-        # Need to find the start of the previous character
-        if utf8EndCol > 0:
-          # Walk backwards to find previous character boundary
-          var prevCharStart = utf8EndCol - 1
-          while prevCharStart > 0 and (endLineText[prevCharStart].ord and 0xC0) == 0x80:
-            dec prevCharStart
-          adjustedEndPos = BufferPosition(line: lspEndPos.line, column: prevCharStart)
-        else:
-          adjustedEndPos = BufferPosition(line: lspEndPos.line, column: 0)
+        # Convert UTF-16 to a rune index and decrement by one rune for the
+        # inclusive end
+        let endRune = utf16ToRuneIndex(endLineText, lspEndPos.character)
+        adjustedEndPos =
+          BufferPosition(line: lspEndPos.line, column: max(endRune - 1, 0))
       else:
         # End is at start of a line (character == 0)
         # Need to point to end of previous line to include the newline
@@ -977,12 +1009,25 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
         of dsHint: bdsHint
       else:
         bdsError
+    # LSP columns are UTF-16 code units; consumers (markers, highlights)
+    # expect rune indexes. Convert using the referenced line's text; lines
+    # outside the buffer fall back to "" so the columns clamp to 0.
+    let startLineText =
+      if diag.range.start.line >= 0 and diag.range.start.line < buffer.len:
+        buffer.getLine(diag.range.start.line)
+      else:
+        ""
+    let endLineText =
+      if diag.range.`end`.line >= 0 and diag.range.`end`.line < buffer.len:
+        buffer.getLine(diag.range.`end`.line)
+      else:
+        ""
     buffer.diagnostics.add(
       BufferDiagnostic(
         startLine: diag.range.start.line,
-        startCol: diag.range.start.character,
+        startCol: utf16ToRuneIndex(startLineText, diag.range.start.character),
         endLine: diag.range.`end`.line,
-        endCol: diag.range.`end`.character,
+        endCol: utf16ToRuneIndex(endLineText, diag.range.`end`.character),
         severity: severity,
         message: diag.message,
       )
@@ -1260,7 +1305,7 @@ proc requestRename*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int, newName: string
 ): Future[Result[Option[WorkspaceEdit], string]] {.async: (raises: [CancelledError]).} =
   ## Request rename at a position
-  ## Note: column is expected to be UTF-8 byte offset, converted to UTF-16 for LSP
+  ## Note: column is expected to be a rune index, converted to UTF-16 for LSP
   let pathRes = resolveLspPath(lsp, buffer)
   if pathRes.isErr:
     return err(pathRes.error)
@@ -1272,7 +1317,7 @@ proc requestDefinition*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
   ## Request go to definition at a position
-  ## Note: column is expected to be UTF-8 byte offset, converted to UTF-16 for LSP
+  ## Note: column is expected to be a rune index, converted to UTF-16 for LSP
   let pathRes = resolveLspPath(lsp, buffer)
   if pathRes.isErr:
     return err(pathRes.error)
@@ -1284,7 +1329,7 @@ proc requestReferences*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Future[Result[seq[Location], string]] {.async: (raises: [CancelledError]).} =
   ## Request find references at a position
-  ## Note: column is expected to be UTF-8 byte offset, converted to UTF-16 for LSP
+  ## Note: column is expected to be a rune index, converted to UTF-16 for LSP
   let pathRes = resolveLspPath(lsp, buffer)
   if pathRes.isErr:
     return err(pathRes.error)
