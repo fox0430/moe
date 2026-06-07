@@ -67,6 +67,11 @@ type
     # Server status per language (langId -> status)
     serverStatus*: Table[string, LspStatusState]
 
+  WorkspaceEditResult* = object ## Outcome of applyWorkspaceEdit
+    modifiedCount*: int ## Total files modified (buffers + on-disk files)
+    modifiedBufferIndexes*: seq[int] ## Indexes into `buffers` that were modified
+    modifiedFilePaths*: seq[string] ## Unopened files modified directly on disk
+
 const ProgressCleanupIntervalSeconds* = 1.0 ## Interval between stale progress checks
 
 proc lspDegradeReason*(status: LspResponseStatus, detail = ""): string =
@@ -886,13 +891,23 @@ proc applyEditsToFile(path: string, edits: seq[TextEdit]): Result[void, string] 
 
   return ok()
 
+proc collectWorkspaceEditPaths*(edit: WorkspaceEdit): seq[string] =
+  ## All target file paths of a WorkspaceEdit, in application order.
+  ## Mirrors applyWorkspaceEdit's precedence: documentChanges over changes.
+  if edit.documentChanges.isSome:
+    for docEdit in edit.documentChanges.get:
+      result.add(uriToPath(docEdit.textDocument.uri))
+  elif edit.changes.isSome:
+    for uri, _ in edit.changes.get:
+      result.add(uriToPath(uri))
+
 proc applyWorkspaceEdit*(
     buffers: var seq[TextBuffer],
     edit: WorkspaceEdit,
     transactionName: string = "Rename",
-): Result[int, string] =
+): Result[WorkspaceEditResult, string] =
   ## Apply a WorkspaceEdit to multiple buffers
-  ## Returns the number of files modified
+  ## Returns which buffers/files were modified
   ## For open buffers: uses transactions for undo support
   ## For unopened files: loads, modifies, and saves directly
   ##
@@ -924,6 +939,7 @@ proc applyWorkspaceEdit*(
 
   # Track successfully modified files for error reporting
   var modifiedBufferPaths: seq[string] = @[]
+  var modifiedBufferIndexes: seq[int] = @[]
   var modifiedFilePaths: seq[string] = @[]
 
   # Apply edits to open buffers with transactions for undo support
@@ -954,6 +970,7 @@ proc applyWorkspaceEdit*(
 
     discard buffer.commitTransaction()
     modifiedCount += 1
+    modifiedBufferIndexes.add(bufferIdx)
     if buffer.filePath.isSome:
       modifiedBufferPaths.add(buffer.filePath.get)
 
@@ -973,7 +990,13 @@ proc applyWorkspaceEdit*(
     modifiedCount += 1
     modifiedFilePaths.add(path)
 
-  return ok(modifiedCount)
+  return ok(
+    WorkspaceEditResult(
+      modifiedCount: modifiedCount,
+      modifiedBufferIndexes: modifiedBufferIndexes,
+      modifiedFilePaths: modifiedFilePaths,
+    )
+  )
 
 # Diagnostic helpers
 proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic]) =

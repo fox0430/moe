@@ -63,6 +63,10 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
         return false
 
       let activeBuffer = e.activeBuffer()
+      # Snapshot the buffer state before awaiting: the server's edits are
+      # positioned against this state and must not be applied if the user
+      # typed while the request was in flight
+      let seqBeforeRequest = activeBuffer.changeSeq
 
       # Get formatting result from LSP
       let formatResult = await e.lsp.requestFormatting(activeBuffer)
@@ -74,6 +78,10 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
       if edits.len == 0:
         e.state.statusMessage = "No formatting changes"
         return true
+
+      if activeBuffer.changeSeq != seqBeforeRequest:
+        e.state.statusMessage = "Buffer changed during format; edits discarded"
+        return false
 
       # Apply the text edits to the buffer
       let applyResult = applyTextEdits(activeBuffer, edits)
@@ -125,6 +133,16 @@ proc requestLspRename*(
       let line = e.state.renameState.cursorLine
       let col = e.state.renameState.cursorColumn
 
+      # Snapshot every open buffer's changeSeq before awaiting: the
+      # server's edits are positioned against this state. If any target
+      # buffer changes while the request is in flight, applying the stale
+      # coordinates would corrupt text, so the whole edit is discarded
+      # (aborting beats partial application).
+      var seqSnapshot: Table[string, int]
+      for buf in e.buffers:
+        if buf.filePath.isSome:
+          seqSnapshot[buf.filePath.get] = buf.changeSeq
+
       # Get rename result from LSP
       let renameResult = await e.lsp.requestRename(activeBuffer, line, col, newName)
       if renameResult.isErr:
@@ -138,13 +156,32 @@ proc requestLspRename*(
 
       let workspaceEdit = workspaceEditOpt.get
 
+      # Reject the edit if any targeted open buffer changed during the await
+      for path in collectWorkspaceEditPaths(workspaceEdit):
+        for buf in e.buffers:
+          if buf.filePath.isSome and buf.filePath.get == path and
+              buf.changeSeq != seqSnapshot.getOrDefault(path, buf.changeSeq):
+            e.state.statusMessage = "Buffer changed during rename; edits discarded"
+            return
+
       # Apply the workspace edits to all affected buffers
       let applyResult = applyWorkspaceEdit(e.buffers, workspaceEdit)
       if applyResult.isErr:
         e.state.statusMessage = "Failed to apply rename: " & applyResult.error
         return
 
-      let modifiedCount = applyResult.get
+      # Sync the server with every buffer we just rewrote. maybeUpdateLsp
+      # only covers the active buffer, so non-active buffers would otherwise
+      # stay stale on the server side.
+      for bufferIdx in applyResult.get.modifiedBufferIndexes:
+        let buf = e.buffers[bufferIdx]
+        let syncResult = e.lsp.onBufferChange(buf)
+        if syncResult.isOk:
+          e.lastLspChangeSeqs[buf.id] = buf.changeSeq
+        elif buf.filePath.isSome:
+          logLspDegraded("rename: didChange " & buf.filePath.get, syncResult.error)
+
+      let modifiedCount = applyResult.get.modifiedCount
       e.state.statusMessage =
         "Renamed '" & e.state.renameState.originalWord & "' to '" & newName & "' (" &
         $modifiedCount & " file" & (if modifiedCount > 1: "s" else: "") & " modified)"
