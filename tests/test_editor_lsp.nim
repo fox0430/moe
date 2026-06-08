@@ -74,6 +74,55 @@ suite "editor_lsp - maybeUpdateLsp":
     check e.lastLspChangeSeqs[activeBuffer.id] == activeBuffer.changeSeq
     check e.lastLspChangeSeqs[otherBuffer.id] == 999
 
+suite "editor_lsp - applyDiagnosticsForUri":
+  proc oneDiagnostic(msg: string): seq[lspTypes.Diagnostic] =
+    @[
+      lspTypes.Diagnostic(
+        `range`: lspTypes.newRange(0, 0, 0, 1),
+        severity: some(lspTypes.dsError),
+        message: msg,
+      )
+    ]
+
+  test "routes diagnostics to the matching non-active buffer":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let activeBuffer = e.activeBuffer()
+    activeBuffer.filePath = some("/tmp/moe-diag-active.nim")
+
+    let other = newTextBuffer("other\nlines", some("/tmp/moe-diag-other.nim"))
+    e.addBuffer(other)
+
+    e.applyDiagnosticsForUri(
+      pathToUri("/tmp/moe-diag-other.nim"), oneDiagnostic("on other")
+    )
+
+    check other.diagnostics.len == 1
+    check other.diagnostics[0].message == "on other"
+    check activeBuffer.diagnostics.len == 0
+
+  test "active buffer still receives its own diagnostics":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let activeBuffer = e.activeBuffer()
+    activeBuffer.filePath = some("/tmp/moe-diag-active.nim")
+
+    e.applyDiagnosticsForUri(
+      pathToUri("/tmp/moe-diag-active.nim"), oneDiagnostic("on active")
+    )
+    check activeBuffer.diagnostics.len == 1
+
+  test "unknown URI is dropped without crashing":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let activeBuffer = e.activeBuffer()
+    activeBuffer.filePath = some("/tmp/moe-diag-active.nim")
+
+    e.applyDiagnosticsForUri(
+      pathToUri("/tmp/moe-diag-nonexistent.nim"), oneDiagnostic("nowhere")
+    )
+    check activeBuffer.diagnostics.len == 0
+
 suite "editor_lsp - pollLspCompletion":
   test "Does nothing when LSP is disabled":
     let e = createTestEditorWithLspDisabled()

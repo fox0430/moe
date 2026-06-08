@@ -19,12 +19,26 @@
 
 ## LSP-related procedures for the editor
 
-import std/[options, json]
+import std/[options, json, os]
 
 import pkg/results
 
 import editor_types, lsp_integration
 import command_handlers/[handler_manager, insert_handler]
+
+proc applyDiagnosticsForUri*(e: Editor, uri: string, diagnostics: seq[Diagnostic]) =
+  ## Route a server's publishDiagnostics to the buffer it targets, not just
+  ## the active one. Diagnostics for a background buffer would otherwise be
+  ## dropped, and the server does not resend them when that buffer is later
+  ## focused.
+  let path = uriToPath(uri).absolutePath()
+  for buf in e.buffers:
+    if buf.filePath.isSome and buf.filePath.get.absolutePath() == path:
+      applyDiagnosticsToBuffer(buf, diagnostics)
+      e.state.windowDisplay.needsFullRedraw = true
+      return
+  # No matching open buffer: drop. The server only publishes for documents
+  # we opened (didOpen), so this is the closed-in-the-meantime case.
 
 proc maybeUpdateLsp*(e: Editor) =
   ## Update LSP if buffer was modified

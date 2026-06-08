@@ -327,16 +327,12 @@ proc main() =
   if editorConfig.standard.mouse:
     app.enableMouse()
 
-  # Set up LSP diagnostics callback to update buffer markers
+  # Set up LSP diagnostics callback to update buffer markers. Route to the
+  # buffer matching the URI (not only the active one) so diagnostics for
+  # background buffers aren't dropped.
   editor.lsp.setDiagnosticsCallback(
     proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.} =
-      # Find the buffer with this URI and apply diagnostics
-      let path = uriToPath(uri).absolutePath()
-      let activeBuffer = editor.activeBuffer()
-      if activeBuffer.filePath.isSome and
-          activeBuffer.filePath.get.absolutePath() == path:
-        applyDiagnosticsToBuffer(activeBuffer, diagnostics)
-        editor.state.windowDisplay.needsFullRedraw = true
+      editor.applyDiagnosticsForUri(uri, diagnostics)
   )
 
   if cmdLineConfig.filePaths.len > 0:
