@@ -89,10 +89,10 @@ type
     of lcmdRequest:
       requestId*: int # ID for tracking response
       reqMethod*: string
-      reqParams*: JsonNode
+      reqParamsJson*: string # JSON-serialized params (see note below)
     of lcmdNotification:
       notifyMethod*: string
-      notifyParams*: JsonNode
+      notifyParamsJson*: string # JSON-serialized params (see note below)
 
   # Messages from worker thread to main thread
   LspEventKind* = enum
@@ -120,6 +120,15 @@ type
     ljdSent # JSON sent to server
     ljdReceived # JSON received from server
 
+  # NOTE on thread safety: LspCommand/LspEvent cross the worker-thread
+  # boundary via the deques below. The objects themselves are copied under
+  # the queue lock, but any GC-managed *ref* embedded in them (JsonNode in
+  # particular, including those buried in Diagnostic.code/data,
+  # ServerCapabilities and Registration.registerOptions) would still be
+  # shared between threads. Under --mm:orc the reference counts are not
+  # atomic, so concurrent incRef/decRef from both threads can corrupt
+  # memory. Therefore all JSON payloads are serialized to strings at the
+  # boundary and parsed on the receiving thread.
   LspEvent* = object
     case kind*: LspEventKind
     of levInitialized:
@@ -128,7 +137,7 @@ type
       errorMsg*: string
     of levDiagnostics:
       diagUri*: string
-      diagnostics*: seq[Diagnostic]
+      diagnosticsJson*: string # JSON array of LSP Diagnostic objects
     of levLogMessage, levShowMessage:
       msgType*: MessageType
       message*: string
@@ -136,10 +145,10 @@ type
       serverName*: string
       serverVersion*: Option[string]
     of levCapabilities:
-      capabilities*: ServerCapabilities
+      capabilitiesJson*: string # JSON object (ServerCapabilities)
     of levResponse:
       requestId*: int
-      responseResult*: Option[JsonNode]
+      responseResultJson*: Option[string] # JSON-serialized result
       responseError*: Option[string]
     of levRawJson:
       jsonDirection*: LspJsonDirection
@@ -148,9 +157,9 @@ type
       progressToken*: string # Progress token (int or string converted to string)
       progress*: WorkDoneProgress # Progress data (begin/report/end)
     of levDynamicRegister:
-      registrations*: seq[Registration]
+      registrationsJson*: string # JSON-serialized RegistrationParams
     of levDynamicUnregister:
-      unregistrations*: seq[Unregistration]
+      unregistrationsJson*: string # JSON-serialized UnregistrationParams
     of levStatusUpdate:
       statusHealth*: ServerHealth
       statusQuiescent*: bool
@@ -358,12 +367,12 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     var evt = LspEvent(kind: levLogMessage, msgType: msgType, message: msg)
     ctx.eventQueue[].push(evt)
 
-  proc sendDiagnostics(uri: string, diags: seq[Diagnostic]) =
-    var evt = LspEvent(kind: levDiagnostics, diagUri: uri, diagnostics: diags)
+  proc sendDiagnostics(uri: string, diagsJson: string) =
+    var evt = LspEvent(kind: levDiagnostics, diagUri: uri, diagnosticsJson: diagsJson)
     ctx.eventQueue[].push(evt)
 
-  proc sendCapabilities(caps: ServerCapabilities) =
-    var evt = LspEvent(kind: levCapabilities, capabilities: caps)
+  proc sendCapabilities(capsJson: string) =
+    var evt = LspEvent(kind: levCapabilities, capabilitiesJson: capsJson)
     ctx.eventQueue[].push(evt)
 
   proc sendServerInfo(name: string, version: Option[string]) =
@@ -371,8 +380,18 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     ctx.eventQueue[].push(evt)
 
   proc sendResponse(reqId: int, result: Option[JsonNode], error: Option[string]) =
+    # Serialize on this side of the boundary; the JsonNode stays owned by
+    # the worker thread
+    let resultJson =
+      if result.isSome:
+        some($result.get)
+      else:
+        none(string)
     var evt = LspEvent(
-      kind: levResponse, requestId: reqId, responseResult: result, responseError: error
+      kind: levResponse,
+      requestId: reqId,
+      responseResultJson: resultJson,
+      responseError: error,
     )
     ctx.eventQueue[].push(evt)
 
@@ -380,12 +399,12 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     var evt = LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: json)
     ctx.eventQueue[].push(evt)
 
-  proc sendDynamicRegister(regs: seq[Registration]) =
-    var evt = LspEvent(kind: levDynamicRegister, registrations: regs)
+  proc sendDynamicRegister(paramsJson: string) =
+    var evt = LspEvent(kind: levDynamicRegister, registrationsJson: paramsJson)
     ctx.eventQueue[].push(evt)
 
-  proc sendDynamicUnregister(unregs: seq[Unregistration]) =
-    var evt = LspEvent(kind: levDynamicUnregister, unregistrations: unregs)
+  proc sendDynamicUnregister(paramsJson: string) =
+    var evt = LspEvent(kind: levDynamicUnregister, unregistrationsJson: paramsJson)
     ctx.eventQueue[].push(evt)
 
   proc handleServerRequest(
@@ -397,10 +416,12 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       # Accept the progress token creation (respond with null/empty result)
       return %*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()}
     of "client/registerCapability":
-      # Dynamic capability registration
+      # Dynamic capability registration. Validate here so a malformed
+      # request is rejected to the server; the main thread re-parses the
+      # serialized params when it processes the event.
       try:
-        let regParams = parseRegistrationParams(params)
-        sendDynamicRegister(regParams.registrations)
+        discard parseRegistrationParams(params)
+        sendDynamicRegister($params)
         return %*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()}
       except CatchableError as e:
         sendLogMessage(mtWarning, "Failed to parse registerCapability: " & e.msg)
@@ -410,10 +431,10 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           "error": {"code": -32602, "message": "Invalid params: " & e.msg},
         }
     of "client/unregisterCapability":
-      # Dynamic capability unregistration
+      # Dynamic capability unregistration (validated as above)
       try:
-        let unregParams = parseUnregistrationParams(params)
-        sendDynamicUnregister(unregParams.unregisterations)
+        discard parseUnregistrationParams(params)
+        sendDynamicUnregister($params)
         return %*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()}
       except CatchableError as e:
         sendLogMessage(mtWarning, "Failed to parse unregisterCapability: " & e.msg)
@@ -435,11 +456,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     case meth
     of "textDocument/publishDiagnostics":
       let uri = params["uri"].getStr
-      var diagnostics: seq[Diagnostic] = @[]
-      if params.hasKey("diagnostics"):
-        for d in params["diagnostics"]:
-          diagnostics.add(parseDiagnostic(d))
-      sendDiagnostics(uri, diagnostics)
+      # Serialize the raw diagnostics array; the main thread parses it
+      # (Diagnostic carries JsonNode fields that must not cross threads)
+      let diagsJson =
+        if params.hasKey("diagnostics"):
+          $params["diagnostics"]
+        else:
+          "[]"
+      sendDiagnostics(uri, diagsJson)
     of "window/logMessage":
       var evt = LspEvent(
         kind: levLogMessage,
@@ -764,11 +788,11 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         await cleanupProcess()
         return
 
-      # Parse capabilities
+      # Forward capabilities (parsed on the main thread)
       if response.hasKey("result"):
         let resultNode = response["result"]
         if resultNode.hasKey("capabilities"):
-          sendCapabilities(parseServerCapabilities(resultNode["capabilities"]))
+          sendCapabilities($resultNode["capabilities"])
         if resultNode.hasKey("serverInfo"):
           let si = resultNode["serverInfo"]
           var version: Option[string] = none(string)
@@ -885,7 +909,15 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         await sendNotificationLog("textDocument/didSave", params)
     of lcmdRequest:
       if ctx.sharedState.loadState() == lwsRunning:
-        let lspIdResult = await sendRequest(cmd.reqMethod, cmd.reqParams)
+        var params: JsonNode
+        try:
+          params = parseJson(cmd.reqParamsJson)
+        except CatchableError as e:
+          sendResponse(
+            cmd.requestId, none(JsonNode), some("Invalid request params: " & e.msg)
+          )
+          return
+        let lspIdResult = await sendRequest(cmd.reqMethod, params)
         if lspIdResult.isOk:
           # Track mapping from LSP request ID to our request ID with timestamp
           pendingRequests[lspIdResult.get] = (cmd.requestId, getTime())
@@ -896,7 +928,15 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         sendResponse(cmd.requestId, none(JsonNode), some("Server not running"))
     of lcmdNotification:
       if ctx.sharedState.loadState() == lwsRunning:
-        await sendNotificationLog(cmd.notifyMethod, cmd.notifyParams)
+        var params: JsonNode
+        try:
+          params = parseJson(cmd.notifyParamsJson)
+        except CatchableError as e:
+          sendLogMessage(
+            mtWarning, "Invalid params for " & cmd.notifyMethod & ": " & e.msg
+          )
+          return
+        await sendNotificationLog(cmd.notifyMethod, params)
 
   proc processMessages(): Future[void] {.async.} =
     if outputFuture.isNil:
@@ -1192,8 +1232,10 @@ proc sendRequest*(worker: LspWorker, requestId: int, meth: string, params: JsonN
   ## The caller is responsible for ID uniqueness; LspService allocates IDs
   ## from a single counter shared by all workers so responses from different
   ## language servers can never collide in its tracking tables.
+  ## The params are serialized here so no JsonNode ref crosses the thread
+  ## boundary (non-atomic ORC refcounts).
   let cmd = LspCommand(
-    kind: lcmdRequest, requestId: requestId, reqMethod: meth, reqParams: params
+    kind: lcmdRequest, requestId: requestId, reqMethod: meth, reqParamsJson: $params
   )
   worker.commandQueue.pushAndSignal(cmd, worker.signal)
 
@@ -1209,5 +1251,6 @@ proc sendRequest*(worker: LspWorker, meth: string, params: JsonNode): int =
 
 proc sendNotification*(worker: LspWorker, meth: string, params: JsonNode) =
   ## Send a notification to the LSP server (no response expected)
-  let cmd = LspCommand(kind: lcmdNotification, notifyMethod: meth, notifyParams: params)
+  let cmd =
+    LspCommand(kind: lcmdNotification, notifyMethod: meth, notifyParamsJson: $params)
   worker.commandQueue.pushAndSignal(cmd, worker.signal)

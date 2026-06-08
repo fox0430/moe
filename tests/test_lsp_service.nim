@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json, options, os, times, strutils, importutils, monotimes]
+import std/[unittest, json, options, os, times, strutils, importutils, tables, monotimes]
 
 import pkg/results
 
@@ -186,6 +186,34 @@ suite "LspService - URI Conversion":
 
   test "uriToPath returns non-file URI unchanged":
     check uriToPath("/home/user/test.nim") == "/home/user/test.nim"
+
+  test "pathToUri percent-encodes spaces":
+    check pathToUri("/home/user/my project/test.nim") ==
+      "file:///home/user/my%20project/test.nim"
+
+  test "pathToUri percent-encodes non-ASCII characters":
+    # "テスト" in UTF-8: E3 83 86 E3 82 B9 E3 83 88
+    check pathToUri("/home/user/テスト.nim") ==
+      "file:///home/user/%E3%83%86%E3%82%B9%E3%83%88.nim"
+
+  test "pathToUri does not encode path separators":
+    check pathToUri("/a/b/c.nim") == "file:///a/b/c.nim"
+
+  test "uriToPath percent-decodes":
+    check uriToPath("file:///home/user/my%20project/test.nim") ==
+      "/home/user/my project/test.nim"
+    check uriToPath("file:///home/user/%E3%83%86%E3%82%B9%E3%83%88.nim") ==
+      "/home/user/テスト.nim"
+
+  test "uriToPath does not treat plus as space":
+    check uriToPath("file:///home/user/a+b.nim") == "/home/user/a+b.nim"
+
+  test "path/URI roundtrip":
+    for p in [
+      "/home/user/test.nim", "/home/user/my project/file.nim",
+      "/home/user/日本語パス/ファイル.nim", "/tmp/a+b#c.nim",
+    ]:
+      check uriToPath(pathToUri(p)) == p
 
 suite "LspService - Worker Management (without actual workers)":
   test "getWorker returns none when no workers started":
@@ -643,6 +671,105 @@ suite "LspService - Poll":
     let svc = newLspService()
     svc.poll() # Should not crash
     svc.poll(100) # With timeout
+
+suite "LspService - processEvent (thread-boundary JSON parsing)":
+  privateAccess(LspService)
+
+  test "levResponse with result is parsed and stored":
+    let svc = newLspService()
+    svc.activeRequests[7] = LspPendingRequest(requestId: 7, langId: "nim")
+    svc.processEvent(
+      "nim",
+      LspEvent(
+        kind: levResponse,
+        requestId: 7,
+        responseResultJson: some($(%*{"items": [1, 2]})),
+        responseError: none(string),
+      ),
+    )
+    check 7 in svc.pendingResponses
+    let resp = svc.pendingResponses[7]
+    check resp.result.isSome
+    check resp.result.get["items"].len == 2
+    check resp.error.isNone
+
+  test "levResponse with invalid JSON stores an error":
+    let svc = newLspService()
+    svc.processEvent(
+      "nim",
+      LspEvent(
+        kind: levResponse,
+        requestId: 8,
+        responseResultJson: some("{invalid json"),
+        responseError: none(string),
+      ),
+    )
+    check 8 in svc.pendingResponses
+    let resp = svc.pendingResponses[8]
+    check resp.result.isNone
+    check resp.error.isSome
+    check resp.error.get.contains("Failed to parse response")
+
+  test "levDiagnostics is parsed and forwarded to the callback":
+    let svc = newLspService()
+    var gotUri = ""
+    var gotDiags: seq[Diagnostic] = @[]
+    svc.onDiagnosticsUpdate = proc(
+        uri: string, diagnostics: seq[Diagnostic]
+    ) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        gotUri = uri
+        gotDiags = diagnostics
+    let diagsJson = $(
+      %*[
+        {
+          "range":
+            {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 5}},
+          "severity": 2,
+          "message": "unused variable",
+        }
+      ]
+    )
+    svc.processEvent(
+      "nim",
+      LspEvent(
+        kind: levDiagnostics, diagUri: "file:///t.nim", diagnosticsJson: diagsJson
+      ),
+    )
+    check gotUri == "file:///t.nim"
+    check gotDiags.len == 1
+    check gotDiags[0].message == "unused variable"
+
+  test "levDiagnostics with invalid JSON does not invoke the callback":
+    let svc = newLspService()
+    var called = false
+    svc.onDiagnosticsUpdate = proc(
+        uri: string, diagnostics: seq[Diagnostic]
+    ) {.gcsafe.} =
+      called = true
+    svc.processEvent(
+      "nim",
+      LspEvent(kind: levDiagnostics, diagUri: "file:///t.nim", diagnosticsJson: "[oops"),
+    )
+    check not called
+
+  test "levCapabilities is parsed and stored":
+    let svc = newLspService()
+    svc.processEvent(
+      "nim",
+      LspEvent(kind: levCapabilities, capabilitiesJson: $(%*{"hoverProvider": true})),
+    )
+    check "nim" in svc.capabilities
+
+  test "levDynamicRegister is parsed and stored":
+    let svc = newLspService()
+    let paramsJson =
+      $(%*{"registrations": [{"id": "r1", "method": "textDocument/completion"}]})
+    svc.processEvent(
+      "nim", LspEvent(kind: levDynamicRegister, registrationsJson: paramsJson)
+    )
+    check "nim" in svc.dynamicRegistrations
+    check "r1" in svc.dynamicRegistrations["nim"]
 
 suite "LspService - LspResponseStatus enum":
   test "LspResponseStatus values":

@@ -181,12 +181,12 @@ suite "LspWorker - LspCommand object":
       kind: lcmdRequest,
       requestId: 42,
       reqMethod: "textDocument/completion",
-      reqParams: %*{"textDocument": {"uri": "file:///test.nim"}},
+      reqParamsJson: $(%*{"textDocument": {"uri": "file:///test.nim"}}),
     )
     check cmd.kind == lcmdRequest
     check cmd.requestId == 42
     check cmd.reqMethod == "textDocument/completion"
-    check cmd.reqParams.hasKey("textDocument")
+    check parseJson(cmd.reqParamsJson).hasKey("textDocument")
 
 suite "LspWorker - LspEvent object":
   test "LspEvent levInitialized variant":
@@ -199,19 +199,25 @@ suite "LspWorker - LspEvent object":
     check evt.errorMsg == "Connection failed"
 
   test "LspEvent levDiagnostics variant":
-    let diag = Diagnostic(
-      `range`: Range(
-        start: Position(line: 0, character: 0), `end`: Position(line: 0, character: 5)
-      ),
-      severity: some(dsError),
-      message: "Error message",
+    # Diagnostics cross the thread boundary serialized as a JSON array
+    let diagsJson = $(
+      %*[
+        {
+          "range":
+            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 5}},
+          "severity": 1,
+          "message": "Error message",
+        }
+      ]
     )
-    let evt =
-      LspEvent(kind: levDiagnostics, diagUri: "file:///test.nim", diagnostics: @[diag])
+    let evt = LspEvent(
+      kind: levDiagnostics, diagUri: "file:///test.nim", diagnosticsJson: diagsJson
+    )
     check evt.kind == levDiagnostics
     check evt.diagUri == "file:///test.nim"
-    check evt.diagnostics.len == 1
-    check evt.diagnostics[0].message == "Error message"
+    let parsed = parseJson(evt.diagnosticsJson)
+    check parsed.len == 1
+    check parseDiagnostic(parsed[0]).message == "Error message"
 
   test "LspEvent levLogMessage variant":
     let evt = LspEvent(kind: levLogMessage, msgType: mtInfo, message: "Log message")
@@ -243,32 +249,32 @@ suite "LspWorker - LspEvent object":
     check evt.serverVersion.isNone
 
   test "LspEvent levCapabilities variant":
-    let caps = ServerCapabilities()
-    let evt = LspEvent(kind: levCapabilities, capabilities: caps)
+    let evt = LspEvent(kind: levCapabilities, capabilitiesJson: "{}")
     check evt.kind == levCapabilities
 
   test "LspEvent levResponse variant with result":
     let evt = LspEvent(
       kind: levResponse,
       requestId: 42,
-      responseResult: some(%*{"items": []}),
+      responseResultJson: some($(%*{"items": []})),
       responseError: none(string),
     )
     check evt.kind == levResponse
     check evt.requestId == 42
-    check evt.responseResult.isSome
+    check evt.responseResultJson.isSome
+    check parseJson(evt.responseResultJson.get).hasKey("items")
     check evt.responseError.isNone
 
   test "LspEvent levResponse variant with error":
     let evt = LspEvent(
       kind: levResponse,
       requestId: 42,
-      responseResult: none(JsonNode),
+      responseResultJson: none(string),
       responseError: some("Request failed"),
     )
     check evt.kind == levResponse
     check evt.requestId == 42
-    check evt.responseResult.isNone
+    check evt.responseResultJson.isNone
     check evt.responseError.isSome
     check evt.responseError.get == "Request failed"
 
@@ -298,19 +304,25 @@ suite "LspWorker - LspEvent object":
     check evt.progress.begin.title == "Indexing"
 
   test "LspEvent levDynamicRegister variant":
-    let reg = Registration(id: "reg-1", `method`: "textDocument/completion")
-    let evt = LspEvent(kind: levDynamicRegister, registrations: @[reg])
+    # RegistrationParams cross the boundary serialized
+    let paramsJson =
+      $(%*{"registrations": [{"id": "reg-1", "method": "textDocument/completion"}]})
+    let evt = LspEvent(kind: levDynamicRegister, registrationsJson: paramsJson)
     check evt.kind == levDynamicRegister
-    check evt.registrations.len == 1
-    check evt.registrations[0].id == "reg-1"
-    check evt.registrations[0].`method` == "textDocument/completion"
+    let regs = parseRegistrationParams(parseJson(evt.registrationsJson)).registrations
+    check regs.len == 1
+    check regs[0].id == "reg-1"
+    check regs[0].`method` == "textDocument/completion"
 
   test "LspEvent levDynamicUnregister variant":
-    let unreg = Unregistration(id: "reg-1", `method`: "textDocument/completion")
-    let evt = LspEvent(kind: levDynamicUnregister, unregistrations: @[unreg])
+    let paramsJson =
+      $(%*{"unregisterations": [{"id": "reg-1", "method": "textDocument/completion"}]})
+    let evt = LspEvent(kind: levDynamicUnregister, unregistrationsJson: paramsJson)
     check evt.kind == levDynamicUnregister
-    check evt.unregistrations.len == 1
-    check evt.unregistrations[0].id == "reg-1"
+    let unregs =
+      parseUnregistrationParams(parseJson(evt.unregistrationsJson)).unregisterations
+    check unregs.len == 1
+    check unregs[0].id == "reg-1"
 
   test "LspEvent levStatusUpdate variant":
     let evt = LspEvent(

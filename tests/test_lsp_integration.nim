@@ -957,7 +957,7 @@ suite "LspIntegration - applyWorkspaceEdit":
     )
     let result = applyWorkspaceEdit(buffers, edit)
     check result.isOk
-    check result.get == 0
+    check result.get.modifiedCount == 0
 
   test "applyWorkspaceEdit with changes field":
     var buffers = @[newTextBuffer("hello", some("/tmp/test.txt"))]
@@ -975,7 +975,7 @@ suite "LspIntegration - applyWorkspaceEdit":
     )
     let result = applyWorkspaceEdit(buffers, edit)
     check result.isOk
-    check result.get == 1
+    check result.get.modifiedCount == 1
     check buffers[0].getLine(0) == "world"
 
   test "applyWorkspaceEdit documentChanges takes precedence":
