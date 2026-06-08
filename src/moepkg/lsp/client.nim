@@ -154,12 +154,12 @@ proc handleNotification*(
         client.onDiagnostics(uri, diagnostics)
     of "window/logMessage":
       if client.onLogMessage != nil:
-        let msgType = MessageType(params["type"].getInt)
+        let msgType = toEnumOr[MessageType](params["type"].getInt, mtLog)
         let message = params["message"].getStr
         client.onLogMessage(msgType, message)
     of "window/showMessage":
       if client.onShowMessage != nil:
-        let msgType = MessageType(params["type"].getInt)
+        let msgType = toEnumOr[MessageType](params["type"].getInt, mtLog)
         let message = params["message"].getStr
         client.onShowMessage(msgType, message)
     of "$/logTrace":

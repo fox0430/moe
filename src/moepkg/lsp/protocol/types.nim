@@ -687,12 +687,29 @@ proc parseWorkspaceEdit*(node: JsonNode): WorkspaceEdit =
         docChanges.add(parseTextDocumentEdit(docChange))
     result.documentChanges = some(docChanges)
 
+# Range-checked enum conversions for server-provided integers.
+# A raw `Enum(getInt)` raises RangeDefect on out-of-range values, and a
+# Defect on the worker thread is uncatchable and kills the whole process,
+# so a misbehaving server must never be able to trigger one.
+
+proc toEnumOr*[T: enum](v: int, default: T): T =
+  if v in T.low.ord .. T.high.ord:
+    T(v)
+  else:
+    default
+
+proc toEnum*[T: enum](v: int): Option[T] =
+  if v in T.low.ord .. T.high.ord:
+    some(T(v))
+  else:
+    none(T)
+
 proc parseDiagnostic*(node: JsonNode): Diagnostic =
   result.range = parseRange(node["range"])
   result.message = node["message"].getStr
 
   if node.hasKey("severity"):
-    result.severity = some(DiagnosticSeverity(node["severity"].getInt))
+    result.severity = toEnum[DiagnosticSeverity](node["severity"].getInt)
   if node.hasKey("code"):
     result.code = some(node["code"])
   if node.hasKey("source"):
@@ -700,17 +717,16 @@ proc parseDiagnostic*(node: JsonNode): Diagnostic =
   if node.hasKey("tags"):
     var tags: seq[DiagnosticTag] = @[]
     for t in node["tags"]:
-      tags.add(DiagnosticTag(t.getInt))
+      let tag = toEnum[DiagnosticTag](t.getInt)
+      if tag.isSome:
+        tags.add(tag.get)
     result.tags = some(tags)
 
 proc parseCompletionItem*(node: JsonNode): CompletionItem =
   result.label = node["label"].getStr
 
   if node.hasKey("kind"):
-    let kind = node["kind"].getInt
-    # LSP spec says kind values are 1-25. Handle invalid values gracefully.
-    if kind >= 1 and kind <= 25:
-      result.kind = some(CompletionItemKind(kind))
+    result.kind = toEnum[CompletionItemKind](node["kind"].getInt)
   if node.hasKey("detail"):
     result.detail = some(node["detail"].getStr)
   if node.hasKey("documentation"):
@@ -718,10 +734,7 @@ proc parseCompletionItem*(node: JsonNode): CompletionItem =
   if node.hasKey("insertText"):
     result.insertText = some(node["insertText"].getStr)
   if node.hasKey("insertTextFormat"):
-    let fmt = node["insertTextFormat"].getInt
-    # LSP spec says 1=PlainText, 2=Snippet. Handle invalid values gracefully.
-    if fmt in {1, 2}:
-      result.insertTextFormat = some(InsertTextFormat(fmt))
+    result.insertTextFormat = toEnum[InsertTextFormat](node["insertTextFormat"].getInt)
   if node.hasKey("sortText"):
     result.sortText = some(node["sortText"].getStr)
   if node.hasKey("filterText"):
@@ -783,7 +796,7 @@ proc parseSignatureHelp*(node: JsonNode): SignatureHelp =
 proc parseDocumentSymbol*(node: JsonNode): DocumentSymbol =
   ## Parse DocumentSymbol from JSON (hierarchical format)
   result.name = node["name"].getStr
-  result.kind = SymbolKind(node["kind"].getInt)
+  result.kind = toEnumOr[SymbolKind](node["kind"].getInt, skFile)
   result.range = parseRange(node["range"])
   result.selectionRange = parseRange(node["selectionRange"])
 
@@ -805,7 +818,7 @@ proc parseDocumentSymbol*(node: JsonNode): DocumentSymbol =
 proc parseSymbolInformation*(node: JsonNode): SymbolInformation =
   ## Parse SymbolInformation from JSON (flat format)
   result.name = node["name"].getStr
-  result.kind = SymbolKind(node["kind"].getInt)
+  result.kind = toEnumOr[SymbolKind](node["kind"].getInt, skFile)
   result.location = parseLocation(node["location"])
 
   if node.hasKey("deprecated"):
@@ -840,7 +853,7 @@ proc parseInlayHint*(node: JsonNode): Option[InlayHint] =
   hint.position = parsePosition(node["position"])
   hint.label = node["label"]
   if node.hasKey("kind"):
-    hint.kind = some(InlayHintKind(node["kind"].getInt))
+    hint.kind = toEnum[InlayHintKind](node["kind"].getInt)
   if node.hasKey("textEdits"):
     let textEditsNode = node["textEdits"]
     if textEditsNode.kind == JArray:
@@ -888,7 +901,7 @@ proc parseDocumentHighlight*(node: JsonNode): DocumentHighlight =
   ## Parse DocumentHighlight from JSON
   result.range = parseRange(node["range"])
   if node.hasKey("kind") and node["kind"].kind == JInt:
-    result.kind = some(DocumentHighlightKind(node["kind"].getInt))
+    result.kind = toEnum[DocumentHighlightKind](node["kind"].getInt)
 
 proc parseDocumentLink*(node: JsonNode): DocumentLink =
   ## Parse DocumentLink from JSON
@@ -1381,7 +1394,7 @@ proc toJson*(action: CodeAction): JsonNode =
 proc parseCallHierarchyItem*(node: JsonNode): CallHierarchyItem =
   ## Parse CallHierarchyItem from JSON
   result.name = node["name"].getStr
-  result.kind = SymbolKind(node["kind"].getInt)
+  result.kind = toEnumOr[SymbolKind](node["kind"].getInt, skFile)
   result.uri = node["uri"].getStr
   result.range = parseRange(node["range"])
   result.selectionRange = parseRange(node["selectionRange"])
