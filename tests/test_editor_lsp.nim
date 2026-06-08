@@ -74,6 +74,48 @@ suite "editor_lsp - maybeUpdateLsp":
     check e.lastLspChangeSeqs[activeBuffer.id] == activeBuffer.changeSeq
     check e.lastLspChangeSeqs[otherBuffer.id] == 999
 
+suite "editor_lsp - server config plumbing":
+  test "custom command/extensions override the built-in default":
+    let config = newEditorConfig()
+    config.lsp.servers["nim"] = LspServerConfig(
+      command: "my-nimlangserver --stdio",
+      extensions: @["nim", "custom"],
+      trace: LspTraceLevel.ltVerbose,
+    )
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+
+    let svcCfg = e.lsp.service.getConfig("nim")
+    check svcCfg.isSome
+    check svcCfg.get.command == "my-nimlangserver --stdio"
+    check svcCfg.get.args.len == 0
+    check svcCfg.get.extensions == @["nim", "custom"]
+    check svcCfg.get.rawJsonLog
+
+  test "language without a built-in default is registered":
+    let config = newEditorConfig()
+    config.lsp.servers["zig"] =
+      LspServerConfig(command: "zls", extensions: @["zig"], trace: LspTraceLevel.ltOff)
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+
+    let svcCfg = e.lsp.service.getConfig("zig")
+    check svcCfg.isSome
+    check svcCfg.get.command == "zls"
+    check svcCfg.get.extensions == @["zig"]
+    check not svcCfg.get.rawJsonLog
+
+  test "empty command leaves the default untouched":
+    let config = newEditorConfig()
+    config.lsp.servers["nim"] =
+      LspServerConfig(command: "", extensions: @[], trace: LspTraceLevel.ltOff)
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+
+    let svcCfg = e.lsp.service.getConfig("nim")
+    check svcCfg.isSome
+    check svcCfg.get.command == "nimlangserver" # built-in default preserved
+
 suite "editor_lsp - applyDiagnosticsForUri":
   proc oneDiagnostic(msg: string): seq[lspTypes.Diagnostic] =
     @[
