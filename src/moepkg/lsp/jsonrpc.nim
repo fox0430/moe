@@ -330,58 +330,64 @@ proc isInvalidContentType(s: string, valueStart: int): bool {.inline.} =
 proc isValidJsonRpc(json: JsonNode): bool {.inline.} =
   json.contains("jsonrpc")
 
+proc parseFrameHeaders*(headerBlock: string): Result[int, string] =
+  ## Parse a JSON-RPC header block and return the Content-Length.
+  ## Headers may arrive in any order and field names are case-insensitive,
+  ## so every line is scanned (stopping at the first Content-* line missed
+  ## Content-Length when Content-Type came first). Unknown headers are
+  ## ignored. Exposed for testing.
+  var contentLen = -1
+  for ln in headerBlock.splitLines:
+    if ln.len == 0:
+      continue
+    let sep = ln.find(':')
+    if sep < 0:
+      continue
+    let name = ln[0 ..< sep]
+    let valueStart = sep + 1 + ln.skipWhitespace(sep + 1)
+    if name.cmpIgnoreCase("Content-Length") == 0:
+      # parseInt raises ValueError on overflow; treat that as invalid too
+      let parsed =
+        try:
+          parseInt(ln, contentLen, valueStart)
+        except ValueError:
+          0
+      if parsed == 0:
+        return Result[int, string].err("Invalid Content-Length: " & ln.substr(valueStart))
+    elif name.cmpIgnoreCase("Content-Type") == 0:
+      if isInvalidContentType(ln, valueStart):
+        return Result[int, string].err("Only utf-8 is supported")
+    # Any other header is ignored
+
+  if contentLen < 0:
+    return Result[int, string].err("Missing Content-Length header")
+  Result[int, string].ok(contentLen)
+
 proc readFrame(s: AsyncStreamReader): Future[Result[string, string]] {.async.} =
   ## Read a JSON-RPC frame from the stream
 
-  while true:
-    let buf =
-      try:
-        await s.readLine(sep = "\r\n\r\n")
-      except CatchableError as e:
-        return Result[string, string].err("readLine failed: " & e.msg)
+  let buf =
+    try:
+      await s.readLine(sep = "\r\n\r\n")
+    except CatchableError as e:
+      return Result[string, string].err("readLine failed: " & e.msg)
 
-    if buf.len == 0:
-      return Result[string, string].err("readLine: empty")
+  if buf.len == 0:
+    return Result[string, string].err("readLine: empty")
 
-    var header: Option[tuple[ln: string, sep: int]]
-    for ln in buf.splitLines:
-      if ln.startsWith("Content-"):
-        let sep = ln.find(':')
-        if sep > -1:
-          header = some((ln, sep))
-          break
+  # `buf` is the whole header block (readLine consumed up to the blank line)
+  let headers = parseFrameHeaders(buf)
+  if headers.isErr:
+    return Result[string, string].err(headers.error)
+  let contentLen = headers.get
 
-    if header.isNone:
-      # Skip line if not JSON-RPC
-      continue
-
-    let valueStart =
-      header.get.sep + 1 + header.get.ln.skipWhitespace(header.get.sep + 1)
-
-    var contentLen = -1
-    case header.get.ln[0 ..< header.get.sep]
-    of "Content-Type":
-      if isInvalidContentType(header.get.ln, valueStart):
-        return Result[string, string].err("Only utf-8 is supported")
-    of "Content-Length":
-      if parseInt(header.get.ln, contentLen, valueStart) == 0:
-        return Result[string, string].err(
-          "Invalid Content-Length: " & header.get.ln.substr(valueStart)
-        )
-    else:
-      # Unrecognized headers are ignored
-      continue
-
-    if contentLen != -1:
-      let buf =
-        try:
-          let bytes = await s.read(contentLen)
-          string.fromBytes(bytes)
-        except CatchableError:
-          return Result[string, string].err("readStr failed")
-      return Result[string, string].ok(buf)
-    else:
-      return Result[string, string].err("Missing Content-Length header")
+  let body =
+    try:
+      let bytes = await s.read(contentLen)
+      string.fromBytes(bytes)
+    except CatchableError:
+      return Result[string, string].err("readStr failed")
+  return Result[string, string].ok(body)
 
 proc read*(s: OutputStream): Future[JsonRpcResponseResult] {.async.} =
   ## Return a JSON-RPC response from the stream

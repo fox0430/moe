@@ -206,6 +206,48 @@ suite "Header Parsing - parseHeaders":
     check result.isOk
     check result.get["content-length"] == "200"
 
+suite "Header Parsing - parseFrameHeaders (readFrame block)":
+  test "Content-Length only":
+    let r = parseFrameHeaders("Content-Length: 42")
+    check r.isOk
+    check r.get == 42
+
+  test "Content-Length after Content-Type (order independent)":
+    let r = parseFrameHeaders("Content-Type: application/vscode-jsonrpc; charset=utf-8\r\nContent-Length: 17")
+    check r.isOk
+    check r.get == 17
+
+  test "field names are case-insensitive":
+    let r = parseFrameHeaders("content-length: 5")
+    check r.isOk
+    check r.get == 5
+
+  test "unknown headers are ignored":
+    let r =
+      parseFrameHeaders("X-Custom: foo\r\nContent-Length: 8\r\nContent-Encoding: gzip")
+    check r.isOk
+    check r.get == 8
+
+  test "missing Content-Length is an error":
+    let r = parseFrameHeaders("X-Custom: foo")
+    check r.isErr
+    check r.error.contains("Missing Content-Length")
+
+  test "non-utf-8 Content-Type is rejected":
+    let r = parseFrameHeaders("Content-Type: text/plain; charset=ascii\r\nContent-Length: 3")
+    check r.isErr
+    check r.error.contains("utf-8")
+
+  test "invalid Content-Length value is an error":
+    let r = parseFrameHeaders("Content-Length: notanumber")
+    check r.isErr
+    check r.error.contains("Invalid Content-Length")
+
+  test "overflowing Content-Length is rejected, not crashing":
+    let r = parseFrameHeaders("Content-Length: 999999999999999999999999")
+    check r.isErr
+    check r.error.contains("Invalid Content-Length")
+
 suite "Message Parsing - parseJsonRpcMessage":
   test "parses request message":
     let body = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"""
