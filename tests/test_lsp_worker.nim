@@ -410,6 +410,15 @@ suite "LspWorker - pollEvents (without starting worker)":
     check worker.pollEvents().len == 0
     check worker.pollEvents().len == 0
 
+suite "LspWorker - rawJsonLog construction":
+  test "newLspWorker defaults rawJsonLog off":
+    let workerResult = newLspWorker("nim")
+    check workerResult.isOk
+
+  test "newLspWorker accepts rawJsonLog flag":
+    let workerResult = newLspWorker("nim", rawJsonLog = true)
+    check workerResult.isOk
+
 suite "LspWorker - sendRequest (without starting worker)":
   test "sendRequest returns incrementing request ids":
     let workerResult = newLspWorker("nim")

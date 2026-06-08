@@ -83,6 +83,21 @@ suite "message_log - LSP Message Log":
   test "lspMessageLogLen on empty log":
     check lspMessageLogLen() == 0
 
+  test "LSP log is capped at MaxLspMessageLogLen":
+    for i in 0 ..< MaxLspMessageLogLen + 5000:
+      addLspMessageLog("line " & $i)
+    check lspMessageLogLen() <= MaxLspMessageLogLen
+    # The most recent entries are retained
+    check getLspMessageLog()[^1] == "line " & $(MaxLspMessageLogLen + 4999)
+
+  test "LSP log cap via seq overload":
+    var batch: seq[string]
+    for i in 0 ..< MaxLspMessageLogLen + 5000:
+      batch.add("b" & $i)
+    addLspMessageLog(batch)
+    check lspMessageLogLen() <= MaxLspMessageLogLen
+    check getLspMessageLog()[^1] == "b" & $(MaxLspMessageLogLen + 4999)
+
 suite "message_log - Isolation":
   setup:
     clearMessageLog()

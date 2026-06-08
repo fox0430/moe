@@ -86,6 +86,17 @@ suite "LspService - Config Management":
     check retrieved.get.args == @["--stdio"]
     check "xyz" in retrieved.get.extensions
 
+  test "LanguageServerConfig rawJsonLog defaults to false":
+    let svc = newLspService()
+    check svc.getConfig("nim").get.rawJsonLog == false
+
+  test "setConfig persists rawJsonLog":
+    let svc = newLspService()
+    var c = svc.getConfig("nim").get
+    c.rawJsonLog = true
+    svc.setConfig("nim", c)
+    check svc.getConfig("nim").get.rawJsonLog
+
   test "setConfig updates existing config":
     let svc = newLspService()
     let newConfig = LanguageServerConfig(
