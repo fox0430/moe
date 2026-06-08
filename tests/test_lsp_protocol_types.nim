@@ -311,3 +311,99 @@ suite "types - FoldingRange parsing":
     check parseFoldingRangeKind("imports").get == frkImports
     check parseFoldingRangeKind("region").get == frkRegion
     check parseFoldingRangeKind("unknown").isNone
+
+suite "types - Enum range validation":
+  test "toEnumOr with fallback value":
+    check toEnumOr(1, mtError) == mtError
+    check toEnumOr(2, mtLog) == mtWarning
+    check toEnumOr(0, mtLog) == mtLog
+    check toEnumOr(5, mtLog) == mtLog
+    check toEnumOr(-3, mtLog) == mtLog
+    check toEnumOr(1, skFile) == skFile
+    check toEnumOr(12, skFile) == skFunction
+    check toEnumOr(26, skFile) == skTypeParameter
+    check toEnumOr(0, skFile) == skFile
+    check toEnumOr(27, skFile) == skFile
+    check toEnumOr(999, skFile) == skFile
+
+  test "toEnum returns Option":
+    check toEnum[DiagnosticSeverity](1) == some(dsError)
+    check toEnum[DiagnosticSeverity](4) == some(dsHint)
+    check toEnum[DiagnosticSeverity](0).isNone
+    check toEnum[DiagnosticSeverity](5).isNone
+    check toEnum[DocumentHighlightKind](1) == some(dhkText)
+    check toEnum[DocumentHighlightKind](3) == some(dhkWrite)
+    check toEnum[DocumentHighlightKind](0).isNone
+    check toEnum[DocumentHighlightKind](4).isNone
+    check toEnum[DiagnosticTag](1) == some(dtUnnecessary)
+    check toEnum[DiagnosticTag](2) == some(dtDeprecated)
+    check toEnum[DiagnosticTag](0).isNone
+    check toEnum[DiagnosticTag](3).isNone
+    check toEnum[InlayHintKind](1) == some(ihkType)
+    check toEnum[InlayHintKind](2) == some(ihkParameter)
+    check toEnum[InlayHintKind](0).isNone
+    check toEnum[InsertTextFormat](1) == some(itfPlainText)
+    check toEnum[InsertTextFormat](0).isNone
+
+suite "types - Diagnostic parsing with out-of-range values":
+  test "parseDiagnostic with out-of-range severity does not raise":
+    for invalid in [0, 5, 99, -1]:
+      let j = %*{
+        "range":
+          {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}},
+        "message": "bad severity",
+        "severity": invalid,
+      }
+      let diag = parseDiagnostic(j)
+      check diag.severity.isNone
+
+  test "parseDiagnostic with out-of-range tags skips them":
+    let j = %*{
+      "range":
+        {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}},
+      "message": "tags",
+      "tags": [1, 5, 2, 0],
+    }
+    let diag = parseDiagnostic(j)
+    check diag.tags.isSome
+    check diag.tags.get == @[dtUnnecessary, dtDeprecated]
+
+  test "parseDocumentSymbol with out-of-range kind does not raise":
+    let j = %*{
+      "name": "x",
+      "kind": 999,
+      "range":
+        {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}},
+      "selectionRange":
+        {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}},
+    }
+    let sym = parseDocumentSymbol(j)
+    check sym.kind == skFile
+
+  test "parseCallHierarchyItem with out-of-range kind does not raise":
+    let j = %*{
+      "name": "f",
+      "kind": 0,
+      "uri": "file:///t.nim",
+      "range":
+        {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}},
+      "selectionRange":
+        {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}},
+    }
+    let item = parseCallHierarchyItem(j)
+    check item.kind == skFile
+
+  test "parseInlayHint with out-of-range kind drops it":
+    let j = %*{"position": {"line": 0, "character": 0}, "label": "hint", "kind": 9}
+    let hint = parseInlayHint(j)
+    check hint.isSome
+    check hint.get.kind.isNone
+
+  test "parseDocumentHighlight with out-of-range kind drops it":
+    let j = %*{
+      "range":
+        {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}},
+      "kind": 0,
+    }
+    let hl = parseDocumentHighlight(j)
+    check hl.kind.isNone

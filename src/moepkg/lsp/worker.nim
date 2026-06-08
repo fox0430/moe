@@ -432,14 +432,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     of "window/logMessage":
       var evt = LspEvent(
         kind: levLogMessage,
-        msgType: MessageType(params["type"].getInt),
+        msgType: toEnumOr[MessageType](params["type"].getInt, mtLog),
         message: params["message"].getStr,
       )
       ctx.eventQueue[].push(evt)
     of "window/showMessage":
       var evt = LspEvent(
         kind: levShowMessage,
-        msgType: MessageType(params["type"].getInt),
+        msgType: toEnumOr[MessageType](params["type"].getInt, mtLog),
         message: params["message"].getStr,
       )
       ctx.eventQueue[].push(evt)
