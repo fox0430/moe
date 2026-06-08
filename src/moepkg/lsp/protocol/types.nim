@@ -673,21 +673,36 @@ proc parseTextDocumentEdit*(node: JsonNode): TextDocumentEdit =
   result.textDocument.uri = tdoc["uri"].getStr
   if tdoc.hasKey("version") and tdoc["version"].kind != JNull:
     result.textDocument.version = some(tdoc["version"].getInt)
-  for edit in node["edits"]:
-    result.edits.add(parseTextEdit(edit))
+  let editsNode = node.getOrDefault("edits")
+  if editsNode != nil and editsNode.kind == JArray:
+    for edit in editsNode:
+      result.edits.add(parseTextEdit(edit))
 
 proc parseWorkspaceEdit*(node: JsonNode): WorkspaceEdit =
-  if node.hasKey("changes"):
+  # Both fields are optional and a server may send `null` (e.g. nimlangserver
+  # returns `"documentChanges": null` alongside a populated `changes`). Iterating
+  # a JNull/JString node raises an AssertionDefect, so guard the kind before
+  # iterating. A `null` documentChanges must leave `result.documentChanges`
+  # unset (none) rather than `some(@[])`, otherwise applyWorkspaceEdit — which
+  # gives documentChanges precedence — would treat it as an empty edit and
+  # silently drop the real `changes`.
+  let changesNode = node.getOrDefault("changes")
+  if changesNode != nil and changesNode.kind == JObject:
     var changes = initTable[string, seq[TextEdit]]()
-    for uri, edits in node["changes"].pairs:
+    for uri, edits in changesNode.pairs:
+      if edits.kind != JArray:
+        continue
       var editSeq: seq[TextEdit] = @[]
       for edit in edits:
         editSeq.add(parseTextEdit(edit))
       changes[uri] = editSeq
     result.changes = some(changes)
-  if node.hasKey("documentChanges"):
+  let docChangesNode = node.getOrDefault("documentChanges")
+  if docChangesNode != nil and docChangesNode.kind == JArray:
     var docChanges: seq[TextDocumentEdit] = @[]
-    for docChange in node["documentChanges"]:
+    for docChange in docChangesNode:
+      if docChange.kind != JObject:
+        continue
       if docChange.hasKey("textDocument"):
         docChanges.add(parseTextDocumentEdit(docChange))
       elif docChange.hasKey("kind"):

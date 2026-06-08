@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json, options]
+import std/[unittest, json, options, tables]
 
 import ../src/moepkg/lsp/protocol/types
 
@@ -153,6 +153,94 @@ suite "types - TextEdit":
     check edit.newText == "world"
     check edit.range.start.line == 1
     check edit.range.`end`.character == 3
+
+suite "types - parseWorkspaceEdit":
+  test "parse changes field":
+    let j = %*{
+      "changes": {
+        "file:///a.nim": [
+          {
+            "range": {
+              "start": {"line": 0, "character": 5}, "end": {"line": 0, "character": 10}
+            },
+            "newText": "renamed",
+          }
+        ]
+      }
+    }
+    let edit = parseWorkspaceEdit(j)
+    check edit.changes.isSome
+    check edit.documentChanges.isNone
+    check edit.changes.get["file:///a.nim"].len == 1
+    check edit.changes.get["file:///a.nim"][0].newText == "renamed"
+
+  test "documentChanges: null is treated as absent (nimlangserver rename)":
+    # nimlangserver returns a populated `changes` alongside `"documentChanges": null`.
+    # Iterating the JNull node used to crash with an AssertionDefect, and even with
+    # the crash fixed a `some(@[])` documentChanges would take precedence over
+    # `changes` and silently drop the real edits.
+    let j = %*{
+      "changes": {
+        "file:///a.nim": [
+          {
+            "range": {
+              "start": {"line": 0, "character": 5}, "end": {"line": 0, "character": 10}
+            },
+            "newText": "renamed",
+          }
+        ]
+      },
+      "documentChanges": newJNull(),
+    }
+    let edit = parseWorkspaceEdit(j)
+    check edit.changes.isSome
+    check edit.documentChanges.isNone
+    check edit.changes.get["file:///a.nim"][0].newText == "renamed"
+
+  test "changes: null is treated as absent":
+    let j = %*{"changes": newJNull()}
+    let edit = parseWorkspaceEdit(j)
+    check edit.changes.isNone
+    check edit.documentChanges.isNone
+
+  test "parse documentChanges field":
+    let j = %*{
+      "documentChanges": [
+        {
+          "textDocument": {"uri": "file:///a.nim", "version": 1},
+          "edits": [
+            {
+              "range": {
+                "start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}
+              },
+              "newText": "abc",
+            }
+          ],
+        }
+      ]
+    }
+    let edit = parseWorkspaceEdit(j)
+    check edit.documentChanges.isSome
+    check edit.documentChanges.get.len == 1
+    check edit.documentChanges.get[0].textDocument.uri == "file:///a.nim"
+    check edit.documentChanges.get[0].edits[0].newText == "abc"
+
+  test "documentChanges with null edits does not crash":
+    let j = %*{
+      "documentChanges":
+        [{"textDocument": {"uri": "file:///a.nim"}, "edits": newJNull()}]
+    }
+    let edit = parseWorkspaceEdit(j)
+    check edit.documentChanges.isSome
+    check edit.documentChanges.get[0].edits.len == 0
+
+  test "resourceOperations recorded from documentChanges":
+    let j = %*{
+      "documentChanges":
+        [{"kind": "rename", "oldUri": "file:///a.nim", "newUri": "file:///b.nim"}]
+    }
+    let edit = parseWorkspaceEdit(j)
+    check edit.resourceOperations == @["rename"]
 
 suite "types - parseLocations":
   test "parse single location object":
