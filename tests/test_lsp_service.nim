@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json, options, os, times, strutils, importutils, tables]
+import
+  std/[unittest, json, options, os, times, strutils, importutils, tables, monotimes]
 
 import pkg/results
 
@@ -290,6 +291,45 @@ suite "LspService - Worker Management (without actual workers)":
     check worker1 == worker2
 
     worker1.stop()
+
+  test "startWorker restarts a crashed server (rate-limited)":
+    proc waitForState(
+        worker: LspWorker, expected: LspWorkerState, timeoutMs = 5000
+    ): bool =
+      let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+      while getMonoTime() < deadline:
+        if worker.state == expected:
+          return true
+        sleep(10)
+      false
+
+    let svc = newLspService()
+    # A "server" that exits immediately -> initialize fails -> lwsCrashed
+    svc.setConfig(
+      "crashlang",
+      LanguageServerConfig(
+        command: "true", args: @[], extensions: @["crashext"], enabled: true
+      ),
+    )
+
+    let result1 = svc.startWorker("crashlang")
+    check result1.isOk
+    let worker = result1.get
+    check worker.waitForState(lwsCrashed)
+
+    # First call after the crash triggers a restart on the same thread
+    let result2 = svc.startWorker("crashlang")
+    check result2.isOk
+    check result2.get == worker
+
+    # The restarted server crashes again; an immediate further restart is
+    # suppressed by the rate limit
+    check worker.waitForState(lwsCrashed)
+    let result3 = svc.startWorker("crashlang")
+    check result3.isErr
+    check result3.error.contains("restart suppressed")
+
+    worker.stop()
 
 suite "LspService - Pending Request Management":
   test "hasPendingRequests returns false initially":
