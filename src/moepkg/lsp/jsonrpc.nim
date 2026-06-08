@@ -353,7 +353,8 @@ proc parseFrameHeaders*(headerBlock: string): Result[int, string] =
         except ValueError:
           0
       if parsed == 0:
-        return Result[int, string].err("Invalid Content-Length: " & ln.substr(valueStart))
+        return
+          Result[int, string].err("Invalid Content-Length: " & ln.substr(valueStart))
     elif name.cmpIgnoreCase("Content-Type") == 0:
       if isInvalidContentType(ln, valueStart):
         return Result[int, string].err("Only utf-8 is supported")

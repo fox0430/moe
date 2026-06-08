@@ -213,7 +213,9 @@ suite "Header Parsing - parseFrameHeaders (readFrame block)":
     check r.get == 42
 
   test "Content-Length after Content-Type (order independent)":
-    let r = parseFrameHeaders("Content-Type: application/vscode-jsonrpc; charset=utf-8\r\nContent-Length: 17")
+    let r = parseFrameHeaders(
+      "Content-Type: application/vscode-jsonrpc; charset=utf-8\r\nContent-Length: 17"
+    )
     check r.isOk
     check r.get == 17
 
@@ -234,7 +236,8 @@ suite "Header Parsing - parseFrameHeaders (readFrame block)":
     check r.error.contains("Missing Content-Length")
 
   test "non-utf-8 Content-Type is rejected":
-    let r = parseFrameHeaders("Content-Type: text/plain; charset=ascii\r\nContent-Length: 3")
+    let r =
+      parseFrameHeaders("Content-Type: text/plain; charset=ascii\r\nContent-Length: 3")
     check r.isErr
     check r.error.contains("utf-8")
 
