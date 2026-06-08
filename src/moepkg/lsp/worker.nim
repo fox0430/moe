@@ -1041,10 +1041,17 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           sendError("Command processing error: " & e.msg)
           # Don't crash the worker, continue processing
 
-      # Process any available messages from server
-      if ctx.sharedState.loadState() == lwsRunning and outputFuture != nil:
+      # Drain all messages the server has already delivered. The signal only
+      # fires on main-thread command enqueue, not on server data, so handling
+      # a single message per wakeup capped throughput at ~1 message per
+      # SignalTimeoutRunningMs (~20/s) and made diagnostics/progress floods
+      # lag by seconds, spuriously tripping request timeouts. Loop while a
+      # completed frame is ready; processMessages re-arms outputFuture on
+      # success and nils it on error/crash, so this terminates.
+      if ctx.sharedState.loadState() == lwsRunning:
         try:
-          await processMessages()
+          while outputFuture != nil and outputFuture.finished:
+            await processMessages()
         except CatchableError as e:
           sendError("Message processing error: " & e.msg)
           # Don't crash the worker, continue processing
