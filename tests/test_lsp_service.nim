@@ -696,6 +696,7 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
 
   test "levResponse with invalid JSON stores an error":
     let svc = newLspService()
+    svc.activeRequests[8] = LspPendingRequest(requestId: 8, langId: "nim")
     svc.processEvent(
       "nim",
       LspEvent(
@@ -710,6 +711,41 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     check resp.result.isNone
     check resp.error.isSome
     check resp.error.get.contains("Failed to parse response")
+
+  test "levResponse for an unknown/timed-out request is dropped":
+    # A response arriving after the request was timed out (no activeRequests
+    # entry) must not be stored, or it would leak in pendingResponses forever.
+    let svc = newLspService()
+    svc.processEvent(
+      "nim",
+      LspEvent(
+        kind: levResponse,
+        requestId: 99,
+        responseResultJson: some($(%*{"ok": true})),
+        responseError: none(string),
+      ),
+    )
+    check 99 notin svc.pendingResponses
+    check svc.pendingResponses.len == 0
+
+  test "recordResponse stores only for active requests":
+    let svc = newLspService()
+    svc.activeRequests[1] = LspPendingRequest(requestId: 1, langId: "nim")
+    svc.recordResponse(1, some(%*{"a": 1}), none(string))
+    svc.recordResponse(2, some(%*{"b": 2}), none(string)) # not active -> dropped
+    check 1 in svc.pendingResponses
+    check 2 notin svc.pendingResponses
+
+  test "late response after cleanupTimedOutRequests does not leak":
+    let svc = newLspService()
+    # An already-expired request
+    svc.activeRequests[5] =
+      LspPendingRequest(requestId: 5, langId: "nim", startTime: 0.0, timeoutMs: 1)
+    svc.cleanupTimedOutRequests()
+    check 5 notin svc.activeRequests
+    # The worker's response arrives afterwards
+    svc.recordResponse(5, some(%*{"late": true}), none(string))
+    check svc.pendingResponses.len == 0
 
   test "levDiagnostics is parsed and forwarded to the callback":
     let svc = newLspService()

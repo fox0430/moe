@@ -356,6 +356,17 @@ proc stopAll*(svc: LspService) =
   svc.activeRequests.clear()
   svc.pendingResponses.clear()
 
+proc recordResponse*(
+    svc: LspService, requestId: int, res: Option[JsonNode], error: Option[string]
+) =
+  ## Store a response for a request that is still awaiting one. Responses
+  ## that arrive after the request was already timed out or cancelled (no
+  ## activeRequests entry) are dropped: otherwise they would sit in
+  ## pendingResponses forever, since cleanupTimedOutRequests and checkResponse
+  ## only ever look at requestIds present in activeRequests.
+  if requestId in svc.activeRequests:
+    svc.pendingResponses[requestId] = (result: res, error: error)
+
 proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
   ## Process a single worker event on the main thread. JSON payloads cross
   ## the thread boundary as serialized strings (JsonNode refs are unsafe to
@@ -397,14 +408,13 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
       try:
         parsed = parseJson(evt.responseResultJson.get)
       except CatchableError as e:
-        svc.pendingResponses[evt.requestId] =
-          (result: none(JsonNode), error: some("Failed to parse response: " & e.msg))
+        svc.recordResponse(
+          evt.requestId, none(JsonNode), some("Failed to parse response: " & e.msg)
+        )
         return
-      svc.pendingResponses[evt.requestId] =
-        (result: some(parsed), error: evt.responseError)
+      svc.recordResponse(evt.requestId, some(parsed), evt.responseError)
     else:
-      svc.pendingResponses[evt.requestId] =
-        (result: none(JsonNode), error: evt.responseError)
+      svc.recordResponse(evt.requestId, none(JsonNode), evt.responseError)
   of levRawJson:
     let timestamp = now().format("HH:mm:ss'.'fff")
     let direction = if evt.jsonDirection == ljdSent: ">>> " else: "<<< "
