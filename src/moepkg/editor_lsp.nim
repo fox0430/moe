@@ -152,10 +152,14 @@ proc requestLspRename*(
       # buffer changes while the request is in flight, applying the stale
       # coordinates would corrupt text, so the whole edit is discarded
       # (aborting beats partial application).
+      # Key by normalized absolute path: buffers opened with a relative path
+      # store it verbatim, but collectWorkspaceEditPaths yields absolute paths,
+      # so the lookup below would otherwise always miss and the guard would
+      # never fire.
       var seqSnapshot: Table[string, int]
       for buf in e.buffers:
         if buf.filePath.isSome:
-          seqSnapshot[buf.filePath.get] = buf.changeSeq
+          seqSnapshot[normalizedPath(absolutePath(buf.filePath.get))] = buf.changeSeq
 
       # Get rename result from LSP
       let renameResult = await e.lsp.requestRename(activeBuffer, line, col, newName)
@@ -172,9 +176,11 @@ proc requestLspRename*(
 
       # Reject the edit if any targeted open buffer changed during the await
       for path in collectWorkspaceEditPaths(workspaceEdit):
+        let absPath = normalizedPath(absolutePath(path))
         for buf in e.buffers:
-          if buf.filePath.isSome and buf.filePath.get == path and
-              buf.changeSeq != seqSnapshot.getOrDefault(path, buf.changeSeq):
+          if buf.filePath.isSome and
+              normalizedPath(absolutePath(buf.filePath.get)) == absPath and
+              buf.changeSeq != seqSnapshot.getOrDefault(absPath, buf.changeSeq):
             e.state.statusMessage = "Buffer changed during rename; edits discarded"
             return
 
