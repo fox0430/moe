@@ -23,6 +23,20 @@ import pkg/results
 
 import ../src/moepkg/lsp/worker
 
+suite "LspWorker - pathToFileUri":
+  test "plain absolute path":
+    check pathToFileUri("/home/user/project") == "file:///home/user/project"
+
+  test "percent-encodes spaces":
+    check pathToFileUri("/home/user/my project") == "file:///home/user/my%20project"
+
+  test "percent-encodes non-ASCII":
+    check pathToFileUri("/home/user/プロジェクト") ==
+      "file:///home/user/%E3%83%97%E3%83%AD%E3%82%B8%E3%82%A7%E3%82%AF%E3%83%88"
+
+  test "keeps path separators":
+    check pathToFileUri("/a/b/c") == "file:///a/b/c"
+
 suite "LspWorker - Constants":
   test "SignalTimeoutRunningMs is defined":
     check SignalTimeoutRunningMs == 50
