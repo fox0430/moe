@@ -541,11 +541,13 @@ proc cancelRequest*(svc: LspService, requestId: int) =
   ## discarded silently.
   if requestId in svc.activeRequests:
     let req = svc.activeRequests[requestId]
-    # Send $/cancelRequest notification to the LSP server
+    # Ask the worker to cancel. It maps this tracking id to the server's
+    # JSON-RPC id before sending $/cancelRequest — sending the tracking id
+    # directly (as before) targets the wrong id and never cancels anything.
     if req.langId in svc.workers:
       let worker = svc.workers[req.langId]
       if worker.isRunning:
-        worker.sendNotification("$/cancelRequest", %*{"id": requestId})
+        worker.cancelRequest(requestId)
     svc.activeRequests.del(requestId)
   svc.pendingResponses.del(requestId)
 
