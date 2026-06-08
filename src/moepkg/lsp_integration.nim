@@ -753,12 +753,20 @@ proc hasRenameSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   langId.isSome and lsp.service.hasRenameSupport(langId.get)
 
 # TextEdit application helpers
-proc compareTextEditReverse(a, b: TextEdit): int =
-  ## Compare TextEdits for reverse sorting (back to front)
-  ## Returns positive if a should come before b (a is after b in document)
-  if a.range.start.line != b.range.start.line:
-    return b.range.start.line - a.range.start.line
-  return b.range.start.character - a.range.start.character
+proc compareTextEditReverse(a, b: (int, TextEdit)): int =
+  ## Order (originalIndex, edit) pairs for back-to-front application.
+  ## Later document positions sort first. For edits at the *same* start
+  ## position, the LSP spec says they appear in the document in array order;
+  ## applying back-to-front, the later array element must be applied first so
+  ## the earlier one ends up before it. Hence the original index is the
+  ## tiebreaker, in descending order.
+  let ea = a[1]
+  let eb = b[1]
+  if ea.range.start.line != eb.range.start.line:
+    return eb.range.start.line - ea.range.start.line
+  if ea.range.start.character != eb.range.start.character:
+    return eb.range.start.character - ea.range.start.character
+  return b[0] - a[0]
 
 proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, string] =
   ## Apply a sequence of TextEdits to the buffer
@@ -786,9 +794,15 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
     if txr.isErr:
       return err("Failed to begin transaction: " & txr.error)
 
-  # Sort edits in reverse order (back to front)
-  var sortedEdits = edits
-  sortedEdits.sort(compareTextEditReverse)
+  # Sort edits in reverse order (back to front), keeping the original index
+  # as a tiebreaker for same-position edits (see compareTextEditReverse)
+  var indexed = newSeq[(int, TextEdit)](edits.len)
+  for i, e in edits:
+    indexed[i] = (i, e)
+  indexed.sort(compareTextEditReverse)
+  var sortedEdits = newSeq[TextEdit](edits.len)
+  for i in 0 ..< indexed.len:
+    sortedEdits[i] = indexed[i][1]
 
   template failEdit(msg: string): untyped =
     if ownTransaction:
