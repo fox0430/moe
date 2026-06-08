@@ -20,7 +20,7 @@
 ## LSP Worker Thread
 ## Runs chronos event loop in a separate thread to avoid blocking the UI
 
-import std/[json, options, os, strutils, strtabs, locks, tables, atomics, deques]
+import std/[json, options, os, strutils, strtabs, locks, tables, atomics, deques, uri]
 import std/times except milliseconds
 
 import pkg/[results, chronos]
@@ -30,6 +30,17 @@ import jsonrpc
 import protocol/types
 
 export types
+
+proc pathToFileUri*(path: string): string =
+  ## Build a percent-encoded file:// URI from an absolute path. Encoding is
+  ## per segment so the separators survive; without it a workspace path
+  ## containing spaces or non-ASCII characters produces an invalid rootUri
+  ## that strict servers reject. Mirrors lsp_service.pathToUri (kept local
+  ## to avoid a dependency cycle).
+  var segments: seq[string]
+  for segment in path.split('/'):
+    segments.add(encodeUrl(segment, usePlus = false))
+  "file://" & segments.join("/")
 
 const
   # Signal wait timeouts
@@ -697,7 +708,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     # Use workspaceRoot if provided, otherwise null
     let rootUri =
       if cmd.workspaceRoot.len > 0:
-        newJString("file://" & cmd.workspaceRoot)
+        newJString(pathToFileUri(cmd.workspaceRoot))
       else:
         newJNull()
     let rootPath =
