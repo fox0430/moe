@@ -157,8 +157,6 @@ proc ensureGapSize(gb: GapBuffer, minSize: int) =
   gb.lines = newLines
   gb.gapEnd = suffixStart
 
-const BULK_COPY_THRESHOLD = 8
-
 proc moveGapTo(gb: GapBuffer, lineNumber: int) =
   ## Move gap to specified logical line number
   ##
@@ -167,9 +165,9 @@ proc moveGapTo(gb: GapBuffer, lineNumber: int) =
   ## - Worst case: O(n) where n = distance to move
   ## - Amortized: O(1) with locality of reference
   ##
-  ## Note: Left movement uses temp buffer for large moves (>= 8 lines)
-  ## to avoid reverse-order copy overhead. Right movement uses direct
-  ## forward copy (no overlap).
+  ## Lines are relocated with `move()` (O(1) pointer transfer per line, no string
+  ## payload copy). Left movement runs in reverse and right movement forward so the
+  ## relocation stays correct even when src/dst overlap (i.e. moveCount > gapSize).
   let clampedLine = max(0, min(lineNumber, gb.lineCount))
 
   if clampedLine == gb.gapStart:
@@ -182,18 +180,9 @@ proc moveGapTo(gb: GapBuffer, lineNumber: int) =
       srcStart = clampedLine
       dstStart = gb.gapEnd - moveCount
 
-    # Move lines from before gap to after gap (reverse order to avoid overlap)
-    if moveCount >= BULK_COPY_THRESHOLD:
-      # Bulk copy for large moves - use temporary buffer
-      var temp = newSeq[string](moveCount)
-      for i in 0 ..< moveCount:
-        temp[i] = gb.lines[srcStart + i]
-      for i in 0 ..< moveCount:
-        gb.lines[dstStart + i] = temp[i]
-    else:
-      # Small move - direct copy in reverse order
-      for i in countdown(moveCount - 1, 0):
-        gb.lines[dstStart + i] = gb.lines[srcStart + i]
+    # Reverse order keeps move() correct when src/dst overlap (moveCount > gapSize)
+    for i in countdown(moveCount - 1, 0):
+      gb.lines[dstStart + i] = move(gb.lines[srcStart + i])
 
     gb.gapStart = clampedLine
     gb.gapEnd -= moveCount
@@ -204,9 +193,9 @@ proc moveGapTo(gb: GapBuffer, lineNumber: int) =
       srcStart = gb.gapEnd
       dstStart = gb.gapStart
 
-    # Move lines from after gap to before gap (forward order is safe, no overlap)
+    # Forward order keeps move() correct when src/dst overlap (dst < src here)
     for i in 0 ..< moveCount:
-      gb.lines[dstStart + i] = gb.lines[srcStart + i]
+      gb.lines[dstStart + i] = move(gb.lines[srcStart + i])
 
     gb.gapStart = clampedLine
     gb.gapEnd += moveCount
