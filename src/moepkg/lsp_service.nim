@@ -44,6 +44,7 @@ type
     args*: seq[string]
     extensions*: seq[string]
     enabled*: bool
+    rawJsonLog*: bool ## Emit raw JSON-RPC traffic to the LSP log (debug only)
 
   LspResponseStatus* = enum
     lrsPending # Response not yet received
@@ -284,7 +285,7 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
     svc.workers.del(langId)
 
   # Create new worker
-  let workerResult = newLspWorker(langId)
+  let workerResult = newLspWorker(langId, config.rawJsonLog)
   if workerResult.isErr:
     return err("Failed to create worker: " & workerResult.error)
   let worker = workerResult.get

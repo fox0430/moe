@@ -180,6 +180,7 @@ type
     sharedState: ptr SharedState
     signal: ThreadSignalPtr # Signal for event-driven wakeup
     tempDir: string
+    rawJsonLog: bool # Emit levRawJson events for every frame (debug only)
 
   LspWorker* = ref object
     thread: Thread[LspWorkerContext]
@@ -191,6 +192,7 @@ type
     signal: ThreadSignalPtr # Signal for event-driven wakeup
     languageId*: string
     nextRequestId: int # For generating unique request IDs
+    rawJsonLog: bool # Forwarded to the worker context on start()
 
 # Atomic state accessors
 proc loadRunning(s: ptr SharedState): bool {.inline.} =
@@ -395,8 +397,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     )
     ctx.eventQueue[].push(evt)
 
-  proc sendRawJson(direction: LspJsonDirection, json: string) =
-    var evt = LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: json)
+  proc sendRawJson(direction: LspJsonDirection, node: JsonNode) =
+    # Gate on the debug flag: pretty-printing every frame (a full-document
+    # didChange on each keystroke under full sync) and pushing it through the
+    # event queue is expensive and the in-memory log grows unbounded, so skip
+    # the work entirely unless raw-JSON logging was explicitly enabled.
+    if not ctx.rawJsonLog:
+      return
+    var evt = LspEvent(kind: levRawJson, jsonDirection: direction, rawJson: node.pretty)
     ctx.eventQueue[].push(evt)
 
   proc sendDynamicRegister(paramsJson: string) =
@@ -564,7 +572,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     lastId.inc
     let req = %*{"jsonrpc": "2.0", "id": lastId, "method": meth, "params": params}
     # Log outgoing request JSON (pretty formatted)
-    sendRawJson(ljdSent, req.pretty)
+    sendRawJson(ljdSent, req)
     let sendResult = await serverStreams.input.sendRequest(req)
     if sendResult.isErr:
       return Result[int, string].err(sendResult.error)
@@ -578,7 +586,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
     let notify = %*{"jsonrpc": "2.0", "method": meth, "params": params}
     # Log outgoing notification JSON (pretty formatted)
-    sendRawJson(ljdSent, notify.pretty)
+    sendRawJson(ljdSent, notify)
     return await serverStreams.input.sendNotify(notify)
 
   proc sendNotificationLog(meth: string, params: JsonNode): Future[void] {.async.} =
@@ -702,7 +710,9 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       "rootPath": rootPath,
       "workspaceFolders": newJNull(),
       "capabilities": buildClientCapabilities(),
-      "trace": "verbose",
+      # Only ask the server for verbose $/logTrace traffic when raw-JSON
+      # logging is enabled; otherwise it floods the event queue for nothing.
+      "trace": (if ctx.rawJsonLog: "verbose" else: "off"),
     }
 
     let reqResult = await sendRequest("initialize", initParams)
@@ -752,7 +762,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
       let response = respResult.get
       # Log received JSON (pretty formatted)
-      sendRawJson(ljdReceived, response.pretty)
+      sendRawJson(ljdReceived, response)
 
       # Handle notification
       if response.hasKey("method") and not response.hasKey("id"):
@@ -775,7 +785,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           else:
             newJObject()
         let resp = await handleServerRequest(meth, reqId, params)
-        sendRawJson(ljdSent, resp.pretty)
+        sendRawJson(ljdSent, resp)
         discard await serverStreams.input.sendRequest(resp)
         continue
 
@@ -963,7 +973,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
     let response = respResult.get
     # Log received JSON (pretty formatted)
-    sendRawJson(ljdReceived, response.pretty)
+    sendRawJson(ljdReceived, response)
 
     # Check if this is a notification (has "method", no "id")
     if response.hasKey("method") and not response.hasKey("id"):
@@ -988,7 +998,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           newJObject()
 
       let resp = await handleServerRequest(meth, reqId, params)
-      sendRawJson(ljdSent, resp.pretty)
+      sendRawJson(ljdSent, resp)
       discard await serverStreams.input.sendRequest(resp)
       return
 
@@ -1094,8 +1104,9 @@ proc initSharedState(): SharedState =
   result.running.store(false, moRelaxed)
   result.stateVal.store(lwsStopped.ord, moRelaxed)
 
-proc newLspWorker*(languageId: string): Result[LspWorker, string] =
+proc newLspWorker*(languageId: string, rawJsonLog = false): Result[LspWorker, string] =
   ## Create a new LSP worker. Returns error if signal creation fails.
+  ## rawJsonLog enables per-frame levRawJson debug events (off by default).
   let signalResult = ThreadSignalPtr.new()
   if signalResult.isErr:
     return err("Failed to create thread signal: " & signalResult.error)
@@ -1108,6 +1119,7 @@ proc newLspWorker*(languageId: string): Result[LspWorker, string] =
       signal: signalResult.get,
       languageId: languageId,
       nextRequestId: 1,
+      rawJsonLog: rawJsonLog,
     )
   )
 
@@ -1124,6 +1136,7 @@ proc start*(worker: LspWorker) =
     sharedState: addr worker.sharedState,
     signal: worker.signal,
     tempDir: getTempDir(),
+    rawJsonLog: worker.rawJsonLog,
   )
 
   createThread(worker.thread, workerThreadProc, ctx)

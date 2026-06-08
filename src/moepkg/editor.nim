@@ -948,6 +948,16 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Apply LSP enable setting from config
   result.lsp.setEnabled(result.config.lsp.enable)
 
+  # Enable raw JSON-RPC logging for any language configured with trace=verbose.
+  # Off by default so the per-keystroke pretty-print cost is not paid normally.
+  for langId, serverCfg in result.config.lsp.servers:
+    if serverCfg.trace == LspTraceLevel.ltVerbose:
+      let existing = result.lsp.service.getConfig(langId)
+      if existing.isSome:
+        var c = existing.get
+        c.rawJsonLog = true
+        result.lsp.service.setConfig(langId, c)
+
   # Initialize config file modification time for liveReloadOfConf
   let configPath = getConfigPath()
   if fileExists(configPath):

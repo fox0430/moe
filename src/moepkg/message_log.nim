@@ -20,8 +20,19 @@
 ## Message log for editor messages displayed on the command line.
 ## These messages are stored for later viewing in the log viewer.
 
+const MaxLspMessageLogLen* = 20000
+  ## Cap on retained LSP log lines. Raw-JSON logging can append a full
+  ## pretty-printed document per keystroke, so the log must be bounded or it
+  ## grows without limit over a long session.
+
 var messageLog {.threadvar.}: seq[string]
 var lspMessageLog {.threadvar.}: seq[string]
+
+proc trimLspMessageLog() =
+  ## Drop the oldest half once the cap is exceeded. Halving (rather than
+  ## trimming one line at a time) amortizes the cost to O(1) per add.
+  if lspMessageLog.len > MaxLspMessageLogLen:
+    lspMessageLog = lspMessageLog[^(MaxLspMessageLogLen div 2) .. ^1]
 
 proc addMessageLog*(message: string) =
   ## Add a message to the log.
@@ -49,11 +60,13 @@ proc messageLogLen*(): int =
 proc addLspMessageLog*(message: string) =
   ## Add a message to the LSP log.
   lspMessageLog.add(message)
+  trimLspMessageLog()
 
 proc addLspMessageLog*(messages: seq[string]) =
   ## Add multiple messages to the LSP log.
   for m in messages:
     lspMessageLog.add(m)
+  trimLspMessageLog()
 
 proc getLspMessageLog*(): seq[string] =
   ## Return all messages in the LSP log.
