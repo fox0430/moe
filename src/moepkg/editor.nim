@@ -948,15 +948,36 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Apply LSP enable setting from config
   result.lsp.setEnabled(result.config.lsp.enable)
 
-  # Enable raw JSON-RPC logging for any language configured with trace=verbose.
-  # Off by default so the per-keystroke pretty-print cost is not paid normally.
+  # Propagate per-language server settings from the config ([Lsp.<lang>])
+  # into the LSP service. Without this, user overrides for command,
+  # extensions, or trace were ignored and only the hardcoded defaults ran.
+  # The command string may include arguments; the worker splits it, so args
+  # is cleared when a custom command is given. trace=verbose enables raw
+  # JSON-RPC logging (off by default to avoid the per-keystroke cost).
   for langId, serverCfg in result.config.lsp.servers:
-    if serverCfg.trace == LspTraceLevel.ltVerbose:
-      let existing = result.lsp.service.getConfig(langId)
-      if existing.isSome:
-        var c = existing.get
+    let existing = result.lsp.service.getConfig(langId)
+    if existing.isSome:
+      var c = existing.get
+      if serverCfg.command.len > 0:
+        c.command = serverCfg.command
+        c.args = @[]
+      if serverCfg.extensions.len > 0:
+        c.extensions = serverCfg.extensions
+      if serverCfg.trace == LspTraceLevel.ltVerbose:
         c.rawJsonLog = true
-        result.lsp.service.setConfig(langId, c)
+      result.lsp.service.setConfig(langId, c)
+    elif serverCfg.command.len > 0:
+      # A language with no built-in default: register it from the user config
+      result.lsp.service.setConfig(
+        langId,
+        LanguageServerConfig(
+          command: serverCfg.command,
+          args: @[],
+          extensions: serverCfg.extensions,
+          enabled: true,
+          rawJsonLog: serverCfg.trace == LspTraceLevel.ltVerbose,
+        ),
+      )
 
   # Initialize config file modification time for liveReloadOfConf
   let configPath = getConfigPath()
