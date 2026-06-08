@@ -188,6 +188,17 @@ suite "LspWorker - LspCommand object":
     check cmd.reqMethod == "textDocument/completion"
     check parseJson(cmd.reqParamsJson).hasKey("textDocument")
 
+  test "LspCommand lcmdCancel variant":
+    let cmd = LspCommand(kind: lcmdCancel, cancelRequestId: 7)
+    check cmd.kind == lcmdCancel
+    check cmd.cancelRequestId == 7
+
+  test "cancelRequest is safe without a running server":
+    let workerResult = newLspWorker("nim")
+    check workerResult.isOk
+    let worker = workerResult.get
+    worker.cancelRequest(123) # Should not crash; nothing is pending
+
 suite "LspWorker - LspEvent object":
   test "LspEvent levInitialized variant":
     let evt = LspEvent(kind: levInitialized)

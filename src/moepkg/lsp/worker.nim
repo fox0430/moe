@@ -62,6 +62,7 @@ type
     lcmdDidSave # textDocument/didSave
     lcmdRequest # Generic request with response tracking
     lcmdNotification # Generic notification (no response expected)
+    lcmdCancel # Cancel a tracked request ($/cancelRequest)
 
   LspCommand* = object
     case kind*: LspCommandKind
@@ -93,6 +94,8 @@ type
     of lcmdNotification:
       notifyMethod*: string
       notifyParamsJson*: string # JSON-serialized params (see note below)
+    of lcmdCancel:
+      cancelRequestId*: int # Tracking ID (the service-side id) to cancel
 
   # Messages from worker thread to main thread
   LspEventKind* = enum
@@ -947,6 +950,20 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
           )
           return
         await sendNotificationLog(cmd.notifyMethod, params)
+    of lcmdCancel:
+      # Translate the service-side tracking id to the JSON-RPC id actually
+      # sent to the server (pendingRequests maps lspId -> tracking id), then
+      # send $/cancelRequest with that id. Drop the mapping so the eventual
+      # response is treated as a late/unknown response and ignored.
+      var lspId = -1
+      for id, (ourId, _) in pendingRequests:
+        if ourId == cmd.cancelRequestId:
+          lspId = id
+          break
+      if lspId >= 0:
+        pendingRequests.del(lspId)
+        if ctx.sharedState.loadState() == lwsRunning:
+          await sendNotificationLog("$/cancelRequest", %*{"id": lspId})
 
   proc processMessages(): Future[void] {.async.} =
     if outputFuture.isNil:
@@ -1273,4 +1290,12 @@ proc sendNotification*(worker: LspWorker, meth: string, params: JsonNode) =
   ## Send a notification to the LSP server (no response expected)
   let cmd =
     LspCommand(kind: lcmdNotification, notifyMethod: meth, notifyParamsJson: $params)
+  worker.commandQueue.pushAndSignal(cmd, worker.signal)
+
+proc cancelRequest*(worker: LspWorker, requestId: int) =
+  ## Cancel a previously sent request identified by its tracking ID. The
+  ## worker resolves the tracking ID to the server's JSON-RPC ID and sends
+  ## $/cancelRequest; a plain notification cannot do this because the caller
+  ## does not know the server-facing ID.
+  let cmd = LspCommand(kind: lcmdCancel, cancelRequestId: requestId)
   worker.commandQueue.pushAndSignal(cmd, worker.signal)
