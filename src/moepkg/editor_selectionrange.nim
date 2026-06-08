@@ -70,14 +70,14 @@ proc pollLspSelectionRange*(e: Editor) =
         let selRange = ranges[0]
         let activeBuffer = e.activeBuffer()
 
-        # Convert LSP UTF-16 positions to UTF-8 byte offsets
+        # Convert LSP UTF-16 positions to rune indexes (BufferPosition.column)
         let startLine = selRange.range.start.line
         let startLineText =
           if startLine >= 0 and startLine < activeBuffer.len:
             activeBuffer.getLine(startLine)
           else:
             ""
-        let startCol = utf16OffsetToUtf8(startLineText, selRange.range.start.character)
+        let startCol = utf16ToRuneIndex(startLineText, selRange.range.start.character)
 
         let endLine = selRange.range.`end`.line
         let endLineText =
@@ -85,7 +85,7 @@ proc pollLspSelectionRange*(e: Editor) =
             activeBuffer.getLine(endLine)
           else:
             ""
-        let endCol = utf16OffsetToUtf8(endLineText, selRange.range.`end`.character)
+        let endCol = utf16ToRuneIndex(endLineText, selRange.range.`end`.character)
 
         # Enter visual mode and set selection to the range
         e.state.previousMode = e.state.mode

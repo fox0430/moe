@@ -329,8 +329,10 @@ proc commitCompletion*(
       # Position cursor at end of inserted text
       let newTextLines = edit.newText.split('\n')
       if newTextLines.len == 1:
-        # Single-line edit: cursor at start column + newText length
-        let startCol = utf16OffsetToUtf8(
+        # Single-line edit: cursor at start column + newText length.
+        # cursor.column is a rune index, so the LSP UTF-16 start must be
+        # converted to a rune index (not a byte offset).
+        let startCol = utf16ToRuneIndex(
           buffer.getLine(edit.range.start.line), edit.range.start.character
         )
         state.cursor.line = edit.range.start.line

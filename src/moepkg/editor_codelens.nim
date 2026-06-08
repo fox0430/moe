@@ -250,16 +250,18 @@ proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlig
     let endLine = highlight.range.`end`.line
 
     if startLine == endLine:
-      # Single line highlight - convert UTF-16 to UTF-8
+      # Single line highlight - convert UTF-16 to rune index. The renderer
+      # compares these against BufferPosition.column (a rune index), so byte
+      # offsets would misplace the highlight on multibyte lines.
       let lineText =
         if startLine >= 0 and startLine < activeBuffer.len:
           activeBuffer.getLine(startLine)
         else:
           ""
-      let utf8StartCol = utf16OffsetToUtf8(lineText, highlight.range.start.character)
-      let utf8EndCol = utf16OffsetToUtf8(lineText, highlight.range.`end`.character)
+      let startCol = utf16ToRuneIndex(lineText, highlight.range.start.character)
+      let endCol = utf16ToRuneIndex(lineText, highlight.range.`end`.character)
       let item = DocumentHighlightItem(
-        line: startLine, startColumn: utf8StartCol, endColumn: utf8EndCol, kind: kind
+        line: startLine, startColumn: startCol, endColumn: endCol, kind: kind
       )
       if startLine notin itemsByLine:
         itemsByLine[startLine] = @[]
@@ -274,14 +276,14 @@ proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlig
             ""
         let startCol =
           if line == startLine:
-            utf16OffsetToUtf8(lineText, highlight.range.start.character)
+            utf16ToRuneIndex(lineText, highlight.range.start.character)
           else:
             0
         # For end column, use a large value for middle lines
         # (will be clamped during rendering)
         let endCol =
           if line == endLine:
-            utf16OffsetToUtf8(lineText, highlight.range.`end`.character)
+            utf16ToRuneIndex(lineText, highlight.range.`end`.character)
           else:
             int.high
         let item = DocumentHighlightItem(

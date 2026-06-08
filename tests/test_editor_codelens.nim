@@ -17,18 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, tables, options, monotimes, times]
+import std/[unittest, tables, options, monotimes, times, json]
 
 import pkg/chronos
 
-import ../src/moepkg/editor
+import ../src/moepkg/[editor, config, types, buffer]
 import ../src/moepkg/editor_codelens {.all.}
-import ../src/moepkg/config
-import ../src/moepkg/types
-import ../src/moepkg/buffer
+import ../src/moepkg/lsp/protocol/types as lspTypes
 
-# Helper to create a minimal Editor for testing
 proc createTestEditor(): Editor =
+  ## Helper to create a minimal Editor for testing
   let config = newEditorConfig()
   result = newEditor(config)
 
@@ -399,3 +397,132 @@ suite "Document Highlight Item":
     check cache.itemsByLine[5][0].kind == 1
     check cache.itemsByLine[10][0].kind == 2
     check cache.itemsByLine[15][0].kind == 3
+
+suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
+  test "Converts UTF-16 positions to rune indexes for surrogate pairs":
+    let e = createTestEditor()
+
+    # Buffer with surrogate pair (emoji): "a😀b"
+    # Rune indexes:  a=0, 😀=1, b=2
+    # UTF-16 offsets: a=0, 😀=1..2, b=3
+    # Byte offsets:   a=0, 😀=1..4, b=5
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a😀b")
+
+    # Highlight 'b': LSP UTF-16 start=3, end=4
+    # After fix:  startColumn=2, endColumn=3 (rune indexes)
+    # Old buggy:  startColumn=5, endColumn=6 (byte offsets)
+    let highlights = @[
+      lspTypes.DocumentHighlight(
+        range: lspTypes.Range(
+          start: lspTypes.Position(line: 0, character: 3),
+          `end`: lspTypes.Position(line: 0, character: 4),
+        ),
+        kind: none(lspTypes.DocumentHighlightKind),
+      )
+    ]
+
+    processDocumentHighlightResponse(e, highlights)
+
+    let cache = e.state.lspCache.documentHighlightCache
+    check cache.isValid
+    check cache.itemsByLine.hasKey(0)
+    let items = cache.itemsByLine[0]
+    check items.len == 1
+    check items[0].line == 0
+    check items[0].startColumn == 2
+    check items[0].endColumn == 3
+    check items[0].kind == 1
+
+  test "Converts UTF-16 positions for multi-line highlights with surrogate pairs":
+    let e = createTestEditor()
+
+    # Multi-line buffer with surrogate pairs (single insert with newline)
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a😀b\nc😀d")
+
+    # Multi-line highlight from UTF-16 line 0 character 3 through line 1 character 3
+    # This covers 'b' (rune 2) on line 0 through 'd' (rune 2) on line 1
+    let highlights = @[
+      lspTypes.DocumentHighlight(
+        range: lspTypes.Range(
+          start: lspTypes.Position(line: 0, character: 3),
+          `end`: lspTypes.Position(line: 1, character: 3),
+        ),
+        kind: none(lspTypes.DocumentHighlightKind),
+      )
+    ]
+
+    processDocumentHighlightResponse(e, highlights)
+
+    let cache = e.state.lspCache.documentHighlightCache
+    check cache.isValid
+    check cache.itemsByLine.hasKey(0)
+    check cache.itemsByLine.hasKey(1)
+
+    # Line 0: startCol=2 (rune index of 'b'), endCol=int.high (middle line)
+    let items0 = cache.itemsByLine[0]
+    check items0.len == 1
+    check items0[0].line == 0
+    check items0[0].startColumn == 2
+    check items0[0].endColumn == int.high
+
+    # Line 1: startCol=0 (middle line), endCol=2 (exclusive, at start of 'd')
+    let items1 = cache.itemsByLine[1]
+    check items1.len == 1
+    check items1[0].line == 1
+    check items1[0].startColumn == 0
+    check items1[0].endColumn == 2
+
+  test "Converts UTF-16 positions correctly for ASCII-only text":
+    let e = createTestEditor()
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "hello world")
+
+    # Highlight "world": UTF-16 start=6, end=11
+    let highlights = @[
+      lspTypes.DocumentHighlight(
+        range: lspTypes.Range(
+          start: lspTypes.Position(line: 0, character: 6),
+          `end`: lspTypes.Position(line: 0, character: 11),
+        ),
+        kind: none(lspTypes.DocumentHighlightKind),
+      )
+    ]
+
+    processDocumentHighlightResponse(e, highlights)
+
+    let cache = e.state.lspCache.documentHighlightCache
+    check cache.isValid
+    let items = cache.itemsByLine[0]
+    check items.len == 1
+    check items[0].startColumn == 6
+    check items[0].endColumn == 11
+
+  test "Converts UTF-16 positions for BMP characters (Japanese)":
+    let e = createTestEditor()
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "こんにちは")
+
+    # Highlight from second character: UTF-16 start=1, end=4
+    # For BMP characters, rune index == UTF-16 offset, so start=1, end=4
+    let highlights = @[
+      lspTypes.DocumentHighlight(
+        range: lspTypes.Range(
+          start: lspTypes.Position(line: 0, character: 1),
+          `end`: lspTypes.Position(line: 0, character: 4),
+        ),
+        kind: none(lspTypes.DocumentHighlightKind),
+      )
+    ]
+
+    processDocumentHighlightResponse(e, highlights)
+
+    let cache = e.state.lspCache.documentHighlightCache
+    check cache.isValid
+    let items = cache.itemsByLine[0]
+    check items.len == 1
+    check items[0].startColumn == 1
+    check items[0].endColumn == 4

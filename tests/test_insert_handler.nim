@@ -21,21 +21,13 @@
 
 import std/[unittest, options, tables, json, monotimes]
 
-import ../src/moepkg/buffer {.all.}
-import ../src/moepkg/types {.all.}
-import ../src/moepkg/key_bindings {.all.}
-import ../src/moepkg/modes {.all.}
-import ../src/moepkg/motion {.all.}
-import ../src/moepkg/command_registry {.all.}
-import ../src/moepkg/config {.all.}
-import ../src/moepkg/registers {.all.}
-import ../src/moepkg/completion {.all.}
-import ../src/moepkg/signature_help {.all.}
-import ../src/moepkg/syntax/tokenizer {.all.}
-import ../src/moepkg/window_manager {.all.}
-import ../src/moepkg/editor_types {.all.}
-import ../src/moepkg/lsp_integration {.all.}
-import ../src/moepkg/command_handlers/insert_handler {.all.}
+import
+  ../src/moepkg/[
+    buffer, types, key_bindings, modes, motion, command_registry, config, registers,
+    completion, signature_help, editor_types, lsp_integration,
+  ]
+import ../src/moepkg/syntax/tokenizer
+import ../src/moepkg/command_handlers/insert_handler
 
 proc createTestState(): EditorState =
   ## Create a minimal EditorState for testing
@@ -1998,11 +1990,6 @@ suite "InsertModeHandler - textEdit with keepPopupOpen":
     let state = createTestState()
     state.cursor = BufferPosition(line: 0, column: 6)
 
-    # Set up LSP items with textEdit
-    let lspRange = Range(
-      start: lspTypes.Position(line: 0, character: 4),
-      `end`: lspTypes.Position(line: 0, character: 6),
-    )
     handler.completionManager.lspItems = @[
       CompletionItem(
         label: "vec!",
@@ -2078,6 +2065,51 @@ suite "InsertModeHandler - textEdit with keepPopupOpen":
     check result.kind == imrHandled
     # textEdit replaces range [4,6) with "vec![$0]"
     check buf.getLine(0) == "    vec![$0]"
+    check not handler.completionManager.isActive()
+
+  test "Commit with textEdit uses rune indexes on surrogate pair line":
+    # Regression: before the fix, utf16OffsetToUtf8 (byte offset) was used
+    # instead of utf16ToRuneIndex (rune index) to compute the cursor column
+    # after commit. On a line with a surrogate-pair emoji the byte offset
+    # for 'b' in "a😀b" is 5 while the correct rune index is 2, so the
+    # cursor would be placed 3 columns too far right.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a😀b")
+    # Rune indexes:  a=0, 😀=1, b=2
+    # UTF-16 offsets: a=0, 😀=1..2, b=3
+    # Byte offsets:   a=0, 😀=1..4, b=5
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    # LSP returns a textEdit that replaces 'b' (UTF-16 3..4) with "X"
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "X",
+        matchScore: 100,
+        source: csLsp,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 0, character: 3),
+              `end`: lspTypes.Position(line: 0, character: 4),
+            ),
+            newText: "X",
+          )
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "b"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+
+    let result = handler.commitCompletion(buf, state, keepPopupOpen = false)
+    check result.kind == imrHandled
+    # textEdit replaces UTF-16 range [3,4) (= rune range [2,3)) with "X"
+    check buf.getLine(0) == "a😀X"
+    # Cursor should be at rune index 3 (startCol=2 + newText.runeLen=1)
+    check state.cursor == BufferPosition(line: 0, column: 3)
     check not handler.completionManager.isActive()
 
 suite "InsertModeHandler - LSP debounce prefix staleness":
