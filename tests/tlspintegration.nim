@@ -505,6 +505,29 @@ suite "TextEdit Application":
     check result.isOk
     check buffer.getTextString() == "AAA def CCC"
 
+  test "applyTextEdits - same-position inserts keep array order":
+    # Per LSP spec, multiple edits at the same position appear in the
+    # document in array order: A then B => "AB", not "BA".
+    let buffer = newTextBuffer("xy")
+    let edits = @[
+      TextEdit(range: newRange(0, 1, 0, 1), newText: "A"),
+      TextEdit(range: newRange(0, 1, 0, 1), newText: "B"),
+    ]
+    let result = applyTextEdits(buffer, edits)
+    check result.isOk
+    check buffer.getTextString() == "xABy"
+
+  test "applyTextEdits - three same-position inserts keep array order":
+    let buffer = newTextBuffer("()")
+    let edits = @[
+      TextEdit(range: newRange(0, 1, 0, 1), newText: "1"),
+      TextEdit(range: newRange(0, 1, 0, 1), newText: "2"),
+      TextEdit(range: newRange(0, 1, 0, 1), newText: "3"),
+    ]
+    let result = applyTextEdits(buffer, edits)
+    check result.isOk
+    check buffer.getTextString() == "(123)"
+
   test "applyTextEdits - multi-line buffer":
     let buffer = newTextBuffer("line1\nline2\nline3")
     let edit = TextEdit(
