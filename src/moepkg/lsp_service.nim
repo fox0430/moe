@@ -324,6 +324,108 @@ proc stopAll*(svc: LspService) =
   svc.activeRequests.clear()
   svc.pendingResponses.clear()
 
+proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
+  ## Process a single worker event on the main thread. JSON payloads cross
+  ## the thread boundary as serialized strings (JsonNode refs are unsafe to
+  ## share under non-atomic ORC refcounting) and are parsed here, on the
+  ## owning thread. Exposed for tests.
+  case evt.kind
+  of levInitialized:
+    svc.onLogMessage(langId, mtInfo, "Language server initialized")
+  of levError:
+    svc.onLogMessage(langId, mtError, evt.errorMsg)
+  of levDiagnostics:
+    var diagnostics: seq[Diagnostic] = @[]
+    try:
+      for d in parseJson(evt.diagnosticsJson):
+        diagnostics.add(parseDiagnostic(d))
+    except CatchableError as e:
+      svc.onLogMessage(langId, mtWarning, "Failed to parse diagnostics: " & e.msg)
+      return
+    svc.onDiagnosticsUpdate(evt.diagUri, diagnostics)
+  of levLogMessage:
+    svc.onLogMessage(langId, evt.msgType, evt.message)
+  of levShowMessage:
+    svc.onLogMessage(langId, evt.msgType, evt.message)
+  of levServerInfo:
+    svc.serverInfo[langId] = (name: evt.serverName, version: evt.serverVersion)
+    var msg = "Server: " & evt.serverName
+    if evt.serverVersion.isSome:
+      msg &= " v" & evt.serverVersion.get
+    svc.onLogMessage(langId, mtInfo, msg)
+  of levCapabilities:
+    try:
+      svc.capabilities[langId] =
+        parseServerCapabilities(parseJson(evt.capabilitiesJson))
+    except CatchableError as e:
+      svc.onLogMessage(langId, mtWarning, "Failed to parse capabilities: " & e.msg)
+  of levResponse:
+    if evt.responseResultJson.isSome:
+      var parsed: JsonNode
+      try:
+        parsed = parseJson(evt.responseResultJson.get)
+      except CatchableError as e:
+        svc.pendingResponses[evt.requestId] =
+          (result: none(JsonNode), error: some("Failed to parse response: " & e.msg))
+        return
+      svc.pendingResponses[evt.requestId] =
+        (result: some(parsed), error: evt.responseError)
+    else:
+      svc.pendingResponses[evt.requestId] =
+        (result: none(JsonNode), error: evt.responseError)
+  of levRawJson:
+    let timestamp = now().format("HH:mm:ss'.'fff")
+    let direction = if evt.jsonDirection == ljdSent: ">>> " else: "<<< "
+    # Split multi-line JSON into separate log entries
+    let lines = evt.rawJson.splitLines()
+    for i, line in lines:
+      if i == 0:
+        svc.onLogMessage(langId, mtLog, "[" & timestamp & "] " & direction & line)
+      else:
+        svc.onLogMessage(langId, mtLog, "    " & line)
+    # Add blank line after each JSON block
+    svc.onLogMessage(langId, mtLog, "")
+  of levProgress:
+    svc.onProgress(langId, evt.progressToken, evt.progress)
+  of levDynamicRegister:
+    # Dynamic capability registration
+    var registrations: seq[Registration]
+    try:
+      registrations =
+        parseRegistrationParams(parseJson(evt.registrationsJson)).registrations
+    except CatchableError as e:
+      svc.onLogMessage(langId, mtWarning, "Failed to parse registrations: " & e.msg)
+      return
+    if langId notin svc.dynamicRegistrations:
+      svc.dynamicRegistrations[langId] = initTable[string, Registration]()
+    for reg in registrations:
+      svc.dynamicRegistrations[langId][reg.id] = reg
+      svc.onLogMessage(
+        langId,
+        mtInfo,
+        "Dynamic registration: " & reg.`method` & " (id: " & reg.id & ")",
+      )
+  of levDynamicUnregister:
+    # Dynamic capability unregistration
+    var unregistrations: seq[Unregistration]
+    try:
+      unregistrations =
+        parseUnregistrationParams(parseJson(evt.unregistrationsJson)).unregisterations
+    except CatchableError as e:
+      svc.onLogMessage(langId, mtWarning, "Failed to parse unregistrations: " & e.msg)
+      return
+    if langId in svc.dynamicRegistrations:
+      for unreg in unregistrations:
+        if unreg.id in svc.dynamicRegistrations[langId]:
+          svc.dynamicRegistrations[langId].del(unreg.id)
+          svc.onLogMessage(
+            langId,
+            mtInfo,
+            "Dynamic unregistration: " & unreg.`method` & " (id: " & unreg.id & ")",
+          )
+  of levStatusUpdate:
+    svc.onStatusUpdate(langId, evt.statusHealth, evt.statusQuiescent, evt.statusMessage)
+
 proc poll*(svc: LspService, timeoutMs: int = 0) =
   ## Poll all workers - process events from worker threads
   ## This is non-blocking - it only processes events that have been queued
@@ -334,71 +436,8 @@ proc poll*(svc: LspService, timeoutMs: int = 0) =
 
   for langId, worker in svc.workers:
     # Get all pending events from this worker
-    let events = worker.pollEvents()
-
-    for evt in events:
-      case evt.kind
-      of levInitialized:
-        svc.onLogMessage(langId, mtInfo, "Language server initialized")
-      of levError:
-        svc.onLogMessage(langId, mtError, evt.errorMsg)
-      of levDiagnostics:
-        svc.onDiagnosticsUpdate(evt.diagUri, evt.diagnostics)
-      of levLogMessage:
-        svc.onLogMessage(langId, evt.msgType, evt.message)
-      of levShowMessage:
-        svc.onLogMessage(langId, evt.msgType, evt.message)
-      of levServerInfo:
-        svc.serverInfo[langId] = (name: evt.serverName, version: evt.serverVersion)
-        var msg = "Server: " & evt.serverName
-        if evt.serverVersion.isSome:
-          msg &= " v" & evt.serverVersion.get
-        svc.onLogMessage(langId, mtInfo, msg)
-      of levCapabilities:
-        svc.capabilities[langId] = evt.capabilities
-      of levResponse:
-        svc.pendingResponses[evt.requestId] =
-          (result: evt.responseResult, error: evt.responseError)
-      of levRawJson:
-        let timestamp = now().format("HH:mm:ss'.'fff")
-        let direction = if evt.jsonDirection == ljdSent: ">>> " else: "<<< "
-        # Split multi-line JSON into separate log entries
-        let lines = evt.rawJson.splitLines()
-        for i, line in lines:
-          if i == 0:
-            svc.onLogMessage(langId, mtLog, "[" & timestamp & "] " & direction & line)
-          else:
-            svc.onLogMessage(langId, mtLog, "    " & line)
-        # Add blank line after each JSON block
-        svc.onLogMessage(langId, mtLog, "")
-      of levProgress:
-        svc.onProgress(langId, evt.progressToken, evt.progress)
-      of levDynamicRegister:
-        # Dynamic capability registration
-        if langId notin svc.dynamicRegistrations:
-          svc.dynamicRegistrations[langId] = initTable[string, Registration]()
-        for reg in evt.registrations:
-          svc.dynamicRegistrations[langId][reg.id] = reg
-          svc.onLogMessage(
-            langId,
-            mtInfo,
-            "Dynamic registration: " & reg.`method` & " (id: " & reg.id & ")",
-          )
-      of levDynamicUnregister:
-        # Dynamic capability unregistration
-        if langId in svc.dynamicRegistrations:
-          for unreg in evt.unregistrations:
-            if unreg.id in svc.dynamicRegistrations[langId]:
-              svc.dynamicRegistrations[langId].del(unreg.id)
-              svc.onLogMessage(
-                langId,
-                mtInfo,
-                "Dynamic unregistration: " & unreg.`method` & " (id: " & unreg.id & ")",
-              )
-      of levStatusUpdate:
-        svc.onStatusUpdate(
-          langId, evt.statusHealth, evt.statusQuiescent, evt.statusMessage
-        )
+    for evt in worker.pollEvents():
+      svc.processEvent(langId, evt)
 
 # Non-blocking response checking
 proc checkResponse*(
