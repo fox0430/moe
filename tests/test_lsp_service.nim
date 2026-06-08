@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json, options, os, times, strutils, importutils, tables, monotimes]
+import
+  std/[unittest, json, options, os, times, strutils, importutils, tables, monotimes]
 
 import pkg/results
 
