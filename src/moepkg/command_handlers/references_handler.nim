@@ -33,6 +33,7 @@ type
     rvrHandled # Command was handled successfully
     rvrEnterCommand # Enter command mode
     rvrJumpToReference # Jump to the selected reference
+    rvrQuit # Close references viewer and return to previous mode
     rvrUnhandled # Command was not handled
     rvrError # Error occurred
 
@@ -63,6 +64,8 @@ proc handleReferencesModeKey*(
   # Check for special keys first
   if keyCombo.isSpecial:
     case keyCombo.special
+    of skEscape:
+      return ReferencesResult(kind: rvrQuit)
     of skUp:
       refState.moveUp()
       refState.ensureSelectedVisible(viewportHeight)
@@ -93,6 +96,9 @@ proc handleReferencesModeKey*(
       return ReferencesResult(kind: rvrHandled)
 
     case keyCombo.char
+    of "q":
+      # Close the references viewer
+      return ReferencesResult(kind: rvrQuit)
     of ":":
       return ReferencesResult(kind: rvrEnterCommand)
     of "j":

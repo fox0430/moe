@@ -23,6 +23,8 @@
 ## (notably `types` and its importers) do not transitively pull in `picker/nav`
 ## via the full `references_viewer` module.
 
+import primitives
+
 type
   ReferenceItem* = object
     path*: string # File path
@@ -36,3 +38,8 @@ type
     topLine*: int # Scroll position (first visible line)
     title*: string # Title for the list (e.g., "References", "Definitions")
     waitingForG*: bool # Waiting for second 'g' for 'gg' command
+    # Cursor/viewport of the underlying buffer captured on entry, so quitting
+    # the viewer restores the position instead of leaving it at (0, 0).
+    originCursor*: BufferPosition
+    originTopLine*: int
+    originLeftColumn*: int

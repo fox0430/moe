@@ -797,6 +797,8 @@ proc handleReferencesMode*(
       jumpToLine: r.targetItem.line,
       jumpToColumn: r.targetItem.column,
     )
+  of rvrQuit:
+    return HandlerResult(kind: hrReferencesQuit)
   of rvrUnhandled:
     return HandlerResult(kind: hrUnhandled)
   of rvrError:

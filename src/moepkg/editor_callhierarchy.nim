@@ -73,9 +73,18 @@ proc enterCallHierarchyMode(
 
   if e.state.mode == EditorMode.CallHierarchy and
       activeWin.modeState.kind == mskCallHierarchy and activeWin.originalBuffer != nil:
-    discard # activeWin.originalBuffer is already set
+    # Re-entering (incoming/outgoing switch): carry over the origin position
+    # captured when the viewer was first opened.
+    let prev = activeWin.modeState.callHierarchy
+    chState.originCursor = prev.originCursor
+    chState.originTopLine = prev.originTopLine
+    chState.originLeftColumn = prev.originLeftColumn
   else:
     e.state.previousMode = e.state.mode
+    # Capture the current position so quitting the viewer can restore it.
+    chState.originCursor = activeWin.cursor
+    chState.originTopLine = activeWin.viewport.topLine
+    chState.originLeftColumn = activeWin.viewport.leftColumn
     activeWin.saveOriginalBuffer()
 
   e.setMode(EditorMode.CallHierarchy)

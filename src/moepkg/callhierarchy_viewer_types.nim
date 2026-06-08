@@ -25,6 +25,7 @@
 ## is still required for `CallHierarchyItem`.
 
 import lsp/protocol/types as lspTypes
+import primitives
 
 type
   CallHierarchyViewKind* = enum
@@ -39,3 +40,8 @@ type
     viewKind*: CallHierarchyViewKind ## Type of view (prepare/incoming/outgoing)
     title*: string ## Title for the list
     waitingForG*: bool ## Waiting for second 'g' for 'gg' command
+    ## Cursor/viewport of the underlying buffer captured on entry, so quitting
+    ## the viewer restores the position instead of leaving it at (0, 0).
+    originCursor*: BufferPosition
+    originTopLine*: int
+    originLeftColumn*: int

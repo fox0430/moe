@@ -191,6 +191,12 @@ proc handleLspLocations*(
     e.setMode(EditorMode.References)
     let refState = newReferencesViewerState(items, title)
     let activeWin = e.activeWindow
+
+    # Capture the current position so quitting the viewer can restore it.
+    refState.originCursor = activeWin.cursor
+    refState.originTopLine = activeWin.viewport.topLine
+    refState.originLeftColumn = activeWin.viewport.leftColumn
+
     activeWin.saveOriginalBuffer()
     activeWin.buffer = refState.createReferencesTextBuffer()
     activeWin.cursor = BufferPosition(line: 0, column: 0)
