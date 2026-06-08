@@ -1193,6 +1193,45 @@ suite "WorkspaceEdit Application":
     check buffers[0].getTextString() == "AAA"
     check buffers[1].getTextString() == "BBB"
 
+  test "applyWorkspaceEdit - relative-path buffer matched against absolute URI":
+    # A buffer opened with a relative path (e.g. `moe foo.nim`) stores the path
+    # verbatim, but WorkspaceEdit URIs always decode to an absolute path. The
+    # open buffer must still be matched and edited in memory, not mistaken for
+    # an unopened file and written straight to disk.
+    let relPath = "rel_rename_target.nim"
+    var buffers: seq[TextBuffer] = @[newTextBuffer("foo bar", some(relPath))]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes[pathToUri(relPath)] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "baz")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isOk
+    check result.get.modifiedCount == 1
+    # The open buffer was modified in memory (not the on-disk file branch)
+    check result.get.modifiedBufferIndexes == @[0]
+    check result.get.modifiedFilePaths.len == 0
+    check buffers[0].getTextString() == "baz bar"
+
+  test "applyWorkspaceEdit - relative-path buffer via documentChanges":
+    let relPath = "rel_rename_doc.nim"
+    var buffers: seq[TextBuffer] = @[newTextBuffer("foo bar", some(relPath))]
+    let docEdit = TextDocumentEdit(
+      textDocument: OptionalVersionedTextDocumentIdentifier(
+        uri: pathToUri(relPath), version: some(1)
+      ),
+      edits: @[TextEdit(range: newRange(0, 4, 0, 7), newText: "baz")],
+    )
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]), documentChanges: some(@[docEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isOk
+    check result.get.modifiedBufferIndexes == @[0]
+    check result.get.modifiedFilePaths.len == 0
+    check buffers[0].getTextString() == "foo baz"
+
   test "applyWorkspaceEdit - custom transaction name":
     var buffers: seq[TextBuffer] = @[newTextBuffer("old text", some("/tmp/custom.txt"))]
     var changes = initTable[string, seq[TextEdit]]()

@@ -21,6 +21,7 @@
 ## Connects LspService to Editor, TextBuffer, and UI components
 
 import std/[options, json, strutils, algorithm, sequtils, tables, times, unicode]
+from std/os import absolutePath, normalizedPath
 
 import pkg/[results, chronos]
 
@@ -880,10 +881,19 @@ proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, str
 
   return ok()
 
+proc samePath(a, b: string): bool =
+  ## Compare two file paths after normalizing to absolute form.
+  ## Buffers opened with a relative path (e.g. `moe foo.nim`) store that
+  ## relative path verbatim, whereas WorkspaceEdit URIs always decode to an
+  ## absolute path. Without normalization the two never match, so the open
+  ## buffer is mistaken for an unopened file and its edits are written to disk
+  ## instead of the in-memory buffer.
+  normalizedPath(absolutePath(a)) == normalizedPath(absolutePath(b))
+
 proc findBufferByPath(buffers: seq[TextBuffer], path: string): Option[int] =
   ## Find buffer index by file path
   for i, buffer in buffers:
-    if buffer.filePath.isSome and buffer.filePath.get == path:
+    if buffer.filePath.isSome and samePath(buffer.filePath.get, path):
       return some(i)
   return none(int)
 
