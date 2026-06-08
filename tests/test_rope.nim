@@ -275,12 +275,79 @@ suite "Rope - Conversion":
       s.add(ch)
     check s == "ab\ncd"
 
+  test "chars iterator with empty last line":
+    let r = newRope("hello\n\n")
+    var s = ""
+    for ch in r.chars:
+      s.add(ch)
+    check s == "hello\n\n"
+    check s == $r
+
   test "lines iterator":
     let r = newRope("hello\nworld")
     var result: seq[string] = @[]
     for line in r.lines:
       result.add(line)
     check result == @["hello", "world"]
+
+  test "lines iterator with empty last line":
+    let r = newRope("hello\n\n")
+    var result: seq[string] = @[]
+    for line in r.lines:
+      result.add(line)
+    check result == @["hello", ""]
+
+  test "lines iterator with single line":
+    let r = newRope("hello")
+    var result: seq[string] = @[]
+    for line in r.lines:
+      result.add(line)
+    check result == @["hello"]
+
+  test "lines iterator with empty line in middle":
+    let r = newRope("a\n\nb")
+    var result: seq[string] = @[]
+    for line in r.lines:
+      result.add(line)
+    check result == @["a", "", "b"]
+
+  test "lines iterator with empty rope":
+    let r = newRope()
+    var result: seq[string] = @[]
+    for line in r.lines:
+      result.add(line)
+    check result == @[""]
+
+  test "lines iterator with two empty lines":
+    let r = newRope("\n\n")
+    var result: seq[string] = @[]
+    for line in r.lines:
+      result.add(line)
+    check result == @["", ""]
+
+  test "chars iterator with single line":
+    let r = newRope("hello")
+    var s = ""
+    for ch in r.chars:
+      s.add(ch)
+    check s == "hello"
+    check s == $r
+
+  test "chars iterator with empty rope":
+    let r = newRope()
+    var s = ""
+    for ch in r.chars:
+      s.add(ch)
+    check s == ""
+    check s == $r
+
+  test "toString with single line":
+    let r = newRope("hello")
+    check $r == "hello"
+
+  test "toString with empty rope":
+    let r = newRope()
+    check $r == ""
 
 suite "Rope - Replace Line":
   test "replaceLine":

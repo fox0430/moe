@@ -675,30 +675,65 @@ proc clear*(rope: Rope) =
   rope.root = newLeaf("")
   rope.cachedLineCount = 1
 
+proc appendLeaves(node: RopeNode, acc: var string) =
+  ## In-order walk emitting each leaf's raw bytes (newlines included).
+  case node.kind
+  of rnkLeaf:
+    acc.add(node.text)
+  of rnkInternal:
+    for child in node.children:
+      appendLeaves(child, acc)
+
 proc `$`*(rope: Rope): string =
-  ## Convert entire buffer to string
+  ## Convert entire buffer to string.
+  ## Leaves store the lines joined by '\n', so an in-order leaf walk rebuilds the
+  ## buffer in O(n) (no per-line tree descent). An empty final line keeps no
+  ## separator newline in storage; re-add it to match the flat-string convention.
   if rope.cachedLineCount == 0:
     return ""
 
-  for i in 0 ..< rope.cachedLineCount:
-    let line = rope.getLine(i)
-    result.add(line)
-    let isLastLine = i == rope.cachedLineCount - 1
-    if not isLastLine or (isLastLine and line.len == 0 and rope.cachedLineCount > 1):
-      result.add('\n')
+  result = newStringOfCap(rope.root.byteLen + 1)
+  appendLeaves(rope.root, result)
+  if rope.cachedLineCount > 1 and rope.getLine(rope.cachedLineCount - 1).len == 0:
+    result.add('\n')
 
 iterator chars*(rope: Rope): char =
-  for i in 0 ..< rope.cachedLineCount:
-    let line = rope.getLine(i)
-    for ch in line:
-      yield ch
-    let isLastLine = i == rope.cachedLineCount - 1
-    if not isLastLine or (isLastLine and line.len == 0 and rope.cachedLineCount > 1):
+  ## In-order leaf walk yielding each byte; O(n), matches `$` (incl. empty final
+  ## line) without per-line tree descent.
+  if rope.cachedLineCount > 0:
+    var stack = @[rope.root]
+    while stack.len > 0:
+      let node = stack.pop()
+      case node.kind
+      of rnkLeaf:
+        for ch in node.text:
+          yield ch
+      of rnkInternal:
+        for i in countdown(node.children.len - 1, 0):
+          stack.add(node.children[i])
+    # empty final line keeps no separator newline in storage; re-add it
+    if rope.cachedLineCount > 1 and rope.getLine(rope.cachedLineCount - 1).len == 0:
       yield '\n'
 
 iterator lines*(rope: Rope): string =
-  for i in 0 ..< rope.cachedLineCount:
-    yield rope.getLine(i)
+  ## In-order leaf walk splitting on '\n'; O(n), yields exactly cachedLineCount
+  ## lines (leaves store the lines joined by '\n').
+  var cur = ""
+  var stack = @[rope.root]
+  while stack.len > 0:
+    let node = stack.pop()
+    case node.kind
+    of rnkLeaf:
+      for ch in node.text:
+        if ch == '\n':
+          yield cur
+          cur.setLen(0)
+        else:
+          cur.add(ch)
+    of rnkInternal:
+      for i in countdown(node.children.len - 1, 0):
+        stack.add(node.children[i])
+  yield cur
 
 proc estimateMemoryUsageNode(node: RopeNode): int =
   result = sizeof(RopeNode)
