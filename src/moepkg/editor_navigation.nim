@@ -22,7 +22,7 @@
 ## location-jump helpers that other LSP feature modules (call hierarchy,
 ## document link) depend on.
 
-import std/[options, strutils]
+import std/[options, strutils, os]
 
 import pkg/results
 
@@ -51,6 +51,18 @@ proc switchToBufferForLsp*(e: Editor, index: int) =
   # EditorConfig now that the active window's buffer changed.
   e.syncActiveWindow()
 
+proc sameFilePath(a, b: string): bool =
+  ## Compare two file paths by their normalized absolute form.
+  ##
+  ## A buffer opened with a relative path ("src/moe.nim") must match an
+  ## LSP-provided absolute path ("/home/.../src/moe.nim") and vice versa.
+  ## Without this, navigation (go-to-definition, references) opens a *second*
+  ## buffer for a file that is already open under a differently-spelled path.
+  ## Duplicate buffers desync edits and break LSP rename: its change-detection
+  ## snapshot is keyed by absolute path, so the two same-file buffers collide
+  ## and rename is wrongly rejected with "Buffer changed during rename".
+  normalizedPath(absolutePath(a)) == normalizedPath(absolutePath(b))
+
 proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string] =
   ## Open `path` in the active window and return the buffer now shown there.
   ##
@@ -63,7 +75,7 @@ proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string
   ## legacy `e.loadFile`, content is loaded into a freshly registered buffer
   ## rather than mutating the stale initial `e.textBuffer` in place.
   for i, buf in e.buffers:
-    if buf.filePath.isSome and buf.filePath.get == path:
+    if buf.filePath.isSome and sameFilePath(buf.filePath.get, path):
       e.switchToBufferForLsp(i)
       return ok(buf)
 
@@ -137,7 +149,7 @@ proc jumpToLspLocation*(e: Editor, loc: lspTypes.Location, resultKind: string): 
   e.addToJumpList()
 
   # Check if it's the same file
-  if activeBuffer.filePath.isSome and activeBuffer.filePath.get == path:
+  if activeBuffer.filePath.isSome and sameFilePath(activeBuffer.filePath.get, path):
     # Same file - just move cursor with boundary checks
     e.moveCursorToLspPosition(
       activeBuffer, loc.range.start.line, loc.range.start.character
@@ -216,7 +228,7 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
   e.addToJumpList()
 
   # Check if it's the same file
-  if activeBuffer.filePath.isSome and activeBuffer.filePath.get == path:
+  if activeBuffer.filePath.isSome and sameFilePath(activeBuffer.filePath.get, path):
     # Same file - just move cursor with boundary checks
     e.moveCursorToLspPosition(activeBuffer, line, column)
   else:

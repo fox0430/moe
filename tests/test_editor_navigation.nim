@@ -437,6 +437,67 @@ suite "editor_navigation - jumpToLspLocation":
     # Should not have added a new buffer
     check e.buffers.len == buffersCount
 
+suite "editor_navigation - relative/absolute path deduplication":
+  test "jumpToLspLocation reuses buffer opened with a relative path":
+    # Regression: a buffer opened relative ("sub/f.txt") must match the
+    # absolute path an LSP server returns, otherwise navigation opens a second
+    # buffer for the same file. The duplicate then breaks LSP rename.
+    let e = createTestEditor()
+    let dir = getTempDir() / "moe_test_relabs"
+    createDir(dir / "sub")
+    let absPath = dir / "sub" / "f.txt"
+    writeFile(absPath, "line 0\nline 1\nline 2\n")
+    defer:
+      removeDir(dir)
+
+    let prevDir = getCurrentDir()
+    setCurrentDir(dir)
+    defer:
+      setCurrentDir(prevDir)
+
+    # Open with a relative path.
+    discard e.editFile("sub/f.txt")
+    let buffersCount = e.buffers.len
+
+    # The server reports the same file as an absolute URI.
+    let loc = lspTypes.Location(
+      uri: "file://" & absPath,
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 2, character: 0),
+        `end`: lspTypes.Position(line: 2, character: 6),
+      ),
+    )
+
+    let result = e.jumpToLspLocation(loc, "Definition")
+
+    check result
+    check e.cursor.line == 2
+    # Must NOT have created a duplicate buffer for the already-open file.
+    check e.buffers.len == buffersCount
+
+  test "openFileAndJumpTo reuses buffer opened with a relative path":
+    let e = createTestEditor()
+    let dir = getTempDir() / "moe_test_relabs2"
+    createDir(dir)
+    let absPath = dir / "g.txt"
+    writeFile(absPath, "a\nb\nc\n")
+    defer:
+      removeDir(dir)
+
+    let prevDir = getCurrentDir()
+    setCurrentDir(dir)
+    defer:
+      setCurrentDir(prevDir)
+
+    discard e.editFile("g.txt")
+    let buffersCount = e.buffers.len
+
+    let result = e.openFileAndJumpTo(absPath, 1, 0)
+
+    check result
+    check e.cursor.line == 1
+    check e.buffers.len == buffersCount
+
 suite "editor_navigation - UTF-16 to UTF-8 conversion":
   test "openFileAndJumpTo handles UTF-16 column offset":
     let e = createTestEditor()
