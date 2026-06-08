@@ -559,6 +559,49 @@ suite "LspService - Dynamic Registration":
     let svc = newLspService()
     check svc.getDynamicRegistrations("nim").len == 0
 
+  test "semantic tokens full/range honored via dynamic registration":
+    privateAccess(LspService)
+    let svc = newLspService()
+    svc.dynamicRegistrations["nim"] = initTable[string, Registration]()
+    svc.dynamicRegistrations["nim"]["reg-st"] = Registration(
+      id: "reg-st",
+      `method`: "textDocument/semanticTokens",
+      registerOptions: some(%*{"full": {"delta": false}, "range": true}),
+    )
+    check svc.hasSemanticTokensSupport("nim")
+    check svc.hasSemanticTokensFullSupport("nim")
+    check svc.hasSemanticTokensRangeSupport("nim")
+
+  test "semantic tokens dynamic registration with range disabled":
+    privateAccess(LspService)
+    let svc = newLspService()
+    svc.dynamicRegistrations["nim"] = initTable[string, Registration]()
+    svc.dynamicRegistrations["nim"]["reg-st"] = Registration(
+      id: "reg-st",
+      `method`: "textDocument/semanticTokens",
+      registerOptions: some(%*{"full": true, "range": false}),
+    )
+    check svc.hasSemanticTokensFullSupport("nim")
+    check not svc.hasSemanticTokensRangeSupport("nim")
+
+  test "semantic tokens full served by separate method dynamic registration":
+    privateAccess(LspService)
+    let svc = newLspService()
+    svc.dynamicRegistrations["nim"] = initTable[string, Registration]()
+    svc.dynamicRegistrations["nim"]["reg-full"] =
+      Registration(id: "reg-full", `method`: "textDocument/semanticTokens/full")
+    check svc.hasSemanticTokensSupport("nim")
+    check svc.hasSemanticTokensFullSupport("nim")
+    check not svc.hasSemanticTokensRangeSupport("nim")
+
+  test "semantic tokens range served by separate method dynamic registration":
+    privateAccess(LspService)
+    let svc = newLspService()
+    svc.dynamicRegistrations["nim"] = initTable[string, Registration]()
+    svc.dynamicRegistrations["nim"]["reg-range"] =
+      Registration(id: "reg-range", `method`: "textDocument/semanticTokens/range")
+    check svc.hasSemanticTokensRangeSupport("nim")
+
 suite "LspService - Request Methods (error cases for unsupported files)":
   # Use unsupported file extension to avoid worker startup
   test "startCompletionRequest fails for unsupported file":

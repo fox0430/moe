@@ -1158,8 +1158,26 @@ proc hasSemanticTokensSupport*(svc: LspService, langId: string): bool =
     return false
   return svc.capabilities[langId].semanticTokensProvider.isSome
 
+proc dynamicSemanticTokensOption(svc: LspService, langId, key: string): bool =
+  ## Check a `full`/`range` flag inside a dynamically-registered semantic
+  ## tokens registration. The option is present (and not literally false)
+  ## when supported; it may be `true` or an object such as {"delta": ...}.
+  let reg = svc.getDynamicRegistration(langId, "textDocument/semanticTokens")
+  if reg.isNone or reg.get.registerOptions.isNone:
+    return false
+  let opts = reg.get.registerOptions.get
+  if opts.kind != JObject or not opts.hasKey(key):
+    return false
+  let node = opts[key]
+  return node.kind != JBool or node.getBool
+
 proc hasSemanticTokensFullSupport*(svc: LspService, langId: string): bool =
   ## Check if full semantic tokens is supported for a language
+  ## (static capability or dynamic registration)
+  if svc.dynamicSemanticTokensOption(langId, "full"):
+    return true
+  if svc.hasDynamicRegistration(langId, "textDocument/semanticTokens/full"):
+    return true
   if langId notin svc.capabilities:
     return false
   let provider = svc.capabilities[langId].semanticTokensProvider
@@ -1169,6 +1187,11 @@ proc hasSemanticTokensFullSupport*(svc: LspService, langId: string): bool =
 
 proc hasSemanticTokensRangeSupport*(svc: LspService, langId: string): bool =
   ## Check if range semantic tokens is supported for a language
+  ## (static capability or dynamic registration)
+  if svc.dynamicSemanticTokensOption(langId, "range"):
+    return true
+  if svc.hasDynamicRegistration(langId, "textDocument/semanticTokens/range"):
+    return true
   if langId notin svc.capabilities:
     return false
   let provider = svc.capabilities[langId].semanticTokensProvider
