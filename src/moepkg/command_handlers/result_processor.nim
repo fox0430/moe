@@ -273,45 +273,88 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       discard e.closeWindow()
     return true
   of hrReferencesQuit:
-    # Close references viewer and return to Normal mode
-    e.activeWindow.clearModeState(EditorMode.References)
-    e.activeWindow.mode = EditorMode.Normal
+    # Close references viewer and return to Normal mode, restoring the
+    # cursor/viewport that were active before the viewer was opened.
+    let win = e.activeWindow
+    var origin = none(ReferencesViewerState)
+    if win.modeState.kind == mskReferences:
+      origin = some(win.modeState.references)
+    win.clearModeState(EditorMode.References) # restores the original buffer
+    if origin.isSome:
+      let refState = origin.get
+      win.cursor = refState.originCursor
+      win.viewport.topLine = refState.originTopLine
+      win.viewport.leftColumn = refState.originLeftColumn
+    win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     return true
   of hrReferencesJumpTo:
-    # Jump to selected reference
-    e.activeWindow.clearModeState(EditorMode.References)
-    e.activeWindow.mode = EditorMode.Normal
+    # Jump to selected reference. Restore the pre-viewer cursor first so the
+    # jump list anchors at the original position (enabling jump-back).
+    let win = e.activeWindow
+    if win.modeState.kind == mskReferences:
+      let refState = win.modeState.references
+      win.clearModeState(EditorMode.References)
+      win.cursor = refState.originCursor
+    else:
+      win.clearModeState(EditorMode.References)
+    win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     discard e.openFileAndJumpTo(r.jumpToPath, r.jumpToLine, r.jumpToColumn)
     return true
   of hrDocumentSymbolQuit:
-    # Close document symbol viewer and return to Normal mode
-    e.activeWindow.clearModeState(EditorMode.DocumentSymbol)
-    e.activeWindow.mode = EditorMode.Normal
+    # Close document symbol viewer and return to Normal mode, restoring the
+    # cursor/viewport that were active before the viewer was opened.
+    let win = e.activeWindow
+    var origin = none(DocumentSymbolViewerState)
+    if win.modeState.kind == mskDocumentSymbol:
+      origin = some(win.modeState.documentSymbol)
+    win.clearModeState(EditorMode.DocumentSymbol) # restores the original buffer
+    if origin.isSome:
+      let st = origin.get
+      win.cursor = st.originCursor
+      win.viewport.topLine = st.originTopLine
+      win.viewport.leftColumn = st.originLeftColumn
+    win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     return true
   of hrDocumentSymbolJumpTo:
-    # Jump to selected symbol (same file)
+    # Jump to selected symbol (same file). Restore the pre-viewer cursor first
+    # so the jump list anchors at the original position (enabling jump-back).
     let activeWin = e.activeWindow
-    let filePath = activeWin.modeState.documentSymbol.filePath
+    let st = activeWin.modeState.documentSymbol
+    let
+      filePath = st.filePath
+      originCursor = st.originCursor
     activeWin.clearModeState(EditorMode.DocumentSymbol)
+    activeWin.cursor = originCursor
     activeWin.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     discard e.openFileAndJumpTo(filePath, r.symbolLine, r.symbolColumn)
     return true
   of hrCallHierarchyQuit:
-    # Close call hierarchy viewer and return to Normal mode
+    # Close call hierarchy viewer and return to Normal mode, restoring the
+    # cursor/viewport that were active before the viewer was opened.
     if e.state.lspCache.pendingCallHierarchyRequestId != 0:
       e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
       e.state.lspCache.pendingCallHierarchyRequestId = 0
     e.state.lspCache.pendingCallHierarchyKind = chrkNone
-    e.activeWindow.clearModeState(EditorMode.CallHierarchy)
-    e.activeWindow.mode = EditorMode.Normal
+    let win = e.activeWindow
+    var origin = none(CallHierarchyViewerState)
+    if win.modeState.kind == mskCallHierarchy:
+      origin = some(win.modeState.callHierarchy)
+    win.clearModeState(EditorMode.CallHierarchy) # restores the original buffer
+    if origin.isSome:
+      let st = origin.get
+      win.cursor = st.originCursor
+      win.viewport.topLine = st.originTopLine
+      win.viewport.leftColumn = st.originLeftColumn
+    win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     return true
   of hrCallHierarchyJumpTo:
-    # Jump to selected call hierarchy item
+    # Jump to selected call hierarchy item. Restore the pre-viewer cursor first
+    # so the jump list anchors at the original position (enabling jump-back).
     let path =
       if r.callHierarchyJumpUri.startsWith("file://"):
         r.callHierarchyJumpUri[7 ..^ 1]
@@ -321,8 +364,13 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
       e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
       e.state.lspCache.pendingCallHierarchyRequestId = 0
     e.state.lspCache.pendingCallHierarchyKind = chrkNone
-    e.activeWindow.clearModeState(EditorMode.CallHierarchy)
-    e.activeWindow.mode = EditorMode.Normal
+    let win = e.activeWindow
+    var originCursor = BufferPosition(line: 0, column: 0)
+    if win.modeState.kind == mskCallHierarchy:
+      originCursor = win.modeState.callHierarchy.originCursor
+    win.clearModeState(EditorMode.CallHierarchy)
+    win.cursor = originCursor
+    win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
     discard
       e.openFileAndJumpTo(path, r.callHierarchyJumpLine, r.callHierarchyJumpColumn)

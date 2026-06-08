@@ -25,6 +25,7 @@
 ## is still required for `SymbolKind`.
 
 import lsp/protocol/enums
+import primitives
 
 type
   SymbolItem* = object
@@ -41,3 +42,8 @@ type
     topLine*: int # Scroll position (first visible line)
     filePath*: string # File path for the symbols
     waitingForG*: bool # Waiting for second 'g' for 'gg' command
+    # Cursor/viewport of the underlying buffer captured on entry, so quitting
+    # the viewer restores the position instead of leaving it at (0, 0).
+    originCursor*: BufferPosition
+    originTopLine*: int
+    originLeftColumn*: int

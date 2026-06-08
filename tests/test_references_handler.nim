@@ -195,7 +195,7 @@ suite "references_handler: Quit commands":
 
     let result = handleReferencesModeKey(state, 10, keyCombo)
 
-    check result.kind == rvrUnhandled
+    check result.kind == rvrQuit
 
   test "Escape key returns quit result":
     let items = @[ReferenceItem(path: "/file.nim", line: 0, column: 0, text: "")]
@@ -204,7 +204,7 @@ suite "references_handler: Quit commands":
 
     let result = handleReferencesModeKey(state, 10, keyCombo)
 
-    check result.kind == rvrUnhandled
+    check result.kind == rvrQuit
 
 suite "references_handler: Enter command mode":
   test ": key returns enter command result":
@@ -362,7 +362,7 @@ suite "references_handler: gg with special key":
     let result = handleReferencesModeKey(state, 10, escKey)
 
     check state.waitingForG == false
-    check result.kind == rvrUnhandled
+    check result.kind == rvrQuit
     check state.selectedIndex == 1 # Position unchanged
 
   test "g followed by Enter cancels gg and jumps":

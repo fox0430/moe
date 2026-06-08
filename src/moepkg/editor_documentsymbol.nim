@@ -88,6 +88,12 @@ proc pollLspDocumentSymbols*(e: Editor) =
       e.state.previousMode = e.state.mode
       e.setMode(EditorMode.DocumentSymbol)
       let activeWin = e.activeWindow
+
+      # Capture the current position so quitting the viewer can restore it.
+      viewerState.originCursor = activeWin.cursor
+      viewerState.originTopLine = activeWin.viewport.topLine
+      viewerState.originLeftColumn = activeWin.viewport.leftColumn
+
       activeWin.saveOriginalBuffer()
       activeWin.buffer = viewerState.createDocumentSymbolTextBuffer()
       activeWin.cursor = BufferPosition(line: 0, column: 0)
