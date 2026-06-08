@@ -19,10 +19,13 @@
 
 ## Tests for editor_selectionrange.nim
 
-import std/unittest
+import std/[unittest, json, options, importutils]
 
-import ../src/moepkg/[editor, config, config_loader]
-import ../src/moepkg/editor_selectionrange
+import
+  ../src/moepkg/
+    [editor, config, config_loader, buffer, modes, lsp_service, editor_selectionrange]
+
+privateAccess(LspService)
 
 proc createTestEditor(): Editor =
   let config = newEditorConfig()
@@ -67,3 +70,46 @@ suite "editor_selectionrange - pollLspSelectionRange":
 
     e.pollLspSelectionRange()
     # No crash means success
+
+  test "Converts UTF-16 positions to rune indexes for surrogate pairs":
+    # Regression: before the fix, utf16OffsetToUtf8 (byte offset) was used to
+    # set visualSelection and cursor columns, all of which are rune indexes.
+    # On a line with a surrogate-pair emoji, the byte offset of 'b' in "a😀b"
+    # is 5 while the correct rune index is 2.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a😀b")
+    # Rune indexes:  a=0, 😀=1, b=2
+    # UTF-16 offsets: a=0, 😀=1..2, b=3
+    # Byte offsets:   a=0, 😀=1..4, b=5
+
+    # Mock an LSP selection range response covering 'b'
+    let responseJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 3}, "end": {"line": 0, "character": 4}}
+      }
+    ]
+
+    let requestId = 1
+    e.state.lspCache.pendingSelectionRangeRequestId = requestId
+    e.lsp.service.activeRequests[requestId] = LspPendingRequest(
+      requestId: requestId,
+      langId: "",
+      methodName: "textDocument/selectionRange",
+      startTime: 0.0,
+      timeoutMs: 5000,
+    )
+    e.lsp.service.pendingResponses[requestId] =
+      (result: some(responseJson), error: none(string))
+
+    e.pollLspSelectionRange()
+
+    # After fix: columns are rune indexes (2, 3)
+    # Old buggy:  columns would be byte offsets (5, 6)
+    check e.state.mode == EditorMode.Visual
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 2)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 3)
+    check e.cursor == BufferPosition(line: 0, column: 3)
