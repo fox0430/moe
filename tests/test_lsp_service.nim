@@ -187,6 +187,34 @@ suite "LspService - URI Conversion":
   test "uriToPath returns non-file URI unchanged":
     check uriToPath("/home/user/test.nim") == "/home/user/test.nim"
 
+  test "pathToUri percent-encodes spaces":
+    check pathToUri("/home/user/my project/test.nim") ==
+      "file:///home/user/my%20project/test.nim"
+
+  test "pathToUri percent-encodes non-ASCII characters":
+    # "テスト" in UTF-8: E3 83 86 E3 82 B9 E3 83 88
+    check pathToUri("/home/user/テスト.nim") ==
+      "file:///home/user/%E3%83%86%E3%82%B9%E3%83%88.nim"
+
+  test "pathToUri does not encode path separators":
+    check pathToUri("/a/b/c.nim") == "file:///a/b/c.nim"
+
+  test "uriToPath percent-decodes":
+    check uriToPath("file:///home/user/my%20project/test.nim") ==
+      "/home/user/my project/test.nim"
+    check uriToPath("file:///home/user/%E3%83%86%E3%82%B9%E3%83%88.nim") ==
+      "/home/user/テスト.nim"
+
+  test "uriToPath does not treat plus as space":
+    check uriToPath("file:///home/user/a+b.nim") == "/home/user/a+b.nim"
+
+  test "path/URI roundtrip":
+    for p in [
+      "/home/user/test.nim", "/home/user/my project/file.nim",
+      "/home/user/日本語パス/ファイル.nim", "/tmp/a+b#c.nim",
+    ]:
+      check uriToPath(pathToUri(p)) == p
+
 suite "LspService - Worker Management (without actual workers)":
   test "getWorker returns none when no workers started":
     let svc = newLspService()
