@@ -207,8 +207,12 @@ proc renderConfig*(
           y = popupY + 1 + i
           isSelected = i == enumInfo.selectedIndex
           style = if isSelected: selectedStyle else: popupNormalStyle
-          line = "│ " & opt.alignLeft(popupWidth - 4) & " │"
-        buffer.setString(startX + popupX, y, line, style)
+          content = " " & opt.alignLeft(popupWidth - 4) & " "
+        # Draw the side borders separately with the border style so the frame
+        # stays consistent even on the highlighted (selected) row.
+        buffer.setString(startX + popupX, y, "│", borderStyle)
+        buffer.setString(startX + popupX + 1, y, content, style)
+        buffer.setString(startX + popupX + popupWidth - 1, y, "│", borderStyle)
 
       # Draw bottom border
       let bottomBorder = "└" & "─".repeat(popupWidth - 2) & "┘"
