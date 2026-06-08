@@ -20,7 +20,7 @@
 ## LSP Integration with Editor
 ## Connects LspService to Editor, TextBuffer, and UI components
 
-import std/[options, json, strutils, algorithm, tables, times, unicode]
+import std/[options, json, strutils, algorithm, sequtils, tables, times, unicode]
 
 import pkg/[results, chronos]
 
@@ -913,6 +913,15 @@ proc applyWorkspaceEdit*(
   ##
   ## Note: Per LSP spec, documentChanges takes precedence over changes.
   ## If both are present, only documentChanges is used.
+  ##
+  ## File operations (create/rename/delete) are not supported. Applying only
+  ## the text edits of such a WorkspaceEdit would leave the workspace in a
+  ## broken half-applied state, so the whole edit is refused instead.
+  if edit.resourceOperations.len > 0:
+    return err(
+      "WorkspaceEdit contains unsupported file operations (" &
+        edit.resourceOperations.deduplicate().join(", ") & "); no edits applied"
+    )
   var modifiedCount = 0
   var openBuffersToModify: seq[tuple[bufferIdx: int, edits: seq[TextEdit]]] = @[]
   var unopenedFilesToModify: seq[tuple[path: string, edits: seq[TextEdit]]] = @[]

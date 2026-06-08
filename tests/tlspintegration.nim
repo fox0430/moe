@@ -1183,6 +1183,44 @@ suite "WorkspaceEdit Application":
     check result.get.modifiedCount == 1
     check buffers[0].getTextString() == "new text"
 
+  test "applyWorkspaceEdit - refuses file operations without applying edits":
+    var buffers: seq[TextBuffer] = @[newTextBuffer("hello", some("/tmp/ro.txt"))]
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]),
+      documentChanges: some(newSeq[TextDocumentEdit]()),
+      resourceOperations: @["rename"],
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isErr
+    check result.error.contains("file operations")
+    check result.error.contains("rename")
+    # Nothing applied
+    check buffers[0].getTextString() == "hello"
+
+  test "parseWorkspaceEdit - records resource operations":
+    let node = %*{
+      "documentChanges": [
+        {
+          "textDocument": {"uri": "file:///tmp/a.txt", "version": 1},
+          "edits": [
+            {
+              "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 0, "character": 0},
+              },
+              "newText": "x",
+            }
+          ],
+        },
+        {"kind": "create", "uri": "file:///tmp/new.txt"},
+        {"kind": "rename", "oldUri": "file:///tmp/a.txt", "newUri": "file:///tmp/b.txt"},
+      ]
+    }
+    let edit = parseWorkspaceEdit(node)
+    check edit.documentChanges.isSome
+    check edit.documentChanges.get.len == 1 # only the textDocument edit
+    check edit.resourceOperations == @["create", "rename"]
+
   test "applyWorkspaceEdit - reports modified buffer indexes":
     var buffers: seq[TextBuffer] = @[
       newTextBuffer("aaa", some("/tmp/a.txt")),

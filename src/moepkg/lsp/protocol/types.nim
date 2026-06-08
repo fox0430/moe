@@ -83,6 +83,11 @@ type
   WorkspaceEdit* = object ## A workspace edit
     changes*: Option[Table[string, seq[TextEdit]]] # uri -> edits
     documentChanges*: Option[seq[TextDocumentEdit]]
+    resourceOperations*: seq[string]
+      ## "kind" of any create/rename/delete file operations present in
+      ## documentChanges. moe does not apply file operations; this records
+      ## that they were requested so callers can refuse rather than apply a
+      ## partial edit.
 
   TextDocumentContentChangeEvent* = object ## Content change event for didChange
     range*: Option[Range]
@@ -685,6 +690,11 @@ proc parseWorkspaceEdit*(node: JsonNode): WorkspaceEdit =
     for docChange in node["documentChanges"]:
       if docChange.hasKey("textDocument"):
         docChanges.add(parseTextDocumentEdit(docChange))
+      elif docChange.hasKey("kind"):
+        # A CreateFile/RenameFile/DeleteFile resource operation. Record its
+        # kind so applyWorkspaceEdit can refuse the whole edit rather than
+        # silently dropping the file operation and applying only text edits.
+        result.resourceOperations.add(docChange["kind"].getStr)
     result.documentChanges = some(docChanges)
 
 # Range-checked enum conversions for server-provided integers.
