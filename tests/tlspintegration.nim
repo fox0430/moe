@@ -1102,7 +1102,7 @@ suite "WorkspaceEdit Application":
     )
     let result = applyWorkspaceEdit(buffers, edit)
     check result.isOk
-    check result.get == 0
+    check result.get.modifiedCount == 0
 
   test "applyWorkspaceEdit - single buffer with changes field":
     var buffers: seq[TextBuffer] =
@@ -1115,7 +1115,7 @@ suite "WorkspaceEdit Application":
     )
     let result = applyWorkspaceEdit(buffers, edit)
     check result.isOk
-    check result.get == 1
+    check result.get.modifiedCount == 1
     check buffers[0].getTextString() == "hi world"
 
   test "applyWorkspaceEdit - single buffer with documentChanges field":
@@ -1131,7 +1131,7 @@ suite "WorkspaceEdit Application":
     )
     let result = applyWorkspaceEdit(buffers, edit)
     check result.isOk
-    check result.get == 1
+    check result.get.modifiedCount == 1
     check buffers[0].getTextString() == "foo baz"
 
   test "applyWorkspaceEdit - documentChanges takes precedence":
@@ -1166,7 +1166,7 @@ suite "WorkspaceEdit Application":
     )
     let result = applyWorkspaceEdit(buffers, edit)
     check result.isOk
-    check result.get == 2
+    check result.get.modifiedCount == 2
     check buffers[0].getTextString() == "AAA"
     check buffers[1].getTextString() == "BBB"
 
@@ -1180,8 +1180,63 @@ suite "WorkspaceEdit Application":
     )
     let result = applyWorkspaceEdit(buffers, edit, "CustomRename")
     check result.isOk
-    check result.get == 1
+    check result.get.modifiedCount == 1
     check buffers[0].getTextString() == "new text"
+
+  test "applyWorkspaceEdit - reports modified buffer indexes":
+    var buffers: seq[TextBuffer] = @[
+      newTextBuffer("aaa", some("/tmp/a.txt")),
+      newTextBuffer("bbb", some("/tmp/b.txt")),
+      newTextBuffer("ccc", some("/tmp/c.txt")),
+    ]
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file:///tmp/a.txt"] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "AAA")]
+    changes["file:///tmp/c.txt"] =
+      @[TextEdit(range: newRange(0, 0, 0, 3), newText: "CCC")]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let result = applyWorkspaceEdit(buffers, edit)
+    check result.isOk
+    check result.get.modifiedCount == 2
+    check result.get.modifiedBufferIndexes.len == 2
+    check 0 in result.get.modifiedBufferIndexes
+    check 2 in result.get.modifiedBufferIndexes
+    check 1 notin result.get.modifiedBufferIndexes
+    check result.get.modifiedFilePaths.len == 0
+
+  test "collectWorkspaceEditPaths - changes field":
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file:///tmp/a.txt"] = @[]
+    changes["file:///tmp/b.txt"] = @[]
+    let edit = WorkspaceEdit(
+      changes: some(changes), documentChanges: none(seq[TextDocumentEdit])
+    )
+    let paths = collectWorkspaceEditPaths(edit)
+    check paths.len == 2
+    check "/tmp/a.txt" in paths
+    check "/tmp/b.txt" in paths
+
+  test "collectWorkspaceEditPaths - documentChanges takes precedence":
+    var changes = initTable[string, seq[TextEdit]]()
+    changes["file:///tmp/from_changes.txt"] = @[]
+    let docEdit = TextDocumentEdit(
+      textDocument: OptionalVersionedTextDocumentIdentifier(
+        uri: "file:///tmp/from_doc.txt", version: some(1)
+      ),
+      edits: @[],
+    )
+    let edit = WorkspaceEdit(changes: some(changes), documentChanges: some(@[docEdit]))
+    let paths = collectWorkspaceEditPaths(edit)
+    check paths == @["/tmp/from_doc.txt"]
+
+  test "collectWorkspaceEditPaths - empty edit":
+    let edit = WorkspaceEdit(
+      changes: none(Table[string, seq[TextEdit]]),
+      documentChanges: none(seq[TextDocumentEdit]),
+    )
+    check collectWorkspaceEditPaths(edit).len == 0
 
 suite "Support Check Functions":
   test "hasInlineValueSupport - LSP disabled":
