@@ -628,6 +628,7 @@ type
     ## handler.handlePendingAsyncOperationsImpl in the main event loop.
     ## Empty-value semantics: `len == 0` / `false` means "no work pending".
     shellCommand*: string # Shell command to execute after suspend
+    terminalCommand*: string # Command to run in a new embedded terminal tab
     background*: bool # Whether to suspend for background (:bg)
     manPage*: string # Man page to show after suspend (:man)
     buildOnSave*:

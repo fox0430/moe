@@ -45,6 +45,10 @@ type
     extensions*: seq[string]
     enabled*: bool
     rawJsonLog*: bool ## Emit raw JSON-RPC traffic to the LSP log (debug only)
+    initializationOptions*: string
+      ## Serialized JSON for the server's `initializationOptions` ("" = none).
+      ## Stored as a string because JsonNode refs cannot cross the worker
+      ## thread boundary under --mm:orc.
 
   LspResponseStatus* = enum
     lrsPending # Response not yet received
@@ -275,7 +279,9 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
     if worker.isThreadAlive:
       # The worker thread survived (only the server process died); ask it to
       # spawn a new server on the same thread.
-      worker.startServer(config.command, config.args, svc.workspaceRoot)
+      worker.startServer(
+        config.command, config.args, svc.workspaceRoot, config.initializationOptions
+      )
       svc.onLogMessage(langId, mtInfo, "Restarting language server: " & config.command)
       return ok(worker)
 
@@ -294,7 +300,9 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
   worker.start()
 
   # Start the LSP server
-  worker.startServer(config.command, config.args, svc.workspaceRoot)
+  worker.startServer(
+    config.command, config.args, svc.workspaceRoot, config.initializationOptions
+  )
 
   svc.workers[langId] = worker
 

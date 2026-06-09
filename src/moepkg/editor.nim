@@ -965,6 +965,13 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         c.extensions = serverCfg.extensions
       if serverCfg.trace == LspTraceLevel.ltVerbose:
         c.rawJsonLog = true
+      if langId == "rust":
+        # Drive rust-analyzer's run/debug CodeLenses from the user settings.
+        # Sent explicitly (including false) so the lenses are suppressed when
+        # disabled, instead of relying on rust-analyzer's on-by-default lens.
+        c.initializationOptions =
+          "{\"lens\":{\"run\":{\"enable\":" & $serverCfg.rustAnalyzerRunSingle &
+          "},\"debug\":{\"enable\":" & $serverCfg.rustAnalyzerDebugSingle & "}}}"
       result.lsp.service.setConfig(langId, c)
     elif serverCfg.command.len > 0:
       # A language with no built-in default: register it from the user config
