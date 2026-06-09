@@ -32,14 +32,13 @@ proc createTestEditor(): Editor =
   result = newEditor(config)
   result.syncActiveWindow()
 
-proc fakeTerminalState(command: string = "bash"): TerminalState =
+proc fakeTerminalState(): TerminalState =
   ## Build a TerminalState whose PTY is pre-closed so cleanup() is a no-op.
   ## Lets tests drive the tab/state lifecycle without spawning a real shell.
   TerminalState(
     pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: true),
     grid: newTerminalGrid(80, 24),
     subMode: tsmInput,
-    command: command,
     exitCode: none(int),
     waitingForCtrlN: false,
     needsBufferRefresh: false,
@@ -51,7 +50,7 @@ proc registerFakeTerminal(e: Editor, command: string = "bash"): TextBuffer =
   result.displayName = some("[Terminal: " & command & "]")
   e.addBuffer(result)
   e.addBufferToWindowList(result)
-  e.terminalStates[result.id] = fakeTerminalState(command)
+  e.terminalStates[result.id] = fakeTerminalState()
   e.activeWindow.buffer = result
   e.activeWindow.modeState =
     ModeState(kind: mskTerminal, terminal: e.terminalStates[result.id])
@@ -73,7 +72,6 @@ suite "Terminal tabs - applyBufferMode":
 
     check e.activeWindow.mode == EditorMode.Terminal
     check e.activeWindow.modeState.kind == mskTerminal
-    check e.activeWindow.modeState.terminal.command == "bash"
     # The original file buffer is untouched.
     check originalBuf != termBuf
 

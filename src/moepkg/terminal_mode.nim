@@ -20,7 +20,7 @@
 ## Terminal mode state management.
 ## Integrates PTY handle with ANSI parser grid and manages sub-modes.
 
-import std/options
+import std/[options, os]
 
 import pkg/results
 
@@ -37,7 +37,6 @@ type
     grid*: TerminalGrid
     subMode*: TerminalSubMode
     scrollbackSnapshot*: TextBuffer # Snapshot for Terminal-Normal mode
-    command*: string
     exitCode*: Option[int]
     waitingForCtrlN*: bool # Waiting for Ctrl-N after Ctrl-\
     needsBufferRefresh*: bool
@@ -46,7 +45,16 @@ proc newTerminalState*(
     command: string = "", cols: int = 80, rows: int = 24
 ): Result[TerminalState, string] =
   ## Create a new terminal state: open PTY, spawn shell, initialize grid.
-  let ptyResult = openPtyAndSpawn(command, cols, rows)
+  ##
+  ## When a command is given (e.g. `:terminal ls`) it is run first and then the
+  ## session hands control to an interactive shell via `exec`, so the terminal
+  ## keeps running instead of exiting once the command finishes.
+  let spawnCommand =
+    if command.len > 0:
+      command & "; exec " & getEnv("SHELL", "/bin/sh")
+    else:
+      ""
+  let ptyResult = openPtyAndSpawn(spawnCommand, cols, rows)
   if ptyResult.isErr:
     return err(ptyResult.error)
 
@@ -55,7 +63,6 @@ proc newTerminalState*(
     grid: newTerminalGrid(cols, rows),
     subMode: tsmInput,
     scrollbackSnapshot: nil,
-    command: command,
     exitCode: none(int),
     waitingForCtrlN: false,
     needsBufferRefresh: false,

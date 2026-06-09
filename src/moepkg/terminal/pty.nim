@@ -84,11 +84,10 @@ proc openPtyAndSpawn*(
     # Child process
     putEnv("TERM", "xterm-256color")
 
+    let shell = getEnv("SHELL", "/bin/sh")
     if command.len > 0:
-      let shell = getEnv("SHELL", "/bin/sh")
       discard execl(shell.cstring, shell.cstring, "-c".cstring, command.cstring, nil)
     else:
-      let shell = getEnv("SHELL", "/bin/sh")
       discard execl(shell.cstring, shell.cstring, nil)
 
     # execl only returns on error
