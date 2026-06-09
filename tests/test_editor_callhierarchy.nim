@@ -19,7 +19,7 @@
 
 ## Tests for editor_callhierarchy.nim
 
-import std/[unittest, os]
+import std/[unittest, os, strutils]
 
 import ../src/moepkg/[editor, config, config_loader, types]
 import ../src/moepkg/callhierarchy_viewer
@@ -97,7 +97,7 @@ suite "editor_callhierarchy - enterCallHierarchyMode":
     check e.activeWindow.modeState.callHierarchy.viewKind == chvkIncoming
     check e.state.previousMode == startMode
     check e.activeWindow.originalBuffer != nil
-    check e.state.statusMessage == "1 incoming calls found"
+    check e.state.statusMessage == "1 incoming call found"
 
   test "Switching Incoming -> Outgoing preserves originalBuffer and previousMode":
     let e = createTestEditor()
@@ -115,7 +115,7 @@ suite "editor_callhierarchy - enterCallHierarchyMode":
     check e.activeWindow.originalBuffer == savedOriginal
     check e.state.previousMode == startMode
     check e.activeWindow.modeState.callHierarchy.viewKind == chvkOutgoing
-    check e.state.statusMessage == "1 outgoing calls found"
+    check e.state.statusMessage == "1 outgoing call found"
 
 suite "editor_callhierarchy - requestCallHierarchyIncomingForItem":
   test "Returns false when LSP is disabled":
@@ -139,6 +139,23 @@ suite "editor_callhierarchy - requestCallHierarchyIncomingForItem":
     check not result
     check e.state.statusMessage == "LSP is not enabled"
 
+  test "Routes via item.uri, not the active buffer":
+    # Regression: in the viewer the active buffer is a synthetic, path-less
+    # buffer, and the target item may live in a different file. The worker must
+    # be resolved from item.uri. Point the item at an extension with no
+    # configured LSP server: the request then fails with a path-specific
+    # "No LSP support" error referencing item.uri's path, proving the routing
+    # came from item.uri (the old code failed with "Buffer has no file path").
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let item = makeCallHierarchyItem("foo", "file:///tmp/x.unknownlang", 0, 0)
+
+    discard e.requestCallHierarchyIncomingForItem(item)
+
+    check not e.state.statusMessage.contains("Buffer has no file path")
+    check e.state.statusMessage.contains("No LSP support for file")
+    check e.state.statusMessage.contains("x.unknownlang")
+
 suite "editor_callhierarchy - requestCallHierarchyOutgoingForItem":
   test "Returns false when LSP is disabled":
     let e = createTestEditorWithLspDisabled()
@@ -160,6 +177,19 @@ suite "editor_callhierarchy - requestCallHierarchyOutgoingForItem":
 
     check not result
     check e.state.statusMessage == "LSP is not enabled"
+
+  test "Routes via item.uri, not the active buffer":
+    # See the incoming counterpart: item.uri (not the active buffer) drives
+    # worker resolution, evidenced by the path-specific "No LSP support" error.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let item = makeCallHierarchyItem("foo", "file:///tmp/x.unknownlang", 0, 0)
+
+    discard e.requestCallHierarchyOutgoingForItem(item)
+
+    check not e.state.statusMessage.contains("Buffer has no file path")
+    check e.state.statusMessage.contains("No LSP support for file")
+    check e.state.statusMessage.contains("x.unknownlang")
 
 suite "editor_callhierarchy - jumpToCallHierarchyItem":
   test "Jumps to item location in same file":

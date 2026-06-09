@@ -1564,34 +1564,6 @@ proc codeLensToJson*(lens: CodeLens): JsonNode =
   if lens.data.isSome:
     result["data"] = lens.data.get
 
-proc callHierarchyItemToJson*(item: CallHierarchyItem): JsonNode =
-  ## Convert CallHierarchyItem to JSON for call hierarchy requests
-  result = %*{
-    "name": item.name,
-    "kind": item.kind.int,
-    "uri": item.uri,
-    "range": {
-      "start": {"line": item.range.start.line, "character": item.range.start.character},
-      "end": {"line": item.range.`end`.line, "character": item.range.`end`.character},
-    },
-    "selectionRange": {
-      "start": {
-        "line": item.selectionRange.start.line,
-        "character": item.selectionRange.start.character,
-      },
-      "end": {
-        "line": item.selectionRange.`end`.line,
-        "character": item.selectionRange.`end`.character,
-      },
-    },
-  }
-  if item.tags.isSome:
-    result["tags"] = %item.tags.get
-  if item.detail.isSome:
-    result["detail"] = %item.detail.get
-  if item.data.isSome:
-    result["data"] = item.data.get
-
 # Dynamic Registration types (LSP 3.17)
 type
   Registration* = object ## General parameters to register a capability.

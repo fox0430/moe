@@ -894,7 +894,7 @@ proc startCallHierarchyIncomingCallsRequest*(
   if not worker.isRunning:
     return err("Server not ready")
 
-  let params = %*{"item": callHierarchyItemToJson(item)}
+  let params = %*{"item": item.toJson}
 
   let requestId = svc.startTrackedRequest(worker, "callHierarchy/incomingCalls", params)
   return ok(requestId)
@@ -911,7 +911,7 @@ proc startCallHierarchyOutgoingCallsRequest*(
   if not worker.isRunning:
     return err("Server not ready")
 
-  let params = %*{"item": callHierarchyItemToJson(item)}
+  let params = %*{"item": item.toJson}
 
   let requestId = svc.startTrackedRequest(worker, "callHierarchy/outgoingCalls", params)
   return ok(requestId)
