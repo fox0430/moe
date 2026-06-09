@@ -229,6 +229,7 @@ type
     showSyntaxChecker*: bool # Whether to show syntax checker results in sidebar
     showCodeLens*: bool # Whether to show CodeLens
     showDocumentHighlight*: bool # Whether to show document highlights
+    showInlayHint*: bool # Whether to show LSP inlay hints
     lineWrap*: bool # Whether to wrap long lines
     tabStop*: int # Tab width (number of spaces per tab character)
     shiftWidth*: int # Indent width, 0 = use tabStop
@@ -275,6 +276,9 @@ type
       # Debounce interval for document highlight updates
     lastSemanticTokensUpdate*: MonoTime # Timestamp of last semantic tokens update
     semanticTokensUpdateInterval*: int64 # Debounce interval for semantic tokens updates
+    inlayHintCache*: InlayHintCache # Cached inlay hints for current viewport
+    lastInlayHintUpdate*: MonoTime # Timestamp of last inlay hint update
+    inlayHintUpdateInterval*: int64 # Debounce interval for inlay hint updates
     signatureHelp*: SignatureHelpRequestState # Auto signature help request tracking
     # Pending async request IDs for non-blocking LSP operations
     pendingSignatureHelpRequestId*: int
@@ -284,6 +288,10 @@ type
     pendingCodeLensRequestId*: int # Request ID for pending code lens request (0 = none)
     pendingSemanticTokensRequestId*: int
       # Request ID for pending semantic tokens request (0 = none)
+    pendingInlayHintRequestId*: int
+      # Request ID for pending inlay hint request (0 = none)
+    pendingInlayHintBufferId*: BufferId
+      # BufferId the pending inlay hint request was made for
     pendingHoverRequestId*: int # Request ID for pending hover request (0 = none)
     pendingHoverBufferId*: BufferId # BufferId the pending hover request was made for
     pendingHoverCursorLine*: int # Cursor line when the hover request was made
@@ -612,6 +620,24 @@ type
     isValid*: bool # Whether semantic tokens have been applied to current highlight
     topLine*: int # Top visible line when tokens were requested
     bottomLine*: int # Bottom visible line when tokens were requested
+
+  InlayHintItem* = object ## Cached inlay hint for a single position
+    line*: int # Line number (0-indexed)
+    column*: int # Rune index in the line (UTF-16 already converted)
+    label*: string # Concatenated label text (from getInlayHintLabel)
+    kind*: int # InlayHintKind: 1=Type, 2=Parameter, 0=unset
+    paddingLeft*: bool # Whether to render a space before the label
+    paddingRight*: bool # Whether to render a space after the label
+
+  InlayHintCache* = object
+    ## Cache for inlay hints over a viewport range
+    ## Uses Table for O(1) line lookup instead of O(n) sequential search
+    itemsByLine*: Table[int, seq[InlayHintItem]] # Line number -> inlay hints
+    changeSeq*: int # Buffer changeSeq when cache was last updated
+    filePath*: string # Path of the buffer this cache belongs to
+    topLine*: int # Top visible line when hints were requested
+    bottomLine*: int # Bottom visible line when hints were requested
+    isValid*: bool # Whether the cache is valid
 
   SubstitutePreview* = object
     ## State for live substitute preview (like Vim's inccommand)

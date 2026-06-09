@@ -495,3 +495,77 @@ suite "types - Diagnostic parsing with out-of-range values":
     }
     let hl = parseDocumentHighlight(j)
     check hl.kind.isNone
+
+suite "types - InlayHint":
+  test "parseInlayHint with string label":
+    let j = %*{"position": {"line": 3, "character": 7}, "label": ": int", "kind": 1}
+    let hint = parseInlayHint(j)
+    check hint.isSome
+    check hint.get.position.line == 3
+    check hint.get.position.character == 7
+    check hint.get.kind == some(ihkType)
+    check getInlayHintLabel(hint.get) == ": int"
+
+  test "parseInlayHint with label parts concatenates":
+    let j = %*{
+      "position": {"line": 0, "character": 0},
+      "label": [{"value": "foo"}, {"value": ": "}, {"value": "Bar"}],
+      "kind": 2,
+    }
+    let hint = parseInlayHint(j)
+    check hint.isSome
+    check hint.get.kind == some(ihkParameter)
+    check getInlayHintLabel(hint.get) == "foo: Bar"
+
+  test "parseInlayHint with padding flags":
+    let j = %*{
+      "position": {"line": 1, "character": 2},
+      "label": "x",
+      "paddingLeft": true,
+      "paddingRight": false,
+    }
+    let hint = parseInlayHint(j)
+    check hint.isSome
+    check hint.get.paddingLeft == some(true)
+    check hint.get.paddingRight == some(false)
+
+  test "parseInlayHint without optional fields":
+    let j = %*{"position": {"line": 0, "character": 0}, "label": "y"}
+    let hint = parseInlayHint(j)
+    check hint.isSome
+    check hint.get.kind.isNone
+    check hint.get.paddingLeft.isNone
+    check hint.get.paddingRight.isNone
+
+  test "parseInlayHint missing required fields returns none":
+    check parseInlayHint(%*{"position": {"line": 0, "character": 0}}).isNone
+    check parseInlayHint(%*{"label": "z"}).isNone
+
+  test "parseInlayHint on non-object returns none":
+    check parseInlayHint(newJNull()).isNone
+    check parseInlayHint(%*[1, 2, 3]).isNone
+
+  test "parseInlayHint with malformed position drops it instead of raising":
+    # A present-but-incomplete position must not raise KeyError out of
+    # parseInlayHintResponse (called on the render/tick path).
+    check parseInlayHint(%*{"position": {"character": 5}, "label": "x"}).isNone
+    check parseInlayHint(%*{"position": {"line": 5}, "label": "x"}).isNone
+    check parseInlayHint(%*{"position": newJNull(), "label": "x"}).isNone
+
+  test "parseInlayHint with a valid label part array":
+    let j = %*{
+      "position": {"line": 0, "character": 0}, "label": [{"value": "a"}, {"value": "b"}]
+    }
+    let hint = parseInlayHint(j)
+    check hint.isSome
+    check hint.get.getInlayHintLabel == "ab"
+
+  test "parseInlayHint with a non-object label part drops it instead of raising":
+    # A server returning string elements (`"label": ["x"]`) must not reach
+    # getInlayHintLabel, where part["value"] would raise a Defect on the
+    # render/tick path.
+    check parseInlayHint(%*{"position": {"line": 0, "character": 0}, "label": ["x"]}).isNone
+    check parseInlayHint(
+      %*{"position": {"line": 0, "character": 0}, "label": [{"novalue": 1}]}
+    ).isNone
+    check parseInlayHint(%*{"position": {"line": 0, "character": 0}, "label": 42}).isNone

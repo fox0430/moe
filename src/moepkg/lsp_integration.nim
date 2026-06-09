@@ -742,6 +742,26 @@ proc startSemanticTokensRequest*(
   else:
     return err("Semantic tokens not supported")
 
+proc hasInlayHintSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if inlay hints are supported for a buffer's language
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasInlayHintSupport(langId.get)
+
+proc startInlayHintRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, firstLine, lastLine: int
+): Result[int, string] =
+  ## Start an inlay hint request for a viewport line range (non-blocking).
+  ## Returns request ID. The range is clamped to the buffer bounds.
+  let path = requireBufferPath(lsp, buffer)
+  if buffer.len == 0:
+    return err("Buffer is empty")
+
+  let actualLastLine = min(lastLine, buffer.len - 1)
+  let actualFirstLine = max(0, min(firstLine, actualLastLine))
+  let endChar =
+    buffer.toUtf16Column(actualLastLine, buffer.getLine(actualLastLine).charLen)
+  lsp.service.startInlayHintRequest(path, actualFirstLine, 0, actualLastLine, endChar)
+
 proc hasInlineValueSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if inline value is supported for a buffer's language
   let langId = requireLangId(lsp, buffer)

@@ -26,7 +26,7 @@ import pkg/celina
 
 import
   buffer, types, commands, command_registry, modes, command_line, command_config,
-  window_manager, lsp_integration, config, persist, background_process
+  window_manager, lsp_integration, config, persist, background_process, virtual_text
 import key_bindings except Command
 import key_router
 import command_handlers/handler_types
@@ -34,7 +34,7 @@ import command_handlers/handler_types
 export
   buffer, types, commands, command_registry, modes, command_line, command_config,
   window_manager, lsp_integration, config, persist, handler_types, tables, celina,
-  background_process, key_router
+  background_process, key_router, virtual_text
 
 type
   ScreenSize* = object
@@ -89,6 +89,8 @@ type
     windowMode*: EditorMode ## Mode of the window being rendered
     windowRightEdge*: int ## Absolute screen X of window's right edge
     isActiveWindow*: bool ## Whether the window being rendered is the active one
+    virtualTextProviders*: seq[VirtualTextProvider]
+      ## Feature-agnostic suppliers of virtual text (inlay hints, etc.)
 
   IndentInfo* = object
     ## Cached indentation analysis for a line to avoid O(n²) performance
