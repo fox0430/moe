@@ -94,8 +94,10 @@ proc enterCallHierarchyMode(
   activeWin.viewport.leftColumn = 0
   activeWin.modeState = ModeState(kind: mskCallHierarchy, callHierarchy: chState)
 
-  let direction = if viewKind == chvkIncoming: "incoming" else: "outgoing"
-  e.state.statusMessage = $items.len & " " & direction & " calls found"
+  let
+    direction = if viewKind == chvkIncoming: "incoming" else: "outgoing"
+    noun = if items.len == 1: "call" else: "calls"
+  e.state.statusMessage = $items.len & " " & direction & " " & noun & " found"
 
 proc pollLspCallHierarchy*(e: Editor) =
   ## Poll for pending call hierarchy request response
@@ -118,8 +120,6 @@ proc pollLspCallHierarchy*(e: Editor) =
   of lrsPending:
     discard # Still waiting
   of lrsSuccess:
-    let activeBuffer = e.activeBuffer()
-
     case kind
     of chrkPrepareIncoming, chrkPrepareOutgoing:
       # First stage complete - parse prepare result and start second stage
@@ -135,9 +135,9 @@ proc pollLspCallHierarchy*(e: Editor) =
         let item = prepareItems[0]
         let secondReqResult =
           if kind == chrkPrepareIncoming:
-            e.lsp.startCallHierarchyIncomingCallsRequest(activeBuffer, item)
+            e.lsp.startCallHierarchyIncomingCallsRequest(item)
           else:
-            e.lsp.startCallHierarchyOutgoingCallsRequest(activeBuffer, item)
+            e.lsp.startCallHierarchyOutgoingCallsRequest(item)
 
         if secondReqResult.isErr:
           e.state.lspCache.pendingCallHierarchyRequestId = 0
@@ -222,15 +222,13 @@ proc requestCallHierarchyIncomingForItem*(
     e.state.statusMessage = "LSP is not enabled"
     return false
 
-  let activeBuffer = e.activeBuffer()
-
   # Cancel any pending call hierarchy request
   if e.state.lspCache.pendingCallHierarchyRequestId != 0:
     e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
     e.state.lspCache.pendingCallHierarchyRequestId = 0
   e.state.lspCache.pendingCallHierarchyKind = chrkNone
 
-  let reqResult = e.lsp.startCallHierarchyIncomingCallsRequest(activeBuffer, item)
+  let reqResult = e.lsp.startCallHierarchyIncomingCallsRequest(item)
   if reqResult.isErr:
     e.state.statusMessage = "LSP incoming calls failed: " & reqResult.error
     return false
@@ -249,15 +247,13 @@ proc requestCallHierarchyOutgoingForItem*(
     e.state.statusMessage = "LSP is not enabled"
     return false
 
-  let activeBuffer = e.activeBuffer()
-
   # Cancel any pending call hierarchy request
   if e.state.lspCache.pendingCallHierarchyRequestId != 0:
     e.lsp.cancelRequest(e.state.lspCache.pendingCallHierarchyRequestId)
     e.state.lspCache.pendingCallHierarchyRequestId = 0
   e.state.lspCache.pendingCallHierarchyKind = chrkNone
 
-  let reqResult = e.lsp.startCallHierarchyOutgoingCallsRequest(activeBuffer, item)
+  let reqResult = e.lsp.startCallHierarchyOutgoingCallsRequest(item)
   if reqResult.isErr:
     e.state.statusMessage = "LSP outgoing calls failed: " & reqResult.error
     return false

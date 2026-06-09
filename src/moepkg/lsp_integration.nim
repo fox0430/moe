@@ -637,17 +637,26 @@ proc startCallHierarchyPrepareRequest*(
   )
 
 proc startCallHierarchyIncomingCallsRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, item: CallHierarchyItem
+    lsp: LspIntegration, item: CallHierarchyItem
 ): Result[int, string] =
   ## Start a call hierarchy incoming calls request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
+  ## The worker is resolved from `item.uri` rather than the active buffer, so the
+  ## request routes correctly even when the call hierarchy viewer (a synthetic,
+  ## path-less buffer) is active or the item lives in a different file.
+  if not lsp.enabled:
+    return err("LSP disabled")
+  let path = uriToPath(item.uri)
   lsp.service.startCallHierarchyIncomingCallsRequest(path, item)
 
 proc startCallHierarchyOutgoingCallsRequest*(
-    lsp: LspIntegration, buffer: TextBuffer, item: CallHierarchyItem
+    lsp: LspIntegration, item: CallHierarchyItem
 ): Result[int, string] =
   ## Start a call hierarchy outgoing calls request (non-blocking). Returns request ID.
-  let path = requireBufferPath(lsp, buffer)
+  ## See `startCallHierarchyIncomingCallsRequest` for why the path comes from
+  ## `item.uri` instead of the active buffer.
+  if not lsp.enabled:
+    return err("LSP disabled")
+  let path = uriToPath(item.uri)
   lsp.service.startCallHierarchyOutgoingCallsRequest(path, item)
 
 proc startDocumentSymbolsRequest*(
