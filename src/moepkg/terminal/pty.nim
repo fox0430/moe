@@ -39,6 +39,12 @@ when defined(macosx):
     amaster: var cint, name: cstring, termp: pointer, winp: pointer
   ): Pid {.importc, header: "<util.h>".}
 
+elif defined(freebsd):
+  {.passL: "-lutil".}
+  proc forkpty(
+    amaster: var cint, name: cstring, termp: pointer, winp: pointer
+  ): Pid {.importc, header: "<libutil.h>".}
+
 else:
   proc forkpty(
     amaster: var cint, name: cstring, termp: pointer, winp: pointer
