@@ -1904,3 +1904,40 @@ suite "Visual Commands - visualSurround":
 
     check buf.getLine(0) == "[あいう] world"
     check buf.getLine(1) == "[かきく] bar"
+
+suite "Visual Commands - fold-aware movement":
+  test "visualMoveDown crosses a collapsed fold":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+    discard buf.foldState.addFold(2, 4, collapsed = true)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 0)
+    state.visualSelection.current = state.cursor
+    # j onto the fold start line.
+    visualMoveDown(buf, state)
+    check state.cursor.line == 2
+    # j again crosses the whole collapsed fold to the line after it.
+    visualMoveDown(buf, state)
+    check state.cursor.line == 5
+    check state.visualSelection.current.line == 5
+
+  test "visualMoveUp crosses a collapsed fold":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+    discard buf.foldState.addFold(2, 4, collapsed = true)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 5, column: 0)
+    state.visualSelection.current = state.cursor
+    # k from below the fold jumps to the fold start.
+    visualMoveUp(buf, state)
+    check state.cursor.line == 2
+    check state.visualSelection.current.line == 2
+    visualMoveUp(buf, state)
+    check state.cursor.line == 1
+
+  test "visualMoveDown stays put on a fold running to the buffer end":
+    let buf = newTextBuffer("0\n1\n2\n3\n4")
+    discard buf.foldState.addFold(2, 4, collapsed = true)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 2, column: 0)
+    state.visualSelection.current = state.cursor
+    visualMoveDown(buf, state)
+    check state.cursor.line == 2

@@ -2434,3 +2434,21 @@ suite "HandlerManager - Insert mode exec.cmdline.* bridge commits transaction":
     check r.kind == hrExecCommand
     check r.execCommandText == "bdelete"
     check not buffer.inTransaction
+
+suite "HandlerManager - Replace mode fold auto-expand":
+  test "Entering Replace mode opens a collapsed fold at the cursor":
+    let manager = createTestManager()
+    let buffer = newTextBuffer("aaaa\nbbbb\ncccc\ndddd")
+    discard buffer.foldState.addFold(0, 2, collapsed = true)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 0)
+    let viewport = createTestViewport()
+
+    let keyCombo = KeyCombo(isSpecial: false, char: "R", modifiers: {})
+    let r = manager.handleNormalMode(
+      createTestEditor(buffer, state, viewport, manager.keyBindingRegistry), keyCombo
+    )
+
+    check r.kind == hrHandled
+    check r.modeTransition == some(EditorMode.Replace)
+    check buffer.foldState.folds[0].collapsed == false

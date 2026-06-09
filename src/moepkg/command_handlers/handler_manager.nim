@@ -320,6 +320,10 @@ proc handleNormalMode*(
         if state.editState.insertModeStartPos.isNone:
           state.editState.insertModeStartPos = some(state.cursor)
       elif targetMode == EditorMode.Replace:
+        # Reveal a collapsed fold at the cursor so Replace never overtypes text
+        # hidden behind a fold marker (mirrors the Insert-mode entry behaviour).
+        if buffer.foldState.openFold(state.cursor.line):
+          state.windowDisplay.needsFullRedraw = true
         # Begin a transaction when entering Replace mode
         # Guard: during insert-normal mode a transaction is already open
         if not buffer.inTransaction:

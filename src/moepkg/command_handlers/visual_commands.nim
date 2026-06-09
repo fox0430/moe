@@ -67,7 +67,13 @@ proc visualMoveRight*(buffer: TextBuffer, state: EditorState) =
 proc visualMoveUp*(buffer: TextBuffer, state: EditorState) =
   ## Move up in visual mode and update selection
   if state.cursor.line > 0:
-    state.cursor.line -= 1
+    var targetLine = state.cursor.line - 1
+    # Skip to a collapsed fold's start so the selection crosses the whole fold
+    # instead of stalling on a hidden interior line. getPrevVisibleLine always
+    # returns a visible line.
+    if buffer.foldState.isLineInCollapsedFold(targetLine):
+      targetLine = buffer.foldState.getPrevVisibleLine(targetLine)
+    state.cursor.line = targetLine
     # Clamp cursor to new line length
     let newLineLen = buffer.getLine(state.cursor.line).charLen
     if state.cursor.column > newLineLen:
@@ -78,13 +84,20 @@ proc visualMoveUp*(buffer: TextBuffer, state: EditorState) =
 proc visualMoveDown*(buffer: TextBuffer, state: EditorState) =
   ## Move down in visual mode and update selection
   if state.cursor.line < buffer.len - 1:
-    state.cursor.line += 1
-    # Clamp cursor to new line length
-    let newLineLen = buffer.getLine(state.cursor.line).charLen
-    if state.cursor.column > newLineLen:
-      state.cursor.column = newLineLen
-    state.visualSelection.current = state.cursor
-    state.windowDisplay.needsFullRedraw = true
+    var targetLine = state.cursor.line + 1
+    # Skip past a collapsed fold so the selection crosses the whole fold instead
+    # of stalling on a hidden interior line.
+    if buffer.foldState.isLineInCollapsedFold(targetLine):
+      targetLine = buffer.foldState.getNextVisibleLine(targetLine, buffer.len - 1)
+    # A collapsed fold that runs to the buffer end can't be crossed; stay put.
+    if not buffer.foldState.isLineInCollapsedFold(targetLine):
+      state.cursor.line = targetLine
+      # Clamp cursor to new line length
+      let newLineLen = buffer.getLine(state.cursor.line).charLen
+      if state.cursor.column > newLineLen:
+        state.cursor.column = newLineLen
+      state.visualSelection.current = state.cursor
+      state.windowDisplay.needsFullRedraw = true
 
 proc getBlockText(buffer: TextBuffer, selection: VisualSelection): string =
   ## Get text from a block (rectangular) selection
