@@ -20,7 +20,7 @@
 ## Integration tests for command_registry
 ## These tests cover executeCommand and executeOperatorOnRange
 
-import std/[unittest, options, strutils]
+import std/[unittest, options, strutils, tables, sets]
 
 import pkg/results
 
@@ -4857,3 +4857,178 @@ suite "Operator with compound counts":
 
     check registry.executeCommand(ctx, cmd).isOk
     check buffer[0] == "five six"
+
+suite "executeCommand - auto-open folds on edit":
+  test "delete-char opens a collapsed fold at the cursor":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4")
+    check buffer.foldState.addFold(0, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0) # on the fold start line
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "delete.char", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check not buffer.foldState.folds[0].collapsed
+
+  test "operator delete opens a collapsed fold at the cursor":
+    let buffer = newTextBuffer("hello world\n1\n2\n3")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check not buffer.foldState.folds[0].collapsed
+
+  test "yank leaves a collapsed fold closed":
+    let buffer = newTextBuffer("hello world\n1\n2\n3")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpYank, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let cmd = Command(kind: ctMotion, motion: Motion.WordForward, count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.foldState.folds[0].collapsed
+
+  test "navigation leaves a collapsed fold closed":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4")
+    check buffer.foldState.addFold(0, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.foldState.folds[0].collapsed
+
+  test "operator+motion opens a collapsed fold spanned by the motion range":
+    # The motion ends inside a fold that does NOT start at the cursor line, so
+    # only the range-wide guard (not the cursor-line openFold) can reveal it.
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5")
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0) # outside the fold
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpIndent, operatorCount: 1, startPos: ctx.cursor)
+    )
+    # >j indents lines 0-1; the range touches the collapsed fold at lines 1-3.
+    let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check not buffer.foldState.folds[0].collapsed
+
+suite "executeCommand - cursor pinned on collapsed folds":
+  test "horizontal motion is pinned on a collapsed fold start line":
+    let buffer = newTextBuffer("function main() {\nbody\nend\ntail")
+    check buffer.foldState.addFold(0, 2, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.Right, count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    # The collapsed fold is a single unit; the cursor cannot roam its line.
+    check ctx.cursor.line == 0
+    check ctx.cursor.column == 0
+
+  test "moving onto a collapsed fold pins the cursor to its start at column 0":
+    let buffer = newTextBuffer("aaaa\nbbbb\ncccc\ndddd\neeee")
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 2)
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctMotion, motion: Motion.Down, count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check ctx.cursor.line == 1
+    check ctx.cursor.column == 0
+
+suite "executeCommand - visual edit opens folds in the selection":
+  test "a visual edit opens collapsed folds the selection spans":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+    check buffer.foldState.addFold(2, 4, collapsed = true)
+    let ctx = createTestContext(buffer)
+    # Select lines 1..5, which span the collapsed fold (2-4).
+    ctx.state.visualSelection = VisualSelection(
+      active: true,
+      start: BufferPosition(line: 1, column: 0),
+      current: BufferPosition(line: 5, column: 0),
+      kind: vskChar,
+    )
+    ctx.state.mode = EditorMode.Visual
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "visual.indent", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    # The fold the selection spans is now open.
+    check buffer.foldState.getFoldAt(2).get.collapsed == false
+
+  test "a visual edit leaves folds outside the selection closed":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6")
+    check buffer.foldState.addFold(4, 6, collapsed = true) # below the selection
+    let ctx = createTestContext(buffer)
+    ctx.state.visualSelection = VisualSelection(
+      active: true,
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 2, column: 0),
+      kind: vskChar,
+    )
+    ctx.state.mode = EditorMode.Visual
+    let registry = createTestRegistry()
+
+    let cmd = Command(kind: ctCustom, commandId: "visual.indent", count: 1)
+    check registry.executeCommand(ctx, cmd).isOk
+    check buffer.foldState.getFoldAt(4).get.collapsed == true
+
+suite "executeCommand - fold auto-open allowlists stay in sync":
+  # The fold auto-open guard keys off hardcoded commandId allowlists. If a
+  # command is renamed or removed without updating the list, the guard silently
+  # stops revealing folds before that edit. These tests fail loudly in that
+  # case by asserting every listed id resolves to a registered built-in command.
+  proc registeredCommandIds(): HashSet[string] =
+    result = initHashSet[string]()
+    let reg = newKeyBindingRegistry()
+    reg.setupDefaultBindings()
+    for cmd in reg.commandRegistry.values:
+      # commandId only exists on these command kinds (it is a variant field).
+      if cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
+          cmd.commandId.len > 0:
+        result.incl(cmd.commandId)
+
+  proc registeredOperatorTypes(): HashSet[string] =
+    result = initHashSet[string]()
+    let reg = newKeyBindingRegistry()
+    reg.setupDefaultBindings()
+    for cmd in reg.commandRegistry.values:
+      # operatorType only exists on ctOperatorPending commands (variant field).
+      if cmd.kind == ctOperatorPending and cmd.operatorType.len > 0:
+        result.incl(cmd.operatorType)
+
+  test "every EditCommandIds entry is a registered command":
+    let ids = registeredCommandIds()
+    for id in EditCommandIds:
+      check id in ids
+
+  test "every VisualEditCommandIds entry is a registered command":
+    let ids = registeredCommandIds()
+    for id in VisualEditCommandIds:
+      check id in ids
+
+  test "every EditOperatorTypes entry is a registered operatorType":
+    let ops = registeredOperatorTypes()
+    for op in EditOperatorTypes:
+      check op in ops
+
+  test "every VisualEditOperatorTypes entry is a registered operatorType":
+    let ops = registeredOperatorTypes()
+    for op in VisualEditOperatorTypes:
+      check op in ops

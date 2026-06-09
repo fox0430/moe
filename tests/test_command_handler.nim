@@ -2203,3 +2203,71 @@ suite "CommandModeHandler - executeDelete":
       buffer, hasRange = true, isGlobalRange = false, startLine = 10, endLine = 20
     )
     check result.kind == cmrError
+
+suite "CommandModeHandler - fold auto-expand on edit":
+  test "substitute reveals a collapsed fold on a modified line":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["aaa", "foo", "bbb", "ccc"])
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    # :2s/foo/bar/  -> 1-based line 2 == index 1 (the fold start, hidden text)
+    let result = handler.executeSubstitute(
+      buffer,
+      "foo",
+      "bar",
+      "",
+      hasRange = true,
+      isGlobalRange = false,
+      startLine = 2,
+      endLine = 2,
+      currentLine = 0,
+    )
+    check result.kind == cmrSubstitute
+    check buffer.getLine(1) == "bar"
+    check buffer.foldState.getFoldAt(1).get.collapsed == false
+
+  test "substitute leaves a fold without a match closed":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["foo", "bbb", "ccc", "ddd"])
+    check buffer.foldState.addFold(1, 3, collapsed = true) # no 'foo' inside
+    # :%s/foo/bar/ matches only line 0
+    let result = handler.executeSubstitute(
+      buffer,
+      "foo",
+      "bar",
+      "",
+      hasRange = false,
+      isGlobalRange = true,
+      startLine = 0,
+      endLine = 0,
+      currentLine = 0,
+    )
+    check result.kind == cmrSubstitute
+    check buffer.getLine(0) == "bar"
+    check buffer.foldState.getFoldAt(1).get.collapsed == true
+
+  test "delete reveals a collapsed fold overlapping the range":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["a", "b", "c", "d", "e", "f"])
+    check buffer.foldState.addFold(2, 4, collapsed = true)
+    # :3d -> 1-based line 3 == index 2
+    let result = handler.executeDelete(
+      buffer,
+      hasRange = true,
+      isGlobalRange = false,
+      startLine = 3,
+      endLine = 3,
+      currentLine = 0,
+    )
+    check result.kind == cmrDeleteLines
+    let f = buffer.foldState.getFoldAt(2)
+    check f.isSome
+    check f.get.collapsed == false
+
+  test "stripwhitespace reveals a fold on a stripped line":
+    let handler = setupHandler()
+    let buffer = setupBuffer(@["aaa", "bbb   ", "ccc", "ddd"])
+    check buffer.foldState.addFold(1, 3, collapsed = true)
+    let result = handler.executeStripWhitespace(buffer)
+    check result.kind == cmrStripWhitespace
+    check buffer.getLine(1) == "bbb"
+    check buffer.foldState.getFoldAt(1).get.collapsed == false

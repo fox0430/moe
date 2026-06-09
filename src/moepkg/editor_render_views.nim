@@ -60,30 +60,78 @@ proc adjustViewportForCursor(
       viewport.topLine = cursor.line
     else:
       # Cursor is at or below topLine. Walk backward from the cursor line,
-      # accumulating screen (wrapped) lines until we either reach visibleHeight
-      # or hit the current topLine. The stopping line is the highest topLine
-      # that still keeps the cursor visible — i.e. the minimal downward scroll,
-      # identical to what the previous forward-sum loop produced. Bounding the
-      # walk by visibleHeight makes this O(visibleHeight) per frame regardless
-      # of how far the cursor jumped (e.g. `G` on a huge file), instead of
+      # accumulating screen (wrapped) rows until we either reach visibleHeight
+      # or run out of lines. The stopping line is the highest topLine that still
+      # keeps the cursor visible — i.e. the minimal downward scroll, identical to
+      # what the previous forward-sum loop produced. Bounding the walk by
+      # visibleHeight makes this O(visibleHeight) per frame regardless of how far
+      # the cursor jumped (e.g. `G` on a huge file), instead of
       # O(cursor.line - topLine), and only touches lines that become visible.
+      #
+      # Collapsed folds are fold-aware (matching renderWindow / calculateWindow-
+      # Cursor): a collapsed fold's start line is a single marker row, its hidden
+      # interior contributes no rows and is skipped to the fold start in one step.
       let cursorLine = min(cursor.line, textBuffer.len - 1)
       if cursorLine >= viewport.topLine:
         wrapCache.ensureFresh(textBuffer, maxWidth, tabStop)
-        var screenLines = wrapCache.cachedWrapCount(textBuffer, cursorLine)
-        var newTopLine = cursorLine
-        while newTopLine > viewport.topLine:
-          let prevCount = wrapCache.cachedWrapCount(textBuffer, newTopLine - 1)
+        var
+          screenLines =
+            if textBuffer.foldState.getCollapsedFoldAt(cursorLine).isSome:
+              1
+            else:
+              wrapCache.cachedWrapCount(textBuffer, cursorLine)
+          newTopLine = cursorLine
+        # Walk past the current topLine (bounded by visibleHeight) and only apply
+        # a downward scroll, so a fold straddling topLine never scrolls up.
+        while newTopLine > 0 and screenLines < visibleHeight:
+          let prev = newTopLine - 1
+          let prevFold = textBuffer.foldState.getCollapsedFoldAt(prev)
+          let
+            prevTop = if prevFold.isSome: prevFold.get.startLine else: prev
+            prevCount =
+              if prevFold.isSome:
+                1
+              else:
+                wrapCache.cachedWrapCount(textBuffer, prev)
           if screenLines + prevCount > visibleHeight:
             break
           screenLines += prevCount
-          newTopLine -= 1
-        viewport.topLine = newTopLine
-  else:
+          newTopLine = prevTop
+        if newTopLine > viewport.topLine:
+          viewport.topLine = newTopLine
+  elif textBuffer.isNil:
+    # No buffer to consult for folds: fall back to raw line arithmetic.
     if cursor.line >= viewport.topLine + visibleHeight:
       viewport.topLine = max(0, cursor.line - visibleHeight + 1)
     elif cursor.line < viewport.topLine:
       viewport.topLine = cursor.line
+  elif cursor.line < viewport.topLine:
+    viewport.topLine = cursor.line
+  else:
+    # Cursor is at or below topLine. Walk backward from the cursor accumulating
+    # visible (marker / non-folded) rows until the window fills, to find the
+    # minimal downward scroll. Each collapsed fold collapses to a single marker
+    # row and is skipped in one step, so this stays O(visibleHeight) per frame
+    # even when the cursor jumps far (e.g. `G`) over a large fold. If we reach
+    # the current topLine before filling, the cursor is already visible and
+    # topLine is left untouched.
+    let cursorLine = min(cursor.line, textBuffer.len - 1)
+    if cursorLine >= viewport.topLine:
+      var
+        rows = 1 # the cursor line itself
+        newTopLine = cursorLine
+      while newTopLine > 0 and rows < visibleHeight:
+        let prev = newTopLine - 1
+        let fold = textBuffer.foldState.getCollapsedFoldAt(prev)
+        if fold.isSome:
+          # The whole collapsed fold is one marker row; jump over its interior.
+          inc rows
+          newTopLine = fold.get.startLine
+        else:
+          inc rows
+          dec newTopLine
+      if newTopLine > viewport.topLine:
+        viewport.topLine = newTopLine
 
   # Horizontal adjustment (only when line wrap is disabled)
   if not lineWrap:

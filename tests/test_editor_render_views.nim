@@ -1597,3 +1597,35 @@ suite "adjustViewportForCursor - line wrap vertical scroll":
     fromNear.adjustWrap(buf, cursorLine)
 
     check fromNear.topLine == fromTop.topLine
+
+  proc singleRowBuffer(lineCount: int): TextBuffer =
+    # Each line is one character, so its wrap count is always 1 row. This
+    # isolates the collapsed-fold row accounting from per-line wrap variance.
+    var lines: seq[string]
+    for i in 0 ..< lineCount:
+      lines.add("x")
+    newTextBuffer(lines.join("\n"))
+
+  test "Collapsed fold above the cursor counts as a single marker row":
+    # Fold lines 18..26 (9 lines) collapse to one marker row. Walking back from
+    # the cursor, that whole region costs 1 row, not 9, so topLine lands 8 lines
+    # lower than the fold-unaware computation (which would stop at 19).
+    let buf = singleRowBuffer(30)
+    check buf.foldState.addFold(18, 26, collapsed = true)
+    let vp = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+
+    vp.adjustWrap(buf, 28)
+
+    check vp.topLine == 11
+
+  test "Collapsed fold lets the viewport keep the top visible (no needless scroll)":
+    # Lines 2..20 collapse to one marker row, so the cursor at line 25 fits
+    # within visibleHeight from topLine 0 (rows: lines 0,1 + marker + 21..25 = 8).
+    # Without fold-aware counting this would force a downward scroll.
+    let buf = singleRowBuffer(30)
+    check buf.foldState.addFold(2, 20, collapsed = true)
+    let vp = ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24)
+
+    vp.adjustWrap(buf, 25)
+
+    check vp.topLine == 0

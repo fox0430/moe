@@ -35,6 +35,46 @@ import
   command_registry/[core, operator_engine, clipboard, motion_scroll, visual, edit, misc]
 export core, operator_engine, clipboard, motion_scroll, visual, edit, misc
 
+const EditCommandIds = [
+  "delete.char", "delete.char.before", "delete.line", "delete.word",
+  "operator.delete.to.end", "operator.change.to.end", "paste.after", "paste.before",
+  "join.lines", "substitute.char", "substitute.line", "toggle.case", "operator.delete",
+  "operator.change", "operator.indent", "operator.outdent", "operator.lowercase",
+  "operator.uppercase", "autoindent.line", "edit.increment", "edit.decrement",
+  "edit.repeat",
+]
+  ## Built-in command ids (dotted form, as carried by Command.commandId) that
+  ## modify the buffer at the cursor. Used to expand a collapsed fold before the
+  ## edit so hidden text is never edited blindly. Pure yanks are intentionally
+  ## excluded (they leave the fold closed, vim-like). The `r` replace command is
+  ## handled separately via its ctOperatorPending operatorType (EditOperatorTypes).
+  ##
+  ## NOTE: when adding a new buffer-modifying command, add its id here too, or
+  ## the editor will silently edit through a closed fold. A guard test
+  ## ("fold auto-open allowlists stay in sync" in test_command_registry_-
+  ## integration) asserts every id below is a real registered command, so
+  ## renames/removals fail loudly — but it cannot catch a *missing* addition.
+
+const EditOperatorTypes = ["replace"]
+  ## ctOperatorPending operatorTypes (see Command.operatorType) that modify the
+  ## buffer at the cursor — currently just `r`. Kept as a named const, like
+  ## EditCommandIds, so the same guard test can assert each value is a real
+  ## registered operatorType: renaming the operatorType in the dispatch below
+  ## without updating this list then fails loudly instead of silently skipping
+  ## the fold auto-open.
+
+const VisualEditCommandIds = [
+  "visual.delete", "visual.indent", "visual.dedent", "visual.lowercase",
+  "visual.uppercase", "visual.togglecase", "visual.joinlines", "visual.to.insert",
+  "visual.change", "visual.block.append", "visual.paste",
+]
+  ## Visual-mode command ids that modify the selection. The selection can span
+  ## several folds, so the whole line range is expanded before the edit.
+
+const VisualEditOperatorTypes = ["visual-replace", "visual-surround"]
+  ## ctOperatorPending operatorTypes that modify the visual selection (`r`, `S`).
+  ## Guarded the same way as EditOperatorTypes / VisualEditCommandIds.
+
 proc executeCommand*(
     registry: CommandRegistry, ctx: CommandContext, cmd: key_bindings.Command
 ): Result[(), string] =
@@ -44,6 +84,37 @@ proc executeCommand*(
   if cmd.kind != ctOperatorPending or cmd.operatorType notin ["find", "till"]:
     ctx.state.ui.findCharMatches = @[]
     ctx.state.ui.findCharMatchLine = 0
+
+  # Auto-expand a collapsed fold under the cursor before a buffer-modifying
+  # command, so the user never edits text hidden behind a fold marker.
+  let isEditCommand =
+    (
+      ctx.state.editState.pendingOperator.isSome and
+      ctx.state.editState.pendingOperator.get.operatorType != OpYank
+    ) or (cmd.kind == ctOperatorPending and cmd.operatorType in EditOperatorTypes) or (
+      cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
+      cmd.commandId in EditCommandIds
+    )
+  if isEditCommand and ctx.buffer.foldState.openFold(ctx.cursor.line):
+    ctx.state.windowDisplay.needsFullRedraw = true
+
+  # Visual-mode edits operate on a line range that may span several folds; open
+  # every collapsed fold the selection touches before the edit.
+  let isVisualEditCommand =
+    (
+      cmd.kind in {ctAction, ctOperator, ctTextObject, ctCustom} and
+      cmd.commandId in VisualEditCommandIds
+    ) or (cmd.kind == ctOperatorPending and cmd.operatorType in VisualEditOperatorTypes)
+  if isVisualEditCommand and ctx.state.visualSelection.active:
+    let
+      selLo = min(
+        ctx.state.visualSelection.start.line, ctx.state.visualSelection.current.line
+      )
+      selHi = max(
+        ctx.state.visualSelection.start.line, ctx.state.visualSelection.current.line
+      )
+    if ctx.buffer.foldState.openFoldsInRange(selLo, selHi):
+      ctx.state.windowDisplay.needsFullRedraw = true
 
   case cmd.kind
   of ctMotion:
@@ -67,6 +138,14 @@ proc executeCommand*(
 
       # Calculate the range affected by this operator+motion
       let range = calculateOperatorRange(ctx.buffer, op.startPos, r.value, cmd.motion)
+
+      # The cursor-line fold is opened above; extend that guard across the whole
+      # operator range so a motion ending inside a collapsed fold (d}, dG, …)
+      # never edits lines hidden behind a fold marker. Pure yanks keep folds
+      # closed (vim-like).
+      if op.operatorType != OpYank and
+          ctx.buffer.foldState.openFoldsInRange(range.start.line, range.endPos.line):
+        ctx.state.windowDisplay.needsFullRedraw = true
 
       block:
         # Execute the operator on the range

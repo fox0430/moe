@@ -19,6 +19,8 @@
 
 ## Motion / scroll / fold commands and registration.
 
+import std/options
+
 import pkg/results
 
 import ../[types, buffer, motion, modes, render_utils]
@@ -118,10 +120,11 @@ proc handleFoldOpen*(ctx: CommandContext, args: seq[string]): Result[(), string]
   ## Open fold at cursor position (zo command)
   if ctx.buffer.foldState.openFold(ctx.cursor.line):
     ctx.state.windowDisplay.needsFullRedraw = true
-    return ok(())
-  else:
+  elif ctx.buffer.foldState.foldIndexAt(ctx.cursor.line).isNone:
+    # Distinguish "no fold here" from "fold already open" (the latter is a
+    # silent no-op, matching vim).
     ctx.state.statusMessage = "No fold found"
-    return ok(())
+  return ok(())
 
 proc handleFoldClose*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Close fold at cursor position (zc command)
@@ -133,10 +136,11 @@ proc handleFoldClose*(ctx: CommandContext, args: seq[string]): Result[(), string
       # Clamp column to new line's length
       let lineLen = ctx.buffer.getLine(ctx.cursor.line).charLen
       ctx.cursor.column = min(ctx.cursor.column, max(0, lineLen - 1))
-    return ok(())
-  else:
+  elif ctx.buffer.foldState.foldIndexAt(ctx.cursor.line).isNone:
+    # Distinguish "no fold here" from "fold already closed" (the latter is a
+    # silent no-op, matching vim and handleFoldOpen).
     ctx.state.statusMessage = "No fold found"
-    return ok(())
+  return ok(())
 
 proc handleFoldToggle*(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Toggle fold at cursor position (za command)

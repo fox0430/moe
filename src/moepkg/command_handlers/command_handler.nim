@@ -501,6 +501,8 @@ proc executeStripWhitespace*(
     let line = buffer.getLine(lineIdx)
     let trimmed = line.strip(leading = false, trailing = true)
     if trimmed != line:
+      # Reveal the line if it is hidden inside a collapsed fold.
+      discard buffer.foldState.openFoldsInRange(lineIdx, lineIdx)
       discard buffer.replaceLine(lineIdx, trimmed)
       strippedCount.inc
   discard buffer.commitTransaction()
@@ -606,6 +608,8 @@ proc executeSubstitute*(
 
     # Update the line if modified
     if modified:
+      # Reveal the line if it is hidden inside a collapsed fold.
+      discard buffer.foldState.openFoldsInRange(lineIdx, lineIdx)
       discard buffer.replaceLine(lineIdx, newLine)
 
   discard buffer.commitTransaction()
@@ -681,6 +685,9 @@ proc executeDelete*(
 
   let lineCount = rangeEnd - rangeStart + 1
   let deletingAll = rangeStart == 0 and rangeEnd == buffer.len - 1
+
+  # Reveal any folded lines in the range before deleting them.
+  discard buffer.foldState.openFoldsInRange(rangeStart, rangeEnd)
 
   discard buffer.beginTransaction("delete lines")
 

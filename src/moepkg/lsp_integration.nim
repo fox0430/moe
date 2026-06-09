@@ -1315,47 +1315,39 @@ proc applyLspFoldingRanges*(
     clearExisting: bool = true,
     startCollapsed: bool = false,
 ): int =
-  ## Apply LSP folding ranges to buffer's FoldState
-  ## Returns the number of folds successfully added
-  ## If clearExisting is true, removes all existing folds first
-  ## If startCollapsed is false (default), folds are added in expanded state
-  ## LSP FoldingRange uses 0-based line numbers which matches our FoldState
+  ## Apply LSP folding ranges to the buffer's FoldState.
+  ## Returns the number of folds successfully added.
+  ## LSP FoldingRange uses 0-based line numbers, which matches our FoldState.
   ##
-  ## Note: Due to the current FoldState design, overlapping/nested folds are not supported.
-  ## This function sorts ranges by size (smallest first) to maximize the number of
-  ## non-overlapping folds that can be added. Larger outer folds that overlap with
-  ## already-added smaller folds will be skipped.
+  ## Nested ranges are preserved: every valid range is added as a fold tagged
+  ## `fsLsp`. addFold rejects only crossing/duplicate folds, so a class, its
+  ## methods, and their inner blocks all become folds.
+  ##
+  ## When `clearExisting` is true, only previously LSP-provided folds are
+  ## removed; manual (`zf`) folds are kept so the two can coexist.
+  ## When `startCollapsed` is true the folds are added collapsed (fold-all).
   if clearExisting:
-    buffer.foldState = initFoldState()
-
-  # Filter valid ranges and sort by size (smallest first) to prioritize inner folds
-  var validRanges: seq[FoldingRange] = @[]
-  for range in ranges:
-    # Skip invalid ranges
-    if range.endLine < range.startLine:
-      continue
-    # Skip ranges outside buffer bounds
-    if range.startLine < 0 or range.endLine >= buffer.len:
-      continue
-    validRanges.add(range)
-
-  # Sort by range size (endLine - startLine), smallest first
-  validRanges.sort(
-    proc(a, b: FoldingRange): int =
-      let sizeA = a.endLine - a.startLine
-      let sizeB = b.endLine - b.startLine
-      result = sizeA - sizeB
-  )
+    buffer.foldState.folds.keepItIf(it.source != fsLsp)
 
   var added = 0
-  for range in validRanges:
-    # Add fold with LSP-provided collapsedText
-    # addFold checks for overlaps and maintains sorted order
+  for range in ranges:
+    # Skip invalid ranges.
+    if range.endLine < range.startLine:
+      continue
+    # Skip degenerate single-line ranges: they hide no lines and would render
+    # as a fold marker replacing the line's own content.
+    if range.endLine == range.startLine:
+      continue
+    # Skip ranges outside the buffer bounds.
+    if range.startLine < 0 or range.endLine >= buffer.len:
+      continue
+    # addFold tags the fold, keeps the list sorted, and rejects crossings.
     if buffer.foldState.addFold(
       range.startLine,
       range.endLine,
       collapsed = startCollapsed,
       collapsedText = range.collapsedText,
+      source = fsLsp,
     ):
       inc added
 

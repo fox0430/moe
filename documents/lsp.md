@@ -130,7 +130,19 @@ autoHoverDelay = 300
 
 ### Folding Range
 
-`lspfold` in Command mode. All existing folds will be expande.
+`lspfold` in Command mode. Requests folding ranges from the language server and
+collapses them all (fold-all), including nested ranges such as a class, its
+methods, and their inner blocks. Open them again with `zo`/`zR`. Manual folds
+created with `zf` are preserved when running `lspfold`. The command does nothing
+if folding range is disabled in the config or unsupported by the server.
+
+> [!NOTE]
+> Editing a line inside a collapsed fold (delete, change, paste, insert, a
+> visual-mode edit, etc.) first reveals the fold and then edits only the
+> targeted line or range. Unlike Vim, moe does not operate on a closed fold as a
+> single unit (e.g. `dd` on a closed fold deletes one line, not the whole fold),
+> so hidden text is never changed without being shown first. Pure yanks leave
+> the fold closed. This applies to both LSP and manual (`zf`) folds.
 
 ![moe](https://github.com/user-attachments/assets/9fac0f03-fa70-49f8-9da0-ea9ae0c0ce04)
 

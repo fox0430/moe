@@ -426,9 +426,6 @@ type
     kind*: Option[FoldingRangeKind] ## The kind of the folding range
     collapsedText*: Option[string] ## Text to display when collapsed (LSP 3.17+)
 
-  FoldingRangeParams* = object ## Parameters for textDocument/foldingRange request
-    textDocument*: TextDocumentIdentifier
-
   # Semantic Tokens types
   SemanticTokensLegend* = object
     ## Semantic tokens legend (defines token types and modifiers)
@@ -1461,11 +1458,7 @@ proc parseCallHierarchyOutgoingCall*(node: JsonNode): CallHierarchyOutgoingCall 
   for r in node["fromRanges"]:
     result.fromRanges.add(parseRange(r))
 
-# Folding Range serialization and parsing
-proc toJson*(params: FoldingRangeParams): JsonNode =
-  ## Serialize FoldingRangeParams to JSON
-  %*{"textDocument": params.textDocument.toJson}
-
+# Folding Range parsing
 proc parseFoldingRangeKind*(s: string): Option[FoldingRangeKind] =
   ## Parse FoldingRangeKind from string
   case s
