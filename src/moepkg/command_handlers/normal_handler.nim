@@ -432,6 +432,10 @@ proc handleInsertModeEntry*(
     insertType: string,
 ): NormalModeResult =
   ## Handle different types of insert mode entry (i, a, o, O, etc.)
+  # Expand a collapsed fold at the cursor so inserted text is never hidden
+  # behind a fold marker.
+  if buffer.foldState.openFold(state.cursor.line):
+    state.windowDisplay.needsFullRedraw = true
   case insertType
   of "insert":
     # Simple insert at cursor

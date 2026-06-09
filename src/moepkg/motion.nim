@@ -913,10 +913,13 @@ proc clampPosition*(
   elif result.y < 0:
     result.y = 0
 
-  # Ensure cursor doesn't land on a folded line (except fold start line)
-  if buf.foldState.isLineInCollapsedFold(result.y):
-    # Move to the fold start line
-    result.y = buf.foldState.getPrevVisibleLine(result.y)
+  # Vim behavior: a collapsed fold is a single unit. If the cursor is on any
+  # line of a collapsed fold (its start line or a hidden interior line), pin it
+  # to the fold's start line at column 0 so it can't roam the hidden content.
+  let collapsedFold = buf.foldState.getCollapsedFoldAt(result.y)
+  if collapsedFold.isSome:
+    result.y = collapsedFold.get.startLine
+    result.x = 0
 
   # Clamp column - ensure line index is valid before accessing
   if result.y >= 0 and result.y < buf.len:

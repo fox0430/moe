@@ -18,9 +18,10 @@
 #[############################################################################]#
 
 import std/[unittest, os, strutils, times, options, unicode]
+
 import pkg/[results, celina]
-import ../src/moepkg/buffer
-import ../src/moepkg/highlight
+
+import ../src/moepkg/[buffer, highlight]
 
 suite "Buffer - Trailing Empty Lines":
   test "Insert text with trailing empty lines preserves them":
@@ -669,10 +670,15 @@ suite "Buffer - Folding":
     discard buf.foldState.addFold(0, 2)
 
     check buf.foldState.folds[0].collapsed == true
+    # closeFold on an already-collapsed fold is a no-op and returns false
+    # (symmetric with openFold on an already-open fold).
+    check buf.foldState.closeFold(1) == false
     check buf.foldState.openFold(1) == true
     check buf.foldState.folds[0].collapsed == false
+    check buf.foldState.openFold(1) == false
     check buf.foldState.closeFold(1) == true
     check buf.foldState.folds[0].collapsed == true
+    check buf.foldState.closeFold(1) == false
 
   test "toggleFold":
     let buf = newTextBuffer("Line1\nLine2\nLine3")
@@ -701,6 +707,31 @@ suite "Buffer - Folding":
     check buf.foldState.isLineInCollapsedFold(2) == true # Inside fold
     check buf.foldState.isLineInCollapsedFold(3) == false
 
+  test "getPrevVisibleLine snaps a hidden line to the fold start":
+    let buf = newTextBuffer("0\n1\n2\n3\n4")
+    discard buf.foldState.addFold(1, 3, collapsed = true)
+    # Lines hidden inside the collapsed fold snap back to its start line.
+    check buf.foldState.getPrevVisibleLine(2) == 1
+    check buf.foldState.getPrevVisibleLine(3) == 1
+    # Visible lines (including the fold start) are unchanged.
+    check buf.foldState.getPrevVisibleLine(1) == 1
+    check buf.foldState.getPrevVisibleLine(0) == 0
+    check buf.foldState.getPrevVisibleLine(4) == 4
+
+  test "openFoldsInRange opens every collapsed fold overlapping the range":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    discard buf.foldState.addFold(0, 2, collapsed = true) # A
+    discard buf.foldState.addFold(4, 6, collapsed = true) # B
+    discard buf.foldState.addFold(8, 9, collapsed = true) # C
+    # Range [5, 8] overlaps B (4-6) and C (8-9) but not A (0-2).
+    check buf.foldState.openFoldsInRange(5, 8) == true
+    check buf.foldState.getFoldAt(0).get.collapsed == true # A untouched
+    check buf.foldState.getFoldAt(4).get.collapsed == false # B opened
+    check buf.foldState.getFoldAt(8).get.collapsed == false # C opened
+    # A range overlapping no collapsed fold is a no-op.
+    check buf.foldState.openFoldsInRange(3, 3) == false
+    check buf.foldState.getFoldAt(0).get.collapsed == true
+
   test "deleteAllFolds":
     let buf = newTextBuffer("Line1\nLine2\nLine3\nLine4\nLine5")
     discard buf.foldState.addFold(0, 1)
@@ -716,6 +747,73 @@ suite "Buffer - Folding":
     let text = buf.formatFoldText(buf.foldState.folds[0])
     check text.contains("3 lines")
     check text.contains("func foo()")
+
+  test "addFold allows nested folds":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    check buf.foldState.addFold(0, 5) == true # outer
+    check buf.foldState.addFold(1, 3) == true # inner, contained
+    check buf.foldState.addFold(4, 5) == true # contained, disjoint from inner
+    check buf.foldState.folds.len == 3
+
+  test "addFold rejects crossing folds":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    check buf.foldState.addFold(2, 4) == true
+    check buf.foldState.addFold(1, 3) == false # crosses (2, 4)
+    check buf.foldState.addFold(3, 5) == false # crosses (2, 4)
+
+  test "addFold rejects exact duplicate":
+    let buf = newTextBuffer("0\n1\n2\n3")
+    check buf.foldState.addFold(0, 2) == true
+    check buf.foldState.addFold(0, 2) == false
+
+  test "addFold keeps outer fold first on tie":
+    let buf = newTextBuffer("0\n1\n2\n3")
+    check buf.foldState.addFold(0, 1) == true # inner added first
+    check buf.foldState.addFold(0, 3) == true # outer, same startLine
+    # Outer (larger endLine) must come first so lookups return it first.
+    check buf.foldState.folds[0].endLine == 3
+    check buf.foldState.folds[1].endLine == 1
+
+  test "addFold tags source (manual default, lsp explicit)":
+    let buf = newTextBuffer("0\n1\n2\n3")
+    check buf.foldState.addFold(0, 1) == true
+    check buf.foldState.folds[0].source == fsManual
+    check buf.foldState.addFold(2, 3, source = fsLsp) == true
+    check buf.foldState.getFoldAt(2).get.source == fsLsp
+
+  test "foldIndexAtInnermost returns the tightest fold":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5) # outer
+    discard buf.foldState.addFold(1, 3) # inner
+    let idx = buf.foldState.foldIndexAtInnermost(2)
+    check idx.isSome
+    check buf.foldState.folds[idx.get].startLine == 1
+    check buf.foldState.folds[idx.get].endLine == 3
+    # A line only covered by the outer fold returns the outer fold.
+    let outerIdx = buf.foldState.foldIndexAtInnermost(5)
+    check outerIdx.isSome
+    check buf.foldState.folds[outerIdx.get].endLine == 5
+
+  test "openFold/closeFold target the innermost fold":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5) # outer at idx 0
+    discard buf.foldState.addFold(1, 3) # inner at idx 1
+    # Opening at an inner line opens only the inner fold.
+    check buf.foldState.openFold(2) == true
+    check buf.foldState.folds[1].collapsed == false # inner opened
+    check buf.foldState.folds[0].collapsed == true # outer untouched
+    # Closing at an inner line closes only the inner fold again.
+    check buf.foldState.closeFold(2) == true
+    check buf.foldState.folds[1].collapsed == true
+
+  test "deleteFold removes the innermost fold":
+    let buf = newTextBuffer("0\n1\n2\n3\n4\n5")
+    discard buf.foldState.addFold(0, 5)
+    discard buf.foldState.addFold(1, 3)
+    check buf.foldState.deleteFold(2) == true
+    check buf.foldState.folds.len == 1
+    check buf.foldState.folds[0].startLine == 0 # outer remains
+    check buf.foldState.folds[0].endLine == 5
 
 suite "Buffer - Sidebar Markers":
   test "setLineMarker and getLineMarker":

@@ -1673,6 +1673,19 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
     )
     e.activeWindow.cursor.line = cursorLine
 
+  # Keep the active cursor off lines hidden inside a collapsed fold. Many cursor
+  # moves (search, :N, LSP jumps, mouse clicks, cursor restore on open) bypass
+  # the motion clamp; normalize here so the cursor always sits on a visible line.
+  # Non-file buffers have no folds, so this is a no-op for them.
+  if not e.state.windowDisplay.scrollAnimation.active:
+    let buf = e.activeBuffer()
+    let collapsedFold = buf.foldState.getCollapsedFoldAt(e.activeWindow.cursor.line)
+    if collapsedFold.isSome:
+      # Pin the cursor to the fold's start line at column 0 (the fold is a single
+      # unit; the cursor must not roam its hidden content).
+      e.activeWindow.cursor.line = collapsedFold.get.startLine
+      e.activeWindow.cursor.column = 0
+
   if e.state.windowDisplay.needsFullRedraw:
     e.state.windowDisplay.needsFullRedraw = false
 

@@ -114,21 +114,47 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
       return false
 
 proc refreshLspFolds*(e: Editor): Future[void] {.async: (raises: []).} =
-  ## Request LSP folding ranges and update buffer fold markers
+  ## Request LSP folding ranges and fold the buffer (LSP "fold all").
+  ## Manual folds are preserved. When folding is disabled or unsupported the
+  ## existing folds are left untouched. If the cursor ends up inside a freshly
+  ## collapsed fold, `prepareFrame` pins it back onto a visible line on the next
+  ## render, so this proc does not adjust the cursor itself.
   try:
     if not e.lsp.enabled:
       e.state.statusMessage = "LSP not enabled"
       return
+    if not e.config.lsp.foldingRange.enable:
+      e.state.statusMessage = "LSP folding range is disabled"
+      return
 
     let activeBuffer = e.activeBuffer()
 
-    # Use lsp_integration's refreshLspFolds
-    let foldResult = await lsp_integration.refreshLspFolds(e.lsp, activeBuffer)
+    # hasFoldingRangeSupport indexes the capability table; guard the lookup so
+    # this raises-[] proc stays exception-free.
+    let supported =
+      try:
+        e.lsp.hasFoldingRangeSupport(activeBuffer)
+      except KeyError:
+        false
+    if not supported:
+      e.state.statusMessage = "Folding range is not supported by the language server"
+      return
+
+    # Add the LSP ranges collapsed (fold-all); manual folds are kept.
+    let foldResult =
+      await lsp_integration.refreshLspFolds(e.lsp, activeBuffer, startCollapsed = true)
     if foldResult.isErr:
       e.state.statusMessage = "LSP fold failed: " & foldResult.error
       return
 
-    e.state.statusMessage = "Updated fold markers"
+    # The cursor may now sit inside a collapsed fold; prepareFrame normalizes it
+    # onto a visible line on the next render, so no cursor fix-up is needed here.
+    let count = foldResult.get
+    e.state.statusMessage =
+      if count > 0:
+        "Folded " & $count & " region(s)"
+      else:
+        "No foldable regions"
     e.state.windowDisplay.needsFullRedraw = true
   except CancelledError:
     discard

@@ -774,9 +774,14 @@ proc renderFoldLine*(
   # Render fold text
   if textScreenX < buffer.area.width:
     let maxWidth = windowRightEdge - textScreenX
+    # Truncate by display width (not bytes or rune count) so multibyte/wide
+    # characters are neither split nor allowed to overflow the window edge.
     let displayText =
-      if foldText.len > maxWidth:
-        foldText[0 ..< maxWidth]
+      if maxWidth <= 0:
+        ""
+      elif foldText.displayWidth > maxWidth:
+        let (fitChars, _) = foldText.displayWidthSubstr(0, maxWidth)
+        foldText.runeSubStr(0, fitChars)
       else:
         foldText
     buffer.setString(textScreenX, actualScreenY, displayText, foldStyle())

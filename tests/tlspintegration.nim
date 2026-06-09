@@ -732,6 +732,85 @@ suite "Folding Range Application":
     check count == 1
     check buffer.foldState.folds.len == 2
 
+  test "applyLspFoldingRanges - preserves nested ranges":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5")
+    let ranges = @[
+      FoldingRange(
+        startLine: 0,
+        endLine: 5,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      ),
+      FoldingRange(
+        startLine: 1,
+        endLine: 3,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      ),
+    ]
+    let count = applyLspFoldingRanges(buffer, ranges)
+    check count == 2 # both outer and inner kept
+    check buffer.foldState.folds.len == 2
+
+  test "applyLspFoldingRanges - skips degenerate single-line ranges":
+    let buffer = newTextBuffer("0\n1\n2\n3")
+    let ranges = @[
+      FoldingRange(
+        startLine: 2,
+        endLine: 2,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
+    let count = applyLspFoldingRanges(buffer, ranges)
+    check count == 0
+    check buffer.foldState.folds.len == 0
+
+  test "applyLspFoldingRanges - keeps manual folds, replaces lsp folds":
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7")
+    # A manual fold the user created with zf.
+    check buffer.foldState.addFold(6, 7, source = fsManual) == true
+
+    let rangesA = @[
+      FoldingRange(
+        startLine: 0,
+        endLine: 2,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
+    check applyLspFoldingRanges(buffer, rangesA) == 1
+    check buffer.foldState.folds.len == 2 # manual + lsp
+
+    # Re-applying clears only the previous LSP fold; the manual fold survives.
+    let rangesB = @[
+      FoldingRange(
+        startLine: 3,
+        endLine: 4,
+        startCharacter: none(int),
+        endCharacter: none(int),
+        kind: none(FoldingRangeKind),
+        collapsedText: none(string),
+      )
+    ]
+    check applyLspFoldingRanges(buffer, rangesB) == 1
+    check buffer.foldState.folds.len == 2 # manual + new lsp
+
+    let manual = buffer.foldState.getFoldAt(6)
+    check manual.isSome
+    check manual.get.source == fsManual
+    # Old LSP fold (0, 2) is gone; the new one (3, 4) is present.
+    check buffer.foldState.getFoldAt(0).isNone
+    check buffer.foldState.getFoldAt(3).isSome
+
 suite "Diagnostics Application":
   test "applyDiagnosticsToBuffer - empty diagnostics":
     let buffer = newTextBuffer("line1\nline2\nline3")

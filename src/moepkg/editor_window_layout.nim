@@ -88,10 +88,22 @@ proc calculateWindowCursor*(
       wrapCache.ensureFresh(buffer, maxWidth, e.state.display.tabStop)
 
     var screenY = 0
-    let maxVisibleLine = min(cursor.line, viewport.topLine + viewport.height)
 
-    for lineIdx in viewport.topLine ..< maxVisibleLine:
-      if lineIdx >= 0 and lineIdx < buffer.len:
+    var lineIdx = viewport.topLine
+    while lineIdx < cursor.line:
+      if lineIdx < 0 or lineIdx >= buffer.len:
+        inc lineIdx
+        continue
+      # A collapsed fold renders as a single marker row at its start line; its
+      # hidden interior occupies no rows. Count the marker once and jump past
+      # the interior in one step so a large fold above the cursor costs O(1),
+      # not O(lines).
+      let collapsed = buffer.foldState.getCollapsedFoldAt(lineIdx)
+      if collapsed.isSome:
+        if collapsed.get.startLine == lineIdx:
+          screenY += 1
+        lineIdx = collapsed.get.endLine + 1
+      else:
         let wrappedLines =
           if wrapCache != nil:
             wrapCache.cachedWrapCount(buffer, lineIdx)
@@ -100,9 +112,10 @@ proc calculateWindowCursor*(
               buffer.getLine(lineIdx), maxWidth, e.state.display.tabStop
             )
         screenY += wrappedLines
+        inc lineIdx
 
-        if screenY >= viewport.height - reservedLines:
-          return CursorPosition(x: 0, y: 0)
+      if screenY >= viewport.height - reservedLines:
+        return CursorPosition(x: 0, y: 0)
 
     let
       cursorLineText = buffer.getLine(cursor.line)
@@ -117,8 +130,29 @@ proc calculateWindowCursor*(
       let finalY = viewport.y + screenY
       return CursorPosition(x: finalX, y: finalY)
   else:
-    # NO-WRAP MODE: Calculate cursor position with horizontal scrolling
-    if cursor.line < viewport.topLine + viewport.height - reservedLines:
+    # NO-WRAP MODE: Calculate cursor position with horizontal scrolling.
+    # Count only the visible rows between topLine and the cursor so collapsed
+    # folds above the cursor don't push it below the rendered content. Each
+    # collapsed fold is a single marker row; skip its hidden interior in one
+    # step so a large fold above the cursor costs O(1), not O(lines).
+    var
+      screenRow = 0
+      l = viewport.topLine
+    while l < cursor.line:
+      if l < 0 or l >= buffer.len:
+        inc l
+        continue
+      let fold = buffer.foldState.getCollapsedFoldAt(l)
+      if fold.isSome:
+        # Count the marker row only at the fold's start line; jump past the rest.
+        if l == fold.get.startLine:
+          screenRow.inc
+        l = fold.get.endLine + 1
+      else:
+        screenRow.inc
+        inc l
+
+    if screenRow < viewport.height - reservedLines:
       let
         cursorLineText = buffer.getLine(cursor.line)
         displayWidthUpToCursor = displayWidthUpToWithTabs(
@@ -127,7 +161,7 @@ proc calculateWindowCursor*(
         displayWidthUpToLeftCol = displayWidthUpToWithTabs(
           cursorLineText, viewport.leftColumn, e.state.display.tabStop
         )
-        screenY = viewport.y + (cursor.line - viewport.topLine)
+        screenY = viewport.y + screenRow
         screenX =
           viewport.x + lineNumOffset +
           max(0, displayWidthUpToCursor - displayWidthUpToLeftCol)

@@ -433,6 +433,48 @@ suite "calculateWindowCursor":
     check pos.x == 4 # lineNumOffset
     check pos.y == 1 # second line
 
+  test "cursor below a collapsed fold uses visible-row offset, no wrap":
+    let e = createTestEditor()
+    e.state.display.lineWrap = false
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    # Collapse lines 1..5: interior lines 2..5 are hidden, line 1 shows a marker.
+    check buffer.foldState.addFold(1, 5, collapsed = true)
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let cursor = BufferPosition(line: 7, column: 0)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = steadyBottomAreaHeight(),
+    )
+    # Visible rows above the cursor are lines 0, 1 (marker) and 6 -> y == 3,
+    # not the raw line distance of 7.
+    check pos.x == 4
+    check pos.y == 3
+
+  test "cursor below a collapsed fold uses visible-row offset, wrap mode":
+    let e = createTestEditor()
+    e.state.display.lineWrap = true
+    let buffer = newTextBuffer("0\n1\n2\n3\n4\n5\n6\n7\n8\n9")
+    check buffer.foldState.addFold(1, 5, collapsed = true)
+    let viewport =
+      ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24, x: 0, y: 0)
+    let cursor = BufferPosition(line: 7, column: 0)
+
+    let pos = e.calculateWindowCursor(
+      buffer,
+      viewport,
+      cursor,
+      lineNumOffset = 4,
+      reservedLines = steadyBottomAreaHeight(),
+    )
+    # Each short line is one wrapped row; the folded interior contributes 0 and
+    # the marker 1, so visible rows above the cursor (0, 1, 6) give y == 3.
+    check pos.y == 3
+
   test "cursor above visible area returns (0, 0)":
     let e = createTestEditor()
     e.state.display.lineWrap = false

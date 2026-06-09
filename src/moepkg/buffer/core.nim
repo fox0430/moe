@@ -87,14 +87,19 @@ type
     lmkModified ## Line content was changed since last save
     lmkInserted ## Line was inserted since last save
 
+  FoldSource* = enum
+    fsManual ## Created by the user (e.g. the `zf` command)
+    fsLsp ## Provided by an LSP server (textDocument/foldingRange)
+
   Fold* = object ## Represents a foldable region of text (vim-like manual folding)
     startLine*: int # Fold start line (0-based, inclusive)
     endLine*: int # Fold end line (0-based, inclusive)
     collapsed*: bool # Whether the fold is currently collapsed
     collapsedText*: Option[string] # Custom text to display when collapsed (from LSP)
+    source*: FoldSource # Origin of this fold (manual or LSP)
 
   FoldState* = object ## Manages all folds in a buffer
-    folds*: seq[Fold] # List of all folds (sorted by startLine)
+    folds*: seq[Fold] # List of all folds (sorted by startLine, outer-first on ties)
 
   BufferEditorConfig* = object
     ## Per-buffer EditorConfig overrides (from .editorconfig files)
