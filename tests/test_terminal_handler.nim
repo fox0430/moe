@@ -186,13 +186,16 @@ suite "checkExitStatus - single waitpid call (regression)":
 suite "pollOutput sets exitCode on process exit (regression)":
   ## Regression test: pollOutput must set TerminalState.exitCode when the
   ## shell process exits, so pollTerminalWindows can detect it and close
-  ## the terminal window.
+  ## the terminal window. A `:terminal` session always runs a persistent
+  ## interactive shell, so the exit happens when the user quits the shell.
 
-  test "pollOutput sets exitCode after short command exits":
-    let termState = newTerminalState("true", 80, 24)
+  test "pollOutput sets exitCode after the shell is quit":
+    let termState = newTerminalState("", 80, 24)
     if termState.isOk:
       let ts = termState.get
       check ts.exitCode.isNone
+
+      ts.feedInput("exit\n")
 
       # Poll until process exit is detected (max ~2 seconds)
       var detected = false
@@ -207,10 +210,11 @@ suite "pollOutput sets exitCode on process exit (regression)":
       check ts.exitCode.isSome
       ts.cleanup()
 
-  test "pollOutput sets exitCode = 0 for 'true' command":
-    let termState = newTerminalState("true", 80, 24)
+  test "pollOutput sets exitCode = 0 when the shell exits cleanly":
+    let termState = newTerminalState("", 80, 24)
     if termState.isOk:
       let ts = termState.get
+      ts.feedInput("exit 0\n")
       var detected = false
       for _ in 0 ..< 100:
         discard ts.pollOutput()
@@ -223,10 +227,11 @@ suite "pollOutput sets exitCode on process exit (regression)":
       check ts.exitCode.get == 0
       ts.cleanup()
 
-  test "pollOutput sets exitCode = 1 for 'false' command":
-    let termState = newTerminalState("false", 80, 24)
+  test "pollOutput captures non-zero exit code from the shell":
+    let termState = newTerminalState("", 80, 24)
     if termState.isOk:
       let ts = termState.get
+      ts.feedInput("exit 1\n")
       var detected = false
       for _ in 0 ..< 100:
         discard ts.pollOutput()
@@ -239,24 +244,22 @@ suite "pollOutput sets exitCode on process exit (regression)":
       check ts.exitCode.get == 1
       ts.cleanup()
 
-suite "enterNormalSubMode after process exit (regression)":
-  ## Regression test: when a short-lived command (e.g. `ls`) exits,
-  ## pollTerminalWindows switches to Terminal-Normal sub-mode so the user
-  ## can review output. The snapshot buffer must contain the command output
-  ## and not be full of empty lines.
+suite "enterNormalSubMode snapshots live session (regression)":
+  ## `enterNormalSubMode` (entered manually via Ctrl-\ Ctrl-N) snapshots the
+  ## current grid into a read-only TextBuffer for scrollback browsing. The
+  ## snapshot must contain the command output and not be full of empty lines.
 
-  test "Snapshot buffer contains command output after exit":
+  test "Snapshot buffer contains command output":
     let termState = newTerminalState("echo hello", 80, 24)
     if termState.isOk:
       let ts = termState.get
-      # Poll until process exits
-      for _ in 0 ..< 100:
+      # Poll long enough for the command output to reach the grid. The session
+      # itself stays alive (the command runs, then `exec $SHELL` takes over),
+      # so we do not wait for an exit.
+      for _ in 0 ..< 20:
         discard ts.pollOutput()
-        if ts.exitCode.isSome:
-          break
         sleep(20)
 
-      check ts.exitCode.isSome
       let snapshot = ts.enterNormalSubMode()
       check ts.subMode == tsmNormal
       check snapshot.len > 0
@@ -268,45 +271,43 @@ suite "enterNormalSubMode after process exit (regression)":
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
       let ts = termState.get
-      for _ in 0 ..< 100:
+      for _ in 0 ..< 20:
         discard ts.pollOutput()
-        if ts.exitCode.isSome:
-          break
         sleep(20)
 
       let snapshot = ts.enterNormalSubMode()
       check snapshot.readOnly == true
       ts.cleanup()
 
-suite "Process exit behavior depends on command (regression)":
-  ## `:terminal` (interactive shell, command="") should auto-close on exit.
-  ## `:terminal ls` (command specified) should switch to Terminal-Normal
-  ## so the user can review output.
+suite "Persistent shell behavior (regression)":
+  ## The session always runs as a persistent interactive shell. `:terminal ls`
+  ## runs the command and then keeps the shell alive instead of exiting and
+  ## recording the output into a snapshot buffer.
 
-  test "Interactive shell (empty command) stays in tsmInput after exit":
-    # With empty command, pollTerminalWindows would auto-close.
-    # At the TerminalState level, subMode remains tsmInput (caller closes).
-    let termState = newTerminalState("true", 80, 24)
-    if termState.isOk:
-      let ts = termState.get
-      # Simulate as if this were an interactive shell
-      ts.command = ""
-      for _ in 0 ..< 100:
-        discard ts.pollOutput()
-        if ts.exitCode.isSome:
-          break
-        sleep(20)
-
-      check ts.exitCode.isSome
-      # subMode should still be tsmInput (not switched by pollOutput itself)
-      check ts.subMode == tsmInput
-      ts.cleanup()
-
-  test "Command mode keeps command field non-empty":
+  test "Command mode keeps the shell alive after the command finishes":
     let termState = newTerminalState("echo test", 80, 24)
     if termState.isOk:
       let ts = termState.get
-      check ts.command == "echo test"
+      # The `echo` finishes quickly, but `exec $SHELL` keeps the session
+      # running, so the process must not have exited on its own.
+      for _ in 0 ..< 20:
+        discard ts.pollOutput()
+        sleep(20)
+
+      check ts.exitCode.isNone
+      ts.cleanup()
+
+  test "Shell exits when the user quits it":
+    let termState = newTerminalState("echo test", 80, 24)
+    if termState.isOk:
+      let ts = termState.get
+      # Let the command run and the interactive shell take over.
+      for _ in 0 ..< 20:
+        discard ts.pollOutput()
+        sleep(20)
+
+      # Quitting the shell (sending `exit`) terminates the session.
+      ts.feedInput("exit\n")
       for _ in 0 ..< 100:
         discard ts.pollOutput()
         if ts.exitCode.isSome:
@@ -314,14 +315,4 @@ suite "Process exit behavior depends on command (regression)":
         sleep(20)
 
       check ts.exitCode.isSome
-      # command field preserved after exit
-      check ts.command == "echo test"
-      ts.cleanup()
-
-  test "Default shell has empty command field":
-    # newTerminalState with empty command spawns default shell
-    let termState = newTerminalState("", 80, 24)
-    if termState.isOk:
-      let ts = termState.get
-      check ts.command == ""
       ts.cleanup()

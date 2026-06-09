@@ -57,44 +57,11 @@ proc pollTerminalWindows*(e: Editor) =
           e.state.windowDisplay.needsFullRedraw = true
 
         if termState.exitCode.isSome:
-          if termState.command.len > 0:
-            # Command mode (e.g. `:terminal ls`): swap the live terminal
-            # buffer for its scrollback snapshot, keeping the tab slot
-            # and the `terminalStates` association intact so `:q` can
-            # close it through the normal Terminal path.
-            let oldBufId = window.buffer.id
-            let snapshot = termState.enterNormalSubMode()
-            snapshot.displayName = some(
-              "[Terminal: " & termState.command & "] (done: " & $termState.exitCode.get &
-                ")"
-            )
-            e.addBuffer(snapshot)
-            for w in e.windowManager.windows:
-              for j in 0 ..< w.bufferIds.len:
-                if w.bufferIds[j] == oldBufId:
-                  w.bufferIds[j] = snapshot.id
-              # Repoint any other window also displaying the dead terminal
-              # buffer at the snapshot, so its `.buffer` ref doesn't dangle
-              # after `deleteBufferAt` evicts the old id from `bufferIdIndex`.
-              if w.buffer != nil and w.buffer.id == oldBufId:
-                w.buffer = snapshot
-            if e.terminalStates.hasKey(oldBufId):
-              e.terminalStates[snapshot.id] = e.terminalStates[oldBufId]
-              e.terminalStates.del(oldBufId)
-            let oldIdx = e.bufferIndexById(oldBufId)
-            if oldIdx >= 0:
-              e.deleteBufferAt(oldIdx)
-            # `window.mode` / `window.modeState` are left as-is on purpose:
-            # they keep pointing to the same `TerminalState` object (only its
-            # `terminalStates` key changed), and `subMode == tsmNormal` is
-            # what flips the renderer over to the scrollback snapshot — the
-            # `tsmInput` guard at the top of pollTerminalWindows prevents
-            # this branch from re-running against the now-static snapshot.
-            window.cursor = BufferPosition(line: max(0, snapshot.len - 1), column: 0)
-            window.viewport.topLine = max(0, snapshot.len - window.viewport.height)
-          else:
-            # Interactive shell (`:terminal`): tear down the tab.
-            e.closeTerminalBuffer(window.buffer.id)
+          # The session always runs as a persistent interactive shell (even
+          # `:terminal ls` runs the command and then drops into a live shell),
+          # so an exit only happens when the user quits the shell itself.
+          # Tear down the tab in every case.
+          e.closeTerminalBuffer(window.buffer.id)
           e.state.windowDisplay.needsFullRedraw = true
           return
 
