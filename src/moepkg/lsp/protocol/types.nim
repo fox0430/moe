@@ -875,8 +875,33 @@ proc parseInlayHint*(node: JsonNode): Option[InlayHint] =
   if not node.hasKey("position") or not node.hasKey("label"):
     return none(InlayHint)
 
-  hint.position = parsePosition(node["position"])
-  hint.label = node["label"]
+  # parsePosition indexes node["line"]/["character"] directly, which raises
+  # KeyError on a present-but-malformed position. Guard here so a non-conforming
+  # server drops the single item (the documented behavior) instead of crashing
+  # the render/tick path that calls parseInlayHintResponse.
+  let posNode = node["position"]
+  if posNode.kind != JObject or not posNode.hasKey("line") or
+      not posNode.hasKey("character"):
+    return none(InlayHint)
+
+  hint.position = parsePosition(posNode)
+
+  # label is `string | InlayHintLabelPart[]`. getInlayHintLabel indexes each
+  # array element as an object (part["value"]), which raises a Defect on a
+  # non-object element (e.g. a server returning `"label": ["x"]`). Validate
+  # here and drop the single item (the documented behavior) instead of
+  # crashing the render/tick path that calls parseInlayHintResponse.
+  let labelNode = node["label"]
+  case labelNode.kind
+  of JString:
+    discard
+  of JArray:
+    for part in labelNode:
+      if part.kind != JObject or not part.hasKey("value"):
+        return none(InlayHint)
+  else:
+    return none(InlayHint)
+  hint.label = labelNode
   if node.hasKey("kind"):
     hint.kind = toEnum[InlayHintKind](node["kind"].getInt)
   if node.hasKey("textEdits"):

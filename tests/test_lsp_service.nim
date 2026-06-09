@@ -470,6 +470,28 @@ suite "LspService - Response Parsing":
     let lenses = parseCodeLensResponse(resp)
     check lenses.len == 1
 
+  test "parseInlayHintResponse parses inlay hints":
+    let resp = %*[
+      {"position": {"line": 0, "character": 5}, "label": ": int", "kind": 1},
+      {"position": {"line": 1, "character": 0}, "label": "arg: ", "kind": 2},
+    ]
+    let hints = parseInlayHintResponse(resp)
+    check hints.len == 2
+    check getInlayHintLabel(hints[0]) == ": int"
+
+  test "parseInlayHintResponse returns empty for null/non-array":
+    check parseInlayHintResponse(newJNull()).len == 0
+    check parseInlayHintResponse(%*{"foo": "bar"}).len == 0
+
+  test "parseInlayHintResponse drops invalid items":
+    let resp = %*[
+      {"position": {"line": 0, "character": 5}, "label": "ok"},
+      {"label": "missing position"},
+    ]
+    let hints = parseInlayHintResponse(resp)
+    check hints.len == 1
+    check getInlayHintLabel(hints[0]) == "ok"
+
   test "parseCallHierarchyPrepareResponse parses items":
     let resp = %*[
       {

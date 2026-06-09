@@ -884,6 +884,31 @@ proc startSemanticTokensRangeRequest*(
     svc.startTrackedRequest(worker, "textDocument/semanticTokens/range", params)
   return ok(requestId)
 
+proc startInlayHintRequest*(
+    svc: LspService, path: string, startLine, startChar, endLine, endChar: int
+): Result[int, string] =
+  ## Start a textDocument/inlayHint request (non-blocking). Returns request ID.
+  ## InlayHintParams requires a range; hints are requested for the visible
+  ## viewport only.
+  let workerResult = svc.getWorkerForPath(path)
+  if workerResult.isErr:
+    return err(workerResult.error)
+
+  let worker = workerResult.get
+  if not worker.isRunning:
+    return err("Server not ready")
+
+  let uri = pathToUri(path)
+  let params = %*{
+    "textDocument": {"uri": uri},
+    "range": {
+      "start": {"line": startLine, "character": startChar},
+      "end": {"line": endLine, "character": endChar},
+    },
+  }
+
+  ok(svc.startTrackedRequest(worker, "textDocument/inlayHint", params))
+
 proc startCallHierarchyPrepareRequest*(
     svc: LspService, path: string, line, character: int
 ): Result[int, string] =
@@ -975,6 +1000,18 @@ proc parseCodeLensResponse*(resp: JsonNode): seq[CodeLens] =
     for item in resp:
       lenses.add(parseCodeLens(item))
   return lenses
+
+proc parseInlayHintResponse*(resp: JsonNode): seq[InlayHint] =
+  ## Parse a textDocument/inlayHint response (array of InlayHint | null).
+  ## Uses parseInlayHint (handles the label string | LabelPart[] union);
+  ## invalid items are silently dropped.
+  result = @[]
+  if resp.isNil or resp.kind != JArray:
+    return
+  for item in resp:
+    let hint = parseInlayHint(item)
+    if hint.isSome:
+      result.add hint.get
 
 proc parseCallHierarchyPrepareResponse*(resp: JsonNode): seq[CallHierarchyItem] =
   ## Parse a call hierarchy prepare response JSON

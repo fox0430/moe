@@ -731,6 +731,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         showSyntaxChecker: editorConfig.syntaxChecker.enable,
         showCodeLens: true,
         showDocumentHighlight: true,
+        showInlayHint: editorConfig.lsp.inlayHint.enable,
         lineWrap: editorConfig.standard.lineWrap,
         tabStop: editorConfig.standard.tabStop,
         shiftWidth: editorConfig.standard.shiftWidth,
@@ -836,6 +837,9 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         documentHighlightUpdateInterval: 200, # 200ms debounce
         lastSemanticTokensUpdate: getMonoTime(),
         semanticTokensUpdateInterval: 500, # 500ms debounce for semantic tokens
+        inlayHintCache: InlayHintCache(isValid: false),
+        lastInlayHintUpdate: getMonoTime(),
+        inlayHintUpdateInterval: 500, # 500ms debounce for inlay hints
         signatureHelp: SignatureHelpRequestState(
           lastUpdate: getMonoTime(),
           interval: 100, # 100ms debounce for signature help
@@ -1610,6 +1614,7 @@ proc tickLsp(e: Editor) =
   # Update LSP caches
   e.updateCodeLensCache()
   e.updateDocumentHighlightCache()
+  e.updateInlayHintCache()
   # Note: updateSemanticTokensCache is called in prepareFrame after updateHighlight
   e.requestSignatureHelpFromLsp()
   e.pollLspCompletion()
@@ -1712,6 +1717,11 @@ proc prepareFrame(e: Editor, buffer: var Buffer): bool =
     # If highlight was modified, we need to re-apply semantic tokens
     if highlightChanged:
       invalidateSemanticTokensCache(e.lsp, e.state.lspCache)
+      # Inlay hints are keyed by absolute line number and rendered straight from
+      # the cache, so an edit (highlightChanged) would otherwise leave stale
+      # hints on now-shifted lines until the next debounced response. Drop the
+      # cache and cancel any in-flight request, matching semantic tokens.
+      invalidateInlayHintCache(e.lsp, e.state.lspCache)
     # Apply semantic tokens after local highlight is ready
     e.updateSemanticTokensCache()
 

@@ -33,7 +33,6 @@ proc closedTerminalState(): TerminalState =
     pty: PtyHandle(masterFd: -1, childPid: Pid(0), closed: true),
     grid: nil,
     subMode: tsmInput,
-    command: "bash",
     exitCode: none(int),
     waitingForCtrlN: false,
     needsBufferRefresh: false,

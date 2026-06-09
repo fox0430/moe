@@ -27,7 +27,7 @@ import
     editor, buffer, config, config_loader, render_utils, modes, color, highlight, types
   ]
 import ../src/moepkg/editor_render_window {.all.}
-import ../src/moepkg/[editor_render_helpers, style_patch, colorcode]
+import ../src/moepkg/[editor_render_helpers, style_patch, colorcode, editor_codelens]
 
 proc createTestEditor(): Editor =
   ## Create a minimal editor for testing
@@ -2970,3 +2970,432 @@ suite "lineFillPatch priority chain":
       inVisualSelection = false,
     )
     check patch == noPatch
+
+import ../src/moepkg/virtual_text
+
+proc stubProvider(items: seq[VirtualText]): VirtualTextProvider =
+  result = proc(line: int): seq[VirtualText] {.closure, gcsafe, raises: [].} =
+    for it in items:
+      if it.line == line:
+        result.add it
+
+suite "renderLineSegmentWithSelection - end-of-line virtual text":
+  test "appends virtual text after real text with inlay hint style":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("abc")
+    var buf = newBuffer(80, 1)
+    let provider = stubProvider(
+      @[
+        VirtualText(
+          line: 0,
+          placement: vtpEndOfLine,
+          chunks:
+            @[VirtualTextChunk(text: ":int", color: EditorColorPairIndex.inlayHint)],
+        )
+      ]
+    )
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+      virtualTextProviders: @[provider],
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "abc", 0, 0, 0, 0, ctx)
+
+    let hintStyle = colorIndexToStyle(EditorColorPairIndex.inlayHint)
+    check buf[3, 0].symbol == ":"
+    check buf[4, 0].symbol == "i"
+    check buf[5, 0].symbol == "n"
+    check buf[6, 0].symbol == "t"
+    check buf[3, 0].style == hintStyle
+    check buf[6, 0].style == hintStyle
+    # Cells after the virtual text are filled with spaces
+    check buf[7, 0].symbol == " "
+
+  test "clips virtual text at the window right edge":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("abc")
+    var buf = newBuffer(80, 1)
+    let provider = stubProvider(
+      @[
+        VirtualText(
+          line: 0,
+          placement: vtpEndOfLine,
+          chunks:
+            @[VirtualTextChunk(text: ":int", color: EditorColorPairIndex.inlayHint)],
+        )
+      ]
+    )
+    # Right edge at 5: only ':' (col 3) and 'i' (col 4) fit.
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 5,
+      virtualTextProviders: @[provider],
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "abc", 0, 0, 0, 0, ctx)
+
+    check buf[3, 0].symbol == ":"
+    check buf[4, 0].symbol == "i"
+    # Column 5 is past the right edge; nothing drawn there.
+    check buf[5, 0].symbol != "n"
+
+  test "no providers leaves rendering unchanged (fills with spaces)":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("abc")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+      virtualTextProviders: @[],
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "abc", 0, 0, 0, 0, ctx)
+
+    check buf[3, 0].symbol == " "
+    check buf[4, 0].symbol == " "
+
+proc inlayHintProvider(): VirtualTextProvider =
+  stubProvider(
+    @[
+      VirtualText(
+        line: 0,
+        placement: vtpEndOfLine,
+        chunks:
+          @[VirtualTextChunk(text: ":hint", color: EditorColorPairIndex.inlayHint)],
+      )
+    ]
+  )
+
+proc rowHasHint(buffer: Buffer): bool =
+  for x in 0 ..< 80:
+    if buffer[x, 0].symbol == ":":
+      return true
+  false
+
+suite "Empty-line end-of-line virtual text":
+  test "no-wrap draws virtual text on an empty line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+      virtualTextProviders: @[inlayHintProvider()],
+    )
+
+    e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
+    check buffer.rowHasHint
+
+  test "no-wrap skips virtual text when scrolled past the line end":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abc")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 10 # scrolled past the 3-rune line
+
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+      virtualTextProviders: @[inlayHintProvider()],
+    )
+
+    e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
+    check not buffer.rowHasHint
+
+  test "no-wrap draws virtual text after a fully visible line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abc")
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+      virtualTextProviders: @[inlayHintProvider()],
+    )
+
+    e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
+    check buffer.rowHasHint
+
+  test "no-wrap skips virtual text on a line truncated at the window edge":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    # 100-rune line in a 40-column window: the line end is off-screen, so no
+    # part of the hint may be drawn at the truncation point. windowRightEdge
+    # is wider than the text budget (as with a scrollbar gutter) so clipping
+    # alone would not hide a stray hint rune.
+    var longLine = ""
+    for _ in 0 ..< 100:
+      longLine.add "a"
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+      virtualTextProviders: @[inlayHintProvider()],
+    )
+
+    e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
+    check not buffer.rowHasHint
+
+  test "no-wrap draws virtual text after a fully visible multibyte line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    # 10 CJK runes: 30 bytes but only 20 display cells. In a 40-column window
+    # the line end is on-screen, so the hint must be drawn. Gating on byte
+    # length (30) vs the cell budget would wrongly hide it.
+    var cjkLine = ""
+    for _ in 0 ..< 10:
+      cjkLine.add "あ"
+    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), cjkLine)
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 40
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 40,
+      virtualTextProviders: @[inlayHintProvider()],
+    )
+
+    e.renderWindowLineNoWrap(buffer, window, 0, ctx, 0, 0)
+    check buffer.rowHasHint
+
+  test "wrapped draws virtual text on an empty line":
+    let e = createTestEditor()
+    var buffer = createTestBuffer()
+
+    let window = e.windowManager.windows[0]
+    window.viewport.width = 80
+    window.viewport.height = 24
+    window.viewport.x = 0
+    window.viewport.y = 0
+    window.viewport.leftColumn = 0
+
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+      virtualTextProviders: @[inlayHintProvider()],
+    )
+
+    var screenY = 0
+    var lineIndex = 0
+    e.renderWindowLineWrapped(buffer, window, 0, ctx, screenY, lineIndex, 20, 0)
+    check buffer.rowHasHint
+
+suite "End-of-line virtual text - cursor line highlight":
+  test "virtual text cells take the cursor-line background but keep the hint fg":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = true
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("abc")
+    var buf = newBuffer(80, 1)
+    let provider = stubProvider(
+      @[
+        VirtualText(
+          line: 0,
+          placement: vtpEndOfLine,
+          chunks:
+            @[VirtualTextChunk(text: ":int", color: EditorColorPairIndex.inlayHint)],
+        )
+      ]
+    )
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+      virtualTextProviders: @[provider],
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "abc", 0, 0, 0, 0, ctx)
+
+    let
+      hlStyle = cursorLineHighlightStyle()
+      hintStyle = colorIndexToStyle(EditorColorPairIndex.inlayHint)
+    # The hint text keeps its own foreground but shares the cursor-line bg, so
+    # the current-line highlight extends across the virtual text, not just the
+    # real text and the trailing fill.
+    check buf[3, 0].symbol == ":"
+    check buf[6, 0].symbol == "t"
+    check buf[3, 0].style.bg == hlStyle.bg
+    check buf[6, 0].style.bg == hlStyle.bg
+    check buf[3, 0].style.fg == hintStyle.fg
+    check buf[6, 0].style.fg == hintStyle.fg
+    # The trailing fill past the hint stays on the cursor-line bg too.
+    check buf[7, 0].symbol == " "
+    check buf[7, 0].style.bg == hlStyle.bg
+
+  test "virtual text keeps the plain hint style off the cursor line":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = true
+    e.state.display.showIndentationLines = false
+
+    let tb = newTextBuffer("abc\ndef")
+    var buf = newBuffer(80, 2)
+    let provider = stubProvider(
+      @[
+        VirtualText(
+          line: 1,
+          placement: vtpEndOfLine,
+          chunks:
+            @[VirtualTextChunk(text: ":int", color: EditorColorPairIndex.inlayHint)],
+        )
+      ]
+    )
+    # Cursor on line 0; the hint is on line 1 (a non-cursor line).
+    let ctx = RenderContext(
+      cursorLine: 0,
+      cursorCol: 0,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+      virtualTextProviders: @[provider],
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "def", 0, 1, 1, 0, ctx)
+
+    let hintStyle = colorIndexToStyle(EditorColorPairIndex.inlayHint)
+    check buf[3, 1].symbol == ":"
+    check buf[3, 1].style == hintStyle
+    check buf[6, 1].style == hintStyle
+
+  test "real inlayHintVirtualTextProvider prepends a space":
+    let config = newEditorConfig()
+    config.theme.kind = tkDefault
+    let vr = newValidationResult()
+    var e = newEditor(config, vr)
+    e.state.display.showSyntax = false
+    e.state.display.showCursorLine = false
+    e.state.display.showIndentationLines = false
+    e.state.display.showInlayHint = true
+    e.activeBuffer().filePath = some("/test/file.nim")
+
+    # Populate the inlay hint cache so the real provider yields text.
+    e.state.lspCache.inlayHintCache = InlayHintCache(
+      isValid: true,
+      filePath: "/test/file.nim",
+      changeSeq: e.activeBuffer().changeSeq,
+      itemsByLine:
+        {0: @[InlayHintItem(line: 0, column: 3, label: ":int", kind: 1)]}.toTable,
+    )
+
+    let providers = e.buildVirtualTextProviders()
+    check providers.len == 1
+
+    let tb = newTextBuffer("abc")
+    var buf = newBuffer(80, 1)
+    let ctx = RenderContext(
+      cursorLine: -1,
+      cursorCol: -1,
+      hasSelection: false,
+      windowMode: EditorMode.Normal,
+      windowRightEdge: 80,
+      virtualTextProviders: providers,
+    )
+
+    e.renderLineSegmentWithSelection(tb, buf, "abc", 0, 0, 0, 0, ctx)
+
+    let hintStyle = colorIndexToStyle(EditorColorPairIndex.inlayHint)
+    # Real text "abc" occupies cols 0,1,2.
+    # The provider prepends " " → label ":int" → total " :int".
+    check buf[3, 0].symbol == " "
+    check buf[3, 0].style == hintStyle
+    check buf[4, 0].symbol == ":"
+    check buf[5, 0].symbol == "i"
+    check buf[6, 0].symbol == "n"
+    check buf[7, 0].symbol == "t"
+    # Cells after the virtual text are filled with plain spaces.
+    check buf[8, 0].symbol == " "

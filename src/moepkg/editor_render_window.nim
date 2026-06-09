@@ -26,7 +26,7 @@ import pkg/celina
 import
   editor_types, editor_window_layout, editor_render_helpers, render_utils, sidebar,
   color, unicode_utils, search_utils, highlight, modes, colorcode, git_conflict,
-  style_patch, status_line
+  style_patch, status_line, editor_codelens
 import command_handlers/visual_handler
 
 type LineStyleContext* = object
@@ -404,6 +404,45 @@ proc fillLineBackground*(
     buffer.setCell(screenX + displayX, screenY, " ", 1, fillStyle)
     displayX += 1
 
+proc appendEndOfLineVirtualText(
+    e: Editor,
+    buffer: var Buffer,
+    ctx: RenderContext,
+    lineCtx: LineStyleContext,
+    startDisplayX, screenX, screenY: int,
+): int =
+  ## Collect end-of-line virtual text for `lineCtx.lineIndex` from the providers
+  ## in `ctx` and draw it starting at `startDisplayX` (the display column just
+  ## past the line's last real rune). Clipped at `ctx.windowRightEdge`. Returns
+  ## the display column just past the drawn text (== `startDisplayX` when empty).
+  ##
+  ## Each cell keeps the chunk's foreground color but takes the line-fill
+  ## background overlay (cursor line / cursor column / git conflict) so the
+  ## virtual text shares the same background as the trailing fill — otherwise the
+  ## current-line highlight stops at the real text and skips the hint.
+  result = startDisplayX
+  if ctx.virtualTextProviders.len == 0:
+    return
+  let vt = collectVirtualText(ctx.virtualTextProviders, lineCtx.lineIndex)
+  if vt.endOfLine.len == 0:
+    return
+  for chunk in vt.endOfLine:
+    let baseStyle = colorIndexToStyle(chunk.color)
+    for rune in chunk.text.runes:
+      let w = runeWidth(rune)
+      if screenX + result + w > ctx.windowRightEdge:
+        return result
+      let bgPatch = e.lineFillPatch(
+        lineCtx, result, ctx.cursorDisplayCol, inVisualSelection = false
+      )
+      let style =
+        if bgPatch.bg.isSome:
+          baseStyle.merge(bgOnly(bgPatch.bg.get))
+        else:
+          baseStyle
+      buffer.setCell(screenX + result, screenY, rune, w, style)
+      result += w
+
 proc renderLineSegmentWithSelection*(
     e: Editor,
     textBuffer: TextBuffer,
@@ -414,10 +453,14 @@ proc renderLineSegmentWithSelection*(
     startColumn: int,
     ctx: RenderContext,
     useRunes: bool = true,
+    appendVirtualText: bool = true,
 ) =
   ## Render a line segment with selection highlighting and syntax highlighting
   ## useRunes: true for wrapped mode (character-based), false for byte-based rendering
   ## ctx: RenderContext containing cursor position and selection information
+  ## appendVirtualText: when true, end-of-line virtual text (inlay hints, etc.)
+  ##   is drawn after the real text and before the trailing fill. In wrapped mode
+  ##   the caller passes false for every segment except the last.
 
   # Update syntax highlighting once per line (not per character)
   if e.hasSyntaxHighlight(textBuffer, ctx.windowMode):
@@ -513,6 +556,13 @@ proc renderLineSegmentWithSelection*(
       renderChar(rune, col, style)
       charIdx += 1
 
+  # Draw end-of-line virtual text (inlay hints, etc.) after the real text and
+  # before the trailing fill, so the running displayX (and thus cursor-column /
+  # cursor-line fill alignment) stays correct.
+  if appendVirtualText:
+    displayX =
+      e.appendEndOfLineVirtualText(buffer, ctx, lineCtx, displayX, screenX, screenY)
+
   # Fill the rest of the line to the window right edge.
   # Always fill to clear stale content (e.g. old cursor line highlight).
   # Visual selection past the line end is not tracked here (matches prior
@@ -586,6 +636,19 @@ proc renderWindowLineWrapped*(
       isEmptyLine = true,
       hasSelection = ctx.hasSelection,
     )
+    # Empty lines bypass renderLineSegmentWithSelection, so draw any end-of-line
+    # virtual text (inlay hints) here too, over the just-filled background.
+    # Partial lineCtx: appendEndOfLineVirtualText -> lineFillPatch only reads
+    # isCursorLine, lineConflict, and useTwoColor.
+    let vtLineCtx = LineStyleContext(
+      lineIndex: lineIndex,
+      isCursorLine: lineIndex == window.cursor.line,
+      lineConflict: e.resolveLineConflict(window.buffer, lineIndex),
+      useTwoColor: e.config.highlight.gitConflictTwoColor,
+    )
+    discard e.appendEndOfLineVirtualText(
+      buffer, ctx, vtLineCtx, 0, textScreenX, actualScreenY
+    )
     inc screenY
     inc lineIndex
     return
@@ -629,7 +692,8 @@ proc renderWindowLineWrapped*(
     if displayLine.len > 0 and textScreenX < buffer.area.width:
       let displayCharCount = endCharCol - startCharCol
       if displayCharCount > 0:
-        # Render with selection highlighting if in visual mode
+        # Render with selection highlighting if in visual mode.
+        # Append end-of-line virtual text only on the final wrap segment.
         e.renderLineSegmentWithSelection(
           window.buffer,
           buffer,
@@ -640,6 +704,7 @@ proc renderWindowLineWrapped*(
           startCharCol,
           ctx,
           useRunes = true,
+          appendVirtualText = endCharCol >= lineCharLen,
         )
 
     inc screenY
@@ -693,12 +758,23 @@ proc renderWindowLineNoWrap*(
     textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
 
   if displayLine.len > 0 and textScreenX < buffer.area.width:
-    let maxWidth = min(
-      displayLine.len,
-      window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset,
-    )
+    let
+      cellBudget = window.viewport.width - sidebarWidth - scrollbarWidth - lineNumOffset
+      maxWidth = min(displayLine.len, cellBudget)
     if maxWidth > 0:
-      # Render with selection highlighting if in visual mode
+      # Render with selection highlighting if in visual mode.
+      # Append end-of-line virtual text only when the line end is visible; when
+      # the line is truncated at the window edge the anchor (the line end) is
+      # off-screen, so drawing the hint there would place it mid-line. The
+      # window-edge clipping in appendEndOfLineVirtualText alone is not enough:
+      # the scrollbar gutter can leave room for a stray rune.
+      #
+      # Compare display width (tabs expanded, CJK counted as 2 cells) against
+      # the cell budget. maxWidth is a byte count, so `maxWidth == displayLine.len`
+      # (both bytes) would hide hints on multibyte/CJK lines and show them past
+      # the edge on tab-heavy lines (the lint_string_len hazard).
+      let lineEndVisible =
+        displayLine.displayWidthWithTabs(e.state.display.tabStop) <= cellBudget
       e.renderLineSegmentWithSelection(
         window.buffer,
         buffer,
@@ -709,6 +785,7 @@ proc renderWindowLineNoWrap*(
         window.viewport.leftColumn,
         ctx,
         useRunes = false,
+        appendVirtualText = lineEndVisible,
       )
   else:
     # Empty line or scrolled past line end - fill to clear stale content
@@ -724,6 +801,23 @@ proc renderWindowLineNoWrap*(
       isEmptyLine = (line.charLen == 0),
       hasSelection = ctx.hasSelection,
     )
+    # The text path skips end-of-line virtual text for empty/scrolled-past
+    # lines. Draw it here when the line's end column is still on-screen
+    # (vtStartCol >= 0); when scrolled horizontally past the line end the
+    # anchor is off-screen, so skip it.
+    let vtStartCol = line.charLen - window.viewport.leftColumn
+    if vtStartCol >= 0:
+      # Partial lineCtx: appendEndOfLineVirtualText -> lineFillPatch only reads
+      # isCursorLine, lineConflict, and useTwoColor.
+      let vtLineCtx = LineStyleContext(
+        lineIndex: lineIndex,
+        isCursorLine: lineIndex == window.cursor.line,
+        lineConflict: e.resolveLineConflict(window.buffer, lineIndex),
+        useTwoColor: e.config.highlight.gitConflictTwoColor,
+      )
+      discard e.appendEndOfLineVirtualText(
+        buffer, ctx, vtLineCtx, vtStartCol, textScreenX, actualScreenY
+      )
 
 proc renderWindowSidebar*(
     buffer: var Buffer,
@@ -894,6 +988,13 @@ proc renderWindow*(
     windowMode: window.mode,
     windowRightEdge: window.viewport.x + window.viewport.width,
     isActiveWindow: isActiveWindow,
+    # Virtual text caches (inlay hints, ...) track the active buffer, so only
+    # the active window draws them.
+    virtualTextProviders:
+      if isActiveWindow:
+        e.buildVirtualTextProviders()
+      else:
+        @[],
   )
 
   var

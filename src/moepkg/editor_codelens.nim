@@ -19,7 +19,7 @@
 
 ## CodeLens, DocumentHighlight, and SemanticTokens related procedures
 
-import std/[options, monotimes, tables, json, times, strutils]
+import std/[options, monotimes, tables, json, times, strutils, algorithm]
 
 import pkg/[results, chronos]
 
@@ -398,6 +398,15 @@ proc updateDocumentHighlightCache*(e: Editor) =
 
 # Semantic Tokens (LSP-based syntax highlighting)
 
+proc viewportRequestRange(e: Editor): (int, int) =
+  ## Visible line range plus a small margin, shared by viewport-scoped LSP
+  ## requests (semantic tokens, inlay hints). Clamped to the buffer end so the
+  ## request range and the cache-coverage check stay in sync.
+  let lastLine = e.activeBuffer().len - 1
+  let topLine = max(0, e.viewport.topLine - 10)
+  let bottomLine = min(e.viewport.topLine + e.viewport.height + 10, lastLine)
+  (topLine, bottomLine)
+
 proc invalidateSemanticTokensCache*(lsp: LspIntegration, cache: var LspCacheState) =
   ## Invalidate the semantic tokens cache, forcing re-request on next update
   cache.semanticTokensCache = SemanticTokensCache(isValid: false)
@@ -438,9 +447,7 @@ proc doUpdateSemanticTokensCache(e: Editor) =
     return
 
   # Request semantic tokens for visible range (with margin)
-  let topLine = max(0, e.viewport.topLine - 10)
-  let bottomLine =
-    min(e.viewport.topLine + e.viewport.height + 10, activeBuffer.len - 1)
+  let (topLine, bottomLine) = e.viewportRequestRange()
 
   # Start async request
   let reqResult = e.lsp.startSemanticTokensRequest(activeBuffer, topLine, bottomLine)
@@ -504,6 +511,184 @@ proc updateSemanticTokensCache*(e: Editor) =
     initDuration(milliseconds = e.state.lspCache.semanticTokensUpdateInterval)
   if elapsed >= threshold:
     e.doUpdateSemanticTokensCache()
+
+# Inlay Hints
+#
+# Follows the SemanticTokens pattern: viewport-range request + debounce +
+# viewport/changeSeq/filePath cache invalidation. Unlike CodeLens there is no
+# resolve round-trip and no async spawn, so the cache write is synchronous and a
+# response-generation counter is unnecessary.
+
+proc hasInlayHintSupport*(e: Editor): bool =
+  ## Check if inlay hints are supported for the current buffer
+  if not e.lsp.enabled:
+    return false
+  e.lsp.hasInlayHintSupport(e.activeBuffer())
+
+proc invalidateInlayHintCache*(lsp: LspIntegration, cache: var LspCacheState) =
+  ## Invalidate the inlay hint cache and cancel any in-flight request
+  cache.inlayHintCache = InlayHintCache(isValid: false)
+  if cache.pendingInlayHintRequestId != 0:
+    lsp.cancelRequest(cache.pendingInlayHintRequestId)
+    cache.pendingInlayHintRequestId = 0
+
+proc processInlayHintResponse(e: Editor, hints: seq[InlayHint]) =
+  ## Internal: convert an inlay hint response into the cached, per-line format.
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    return
+
+  # Group by line for O(1) lookup during rendering.
+  # Note: LSP character positions are UTF-16; convert to rune index because the
+  # renderer compares against rune-based buffer columns.
+  var itemsByLine: Table[int, seq[InlayHintItem]]
+  for hint in hints:
+    let line = hint.position.line
+    if line < 0 or line >= activeBuffer.len:
+      continue
+    let lineText = activeBuffer.getLine(line)
+    let col = utf16ToRuneIndex(lineText, hint.position.character)
+    let label = getInlayHintLabel(hint)
+    if label.len == 0:
+      continue
+    let item = InlayHintItem(
+      line: line,
+      column: col,
+      label: label,
+      kind: (if hint.kind.isSome: hint.kind.get.int else: 0),
+      paddingLeft: hint.paddingLeft.get(false),
+      paddingRight: hint.paddingRight.get(false),
+    )
+    itemsByLine.mgetOrPut(line, @[]).add(item)
+
+  # LSP does not guarantee the order of InlayHint[], but end-of-line rendering
+  # concatenates items left-to-right, so sort each line by column. sort is a
+  # stable merge sort, so the server order is kept among hints sharing a column.
+  for items in itemsByLine.mvalues:
+    items.sort(
+      proc(a, b: InlayHintItem): int =
+        cmp(a.column, b.column)
+    )
+
+  e.state.lspCache.inlayHintCache = InlayHintCache(
+    itemsByLine: itemsByLine,
+    changeSeq: activeBuffer.changeSeq,
+    filePath: activeBuffer.filePath.get,
+    topLine: e.viewport.topLine,
+    bottomLine: e.viewport.topLine + e.viewport.height,
+    isValid: true,
+  )
+  e.state.lspCache.lastInlayHintUpdate = getMonoTime()
+
+proc doUpdateInlayHintCache(e: Editor) =
+  ## Internal: Start an async inlay hint request for the visible range (non-blocking)
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    invalidateInlayHintCache(e.lsp, e.state.lspCache)
+    return
+
+  # Request the visible range with a small margin (matches semantic tokens).
+  let (topLine, bottomLine) = e.viewportRequestRange()
+
+  let reqResult = e.lsp.startInlayHintRequest(activeBuffer, topLine, bottomLine)
+  if reqResult.isOk:
+    e.state.lspCache.pendingInlayHintRequestId = reqResult.get
+    e.state.lspCache.pendingInlayHintBufferId = activeBuffer.id
+  else:
+    invalidateInlayHintCache(e.lsp, e.state.lspCache)
+
+proc updateInlayHintCache*(e: Editor) =
+  ## Update the inlay hint cache (with debouncing)
+  ## Called from tickLsp. Uses non-blocking async pattern to avoid freezing the UI.
+  if not e.lsp.enabled or not e.state.display.showInlayHint:
+    return
+
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    return
+
+  let path = activeBuffer.filePath.get
+  let langIdOpt = e.lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return
+
+  if not e.lsp.service.hasInlayHintSupport(langIdOpt.get):
+    return
+
+  # Check if there's a pending request - try to get response
+  if e.state.lspCache.pendingInlayHintRequestId != 0:
+    let (status, resultOpt, errorOpt) =
+      e.lsp.checkResponse(e.state.lspCache.pendingInlayHintRequestId)
+    case status
+    of lrsPending:
+      return
+    of lrsSuccess:
+      e.state.lspCache.pendingInlayHintRequestId = 0
+      # Discard the response if the active buffer changed while in flight:
+      # checkResponse routes by request id only, so without this guard file A's
+      # hints would be stamped onto (and self-validate against) file B's cache
+      # and render inside B. Mirrors the pendingHoverBufferId guard.
+      if e.activeBuffer().id != e.state.lspCache.pendingInlayHintBufferId:
+        return
+      if resultOpt.isSome and resultOpt.get.kind != JNull:
+        e.processInlayHintResponse(parseInlayHintResponse(resultOpt.get))
+    of lrsError, lrsTimeout:
+      logLspDegraded("Inlay hint", status, errorOpt.get(""))
+      e.state.lspCache.pendingInlayHintRequestId = 0
+
+  # Check if cache is still valid and covers the current viewport
+  let cache = e.state.lspCache.inlayHintCache
+  if cache.isValid and cache.changeSeq == activeBuffer.changeSeq and
+      cache.filePath == path and cache.topLine <= e.viewport.topLine and
+      cache.bottomLine >= e.viewport.topLine + e.viewport.height:
+    return
+
+  # Debounce - only update if enough time has passed since last update
+  let now = getMonoTime()
+  let elapsed = now - e.state.lspCache.lastInlayHintUpdate
+  let threshold = initDuration(milliseconds = e.state.lspCache.inlayHintUpdateInterval)
+  if elapsed >= threshold:
+    e.doUpdateInlayHintCache()
+
+proc getInlayHintsForLine*(cache: var LspCacheState, line: int): seq[InlayHintItem] =
+  ## Get cached inlay hints for a specific line (O(1) lookup)
+  if not cache.inlayHintCache.isValid:
+    return @[]
+  cache.inlayHintCache.itemsByLine.getOrDefault(line, @[])
+
+proc inlayHintVirtualTextProvider*(e: Editor): VirtualTextProvider =
+  ## Adapter: expose the cached inlay hints as end-of-line virtual text. The
+  ## returned closure reads the cache lazily at render time via
+  ## getInlayHintsForLine (which yields nothing when the cache is invalid).
+  ## Feature enablement is gated once, in buildVirtualTextProviders.
+  result = proc(line: int): seq[VirtualText] {.closure, gcsafe, raises: [].} =
+    for item in e.state.lspCache.getInlayHintsForLine(line):
+      var text = " "
+      if item.paddingLeft:
+        text.add " "
+      text.add item.label
+      if item.paddingRight:
+        text.add " "
+      result.add VirtualText(
+        line: line,
+        column: item.column,
+        placement: vtpEndOfLine,
+        priority: 0,
+        chunks: @[VirtualTextChunk(text: text, color: EditorColorPairIndex.inlayHint)],
+      )
+
+proc buildVirtualTextProviders*(e: Editor): seq[VirtualTextProvider] =
+  ## Assemble the virtual text providers for the currently enabled features.
+  ## New features (inline diagnostics, git blame, ...) push their own provider
+  ## here; the renderer stays feature-agnostic.
+  if e.state.display.showInlayHint:
+    # The cache is keyed by file but read per line number, so right after a
+    # buffer switch (before the highlightChanged invalidation in prepareFrame
+    # runs) it can still hold the previous file's hints. Gate on the owning
+    # file once per frame instead of per line.
+    let cache = e.state.lspCache.inlayHintCache
+    if cache.isValid and some(cache.filePath) == e.activeBuffer().filePath:
+      result.add e.inlayHintVirtualTextProvider()
 
 proc getCodeLensDisplayText*(e: Editor, line: int): string =
   ## Get display text for CodeLens on a specific line
