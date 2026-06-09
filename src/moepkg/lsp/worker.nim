@@ -82,6 +82,7 @@ type
       command*: string
       args*: seq[string]
       workspaceRoot*: string
+      initializationOptions*: string # Serialized JSON ("" = none)
     of lcmdStop, lcmdShutdown:
       discard
     of lcmdDidOpen:
@@ -354,6 +355,14 @@ proc buildClientCapabilities(): JsonNode =
     },
     "workspace": {"applyEdit": true, "workspaceFolders": true, "configuration": false},
     "window": {"workDoneProgress": true},
+    # rust-analyzer only emits its run/debug CodeLenses when the client declares
+    # it can execute the corresponding client-side commands. Advertise the ones
+    # moe handles (see editor_codelens.executeCodeLensItem); the actual
+    # run/debug lens visibility is still gated per-setting via the server's
+    # initializationOptions (lens.run/lens.debug).
+    "experimental": {
+      "commands": {"commands": ["rust-analyzer.runSingle", "rust-analyzer.debugSingle"]}
+    },
   }
 
 # Worker thread main loop
@@ -717,7 +726,7 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       else:
         newJNull()
 
-    let initParams = %*{
+    var initParams = %*{
       "processId": getCurrentProcessId(),
       "clientInfo": {"name": "moe", "version": "0.3.0"},
       "rootUri": rootUri,
@@ -728,6 +737,14 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       # logging is enabled; otherwise it floods the event queue for nothing.
       "trace": (if ctx.rawJsonLog: "verbose" else: "off"),
     }
+
+    # Forward server-specific initializationOptions (e.g. rust-analyzer lens
+    # config). Carried as a serialized string across the thread boundary.
+    if cmd.initializationOptions.len > 0:
+      try:
+        initParams["initializationOptions"] = parseJson(cmd.initializationOptions)
+      except JsonParsingError:
+        discard
 
     let reqResult = await sendRequest("initialize", initParams)
     if reqResult.isErr:
@@ -1204,7 +1221,11 @@ proc stop*(worker: LspWorker) =
   worker.stopped = true
 
 proc startServer*(
-    worker: LspWorker, command: string, args: seq[string], workspaceRoot: string
+    worker: LspWorker,
+    command: string,
+    args: seq[string],
+    workspaceRoot: string,
+    initializationOptions: string = "",
 ) =
   let cmd = LspCommand(
     kind: lcmdStart,
@@ -1212,6 +1233,7 @@ proc startServer*(
     command: command,
     args: args,
     workspaceRoot: workspaceRoot,
+    initializationOptions: initializationOptions,
   )
   worker.commandQueue.pushAndSignal(cmd, worker.signal)
 

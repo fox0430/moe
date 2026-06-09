@@ -1156,9 +1156,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
 proc hasPendingAsyncOperations*(e: Editor): bool =
   ## Check if there are pending async operations
-  e.state.pending.shellCommand.len > 0 or e.state.pending.manPage.len > 0 or
-    e.state.pending.background or e.state.pending.buildOnSave.path.len > 0 or
-    e.state.pending.quickRun.cmd.len > 0 or e.state.pending.syntaxCheck.path.len > 0
+  e.state.pending.shellCommand.len > 0 or e.state.pending.terminalCommand.len > 0 or
+    e.state.pending.manPage.len > 0 or e.state.pending.background or
+    e.state.pending.buildOnSave.path.len > 0 or e.state.pending.quickRun.cmd.len > 0 or
+    e.state.pending.syntaxCheck.path.len > 0
 
 type
   BuildInfo =
@@ -1276,6 +1277,13 @@ proc handlePendingAsyncOperationsImpl(
   ## Called from the main event loop after handleEvent returns
 
   {.cast(gcsafe).}:
+    # Open a queued terminal command (e.g. rust-analyzer run/debug single) as a
+    # new terminal tab in the active window.
+    if e.state.pending.terminalCommand.len > 0:
+      let cmd = e.state.pending.terminalCommand
+      e.state.pending.terminalCommand = ""
+      e.enterTerminalInActiveWindow(cmd)
+
     # Handle shell command
     if e.state.pending.shellCommand.len > 0:
       let cmd = e.state.pending.shellCommand

@@ -24,6 +24,7 @@ import std/[options, monotimes, tables, json, times, strutils]
 import pkg/[results, chronos]
 
 import editor_types, logger, highlight, lsp_integration
+import lsp/rust_runnable
 
 proc hasCodeLensSupport*(e: Editor): bool =
   ## Check if CodeLens is supported for the current buffer
@@ -198,6 +199,27 @@ proc executeCodeLensItem*(
 
     if item.command.len == 0:
       return err("CodeLens has no command")
+
+    # rust-analyzer run/debug are client-side commands: the server expects the
+    # editor (not workspace/executeCommand) to launch the build/test process.
+    # Intercept them and queue a terminal command; the main loop opens it.
+    if item.command == "rust-analyzer.runSingle" or
+        item.command == "rust-analyzer.debugSingle":
+      if item.arguments.len == 0:
+        return err("Runnable command has no arguments")
+      var runnable: JsonNode
+      try:
+        runnable = parseJson(item.arguments[0])
+      except JsonParsingError:
+        return err("Failed to parse runnable argument")
+      let cmdResult = buildRunnableCommand(
+        runnable, debug = item.command == "rust-analyzer.debugSingle"
+      )
+      if cmdResult.isErr:
+        return err(cmdResult.error)
+      e.state.pending.terminalCommand = cmdResult.get
+      e.state.statusMessage = "Running: " & item.title
+      return ok()
 
     let activeBuffer = e.activeBuffer()
 

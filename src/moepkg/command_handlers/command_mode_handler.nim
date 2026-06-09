@@ -310,7 +310,7 @@ proc updateSubstitutePreviewIfNeeded(e: Editor) =
     else:
       e.state.windowDisplay.needsFullRedraw = true
 
-proc enterTerminalInActiveWindow(e: Editor, command: string) =
+proc enterTerminalInActiveWindow*(e: Editor, command: string) =
   ## Open a new Terminal session as its own tab in the active window.
   ## The session is tracked in `e.terminalStates` keyed by the buffer id
   ## so the user can move between tabs without tearing down the PTY.
