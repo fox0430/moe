@@ -19,9 +19,9 @@
 
 ## Tests for editor_callhierarchy.nim
 
-import std/[unittest, os, strutils]
+import std/[unittest, os, strutils, options, json, importutils]
 
-import ../src/moepkg/[editor, config, config_loader, types]
+import ../src/moepkg/[editor, config, config_loader, types, lsp_service]
 import ../src/moepkg/callhierarchy_viewer
 import ../src/moepkg/editor_callhierarchy {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
@@ -43,6 +43,29 @@ proc makeCallHierarchyItem(
     `end`: lspTypes.Position(line: line, character: col + name.len),
   )
   result.selectionRange = result.range
+
+proc dummyRangeJson(): JsonNode =
+  %*{"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}}
+
+proc incomingCallsResponseJson(items: seq[lspTypes.CallHierarchyItem]): JsonNode =
+  ## Build a callHierarchy/incomingCalls wire response: an array of
+  ## {from: <item>, fromRanges: [...]} objects.
+  result = newJArray()
+  for it in items:
+    result.add(%*{"from": it.toJson, "fromRanges": [dummyRangeJson()]})
+
+proc outgoingCallsResponseJson(items: seq[lspTypes.CallHierarchyItem]): JsonNode =
+  ## Build a callHierarchy/outgoingCalls wire response: an array of
+  ## {to: <item>, fromRanges: [...]} objects.
+  result = newJArray()
+  for it in items:
+    result.add(%*{"to": it.toJson, "fromRanges": [dummyRangeJson()]})
+
+proc injectLspResponse(e: Editor, requestId: int, resp: JsonNode) =
+  ## Simulate a server response arriving for `requestId`. Uses privateAccess to
+  ## reach the service's private `pendingResponses` table (no production seam).
+  privateAccess(LspService)
+  e.lsp.service.pendingResponses[requestId] = (result: some(resp), error: none(string))
 
 proc createTestEditorWithLspDisabled(): Editor =
   let config = newEditorConfig()
@@ -83,6 +106,80 @@ suite "editor_callhierarchy - pollLspCallHierarchy":
 
     e.pollLspCallHierarchy()
     # No crash means success
+
+  test "Incoming-calls response enters CallHierarchy mode":
+    # Final-stage cascade: a chrkIncomingCalls response is parsed and shown in
+    # the viewer. No worker is needed here (this stage starts no new request).
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let reqId = 4242
+    e.state.lspCache.pendingCallHierarchyRequestId = reqId
+    e.state.lspCache.pendingCallHierarchyKind = chrkIncomingCalls
+    let items = @[makeCallHierarchyItem("caller", "file:///x.nim", 2, 0)]
+    e.injectLspResponse(reqId, incomingCallsResponseJson(items))
+
+    e.pollLspCallHierarchy()
+
+    check e.state.mode == EditorMode.CallHierarchy
+    check e.activeWindow.modeState.kind == mskCallHierarchy
+    check e.activeWindow.modeState.callHierarchy.viewKind == chvkIncoming
+    check e.activeWindow.modeState.callHierarchy.items.len == 1
+    check e.activeWindow.modeState.callHierarchy.items[0].name == "caller"
+    check e.state.statusMessage == "1 incoming call found"
+    # Pending state is cleared after the cascade completes.
+    check e.state.lspCache.pendingCallHierarchyRequestId == 0
+    check e.state.lspCache.pendingCallHierarchyKind == chrkNone
+
+  test "Outgoing-calls response enters CallHierarchy mode":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let reqId = 4343
+    e.state.lspCache.pendingCallHierarchyRequestId = reqId
+    e.state.lspCache.pendingCallHierarchyKind = chrkOutgoingCalls
+    let items = @[
+      makeCallHierarchyItem("calleeA", "file:///x.nim", 5, 0),
+      makeCallHierarchyItem("calleeB", "file:///y.nim", 9, 2),
+    ]
+    e.injectLspResponse(reqId, outgoingCallsResponseJson(items))
+
+    e.pollLspCallHierarchy()
+
+    check e.state.mode == EditorMode.CallHierarchy
+    check e.activeWindow.modeState.callHierarchy.viewKind == chvkOutgoing
+    check e.activeWindow.modeState.callHierarchy.items.len == 2
+    check e.state.statusMessage == "2 outgoing calls found"
+
+  test "Empty incoming-calls response stays out of CallHierarchy mode":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let startMode = e.state.mode
+    let reqId = 4444
+    e.state.lspCache.pendingCallHierarchyRequestId = reqId
+    e.state.lspCache.pendingCallHierarchyKind = chrkIncomingCalls
+    e.injectLspResponse(reqId, newJArray())
+
+    e.pollLspCallHierarchy()
+
+    check e.state.mode == startMode
+    check e.state.statusMessage == "No incoming calls found"
+    check e.state.lspCache.pendingCallHierarchyRequestId == 0
+
+  test "Empty prepare response reports no callable symbol":
+    # First-stage prepare with an empty result: no second-stage request is
+    # started, so this needs only response injection (no worker).
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let prepareId = 7003
+    e.state.lspCache.pendingCallHierarchyRequestId = prepareId
+    e.state.lspCache.pendingCallHierarchyKind = chrkPrepareIncoming
+    e.injectLspResponse(prepareId, newJArray())
+
+    e.pollLspCallHierarchy()
+
+    check e.state.statusMessage == "No callable symbol at cursor"
+    check e.state.lspCache.pendingCallHierarchyRequestId == 0
+    check e.state.lspCache.pendingCallHierarchyKind == chrkNone
+    check e.state.mode != EditorMode.CallHierarchy
 
 suite "editor_callhierarchy - enterCallHierarchyMode":
   test "Fresh entry saves originalBuffer and previousMode":
