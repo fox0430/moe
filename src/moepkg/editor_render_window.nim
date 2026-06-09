@@ -26,7 +26,7 @@ import pkg/celina
 import
   editor_types, editor_window_layout, editor_render_helpers, render_utils, sidebar,
   color, unicode_utils, search_utils, highlight, modes, colorcode, git_conflict,
-  style_patch
+  style_patch, status_line
 import command_handlers/visual_handler
 
 type LineStyleContext* = object
@@ -845,13 +845,23 @@ proc renderWindow*(
   # Note: sidebar needs visibleHeight rows (screenY goes from tabLineOffset to visibleHeight + tabLineOffset)
   let maybeSidebar =
     if e.state.display.showSidebar:
+      # When the git-diff gutter is active for a git-tracked file, it is the
+      # authoritative (content-based) change indicator, so suppress the session
+      # "modified lines" fallback. Both draw the same `~`/`+` glyphs, and the
+      # session markers are history-based — they linger after the buffer is
+      # edited back to match HEAD (git diff goes empty but the line stays
+      # flagged), making it look like a stuck git marker. For non-git / untracked
+      # files the git gutter shows nothing, so the session fallback is kept.
+      let showSessionMarkers =
+        e.state.display.showModifiedLines and
+        not (e.state.display.showGitDiff and isBufferGitTracked(window.buffer))
       some(
         generateSidebarFromBuffer(
           window.buffer,
           window.viewport.topLine,
           visibleHeight,
           modifiedLines = window.buffer.modifiedLines,
-          showModifiedLines = e.state.display.showModifiedLines,
+          showModifiedLines = showSessionMarkers,
           bookmarks = window.buffer.bookmarks,
         )
       )

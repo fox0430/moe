@@ -24,6 +24,57 @@ import pkg/[celina, results]
 import types, buffer, modes, color, config, git_diff, unicode_utils, highlight
 import syntax/tokenizer
 
+type
+  GitDiffCacheEntry = object
+    counts: tuple[added, modified, deleted: int]
+    changeSeqAtRefresh: int
+    lastRefresh: MonoTime
+    pending: Option[GitDiffProcess]
+    populated: bool
+    gitTracked: bool
+      ## Whether the buffer's file is tracked by git (exists in HEAD). Set from the
+      ## result of `startGitDiffFromBufferAsync`, which errors for files not under
+      ## git. When true, the git-diff gutter is the authoritative change indicator,
+      ## so the session "modified lines" sidebar fallback is suppressed (it would
+      ## otherwise draw the same `~`/`+` glyphs and linger after the buffer is
+      ## edited back to match HEAD, since it is history- rather than content-based).
+    pendingDiffInfo: Option[GitDiffInfo]
+      ## Holds the most recent completed diff so the sidebar gutter can be
+      ## refreshed independently of the status-line `counts` readout. The
+      ## editor tick consumes this via `maybeApplyGitMarkers`, gated on the
+      ## user's `showGitDiff` flag — we don't touch `lineMarkers` from the
+      ## render path anymore.
+
+  GitBranchCacheEntry = object
+    path: string
+    name: string
+    lastRefresh: MonoTime
+    populated: bool
+
+# Per-buffer git status cache for the status line. Without caching, every
+# frame spawns `git diff --no-index` (dumping the whole buffer to a tempfile
+# — ~30ms on a 40k-line JSON) and `git rev-parse --abbrev-ref HEAD`, pegging
+# idle j/k at ~30 FPS. The buffer reference (ref object) is used as the
+# key; entries for closed buffers linger but are small.
+#
+# Diff refresh strategy: non-blocking. We spawn `git diff` in the background
+# via startGitDiffFromBufferAsync and keep showing the previous counts until
+# the process completes. A refresh is kicked off when changeSeq changes OR
+# the last refresh is older than GitDiffRefreshIntervalMs — the TTL path is
+# what picks up external commits / checkouts without an edit.
+#
+# Branch refresh strategy: synchronous TTL. `git rev-parse` is cheap
+# (~5ms) and re-running it on every keystroke is unnecessary but also not
+# catastrophic. A short TTL keeps branch switches in sync.
+const
+  DefaultGitDiffRefreshIntervalMs: int64 = 2000
+  GitBranchTtlMs = 5000
+
+var
+  diffCacheStore: Table[pointer, GitDiffCacheEntry]
+  branchCacheStore: Table[pointer, GitBranchCacheEntry]
+  gitDiffRefreshIntervalMs: int64 = DefaultGitDiffRefreshIntervalMs
+
 proc toggleStatusLine*(state: var EditorState) =
   ## Toggle the visibility of the status line
   state.display.showStatusLine = not state.display.showStatusLine
@@ -197,50 +248,6 @@ proc buildFileDisplay(
 
   return displayText
 
-# Per-buffer git status cache for the status line. Without caching, every
-# frame spawns `git diff --no-index` (dumping the whole buffer to a tempfile
-# — ~30ms on a 40k-line JSON) and `git rev-parse --abbrev-ref HEAD`, pegging
-# idle j/k at ~30 FPS. The buffer reference (ref object) is used as the
-# key; entries for closed buffers linger but are small.
-#
-# Diff refresh strategy: non-blocking. We spawn `git diff` in the background
-# via startGitDiffFromBufferAsync and keep showing the previous counts until
-# the process completes. A refresh is kicked off when changeSeq changes OR
-# the last refresh is older than GitDiffRefreshIntervalMs — the TTL path is
-# what picks up external commits / checkouts without an edit.
-#
-# Branch refresh strategy: synchronous TTL. `git rev-parse` is cheap
-# (~5ms) and re-running it on every keystroke is unnecessary but also not
-# catastrophic. A short TTL keeps branch switches in sync.
-const
-  DefaultGitDiffRefreshIntervalMs: int64 = 2000
-  GitBranchTtlMs = 5000
-
-type
-  GitDiffCacheEntry = object
-    counts: tuple[added, modified, deleted: int]
-    changeSeqAtRefresh: int
-    lastRefresh: MonoTime
-    pending: Option[GitDiffProcess]
-    populated: bool
-    # Holds the most recent completed diff so the sidebar gutter can be
-    # refreshed independently of the status-line `counts` readout. The
-    # editor tick consumes this via `maybeApplyGitMarkers`, gated on the
-    # user's `showGitDiff` flag — we don't touch `lineMarkers` from the
-    # render path anymore.
-    pendingDiffInfo: Option[GitDiffInfo]
-
-  GitBranchCacheEntry = object
-    path: string
-    name: string
-    lastRefresh: MonoTime
-    populated: bool
-
-var
-  diffCacheStore: Table[pointer, GitDiffCacheEntry]
-  branchCacheStore: Table[pointer, GitBranchCacheEntry]
-  gitDiffRefreshIntervalMs: int64 = DefaultGitDiffRefreshIntervalMs
-
 proc setGitDiffRefreshInterval*(ms: int64) =
   ## Override the async diff refresh cadence (ms). Called from
   ## `applyConfigSettings` so the existing `[git] updateInterval` toml
@@ -285,6 +292,9 @@ proc cachedGitDiffCounts(b: TextBuffer): tuple[added, modified, deleted: int] =
   if needsRefresh:
     entry.changeSeqAtRefresh = b.changeSeq
     let startResult = startGitDiffFromBufferAsync(b)
+    # `startGitDiffFromBufferAsync` errors when the file is not in git / not in
+    # HEAD, so its success doubles as a "git-tracked" probe for the sidebar.
+    entry.gitTracked = startResult.isOk
     if startResult.isOk:
       entry.pending = some(startResult.get)
     else:
@@ -342,6 +352,16 @@ proc maybeApplyGitMarkers*(b: TextBuffer) =
       let diffInfo = entry[].pendingDiffInfo.get
       applyGitDiffToBuffer(b, diffInfo)
       entry[].pendingDiffInfo = none(GitDiffInfo)
+
+proc isBufferGitTracked*(b: TextBuffer): bool =
+  ## Whether `b`'s file is tracked by git (present in HEAD), per the most recent
+  ## diff scheduling attempt. Returns false until the git-diff cache has been
+  ## populated for this buffer. Used by the renderer to decide whether the
+  ## git-diff gutter should take over from the session "modified lines"
+  ## fallback, so the two don't draw overlapping `~`/`+` markers.
+  let key = bufferKey(b)
+  let entry = diffCacheStore.getOrDefault(key)
+  entry.populated and entry.gitTracked
 
 proc evictGitCacheForBuffer*(b: TextBuffer) =
   ## Drop the cache entries associated with `b`. Call before a buffer is
