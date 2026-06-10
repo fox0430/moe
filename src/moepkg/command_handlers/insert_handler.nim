@@ -424,10 +424,10 @@ proc triggerLspCompletionRequest*(
   )
 
   if not handler.lsp.isNil and handler.lsp.isEnabled and handler.lspCompletionEnabled and
-    # If LSP completion is available and the server advertises completion support,
-    # start an async request in background. The capability gate lives here (not in
-    # the skip branch above) because that branch only filters already-received
-    # lspItems client-side and never issues a fresh request.
+      # If LSP completion is available and the server advertises completion support,
+      # start an async request in background. The capability gate lives here (not in
+      # the skip branch above) because that branch only filters already-received
+      # lspItems client-side and never issues a fresh request.
       handler.lsp.hasCompletionSupport(buffer):
     # Cancel any pending LSP completion request to avoid orphaned responses
     let oldReqId = handler.completionManager.getLspRequestId
