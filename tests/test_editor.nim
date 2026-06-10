@@ -1048,6 +1048,28 @@ suite "Editor - applyConfigSettings syncs display state":
     e.applyConfigSettings(e.config)
     check e.state.display.showDocumentHighlight == true
 
+  test "Syncs showCodeLens from config.lsp.codeLens.enable":
+    let e = createTestEditor()
+
+    e.config.lsp.codeLens.enable = true
+    e.applyConfigSettings(e.config)
+    check e.state.display.showCodeLens == true
+
+    e.config.lsp.codeLens.enable = false
+    e.applyConfigSettings(e.config)
+    check e.state.display.showCodeLens == false
+
+  test "Syncs showInlayHint from config.lsp.inlayHint.enable":
+    let e = createTestEditor()
+
+    e.config.lsp.inlayHint.enable = false
+    e.applyConfigSettings(e.config)
+    check e.state.display.showInlayHint == false
+
+    e.config.lsp.inlayHint.enable = true
+    e.applyConfigSettings(e.config)
+    check e.state.display.showInlayHint == true
+
   test "Syncs showIndentationLines from config.standard.indentationLines":
     let e = createTestEditor()
 
