@@ -35,6 +35,7 @@ import ../src/moepkg/registers {.all.}
 import ../src/moepkg/editor_types except Command
 import ../src/moepkg/command_handlers/normal_handler {.all.}
 import ../src/moepkg/command_handlers/command_passthrough {.all.}
+import ../src/moepkg/command_handlers/handler_result {.all.}
 import editor_test_helper
 
 proc createTestState(): EditorState =
@@ -1058,6 +1059,16 @@ suite "NormalModeHandler - LSP Results":
     chk(ptLspHover)
     chk(ptLspSelectionRange)
     chk(ptLspDocumentLink)
+    chk(ptLspDocumentSymbol)
+
+  test "lsp.document.symbol routes to hrLspDocumentSymbol request":
+    # The command must fire the document symbol request (via the passthrough
+    # table), NOT switch mode directly. The viewer mode is entered later by
+    # pollLspDocumentSymbols once the response arrives.
+    let pk = lookupPassthrough("lsp.document.symbol")
+    check pk.isSome
+    check pk.get == ptLspDocumentSymbol
+    check toHandlerResult(ptLspDocumentSymbol).kind == hrLspDocumentSymbol
 
 suite "NormalModeHandler - Macro Key Recording":
   test "Keys recorded during macro recording":

@@ -984,11 +984,6 @@ proc handleNormalModeKey*(
       return NormalModeResult(
         kind: nmrError, errorMessage: "No URI or file path under cursor"
       )
-    elif cmd.commandId == "lsp.document.symbol":
-      # Transition to DocumentSymbol mode
-      return NormalModeResult(
-        kind: nmrHandled, modeTransition: some(EditorMode.DocumentSymbol)
-      )
 
     # Execute custom commands and operators through command registry
     let ctx = CommandContext(
