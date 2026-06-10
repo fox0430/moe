@@ -1261,10 +1261,6 @@ proc hasSelectionRangeSupport*(svc: LspService, langId: string): bool =
     langId, "textDocument/selectionRange", selectionRangeProvider
   )
 
-proc hasInlineValueSupport*(svc: LspService, langId: string): bool =
-  ## Check if inline value is supported for a language (static or dynamic)
-  svc.hasCapabilitySupport(langId, "textDocument/inlineValue", inlineValueProvider)
-
 # Status information
 proc getRunningLanguages*(svc: LspService): seq[string] =
   ## Get list of languages with running LSP servers

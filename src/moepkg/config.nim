@@ -634,7 +634,6 @@ type
     documentSymbol*: LspFeatureConfig
     hover*: LspFeatureConfig
     inlayHint*: LspFeatureConfig
-    inlineValue*: LspFeatureConfig
     references*: LspFeatureConfig
     callHierarchy*: LspFeatureConfig
     documentHighlight*: LspFeatureConfig
@@ -937,7 +936,6 @@ proc newEditorConfig*(): EditorConfig =
       documentSymbol: LspFeatureConfig(enable: true),
       hover: LspFeatureConfig(enable: true),
       inlayHint: LspFeatureConfig(enable: true),
-      inlineValue: LspFeatureConfig(enable: false),
       references: LspFeatureConfig(enable: true),
       callHierarchy: LspFeatureConfig(enable: true),
       documentHighlight: LspFeatureConfig(enable: true),

@@ -27,7 +27,6 @@ Please feedback, bug reports and PRs.
 - `workspace/semanticTokens/refresh`
 - `textDocument/inlayHint`
 - `workspace/inlayHint/refresh`
-- `textDocument/inlineValue`
 - `textDocument/declaration`
 - `textDocument/definition`
 - `textDocument/typeDefinition`

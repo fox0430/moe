@@ -326,7 +326,6 @@ suite "Config - newEditorConfig defaults":
     check config.lsp.documentSymbol.enable == true
     check config.lsp.hover.enable == true
     check config.lsp.inlayHint.enable == true
-    check config.lsp.inlineValue.enable == false
     check config.lsp.references.enable == true
     check config.lsp.callHierarchy.enable == true
     check config.lsp.documentHighlight.enable == true

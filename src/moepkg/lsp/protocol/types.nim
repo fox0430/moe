@@ -264,45 +264,6 @@ type
     textDocument*: TextDocumentIdentifier
     range*: Range
 
-  # Inline Value types
-  InlineValueText* = object ## Provide inline value as text
-    range*: Range
-    text*: string
-
-  InlineValueVariableLookup* = object ## Provide inline value through a variable lookup
-    range*: Range
-    variableName*: Option[string]
-    caseSensitiveLookup*: bool
-
-  InlineValueEvaluatableExpression* = object
-    ## Provide inline value through an expression evaluation
-    range*: Range
-    expression*: Option[string]
-
-  InlineValueKind* = enum
-    ivkText
-    ivkVariableLookup
-    ivkEvaluatableExpression
-
-  InlineValue* = object
-    ## An inline value (one of: text, variable lookup, or evaluatable expression)
-    case kind*: InlineValueKind
-    of ivkText:
-      text*: InlineValueText
-    of ivkVariableLookup:
-      variableLookup*: InlineValueVariableLookup
-    of ivkEvaluatableExpression:
-      evaluatableExpression*: InlineValueEvaluatableExpression
-
-  InlineValueContext* = object ## Context for inline values request
-    frameId*: int
-    stoppedLocation*: Range
-
-  InlineValueParams* = object ## Parameters for inline value request
-    textDocument*: TextDocumentIdentifier
-    range*: Range
-    context*: InlineValueContext
-
   # Selection Range types
   SelectionRange* = ref object ## Selection range with optional parent
     range*: Range
@@ -532,7 +493,6 @@ type
     semanticTokensProvider*: Option[SemanticTokensOptions]
     monikerProvider*: Option[JsonNode]
     typeHierarchyProvider*: Option[JsonNode]
-    inlineValueProvider*: Option[JsonNode]
     inlayHintProvider*: Option[JsonNode]
     diagnosticProvider*: Option[JsonNode]
     workspaceSymbolProvider*: Option[JsonNode]
@@ -960,65 +920,6 @@ proc parseDocumentLink*(node: JsonNode): DocumentLink =
   if node.hasKey("data"):
     result.data = some(node["data"])
 
-proc parseInlineValueText*(node: JsonNode): InlineValueText =
-  ## Parse InlineValueText from JSON
-  result.range = parseRange(node["range"])
-  result.text = node["text"].getStr
-
-proc parseInlineValueVariableLookup*(node: JsonNode): InlineValueVariableLookup =
-  ## Parse InlineValueVariableLookup from JSON
-  result.range = parseRange(node["range"])
-  if node.hasKey("variableName") and node["variableName"].kind == JString:
-    result.variableName = some(node["variableName"].getStr)
-  result.caseSensitiveLookup = node["caseSensitiveLookup"].getBool
-
-proc parseInlineValueEvaluatableExpression*(
-    node: JsonNode
-): InlineValueEvaluatableExpression =
-  ## Parse InlineValueEvaluatableExpression from JSON
-  result.range = parseRange(node["range"])
-  if node.hasKey("expression") and node["expression"].kind == JString:
-    result.expression = some(node["expression"].getStr)
-
-proc parseInlineValue*(node: JsonNode): InlineValue =
-  ## Parse InlineValue from JSON
-  ## Determines type based on which fields are present
-  if node.hasKey("text"):
-    # InlineValueText
-    result = InlineValue(kind: ivkText, text: parseInlineValueText(node))
-  elif node.hasKey("caseSensitiveLookup"):
-    # InlineValueVariableLookup
-    result = InlineValue(
-      kind: ivkVariableLookup, variableLookup: parseInlineValueVariableLookup(node)
-    )
-  else:
-    # InlineValueEvaluatableExpression (has range and optionally expression)
-    result = InlineValue(
-      kind: ivkEvaluatableExpression,
-      evaluatableExpression: parseInlineValueEvaluatableExpression(node),
-    )
-
-proc getInlineValueRange*(value: InlineValue): Range =
-  ## Get the range from an inline value
-  case value.kind
-  of ivkText:
-    return value.text.range
-  of ivkVariableLookup:
-    return value.variableLookup.range
-  of ivkEvaluatableExpression:
-    return value.evaluatableExpression.range
-
-proc toJson*(params: InlineValueParams): JsonNode =
-  ## Serialize InlineValueParams to JSON
-  %*{
-    "textDocument": params.textDocument.toJson,
-    "range": params.range.toJson,
-    "context": {
-      "frameId": params.context.frameId,
-      "stoppedLocation": params.context.stoppedLocation.toJson,
-    },
-  }
-
 proc parseSemanticTokensLegend*(node: JsonNode): SemanticTokensLegend =
   ## Parse SemanticTokensLegend from JSON
   if node.hasKey("tokenTypes"):
@@ -1328,8 +1229,6 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
       some(parseSemanticTokensOptions(node["semanticTokensProvider"]))
   if node.hasKey("inlayHintProvider"):
     result.inlayHintProvider = some(node["inlayHintProvider"])
-  if node.hasKey("inlineValueProvider"):
-    result.inlineValueProvider = some(node["inlineValueProvider"])
   if node.hasKey("selectionRangeProvider"):
     result.selectionRangeProvider = some(node["selectionRangeProvider"])
   if node.hasKey("codeLensProvider"):

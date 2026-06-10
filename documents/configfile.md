@@ -1082,13 +1082,6 @@ The same commands as `[KeyMapping]` are available. See [Available commands](#ava
 | enable | bool | true | LSP InlayHint |
 
 
-### Lsp.InlineValue table
-
-| Name | Type | Default Value | Description |
-|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | false | LSP InlineValue |
-
-
 ### Lsp.References table
 
 | Name | Type | Default Value | Description |
@@ -1499,7 +1492,6 @@ Notes:
 | union | LSP semantic token: union |
 | unresolvedReference | LSP semantic token: unresolved reference |
 | inlayHint | LSP inlay hint |
-| inlineValue | LSP inline value |
 | codeLens | LSP code lens |
 | currentFile | Filer: current file name |
 | file | Filer: file name |

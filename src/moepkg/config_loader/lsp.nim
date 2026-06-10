@@ -164,10 +164,6 @@ proc loadLspConfig*(
     loadLspFeatureConfig(
       table["InlayHint"].getTable(), config.inlayHint, vr, "Lsp.InlayHint"
     )
-  if table.hasKey("InlineValue"):
-    loadLspFeatureConfig(
-      table["InlineValue"].getTable(), config.inlineValue, vr, "Lsp.InlineValue"
-    )
   if table.hasKey("References"):
     loadLspFeatureConfig(
       table["References"].getTable(), config.references, vr, "Lsp.References"
@@ -213,8 +209,8 @@ proc loadLspConfig*(
     "enable", "timeout", "Completion", "Declaration", "Definition", "TypeDefinition",
     "Implementation", "Diagnostics", "SignatureHelp", "DocumentFormatting",
     "FoldingRange", "SelectionRange", "DocumentSymbol", "Hover", "InlayHint",
-    "InlineValue", "References", "CallHierarchy", "DocumentHighlight", "DocumentLink",
-    "CodeLens", "Rename", "SemanticTokens", "ExecuteCommand",
+    "References", "CallHierarchy", "DocumentHighlight", "DocumentLink", "CodeLens",
+    "Rename", "SemanticTokens", "ExecuteCommand",
   ]
   const serverConfigKeys = [
     "extensions", "command", "trace", "rustAnalyzerRunSingle", "rustAnalyzerDebugSingle"
@@ -303,10 +299,6 @@ proc appendLspToml*(lines: var seq[string], cfg: LspConfig) =
 
   lines.add "[Lsp.InlayHint]"
   lines.add "enable = " & toTomlBool(cfg.inlayHint.enable)
-  lines.add ""
-
-  lines.add "[Lsp.InlineValue]"
-  lines.add "enable = " & toTomlBool(cfg.inlineValue.enable)
   lines.add ""
 
   lines.add "[Lsp.References]"

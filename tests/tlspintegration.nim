@@ -1417,17 +1417,6 @@ suite "WorkspaceEdit Application":
     check collectWorkspaceEditPaths(edit).len == 0
 
 suite "Support Check Functions":
-  test "hasInlineValueSupport - LSP disabled":
-    let lsp = newLspIntegration("/tmp")
-    lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
-    check not lsp.hasInlineValueSupport(buffer)
-
-  test "hasInlineValueSupport - no file path":
-    let lsp = newLspIntegration("/tmp")
-    let buffer = newTextBuffer("test") # No file path
-    check not lsp.hasInlineValueSupport(buffer)
-
   test "hasDocumentLinkSupport - LSP disabled":
     let lsp = newLspIntegration("/tmp")
     lsp.setEnabled(false)

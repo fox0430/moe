@@ -872,12 +872,6 @@ suite "LspIntegration - Feature Support Checks (disabled)":
     let buffer = newTextBuffer("test", some("/tmp/test.nim"))
     check not lsp.hasDocumentLinkSupport(buffer)
 
-  test "hasInlineValueSupport returns false when disabled":
-    let lsp = newLspIntegration()
-    lsp.setEnabled(false)
-    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
-    check not lsp.hasInlineValueSupport(buffer)
-
 suite "LspIntegration - Completion/SignatureHelp capability gating":
   privateAccess(LspService)
 
