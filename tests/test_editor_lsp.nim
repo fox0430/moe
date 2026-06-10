@@ -165,6 +165,54 @@ suite "editor_lsp - applyDiagnosticsForUri":
     )
     check activeBuffer.diagnostics.len == 0
 
+  test "drops incoming diagnostics when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.diagnostics.enable = false
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+    e.lsp.enabled = true
+    let activeBuffer = e.activeBuffer()
+    let path = getTempDir() / "moe_test_diag_disabled.nim"
+    activeBuffer.filePath = some(path)
+
+    e.applyDiagnosticsForUri(pathToUri(path), oneDiagnostic("dropped"))
+
+    check activeBuffer.diagnostics.len == 0
+    check activeBuffer.getLineMarker(0).isNone
+
+suite "editor_lsp - clearAllDiagnostics":
+  test "clears stored diagnostics and markers from all buffers":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let activeBuffer = e.activeBuffer()
+    let activePath = getTempDir() / "moe_test_diag_clear_active.nim"
+    activeBuffer.filePath = some(activePath)
+
+    let otherPath = getTempDir() / "moe_test_diag_clear_other.nim"
+    let other = newTextBuffer("other\nlines", some(otherPath))
+    e.addBuffer(other)
+
+    let diag = @[
+      lspTypes.Diagnostic(
+        `range`: lspTypes.newRange(0, 0, 0, 1),
+        severity: some(lspTypes.dsError),
+        message: "boom",
+      )
+    ]
+    e.applyDiagnosticsForUri(pathToUri(activePath), diag)
+    e.applyDiagnosticsForUri(pathToUri(otherPath), diag)
+    check activeBuffer.diagnostics.len == 1
+    check other.diagnostics.len == 1
+    check activeBuffer.getLineMarker(0).isSome
+    check other.getLineMarker(0).isSome
+
+    e.clearAllDiagnostics()
+
+    check activeBuffer.diagnostics.len == 0
+    check other.diagnostics.len == 0
+    check activeBuffer.getLineMarker(0).isNone
+    check other.getLineMarker(0).isNone
+
 suite "editor_lsp - pollLspCompletion":
   test "Does nothing when LSP is disabled":
     let e = createTestEditorWithLspDisabled()

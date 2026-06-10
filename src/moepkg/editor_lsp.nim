@@ -31,6 +31,11 @@ proc applyDiagnosticsForUri*(e: Editor, uri: string, diagnostics: seq[Diagnostic
   ## the active one. Diagnostics for a background buffer would otherwise be
   ## dropped, and the server does not resend them when that buffer is later
   ## focused.
+  ## Diagnostics are server-push: there is no request to suppress, so the
+  ## Lsp.Diagnostics.enable gate drops them here on receipt instead.
+  if not e.config.lsp.diagnostics.enable:
+    return
+
   let path = uriToPath(uri).absolutePath()
   for buf in e.buffers:
     if buf.filePath.isSome and buf.filePath.get.absolutePath() == path:
@@ -39,6 +44,15 @@ proc applyDiagnosticsForUri*(e: Editor, uri: string, diagnostics: seq[Diagnostic
       return
   # No matching open buffer: drop. The server only publishes for documents
   # we opened (didOpen), so this is the closed-in-the-meantime case.
+
+proc clearAllDiagnostics*(e: Editor) =
+  ## Drop stored diagnostics and their line markers from every buffer.
+  ## Used when Lsp.Diagnostics is disabled on a config reload: the server
+  ## keeps pushing (and applyDiagnosticsForUri keeps dropping), but what was
+  ## already applied has to be removed explicitly.
+  for buf in e.buffers:
+    applyDiagnosticsToBuffer(buf, @[])
+  e.state.windowDisplay.needsFullRedraw = true
 
 proc maybeUpdateLsp*(e: Editor) =
   ## Update LSP if buffer was modified
