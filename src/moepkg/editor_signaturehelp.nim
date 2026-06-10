@@ -107,6 +107,12 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
   ):
     return
 
+  if not e.lsp.hasSignatureHelpSupport(activeBuffer):
+    # Gate new requests on server capability. Placed here (not earlier) so a
+    # pending response is still drained above even when the server lacks the
+    # capability; only the fresh request is suppressed.
+    return
+
   # Start a new request and record the position it was issued for.
   let reqResult = e.lsp.startSignatureHelpRequest(
     activeBuffer, e.activeWindow.cursor.line, e.activeWindow.cursor.column
