@@ -331,6 +331,13 @@ proc doUpdateDocumentHighlightCache(e: Editor) =
     e.state.lspCache.invalidateDocumentHighlightCache()
     return
 
+  if not e.lsp.hasDocumentHighlightSupport(activeBuffer):
+    # Skip servers that do not advertise documentHighlight support; otherwise we
+    # would fire a request every debounce interval that the server can only reject
+    # (e.g. nimlangserver, which does not implement textDocument/documentHighlight).
+    e.state.lspCache.invalidateDocumentHighlightCache()
+    return
+
   # Start async request
   let reqResult =
     e.lsp.startDocumentHighlightRequest(activeBuffer, e.cursor.line, e.cursor.column)

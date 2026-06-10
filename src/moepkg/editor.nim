@@ -730,7 +730,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         showGitDiff: editorConfig.git.showChangedLine,
         showSyntaxChecker: editorConfig.syntaxChecker.enable,
         showCodeLens: true,
-        showDocumentHighlight: true,
+        showDocumentHighlight: editorConfig.lsp.documentHighlight.enable,
         showInlayHint: editorConfig.lsp.inlayHint.enable,
         lineWrap: editorConfig.standard.lineWrap,
         tabStop: editorConfig.standard.tabStop,
@@ -1130,6 +1130,7 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   e.state.display.showModifiedLines = newConfig.standard.showModifiedLines
   e.state.display.showGitDiff = newConfig.git.showChangedLine
   e.state.display.showSyntaxChecker = newConfig.syntaxChecker.enable
+  e.state.display.showDocumentHighlight = newConfig.lsp.documentHighlight.enable
   e.state.display.tabStop = newConfig.standard.tabStop
   e.state.display.shiftWidth = newConfig.standard.shiftWidth
   e.state.display.softTabStop = newConfig.standard.softTabStop

@@ -836,6 +836,12 @@ suite "LspIntegration - Feature Support Checks (disabled)":
     let buffer = newTextBuffer("test", some("/tmp/test.nim"))
     check not lsp.hasCodeLensSupport(buffer)
 
+  test "hasDocumentHighlightSupport returns false when disabled":
+    let lsp = newLspIntegration()
+    lsp.setEnabled(false)
+    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    check not lsp.hasDocumentHighlightSupport(buffer)
+
   test "hasDocumentSymbolSupport returns false when disabled":
     let lsp = newLspIntegration()
     lsp.setEnabled(false)

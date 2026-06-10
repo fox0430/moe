@@ -265,6 +265,16 @@ suite "CodeLens Picker":
     check e.state.lspCache.codeLensPicker.scrollOffset == 2
 
 suite "Document Highlight Cache":
+  test "showDocumentHighlight follows config.lsp.documentHighlight.enable at init":
+    var config = newEditorConfig()
+    config.lsp.documentHighlight.enable = false
+    let e = newEditor(config)
+    check not e.state.display.showDocumentHighlight
+
+    config.lsp.documentHighlight.enable = true
+    let e2 = newEditor(config)
+    check e2.state.display.showDocumentHighlight
+
   test "invalidateDocumentHighlightCache":
     let e = createTestEditor()
     e.state.lspCache.documentHighlightCache.isValid = true
