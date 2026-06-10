@@ -1037,6 +1037,17 @@ suite "Editor - applyConfigSettings syncs display state":
     e.applyConfigSettings(e.config)
     check e.state.display.showSyntax == false
 
+  test "Syncs showDocumentHighlight from config.lsp.documentHighlight.enable":
+    let e = createTestEditor()
+
+    e.config.lsp.documentHighlight.enable = false
+    e.applyConfigSettings(e.config)
+    check e.state.display.showDocumentHighlight == false
+
+    e.config.lsp.documentHighlight.enable = true
+    e.applyConfigSettings(e.config)
+    check e.state.display.showDocumentHighlight == true
+
   test "Syncs showIndentationLines from config.standard.indentationLines":
     let e = createTestEditor()
 
