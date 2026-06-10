@@ -611,6 +611,16 @@ proc startSignatureHelpRequest*(
   let path = requireBufferPath(lsp, buffer)
   lsp.service.startSignatureHelpRequest(path, line, buffer.toUtf16Column(line, column))
 
+proc hasCompletionSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if completion is supported for a buffer's language
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasCompletionSupport(langId.get)
+
+proc hasSignatureHelpSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if signature help is supported for a buffer's language
+  let langId = requireLangId(lsp, buffer)
+  langId.isSome and lsp.service.hasSignatureHelpSupport(langId.get)
+
 proc hasDocumentHighlightSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if document highlight is supported for a buffer's language
   let langId = requireLangId(lsp, buffer)

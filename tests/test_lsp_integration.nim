@@ -878,6 +878,38 @@ suite "LspIntegration - Feature Support Checks (disabled)":
     let buffer = newTextBuffer("test", some("/tmp/test.nim"))
     check not lsp.hasInlineValueSupport(buffer)
 
+suite "LspIntegration - Completion/SignatureHelp capability gating":
+  privateAccess(LspService)
+
+  test "hasCompletionSupport returns false when disabled":
+    let lsp = newLspIntegration()
+    lsp.setEnabled(false)
+    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    check not lsp.hasCompletionSupport(buffer)
+
+  test "hasCompletionSupport reflects the advertised server capability":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    # Enabled (the default) but the server has not advertised completion yet.
+    check not lsp.hasCompletionSupport(buffer)
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(completionProvider: some(CompletionOptions()))
+    check lsp.hasCompletionSupport(buffer)
+
+  test "hasSignatureHelpSupport returns false when disabled":
+    let lsp = newLspIntegration()
+    lsp.setEnabled(false)
+    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    check not lsp.hasSignatureHelpSupport(buffer)
+
+  test "hasSignatureHelpSupport reflects the advertised server capability":
+    let lsp = newLspIntegration()
+    let buffer = newTextBuffer("test", some("/tmp/test.nim"))
+    check not lsp.hasSignatureHelpSupport(buffer)
+    lsp.service.capabilities["nim"] =
+      ServerCapabilities(signatureHelpProvider: some(SignatureHelpOptions()))
+    check lsp.hasSignatureHelpSupport(buffer)
+
 suite "LspIntegration - Shutdown":
   privateAccess(LspIntegration)
 
