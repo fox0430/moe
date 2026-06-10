@@ -49,6 +49,9 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
   if not e.lsp.enabled:
     return
 
+  if not e.config.lsp.signatureHelp.enable:
+    return
+
   if e.state.mode != EditorMode.Insert:
     return
 

@@ -48,6 +48,8 @@ type
     signatureHelpManager*: SignatureHelpManager
     lsp*: LspIntegration ## LSP integration for completions
     autocompleteEnabled*: bool ## Whether autocomplete is enabled
+    lspCompletionEnabled*: bool
+      ## Whether LSP completion (lsp.completion.enable) is enabled
     notificationConfig*: NotificationConfig
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands

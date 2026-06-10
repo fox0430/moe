@@ -101,6 +101,7 @@ proc createTestHandler(buf: TextBuffer): InsertModeHandler =
     commandRegistry,
     nil, # No LSP
     true, # autocompleteEnabled
+    true, # lspCompletionEnabled
     NotificationConfig(),
   )
 
@@ -116,6 +117,7 @@ suite "InsertModeHandler - Constructor":
     check handler.completionManager != nil
     check handler.signatureHelpManager != nil
     check handler.autocompleteEnabled == true
+    check handler.lspCompletionEnabled == true
 
   test "Create InsertModeHandler with autocomplete disabled":
     let buf = newTextBuffer()
@@ -133,6 +135,24 @@ suite "InsertModeHandler - Constructor":
     )
 
     check handler.autocompleteEnabled == false
+
+  test "Create InsertModeHandler with LSP completion disabled":
+    let buf = newTextBuffer()
+    let keyBindingRegistry = newKeyBindingRegistry()
+    let commandRegistry = newCommandRegistry()
+    let motionController =
+      newMotionController(buf, createTestState(), createTestViewport())
+
+    let handler = newInsertModeHandler(
+      keyBindingRegistry,
+      motionController,
+      commandRegistry,
+      nil,
+      true, # autocompleteEnabled
+      false, # lspCompletionEnabled
+    )
+
+    check handler.lspCompletionEnabled == false
 
 suite "InsertModeHandler - Character Insertion":
   test "Insert single character":
@@ -2138,6 +2158,7 @@ suite "InsertModeHandler - LSP debounce prefix staleness":
       commandRegistry,
       lsp,
       true,
+      true, # lspCompletionEnabled
       NotificationConfig(),
     )
 

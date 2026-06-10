@@ -62,6 +62,19 @@ suite "editor_signaturehelp - requestSignatureHelpFromLsp":
 
     check e.state.lspCache.pendingSignatureHelpRequestId == 0
 
+  test "Does nothing when signatureHelp.enable is false":
+    # Even with an otherwise-eligible state (LSP on, Insert mode, inside parens),
+    # the lsp.signatureHelp.enable gate must suppress the request.
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.config.lsp.signatureHelp.enable = false
+    e.state.mode = EditorMode.Insert
+    e.handlerManager.insertHandler.signatureHelpManager.parenDepth = 1
+
+    e.requestSignatureHelpFromLsp()
+
+    check e.state.lspCache.pendingSignatureHelpRequestId == 0
+
   test "Timed-out response clears pending and invalidates change tracking":
     # A timed-out in-flight request must reset the tracked changeSeq so the next
     # eligible frame can retry instead of being suppressed by change detection.
