@@ -39,7 +39,7 @@ import
     types, buffer, modes, motion, key_bindings, command_line, command_config,
     command_registry, config, lsp_integration, logger,
   ]
-import ../editor_types
+import ../types/editor_types
 import
   handler_types, handler_result, mode_dispatchers, normal_handler, insert_handler,
   insert_commands, command_handler, visual_handler, replace_handler, filer_handler,

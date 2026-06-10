@@ -25,7 +25,7 @@ import std/options
 import buffer
 import picker/nav
 
-import buffer_manager_types
+import types/buffer_manager_types
 export buffer_manager_types
 
 proc newBufferManagerState*(): BufferManagerState =

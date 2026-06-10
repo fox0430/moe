@@ -22,10 +22,23 @@ import std/[strutils, strformat, options, monotimes, times, os]
 import pkg/[results, chronos]
 
 import
-  editor_types, editor_window, editor_window_state, editor_file, editor_lsp,
-  editor_codelens, editor_selectionrange, editor_documentsymbol, editor_documentlink,
-  editor_signaturehelp, editor_hover, editor_callhierarchy, editor_navigation,
-  editor_render, editorconfig_helper, editor_init, emergency
+  types/editor_types,
+  editor_window,
+  editor_window_state,
+  editor_file,
+  editor_lsp,
+  editor_codelens,
+  editor_selectionrange,
+  editor_documentsymbol,
+  editor_documentlink,
+  editor_signaturehelp,
+  editor_hover,
+  editor_callhierarchy,
+  editor_navigation,
+  editor_render,
+  editorconfig_helper,
+  editor_init,
+  emergency
 
 import
   status_line, render_utils, git_diff, git_conflict, logger, config_loader,

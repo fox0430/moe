@@ -32,7 +32,7 @@ import ../src/moepkg/registers {.all.}
 import ../src/moepkg/command_line {.all.}
 import ../src/moepkg/command_config {.all.}
 import ../src/moepkg/filetree {.all.}
-import ../src/moepkg/editor_types except Command
+import ../src/moepkg/types/editor_types except Command
 import ../src/moepkg/command_handlers/handler_manager {.all.}
 import ../src/moepkg/command_handlers/command_handler {.all.}
 import ../src/moepkg/command_handlers/visual_handler {.all.}

@@ -25,7 +25,7 @@ import std/[options, os, times, algorithm]
 import backup, buffer
 import picker/nav
 
-import backup_manager_types
+import types/backup_manager_types
 export backup_manager_types
 
 const BackupDateFormat = "yyyy-MM-dd'T'HH:mm:sszzz"

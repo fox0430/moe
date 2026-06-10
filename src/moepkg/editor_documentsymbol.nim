@@ -21,7 +21,7 @@
 
 import std/options
 
-import editor_types, editor_window_state, lsp_integration, documentsymbol_viewer
+import types/editor_types, editor_window_state, lsp_integration, documentsymbol_viewer
 
 proc startLspDocumentSymbols*(e: Editor): bool =
   ## Start async document symbols request

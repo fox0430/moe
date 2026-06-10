@@ -17,32 +17,31 @@
 #                                                                              #
 #[############################################################################]#
 
-## Lightweight type definitions for the references viewer.
+## Lightweight type definitions for the call hierarchy viewer.
 ##
-## Split out from `references_viewer` so modules that only need its State type
-## (notably `types` and its importers) do not transitively pull in `picker/nav`
-## via the full `references_viewer` module.
+## Split out from `callhierarchy_viewer` so modules that only need its State
+## type (notably `types` and its importers) do not transitively pull in
+## `picker/nav` via the full `callhierarchy_viewer` module. `lsp/protocol/types`
+## is still required for `CallHierarchyItem`.
 
-import primitives
+import ../lsp/protocol/types as lspTypes
+import ../primitives
 
 type
-  ReferenceItem* = object
-    path*: string # File path
-    line*: int # Line number (0-indexed)
-    column*: int # Column number (0-indexed)
-    text*: string # Optional context text
+  CallHierarchyViewKind* = enum
+    chvkPrepare ## Initial prepare result
+    chvkIncoming ## Incoming calls view
+    chvkOutgoing ## Outgoing calls view
 
-  ReferencesViewerState* = ref object
-    items*: seq[ReferenceItem] # Reference items to display
-    selectedIndex*: int # Currently selected item index
-    topLine*: int # Scroll position (first visible line)
-    title*: string # Title for the list (e.g., "References", "Definitions")
-    waitingForG*: bool # Waiting for second 'g' for 'gg' command
-    # When true, jumping to a selected item opens a new vertical split window
-    # instead of reusing the current one (goto features' openWindow option).
-    openWindowOnJump*: bool
-    # Cursor/viewport of the underlying buffer captured on entry, so quitting
-    # the viewer restores the position instead of leaving it at (0, 0).
+  CallHierarchyViewerState* = ref object
+    items*: seq[lspTypes.CallHierarchyItem] ## Call hierarchy items to display
+    selectedIndex*: int ## Currently selected item index
+    topLine*: int ## Scroll position (first visible line)
+    viewKind*: CallHierarchyViewKind ## Type of view (prepare/incoming/outgoing)
+    title*: string ## Title for the list
+    waitingForG*: bool ## Waiting for second 'g' for 'gg' command
+    ## Cursor/viewport of the underlying buffer captured on entry, so quitting
+    ## the viewer restores the position instead of leaving it at (0, 0).
     originCursor*: BufferPosition
     originTopLine*: int
     originLeftColumn*: int

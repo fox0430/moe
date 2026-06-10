@@ -27,7 +27,7 @@ import std/[strformat, strutils, options]
 import buffer
 import picker/nav
 
-import references_viewer_types
+import types/references_viewer_types
 export references_viewer_types
 
 proc newReferencesViewerState*(

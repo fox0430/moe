@@ -27,7 +27,7 @@ import pkg/celina
 
 import buffer, highlight, color, filer, logger, unicode_utils
 
-import filetree_types
+import types/filetree_types
 export filetree_types
 
 const DefaultFileTreeWidth* = 30

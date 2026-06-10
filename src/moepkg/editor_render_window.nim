@@ -24,9 +24,21 @@ import std/[options, strutils, unicode, tables]
 import pkg/celina
 
 import
-  editor_types, editor_window_layout, editor_render_helpers, render_utils, sidebar,
-  color, unicode_utils, search_utils, highlight, modes, colorcode, git_conflict,
-  style_patch, status_line, editor_codelens
+  types/editor_types,
+  editor_window_layout,
+  editor_render_helpers,
+  render_utils,
+  sidebar,
+  color,
+  unicode_utils,
+  search_utils,
+  highlight,
+  modes,
+  colorcode,
+  git_conflict,
+  style_patch,
+  status_line,
+  editor_codelens
 import command_handlers/visual_handler
 
 type LineStyleContext* = object

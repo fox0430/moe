@@ -23,7 +23,8 @@ import std/[options, strutils]
 
 import pkg/celina
 
-import editor_types, color, colorcode, render_utils, config_mode, editor_window_layout
+import
+  types/editor_types, color, colorcode, render_utils, config_mode, editor_window_layout
 import terminal/ansi_parser
 
 proc renderConfig*(

@@ -25,7 +25,7 @@ import std/[options, unicode]
 import buffer
 import picker/nav
 
-import bookmark_manager_types
+import types/bookmark_manager_types
 export bookmark_manager_types
 
 proc newBookmarkManagerState*(): BookmarkManagerState =

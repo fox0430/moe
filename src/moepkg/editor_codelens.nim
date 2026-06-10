@@ -23,7 +23,7 @@ import std/[options, monotimes, tables, json, times, algorithm]
 
 import pkg/[results, chronos]
 
-import editor_types, logger, highlight, lsp_integration
+import types/editor_types, logger, highlight, lsp_integration
 import lsp/rust_runnable
 
 proc hasCodeLensSupport*(e: Editor): bool =

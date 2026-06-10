@@ -28,7 +28,7 @@ import lsp/protocol/[types, enums]
 import buffer
 import picker/nav
 
-import documentsymbol_viewer_types
+import types/documentsymbol_viewer_types
 export documentsymbol_viewer_types
 
 proc symbolKindToString*(kind: SymbolKind): string =

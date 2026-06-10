@@ -25,7 +25,7 @@ import std/[strutils, options]
 
 import buffer, help_generator
 
-import help_viewer_types
+import types/help_viewer_types
 export help_viewer_types
 
 const HelpSentences* =

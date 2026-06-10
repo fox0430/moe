@@ -37,7 +37,7 @@ import
     completion, signature_help, lsp_integration,
   ]
 import handler_types, insert_commands
-import ../editor_types
+import ../types/editor_types
 export handler_types
 
 type

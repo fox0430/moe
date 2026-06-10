@@ -24,7 +24,7 @@
 
 import std/[options, monotimes, times]
 
-import editor_types, lsp_integration, signature_help
+import types/editor_types, lsp_integration, signature_help
 
 proc shouldRequestSignatureHelp*(
     sigHelp: SignatureHelpRequestState,

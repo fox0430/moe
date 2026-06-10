@@ -5,7 +5,7 @@ import ../src/moepkg/types
 import ../src/moepkg/window_manager
 import ../src/moepkg/key_bindings
 import ../src/moepkg/key_router
-from ../src/moepkg/editor_types import Editor
+from ../src/moepkg/types/editor_types import Editor
 
 proc createTestEditor*(
     buf: TextBuffer,

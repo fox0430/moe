@@ -39,7 +39,7 @@ import
     recent_file_mode,
   ]
 import ../lsp/protocol/types as lspTypes
-import ../editor_types
+import ../types/editor_types
 import handler_types, handler_result
 import
   insert_handler, insert_commands, command_handler, visual_handler, replace_handler,

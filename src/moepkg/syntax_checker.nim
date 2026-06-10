@@ -24,7 +24,7 @@ import pkg/[results, chronos, regex]
 import background_process, primitives, buffer
 import syntax/tokenizer
 
-import syntax_checker_types
+import types/syntax_checker_types
 export syntax_checker_types
 
 type SyntaxCheckProcess* = object

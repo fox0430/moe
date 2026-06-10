@@ -29,7 +29,7 @@ import ../src/moepkg/motion {.all.}
 import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/registers {.all.}
 import ../src/moepkg/window_manager {.all.}
-import ../src/moepkg/editor_types {.all.}
+import ../src/moepkg/types/editor_types {.all.}
 import ../src/moepkg/command_handlers/replace_handler {.all.}
 
 proc createTestState(): EditorState =

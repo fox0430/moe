@@ -24,8 +24,16 @@ import std/[options, strutils, unicode]
 import pkg/celina
 
 import
-  editor_types, editor_window, editor_window_layout, editor_render_window,
-  editor_render_modes, render_utils, status_line, tab_line, buffer, unicode_utils,
+  types/editor_types,
+  editor_window,
+  editor_window_layout,
+  editor_render_window,
+  editor_render_modes,
+  render_utils,
+  status_line,
+  tab_line,
+  buffer,
+  unicode_utils,
   command_completion
 
 proc updateViewportSize*(e: Editor, buffer: Buffer): bool =

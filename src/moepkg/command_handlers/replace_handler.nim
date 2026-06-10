@@ -24,7 +24,7 @@ import std/[options, unicode]
 import pkg/results
 
 import ../[types, buffer, modes, key_bindings, motion, command_registry]
-import ../editor_types
+import ../types/editor_types
 import handler_types
 export handler_types
 

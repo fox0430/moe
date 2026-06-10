@@ -32,7 +32,7 @@ import ../src/moepkg/motion {.all.}
 import ../src/moepkg/command_registry {.all.}
 import ../src/moepkg/config {.all.}
 import ../src/moepkg/registers {.all.}
-import ../src/moepkg/editor_types except Command
+import ../src/moepkg/types/editor_types except Command
 import ../src/moepkg/command_handlers/normal_handler {.all.}
 import ../src/moepkg/command_handlers/command_passthrough {.all.}
 import ../src/moepkg/command_handlers/handler_result {.all.}
