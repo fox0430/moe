@@ -556,3 +556,49 @@ suite "editor_navigation - cursor clamping":
     check e.cursor.line == 0
     # Clamped to the last character index (charLen - 1 == 2)
     check e.cursor.column == 2
+
+suite "editor_navigation - per-feature config gates":
+  proc createEditorWithLsp(config: EditorConfig): Editor =
+    let vr = newValidationResult()
+    result = newEditor(config, vr)
+    result.lsp.enabled = true
+
+  test "Goto definition returns false when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.definition.enable = false
+    let e = createEditorWithLsp(config)
+
+    check not e.requestLspGotoDefinition()
+    check e.state.statusMessage == "LSP definition is disabled"
+
+  test "Goto declaration returns false when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.declaration.enable = false
+    let e = createEditorWithLsp(config)
+
+    check not e.requestLspGotoDeclaration()
+    check e.state.statusMessage == "LSP declaration is disabled"
+
+  test "Find references returns false when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.references.enable = false
+    let e = createEditorWithLsp(config)
+
+    check not e.requestLspReferences()
+    check e.state.statusMessage == "LSP references is disabled"
+
+  test "Goto type definition returns false when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.typeDefinition.enable = false
+    let e = createEditorWithLsp(config)
+
+    check not e.requestLspTypeDefinition()
+    check e.state.statusMessage == "LSP type definition is disabled"
+
+  test "Goto implementation returns false when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.implementation.enable = false
+    let e = createEditorWithLsp(config)
+
+    check not e.requestLspImplementation()
+    check e.state.statusMessage == "LSP implementation is disabled"
