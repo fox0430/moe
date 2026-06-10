@@ -1138,6 +1138,13 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   # The insert handler caches lsp.completion.enable as a flag (it has no access
   # to e.config), so re-sync it on reload like the display flags above.
   e.handlerManager.insertHandler.lspCompletionEnabled = newConfig.lsp.completion.enable
+
+  if not newConfig.lsp.diagnostics.enable:
+    # Diagnostics are server-push; when disabled, incoming publishDiagnostics are
+    # dropped in applyDiagnosticsForUri. Clear what was already applied so
+    # existing markers and hover content disappear on reload too.
+    e.clearAllDiagnostics()
+
   e.state.display.tabStop = newConfig.standard.tabStop
   e.state.display.shiftWidth = newConfig.standard.shiftWidth
   e.state.display.softTabStop = newConfig.standard.softTabStop

@@ -1083,6 +1083,29 @@ suite "Editor - applyConfigSettings syncs display state":
     e.applyConfigSettings(e.config)
     check e.handlerManager.insertHandler.lspCompletionEnabled == true
 
+  test "Disabling diagnostics clears stored diagnostics and markers":
+    # Diagnostics are server-push, so disabling only stops future updates;
+    # the reload path must clear what was already applied.
+    let e = createTestEditor()
+    let buf = e.activeBuffer()
+    buf.setLineMarker(0, LineMarkerKind.SyntaxError)
+    buf.diagnostics.add(
+      BufferDiagnostic(
+        startLine: 0,
+        startCol: 0,
+        endLine: 0,
+        endCol: 1,
+        severity: bdsError,
+        message: "boom",
+      )
+    )
+
+    e.config.lsp.diagnostics.enable = false
+    e.applyConfigSettings(e.config)
+
+    check buf.diagnostics.len == 0
+    check buf.getLineMarker(0).isNone
+
   test "Syncs showIndentationLines from config.standard.indentationLines":
     let e = createTestEditor()
 
