@@ -26,8 +26,8 @@
 ##   * handler_manager.nim:handleNormalMode — Normal mode result translation
 ##
 ## Stateful commandIds (changelist.*, bookmark.*, jump.*, macro.record,
-## editor.open.uri, lsp.document.symbol, insert.*, edit.{undo,redo}) are NOT
-## handled here and remain in normal_handler.nim with full editor context.
+## editor.open.uri, insert.*, edit.{undo,redo}) are NOT handled here and remain
+## in normal_handler.nim with full editor context.
 
 import std/options
 
@@ -69,6 +69,7 @@ type PassthroughKind* = enum
   ptLspRename
   ptLspSelectionRange
   ptLspDocumentLink
+  ptLspDocumentSymbol
 
 proc lookupPassthrough*(commandId: string): Option[PassthroughKind] =
   ## Return the canonical PassthroughKind for `commandId`, or none for
@@ -134,6 +135,8 @@ proc lookupPassthrough*(commandId: string): Option[PassthroughKind] =
     some(ptLspSelectionRange)
   of "lsp.document.link":
     some(ptLspDocumentLink)
+  of "lsp.document.symbol":
+    some(ptLspDocumentSymbol)
   else:
     none(PassthroughKind)
 
@@ -202,3 +205,5 @@ proc toHandlerResult*(k: PassthroughKind): HandlerResult =
     HandlerResult(kind: hrLspSelectionRange)
   of ptLspDocumentLink:
     HandlerResult(kind: hrLspDocumentLink)
+  of ptLspDocumentSymbol:
+    HandlerResult(kind: hrLspDocumentSymbol)

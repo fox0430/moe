@@ -103,6 +103,7 @@ type
     hrLspGotoDefinition # Execute LSP goto definition
     hrLspGotoDeclaration # Execute LSP goto declaration
     hrLspFindReferences # Execute LSP find references
+    hrLspDocumentSymbol # Execute LSP document symbol request
     hrLspCodeLensExecute # Execute CodeLens on current line
     hrLspCallHierarchyIncoming # Execute LSP incoming calls
     hrLspCallHierarchyOutgoing # Execute LSP outgoing calls
@@ -287,6 +288,8 @@ type
       discard
     of hrLspFindReferences:
       discard
+    of hrLspDocumentSymbol:
+      discard
     of hrLspCodeLensExecute:
       discard
     of hrLspCallHierarchyIncoming:
@@ -421,7 +424,7 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
     hrIncreaseWindowHeight, hrDecreaseWindowHeight, hrIncreaseWindowWidth,
     hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow, hrEnterDiffViewer,
-    hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
+    hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences, hrLspDocumentSymbol,
     hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
     hrLspTypeDefinition, hrLspImplementation, hrLspHover, hrLspRename,
     hrLspSelectionRange, hrLspDocumentLink, hrJumpList, hrChanges, hrLspLog,

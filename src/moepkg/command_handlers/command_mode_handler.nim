@@ -1524,10 +1524,11 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
           hrPrevWindow, hrIncreaseWindowHeight, hrDecreaseWindowHeight,
           hrIncreaseWindowWidth, hrDecreaseWindowWidth, hrEqualizeWindows, hrSwapWindow,
           hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
-          hrLspCodeLensExecute, hrLspTypeDefinition, hrLspImplementation, hrLspHover,
-          hrLspRename, hrLspSelectionRange, hrLspDocumentLink, hrConfigQuit,
-          hrConfigSaveConfig, hrDebugViewerQuit, hrLogViewerQuit, hrTerminalQuit,
-          hrExecCommand, hrFileTreeOpenFile, hrFileTreeQuit, hrOpenUri:
+          hrLspDocumentSymbol, hrLspCodeLensExecute, hrLspTypeDefinition,
+          hrLspImplementation, hrLspHover, hrLspRename, hrLspSelectionRange,
+          hrLspDocumentLink, hrConfigQuit, hrConfigSaveConfig, hrDebugViewerQuit,
+          hrLogViewerQuit, hrTerminalQuit, hrExecCommand, hrFileTreeOpenFile,
+          hrFileTreeQuit, hrOpenUri:
         discard # Not returned from command mode handler
 
       if not overlayHandled:

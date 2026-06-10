@@ -653,6 +653,9 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
   of hrLspFindReferences:
     discard e.requestLspReferences()
     return true
+  of hrLspDocumentSymbol:
+    discard e.startLspDocumentSymbols()
+    return true
   of hrLspCodeLensExecute:
     asyncSpawn e.executeCurrentLineCodeLens()
     return true
