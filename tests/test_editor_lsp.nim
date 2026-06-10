@@ -22,6 +22,8 @@
 import std/[unittest, os, options, strutils, monotimes, times, tables]
 
 import ../src/moepkg/[editor, buffer, config, config_loader, types, hover_popup]
+import pkg/chronos
+
 import ../src/moepkg/editor_lsp {.all.}
 import ../src/moepkg/lsp_integration {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
@@ -222,3 +224,33 @@ suite "editor_lsp - Async functions":
     let e = createTestEditorWithLspDisabled()
 
     check not e.lsp.enabled
+
+suite "editor_lsp - per-feature config gates":
+  proc createEditorWithLsp(config: EditorConfig): Editor =
+    let vr = newValidationResult()
+    result = newEditor(config, vr)
+    result.lsp.enabled = true
+
+  test "requestLspFormat returns false when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.documentFormatting.enable = false
+    let e = createEditorWithLsp(config)
+
+    check not waitFor e.requestLspFormat()
+    check e.state.statusMessage == "LSP document formatting is disabled"
+
+  test "requestLspRename does nothing when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.rename.enable = false
+    let e = createEditorWithLsp(config)
+
+    waitFor e.requestLspRename("newName")
+    check e.state.statusMessage == "LSP rename is disabled"
+
+  test "requestLspExecuteCommand does nothing when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.executeCommand.enable = false
+    let e = createEditorWithLsp(config)
+
+    waitFor e.requestLspExecuteCommand("test.command")
+    check e.state.statusMessage == "LSP execute command is disabled"

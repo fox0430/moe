@@ -30,6 +30,10 @@ proc startLspDocumentSymbols*(e: Editor): bool =
     e.state.statusMessage = "LSP is not enabled"
     return false
 
+  if not e.config.lsp.documentSymbol.enable:
+    e.state.statusMessage = "LSP document symbol is disabled"
+    return false
+
   let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
     e.state.statusMessage = "No file path for current buffer"

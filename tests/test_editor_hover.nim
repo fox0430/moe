@@ -383,3 +383,14 @@ suite "editor_hover - maybeAutoHoverDiagnostic":
     check not e.state.lspCache.hoverPopup.isActive
     check e.state.lspCache.autoHoverCursorLine == -1
     check e.state.lspCache.autoHoverCursorCol == -1
+
+suite "editor_hover - config gate":
+  test "startLspHover returns false when hover is disabled in config":
+    let config = newEditorConfig()
+    config.lsp.hover.enable = false
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+    e.lsp.enabled = true
+
+    check not e.startLspHover()
+    check e.state.statusMessage == "LSP hover is disabled"

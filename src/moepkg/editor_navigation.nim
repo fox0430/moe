@@ -251,6 +251,27 @@ proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =
     e.state.statusMessage = "LSP is not enabled"
     return false
 
+  let kindName =
+    case kind
+    of lrkDefinition: "definition"
+    of lrkDeclaration: "declaration"
+    of lrkReferences: "references"
+    of lrkTypeDefinition: "type definition"
+    of lrkImplementation: "implementation"
+    of lrkNone: ""
+
+  let featureEnabled =
+    case kind
+    of lrkDefinition: e.config.lsp.definition.enable
+    of lrkDeclaration: e.config.lsp.declaration.enable
+    of lrkReferences: e.config.lsp.references.enable
+    of lrkTypeDefinition: e.config.lsp.typeDefinition.enable
+    of lrkImplementation: e.config.lsp.implementation.enable
+    of lrkNone: false
+  if not featureEnabled:
+    e.state.statusMessage = "LSP " & kindName & " is disabled"
+    return false
+
   # Cancel any pending location request
   if e.state.lspCache.pendingLocationRequestId != 0:
     e.lsp.cancelRequest(e.state.lspCache.pendingLocationRequestId)
@@ -277,14 +298,6 @@ proc startLspLocationRequest(e: Editor, kind: LspLocationRequestKind): bool =
       return false
 
   if reqResult.isErr:
-    let kindName =
-      case kind
-      of lrkDefinition: "definition"
-      of lrkDeclaration: "declaration"
-      of lrkReferences: "references"
-      of lrkTypeDefinition: "type definition"
-      of lrkImplementation: "implementation"
-      of lrkNone: ""
     e.state.statusMessage = "LSP " & kindName & " failed: " & reqResult.error
     return false
 

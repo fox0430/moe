@@ -317,3 +317,24 @@ suite "editor_callhierarchy - jumpToCallHierarchyItem":
 
     check result
     check e.cursor.line == 1
+
+suite "editor_callhierarchy - config gate":
+  test "Incoming calls returns false when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.callHierarchy.enable = false
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+    e.lsp.enabled = true
+
+    check not e.requestLspCallHierarchyIncoming()
+    check e.state.statusMessage == "LSP call hierarchy is disabled"
+
+  test "Outgoing calls returns false when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.callHierarchy.enable = false
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+    e.lsp.enabled = true
+
+    check not e.requestLspCallHierarchyOutgoing()
+    check e.state.statusMessage == "LSP call hierarchy is disabled"

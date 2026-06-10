@@ -30,6 +30,10 @@ proc startLspSelectionRange*(e: Editor): bool =
     e.state.statusMessage = "LSP is not enabled"
     return false
 
+  if not e.config.lsp.selectionRange.enable:
+    e.state.statusMessage = "LSP selection range is disabled"
+    return false
+
   # Cancel any pending selection range request
   if e.state.lspCache.pendingSelectionRangeRequestId != 0:
     e.lsp.cancelRequest(e.state.lspCache.pendingSelectionRangeRequestId)

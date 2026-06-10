@@ -34,6 +34,10 @@ proc startLspHover*(e: Editor): bool =
     e.state.statusMessage = "LSP is not enabled"
     return false
 
+  if not e.config.lsp.hover.enable:
+    e.state.statusMessage = "LSP hover is disabled"
+    return false
+
   # Cancel any pending hover request
   if e.state.lspCache.pendingHoverRequestId != 0:
     e.lsp.cancelRequest(e.state.lspCache.pendingHoverRequestId)

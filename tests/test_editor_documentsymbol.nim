@@ -76,3 +76,14 @@ suite "editor_documentsymbol - pollLspDocumentSymbols":
 
     e.pollLspDocumentSymbols()
     # No crash means success
+
+suite "editor_documentsymbol - config gate":
+  test "startLspDocumentSymbols returns false when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.documentSymbol.enable = false
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+    e.lsp.enabled = true
+
+    check not e.startLspDocumentSymbols()
+    check e.state.statusMessage == "LSP document symbol is disabled"

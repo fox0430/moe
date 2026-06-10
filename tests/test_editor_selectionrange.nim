@@ -113,3 +113,14 @@ suite "editor_selectionrange - pollLspSelectionRange":
     check e.state.visualSelection.start == BufferPosition(line: 0, column: 2)
     check e.state.visualSelection.current == BufferPosition(line: 0, column: 3)
     check e.cursor == BufferPosition(line: 0, column: 3)
+
+suite "editor_selectionrange - config gate":
+  test "startLspSelectionRange returns false when disabled in config":
+    let config = newEditorConfig()
+    config.lsp.selectionRange.enable = false
+    let vr = newValidationResult()
+    let e = newEditor(config, vr)
+    e.lsp.enabled = true
+
+    check not e.startLspSelectionRange()
+    check e.state.statusMessage == "LSP selection range is disabled"

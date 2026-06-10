@@ -76,6 +76,10 @@ proc requestLspFormat*(e: Editor): Future[bool] {.async: (raises: [CancelledErro
         e.state.statusMessage = "LSP not enabled"
         return false
 
+      if not e.config.lsp.documentFormatting.enable:
+        e.state.statusMessage = "LSP document formatting is disabled"
+        return false
+
       let activeBuffer = e.activeBuffer()
       # Snapshot the buffer state before awaiting: the server's edits are
       # positioned against this state and must not be applied if the user
@@ -167,6 +171,10 @@ proc requestLspRename*(
     try:
       if not e.lsp.enabled:
         e.state.statusMessage = "LSP not enabled"
+        return
+
+      if not e.config.lsp.rename.enable:
+        e.state.statusMessage = "LSP rename is disabled"
         return
 
       let activeBuffer = e.activeBuffer()
@@ -297,6 +305,10 @@ proc requestLspExecuteCommand*(
     try:
       if not e.lsp.enabled:
         e.state.statusMessage = "LSP not enabled"
+        return
+
+      if not e.config.lsp.executeCommand.enable:
+        e.state.statusMessage = "LSP execute command is disabled"
         return
 
       let activeBuffer = e.activeBuffer()
