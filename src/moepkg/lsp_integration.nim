@@ -777,11 +777,6 @@ proc startInlayHintRequest*(
     buffer.toUtf16Column(actualLastLine, buffer.getLine(actualLastLine).charLen)
   lsp.service.startInlayHintRequest(path, actualFirstLine, 0, actualLastLine, endChar)
 
-proc hasInlineValueSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
-  ## Check if inline value is supported for a buffer's language
-  let langId = requireLangId(lsp, buffer)
-  langId.isSome and lsp.service.hasInlineValueSupport(langId.get)
-
 proc hasDocumentLinkSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
   ## Check if document link is supported for a buffer's language
   let langId = requireLangId(lsp, buffer)

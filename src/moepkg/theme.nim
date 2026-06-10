@@ -274,7 +274,6 @@ const DefaultColors*: ThemeColors = [
 
   # LSP features
   EditorColorPairIndex.inlayHint: makeColorPairDefaultBg("#636d83"),
-  EditorColorPairIndex.inlineValue: makeColorPairDefaultBg("#636d83"),
   EditorColorPairIndex.codeLens: makeColorPairDefaultBg("#636d83"),
 
   # Filer mode

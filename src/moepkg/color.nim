@@ -265,7 +265,6 @@ type
 
     # LSP features
     inlayHint
-    inlineValue
     codeLens
 
     # Filer mode
@@ -596,7 +595,6 @@ const
     EditorColorPairIndex.union: "LSP semantic token: union",
     EditorColorPairIndex.unresolvedReference: "LSP semantic token: unresolved reference",
     EditorColorPairIndex.inlayHint: "LSP inlay hint",
-    EditorColorPairIndex.inlineValue: "LSP inline value",
     EditorColorPairIndex.codeLens: "LSP code lens",
     EditorColorPairIndex.currentFile: "Filer: current file name",
     EditorColorPairIndex.file: "Filer: file name",

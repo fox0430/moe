@@ -551,7 +551,6 @@ suite "LspService - Capability Checking (without workers)":
     check not svc.hasSemanticTokensFullSupport("nim")
     check not svc.hasSemanticTokensRangeSupport("nim")
     check not svc.hasSelectionRangeSupport("nim")
-    check not svc.hasInlineValueSupport("nim")
     check not svc.hasCodeLensSupport("nim")
     check not svc.hasCodeLensResolveSupport("nim")
     check not svc.hasCallHierarchySupport("nim")

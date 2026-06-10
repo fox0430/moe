@@ -196,7 +196,6 @@ union = { fg = "#00b7ce" }
 unresolvedReference = { fg = "#f8f5d5" }
 
 inlayHint = { fg = "#808080" }
-inlineValue = { fg = "#808080" }
 codeLens = { fg = "#808080" }
 
 currentFile = { fg = "#000000", bg = "#09aefa" }

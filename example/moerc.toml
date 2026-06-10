@@ -540,10 +540,6 @@ enable = true                          # Enable hover information
 
 enable = true                          # Enable inlay hints
 
-[Lsp.InlineValue]
-
-enable = false                         # Enable inline values
-
 [Lsp.References]
 
 enable = true                          # Enable find references
