@@ -292,15 +292,17 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     # Jump to selected reference. Restore the pre-viewer cursor first so the
     # jump list anchors at the original position (enabling jump-back).
     let win = e.activeWindow
+    var openWindow = false
     if win.modeState.kind == mskReferences:
       let refState = win.modeState.references
+      openWindow = refState.openWindowOnJump
       win.clearModeState(EditorMode.References)
       win.cursor = refState.originCursor
     else:
       win.clearModeState(EditorMode.References)
     win.mode = EditorMode.Normal
     e.setMode(EditorMode.Normal)
-    discard e.openFileAndJumpTo(r.jumpToPath, r.jumpToLine, r.jumpToColumn)
+    discard e.openFileAndJumpTo(r.jumpToPath, r.jumpToLine, r.jumpToColumn, openWindow)
     return true
   of hrDocumentSymbolQuit:
     # Close document symbol viewer and return to Normal mode, restoring the

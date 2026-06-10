@@ -38,6 +38,9 @@ type
     topLine*: int # Scroll position (first visible line)
     title*: string # Title for the list (e.g., "References", "Definitions")
     waitingForG*: bool # Waiting for second 'g' for 'gg' command
+    # When true, jumping to a selected item opens a new vertical split window
+    # instead of reusing the current one (goto features' openWindow option).
+    openWindowOnJump*: bool
     # Cursor/viewport of the underlying buffer captured on entry, so quitting
     # the viewer restores the position instead of leaving it at (0, 0).
     originCursor*: BufferPosition

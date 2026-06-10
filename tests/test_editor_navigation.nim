@@ -602,3 +602,160 @@ suite "editor_navigation - per-feature config gates":
 
     check not e.requestLspImplementation()
     check e.state.statusMessage == "LSP implementation is disabled"
+
+suite "editor_navigation - openWindow option":
+  test "jumpToLspLocation does not split when openWindow is false":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_ow_nosplit.txt"
+
+    writeFile(testFile, "line 0\nline 1\nline 2\n")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+    let windowsBefore = e.windowManager.windows.len
+
+    let loc = lspTypes.Location(
+      uri: "file://" & testFile,
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 2, character: 0),
+        `end`: lspTypes.Position(line: 2, character: 6),
+      ),
+    )
+
+    check e.jumpToLspLocation(loc, "Definition")
+    check e.windowManager.windows.len == windowsBefore
+
+  test "jumpToLspLocation opens a new split window when openWindow is true":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_ow_same.txt"
+
+    writeFile(testFile, "line 0\nline 1\nline 2\n")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+    let windowsBefore = e.windowManager.windows.len
+
+    let loc = lspTypes.Location(
+      uri: "file://" & testFile,
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 2, character: 0),
+        `end`: lspTypes.Position(line: 2, character: 6),
+      ),
+    )
+
+    check e.jumpToLspLocation(loc, "Definition", openWindow = true)
+    check e.windowManager.windows.len == windowsBefore + 1
+    # The jump lands in the new (active) window
+    check e.cursor.line == 2
+
+  test "jumpToLspLocation with openWindow keeps the original window position":
+    let e = createTestEditor()
+    let testFile1 = getTempDir() / "moe_test_ow_orig1.txt"
+    let testFile2 = getTempDir() / "moe_test_ow_orig2.txt"
+
+    writeFile(testFile1, "file 1\nfile 1 line 1\n")
+    writeFile(testFile2, "line 0\nline 1\nline 2\n")
+    defer:
+      removeFile(testFile1)
+      removeFile(testFile2)
+
+    discard e.editFile(testFile1)
+    e.cursor = BufferPosition(line: 1, column: 0)
+
+    let loc = lspTypes.Location(
+      uri: "file://" & testFile2,
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 2, character: 0),
+        `end`: lspTypes.Position(line: 2, character: 6),
+      ),
+    )
+
+    check e.jumpToLspLocation(loc, "Definition", openWindow = true)
+    check e.windowManager.windows.len == 2
+    # Active window shows the jump target
+    check e.activeBuffer().filePath.get == testFile2
+    check e.cursor.line == 2
+    # The other window still shows the original file at its original position
+    var foundOriginal = false
+    for win in e.windowManager.windows:
+      if not win.active:
+        check win.buffer.filePath.get == testFile1
+        check win.cursor.line == 1
+        foundOriginal = true
+    check foundOriginal
+
+  test "handleLspLocations passes openWindow for a single location":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_ow_handle.txt"
+
+    writeFile(testFile, "line 0\nline 1\nline 2\n")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+    let windowsBefore = e.windowManager.windows.len
+
+    let loc = lspTypes.Location(
+      uri: "file://" & testFile,
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 1, character: 0),
+        `end`: lspTypes.Position(line: 1, character: 6),
+      ),
+    )
+
+    check e.handleLspLocations(@[loc], "Definitions", "Definition", openWindow = true)
+    check e.windowManager.windows.len == windowsBefore + 1
+    check e.cursor.line == 1
+
+  test "handleLspLocations stores openWindow in the References viewer state":
+    let e = createTestEditor()
+    let testFile = getTempDir() / "moe_test_ow_viewer.txt"
+
+    writeFile(testFile, "line 0\nline 1\nline 2\n")
+    defer:
+      removeFile(testFile)
+
+    discard e.editFile(testFile)
+
+    let loc1 = lspTypes.Location(
+      uri: "file://" & testFile,
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 0, character: 0),
+        `end`: lspTypes.Position(line: 0, character: 6),
+      ),
+    )
+    let loc2 = lspTypes.Location(
+      uri: "file://" & testFile,
+      range: lspTypes.Range(
+        start: lspTypes.Position(line: 2, character: 0),
+        `end`: lspTypes.Position(line: 2, character: 6),
+      ),
+    )
+
+    check e.handleLspLocations(
+      @[loc1, loc2], "Definitions", "Definition", openWindow = true
+    )
+    check e.state.mode == EditorMode.References
+    check e.activeWindow.modeState.kind == mskReferences
+    check e.activeWindow.modeState.references.openWindowOnJump
+
+  test "openFileAndJumpTo opens a new split window when openWindow is true":
+    let e = createTestEditor()
+    let testFile1 = getTempDir() / "moe_test_ow_open1.txt"
+    let testFile2 = getTempDir() / "moe_test_ow_open2.txt"
+
+    writeFile(testFile1, "file 1\n")
+    writeFile(testFile2, "line 0\nline 1\nline 2\n")
+    defer:
+      removeFile(testFile1)
+      removeFile(testFile2)
+
+    discard e.editFile(testFile1)
+    let windowsBefore = e.windowManager.windows.len
+
+    check e.openFileAndJumpTo(testFile2, 1, 0, openWindow = true)
+    check e.windowManager.windows.len == windowsBefore + 1
+    check e.activeBuffer().filePath.get == testFile2
+    check e.cursor.line == 1
