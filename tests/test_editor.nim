@@ -1070,6 +1070,19 @@ suite "Editor - applyConfigSettings syncs display state":
     e.applyConfigSettings(e.config)
     check e.state.display.showInlayHint == true
 
+  test "Syncs lspCompletionEnabled from config.lsp.completion.enable":
+    # The insert handler caches lsp.completion.enable (it has no e.config access),
+    # so a config reload must re-sync the flag.
+    let e = createTestEditor()
+
+    e.config.lsp.completion.enable = false
+    e.applyConfigSettings(e.config)
+    check e.handlerManager.insertHandler.lspCompletionEnabled == false
+
+    e.config.lsp.completion.enable = true
+    e.applyConfigSettings(e.config)
+    check e.handlerManager.insertHandler.lspCompletionEnabled == true
+
   test "Syncs showIndentationLines from config.standard.indentationLines":
     let e = createTestEditor()
 

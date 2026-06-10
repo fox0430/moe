@@ -471,6 +471,9 @@ proc updateSemanticTokensCache*(e: Editor) =
   if not e.lsp.enabled:
     return
 
+  if not e.config.lsp.semanticTokens.enable:
+    return
+
   let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
     return

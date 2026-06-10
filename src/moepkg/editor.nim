@@ -943,6 +943,7 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig,
     cmdRegistry, result.config.clipboard, result.config.smoothScroll,
     result.config.notification, result.lsp, result.config.autocomplete.enable,
+    result.config.lsp.completion.enable,
   )
 
   # Set clipboard tool for register system
@@ -1133,6 +1134,10 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   e.state.display.showCodeLens = newConfig.lsp.codeLens.enable
   e.state.display.showDocumentHighlight = newConfig.lsp.documentHighlight.enable
   e.state.display.showInlayHint = newConfig.lsp.inlayHint.enable
+
+  # The insert handler caches lsp.completion.enable as a flag (it has no access
+  # to e.config), so re-sync it on reload like the display flags above.
+  e.handlerManager.insertHandler.lspCompletionEnabled = newConfig.lsp.completion.enable
   e.state.display.tabStop = newConfig.standard.tabStop
   e.state.display.shiftWidth = newConfig.standard.shiftWidth
   e.state.display.softTabStop = newConfig.standard.softTabStop

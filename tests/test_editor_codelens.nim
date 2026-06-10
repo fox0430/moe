@@ -332,6 +332,19 @@ suite "Semantic Tokens Cache":
     # Cache should remain unchanged
     check e.state.lspCache.semanticTokensCache.isValid
 
+  test "updateSemanticTokensCache - feature disabled via lsp.semanticTokens.enable":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.config.lsp.semanticTokens.enable = false
+    e.state.lspCache.semanticTokensCache.isValid = true
+
+    # The feature gate returns before issuing a request, leaving the cache and
+    # the pending-request id untouched.
+    e.updateSemanticTokensCache()
+
+    check e.state.lspCache.semanticTokensCache.isValid
+    check e.state.lspCache.pendingSemanticTokensRequestId == 0
+
 suite "CodeLens Item":
   test "CodeLensItem with arguments":
     let item = CodeLensItem(

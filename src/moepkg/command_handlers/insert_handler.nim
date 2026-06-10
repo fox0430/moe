@@ -69,6 +69,7 @@ proc newInsertModeHandler*(
     commandRegistry: CommandRegistry,
     lsp: LspIntegration = nil,
     autocompleteEnabled: bool = true,
+    lspCompletionEnabled: bool = true,
     notificationConfig: NotificationConfig = NotificationConfig(),
 ): InsertModeHandler =
   ## Create a new Insert mode handler
@@ -80,6 +81,7 @@ proc newInsertModeHandler*(
     signatureHelpManager: newSignatureHelpManager(),
     lsp: lsp,
     autocompleteEnabled: autocompleteEnabled,
+    lspCompletionEnabled: lspCompletionEnabled,
     notificationConfig: notificationConfig,
   )
 
@@ -390,9 +392,11 @@ proc triggerLspCompletionRequest*(
   let line = buffer.getLine(state.cursor.line)
   let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
 
-  # If LSP is available, check if we can skip the request and filter client-side.
-  # This must be checked BEFORE triggerCompletion, which clears lspItems.
-  if not handler.lsp.isNil and handler.lsp.isEnabled:
+  # If LSP completion is available, check if we can skip the request and filter
+  # client-side. This must be checked BEFORE triggerCompletion, which clears
+  # lspItems. When lsp.completion.enable is off we fall through to buffer
+  # completions only, without touching LSP.
+  if not handler.lsp.isNil and handler.lsp.isEnabled and handler.lspCompletionEnabled:
     if handler.completionManager.shouldSkipLspRequest(prefix):
       if handler.completionManager.lspItems.len > 0:
         # Filter existing LSP items client-side without clearing them
@@ -419,8 +423,8 @@ proc triggerLspCompletionRequest*(
     buffer, state.cursor.line, state.cursor.column, buffer.language
   )
 
-  # If LSP is available, start async request in background
-  if not handler.lsp.isNil and handler.lsp.isEnabled:
+  # If LSP completion is available, start async request in background
+  if not handler.lsp.isNil and handler.lsp.isEnabled and handler.lspCompletionEnabled:
     # Cancel any pending LSP completion request to avoid orphaned responses
     let oldReqId = handler.completionManager.getLspRequestId
     if oldReqId.isSome:

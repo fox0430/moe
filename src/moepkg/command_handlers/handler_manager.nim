@@ -68,6 +68,7 @@ proc newHandlerManager*(
     notificationConfig: NotificationConfig = NotificationConfig(),
     lsp: LspIntegration = nil,
     autocompleteEnabled: bool = true,
+    lspCompletionEnabled: bool = true,
 ): HandlerManager =
   ## Create a new handler manager with all mode handlers
 
@@ -77,7 +78,7 @@ proc newHandlerManager*(
   )
   let insertHandler = newInsertModeHandler(
     keyBindingRegistry, motionController, commandRegistry, lsp, autocompleteEnabled,
-    notificationConfig,
+    lspCompletionEnabled, notificationConfig,
   )
   let commandHandler =
     newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
