@@ -21,7 +21,7 @@ import std/[unittest, tables, options, monotimes, times, json]
 
 import pkg/chronos
 
-import ../src/moepkg/[editor, config, types, buffer]
+import ../src/moepkg/[editor, config, types, buffer, color]
 import ../src/moepkg/editor_codelens {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
 
@@ -76,7 +76,11 @@ suite "CodeLens Cache":
 
   test "getCodeLensItemsForCurrentLine":
     let e = createTestEditor()
+    # The cache must be owned by the active buffer or the filePath guard returns
+    # @[] (see "getCodeLensItemsForCurrentLine - foreign cache" below).
+    e.activeBuffer().filePath = some("/test/file.nim")
     e.state.lspCache.codeLensCache.isValid = true
+    e.state.lspCache.codeLensCache.filePath = "/test/file.nim"
     e.state.lspCache.codeLensCache.itemsByLine =
       {3: @[CodeLensItem(line: 3, title: "Test Item", command: "test")]}.toTable
 
@@ -85,6 +89,19 @@ suite "CodeLens Cache":
     let items = e.getCodeLensItemsForCurrentLine()
     check items.len == 1
     check items[0].title == "Test Item"
+
+  test "getCodeLensItemsForCurrentLine - foreign cache returns empty":
+    # After a buffer switch the line-keyed cache may still hold the previous
+    # file's lenses; the filePath guard must suppress them.
+    let e = createTestEditor()
+    e.activeBuffer().filePath = some("/test/current.nim")
+    e.state.lspCache.codeLensCache.isValid = true
+    e.state.lspCache.codeLensCache.filePath = "/test/previous.nim"
+    e.state.lspCache.codeLensCache.itemsByLine =
+      {3: @[CodeLensItem(line: 3, title: "Stale", command: "test")]}.toTable
+
+    e.cursor = BufferPosition(line: 3, column: 0)
+    check e.getCodeLensItemsForCurrentLine().len == 0
 
   test "invalidateCodeLensCache":
     let e = createTestEditor()
@@ -111,33 +128,6 @@ suite "CodeLens Cache":
     e.doUpdateCodeLensCache()
 
     check e.state.lspCache.lastCodeLensUpdate > old
-
-  test "getCodeLensDisplayText - no items":
-    let e = createTestEditor()
-    e.state.lspCache.codeLensCache.isValid = true
-    let text = e.getCodeLensDisplayText(0)
-    check text == ""
-
-  test "getCodeLensDisplayText - single item":
-    let e = createTestEditor()
-    e.state.lspCache.codeLensCache.isValid = true
-    e.state.lspCache.codeLensCache.itemsByLine =
-      {0: @[CodeLensItem(line: 0, title: "3 references", command: "refs")]}.toTable
-    let text = e.getCodeLensDisplayText(0)
-    check text == "3 references"
-
-  test "getCodeLensDisplayText - multiple items":
-    let e = createTestEditor()
-    e.state.lspCache.codeLensCache.isValid = true
-    e.state.lspCache.codeLensCache.itemsByLine = {
-      0: @[
-        CodeLensItem(line: 0, title: "Run", command: "run"),
-        CodeLensItem(line: 0, title: "Debug", command: "debug"),
-        CodeLensItem(line: 0, title: "Test", command: "test"),
-      ]
-    }.toTable
-    let text = e.getCodeLensDisplayText(0)
-    check text == "Run | Debug | Test"
 
 suite "CodeLens Picker":
   test "showCodeLensPicker":
@@ -549,3 +539,293 @@ suite "processDocumentHighlightResponse - UTF-16 to Rune Index":
     check items.len == 1
     check items[0].startColumn == 1
     check items[0].endColumn == 4
+
+# Inline display + execution dispatch (module-scope helpers reused below)
+
+proc lensWithCommand(line, character: int, title: string): lspTypes.CodeLens =
+  ## A CodeLens whose command is inlined (no resolve round-trip needed).
+  lspTypes.CodeLens(
+    range: lspTypes.Range(
+      start: lspTypes.Position(line: line, character: character),
+      `end`: lspTypes.Position(line: line, character: character),
+    ),
+    command: some(
+      lspTypes.Command(title: title, command: "cmd", arguments: none(seq[JsonNode]))
+    ),
+  )
+
+proc lensWithoutCommand(line, character: int): lspTypes.CodeLens =
+  ## A CodeLens with no inlined command, i.e. one that would need a
+  ## codeLens/resolve round-trip to obtain its command.
+  lspTypes.CodeLens(
+    range: lspTypes.Range(
+      start: lspTypes.Position(line: line, character: character),
+      `end`: lspTypes.Position(line: line, character: character),
+    ),
+    command: none(lspTypes.Command),
+    data: some(%*{"id": 1}),
+  )
+
+proc runnableArg(): string =
+  ## Minimal rust-analyzer Runnable serialized as a CodeLens command argument.
+  $(
+    %*{
+      "args":
+        {"workspaceRoot": "/home/user/proj", "cargoArgs": ["test", "--package", "foo"]}
+    }
+  )
+
+proc runnableItem(title = "Run test"): CodeLensItem =
+  CodeLensItem(
+    line: 0,
+    title: title,
+    command: "rust-analyzer.runSingle",
+    arguments: @[runnableArg()],
+  )
+
+suite "CodeLens Column Extraction":
+  test "extracts UTF-16 character as a rune-index column":
+    let e = createTestEditor()
+    e.activeBuffer().filePath = some("/test/file.nim")
+    # "a😀b": rune indexes a=0, 😀=1, b=2; UTF-16 offsets a=0, 😀=1..2, b=3
+    discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "a😀b")
+    e.state.lspCache.codeLensResponseGen = 1
+    waitFor e.processCodeLensResponse(@[lensWithCommand(0, 3, "5 refs")], 1)
+
+    let items = e.state.lspCache.getCodeLensItemsForLine(0)
+    check items.len == 1
+    check items[0].column == 2
+    check items[0].title == "5 refs"
+
+  test "sorts items on a line by column (server order out of order)":
+    let e = createTestEditor()
+    e.activeBuffer().filePath = some("/test/file.nim")
+    discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "abcdefgh")
+    e.state.lspCache.codeLensResponseGen = 1
+    waitFor e.processCodeLensResponse(
+      @[lensWithCommand(0, 5, "second"), lensWithCommand(0, 2, "first")], 1
+    )
+
+    let items = e.state.lspCache.getCodeLensItemsForLine(0)
+    check items.len == 2
+    check items[0].column == 2
+    check items[0].title == "first"
+    check items[1].column == 5
+    check items[1].title == "second"
+
+  test "command-less lens is dropped when resolve is unsupported":
+    # The resolve gate must skip codeLens/resolve when the server does not
+    # advertise it. With LSP disabled hasCodeLensResolveSupport is false, so the
+    # lazily-computed gate is false: no resolve round-trip is attempted and the
+    # still-title-less lens is dropped (no crash, no cached item).
+    let e = createTestEditor()
+    check not e.lsp.enabled
+    e.activeBuffer().filePath = some("/test/file.nim")
+    discard e.activeBuffer().insertText(BufferPosition(line: 0, column: 0), "let x = 1")
+    e.state.lspCache.codeLensResponseGen = 1
+
+    waitFor e.processCodeLensResponse(@[lensWithoutCommand(0, 0)], 1)
+
+    check e.state.lspCache.codeLensCache.isValid
+    check e.state.lspCache.getCodeLensItemsForLine(0).len == 0
+
+suite "CodeLens Virtual Text Provider":
+  test "buildVirtualTextProviders adds the provider for the owning file":
+    let e = createTestEditor()
+    e.state.display.showCodeLens = true
+    e.state.display.showInlayHint = false
+    e.activeBuffer().filePath = some("/test/current.nim")
+    e.state.lspCache.codeLensCache = CodeLensCache(
+      isValid: true,
+      filePath: "/test/current.nim",
+      itemsByLine: {
+        0: @[CodeLensItem(line: 0, column: 4, title: "5 refs", command: "refs")]
+      }.toTable,
+    )
+
+    check e.buildVirtualTextProviders().len == 1
+
+  test "skips a cache owned by another file":
+    let e = createTestEditor()
+    e.state.display.showCodeLens = true
+    e.state.display.showInlayHint = false
+    e.activeBuffer().filePath = some("/test/current.nim")
+    e.state.lspCache.codeLensCache = CodeLensCache(
+      isValid: true,
+      filePath: "/test/previous.nim",
+      itemsByLine: initTable[int, seq[CodeLensItem]](),
+    )
+
+    check e.buildVirtualTextProviders().len == 0
+
+  test "skips an invalid cache":
+    let e = createTestEditor()
+    e.state.display.showCodeLens = true
+    e.state.display.showInlayHint = false
+    e.activeBuffer().filePath = some("/test/current.nim")
+    e.state.lspCache.codeLensCache = CodeLensCache(
+      isValid: false,
+      filePath: "/test/current.nim",
+      itemsByLine: initTable[int, seq[CodeLensItem]](),
+    )
+
+    check e.buildVirtualTextProviders().len == 0
+
+  test "provider yields an end-of-line chunk with the codeLens color":
+    let e = createTestEditor()
+    e.activeBuffer().filePath = some("/test/current.nim")
+    e.state.lspCache.codeLensCache = CodeLensCache(
+      isValid: true,
+      filePath: "/test/current.nim",
+      itemsByLine: {
+        0: @[CodeLensItem(line: 0, column: 4, title: "5 refs", command: "refs")]
+      }.toTable,
+    )
+
+    let vts = e.codeLensVirtualTextProvider()(0)
+    check vts.len == 1
+    check vts[0].placement == vtpEndOfLine
+    check vts[0].priority == 10
+    check vts[0].column == 4
+    check vts[0].chunks.len == 1
+    check vts[0].chunks[0].text == " 5 refs"
+    check vts[0].chunks[0].color == EditorColorPairIndex.codeLens
+
+  test "renders inlay hints left of code lenses on the same line":
+    let e = createTestEditor()
+    e.activeBuffer().filePath = some("/test/current.nim")
+    e.state.display.showInlayHint = true
+    e.state.display.showCodeLens = true
+    e.state.lspCache.inlayHintCache = InlayHintCache(
+      isValid: true,
+      filePath: "/test/current.nim",
+      itemsByLine: {0: @[InlayHintItem(line: 0, column: 2, label: ": int")]}.toTable,
+    )
+    e.state.lspCache.codeLensCache = CodeLensCache(
+      isValid: true,
+      filePath: "/test/current.nim",
+      itemsByLine: {
+        0: @[CodeLensItem(line: 0, column: 0, title: "5 refs", command: "refs")]
+      }.toTable,
+    )
+
+    let vt = collectVirtualText(e.buildVirtualTextProviders(), 0)
+    check vt.endOfLine.len == 2
+    # Inlay hint (priority 0) renders before the code lens (priority 10).
+    check vt.endOfLine[0].text == " : int"
+    check vt.endOfLine[1].text == " 5 refs"
+
+suite "CodeLens Execution":
+  test "executeCodeLensItem - LSP disabled":
+    let e = createTestEditor()
+    e.lsp.enabled = false
+    let res = waitFor e.executeCodeLensItem(runnableItem())
+    check res.isErr
+    check res.error == "LSP is not enabled"
+
+  test "executeCodeLensItem - empty command":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let res =
+      waitFor e.executeCodeLensItem(CodeLensItem(line: 0, title: "x", command: ""))
+    check res.isErr
+    check res.error == "CodeLens has no command"
+
+  test "executeCodeLensItem - rust-analyzer runSingle builds a terminal command":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let res = waitFor e.executeCodeLensItem(runnableItem("Run test"))
+    check res.isOk
+    check e.state.pending.terminalCommand ==
+      "cd /home/user/proj && cargo test --package foo"
+    check e.state.statusMessage == "Running: Run test"
+
+  test "executeCodeLensItem - runnable with no arguments":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let res = waitFor e.executeCodeLensItem(
+      CodeLensItem(
+        line: 0, title: "x", command: "rust-analyzer.runSingle", arguments: @[]
+      )
+    )
+    check res.isErr
+    check res.error == "Runnable command has no arguments"
+
+  test "executeCodeLensItem - runnable with malformed JSON argument":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    let res = waitFor e.executeCodeLensItem(
+      CodeLensItem(
+        line: 0,
+        title: "x",
+        command: "rust-analyzer.runSingle",
+        arguments: @["{not json"],
+      )
+    )
+    check res.isErr
+    check res.error == "Failed to parse runnable argument"
+
+  # Note: the workspace/executeCommand branch (non rust-analyzer commands) calls
+  # the live LSP server via requestExecuteCommand and is not unit-tested here.
+
+  test "executeCurrentLineCodeLens - single item executes directly":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.activeBuffer().filePath = some("/test/file.nim")
+    e.state.lspCache.codeLensCache = CodeLensCache(
+      isValid: true,
+      filePath: "/test/file.nim",
+      itemsByLine: {0: @[runnableItem("Run test")]}.toTable,
+    )
+    e.cursor = BufferPosition(line: 0, column: 0)
+
+    waitFor e.executeCurrentLineCodeLens()
+    check e.state.pending.terminalCommand.len > 0
+    check not e.state.lspCache.codeLensPicker.isActive
+
+  test "executeCurrentLineCodeLens - multiple items show the picker":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.viewport.height = 24
+    e.activeBuffer().filePath = some("/test/file.nim")
+    e.state.lspCache.codeLensCache = CodeLensCache(
+      isValid: true,
+      filePath: "/test/file.nim",
+      itemsByLine: {0: @[runnableItem("Run"), runnableItem("Debug")]}.toTable,
+    )
+    e.cursor = BufferPosition(line: 0, column: 0)
+
+    waitFor e.executeCurrentLineCodeLens()
+    check e.state.lspCache.codeLensPicker.isActive
+    check e.state.lspCache.codeLensPicker.items.len == 2
+
+  test "codeLensPickerConfirm executes the selected item":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.viewport.height = 24
+    e.showCodeLensPicker(@[runnableItem("Run"), runnableItem("Debug")])
+    e.state.lspCache.codeLensPicker.selectedIndex = 1
+
+    waitFor e.codeLensPickerConfirm()
+    check not e.state.lspCache.codeLensPicker.isActive
+    check e.state.pending.terminalCommand.len > 0
+
+  test "codeLensPickerSelectByNumber executes the numbered item":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.viewport.height = 24
+    e.showCodeLensPicker(@[runnableItem("Run"), runnableItem("Debug")])
+
+    waitFor e.codeLensPickerSelectByNumber(2)
+    check not e.state.lspCache.codeLensPicker.isActive
+    check e.state.pending.terminalCommand.len > 0
+
+  test "codeLensPickerSelectByNumber ignores out-of-range numbers":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+    e.viewport.height = 24
+    e.showCodeLensPicker(@[runnableItem("Run")])
+
+    waitFor e.codeLensPickerSelectByNumber(5)
+    check e.state.lspCache.codeLensPicker.isActive
+    check e.state.pending.terminalCommand.len == 0

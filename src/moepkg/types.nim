@@ -577,6 +577,7 @@ type
 
   CodeLensItem* = object ## Cached CodeLens item with display information
     line*: int # Line number (0-indexed)
+    column*: int # Rune index in the line (UTF-16 already converted)
     title*: string # Display title (e.g., "5 references")
     command*: string # Command identifier
     arguments*: seq[string] # Command arguments (JSON strings)

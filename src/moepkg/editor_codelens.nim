@@ -19,7 +19,7 @@
 
 ## CodeLens, DocumentHighlight, and SemanticTokens related procedures
 
-import std/[options, monotimes, tables, json, times, strutils, algorithm]
+import std/[options, monotimes, tables, json, times, algorithm]
 
 import pkg/[results, chronos]
 
@@ -48,10 +48,27 @@ proc processCodeLensResponse(
 
     let filePath = activeBuffer.filePath.get
 
+    # Resolve support is queried lazily and memoized for this response: servers
+    # like rust-analyzer inline every command, so the (Table + JSON) capability
+    # lookup is skipped entirely there. Not cached across responses on purpose —
+    # capabilities can change via dynamic (un)registration, and every other
+    # has*Support check is likewise recomputed each cycle.
+    var resolveSupported = none(bool)
+
     # Convert to cached items grouped by line (Table for O(1) lookup)
     var itemsByLine: Table[int, seq[CodeLensItem]]
     for lens in lenses:
-      var item = CodeLensItem(line: lens.range.start.line)
+      # LSP character positions are UTF-16; convert to a rune index because the
+      # end-of-line renderer orders items by rune-based column. Mirrors
+      # processInlayHintResponse.
+      let line = lens.range.start.line
+      let lineText =
+        if line >= 0 and line < activeBuffer.len:
+          activeBuffer.getLine(line)
+        else:
+          ""
+      let col = utf16ToRuneIndex(lineText, lens.range.start.character)
+      var item = CodeLensItem(line: line, column: col)
 
       if lens.command.isSome:
         let cmd = lens.command.get
@@ -61,21 +78,42 @@ proc processCodeLensResponse(
           for arg in cmd.arguments.get:
             item.arguments.add($arg)
       else:
-        # Need to resolve
-        let resolveResult = await e.lsp.requestCodeLensResolve(activeBuffer, lens)
-        if resolveResult.isOk:
-          let resolved = resolveResult.get
-          if resolved.command.isSome:
-            let cmd = resolved.command.get
-            item.title = cmd.title
-            item.command = cmd.command
-            if cmd.arguments.isSome:
-              for arg in cmd.arguments.get:
-                item.arguments.add($arg)
+        # Command not inlined: resolve it, but only when the server advertises
+        # codeLens/resolve. Without this gate a server that emits command-less
+        # lenses but does not implement resolve would get a rejected request per
+        # lens. A lens left command-less here stays title-less and is dropped by
+        # the `item.title.len > 0` filter below.
+        if resolveSupported.isNone:
+          # The capability lookup reads a Table and can raise KeyError; this proc
+          # is raises:[], so guard it (treat a lookup failure as "no support").
+          try:
+            resolveSupported = some(e.lsp.hasCodeLensResolveSupport(activeBuffer))
+          except KeyError:
+            resolveSupported = some(false)
+        if resolveSupported.get:
+          let resolveResult = await e.lsp.requestCodeLensResolve(activeBuffer, lens)
+          if resolveResult.isOk:
+            let resolved = resolveResult.get
+            if resolved.command.isSome:
+              let cmd = resolved.command.get
+              item.title = cmd.title
+              item.command = cmd.command
+              if cmd.arguments.isSome:
+                for arg in cmd.arguments.get:
+                  item.arguments.add($arg)
 
       if item.title.len > 0:
         # Group by line number
         itemsByLine.mgetOrPut(item.line, @[]).add(item)
+
+    # End-of-line rendering concatenates items left-to-right, so sort each line
+    # by column. sort is a stable merge sort, so the server order is kept among
+    # lenses sharing a column. Mirrors processInlayHintResponse.
+    for items in itemsByLine.mvalues:
+      items.sort(
+        proc(a, b: CodeLensItem): int =
+          cmp(a.column, b.column)
+      )
 
     # A newer response has been spawned while we were awaiting resolves; discard
     # this stale result rather than overwriting the newer cache.
@@ -186,8 +224,36 @@ proc getCodeLensItemsForLine*(cache: var LspCacheState, line: int): seq[CodeLens
   cache.codeLensCache.itemsByLine.getOrDefault(line, @[])
 
 proc getCodeLensItemsForCurrentLine*(e: Editor): seq[CodeLensItem] =
-  ## Get cached CodeLens items for the current cursor line
+  ## Get cached CodeLens items for the current cursor line.
+  ## Returns @[] when the cache belongs to a different buffer (post buffer-switch
+  ## staleness): the cache is line-keyed, so without this gate the previous
+  ## file's lenses could surface on the new buffer. Mirrors the filePath gate in
+  ## buildVirtualTextProviders.
+  let cache = e.state.lspCache.codeLensCache
+  if not cache.isValid or some(cache.filePath) != e.activeBuffer().filePath:
+    return @[]
   e.state.lspCache.getCodeLensItemsForLine(e.cursor.line)
+
+proc codeLensVirtualTextProvider*(e: Editor): VirtualTextProvider =
+  ## Adapter: expose the cached code lenses as end-of-line virtual text. The
+  ## returned closure reads the cache lazily at render time via
+  ## getCodeLensItemsForLine (which yields nothing when the cache is invalid).
+  ## Feature enablement and buffer ownership are gated once, in
+  ## buildVirtualTextProviders. Mirrors inlayHintVirtualTextProvider, but uses a
+  ## higher priority so lenses render to the right of inlay hints.
+  result = proc(line: int): seq[VirtualText] {.closure, gcsafe, raises: [].} =
+    for item in e.state.lspCache.getCodeLensItemsForLine(line):
+      if item.title.len == 0:
+        continue
+      result.add VirtualText(
+        line: line,
+        column: item.column,
+        placement: vtpEndOfLine,
+        priority: 10,
+        chunks: @[
+          VirtualTextChunk(text: " " & item.title, color: EditorColorPairIndex.codeLens)
+        ],
+      )
 
 proc executeCodeLensItem*(
     e: Editor, item: CodeLensItem
@@ -700,19 +766,13 @@ proc buildVirtualTextProviders*(e: Editor): seq[VirtualTextProvider] =
     if cache.isValid and some(cache.filePath) == e.activeBuffer().filePath:
       result.add e.inlayHintVirtualTextProvider()
 
-proc getCodeLensDisplayText*(e: Editor, line: int): string =
-  ## Get display text for CodeLens on a specific line
-  ## Returns empty string if no CodeLens on this line
-  let items = e.state.lspCache.getCodeLensItemsForLine(line)
-  if items.len == 0:
-    return ""
-
-  var texts: seq[string] = @[]
-  for item in items:
-    if item.title.len > 0:
-      texts.add(item.title)
-
-  return texts.join(" | ")
+  if e.state.display.showCodeLens:
+    # Same per-file gate as inlay hints: the cache is line-keyed, so right after
+    # a buffer switch it can still hold the previous file's lenses. Gate on the
+    # owning file once per frame instead of per line.
+    let cache = e.state.lspCache.codeLensCache
+    if cache.isValid and some(cache.filePath) == e.activeBuffer().filePath:
+      result.add e.codeLensVirtualTextProvider()
 
 proc showCodeLensPicker*(e: Editor, items: seq[CodeLensItem]) =
   ## Show the CodeLens picker with the given items
@@ -806,10 +866,12 @@ proc executeCurrentLineCodeLens*(e: Editor): Future[void] {.async: (raises: []).
       e.state.statusMessage = "LSP is not enabled"
       return
 
-    # Force update cache (bypass debouncing for explicit user action)
-    if e.state.display.showCodeLens:
-      e.doUpdateCodeLensCache()
-
+    # No force-update here: doUpdateCodeLensCache only *starts* an async request
+    # whose response lands frames later via the updateCodeLensCache polling path,
+    # so reading the cache right after would see stale data anyway (and the new
+    # request would orphan any in-flight poll request by overwriting its id).
+    # While showCodeLens is on the cache is kept fresh by that polling, which now
+    # also feeds the inline renderer, so the explicit refresh is unnecessary.
     if not e.state.lspCache.codeLensCache.isValid:
       e.state.statusMessage = "No CodeLens available"
       return
