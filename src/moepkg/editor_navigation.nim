@@ -139,14 +139,30 @@ proc moveCursorToLspPosition(e: Editor, buffer: TextBuffer, lspLine, lspColumn: 
   e.activeWindow.cursor.line = targetLine
   e.activeWindow.cursor.column = max(0, targetCol)
 
-proc jumpToLspLocation*(e: Editor, loc: lspTypes.Location, resultKind: string): bool =
-  ## Jump to a single LSP location
+proc splitWindowForJump(e: Editor): bool =
+  ## Open a new vertical split window (showing the current buffer) so a
+  ## subsequent jump lands in the new window instead of the current one.
+  ## Returns false (with a status message) if the split fails.
+  let splitResult = e.vsplit()
+  if splitResult.isErr:
+    e.state.statusMessage = "Failed to open window: " & splitResult.error
+    return false
+  true
+
+proc jumpToLspLocation*(
+    e: Editor, loc: lspTypes.Location, resultKind: string, openWindow: bool = false
+): bool =
+  ## Jump to a single LSP location. When `openWindow` is true, the jump
+  ## happens in a new vertical split window instead of the current one.
   ## Returns true if successful
   let activeBuffer = e.activeBuffer()
   let path = lsp_service.uriToPath(loc.uri)
 
   # Add current position to jump list before jumping
   e.addToJumpList()
+
+  if openWindow and not e.splitWindowForJump():
+    return false
 
   # Check if it's the same file
   if activeBuffer.filePath.isSome and sameFilePath(activeBuffer.filePath.get, path):
@@ -159,6 +175,9 @@ proc jumpToLspLocation*(e: Editor, loc: lspTypes.Location, resultKind: string): 
     # Different file - open it in a new buffer (or switch to existing)
     let opened = e.openFileInActiveWindow(path)
     if opened.isErr:
+      if openWindow:
+        # Don't leave the freshly split window behind on failure
+        discard e.closeWindow()
       e.state.statusMessage = "Failed to open file: " & opened.error
       return false
 
@@ -173,9 +192,16 @@ proc jumpToLspLocation*(e: Editor, loc: lspTypes.Location, resultKind: string): 
   return true
 
 proc handleLspLocations*(
-    e: Editor, locations: seq[lspTypes.Location], title: string, singularName: string
+    e: Editor,
+    locations: seq[lspTypes.Location],
+    title: string,
+    singularName: string,
+    openWindow: bool = false,
 ): bool =
-  ## Handle LSP location results (shared by definition and references)
+  ## Handle LSP location results (shared by definition and references).
+  ## `openWindow` makes the jump open a new vertical split window: directly
+  ## for a single location, or on item selection in the References viewer
+  ## when there are multiple.
   ## Returns true if successful
   if locations.len == 0:
     e.state.statusMessage = "No " & title.toLowerAscii() & " found"
@@ -183,7 +209,7 @@ proc handleLspLocations*(
 
   if locations.len == 1:
     # Single location - jump directly
-    return e.jumpToLspLocation(locations[0], singularName)
+    return e.jumpToLspLocation(locations[0], singularName, openWindow)
   else:
     # Multiple locations - open References viewer mode
     var items: seq[ReferenceItem] = @[]
@@ -202,6 +228,7 @@ proc handleLspLocations*(
     e.state.previousMode = e.state.mode
     e.setMode(EditorMode.References)
     let refState = newReferencesViewerState(items, title)
+    refState.openWindowOnJump = openWindow
     let activeWin = e.activeWindow
 
     # Capture the current position so quitting the viewer can restore it.
@@ -218,14 +245,20 @@ proc handleLspLocations*(
     e.state.statusMessage = $locations.len & " " & title.toLowerAscii() & " found"
     return true
 
-proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
-  ## Open a file and jump to a specific location
+proc openFileAndJumpTo*(
+    e: Editor, path: string, line, column: int, openWindow: bool = false
+): bool =
+  ## Open a file and jump to a specific location. When `openWindow` is true,
+  ## the jump happens in a new vertical split window instead of the current one.
   ## Note: column is expected to be LSP UTF-16 code unit offset
   ## Returns true if successful
   let activeBuffer = e.activeBuffer()
 
   # Add current position to jump list before jumping
   e.addToJumpList()
+
+  if openWindow and not e.splitWindowForJump():
+    return false
 
   # Check if it's the same file
   if activeBuffer.filePath.isSome and sameFilePath(activeBuffer.filePath.get, path):
@@ -235,6 +268,9 @@ proc openFileAndJumpTo*(e: Editor, path: string, line, column: int): bool =
     # Different file - open it in a new buffer (or switch to existing)
     let opened = e.openFileInActiveWindow(path)
     if opened.isErr:
+      if openWindow:
+        # Don't leave the freshly split window behind on failure
+        discard e.closeWindow()
       e.state.statusMessage = "Failed to open file: " & opened.error
       return false
     # Set cursor with boundary checks against the now-active buffer
@@ -344,7 +380,14 @@ proc pollLspLocationRequest*(e: Editor) =
           ("Implementations", "Implementation")
         of lrkNone:
           ("", "")
-      discard e.handleLspLocations(locations, pluralName, singularName)
+      let openWindow =
+        case kind
+        of lrkDefinition: e.config.lsp.definition.openWindow
+        of lrkDeclaration: e.config.lsp.declaration.openWindow
+        of lrkTypeDefinition: e.config.lsp.typeDefinition.openWindow
+        of lrkImplementation: e.config.lsp.implementation.openWindow
+        of lrkReferences, lrkNone: false
+      discard e.handleLspLocations(locations, pluralName, singularName, openWindow)
     else:
       e.state.statusMessage = "No results found"
   of lrsError:
