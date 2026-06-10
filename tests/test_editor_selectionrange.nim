@@ -124,3 +124,88 @@ suite "editor_selectionrange - config gate":
 
     check not e.startLspSelectionRange()
     check e.state.statusMessage == "LSP selection range is disabled"
+
+suite "editor_selectionrange - chain expansion":
+  proc seedResponse(e: Editor, requestId: int, responseJson: JsonNode) =
+    e.state.lspCache.pendingSelectionRangeRequestId = requestId
+    e.lsp.service.activeRequests[requestId] = LspPendingRequest(
+      requestId: requestId,
+      langId: "",
+      methodName: "textDocument/selectionRange",
+      startTime: 0.0,
+      timeoutMs: 5000,
+    )
+    e.lsp.service.pendingResponses[requestId] =
+      (result: some($responseJson), error: none(string))
+
+  test "Repeated requests walk the parent chain outward, then stop":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo(bar)")
+
+    # innermost = "bar" (4..7), parent = "foo(bar)" (0..8)
+    let responseJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 7}},
+        "parent": {
+          "range":
+            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 8}}
+        },
+      }
+    ]
+    e.seedResponse(1, responseJson)
+
+    # First poll selects the innermost range.
+    e.pollLspSelectionRange()
+    check e.state.mode == EditorMode.Visual
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 4)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 7)
+    check e.state.lspCache.selectionRangeIndex == 0
+    check e.state.lspCache.selectionRangeChain.len == 2
+
+    # Second request expands to the parent without contacting the server.
+    check e.requestLspSelectionRange()
+    check e.state.lspCache.pendingSelectionRangeRequestId == 0
+    check e.state.lspCache.selectionRangeIndex == 1
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 0)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 8)
+
+    # Third request stops at the outermost level (no change, no new request).
+    check e.requestLspSelectionRange()
+    check e.state.lspCache.pendingSelectionRangeRequestId == 0
+    check e.state.lspCache.selectionRangeIndex == 1
+    check e.state.visualSelection.start == BufferPosition(line: 0, column: 0)
+    check e.state.visualSelection.current == BufferPosition(line: 0, column: 8)
+
+  test "Selection moved off the chain triggers a fresh request":
+    let e = createTestEditor()
+    e.lsp.enabled = true
+
+    let buf = e.activeBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo(bar)")
+
+    let responseJson = %*[
+      {
+        "range":
+          {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 7}},
+        "parent": {
+          "range":
+            {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 8}}
+        },
+      }
+    ]
+    e.seedResponse(1, responseJson)
+    e.pollLspSelectionRange()
+    check e.state.lspCache.selectionRangeIndex == 0
+
+    # Simulate the user adjusting the selection by hand: it no longer matches
+    # the cached chain level. The next request takes the fresh-request path
+    # (which fails here since no real server is attached) and must abandon the
+    # stale chain rather than expanding it.
+    e.state.visualSelection.current = BufferPosition(line: 0, column: 5)
+    discard e.requestLspSelectionRange()
+    check e.state.lspCache.selectionRangeChain.len == 0
+    check e.state.lspCache.selectionRangeIndex == 0

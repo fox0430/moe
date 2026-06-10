@@ -348,6 +348,10 @@ type
     pendingDocumentSymbolsRequestId*: int # Request ID (0 = none)
     # Pending selection range request
     pendingSelectionRangeRequestId*: int # Request ID (0 = none)
+    # Selection range expansion chain (innermost -> outermost), rune indexes.
+    # Lets repeated Ctrl-s walk the parent chain without re-querying the server.
+    selectionRangeChain*: seq[tuple[first, last: BufferPosition]]
+    selectionRangeIndex*: int # Current level in the chain (0 = innermost)
     # Pending call hierarchy request (2-stage: prepare -> incoming/outgoing)
     pendingCallHierarchyRequestId*: int # Request ID (0 = none)
     pendingCallHierarchyKind*: CallHierarchyRequestKind # incoming or outgoing
