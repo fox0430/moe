@@ -23,8 +23,18 @@ import std/[unittest, options, tables, json, monotimes]
 
 import
   ../src/moepkg/[
-    buffer, types, key_bindings, modes, motion, command_registry, config, registers,
-    completion, signature_help, editor_types, lsp_integration,
+    buffer,
+    types,
+    key_bindings,
+    modes,
+    motion,
+    command_registry,
+    config,
+    registers,
+    completion,
+    signature_help,
+    types/editor_types,
+    lsp_integration,
   ]
 import ../src/moepkg/syntax/tokenizer
 import ../src/moepkg/command_handlers/insert_handler

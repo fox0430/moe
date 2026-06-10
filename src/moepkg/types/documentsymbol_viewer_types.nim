@@ -24,8 +24,8 @@
 ## `picker/nav` via the full `documentsymbol_viewer` module. `lsp/protocol/enums`
 ## is still required for `SymbolKind`.
 
-import lsp/protocol/enums
-import primitives
+import ../lsp/protocol/enums
+import ../primitives
 
 type
   SymbolItem* = object

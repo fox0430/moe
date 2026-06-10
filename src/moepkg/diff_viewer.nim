@@ -26,7 +26,7 @@ import pkg/results
 
 import buffer, highlight, syntax/tokenizer
 
-import diff_viewer_types
+import types/diff_viewer_types
 export diff_viewer_types
 
 proc newDiffViewerState*(): DiffViewerState =

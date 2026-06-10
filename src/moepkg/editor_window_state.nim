@@ -24,7 +24,7 @@
 
 import std/options
 
-import editor_types, terminal_mode, message_log
+import types/editor_types, terminal_mode, message_log
 
 proc saveOriginalBuffer*(win: EditorWindow) =
   ## Stash the current buffer as `originalBuffer` so a later mode exit can

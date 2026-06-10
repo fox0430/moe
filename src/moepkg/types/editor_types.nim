@@ -25,11 +25,22 @@ import std/[options, tables]
 import pkg/celina
 
 import
-  buffer, types, commands, command_registry, modes, command_line, command_config,
-  window_manager, lsp_integration, config, persist, background_process, virtual_text
-import key_bindings except Command
-import key_router
-import command_handlers/handler_types
+  ../buffer,
+  ../types,
+  ../commands,
+  ../command_registry,
+  ../modes,
+  ../command_line,
+  ../command_config,
+  ../window_manager,
+  ../lsp_integration,
+  ../config,
+  ../persist,
+  ../background_process,
+  ../virtual_text
+import ../key_bindings except Command
+import ../key_router
+import ../command_handlers/handler_types
 
 export
   buffer, types, commands, command_registry, modes, command_line, command_config,

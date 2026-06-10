@@ -24,7 +24,7 @@
 
 import std/[options, monotimes, times]
 
-import editor_types, lsp_integration, hover_popup, buffer
+import types/editor_types, lsp_integration, hover_popup, buffer
 
 proc startLspHover*(e: Editor): bool =
   ## Start async LSP hover request at current cursor position

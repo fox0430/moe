@@ -30,7 +30,7 @@ import
   command_line, command_line_commands, fuzzy_match, help_description, setting_options,
   unicode_utils
 
-import command_completion_types
+import types/command_completion_types
 export command_completion_types
 
 const

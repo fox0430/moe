@@ -23,7 +23,7 @@ import std/[strutils, options, times]
 
 import modes, buffer
 
-import debug_viewer_types
+import types/debug_viewer_types
 export debug_viewer_types
 
 proc newDebugViewerState*(): DebugViewerState =

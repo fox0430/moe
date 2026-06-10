@@ -21,7 +21,7 @@
 
 import std/options
 
-import editor_types, lsp_integration
+import types/editor_types, lsp_integration
 
 proc startLspSelectionRange*(e: Editor): bool =
   ## Start async LSP selection range request at current cursor position

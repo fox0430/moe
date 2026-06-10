@@ -23,7 +23,7 @@ import std/[options, json, os]
 
 import pkg/results
 
-import editor_types, lsp_integration
+import types/editor_types, lsp_integration
 import command_handlers/[handler_manager, insert_handler]
 
 proc applyDiagnosticsForUri*(e: Editor, uri: string, diagnostics: seq[Diagnostic]) =

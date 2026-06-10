@@ -27,8 +27,15 @@ import std/[options, strutils, os]
 import pkg/results
 
 import
-  editor_types, editor_window, editor_window_state, lsp_service, lsp_integration,
-  references_viewer, buffer, unicode_utils, editorconfig_helper
+  types/editor_types,
+  editor_window,
+  editor_window_state,
+  lsp_service,
+  lsp_integration,
+  references_viewer,
+  buffer,
+  unicode_utils,
+  editorconfig_helper
 import lsp/protocol/types as lspTypes
 
 proc switchToBufferForLsp*(e: Editor, index: int) =

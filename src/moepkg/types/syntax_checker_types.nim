@@ -17,31 +17,24 @@
 #                                                                              #
 #[############################################################################]#
 
-## Lightweight type definitions for the call hierarchy viewer.
+## Lightweight type definitions for syntax checking.
 ##
-## Split out from `callhierarchy_viewer` so modules that only need its State
-## type (notably `types` and its importers) do not transitively pull in
-## `picker/nav` via the full `callhierarchy_viewer` module. `lsp/protocol/types`
-## is still required for `CallHierarchyItem`.
+## Split out from `syntax_checker` so modules that only need `SyntaxCheckError`
+## (notably `types` and the many modules importing it) do not transitively pull
+## in `chronos` / `background_process` via the full `syntax_checker` module.
+## `SyntaxCheckProcess` stays in `syntax_checker` because it genuinely depends on
+## `background_process`.
 
-import lsp/protocol/types as lspTypes
-import primitives
+import ../primitives
 
 type
-  CallHierarchyViewKind* = enum
-    chvkPrepare ## Initial prepare result
-    chvkIncoming ## Incoming calls view
-    chvkOutgoing ## Outgoing calls view
+  SyntaxCheckMessageType* = enum
+    info
+    hint
+    warning
+    error
 
-  CallHierarchyViewerState* = ref object
-    items*: seq[lspTypes.CallHierarchyItem] ## Call hierarchy items to display
-    selectedIndex*: int ## Currently selected item index
-    topLine*: int ## Scroll position (first visible line)
-    viewKind*: CallHierarchyViewKind ## Type of view (prepare/incoming/outgoing)
-    title*: string ## Title for the list
-    waitingForG*: bool ## Waiting for second 'g' for 'gg' command
-    ## Cursor/viewport of the underlying buffer captured on entry, so quitting
-    ## the viewer restores the position instead of leaving it at (0, 0).
-    originCursor*: BufferPosition
-    originTopLine*: int
-    originLeftColumn*: int
+  SyntaxCheckError* = object
+    position*: BufferPosition
+    messageType*: SyntaxCheckMessageType
+    message*: string

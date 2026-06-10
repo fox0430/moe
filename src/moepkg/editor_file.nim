@@ -24,8 +24,14 @@ import std/[options, strformat, os, monotimes, times, tables, sets]
 import pkg/results
 
 import
-  editor_types, logger, git_diff, git_conflict, backup, search_utils,
-  editorconfig_helper, highlight
+  types/editor_types,
+  logger,
+  git_diff,
+  git_conflict,
+  backup,
+  search_utils,
+  editorconfig_helper,
+  highlight
 
 type SaveAllBuffersResult* = object
   savedCount*: int

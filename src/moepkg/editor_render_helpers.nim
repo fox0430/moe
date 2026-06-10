@@ -23,7 +23,7 @@ import std/[options, strutils, unicode, tables]
 
 import pkg/celina
 
-import editor_types, color, render_utils, unicode_utils
+import types/editor_types, color, render_utils, unicode_utils
 
 proc colorIndexToStyle*(colorIdx: EditorColorPairIndex): Style =
   ## Convert EditorColorPairIndex to Celina Style using theme colors

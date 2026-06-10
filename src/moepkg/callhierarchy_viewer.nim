@@ -28,7 +28,7 @@ import lsp/protocol/types as lspTypes
 import buffer
 import picker/nav
 
-import callhierarchy_viewer_types
+import types/callhierarchy_viewer_types
 export callhierarchy_viewer_types
 
 proc newCallHierarchyViewerState*(

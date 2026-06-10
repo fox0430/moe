@@ -28,7 +28,7 @@ import pkg/celina
 import buffer, highlight, color
 import syntax/tokenizer
 
-import filer_types
+import types/filer_types
 export filer_types
 
 proc isHiddenFile(name: string): bool =

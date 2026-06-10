@@ -27,7 +27,7 @@ import std/[options, strutils]
 import pkg/results
 
 import ../[buffer, config, modes, motion, types, key_bindings, command_registry]
-import ../editor_types
+import ../types/editor_types
 import handler_types
 export handler_types
 

@@ -21,7 +21,7 @@
 
 import std/[options, strutils]
 
-import editor_types, lsp_service, lsp_integration, buffer, editor_navigation
+import types/editor_types, lsp_service, lsp_integration, buffer, editor_navigation
 import lsp/protocol/types as lspTypes
 
 proc findDocumentLinkAtCursor*(

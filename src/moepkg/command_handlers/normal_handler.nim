@@ -31,7 +31,7 @@ import
     render_utils, search_utils, uri_utils,
   ]
 import handler_types, visual_handler, insert_commands, command_passthrough
-import ../editor_types
+import ../types/editor_types
 export handler_types
 
 type

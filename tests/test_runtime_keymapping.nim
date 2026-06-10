@@ -35,7 +35,7 @@ import ../src/moepkg/command_handlers/command_handler
 import ../src/moepkg/command_handlers/handler_manager {.all.}
 import ../src/moepkg/command_handlers/visual_handler {.all.}
 import ../src/moepkg/command_handlers/insert_handler {.all.}
-from ../src/moepkg/editor_types import Editor
+from ../src/moepkg/types/editor_types import Editor
 import editor_test_helper
 
 suite "parseKeyString":

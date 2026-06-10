@@ -24,7 +24,10 @@
 import std/options
 
 import
-  editor_types, editor_window_state, lsp_integration, callhierarchy_viewer,
+  types/editor_types,
+  editor_window_state,
+  lsp_integration,
+  callhierarchy_viewer,
   editor_navigation
 import lsp/protocol/types as lspTypes
 

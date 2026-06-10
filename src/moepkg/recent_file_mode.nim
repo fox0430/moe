@@ -29,7 +29,7 @@ import pkg/results
 import buffer
 import picker/nav
 
-import recent_file_mode_types
+import types/recent_file_mode_types
 export recent_file_mode_types
 
 proc newRecentFileModeState*(): RecentFileModeState =

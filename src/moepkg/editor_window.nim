@@ -23,7 +23,8 @@ import std/options
 
 import pkg/results
 
-import editor_types, logger, render_utils, editorconfig_helper, editor_window_layout
+import
+  types/editor_types, logger, render_utils, editorconfig_helper, editor_window_layout
 
 # Window state management procedures
 
