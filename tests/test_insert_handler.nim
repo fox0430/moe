@@ -1558,22 +1558,23 @@ suite "InsertModeHandler - Completion Active Key Handling":
 
     if handler.completionManager.isActive() and
         handler.completionManager.menu.entries.len >= 2:
-      # First Tab selects item 0
+      # First Tab highlights item 0 (cycling no longer mutates the buffer)
       let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
       discard handler.handleInsertModeKey(buf, state, tabKey)
-      let firstWord = handler.completionManager.menu.entries[0].word
+      check handler.completionManager.menu.selectedIndex == 0
 
-      # Second Tab selects item 1
+      # Second Tab highlights item 1
       discard handler.handleInsertModeKey(buf, state, tabKey)
+      check handler.completionManager.menu.selectedIndex == 1
 
       # BackTab goes back to item 0
       let backTabKey =
         KeyCombo(isSpecial: true, special: skBackTab, fnNum: 0, modifiers: {})
       discard handler.handleInsertModeKey(buf, state, backTabKey)
+      check handler.completionManager.menu.selectedIndex == 0
 
-      check buf.getLine(1) == firstWord
-    else:
-      check true
+      # The buffer is untouched throughout cycling — only the typed prefix is there
+      check buf.getLine(1) == "al"
 
 suite "InsertModeHandler - Path completion":
   test "Slash triggers path completion":
@@ -1651,9 +1652,13 @@ suite "InsertModeHandler - Path completion":
       ),
     ]
 
-    # Tab selects first entry (directory "src/")
+    # Tab previews the first entry (directory "src/") without its trailing slash
     let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
     discard handler.handleInsertModeKey(buf, state, tabKey)
+    check buf.getLine(0) == "./src" # cycling previews into the buffer
+
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, enterKey)
 
     # Directory should be inserted without trailing '/'
     check buf.getLine(0) == "./src"
@@ -1686,15 +1691,19 @@ suite "InsertModeHandler - Path completion":
       )
     ]
 
-    # Tab selects file entry
+    # Tab previews the file entry with its full name
     let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
     discard handler.handleInsertModeKey(buf, state, tabKey)
+    check buf.getLine(0) == "./setup.nim" # cycling previews into the buffer
+
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, enterKey)
 
     # File should be inserted with full name
     check buf.getLine(0) == "./setup.nim"
     check state.cursor.column == 11
 
-  test "Cycling path entries preserves no-trailing-slash for directories":
+  test "Committing a cycled-to directory preserves no-trailing-slash":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "./")
     let handler = createTestHandler(buf)
@@ -1738,17 +1747,17 @@ suite "InsertModeHandler - Path completion":
 
     let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
 
-    # First Tab: selects "docs/" -> inserts "docs"
+    # Cycle to the second entry ("src/"); each cycle previews into the buffer
+    # without the directory's trailing slash
     discard handler.handleInsertModeKey(buf, state, tabKey)
-    check buf.getLine(0) == "./docs"
-
-    # Second Tab: selects "src/" -> inserts "src"
     discard handler.handleInsertModeKey(buf, state, tabKey)
+    check handler.completionManager.menu.selectedIndex == 1
     check buf.getLine(0) == "./src"
 
-    # Third Tab: selects "README.md" -> inserts full name
-    discard handler.handleInsertModeKey(buf, state, tabKey)
-    check buf.getLine(0) == "./README.md"
+    # Enter commits the highlighted directory without its trailing slash
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, enterKey)
+    check buf.getLine(0) == "./src"
 
   test "Escape cancels path completion":
     let buf = newTextBuffer()
@@ -2012,8 +2021,8 @@ suite "InsertModeHandler - Ctrl+O (Insert-Normal mode)":
     check r.modeTransition.get == EditorMode.Normal
     check state.insertNormalMode == true
 
-suite "InsertModeHandler - textEdit with keepPopupOpen":
-  test "Tab cycling with textEdit uses prefix-deletion, not textEdit":
+suite "InsertModeHandler - completion commit":
+  test "Cycling previews into the buffer; Enter commits via textEdit":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    ve")
     let handler = createTestHandler(buf)
@@ -2048,20 +2057,25 @@ suite "InsertModeHandler - textEdit with keepPopupOpen":
     check handler.completionManager.isActive()
     check handler.completionManager.menu.entries.len >= 2
 
-    # First Tab: activates selection (idx=0 "vec!")
     let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+
+    # First Tab highlights idx 0 and previews it into the buffer via its textEdit
     discard handler.handleInsertModeKey(buf, state, tabKey)
+    check handler.completionManager.menu.selectedIndex == 0
     check buf.getLine(0) == "    vec!"
 
-    # Second Tab: selects next (idx=1 "version")
+    # Second Tab highlights idx 1; the preview is replaced in place
     discard handler.handleInsertModeKey(buf, state, tabKey)
+    check handler.completionManager.menu.selectedIndex == 1
     check buf.getLine(0) == "    version"
 
-    # Third Tab: wraps back (idx=0 "vec!")
-    discard handler.handleInsertModeKey(buf, state, tabKey)
-    check buf.getLine(0) == "    vec!"
+    # Enter commits the highlighted entry via its textEdit (same final result)
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, enterKey)
+    check buf.getLine(0) == "    version"
+    check not handler.completionManager.isActive()
 
-  test "Commit with textEdit applies textEdit on final confirm":
+  test "Commit applies textEdit on final confirm":
     let buf = newTextBuffer()
     discard buf.insertText(BufferPosition(line: 0, column: 0), "    ve")
     let handler = createTestHandler(buf)
@@ -2080,7 +2094,7 @@ suite "InsertModeHandler - textEdit with keepPopupOpen":
               start: lspTypes.Position(line: 0, character: 4),
               `end`: lspTypes.Position(line: 0, character: 6),
             ),
-            newText: "vec![$0]",
+            newText: "vec!",
           )
         ),
       )
@@ -2090,11 +2104,11 @@ suite "InsertModeHandler - textEdit with keepPopupOpen":
     handler.completionManager.menu.hasSelection = true
     handler.completionManager.state = csActive
 
-    # Final commit (keepPopupOpen=false) should use textEdit
-    let result = handler.commitCompletion(buf, state, keepPopupOpen = false)
+    let result = handler.commitCompletion(buf, state)
     check result.kind == imrHandled
-    # textEdit replaces range [4,6) with "vec![$0]"
-    check buf.getLine(0) == "    vec![$0]"
+    # textEdit replaces range [4,6) with "vec!"
+    check buf.getLine(0) == "    vec!"
+    check state.cursor.column == 8
     check not handler.completionManager.isActive()
 
   test "Commit with textEdit uses rune indexes on surrogate pair line":
@@ -2134,13 +2148,271 @@ suite "InsertModeHandler - textEdit with keepPopupOpen":
     handler.completionManager.menu.hasSelection = true
     handler.completionManager.state = csActive
 
-    let result = handler.commitCompletion(buf, state, keepPopupOpen = false)
+    let result = handler.commitCompletion(buf, state)
     check result.kind == imrHandled
     # textEdit replaces UTF-16 range [3,4) (= rune range [2,3)) with "X"
     check buf.getLine(0) == "a😀X"
     # Cursor should be at rune index 3 (startCol=2 + newText.runeLen=1)
     check state.cursor == BufferPosition(line: 0, column: 3)
     check not handler.completionManager.isActive()
+
+  test "Commit expands a snippet and positions the cursor at $0":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    ve")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "vec!",
+        matchScore: 100,
+        source: csLsp,
+        isSnippet: true,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 0, character: 4),
+              `end`: lspTypes.Position(line: 0, character: 6),
+            ),
+            newText: "vec![$0]",
+          )
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "ve"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+
+    let result = handler.commitCompletion(buf, state)
+    check result.kind == imrHandled
+    # Snippet "vec![$0]" expands to "vec![]" with the cursor inside the brackets
+    check buf.getLine(0) == "    vec![]"
+    check state.cursor.column == 9 # startCol(4) + offset of $0 (after "vec![")
+    check not handler.completionManager.isActive()
+
+  test "Commit applies additionalTextEdits (auto-import) above the cursor":
+    let buf = newTextBuffer()
+    # An empty first line stands in for the import insertion point.
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\nfoo")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 3)
+
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "foobar",
+        matchScore: 100,
+        source: csLsp,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 1, character: 0),
+              `end`: lspTypes.Position(line: 1, character: 3),
+            ),
+            newText: "foobar",
+          )
+        ),
+        additionalTextEdits: some(
+          @[
+            TextEdit(
+              range: Range(
+                start: lspTypes.Position(line: 0, character: 0),
+                `end`: lspTypes.Position(line: 0, character: 0),
+              ),
+              newText: "import bar\n",
+            )
+          ]
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "foo"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+
+    let result = handler.commitCompletion(buf, state)
+    check result.kind == imrHandled
+    # The import edit lands on line 0 and the completion on the (now shifted) line
+    check buf.getLine(0) == "import bar"
+    check buf.getLine(2) == "foobar"
+    # The cursor line is shifted down by the one inserted import line
+    check state.cursor.line == 2
+    check state.cursor.column == 6
+    check not handler.completionManager.isActive()
+
+  test "Cycling preview defers additionalTextEdits until the final commit":
+    # Hybrid: Tab previews the completion text into the buffer immediately, but
+    # the auto-import (additionalTextEdits) must NOT be applied while cycling -
+    # only the final commit (Enter) applies it.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "\nfoo")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 1, column: 3)
+
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "foobar",
+        matchScore: 100,
+        source: csLsp,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 1, character: 0),
+              `end`: lspTypes.Position(line: 1, character: 3),
+            ),
+            newText: "foobar",
+          )
+        ),
+        additionalTextEdits: some(
+          @[
+            TextEdit(
+              range: Range(
+                start: lspTypes.Position(line: 0, character: 0),
+                `end`: lspTypes.Position(line: 0, character: 0),
+              ),
+              newText: "import bar\n",
+            )
+          ]
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "foo"
+    handler.completionManager.menu.triggerLine = 1
+    handler.completionManager.menu.triggerCol = 0
+    handler.completionManager.state = csActive
+
+    # Tab previews "foobar" but leaves the import line untouched
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check buf.getLine(0) == "" # auto-import NOT applied during cycling
+    check buf.getLine(1) == "foobar"
+
+    # Enter finalizes and applies the auto-import above the cursor
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, enterKey)
+    check buf.getLine(0) == "import bar"
+    check buf.getLine(2) == "foobar"
+    check state.cursor.line == 2
+    check state.cursor.column == 6
+    check not handler.completionManager.isActive()
+
+  test "Commit honors a textEdit range that extends past the cursor":
+    # Replace-mode completion: the cursor sits between "foo" and "bar" and the
+    # server's textEdit replaces the whole identifier [0,6) with "foobaz". The
+    # trailing "bar" must be replaced too, not left dangling as "foobazbar".
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foobar")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "foobaz",
+        matchScore: 100,
+        source: csLsp,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 0, character: 0),
+              `end`: lspTypes.Position(line: 0, character: 6),
+            ),
+            newText: "foobaz",
+          )
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "foo"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+
+    let result = handler.commitCompletion(buf, state)
+    check result.kind == imrHandled
+    check buf.getLine(0) == "foobaz"
+    check state.cursor.column == 6
+    check not handler.completionManager.isActive()
+
+  test "Commit deletes a multi-line textEdit range wholesale":
+    # The server's textEdit spans two lines ("foo\nbar"); replacing it must remove
+    # the whole range and join the lines, not delete only the first line and leave
+    # "bar" dangling.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "foo\nbar")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 3)
+
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "baz",
+        matchScore: 100,
+        source: csLsp,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 0, character: 0),
+              `end`: lspTypes.Position(line: 1, character: 3),
+            ),
+            newText: "baz",
+          )
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "foo"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+
+    let result = handler.commitCompletion(buf, state)
+    check result.kind == imrHandled
+    check buf.len == 1 # the two lines were joined into one
+    check buf.getLine(0) == "baz"
+    check state.cursor == BufferPosition(line: 0, column: 3)
+    check not handler.completionManager.isActive()
+
+suite "InsertModeHandler - completion selection invalidation":
+  test "Backspace clears the selection so the next keystroke does not commit it":
+    # Regression: Tab previews item 0 into the buffer ("te" -> "template") and
+    # activates hasSelection. Backspace edits the preview and re-filters via
+    # updateFilter, which must drop the selection. If hasSelection survived, the
+    # next typed char would re-commit an item the user never confirmed (producing
+    # e.g. "templatextemplate" instead of "templatx").
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "te")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 2)
+
+    handler.completionManager.allWords = @["template", "test"]
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(word: "template", matchScore: 100, source: csBuffer),
+      CompletionEntry(word: "test", matchScore: 50, source: csBuffer),
+    ]
+    handler.completionManager.menu.prefix = "te"
+    handler.completionManager.menu.triggerLine = 0
+    handler.completionManager.menu.triggerCol = 0
+    handler.completionManager.state = csActive
+
+    # Tab previews item 0 ("template") into the buffer and selects it
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check handler.completionManager.menu.hasSelection
+    check buf.getLine(0) == "template"
+
+    # Backspace edits the preview and must drop the selection
+    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, bsKey)
+    check not handler.completionManager.menu.hasSelection
+    check buf.getLine(0) == "templat"
+
+    # Typing now just inserts the char; it must NOT re-commit a completion item
+    let xKey = KeyCombo(isSpecial: false, char: "x", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, xKey)
+    check buf.getLine(0) == "templatx"
 
 suite "InsertModeHandler - LSP debounce prefix staleness":
   test "Fast typing through LSP debounce keeps menu.prefix in sync":
@@ -2193,8 +2465,12 @@ suite "InsertModeHandler - LSP debounce prefix staleness":
     discard handler.handleInsertModeKey(buf, state, typeE)
     check handler.completionManager.menu.prefix == "te"
 
+    # Tab highlights "template"; Enter commits it. The commit replaces the whole
+    # typed word [triggerCol, cursor), so the synced prefix yields "template".
     let tab = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
     discard handler.handleInsertModeKey(buf, state, tab)
+    let enter = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, enter)
 
     check buf.getLine(1) == "template"
     check state.cursor.column == 8

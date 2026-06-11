@@ -28,7 +28,7 @@ import pkg/celina
 
 import
   command_line, command_line_commands, fuzzy_match, help_description, setting_options,
-  unicode_utils
+  popup_render
 
 import types/command_completion_types
 export command_completion_types
@@ -567,81 +567,44 @@ proc renderCommandCompletionPopup*(
 
   # Draw border if enabled
   if showBorder:
-    # Top border
-    if pos.y >= 0 and pos.y < termBuffer.area.height:
-      if pos.x >= 0 and pos.x < termBuffer.area.width:
-        termBuffer[pos.x, pos.y] = cell("┌", cmdPopupBorderStyle)
-      for x in pos.x + 1 ..< min(pos.x + pos.width - 1, termBuffer.area.width):
-        if x >= 0:
-          termBuffer[x, pos.y] = cell("─", cmdPopupBorderStyle)
-      if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
-        termBuffer[pos.x + pos.width - 1, pos.y] = cell("┐", cmdPopupBorderStyle)
+    drawBorder(termBuffer, pos.x, pos.y, pos.width, pos.height, cmdPopupBorderStyle)
 
-    # Side borders and content
-    for i in 0 ..< contentHeight:
-      let y = contentY + i
-      if y >= 0 and y < termBuffer.area.height:
-        # Left border
-        if pos.x >= 0 and pos.x < termBuffer.area.width:
-          termBuffer[pos.x, y] = cell("│", cmdPopupBorderStyle)
+  # Content (command + aligned description columns)
+  let maxCmdWidth = calculateMaxCommandWidth(menu.entries)
+  let contentLimit = contentX + contentWidth
+  for i in 0 ..< contentHeight:
+    let y = contentY + i
+    if y >= 0 and y < termBuffer.area.height:
+      let entryIdx = menu.scrollOffset + i
+      if entryIdx < menu.entries.len:
+        let entry = menu.entries[entryIdx]
+        let isSelected = entryIdx == menu.selectedIndex
+        let cmdStyle = if isSelected: cmdPopupSelectedStyle else: cmdPopupNormalStyle
+        let descStyle =
+          if isSelected: cmdPopupDescSelectedStyle else: cmdPopupDescNormalStyle
 
-        # Content
-        let entryIdx = menu.scrollOffset + i
-        if entryIdx < menu.entries.len:
-          let entry = menu.entries[entryIdx]
-          let isSelected = entryIdx == menu.selectedIndex
-          let cmdStyle = if isSelected: cmdPopupSelectedStyle else: cmdPopupNormalStyle
-          let descStyle =
-            if isSelected: cmdPopupDescSelectedStyle else: cmdPopupDescNormalStyle
+        # Truncate command if needed
+        var displayCmd = entry.command
+        let cmdDisplayWidth = min(maxCmdWidth, contentWidth - DescriptionGap - 1)
+        if displayCmd.runeLen > cmdDisplayWidth:
+          displayCmd = $displayCmd.toRunes[0 ..< cmdDisplayWidth - 1] & "…"
 
-          # Calculate max command width for alignment
-          let maxCmdWidth = calculateMaxCommandWidth(menu.entries)
+        # Draw command
+        var x =
+          drawClippedRunes(termBuffer, contentX, y, contentLimit, displayCmd, cmdStyle)
 
-          # Truncate command if needed
-          var displayCmd = entry.command
-          let cmdDisplayWidth = min(maxCmdWidth, contentWidth - DescriptionGap - 1)
-          if displayCmd.runeLen > cmdDisplayWidth:
-            displayCmd = $displayCmd.toRunes[0 ..< cmdDisplayWidth - 1] & "…"
+        # Pad command to max width for alignment
+        let cmdEndX = contentX + min(maxCmdWidth, cmdDisplayWidth) + DescriptionGap
+        x = fillCells(termBuffer, x, y, min(cmdEndX, contentLimit), cmdStyle)
 
-          # Draw command
-          var x = contentX
-          for r in displayCmd.runes:
-            if x < contentX + contentWidth and x < termBuffer.area.width:
-              x += setRuneCell(termBuffer, x, y, r, cmdStyle)
+        # Draw description if available
+        if entry.description.len > 0:
+          let remainingWidth = contentLimit - x
+          var displayDesc = entry.description
+          if displayDesc.runeLen > remainingWidth:
+            displayDesc = $displayDesc.toRunes[0 ..< remainingWidth - 1] & "…"
 
-          # Pad command to max width for alignment
-          let cmdEndX = contentX + min(maxCmdWidth, cmdDisplayWidth) + DescriptionGap
-          while x < cmdEndX and x < contentX + contentWidth and x < termBuffer.area.width:
-            termBuffer[x, y] = cell(" ", cmdStyle)
-            inc x
+          x = drawClippedRunes(termBuffer, x, y, contentLimit, displayDesc, descStyle)
 
-          # Draw description if available
-          if entry.description.len > 0:
-            let remainingWidth = contentX + contentWidth - x
-            var displayDesc = entry.description
-            if displayDesc.runeLen > remainingWidth:
-              displayDesc = $displayDesc.toRunes[0 ..< remainingWidth - 1] & "…"
-
-            for r in displayDesc.runes:
-              if x < contentX + contentWidth and x < termBuffer.area.width:
-                x += setRuneCell(termBuffer, x, y, r, descStyle)
-
-          # Fill remaining space with background
-          while x < contentX + contentWidth and x < termBuffer.area.width:
-            termBuffer[x, y] = cell(" ", cmdStyle)
-            inc x
-
-        # Right border
-        if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
-          termBuffer[pos.x + pos.width - 1, y] = cell("│", cmdPopupBorderStyle)
-
-    # Bottom border
-    let bottomY = contentY + contentHeight
-    if bottomY >= 0 and bottomY < termBuffer.area.height:
-      if pos.x >= 0 and pos.x < termBuffer.area.width:
-        termBuffer[pos.x, bottomY] = cell("└", cmdPopupBorderStyle)
-      for x in pos.x + 1 ..< min(pos.x + pos.width - 1, termBuffer.area.width):
-        if x >= 0:
-          termBuffer[x, bottomY] = cell("─", cmdPopupBorderStyle)
-      if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
-        termBuffer[pos.x + pos.width - 1, bottomY] = cell("┘", cmdPopupBorderStyle)
+        # Fill remaining space with background
+        x = fillCells(termBuffer, x, y, contentLimit, cmdStyle)

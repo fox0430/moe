@@ -282,7 +282,7 @@ proc buildClientCapabilities(): JsonNode =
       "completion": {
         "dynamicRegistration": true,
         "completionItem": {
-          "snippetSupport": false,
+          "snippetSupport": true,
           "commitCharactersSupport": true,
           "documentationFormat": ["plaintext", "markdown"],
           "deprecatedSupport": true,

@@ -351,16 +351,90 @@ suite "Completion - filterAndSortEntries":
     for e in entries:
       check e.word.toLowerAscii.startsWith("hel")
 
-  test "LSP items take priority over buffer words":
+  test "Within a tier the LSP item leads; buffer words merge in below":
     let mgr = newCompletionManager()
+    # All three are prefix matches for "hel" (same tier), so the LSP item leads
+    # and the buffer words follow (merged, not replaced).
     mgr.allWords = @["hello", "help"]
-    mgr.lspItems = @[CompletionItem(label: "lspHelp", kind: some(cikFunction))]
+    mgr.lspItems = @[CompletionItem(label: "helper", kind: some(cikFunction))]
 
     let entries = mgr.filterAndSortEntries("hel")
 
-    # Should only contain LSP items when available
-    check entries.len == 1
+    check entries.len == 3
     check entries[0].source == csLsp
+    check entries[0].word == "helper"
+    var bufferWords: seq[string]
+    for e in entries[1 .. ^1]:
+      check e.source == csBuffer
+      bufferWords.add(e.word)
+    check "hello" in bufferWords
+    check "help" in bufferWords
+
+  test "A prefix-matching buffer word outranks a fuzzy-only LSP item":
+    let mgr = newCompletionManager()
+    # Regression for the "i" → tokenizer-above-if/in report: "if" is an exact
+    # prefix match for "i" (a keyword/buffer word); "tokenizer" only fuzzy-matches
+    # ("i" is the 6th letter). Prefix matches must rank above fuzzy ones even
+    # though the fuzzy one is the (normally higher-priority) LSP item.
+    mgr.allWords = @["if", "in"]
+    mgr.lspItems = @[CompletionItem(label: "tokenizer", kind: some(cikFunction))]
+
+    let entries = mgr.filterAndSortEntries("i")
+
+    # "if" and "in" (prefix matches) come before "tokenizer" (fuzzy only)
+    let words = block:
+      var acc: seq[string]
+      for e in entries:
+        acc.add(e.word)
+      acc
+    check "if" in words
+    check "in" in words
+    check "tokenizer" in words
+    check words.find("tokenizer") > words.find("if")
+    check words.find("tokenizer") > words.find("in")
+
+  test "A buffer word an LSP item already offers is dropped from the merge":
+    let mgr = newCompletionManager()
+    # "lspHelp" is offered by both the buffer and the LSP item; it must appear
+    # once (the richer LSP entry), with the unique buffer word kept.
+    mgr.allWords = @["lspHelp", "hello"]
+    mgr.lspItems = @[CompletionItem(label: "lspHelp", kind: some(cikFunction))]
+
+    let entries = mgr.filterAndSortEntries("")
+
+    var lspHelpCount = 0
+    var sawHello = false
+    for e in entries:
+      if e.word == "lspHelp":
+        inc lspHelpCount
+      elif e.word == "hello":
+        sawHello = true
+    check lspHelpCount == 1
+    check entries[0].source == csLsp
+    check sawHello
+
+  test "A buffer word is dropped even when the LSP label carries extra detail":
+    let mgr = newCompletionManager()
+    # The LSP item inserts "lspHelp" but displays the richer label
+    # "lspHelp(): int". The dedup keys on the inserted word as well as the label,
+    # so the buffer's plain "lspHelp" is still recognized as the same name and
+    # dropped (it would survive if only the display label were compared).
+    mgr.allWords = @["lspHelp", "hello"]
+    mgr.lspItems = @[
+      CompletionItem(
+        label: "lspHelp(): int", insertText: some("lspHelp"), kind: some(cikFunction)
+      )
+    ]
+
+    let entries = mgr.filterAndSortEntries("")
+
+    var lspHelpWordCount = 0
+    for e in entries:
+      if e.word == "lspHelp":
+        inc lspHelpWordCount
+    check lspHelpWordCount == 1
+    check entries[0].source == csLsp
+    check entries[0].displayText == "lspHelp(): int"
 
   test "Empty prefix returns all words":
     let mgr = newCompletionManager()
@@ -1222,6 +1296,18 @@ suite "Completion - resolve support":
     check mgr.menu.entries[0].detail == some("fn() -> int")
     check mgr.menu.entries[0].documentation == some("Documentation text")
 
+  test "updateResolvedEntry is dropped when the entry no longer matches":
+    # The entries were rebuilt between the request and its response, so the item
+    # at resolvedIndex is now a different word. The stale result must be ignored.
+    let mgr = newCompletionManager()
+    mgr.menu.entries = @[CompletionEntry(word: "other", matchScore: 100, source: csLsp)]
+    mgr.resolvedIndex = 0
+
+    let resolved = CompletionItem(label: "test", detail: some("fn() -> int"))
+    mgr.updateResolvedEntry(resolved)
+
+    check mgr.menu.entries[0].detail.isNone
+
   test "setLspItems stores raw JSON items":
     let mgr = newCompletionManager()
     mgr.menu.prefix = "te"
@@ -1287,6 +1373,26 @@ suite "Completion - DocPanel":
     let docPanel = DocPanel(lines: @["short doc"], scrollOffset: 0, visible: true)
     let pos = calculateDocPanelPosition(completionPos, 80, 24, docPanel)
     check pos.x < completionPos.x # Should be left of completion
+
+  test "calculateDocPanelPosition tracks the highlighted candidate's row":
+    # selectedRowOffset pushes the panel top down to the highlighted row instead
+    # of pinning it to the popup's first row.
+    let completionPos = PopupPosition(x: 0, y: 0, width: 20, height: 12)
+    let docPanel = DocPanel(lines: @["short doc"], scrollOffset: 0, visible: true)
+    let pos =
+      calculateDocPanelPosition(completionPos, 80, 24, docPanel, selectedRowOffset = 3)
+    check pos.y == 3
+
+  test "calculateDocPanelPosition clamps upward when the row would overflow":
+    # A row near the bottom would push the panel past the bottom reserve, so it
+    # is clamped up to stay fully on screen.
+    let completionPos = PopupPosition(x: 0, y: 0, width: 20, height: 12)
+    let docPanel = DocPanel(lines: @["short doc"], scrollOffset: 0, visible: true)
+    # popupHeight = 1 visible line + 2 border = 3; termHeight 10, reserve 2.
+    let pos = calculateDocPanelPosition(
+      completionPos, 80, 10, docPanel, bottomReserve = 2, selectedRowOffset = 8
+    )
+    check pos.y == 5 # max(0, 10 - 2 - 3)
 
   test "renderDocPanel renders content":
     let docPanel = DocPanel(lines: @["Hello", "World"], scrollOffset: 0, visible: true)
@@ -1473,3 +1579,119 @@ suite "Completion - renderCompletionPopup with multibyte characters":
     check termBuffer[3, 1].symbol == "本"
     check termBuffer[4, 1].symbol == ""
     check termBuffer[4, 1].style == termBuffer[3, 1].style
+
+suite "Completion - expandSnippet":
+  test "Plain text passes through with cursor at end":
+    let (text, offset) = expandSnippet("hello")
+    check text == "hello"
+    check offset == 5
+
+  test "$0 marks the final cursor stop":
+    let (text, offset) = expandSnippet("vec![$0]")
+    check text == "vec![]"
+    check offset == 5
+
+  test "${0} braces form of the final stop":
+    let (text, offset) = expandSnippet("a${0}b")
+    check text == "ab"
+    check offset == 1
+
+  test "Numbered placeholder keeps its default text":
+    let (text, offset) = expandSnippet("foo(${1:bar})")
+    check text == "foo(bar)"
+    # No $0, so cursor goes to the lowest-numbered stop ($1 = start of "bar")
+    check offset == 4
+
+  test "Bare $n becomes empty":
+    let (text, offset) = expandSnippet("if $1:")
+    check text == "if :"
+    check offset == 3
+
+  test "$0 preferred over numbered stops":
+    let (text, offset) = expandSnippet("${1:a}$0${2:b}")
+    check text == "ab"
+    check offset == 1
+
+  test "Escapes are unescaped":
+    let (text, offset) = expandSnippet("price: \\$5")
+    check text == "price: $5"
+    check offset == 9
+
+  test "Nested placeholder defaults are expanded":
+    let (text, _) = expandSnippet("${1:${2:inner}}")
+    check text == "inner"
+
+  test "No stops puts cursor at end":
+    let (text, offset) = expandSnippet("abc")
+    check text == "abc"
+    check offset == 3
+
+  test "A $0 nested inside a placeholder default wins the cursor":
+    # The $0 lives inside the ${1:...} default; the cursor must land on it
+    # (between "foo" and "bar"), not at the start of the placeholder.
+    let (text, offset) = expandSnippet("${1:foo$0bar}")
+    check text == "foobar"
+    check offset == 3
+
+  test "An overflowing tabstop number is ignored, not a crash":
+    # A pathological digit run would overflow parseInt; it must be swallowed and
+    # treated as no stop rather than raising out of the commit path.
+    let (text, offset) = expandSnippet("${999999999999999999999:x}")
+    check text == "x"
+    check offset == 1
+
+  test "A bare $VAR variable drops to empty, not a literal $name":
+    # We don't expand snippet variables; $TM_FILENAME must vanish rather than
+    # leaking a stray "$TM_FILENAME" into the buffer.
+    let (text, offset) = expandSnippet("log($TM_FILENAME)")
+    check text == "log()"
+    check offset == 5
+
+  test "An unknown ${VAR} drops to its default or empty":
+    check expandSnippet("${TM_SELECTED_TEXT}").text == ""
+    check expandSnippet("name: ${UNKNOWN:fallback}").text == "name: fallback"
+
+suite "Completion - LSP filterText/sortText":
+  test "Items are kept by filterText, not insertText":
+    let mgr = newCompletionManager()
+    # label/filterText match the prefix but insertText does not.
+    mgr.lspItems = @[
+      CompletionItem(
+        label: "myField", filterText: some("myField"), insertText: some("this.myField")
+      )
+    ]
+    let entries = mgr.filterAndSortEntries("myF")
+    check entries.len == 1
+    check entries[0].word == "this.myField"
+
+  test "Ordering follows sortText, not client matchScore":
+    let mgr = newCompletionManager()
+    # "alpha" is a better prefix match, but sortText ranks "beta" first.
+    mgr.lspItems = @[
+      CompletionItem(label: "alpha", sortText: some("zzz")),
+      CompletionItem(label: "beta", sortText: some("aaa")),
+    ]
+    let entries = mgr.filterAndSortEntries("")
+    check entries.len == 2
+    check entries[0].word == "beta"
+    check entries[1].word == "alpha"
+
+suite "Completion - snippet display label":
+  test "Snippet items display the label, not the raw snippet body":
+    # With snippetSupport enabled the server returns the snippet body in
+    # insertText; `word` keeps it for insertion but the popup must show the clean
+    # label instead of placeholder syntax like `println!($0)`.
+    let item = CompletionItem(
+      label: "println!",
+      insertText: some("println!($0)"),
+      insertTextFormat: some(InsertTextFormat.itfSnippet),
+    )
+    let entry = lspItemToEntry(item, "pr")
+    check entry.isSnippet
+    check entry.word == "println!($0)" # raw body, used for insertion
+    check entry.label == "println!"
+    check entry.displayText == "println!" # what the popup renders
+
+  test "Buffer entries with no label fall back to the word for display":
+    let entry = CompletionEntry(word: "template", source: csBuffer)
+    check entry.displayText == "template"
