@@ -28,7 +28,7 @@ import pkg/celina
 
 import
   command_line, command_line_commands, fuzzy_match, help_description, setting_options,
-  popup_render
+  popup_render, color
 
 import types/command_completion_types
 export command_completion_types
@@ -449,30 +449,26 @@ type CommandPopupPosition* = object
   x*, y*: int
   width*, height*: int
 
-let
-  cmdPopupNormalStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.White),
-    bg: ColorValue(kind: Indexed, indexed: Color.Black),
-    modifiers: {},
-  )
-  cmdPopupSelectedStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Black),
-    bg: ColorValue(kind: Indexed, indexed: Color.Cyan),
-    modifiers: {},
-  )
-  cmdPopupBorderStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
-    bg: ColorValue(kind: Indexed, indexed: Color.Black),
-    modifiers: {},
-  )
-  cmdPopupDescNormalStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
-    bg: ColorValue(kind: Indexed, indexed: Color.Black),
-    modifiers: {},
-  )
-  cmdPopupDescSelectedStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Black),
-    bg: ColorValue(kind: Indexed, indexed: Color.Cyan),
+# Styles are derived from the current theme on each call so that theme changes
+# (and the theme being loaded after this module is initialized) are reflected.
+proc cmdPopupNormalStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindow)
+
+proc cmdPopupSelectedStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWinCurrentLine)
+
+proc cmdPopupBorderStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindowBorder)
+
+proc cmdPopupDescNormalStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindowDetail)
+
+proc cmdPopupDescSelectedStyle*(): Style =
+  ## Description text on the selected row: detail foreground over the
+  ## current-line background.
+  Style(
+    fg: getThemeStyle(EditorColorPairIndex.popupWindowDetail).fg,
+    bg: getThemeStyle(EditorColorPairIndex.popupWinCurrentLine).bg,
     modifiers: {},
   )
 
@@ -567,7 +563,7 @@ proc renderCommandCompletionPopup*(
 
   # Draw border if enabled
   if showBorder:
-    drawBorder(termBuffer, pos.x, pos.y, pos.width, pos.height, cmdPopupBorderStyle)
+    drawBorder(termBuffer, pos.x, pos.y, pos.width, pos.height, cmdPopupBorderStyle())
 
   # Content (command + aligned description columns)
   let maxCmdWidth = calculateMaxCommandWidth(menu.entries)
@@ -579,9 +575,16 @@ proc renderCommandCompletionPopup*(
       if entryIdx < menu.entries.len:
         let entry = menu.entries[entryIdx]
         let isSelected = entryIdx == menu.selectedIndex
-        let cmdStyle = if isSelected: cmdPopupSelectedStyle else: cmdPopupNormalStyle
+        let cmdStyle =
+          if isSelected:
+            cmdPopupSelectedStyle()
+          else:
+            cmdPopupNormalStyle()
         let descStyle =
-          if isSelected: cmdPopupDescSelectedStyle else: cmdPopupDescNormalStyle
+          if isSelected:
+            cmdPopupDescSelectedStyle()
+          else:
+            cmdPopupDescNormalStyle()
 
         # Truncate command if needed
         var displayCmd = entry.command

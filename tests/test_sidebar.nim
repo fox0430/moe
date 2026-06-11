@@ -21,7 +21,7 @@ import std/[options, unittest]
 
 import pkg/celina
 
-import ../src/moepkg/[buffer, sidebar]
+import ../src/moepkg/[buffer, sidebar, color, theme]
 
 suite "Sidebar - initSidebar":
   test "Initialize sidebar with default width":
@@ -356,31 +356,29 @@ suite "Sidebar - generateSidebarFromBuffer":
     check sidebar.buffer[0][0].kind == some(GitAdded)
 
 suite "Sidebar - Style functions":
-  test "gitAddedStyle has green foreground":
-    let style = gitAddedStyle()
-    check style.fg.kind == Indexed
-    check style.fg.indexed == Color.Green
+  test "gitAddedStyle uses the sidebarGitAddedSign theme color":
+    initDefaultTheme()
+    check gitAddedStyle() == getThemeStyle(EditorColorPairIndex.sidebarGitAddedSign)
 
-  test "gitChangedStyle has yellow foreground":
-    let style = gitChangedStyle()
-    check style.fg.kind == Indexed
-    check style.fg.indexed == Color.Yellow
+  test "gitChangedStyle uses the sidebarGitChangedSign theme color":
+    initDefaultTheme()
+    check gitChangedStyle() == getThemeStyle(EditorColorPairIndex.sidebarGitChangedSign)
 
-  test "gitDeletedStyle has red foreground":
-    let style = gitDeletedStyle()
-    check style.fg.kind == Indexed
-    check style.fg.indexed == Color.Red
+  test "gitDeletedStyle uses the sidebarGitDeletedSign theme color":
+    initDefaultTheme()
+    check gitDeletedStyle() == getThemeStyle(EditorColorPairIndex.sidebarGitDeletedSign)
 
-  test "syntaxErrorStyle has red foreground and bold modifier":
-    let style = syntaxErrorStyle()
-    check style.fg.kind == Indexed
-    check style.fg.indexed == Color.Red
-    check StyleModifier.Bold in style.modifiers
+  test "syntaxErrorStyle uses the sidebarSyntaxCheckErrSign theme color with bold":
+    initDefaultTheme()
+    check syntaxErrorStyle() ==
+      getThemeStyle(
+        EditorColorPairIndex.sidebarSyntaxCheckErrSign, {StyleModifier.Bold}
+      )
 
-  test "syntaxWarningStyle has yellow foreground":
-    let style = syntaxWarningStyle()
-    check style.fg.kind == Indexed
-    check style.fg.indexed == Color.Yellow
+  test "syntaxWarningStyle uses the sidebarSyntaxCheckWarnSign theme color":
+    initDefaultTheme()
+    check syntaxWarningStyle() ==
+      getThemeStyle(EditorColorPairIndex.sidebarSyntaxCheckWarnSign)
 
   test "emptyStyle has default foreground":
     let style = emptyStyle()

@@ -21,7 +21,7 @@ import std/[options, unittest]
 
 import pkg/celina
 
-import ../src/moepkg/[buffer, sidebar]
+import ../src/moepkg/[buffer, sidebar, color, theme]
 
 suite "ModifiedLines - Basic Tracking":
   test "New buffer has all lines unmodified":
@@ -354,15 +354,15 @@ suite "ModifiedLines - PieceTable Backend":
       check b.modifiedLines[i] == lmkUnmodified
 
 suite "Sidebar - Session Modified/Inserted Markers":
-  test "sessionModifiedStyle has yellow foreground":
-    let style = sessionModifiedStyle()
-    check style.fg.kind == Indexed
-    check style.fg.indexed == Color.Yellow
+  test "sessionModifiedStyle uses the sidebarSessionModifiedSign theme color":
+    initDefaultTheme()
+    check sessionModifiedStyle() ==
+      getThemeStyle(EditorColorPairIndex.sidebarSessionModifiedSign)
 
-  test "sessionInsertedStyle has green foreground":
-    let style = sessionInsertedStyle()
-    check style.fg.kind == Indexed
-    check style.fg.indexed == Color.Green
+  test "sessionInsertedStyle uses the sidebarSessionInsertedSign theme color":
+    initDefaultTheme()
+    check sessionInsertedStyle() ==
+      getThemeStyle(EditorColorPairIndex.sidebarSessionInsertedSign)
 
   test "generateSidebarFromBuffer shows SessionModified fallback":
     let buf = newTextBuffer("line1\nline2\nline3")

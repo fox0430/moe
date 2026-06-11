@@ -27,7 +27,7 @@ import std/[options, unicode, json]
 
 import pkg/celina
 
-import lsp_integration, unicode_utils
+import lsp_integration, unicode_utils, color
 import lsp/protocol/types as lspTypes
 
 type
@@ -147,22 +147,17 @@ type SignatureHelpPopupPosition* = object
   x*, y*: int
   width*, height*: int
 
-let
-  signatureHelpNormalStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.White),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
-    modifiers: {},
-  )
-  signatureHelpHighlightStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
-    modifiers: {StyleModifier.Bold},
-  )
-  signatureHelpBorderStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
-    modifiers: {},
-  )
+# Styles are derived from the current theme on each call so that theme changes
+# (and the theme being loaded after this module is initialized) are reflected.
+proc signatureHelpNormalStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindow)
+
+proc signatureHelpHighlightStyle*(): Style =
+  ## Active parameter emphasis.
+  getThemeStyle(EditorColorPairIndex.popupWindowActiveParameter, {StyleModifier.Bold})
+
+proc signatureHelpBorderStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindowBorder)
 
 proc calculateSignatureHelpPosition*(
     cursorX, cursorY: int, termWidth, termHeight: int, signatureLen: int
@@ -218,18 +213,19 @@ proc renderSignatureHelpPopup*(
     # Top border
     if pos.y >= 0 and pos.y < termBuffer.area.height:
       if pos.x >= 0 and pos.x < termBuffer.area.width:
-        termBuffer[pos.x, pos.y] = cell("┌", signatureHelpBorderStyle)
+        termBuffer[pos.x, pos.y] = cell("┌", signatureHelpBorderStyle())
       for x in pos.x + 1 ..< min(pos.x + pos.width - 1, termBuffer.area.width):
         if x >= 0:
-          termBuffer[x, pos.y] = cell("─", signatureHelpBorderStyle)
+          termBuffer[x, pos.y] = cell("─", signatureHelpBorderStyle())
       if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
-        termBuffer[pos.x + pos.width - 1, pos.y] = cell("┐", signatureHelpBorderStyle)
+        termBuffer[pos.x + pos.width - 1, pos.y] =
+          cell("┐", signatureHelpBorderStyle())
 
     # Side borders and content
     if contentY >= 0 and contentY < termBuffer.area.height:
       # Left border
       if pos.x >= 0 and pos.x < termBuffer.area.width:
-        termBuffer[pos.x, contentY] = cell("│", signatureHelpBorderStyle)
+        termBuffer[pos.x, contentY] = cell("│", signatureHelpBorderStyle())
 
       # Content - signature with highlighted active parameter
       var x = contentX
@@ -242,31 +238,31 @@ proc renderSignatureHelpPopup*(
         let style =
           if display.activeParamStart >= 0 and charIdx >= display.activeParamStart and
               charIdx < display.activeParamEnd:
-            signatureHelpHighlightStyle
+            signatureHelpHighlightStyle()
           else:
-            signatureHelpNormalStyle
+            signatureHelpNormalStyle()
 
         x += setRuneCell(termBuffer, x, contentY, r, style)
         inc charIdx
 
       # Fill remaining space with background
       while x < contentX + contentWidth and x < termBuffer.area.width:
-        termBuffer[x, contentY] = cell(" ", signatureHelpNormalStyle)
+        termBuffer[x, contentY] = cell(" ", signatureHelpNormalStyle())
         inc x
 
       # Right border
       if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
         termBuffer[pos.x + pos.width - 1, contentY] =
-          cell("│", signatureHelpBorderStyle)
+          cell("│", signatureHelpBorderStyle())
 
     # Bottom border
     let bottomY = contentY + 1
     if bottomY >= 0 and bottomY < termBuffer.area.height:
       if pos.x >= 0 and pos.x < termBuffer.area.width:
-        termBuffer[pos.x, bottomY] = cell("└", signatureHelpBorderStyle)
+        termBuffer[pos.x, bottomY] = cell("└", signatureHelpBorderStyle())
       for x in pos.x + 1 ..< min(pos.x + pos.width - 1, termBuffer.area.width):
         if x >= 0:
-          termBuffer[x, bottomY] = cell("─", signatureHelpBorderStyle)
+          termBuffer[x, bottomY] = cell("─", signatureHelpBorderStyle())
       if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
         termBuffer[pos.x + pos.width - 1, bottomY] =
-          cell("┘", signatureHelpBorderStyle)
+          cell("┘", signatureHelpBorderStyle())

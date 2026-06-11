@@ -24,6 +24,7 @@ import std/unittest
 import pkg/celina
 
 import ../src/moepkg/hover_popup {.all.}
+import ../src/moepkg/[color, theme]
 
 suite "HoverPopup - newHoverPopupManager":
   test "Creates manager with idle state":
@@ -579,18 +580,19 @@ suite "HoverPopup - renderHoverPopup":
     check termBuffer[4, 1].style == termBuffer[3, 1].style
 
 suite "HoverPopup - styles":
-  test "hoverPopupNormalStyle has white foreground and dark background":
-    check hoverPopupNormalStyle.fg.kind == Indexed
-    check hoverPopupNormalStyle.fg.indexed == Color.White
-    check hoverPopupNormalStyle.bg.kind == Rgb
+  test "hoverPopupNormalStyle uses the popupWindow theme color":
+    initDefaultTheme()
+    check hoverPopupNormalStyle() == getThemeStyle(EditorColorPairIndex.popupWindow)
 
-  test "hoverPopupBorderStyle has bright black foreground":
-    check hoverPopupBorderStyle.fg.kind == Indexed
-    check hoverPopupBorderStyle.fg.indexed == Color.BrightBlack
+  test "hoverPopupBorderStyle uses the popupWindowBorder theme color":
+    initDefaultTheme()
+    check hoverPopupBorderStyle() ==
+      getThemeStyle(EditorColorPairIndex.popupWindowBorder)
 
-  test "hoverPopupScrollIndicatorStyle has yellow foreground":
-    check hoverPopupScrollIndicatorStyle.fg.kind == Indexed
-    check hoverPopupScrollIndicatorStyle.fg.indexed == Color.Yellow
+  test "hoverPopupScrollIndicatorStyle uses the popupWindowScrollBar theme color":
+    initDefaultTheme()
+    check hoverPopupScrollIndicatorStyle() ==
+      getThemeStyle(EditorColorPairIndex.popupWindowScrollBar)
 
 suite "HoverPopup - constants":
   test "DefaultMaxVisibleLines is 10":

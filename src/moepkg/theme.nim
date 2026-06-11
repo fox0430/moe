@@ -284,7 +284,11 @@ const DefaultColors*: ThemeColors = [
 
   # Popup window
   EditorColorPairIndex.popupWindow: makeColorPair("#ffffff", "#000000"),
-  EditorColorPairIndex.popupWinCurrentLine: makeColorPair("#61afef", "#000000"),
+  EditorColorPairIndex.popupWinCurrentLine: makeColorPair("#ffffff", "#3e4452"),
+  EditorColorPairIndex.popupWindowBorder: makeColorPair("#636d83", "#000000"),
+  EditorColorPairIndex.popupWindowDetail: makeColorPair("#636d83", "#000000"),
+  EditorColorPairIndex.popupWindowScrollBar: makeColorPair("#e5c07b", "#000000"),
+  EditorColorPairIndex.popupWindowActiveParameter: makeColorPair("#e5c07b", "#000000"),
 
   # Notification popup
   EditorColorPairIndex.notificationPopupInfo: makeColorPair("#ffffff", "#323232"),

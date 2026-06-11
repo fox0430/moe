@@ -34,7 +34,8 @@ import
   tab_line,
   buffer,
   unicode_utils,
-  command_completion
+  command_completion,
+  color
 
 proc updateViewportSize*(e: Editor, buffer: Buffer): bool =
   ## Update screen size from buffer area and return true if resized.
@@ -573,28 +574,12 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
   if popupY + popupHeight > buffer.area.height - 2:
     popupY = max(0, e.state.screenCursor.y - popupHeight)
 
-  # Define styles
+  # Define styles (derived from the current theme)
   let
-    borderStyle = Style(
-      fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
-      bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 30, g: 30, b: 30)),
-      modifiers: {},
-    )
-    popupNormalStyle = Style(
-      fg: ColorValue(kind: Default),
-      bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 30, g: 30, b: 30)),
-      modifiers: {},
-    )
-    selectedStyle = Style(
-      fg: ColorValue(kind: Indexed, indexed: Color.Black),
-      bg: ColorValue(kind: Indexed, indexed: Color.Cyan),
-      modifiers: {},
-    )
-    scrollIndicatorStyle = Style(
-      fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
-      bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 30, g: 30, b: 30)),
-      modifiers: {},
-    )
+    borderStyle = getThemeStyle(EditorColorPairIndex.popupWindowBorder)
+    popupNormalStyle = getThemeStyle(EditorColorPairIndex.popupWindow)
+    selectedStyle = getThemeStyle(EditorColorPairIndex.popupWinCurrentLine)
+    scrollIndicatorStyle = getThemeStyle(EditorColorPairIndex.popupWindowScrollBar)
 
   # Draw top border with scroll indicator if needed
   if popupY >= 0 and popupY < buffer.area.height:
@@ -634,7 +619,7 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
     if itemIdx < 9:
       let numStr = $(itemIdx + 1) & "."
       let numStyle = Style(
-        fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
+        fg: getThemeStyle(EditorColorPairIndex.popupWindowScrollBar).fg,
         bg: style.bg,
         modifiers: {},
       )

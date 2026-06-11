@@ -29,7 +29,7 @@ import
 
 import pkg/celina
 
-import buffer, word_dictionary, command_completion, fuzzy_match
+import buffer, word_dictionary, command_completion, fuzzy_match, color
 import popup_render
 import syntax/tokenizer
 import lsp/protocol/types as lspTypes
@@ -117,50 +117,39 @@ const
   DocPanelMinWidth* = 20 ## Minimum width of documentation panel
   DocPanelMaxVisibleLines* = 10 ## Maximum visible lines in doc panel
 
-let
-  # Documentation panel
-  # TODO: Add to config
-  docPanelNormalStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.White),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
-    modifiers: {},
-  )
-  docPanelBorderStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
-    modifiers: {},
-  )
-  docPanelScrollStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
+# Styles are derived from the current theme on each call so that theme changes
+# (and the theme being loaded after this module is initialized) are reflected.
+
+# Documentation panel
+proc docPanelNormalStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindow)
+
+proc docPanelBorderStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindowBorder)
+
+proc docPanelScrollStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindowScrollBar)
+
+proc popupNormalStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindow)
+
+proc popupSelectedStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWinCurrentLine)
+
+proc popupDetailStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindowDetail)
+
+proc popupSelectedDetailStyle*(): Style =
+  ## Detail text on the selected row: detail foreground over the
+  ## current-line background.
+  Style(
+    fg: getThemeStyle(EditorColorPairIndex.popupWindowDetail).fg,
+    bg: getThemeStyle(EditorColorPairIndex.popupWinCurrentLine).bg,
     modifiers: {},
   )
 
-  popupNormalStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.White),
-    bg: ColorValue(kind: Indexed, indexed: Color.Black),
-    modifiers: {},
-  )
-  popupSelectedStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Black),
-    bg: ColorValue(kind: Indexed, indexed: Color.Cyan),
-    modifiers: {},
-  )
-  popupDetailStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
-    bg: ColorValue(kind: Indexed, indexed: Color.Black),
-    modifiers: {},
-  )
-  popupSelectedDetailStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
-    bg: ColorValue(kind: Indexed, indexed: Color.Cyan),
-    modifiers: {},
-  )
-  popupBorderStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
-    bg: ColorValue(kind: Indexed, indexed: Color.Black),
-    modifiers: {},
-  )
+proc popupBorderStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindowBorder)
 
 # Forward declaration
 proc cancelCompletion*(mgr: CompletionManager)
@@ -925,7 +914,7 @@ proc renderCompletionPopup*(
 
   if showBorder:
     # Draw border if enabled
-    drawBorder(termBuffer, pos.x, pos.y, pos.width, pos.height, popupBorderStyle)
+    drawBorder(termBuffer, pos.x, pos.y, pos.width, pos.height, popupBorderStyle())
 
   # Content (always rendered)
   let maxWordW = calculateMaxWordWidth(menu.entries)
@@ -938,7 +927,11 @@ proc renderCompletionPopup*(
         let entry = menu.entries[entryIdx]
         # Only highlight if selection mode is active
         let isSelected = menu.hasSelection and entryIdx == menu.selectedIndex
-        let style = if isSelected: popupSelectedStyle else: popupNormalStyle
+        let style =
+          if isSelected:
+            popupSelectedStyle()
+          else:
+            popupNormalStyle()
 
         # Truncate word to fit
         var displayWord = entry.displayText
@@ -950,7 +943,11 @@ proc renderCompletionPopup*(
           drawClippedRunes(termBuffer, contentX, y, contentLimit, displayWord, style)
 
         # Draw detail after the word (if available)
-        let detailStyle = if isSelected: popupSelectedDetailStyle else: popupDetailStyle
+        let detailStyle =
+          if isSelected:
+            popupSelectedDetailStyle()
+          else:
+            popupDetailStyle()
         if entry.detail.isSome and entry.detail.get.len > 0:
           # Fill gap between word and detail
           let detailStartX = contentX + maxWordW + DetailSeparatorWidth
@@ -1054,10 +1051,10 @@ proc renderDocPanel*(termBuffer: var Buffer, docPanel: DocPanel, pos: PopupPosit
   let contentLimit = contentX + contentWidth
 
   # Border box; scroll indicators replace the right-hand corners when scrollable
-  drawBorder(termBuffer, pos.x, pos.y, pos.width, pos.height, docPanelBorderStyle)
+  drawBorder(termBuffer, pos.x, pos.y, pos.width, pos.height, docPanelBorderStyle())
   if canScrollUp and pos.y >= 0 and pos.y < termBuffer.area.height and rightX >= 0 and
       rightX < termBuffer.area.width:
-    termBuffer[rightX, pos.y] = cell("▲", docPanelScrollStyle)
+    termBuffer[rightX, pos.y] = cell("▲", docPanelScrollStyle())
 
   # Content lines
   for i in 0 ..< visibleLines:
@@ -1073,15 +1070,15 @@ proc renderDocPanel*(termBuffer: var Buffer, docPanel: DocPanel, pos: PopupPosit
         ""
 
     let afterText = drawClippedRunes(
-      termBuffer, contentX, lineY, contentLimit, lineText, docPanelNormalStyle
+      termBuffer, contentX, lineY, contentLimit, lineText, docPanelNormalStyle()
     )
-    discard fillCells(termBuffer, afterText, lineY, contentLimit, docPanelNormalStyle)
+    discard fillCells(termBuffer, afterText, lineY, contentLimit, docPanelNormalStyle())
 
   # Bottom scroll indicator (the border itself was drawn above)
   let bottomY = contentY + visibleLines
   if canScrollDown and bottomY >= 0 and bottomY < termBuffer.area.height and rightX >= 0 and
       rightX < termBuffer.area.width:
-    termBuffer[rightX, bottomY] = cell("▼", docPanelScrollStyle)
+    termBuffer[rightX, bottomY] = cell("▼", docPanelScrollStyle())
 
 # LSP completion support
 

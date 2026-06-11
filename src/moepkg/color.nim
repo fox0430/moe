@@ -276,6 +276,10 @@ type
     # Popup window
     popupWindow
     popupWinCurrentLine
+    popupWindowBorder
+    popupWindowDetail
+    popupWindowScrollBar
+    popupWindowActiveParameter
 
     # Notification popup
     notificationPopupInfo
@@ -602,6 +606,11 @@ const
     EditorColorPairIndex.pcLink: "Filer: symbolic link",
     EditorColorPairIndex.popupWindow: "Pop-up window",
     EditorColorPairIndex.popupWinCurrentLine: "Pop-up window current line",
+    EditorColorPairIndex.popupWindowBorder: "Pop-up window border",
+    EditorColorPairIndex.popupWindowDetail: "Pop-up window detail text",
+    EditorColorPairIndex.popupWindowScrollBar: "Pop-up window scroll indicator",
+    EditorColorPairIndex.popupWindowActiveParameter:
+      "Pop-up window active parameter (signature help)",
     EditorColorPairIndex.notificationPopupInfo: "Notification popup: info body",
     EditorColorPairIndex.notificationPopupInfoBorder: "Notification popup: info border",
     EditorColorPairIndex.notificationPopupWarning: "Notification popup: warning body",
