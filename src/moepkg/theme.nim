@@ -31,6 +31,15 @@ proc makeColorPairDefaultBg(fg: string): ColorPair =
   ## Helper to create a ColorPair with default background (#000000)
   makeColorPair(fg, "#000000")
 
+proc makeColorPairTermDefaultFg(bg: string): ColorPair =
+  ## Helper to create a ColorPair with terminal-default foreground and a fixed
+  ## background. Used for highlight tints that keep the underlying text's
+  ## terminal-default foreground (e.g. LSP document highlight).
+  ColorPair(
+    foreground: ThemeColor(rgb: TerminalDefaultRgb),
+    background: ThemeColor(rgb: rgb(bg)),
+  )
+
 const DefaultColors*: ThemeColors = [
   # Basic
   EditorColorPairIndex.default: makeColorPair("#dadada", "#000000"),
@@ -378,6 +387,18 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.documentSymbolViewerHeader: makeColorPairDefaultBg("#afd700"),
   EditorColorPairIndex.callHierarchyViewerHeader: makeColorPairDefaultBg("#afd700"),
   EditorColorPairIndex.helpViewerSectionHeader: makeColorPairDefaultBg("#5f87ff"),
+
+  # Indentation guide
+  EditorColorPairIndex.indentationLine: makeColorPairDefaultBg("#464646"),
+
+  # Scroll bar
+  EditorColorPairIndex.scrollBarThumb: makeColorPair("#787878", "#787878"),
+  EditorColorPairIndex.scrollBarTrack: makeColorPairDefaultBg("#323232"),
+
+  # LSP document highlight
+  EditorColorPairIndex.documentHighlightText: makeColorPairTermDefaultFg("#3c3c50"),
+  EditorColorPairIndex.documentHighlightRead: makeColorPairTermDefaultFg("#284628"),
+  EditorColorPairIndex.documentHighlightWrite: makeColorPairTermDefaultFg("#503232"),
 ]
 
 proc initDefaultTheme*() =

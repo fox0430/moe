@@ -370,6 +370,18 @@ type
     callHierarchyViewerHeader
     helpViewerSectionHeader
 
+    # Indentation guide
+    indentationLine
+
+    # Scroll bar
+    scrollBarThumb
+    scrollBarTrack
+
+    # LSP document highlight (textDocument/documentHighlight)
+    documentHighlightText
+    documentHighlightRead
+    documentHighlightWrite
+
   ## A single color with RGB value
   ThemeColor* = object
     rgb*: Rgb
@@ -675,6 +687,13 @@ const
     EditorColorPairIndex.documentSymbolViewerHeader: "Document symbol viewer: header",
     EditorColorPairIndex.callHierarchyViewerHeader: "Call hierarchy viewer: header",
     EditorColorPairIndex.helpViewerSectionHeader: "Help viewer: section header",
+    EditorColorPairIndex.indentationLine: "Indentation guide line",
+    EditorColorPairIndex.scrollBarThumb: "Scroll bar thumb (handle)",
+    EditorColorPairIndex.scrollBarTrack: "Scroll bar track (background)",
+    EditorColorPairIndex.documentHighlightText:
+      "LSP document highlight: text occurrence",
+    EditorColorPairIndex.documentHighlightRead: "LSP document highlight: read access",
+    EditorColorPairIndex.documentHighlightWrite: "LSP document highlight: write access",
   ]
 
   ## Terminal default RGB (-1 indicates use terminal default)
