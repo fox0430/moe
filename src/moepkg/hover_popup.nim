@@ -27,7 +27,7 @@ import std/[strutils, unicode]
 
 import pkg/celina
 
-import unicode_utils
+import unicode_utils, color
 
 type
   HoverPopupState* = enum
@@ -165,22 +165,16 @@ proc canScrollLeft*(mgr: HoverPopupManager): bool =
 
 # Popup rendering
 
-let
-  hoverPopupNormalStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.White),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
-    modifiers: {},
-  )
-  hoverPopupBorderStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
-    modifiers: {},
-  )
-  hoverPopupScrollIndicatorStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
-    modifiers: {},
-  )
+# Styles are derived from the current theme on each call so that theme changes
+# (and the theme being loaded after this module is initialized) are reflected.
+proc hoverPopupNormalStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindow)
+
+proc hoverPopupBorderStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindowBorder)
+
+proc hoverPopupScrollIndicatorStyle*(): Style =
+  getThemeStyle(EditorColorPairIndex.popupWindowScrollBar)
 
 proc calculateHoverPopupPosition*(
     cursorX, cursorY: int, termWidth, termHeight: int, mgr: HoverPopupManager
@@ -276,17 +270,18 @@ proc renderHoverPopup*(
     # Top border
     if pos.y >= 0 and pos.y < termBuffer.area.height:
       if pos.x >= 0 and pos.x < termBuffer.area.width:
-        termBuffer[pos.x, pos.y] = cell("┌", hoverPopupBorderStyle)
+        termBuffer[pos.x, pos.y] = cell("┌", hoverPopupBorderStyle())
       for x in pos.x + 1 ..< min(pos.x + pos.width - 1, termBuffer.area.width):
         if x >= 0:
-          termBuffer[x, pos.y] = cell("─", hoverPopupBorderStyle)
+          termBuffer[x, pos.y] = cell("─", hoverPopupBorderStyle())
       if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
         # Show scroll up indicator if scrollable
         if mgr.canScrollUp():
           termBuffer[pos.x + pos.width - 1, pos.y] =
-            cell("▲", hoverPopupScrollIndicatorStyle)
+            cell("▲", hoverPopupScrollIndicatorStyle())
         else:
-          termBuffer[pos.x + pos.width - 1, pos.y] = cell("┐", hoverPopupBorderStyle)
+          termBuffer[pos.x + pos.width - 1, pos.y] =
+            cell("┐", hoverPopupBorderStyle())
 
     # Content lines
     for i in 0 ..< contentHeight:
@@ -304,9 +299,9 @@ proc renderHoverPopup*(
       # Left border - show horizontal scroll left indicator if scrollable
       if pos.x >= 0 and pos.x < termBuffer.area.width:
         if i == contentHeight div 2 and mgr.canScrollLeft():
-          termBuffer[pos.x, lineY] = cell("◀", hoverPopupScrollIndicatorStyle)
+          termBuffer[pos.x, lineY] = cell("◀", hoverPopupScrollIndicatorStyle())
         else:
-          termBuffer[pos.x, lineY] = cell("│", hoverPopupBorderStyle)
+          termBuffer[pos.x, lineY] = cell("│", hoverPopupBorderStyle())
 
       # Content - with horizontal scroll offset
       var x = contentX
@@ -320,7 +315,7 @@ proc renderHoverPopup*(
         if x >= contentX + contentWidth or x >= termBuffer.area.width:
           break
         if x >= 0:
-          x += setRuneCell(termBuffer, x, lineY, r, hoverPopupNormalStyle)
+          x += setRuneCell(termBuffer, x, lineY, r, hoverPopupNormalStyle())
         else:
           x += runeWidth(r)
         inc charIdx
@@ -328,30 +323,31 @@ proc renderHoverPopup*(
       # Fill remaining space with background
       while x < contentX + contentWidth and x < termBuffer.area.width:
         if x >= 0:
-          termBuffer[x, lineY] = cell(" ", hoverPopupNormalStyle)
+          termBuffer[x, lineY] = cell(" ", hoverPopupNormalStyle())
         inc x
 
       # Right border - show horizontal scroll right indicator if scrollable
       if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
         if i == contentHeight div 2 and mgr.canScrollRight():
           termBuffer[pos.x + pos.width - 1, lineY] =
-            cell("▶", hoverPopupScrollIndicatorStyle)
+            cell("▶", hoverPopupScrollIndicatorStyle())
         else:
-          termBuffer[pos.x + pos.width - 1, lineY] = cell("│", hoverPopupBorderStyle)
+          termBuffer[pos.x + pos.width - 1, lineY] =
+            cell("│", hoverPopupBorderStyle())
 
     # Bottom border
     let bottomY = contentY + contentHeight
     if bottomY >= 0 and bottomY < termBuffer.area.height:
       if pos.x >= 0 and pos.x < termBuffer.area.width:
-        termBuffer[pos.x, bottomY] = cell("└", hoverPopupBorderStyle)
+        termBuffer[pos.x, bottomY] = cell("└", hoverPopupBorderStyle())
       for x in pos.x + 1 ..< min(pos.x + pos.width - 1, termBuffer.area.width):
         if x >= 0:
-          termBuffer[x, bottomY] = cell("─", hoverPopupBorderStyle)
+          termBuffer[x, bottomY] = cell("─", hoverPopupBorderStyle())
       if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
         # Show scroll down indicator if scrollable
         if mgr.canScrollDown():
           termBuffer[pos.x + pos.width - 1, bottomY] =
-            cell("▼", hoverPopupScrollIndicatorStyle)
+            cell("▼", hoverPopupScrollIndicatorStyle())
         else:
           termBuffer[pos.x + pos.width - 1, bottomY] =
-            cell("┘", hoverPopupBorderStyle)
+            cell("┘", hoverPopupBorderStyle())

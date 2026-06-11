@@ -618,10 +618,10 @@ suite "Completion - renderCompletionPopup":
     renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
 
     # First entry: normal style
-    check termBuffer[0, 0].style == popupNormalStyle
+    check termBuffer[0, 0].style == popupNormalStyle()
 
     # Second entry (selected): selected style
-    check termBuffer[0, 1].style == popupSelectedStyle
+    check termBuffer[0, 1].style == popupSelectedStyle()
 
   test "Does nothing with empty entries":
     let menu =
@@ -1006,7 +1006,7 @@ suite "Completion - renderCompletionPopup with detail":
     renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
 
     # Detail starts at x = maxWordWidth(3) + DetailSeparatorWidth(2) = 5
-    check termBuffer[5, 0].style == popupDetailStyle
+    check termBuffer[5, 0].style == popupDetailStyle()
 
   test "Selected item detail uses selected detail style":
     let menu = CompletionMenu(
@@ -1026,7 +1026,7 @@ suite "Completion - renderCompletionPopup with detail":
     renderCompletionPopup(termBuffer, menu, pos, showBorder = false)
 
     # Detail starts at x=5
-    check termBuffer[5, 0].style == popupSelectedDetailStyle
+    check termBuffer[5, 0].style == popupSelectedDetailStyle()
 
   test "Entry without detail renders normally":
     let menu = CompletionMenu(

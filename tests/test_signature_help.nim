@@ -25,6 +25,7 @@ import pkg/celina
 
 import ../src/moepkg/signature_help {.all.}
 import ../src/moepkg/lsp/protocol/types as lspTypes
+import ../src/moepkg/[color, theme]
 
 proc createSignatureHelp(
     label: string,
@@ -357,19 +358,21 @@ suite "SignatureHelp - renderSignatureHelpPopup":
     check termBuffer[4, 1].style == termBuffer[3, 1].style
 
 suite "SignatureHelp - styles":
-  test "signatureHelpNormalStyle has white foreground and dark background":
-    check signatureHelpNormalStyle.fg.kind == Indexed
-    check signatureHelpNormalStyle.fg.indexed == Color.White
-    check signatureHelpNormalStyle.bg.kind == Rgb
+  test "signatureHelpNormalStyle uses the popupWindow theme color":
+    initDefaultTheme()
+    check signatureHelpNormalStyle() == getThemeStyle(EditorColorPairIndex.popupWindow)
 
-  test "signatureHelpHighlightStyle has yellow foreground and bold":
-    check signatureHelpHighlightStyle.fg.kind == Indexed
-    check signatureHelpHighlightStyle.fg.indexed == Color.Yellow
-    check StyleModifier.Bold in signatureHelpHighlightStyle.modifiers
+  test "signatureHelpHighlightStyle uses the active parameter theme color with bold":
+    initDefaultTheme()
+    check signatureHelpHighlightStyle() ==
+      getThemeStyle(
+        EditorColorPairIndex.popupWindowActiveParameter, {StyleModifier.Bold}
+      )
 
-  test "signatureHelpBorderStyle has bright black foreground":
-    check signatureHelpBorderStyle.fg.kind == Indexed
-    check signatureHelpBorderStyle.fg.indexed == Color.BrightBlack
+  test "signatureHelpBorderStyle uses the popupWindowBorder theme color":
+    initDefaultTheme()
+    check signatureHelpBorderStyle() ==
+      getThemeStyle(EditorColorPairIndex.popupWindowBorder)
 
 suite "SignatureHelp - constants":
   test "SignatureHelpTriggerChars contains '(' and ','":
@@ -629,12 +632,12 @@ suite "SignatureHelp - renderSignatureHelpPopup advanced":
     # Check that content is rendered (left border + content)
     check termBuffer[0, 1].symbol == "│"
 
-    # Verify highlighted portion has different style
-    # Characters at index 5-10 should have highlight style (Yellow)
-    check termBuffer[6, 1].style.fg.indexed == Color.Yellow
+    # Verify highlighted portion uses the active-parameter highlight style
+    # Characters at index 5-10 should have highlight style
+    check termBuffer[6, 1].style == signatureHelpHighlightStyle()
 
-    # Characters before highlight should have normal style (White)
-    check termBuffer[1, 1].style.fg.indexed == Color.White
+    # Characters before highlight should have the normal style
+    check termBuffer[1, 1].style == signatureHelpNormalStyle()
 
   test "Renders Unicode signature correctly":
     let display = SignatureHelpDisplay(
@@ -683,7 +686,7 @@ suite "SignatureHelp - renderSignatureHelpPopup advanced":
     # Content area should be filled after "Hi"
     # Position 1 = 'H', 2 = 'i', 3+ should be spaces with normal style
     check termBuffer[3, 1].symbol == " "
-    check termBuffer[3, 1].style.fg.indexed == Color.White
+    check termBuffer[3, 1].style == signatureHelpNormalStyle()
 
   test "Truncates long signature that exceeds content width":
     let display = SignatureHelpDisplay(

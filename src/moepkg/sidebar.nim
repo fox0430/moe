@@ -82,27 +82,15 @@ proc themeBackground(): ColorValue =
   let colorPair = getThemeColor(EditorColorPairIndex.default)
   colorPair.background.rgb.toColorValue
 
-# Style getter procs for different sidebar indicators (use theme background)
+# Style getter procs for different sidebar indicators (colors come from the theme)
 proc gitAddedStyle*(): Style =
-  Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Green),
-    bg: themeBackground(),
-    modifiers: {},
-  )
+  getThemeStyle(EditorColorPairIndex.sidebarGitAddedSign)
 
 proc gitChangedStyle*(): Style =
-  Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
-    bg: themeBackground(),
-    modifiers: {},
-  )
+  getThemeStyle(EditorColorPairIndex.sidebarGitChangedSign)
 
 proc gitDeletedStyle*(): Style =
-  Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Red),
-    bg: themeBackground(),
-    modifiers: {},
-  )
+  getThemeStyle(EditorColorPairIndex.sidebarGitDeletedSign)
 
 proc gitConflictSidebarStyle*(): Style =
   var style = getThemeStyle(EditorColorPairIndex.sidebarGitConflictSign)
@@ -110,32 +98,16 @@ proc gitConflictSidebarStyle*(): Style =
   style
 
 proc syntaxErrorStyle*(): Style =
-  Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Red),
-    bg: themeBackground(),
-    modifiers: {StyleModifier.Bold},
-  )
+  getThemeStyle(EditorColorPairIndex.sidebarSyntaxCheckErrSign, {StyleModifier.Bold})
 
 proc syntaxWarningStyle*(): Style =
-  Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
-    bg: themeBackground(),
-    modifiers: {},
-  )
+  getThemeStyle(EditorColorPairIndex.sidebarSyntaxCheckWarnSign)
 
 proc sessionModifiedStyle*(): Style =
-  Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
-    bg: themeBackground(),
-    modifiers: {},
-  )
+  getThemeStyle(EditorColorPairIndex.sidebarSessionModifiedSign)
 
 proc sessionInsertedStyle*(): Style =
-  Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Green),
-    bg: themeBackground(),
-    modifiers: {},
-  )
+  getThemeStyle(EditorColorPairIndex.sidebarSessionInsertedSign)
 
 proc bookmarkStyle*(): Style =
   Style(

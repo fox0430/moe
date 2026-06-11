@@ -204,7 +204,11 @@ dir = { fg = "#61afef", bg = "#000000" }
 pcLink = { fg = "#008080", bg = "#000000" }
 
 popupWindow = { fg = "#ffffff", bg = "#000000" }
-popupWinCurrentLine = { fg = "#61afef", bg = "#000000" }
+popupWinCurrentLine = { fg = "#ffffff", bg = "#3e4452" }
+popupWindowBorder = { fg = "#636d83", bg = "#000000" }
+popupWindowDetail = { fg = "#636d83", bg = "#000000" }
+popupWindowScrollBar = { fg = "#e5c07b", bg = "#000000" }
+popupWindowActiveParameter = { fg = "#e5c07b", bg = "#000000" }
 
 notificationPopupInfo = { fg = "#ffffff", bg = "#323232" }
 notificationPopupInfoBorder = { fg = "#808080", bg = "#323232" }

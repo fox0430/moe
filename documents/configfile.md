@@ -1499,6 +1499,10 @@ Notes:
 | pcLink | Filer: symbolic link |
 | popupWindow | Pop-up window |
 | popupWinCurrentLine | Pop-up window current line |
+| popupWindowBorder | Pop-up window border |
+| popupWindowDetail | Pop-up window detail text |
+| popupWindowScrollBar | Pop-up window scroll indicator |
+| popupWindowActiveParameter | Pop-up window active parameter (signature help) |
 | notificationPopupInfo | Notification popup: info body |
 | notificationPopupInfoBorder | Notification popup: info border |
 | notificationPopupWarning | Notification popup: warning body |
