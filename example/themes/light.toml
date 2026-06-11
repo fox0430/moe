@@ -300,3 +300,15 @@ referencesViewerHeader = { fg = "#0067c0" }
 documentSymbolViewerHeader = { fg = "#008000" }
 callHierarchyViewerHeader = { fg = "#008000" }
 helpViewerSectionHeader = { fg = "#0040ff" }
+
+# Indentation guide
+indentationLine = { fg = "#bcbcbc" }
+
+# Scroll bar
+scrollBarThumb = { fg = "#9e9e9e", bg = "#9e9e9e" }
+scrollBarTrack = { fg = "#d0d0d0" }
+
+# LSP document highlight
+documentHighlightText = { fg = "termDefault", bg = "#dbe6f6" }
+documentHighlightRead = { fg = "termDefault", bg = "#d6efd6" }
+documentHighlightWrite = { fg = "termDefault", bg = "#f6dcdc" }

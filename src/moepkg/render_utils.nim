@@ -126,34 +126,20 @@ proc findCharMatchStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.findCharMatch)
 
 proc indentationLineStyle*(): Style =
-  ## Get indentation guide style (slightly darker than background)
-  let colorPair = getThemeColor(EditorColorPairIndex.default)
-  Style(
-    fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 70, g: 70, b: 70)),
-    bg: colorPair.background.rgb.toColorValue,
-    modifiers: {},
-  )
+  ## Get indentation guide style from theme
+  getThemeStyle(EditorColorPairIndex.indentationLine)
 
 proc foldStyle*(): Style =
   ## Get folding line style from theme
   getThemeStyle(EditorColorPairIndex.foldingLine)
 
 proc scrollbarThumbStyle*(): Style =
-  ## Get scrollbar thumb (handle) style — solid block via background color
-  Style(
-    fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 120, g: 120, b: 120)),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 120, g: 120, b: 120)),
-    modifiers: {},
-  )
+  ## Get scrollbar thumb (handle) style from theme — solid block
+  getThemeStyle(EditorColorPairIndex.scrollBarThumb)
 
 proc scrollbarTrackStyle*(): Style =
-  ## Get scrollbar track (background) style — subtle via background color
-  let colorPair = getThemeColor(EditorColorPairIndex.default)
-  Style(
-    fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 50, g: 50, b: 50)),
-    bg: colorPair.background.rgb.toColorValue,
-    modifiers: {},
-  )
+  ## Get scrollbar track (background) style from theme
+  getThemeStyle(EditorColorPairIndex.scrollBarTrack)
 
 proc fullWidthSpaceStyle*(): Style =
   ## Get full-width space highlight style from theme
@@ -176,30 +162,17 @@ proc codeLensStyle*(): Style =
   getThemeStyle(EditorColorPairIndex.codeLens)
 
 # Document Highlight styles (LSP textDocument/documentHighlight)
-# These use fixed colors for now as they are not in the theme
 proc documentHighlightTextStyle*(): Style =
   ## Style for generic text occurrence (DocumentHighlightKind.Text)
-  Style(
-    fg: ColorValue(kind: Default),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 60, g: 60, b: 80)),
-    modifiers: {},
-  )
+  getThemeStyle(EditorColorPairIndex.documentHighlightText)
 
 proc documentHighlightReadStyle*(): Style =
   ## Style for read-access of a symbol (DocumentHighlightKind.Read)
-  Style(
-    fg: ColorValue(kind: Default),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 40, g: 70, b: 40)),
-    modifiers: {},
-  )
+  getThemeStyle(EditorColorPairIndex.documentHighlightRead)
 
 proc documentHighlightWriteStyle*(): Style =
   ## Style for write-access of a symbol (DocumentHighlightKind.Write)
-  Style(
-    fg: ColorValue(kind: Default),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 80, g: 50, b: 50)),
-    modifiers: {},
-  )
+  getThemeStyle(EditorColorPairIndex.documentHighlightWrite)
 
 # Pure utility functions
 

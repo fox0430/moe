@@ -1561,4 +1561,10 @@ Notes:
 | documentSymbolViewerHeader | Document symbol viewer: header |
 | callHierarchyViewerHeader | Call hierarchy viewer: header |
 | helpViewerSectionHeader | Help viewer: section header |
+| indentationLine | Indentation guide line |
+| scrollBarThumb | Scroll bar thumb (handle) |
+| scrollBarTrack | Scroll bar track (background) |
+| documentHighlightText | LSP document highlight: text occurrence |
+| documentHighlightRead | LSP document highlight: read access |
+| documentHighlightWrite | LSP document highlight: write access |
 <!-- AUTO-GEN:end Colors -->
