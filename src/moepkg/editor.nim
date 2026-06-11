@@ -1148,9 +1148,11 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   e.state.display.showDocumentHighlight = newConfig.lsp.documentHighlight.enable
   e.state.display.showInlayHint = newConfig.lsp.inlayHint.enable
 
-  # The insert handler caches lsp.completion.enable as a flag (it has no access
-  # to e.config), so re-sync it on reload like the display flags above.
+  # The insert handler caches lsp.completion.enable and autocomplete.enable as
+  # flags (it has no access to e.config), so re-sync them on reload like the
+  # display flags above.
   e.handlerManager.insertHandler.lspCompletionEnabled = newConfig.lsp.completion.enable
+  e.handlerManager.insertHandler.autocompleteEnabled = newConfig.autocomplete.enable
 
   if not newConfig.lsp.diagnostics.enable:
     # Diagnostics are server-push; when disabled, incoming publishDiagnostics are
@@ -1796,11 +1798,18 @@ proc renderOverlays(e: Editor, buffer: var Buffer) =
         buffer, completionMgr.menu, popupPos, e.config.autocomplete.windowBorder
       )
 
-      # Render documentation panel next to completion popup
+      # Render documentation panel next to completion popup. Anchor it to the
+      # highlighted candidate's row (popup border + position within the visible
+      # window) so it tracks the selection as you cycle, instead of pinning to
+      # the popup's first row.
       if completionMgr.docPanel.visible:
+        let borderOffset = if e.config.autocomplete.windowBorder: 1 else: 0
+        let selectedRowOffset =
+          borderOffset +
+          (completionMgr.menu.selectedIndex - completionMgr.menu.scrollOffset)
         let docPos = calculateDocPanelPosition(
           popupPos, buffer.area.width, buffer.area.height, completionMgr.docPanel,
-          bottomReserve,
+          bottomReserve, selectedRowOffset,
         )
         renderDocPanel(buffer, completionMgr.docPanel, docPos)
 

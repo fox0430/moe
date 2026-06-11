@@ -297,9 +297,17 @@ proc commitCompletion*(
     state: EditorState,
     keepPopupOpen: bool = false,
 ): InsertModeResult =
-  ## Commit the selected completion item
-  ## If keepPopupOpen is true, the popup remains visible for further selection
-  ## Changes are added to the existing Insert mode transaction (do not start a new one)
+  ## Commit the currently selected completion item.
+  ##
+  ## Replaces the range [start, cursor) in one edit: `start` is the LSP textEdit
+  ## start (else the trigger column) and the end is always widened to the cursor,
+  ## so re-committing after a cycling preview cleanly removes the previous insert.
+  ##
+  ## `keepPopupOpen` = cycling preview: insert the candidate as plain text with
+  ## the cursor at its end, skip additionalTextEdits, and leave the popup open.
+  ## The final commit (Enter / typing) instead expands snippets to $0 and applies
+  ## additionalTextEdits (e.g. auto-imports). All edits join the Insert-mode
+  ## transaction and undo together.
   let entryOpt = handler.completionManager.getSelectedEntry()
   if entryOpt.isNone or entryOpt.get.word.len == 0:
     if not keepPopupOpen:
@@ -309,73 +317,151 @@ proc commitCompletion*(
   let entry = entryOpt.get
   let menu = handler.completionManager.menu
 
-  # Note: We do NOT start a new transaction here because Insert mode already
-  # has an active transaction. The completion changes will be part of that
-  # transaction and undone together with other Insert mode edits.
-
-  # For path completion, strip trailing '/' from directories so the user
-  # can explicitly type '/' to drill in.
-  let insertWord =
-    if handler.completionManager.isPathCompletion and entry.word.endsWith("/"):
-      entry.word[0 ..^ 2]
-    else:
-      entry.word
-
-  if entry.textEdit.isSome and not keepPopupOpen:
-    # Use textEdit for range-based replacement (LSP-provided edit)
-    # Only used on final commit (not during Tab cycling) because the textEdit
-    # range refers to the original buffer state and becomes invalid after cycling.
+  # Resolve the replacement range (rune coords) and the raw text to insert. The
+  # range is [(startLine, startCol), (endLine, endCol)): both ends come from the
+  # LSP textEdit when present (otherwise the word the popup was triggered on),
+  # and the end is later widened to the current cursor so we also swallow any
+  # characters typed after the request was sent. Honoring the textEdit end keeps
+  # replace-mode completions (whose range extends past the cursor, e.g.
+  # completing in the middle of an identifier) from leaving a dangling suffix,
+  # and multi-line ranges are deleted wholesale rather than leaving a tail.
+  var startLine: int
+  var startCol: int
+  var endLine: int
+  var endCol: int
+  var rawText: string
+  if entry.textEdit.isSome:
     let edit = entry.textEdit.get
-    let applyResult = buffer.applyTextEdits(@[edit])
-    if applyResult.isOk:
-      # Position cursor at end of inserted text
-      let newTextLines = edit.newText.split('\n')
-      if newTextLines.len == 1:
-        # Single-line edit: cursor at start column + newText length.
-        # cursor.column is a rune index, so the LSP UTF-16 start must be
-        # converted to a rune index (not a byte offset).
-        let startCol = utf16ToRuneIndex(
-          buffer.getLine(edit.range.start.line), edit.range.start.character
-        )
-        state.cursor.line = edit.range.start.line
-        state.cursor.column = startCol + edit.newText.runeLen
+    startLine = edit.range.start.line
+    startCol = utf16ToRuneIndex(buffer.getLine(startLine), edit.range.start.character)
+    endLine = edit.range.`end`.line
+    endCol = utf16ToRuneIndex(buffer.getLine(endLine), edit.range.`end`.character)
+    rawText = edit.newText
+  else:
+    startLine = menu.triggerLine
+    startCol = menu.triggerCol
+    endLine = startLine
+    endCol = startCol
+    # For path completion, strip the trailing '/' from directories so the user
+    # can explicitly type '/' to drill in.
+    rawText =
+      if handler.completionManager.isPathCompletion and entry.word.endsWith("/"):
+        entry.word[0 ..^ 2]
       else:
-        # Multi-line edit: cursor at end of last line
-        let lastLine = edit.range.start.line + newTextLines.len - 1
-        state.cursor.line = lastLine
-        state.cursor.column = newTextLines[^1].runeLen
+        entry.word
 
-      # Apply additional text edits if present
-      if entry.additionalTextEdits.isSome:
-        discard buffer.applyTextEdits(entry.additionalTextEdits.get)
+  # Expand snippets to plain text plus the in-text cursor offset (in runes). A
+  # cycling preview forces the cursor to the end (not $0) so the next cycle's
+  # widen-to-cursor deletion swallows the whole preview.
+  let (insertText, cursorRuneOffset) =
+    if entry.isSnippet:
+      let (text, snippetOffset) = expandSnippet(rawText)
+      if keepPopupOpen:
+        (text, text.runeLen)
+      else:
+        (text, snippetOffset)
     else:
-      # Fallback to simple prefix-deletion if textEdit application fails
-      let prefixLen = menu.prefix.runeLen
-      if prefixLen > 0:
-        for _ in 0 ..< prefixLen:
-          state.cursor.column -= 1
-          discard buffer.deleteChar(state.cursor)
-      discard buffer.insertText(state.cursor, entry.word)
-      state.cursor.column += entry.word.runeLen
-  else:
-    # Simple prefix-deletion approach (no textEdit)
-    let prefixLen = menu.prefix.runeLen
-    if prefixLen > 0:
-      for _ in 0 ..< prefixLen:
-        state.cursor.column -= 1
+      (rawText, rawText.runeLen)
+
+  if entry.additionalTextEdits.isSome and not keepPopupOpen:
+    # Apply additionalTextEdits (auto-imports etc.) FIRST, while the buffer still
+    # matches the coordinates the server computed them against. Edits inserted at
+    # or above the completion site push it down, so shift the start/end lines and
+    # the live cursor (which tracks the same text) by the net lines they add.
+    # Only line shifts are compensated: real servers emit whole-line insertions
+    # (imports), never edits that change columns on the completion's own line, so
+    # an intra-line column shift is intentionally not handled here.
+    let adds = entry.additionalTextEdits.get
+    if buffer.applyTextEdits(adds).isOk:
+      var lineShift = 0
+      for e in adds:
+        if e.range.start.line <= startLine:
+          lineShift += e.newText.count('\n') - (e.range.`end`.line - e.range.start.line)
+      startLine += lineShift
+      endLine += lineShift
+      state.cursor.line += lineShift
+
+  # Widen the deletion end to the cursor when it sits past the textEdit end
+  # (characters typed after the request was sent). Positions are compared as
+  # (line, column) so this also covers the cursor trailing onto a later line.
+  var delEndLine = endLine
+  var delEndCol = endCol
+  if state.cursor.line > delEndLine or
+      (state.cursor.line == delEndLine and state.cursor.column > delEndCol):
+    delEndLine = state.cursor.line
+    delEndCol = state.cursor.column
+
+  let startNotAfterEnd =
+    startLine < delEndLine or (startLine == delEndLine and startCol <= delEndCol)
+  let cursorSane =
+    not (startLine == state.cursor.line and state.cursor.column < startCol)
+  if startNotAfterEnd and cursorSane:
+    # Delete the replaced range [(startLine, startCol), (delEndLine, delEndCol)).
+    if delEndLine == startLine:
+      state.cursor = BufferPosition(line: startLine, column: startCol)
+      for _ in 0 ..< delEndCol - startCol:
         discard buffer.deleteChar(state.cursor)
-
-    # Insert the selected word
-    discard buffer.insertText(state.cursor, insertWord)
-    state.cursor.column += insertWord.runeLen
-
-  # Close the completion menu (unless keepPopupOpen)
-  if not keepPopupOpen:
-    handler.completionManager.cancelCompletion()
+    else:
+      # Multi-line range: deleteRange's end is inclusive, so step the exclusive
+      # end back one position (wrapping to the prior line's end, which also pulls
+      # in the joining newline).
+      var incLine = delEndLine
+      var incCol = delEndCol
+      if incCol > 0:
+        dec incCol
+      else:
+        dec incLine
+        incCol = buffer.getLine(incLine).runeLen
+      discard buffer.deleteRange(
+        BufferPosition(line: startLine, column: startCol),
+        BufferPosition(line: incLine, column: incCol),
+      )
+      state.cursor = BufferPosition(line: startLine, column: startCol)
   else:
-    # Update the prefix to the inserted text (so further cycling deletes it correctly)
-    handler.completionManager.menu.prefix = insertWord
+    # Inconsistent state (cursor before the start, or start past the end): fall
+    # back to deleting the tracked prefix backward from the cursor.
+    let prefixLen = menu.prefix.runeLen
+    for _ in 0 ..< prefixLen:
+      if state.cursor.column == 0:
+        break
+      state.cursor.column -= 1
+      discard buffer.deleteChar(state.cursor)
+    startLine = state.cursor.line
+    startCol = state.cursor.column
 
+  # Insert the (expanded) text at the start position.
+  discard buffer.insertText(state.cursor, insertText)
+
+  # Place the cursor at cursorRuneOffset within the inserted text, translating
+  # the flat rune offset into a (line, column) delta to support multi-line text.
+  var lineDelta = 0
+  var colInLine = 0
+  var seen = 0
+  for r in insertText.runes:
+    if seen >= cursorRuneOffset:
+      break
+    if r == Rune('\n'):
+      inc lineDelta
+      colInLine = 0
+    else:
+      inc colInLine
+    inc seen
+  state.cursor.line = startLine + lineDelta
+  state.cursor.column =
+    if lineDelta == 0:
+      startCol + colInLine
+    else:
+      colInLine
+
+  if keepPopupOpen:
+    # Cycling preview: keep the popup open and track the inserted text as the
+    # prefix for the fallback delete path and popup rendering. Multi-line inserts
+    # are left untracked (the single-line fallback cannot represent them; the
+    # main range-delete path is what actually runs during cycling).
+    if '\n' notin insertText:
+      handler.completionManager.menu.prefix = insertText
+  else:
+    handler.completionManager.cancelCompletion()
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc triggerLspCompletionRequest*(
@@ -392,11 +478,12 @@ proc triggerLspCompletionRequest*(
   let line = buffer.getLine(state.cursor.line)
   let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
 
-  # If LSP completion is available, check if we can skip the request and filter
-  # client-side. This must be checked BEFORE triggerCompletion, which clears
-  # lspItems. When lsp.completion.enable is off we fall through to buffer
-  # completions only, without touching LSP.
   if not handler.lsp.isNil and handler.lsp.isEnabled and handler.lspCompletionEnabled:
+    # If LSP completion is available, check whether we can skip the request and
+    # filter client-side. The skip check must run BEFORE the fallback
+    # triggerCompletion below, which recollects buffer words. When
+    # lsp.completion.enable is off we fall through to buffer completions only,
+    # without touching LSP.
     if handler.completionManager.shouldSkipLspRequest(prefix):
       if handler.completionManager.lspItems.len > 0:
         # Filter existing LSP items client-side without clearing them
@@ -410,9 +497,8 @@ proc triggerLspCompletionRequest*(
           handler.completionManager.state = csActive
       else:
         # LSP response not yet arrived; refresh buffer completions in place so
-        # menu.prefix stays in sync with the cursor. Skipping this would leave a
-        # stale prefix and cause commitCompletion to delete the wrong number of
-        # characters (e.g. typing "te" fast at col 0 then Tab → "ttemplate").
+        # menu.prefix, the trigger position and the visible entries stay in sync
+        # with the cursor while we wait.
         handler.completionManager.triggerCompletion(
           buffer, state.cursor.line, state.cursor.column, buffer.language
         )
@@ -606,49 +692,53 @@ proc handleInsertModeKey*(
 
   # Handle completion-specific keys when completion is active
   if completionActive:
-    # Ctrl+N, Down, or Tab - select next and replace current word
+    # Ctrl+N, Down, or Tab - highlight the next item and preview it into the
+    # buffer (replacing any previous preview). The final commit (Enter / typing)
+    # re-applies the textEdit range and additionalTextEdits.
     if keyCombo.isCtrlN or (keyCombo.isSpecial and keyCombo.special == skDown) or (
       keyCombo.isSpecial and keyCombo.special == skTab and
       kmShift notin keyCombo.modifiers
     ):
-      # First Tab activates selection mode
+      # First Tab activates selection mode (highlights item 0)
       if not handler.completionManager.menu.hasSelection:
         handler.completionManager.menu.hasSelection = true
       else:
         handler.completionManager.selectNext()
-      # Replace current word with selected one
-      let commitResult = handler.commitCompletion(buffer, state, keepPopupOpen = true)
+      let res = handler.commitCompletion(buffer, state, keepPopupOpen = true)
       handler.completionManager.updateDocPanel()
       handler.triggerResolveRequest(buffer)
-      return commitResult
+      return res
 
-    # Ctrl+P, Up, or Shift+Tab/BackTab - select previous and replace current word
     if keyCombo.isCtrlP or (keyCombo.isSpecial and keyCombo.special == skUp) or (
       keyCombo.isSpecial and keyCombo.special == skTab and kmShift in keyCombo.modifiers
     ) or (keyCombo.isSpecial and keyCombo.special == skBackTab):
-      # First Shift+Tab activates selection mode
+      # Ctrl+P, Up, or Shift+Tab/BackTab - highlight the previous item and preview
+      # it into the buffer (same as forward cycling).
+      # First Shift+Tab activates selection mode (highlights item 0)
       if not handler.completionManager.menu.hasSelection:
         handler.completionManager.menu.hasSelection = true
       else:
         handler.completionManager.selectPrevious()
-      # Replace current word with selected one
-      let commitResult = handler.commitCompletion(buffer, state, keepPopupOpen = true)
+      let res = handler.commitCompletion(buffer, state, keepPopupOpen = true)
       handler.completionManager.updateDocPanel()
       handler.triggerResolveRequest(buffer)
-      return commitResult
+      return res
 
-    # Enter - confirm selection and close popup
     if keyCombo.isSpecial and keyCombo.special == skEnter:
+      # Enter - confirm the highlighted item (if any), otherwise just dismiss the
+      # popup without inserting a newline (press Enter again for a newline).
+      if handler.completionManager.menu.hasSelection:
+        return handler.commitCompletion(buffer, state)
       handler.completionManager.cancelCompletion()
       return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-    # Escape - cancel completion and leave insert mode
     if keyCombo.isSpecial and keyCombo.special == skEscape:
+      # Escape - cancel completion and leave insert mode
       handler.completionManager.cancelCompletion()
       return handler.handleModeSwitch(EditorMode.Normal)
 
-    # Backspace - update filter or cancel if prefix is empty
     if keyCombo.isSpecial and keyCombo.special == skBackspace:
+      # Backspace - update filter or cancel if prefix is empty
       let backspaceResult = handler.handleBackspace(buffer, state)
       if handler.completionManager.isPathCompletion:
         # Re-check path context after backspace
@@ -670,14 +760,15 @@ proc handleInsertModeKey*(
           handler.completionManager.cancelCompletion()
       return backspaceResult
 
-    # Regular character input while completion is active
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+      # Regular character input while completion is active
       let hasSelection = handler.completionManager.menu.hasSelection
       let wasPathCompletion = handler.completionManager.isPathCompletion
 
       if hasSelection and not wasPathCompletion:
-        # Confirm current selection and close popup (non-path only)
-        handler.completionManager.cancelCompletion()
+        # Confirm the highlighted item, then type the new character after it.
+        # Path completion keeps filtering as you type, so it is not committed.
+        discard handler.commitCompletion(buffer, state)
 
       # Insert the new character
       discard handler.handleCharacterInsertion(buffer, state, keyCombo.char)
@@ -698,56 +789,56 @@ proc handleInsertModeKey*(
           handler.completionManager.cancelCompletion()
       return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  # Ctrl+N - trigger completion (when not active)
   if keyCombo.isCtrlN and not completionActive:
+    # Ctrl+N - trigger completion (when not active)
     # Show buffer completions immediately, LSP will update when ready
     handler.triggerLspCompletionRequest(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  # Ctrl+Space - also trigger completion
   if keyCombo.isCtrlSpace and not completionActive:
+    # Ctrl+Space - also trigger completion
     # Show buffer completions immediately, LSP will update when ready
     handler.triggerLspCompletionRequest(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  # Ctrl+W - delete word backward
   if keyCombo.isCtrlW:
+    # Ctrl+W - delete word backward
     handler.completionManager.cancelCompletion()
     deleteWordBackward(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  # Ctrl+U - delete to line start
   if keyCombo.isCtrlU:
+    # Ctrl+U - delete to line start
     handler.completionManager.cancelCompletion()
     deleteToLineStart(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  # Ctrl+T - indent line
   if keyCombo.isCtrlT:
+    # Ctrl+T - indent line
     handler.completionManager.cancelCompletion()
     indentLine(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  # Ctrl+D - dedent line
   if keyCombo.isCtrlD:
+    # Ctrl+D - dedent line
     handler.completionManager.cancelCompletion()
     dedentLine(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  # Ctrl+E - insert character from line below
   if keyCombo.isCtrlE:
+    # Ctrl+E - insert character from line below
     handler.completionManager.cancelCompletion()
     discard insertCharFromBelow(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  # Ctrl+Y - insert character from line above
   if keyCombo.isCtrlY:
+    # Ctrl+Y - insert character from line above
     handler.completionManager.cancelCompletion()
     discard insertCharFromAbove(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  # Ctrl+R - trigger signature help (LSP)
   if keyCombo.isCtrlR:
+    # Ctrl+R - trigger signature help (LSP)
     handler.completionManager.cancelCompletion()
     # Request signature help from LSP if available
     if not handler.lsp.isNil and handler.lsp.isEnabled:
@@ -762,15 +853,15 @@ proc handleInsertModeKey*(
         state.lspCache.pendingSignatureHelpRequestId = reqResult.get
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-  # Ctrl+O - execute one Normal mode command then return to Insert mode
   if keyCombo.isCtrlO:
+    # Ctrl+O - execute one Normal mode command then return to Insert mode
     handler.completionManager.cancelCompletion()
     handler.signatureHelpManager.hide()
     state.insertNormalMode = true
     return InsertModeResult(kind: imrHandled, modeTransition: some(EditorMode.Normal))
 
-  # Ctrl+I - insert tab
   if keyCombo.isCtrlI:
+    # Ctrl+I - insert tab
     return handler.handleTab(buffer, state)
 
   # Check for mode switch keys (like Escape)
@@ -811,22 +902,25 @@ proc handleInsertModeKey*(
       # Other command types not supported in insert mode
       return InsertModeResult(kind: imrUnhandled)
 
-  # Handle regular character insertion with auto-completion trigger
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+    # Handle regular character insertion with auto-completion trigger
     discard handler.handleCharacterInsertion(buffer, state, keyCombo.char)
-    # Check for path completion first
-    let line = buffer.getLine(state.cursor.line)
-    let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)
-    if pathPrefix.len > 0:
-      handler.completionManager.triggerPathCompletion(
-        buffer, state.cursor.line, state.cursor.column
-      )
-    else:
-      # Auto-trigger word completion after typing (when prefix is long enough)
-      let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
-      if prefix.len >= AutoTriggerPrefixLength:
-        # Show buffer completions immediately, LSP will update when ready
-        handler.triggerLspCompletionRequest(buffer, state)
+    # All auto-triggering (path and word completion alike) is gated on
+    # autocomplete.enable so the flag governs both consistently.
+    if handler.autocompleteEnabled:
+      # Check for path completion first
+      let line = buffer.getLine(state.cursor.line)
+      let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)
+      if pathPrefix.len > 0:
+        handler.completionManager.triggerPathCompletion(
+          buffer, state.cursor.line, state.cursor.column
+        )
+      else:
+        # Auto-trigger word completion after typing (when prefix is long enough)
+        let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
+        if prefix.len >= AutoTriggerPrefixLength:
+          # Show buffer completions immediately, LSP will update when ready
+          handler.triggerLspCompletionRequest(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   # Handle special keys
