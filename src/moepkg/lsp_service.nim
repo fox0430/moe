@@ -1094,6 +1094,19 @@ proc getDynamicRegistrations*(svc: LspService, langId: string): seq[Registration
   for id, reg in svc.dynamicRegistrations[langId]:
     result.add(reg)
 
+template isCapabilityEnabled(cap: Option[JsonNode]): bool =
+  ## A `boolean | Options` server capability counts as supported only when it is
+  ## present and not literally `false`. A server may legitimately advertise
+  ## `"xxxProvider": false` to disable a feature; treating that as enabled fires
+  ## useless requests that hang until the request timeout. An object (Options)
+  ## always means enabled.
+  cap.isSome and (cap.get.kind != JBool or cap.get.getBool)
+
+template isCapabilityEnabled[T](cap: Option[T]): bool =
+  ## Capabilities typed as `Options` only (e.g. CompletionOptions) cannot be a
+  ## bare boolean per the LSP spec, so presence alone means supported.
+  cap.isSome
+
 # Template for standard capability checks (dynamic registration + static capability)
 template hasCapabilitySupport(
     svc: LspService, langId: string, methodName: string, capability: untyped
@@ -1103,7 +1116,7 @@ template hasCapabilitySupport(
   elif langId notin svc.capabilities:
     false
   else:
-    svc.capabilities[langId].capability.isSome
+    isCapabilityEnabled(svc.capabilities[langId].capability)
 
 proc hasCompletionSupport*(svc: LspService, langId: string): bool =
   ## Check if completion is supported for a language (static or dynamic)

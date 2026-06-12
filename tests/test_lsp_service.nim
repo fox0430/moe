@@ -559,6 +559,41 @@ suite "LspService - Capability Checking (without workers)":
     check not svc.hasDocumentLinkSupport("nim")
     check not svc.hasDocumentLinkResolveSupport("nim")
 
+  test "explicit `false` capability is treated as unsupported":
+    # A server may legitimately advertise `"xxxProvider": false` to disable a
+    # feature. Storing the JsonNode and checking only `.isSome` would wrongly
+    # report support and fire requests that hang until the timeout.
+    let svc = newLspService()
+    svc.processEvent(
+      "nim",
+      LspEvent(
+        kind: levCapabilities,
+        capabilitiesJson: $(
+          %*{
+            "hoverProvider": false,
+            "definitionProvider": false,
+            "referencesProvider": false,
+          }
+        ),
+      ),
+    )
+    check not svc.hasHoverSupport("nim")
+    check not svc.hasDefinitionSupport("nim")
+    check not svc.hasReferencesSupport("nim")
+
+  test "`true` and object capabilities are treated as supported":
+    let svc = newLspService()
+    svc.processEvent(
+      "nim",
+      LspEvent(
+        kind: levCapabilities,
+        capabilitiesJson:
+          $(%*{"hoverProvider": true, "definitionProvider": {"workDoneProgress": true}}),
+      ),
+    )
+    check svc.hasHoverSupport("nim")
+    check svc.hasDefinitionSupport("nim")
+
   test "getServerInfo returns none when no workers":
     let svc = newLspService()
     check svc.getServerInfo("nim").isNone
