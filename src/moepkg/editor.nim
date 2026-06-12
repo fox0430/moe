@@ -776,6 +776,8 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
         lastConfigCheck: getMonoTime(),
         lastConfigModTime: times.Time(), # Will be set properly after initialization
         configCheckInterval: 2000, # Check config modification every 2 seconds
+        lastLspCleanup: getMonoTime(),
+        lspCleanupInterval: 1000, # Sweep timed-out LSP requests every 1 second
       ),
       # Search state (grouped in SearchState)
       search: SearchState(
@@ -1607,6 +1609,27 @@ proc notify*(e: Editor, msg: string, level: NotificationLevel = nlInfo) =
   else:
     e.state.statusMessage = msg
 
+proc maybeCleanupTimedOutLspRequests(e: Editor) =
+  ## Sweep timed-out LSP requests whose consumer stopped polling (e.g. a
+  ## completion request left in flight when Insert mode is exited: the poller
+  ## is mode-gated and never calls checkResponse again). Without this, such
+  ## requests linger in activeRequests/pendingResponses for the rest of the
+  ## session on features that have no cancelRequest reclaim path.
+  ##
+  ## Throttled to once per second: the sweep only ever removes entries already
+  ## past their timeout, and active consumers reclaim their own responses via
+  ## checkResponse each frame, so a high-frequency sweep buys nothing.
+  ##
+  ## Must run after the pollLsp* helpers so an active consumer observes its own
+  ## lrsTimeout (and clears its pending id) before the sweep would drop the entry.
+  let now = getMonoTime()
+  let threshold = initDuration(milliseconds = e.state.timing.lspCleanupInterval)
+  if now - e.state.timing.lastLspCleanup < threshold:
+    return
+  e.state.timing.lastLspCleanup = now
+
+  e.lsp.cleanupTimedOutRequests()
+
 proc tickLsp(e: Editor) =
   ## Per-frame LSP processing: poll the server, surface its messages, push
   ## buffer changes, then drain all response caches/pollers.
@@ -1670,6 +1693,10 @@ proc tickLsp(e: Editor) =
   e.pollLspDocumentSymbols()
   e.pollLspDocumentLinks()
   e.pollLspDocumentLinkResolve()
+
+  # Reclaim abandoned (timed-out, no longer polled) requests. Runs last so
+  # active consumers process their own responses above before the sweep.
+  e.maybeCleanupTimedOutLspRequests()
 
 proc tickFileAndConfig(e: Editor) =
   ## Detect external edits and config changes and reload them.

@@ -19,12 +19,12 @@
 
 ## Tests for editor.nim
 
-import std/[unittest, os, options, strutils]
+import std/[unittest, os, options, strutils, monotimes, times]
 import pkg/results
 import
   ../src/moepkg/[
     editor, buffer, config, config_loader, config_mode, highlight, window_manager,
-    render_utils,
+    render_utils, lsp_service,
   ]
 import ../src/moepkg/command_handlers/[command_mode_handler, handler_result]
 import ../src/moepkg/command_handlers/result_processor
@@ -1655,6 +1655,49 @@ suite "Editor - lspForcePopup":
     # Should go to statusMessage, not popup
     check e.state.notificationPopup.queue.len == 0
     check e.state.statusMessage == "[LSP Error] nim: something failed"
+
+suite "Editor - tickLsp timed-out request cleanup":
+  test "tick sweeps an abandoned timed-out request":
+    let e = createTestEditor()
+
+    # A request whose consumer stopped polling: already past its timeout and
+    # never reclaimed via checkResponse/cancelRequest.
+    e.lsp.service.activeRequests[42] =
+      LspPendingRequest(requestId: 42, langId: "nim", startTime: 0.0, timeoutMs: 1)
+
+    # The throttle timestamp is reset to "now" at construction, so a tick this
+    # instant would be within the 1s window. Backdate it so the sweep fires.
+    e.state.timing.lastLspCleanup = getMonoTime() - initDuration(seconds = 2)
+
+    e.tick()
+
+    check 42 notin e.lsp.service.activeRequests
+    check not e.lsp.service.hasPendingRequests()
+
+  test "tick leaves a fresh request that has not timed out":
+    let e = createTestEditor()
+
+    # A long-lived request that is nowhere near its timeout yet.
+    e.lsp.service.activeRequests[7] = LspPendingRequest(
+      requestId: 7, langId: "nim", startTime: epochTime(), timeoutMs: 60_000
+    )
+    e.state.timing.lastLspCleanup = getMonoTime() - initDuration(seconds = 2)
+
+    e.tick()
+
+    check 7 in e.lsp.service.activeRequests
+
+  test "tick within the throttle window does not sweep yet":
+    let e = createTestEditor()
+
+    e.lsp.service.activeRequests[99] =
+      LspPendingRequest(requestId: 99, langId: "nim", startTime: 0.0, timeoutMs: 1)
+    # lastLspCleanup stays at its construction time (~now), so the throttle
+    # gate should skip the sweep on this tick.
+
+    e.tick()
+
+    check 99 in e.lsp.service.activeRequests
 
 suite "Editor - openFileInNewRightWindow":
   proc setupLoneFileTree(termWidth: int = 120, termHeight: int = 40): Editor =

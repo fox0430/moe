@@ -383,6 +383,9 @@ type
     lastDebugUpdate*: MonoTime # Timestamp of last debug buffer update
     debugUpdateInterval*: int64
       # Minimum milliseconds between debug buffer updates (default: 500)
+    lastLspCleanup*: MonoTime # Timestamp of last LSP timed-out request cleanup
+    lspCleanupInterval*: int64
+      # Minimum milliseconds between LSP timed-out request cleanups (default: 1000)
 
   JumpPosition* = object ## Represents a position in the jump list
     bufferId*: BufferId # BufferId of the target buffer (stable across buffer deletes)
