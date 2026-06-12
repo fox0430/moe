@@ -1052,6 +1052,18 @@ proc newEditor*(): Editor =
 
   result = newEditor(editorConfig, vr)
 
+proc clampCursorAfterReload(e: Editor, buf: TextBuffer) =
+  ## A reload swaps the buffer contents wholesale without touching the cursor.
+  ## If the file shrank, the cursor can now point past the last line (or past a
+  ## now-shorter line's end); if it grew, the column may dangle past the new
+  ## line. Re-clamp to valid bounds here so rendering, completion and
+  ## word-at-cursor reads don't observe a stale out-of-range position in the
+  ## window before the next motion would have re-clamped it.
+  let clamped = e.executer.motionController.cursorManager.clampPosition(
+    CursorPosition(x: e.cursor.column, y: e.cursor.line), buf
+  )
+  e.cursor = BufferPosition(line: clamped.y, column: clamped.x)
+
 proc maybeReloadExternallyModifiedFile*(e: Editor) =
   ## Check if files were modified externally and reload them if:
   ##   - liveReloadOfFile is enabled in config
@@ -1093,6 +1105,7 @@ proc maybeReloadExternallyModifiedFile*(e: Editor) =
   logInfo("editor", "File externally modified, reloading: " & filePath)
   let reloadResult = activeBuffer.reloadFile()
   if reloadResult.isOk:
+    e.clampCursorAfterReload(activeBuffer)
     e.state.statusMessage = "File reloaded: " & filePath
     e.state.windowDisplay.needsFullRedraw = true
     # Update git diff after reload
@@ -1115,6 +1128,7 @@ proc reloadCurrentFile*(e: Editor): Result[void, string] =
   if reloadResult.isErr:
     return err(reloadResult.error)
 
+  e.clampCursorAfterReload(activeBuffer)
   e.state.statusMessage = "File reloaded: " & filePath
   e.state.windowDisplay.needsFullRedraw = true
   e.refreshGitDiff(useBuffer = false)

@@ -445,6 +445,41 @@ suite "Editor - editFile":
     check e.buffers.len == 2
     check e.currentBufferIndex() == 1
 
+suite "Editor - reloadCurrentFile cursor clamp":
+  test "Clamps cursor line when the file shrank on disk":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_reload_clamp_shrink.txt"
+    writeFile(path, "line1\nline2\nline3\nline4\nline5")
+    defer:
+      removeFile(path)
+
+    check e.editFile(path).isOk
+    # Park the cursor near the old end, then shrink the file to a single line.
+    e.cursor = BufferPosition(line: 4, column: 3)
+    writeFile(path, "x")
+
+    check e.reloadCurrentFile().isOk
+    check e.activeBuffer().len == 1
+    # Without the clamp the cursor would dangle at line 4 (>= buf.len).
+    check e.cursor.line == 0
+    check e.cursor.column == 0
+
+  test "Clamps a dangling column when its line got shorter":
+    let e = createTestEditor()
+    let path = getTempDir() / "moe_test_reload_clamp_col.txt"
+    writeFile(path, "abcdefghij")
+    defer:
+      removeFile(path)
+
+    check e.editFile(path).isOk
+    e.cursor = BufferPosition(line: 0, column: 8)
+    writeFile(path, "ab")
+
+    check e.reloadCurrentFile().isOk
+    check e.cursor.line == 0
+    # Normal-mode clamp keeps the cursor on the last character, not past it.
+    check e.cursor.column == 1
+
 suite "Editor - Display toggle functions":
   test "Toggle status line visibility":
     let e = createTestEditor()
