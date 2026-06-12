@@ -258,6 +258,33 @@ proc requestLspRename*(
     except Exception as err:
       e.state.statusMessage = "LSP rename error: " & err.msg
 
+proc renotifyOpenBuffers(e: Editor, langId: string): int =
+  ## (Re-)send didOpen for every open buffer whose language is `langId` and
+  ## return how many failed. Used both by an explicit `:lspRestart` and by the
+  ## automatic crash-recovery path: a freshly (re)started server has no open
+  ## documents, so without this its diagnostics/completion stay dead.
+  for buf in e.buffers:
+    if buf.filePath.isSome:
+      let bufLangIdOpt = e.lsp.service.getLanguageIdFromPath(buf.filePath.get)
+      if bufLangIdOpt.isSome and bufLangIdOpt.get == langId:
+        let openResult = e.lsp.onBufferOpen(buf)
+        if openResult.isErr:
+          inc result
+          logLspDegraded("re-open " & buf.filePath.get, openResult.error)
+
+proc onLspServerRestart*(e: Editor, langId: string) =
+  ## Crash-recovery hook: a language server re-initialized after crashing, so
+  ## the documents it knew about were lost. Re-open them automatically. Without
+  ## this the user would have to run `:lspRestart` by hand to get LSP features
+  ## back for the affected buffers.
+  let failures = e.renotifyOpenBuffers(langId)
+  if failures > 0:
+    e.state.statusMessage =
+      "LSP server for " & langId & " restarted (" & $failures &
+      " buffer(s) failed to re-open; see LSP log)"
+  else:
+    e.state.statusMessage = "LSP server for " & langId & " restarted automatically"
+
 proc restartLspServer*(e: Editor): bool =
   ## Restart LSP server for the current buffer's language
   ## This will start the server even if it was not running
@@ -293,15 +320,7 @@ proc restartLspServer*(e: Editor): bool =
   # Re-notify about open buffers for this language. A re-open failure leaves that
   # buffer untracked by the server, so surface it: the user explicitly requested
   # the restart and otherwise has no way to know the feature silently degraded.
-  var renotifyFailures = 0
-  for buf in e.buffers:
-    if buf.filePath.isSome:
-      let bufLangIdOpt = e.lsp.service.getLanguageIdFromPath(buf.filePath.get)
-      if bufLangIdOpt.isSome and bufLangIdOpt.get == langId:
-        let openResult = e.lsp.onBufferOpen(buf)
-        if openResult.isErr:
-          inc renotifyFailures
-          logLspDegraded("restart: re-open " & buf.filePath.get, openResult.error)
+  let renotifyFailures = e.renotifyOpenBuffers(langId)
 
   if renotifyFailures > 0:
     e.state.statusMessage =

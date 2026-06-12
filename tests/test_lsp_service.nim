@@ -18,7 +18,8 @@
 #[############################################################################]#
 
 import
-  std/[unittest, json, options, os, times, strutils, importutils, tables, monotimes]
+  std/
+    [unittest, json, options, os, times, strutils, importutils, tables, sets, monotimes]
 
 import pkg/results
 
@@ -882,6 +883,44 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     )
     check "nim" in svc.dynamicRegistrations
     check "r1" in svc.dynamicRegistrations["nim"]
+
+  test "first levInitialized records the language but does not fire onServerRestart":
+    # Normal startup: the editor already sent didOpen at file-open time, so the
+    # restart hook must stay silent.
+    let svc = newLspService()
+    var restarts: seq[string] = @[]
+    svc.onServerRestart = proc(langId: string) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        restarts.add(langId)
+    svc.processEvent("nim", LspEvent(kind: levInitialized))
+    check restarts.len == 0
+    check "nim" in svc.initializedLangs
+
+  test "repeat levInitialized fires onServerRestart (crash recovery)":
+    # A second initialize for the same language means the server crashed and
+    # restarted with no open documents: the editor must re-open them.
+    let svc = newLspService()
+    var restarts: seq[string] = @[]
+    svc.onServerRestart = proc(langId: string) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        restarts.add(langId)
+    svc.processEvent("nim", LspEvent(kind: levInitialized))
+    svc.processEvent("nim", LspEvent(kind: levInitialized))
+    check restarts == @["nim"]
+
+  test "onServerRestart is per-language":
+    let svc = newLspService()
+    var restarts: seq[string] = @[]
+    svc.onServerRestart = proc(langId: string) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        restarts.add(langId)
+    # First init of two different languages: neither is a restart.
+    svc.processEvent("nim", LspEvent(kind: levInitialized))
+    svc.processEvent("rust", LspEvent(kind: levInitialized))
+    check restarts.len == 0
+    # Only rust re-initializes.
+    svc.processEvent("rust", LspEvent(kind: levInitialized))
+    check restarts == @["rust"]
 
 suite "LspService - LspResponseStatus enum":
   test "LspResponseStatus values":

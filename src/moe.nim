@@ -302,6 +302,13 @@ proc main() =
       editor.applyDiagnosticsForUri(uri, diagnostics)
   )
 
+  # Re-open buffers automatically when a language server recovers from a crash,
+  # so its diagnostics/completion come back without a manual `:lspRestart`.
+  editor.lsp.setServerRestartCallback(
+    proc(langId: string) {.gcsafe.} =
+      editor.onLspServerRestart(langId)
+  )
+
   if cmdLineConfig.filePaths.len > 0:
     # Check if first path is a directory
     if cmdLineConfig.filePaths.len == 1 and dirExists(cmdLineConfig.filePaths[0]):

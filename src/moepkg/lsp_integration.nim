@@ -328,6 +328,14 @@ proc setLogCallback*(
   ## Set callback for log messages
   lsp.service.onLogMessage = callback
 
+proc setServerRestartCallback*(
+    lsp: LspIntegration, callback: proc(langId: string) {.gcsafe.}
+) =
+  ## Set callback invoked when a language server re-initializes after a crash.
+  ## The editor uses it to re-open buffers so diagnostics/completion recover
+  ## without a manual `:lspRestart`.
+  lsp.service.onServerRestart = callback
+
 # Buffer lifecycle operations
 proc onBufferOpen*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string] =
   ## Called when a buffer is opened/loaded

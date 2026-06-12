@@ -21,7 +21,7 @@
 ## Manages multiple LSP workers and provides high-level API for editor integration
 ## Uses thread-based workers to avoid blocking the UI event loop
 
-import std/[tables, options, os, strutils, json, times, uri]
+import std/[tables, sets, options, os, strutils, json, times, uri]
 
 import pkg/[results, chronos]
 
@@ -95,6 +95,12 @@ type
     # Last automatic restart attempt per language (epochTime), for
     # crash-loop suppression
     lastRestartTimes: Table[string, float]
+    # Languages whose worker has completed `initialize` at least once. A second
+    # (or later) initialization for a language means the server (re)started
+    # after a crash, so the open documents it knew about were lost and must be
+    # re-opened. stopWorker clears the entry so an explicit restart, which
+    # re-opens buffers itself, is not double-counted as a crash recovery.
+    initializedLangs: HashSet[string]
     # Global callbacks (forwarded from individual workers)
     onDiagnosticsUpdate*: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.}
     onLogMessage*:
@@ -104,6 +110,10 @@ type
     onStatusUpdate*: proc(
       langId: string, health: ServerHealth, quiescent: bool, message: Option[string]
     ) {.gcsafe.}
+    # Invoked when a language server re-initializes after a crash. The editor
+    # uses this to re-send didOpen for every open buffer of that language, since
+    # the restarted server starts with no open documents (see initializedLangs).
+    onServerRestart*: proc(langId: string) {.gcsafe.}
 
 proc newLspService*(workspaceRoot: string = ""): LspService =
   ## Create a new LSP service
@@ -124,6 +134,7 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
     activeRequests: initTable[int, LspPendingRequest](),
     nextRequestId: 1,
     lastRestartTimes: initTable[string, float](),
+    initializedLangs: initHashSet[string](),
     # Default no-op callbacks to avoid nil checks throughout the code
     onDiagnosticsUpdate: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.} =
       discard,
@@ -138,6 +149,8 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
     onStatusUpdate: proc(
         langId: string, health: ServerHealth, quiescent: bool, message: Option[string]
     ) {.gcsafe.} =
+      discard,
+    onServerRestart: proc(langId: string) {.gcsafe.} =
       discard,
   )
 
@@ -342,6 +355,11 @@ proc stopWorker*(svc: LspService, langId: string): Result[void, string] =
   svc.capabilities.del(langId)
   svc.serverInfo.del(langId)
   svc.dynamicRegistrations.del(langId)
+  # Forget the initialization so a fresh start is treated as a first init, not
+  # a crash recovery. restartLspServer stops then starts and re-opens buffers
+  # itself; without this the next initialize would also fire onServerRestart and
+  # re-open everything a second time.
+  svc.initializedLangs.excl(langId)
 
   # Clean up pending requests for this language
   var toRemove: seq[int] = @[]
@@ -364,6 +382,7 @@ proc stopAll*(svc: LspService) =
   svc.dynamicRegistrations.clear()
   svc.activeRequests.clear()
   svc.pendingResponses.clear()
+  svc.initializedLangs.clear()
 
 proc recordResponse*(
     svc: LspService, requestId: int, res: Option[JsonNode], error: Option[string]
@@ -384,6 +403,15 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
   case evt.kind
   of levInitialized:
     svc.onLogMessage(langId, mtInfo, "Language server initialized")
+    # A repeat initialization means the server crashed and was restarted: the
+    # new process has no open documents, so ask the editor to re-send didOpen
+    # for every open buffer of this language. The first initialization is the
+    # normal startup path, where the editor already sent didOpen at file-open
+    # time (queued in the worker and flushed on initialize).
+    if langId in svc.initializedLangs:
+      svc.onServerRestart(langId)
+    else:
+      svc.initializedLangs.incl(langId)
   of levError:
     svc.onLogMessage(langId, mtError, evt.errorMsg)
   of levDiagnostics:
