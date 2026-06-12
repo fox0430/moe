@@ -554,6 +554,19 @@ type
     active*: bool # Whether selection is currently active
     kind*: VisualSelectionKind # Type of selection (char, block, line)
 
+  SnippetStop* = object ## A tabstop of an active snippet, in buffer coordinates
+    num*: int # Tabstop number; 0 is the final stop
+    pos*: BufferPosition # Start of the placeholder default range
+    len*: int # Rune length of the default (0 for bare `$n`)
+
+  SnippetSession* = object ## Tab-cycling state for a committed snippet completion
+    active*: bool # Whether a snippet session is in progress
+    stops*: seq[SnippetStop] # Stops in cycle order (number ascending, $0 last)
+    index*: int # Index of the current stop in stops
+    defaultPending*: bool
+      # Current stop's default is untouched (= selected); the next typed
+      # character or Backspace replaces/deletes the whole default range
+
   ReplaceHistoryEntry* = object ## Replace mode history entry for undo with Backspace
     pos*: BufferPosition # Position where character was replaced
     originalChar*: string # Original character before replacement
@@ -713,6 +726,7 @@ type
     statusMessageStr: string # Internal - use statusMessage getter/setter
     editState*: EditState # Edit operation state (operators, motions, repeat, etc.)
     visualSelection*: VisualSelection # Visual mode selection state
+    snippetSession*: SnippetSession # Snippet tabstop cycling state (Insert mode)
     display*: DisplaySettings # Display and UI settings
     timing*: TimingState # Timing and debounce state
     lastKeyWasEscape*: bool

@@ -2374,6 +2374,732 @@ suite "InsertModeHandler - completion commit":
     check state.cursor == BufferPosition(line: 0, column: 3)
     check not handler.completionManager.isActive()
 
+proc setSnippetEntry(handler: InsertModeHandler, body: string) =
+  ## Single snippet completion entry whose textEdit replaces [4,6) on line 0
+  ## (the "xx" the popup was triggered on) with the expanded snippet body.
+  handler.completionManager.menu.entries = @[
+    CompletionEntry(
+      word: "x",
+      matchScore: 100,
+      source: csLsp,
+      isSnippet: true,
+      textEdit: some(
+        TextEdit(
+          range: Range(
+            start: lspTypes.Position(line: 0, character: 4),
+            `end`: lspTypes.Position(line: 0, character: 6),
+          ),
+          newText: body,
+        )
+      ),
+    )
+  ]
+  handler.completionManager.menu.prefix = "xx"
+  handler.completionManager.menu.selectedIndex = 0
+  handler.completionManager.menu.hasSelection = true
+  handler.completionManager.state = csActive
+
+suite "InsertModeHandler - snippet session":
+  test "Committing a multi-stop snippet starts a session":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+
+    discard handler.commitCompletion(buf, state)
+    check buf.getLine(0) == "    replace(size_type pos, size_type n1)"
+    check state.snippetSession.active
+    check state.snippetSession.index == 0
+    check state.snippetSession.defaultPending
+    check state.snippetSession.stops ==
+      @[
+        SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 12), len: 13),
+        SnippetStop(num: 2, pos: BufferPosition(line: 0, column: 27), len: 12),
+      ]
+    # Cursor lands at the end of the first stop's default (selection end).
+    check state.cursor == BufferPosition(line: 0, column: 25)
+
+  test "Multi-line snippet body resolves stops on later lines":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("for ${1:x} {\n\t$0\n}")
+
+    discard handler.commitCompletion(buf, state)
+    check buf.getLine(0) == "    for x {"
+    check buf.getLine(1) == "\t"
+    check buf.getLine(2) == "}"
+    check state.snippetSession.active
+    check state.snippetSession.stops ==
+      @[
+        SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 8), len: 1),
+        SnippetStop(num: 0, pos: BufferPosition(line: 1, column: 1), len: 0),
+      ]
+    check state.cursor == BufferPosition(line: 0, column: 9)
+
+  test "A lone $0 does not start a session":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("vec![$0]")
+
+    discard handler.commitCompletion(buf, state)
+    check buf.getLine(0) == "    vec![]"
+    check not state.snippetSession.active
+    check state.cursor == BufferPosition(line: 0, column: 9)
+
+  test "A lone bare $n does not start a session":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("if $1:")
+
+    discard handler.commitCompletion(buf, state)
+    check buf.getLine(0) == "    if :"
+    check not state.snippetSession.active
+    check state.cursor == BufferPosition(line: 0, column: 7)
+
+  test "A single placeholder with a default starts a session":
+    # Common clangd shape for one-parameter calls: no $0, one ${1:...}. The
+    # session is what lets the first keystroke replace the default, so it must
+    # start even though there is no second stop to Tab to.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("push_back(${1:value})")
+
+    discard handler.commitCompletion(buf, state)
+    check buf.getLine(0) == "    push_back(value)"
+    check state.snippetSession.active
+    check state.snippetSession.defaultPending
+    check state.snippetSession.stops ==
+      @[SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 14), len: 5)]
+    check state.cursor == BufferPosition(line: 0, column: 19)
+
+  test "Committing a snippet over a pending default does not grow the buffer":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("push_back(${1:value})")
+    discard handler.commitCompletion(buf, state)
+    check state.snippetSession.active
+    let highBefore = (buf.len - 1)
+    # Re-open the popup with ONE snippet candidate whose textEdit covers the
+    # selected placeholder range [14,19) ("value"), as clangd would.
+    handler.completionManager.menu.entries = @[
+      CompletionEntry(
+        word: "value",
+        matchScore: 100,
+        source: csLsp,
+        isSnippet: true,
+        textEdit: some(
+          TextEdit(
+            range: Range(
+              start: lspTypes.Position(line: 0, character: 14),
+              `end`: lspTypes.Position(line: 0, character: 19),
+            ),
+            newText: "value_t(${1:int a})",
+          )
+        ),
+      )
+    ]
+    handler.completionManager.menu.prefix = "value"
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.menu.triggerLine = 0
+    handler.completionManager.menu.triggerCol = 14
+    handler.completionManager.state = csActive
+    check handler.completionManager.isActive()
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check (buf.len - 1) == highBefore
+
+  test "Single-placeholder Tab ends the session without inserting a newline":
+    # Regression: a one-stop snippet (no $0) must not leave the session alive
+    # or insert a newline when Tab is pressed past its only stop. The Tab
+    # falls through to the normal indentation handling (vsnip-style
+    # "jumpable ? jump : tab"): expandTab aligns to the next tabStop(2)
+    # boundary, one space here.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("push_back(${1:value})")
+    discard handler.commitCompletion(buf, state)
+    check state.snippetSession.active
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check (buf.len - 1) == 0
+    check buf.getLine(0) == "    push_back(value )"
+    check not state.snippetSession.active
+    check state.cursor == BufferPosition(line: 0, column: 20)
+
+  test "Tab jumps to the next stop, Shift-Tab back to the previous":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check state.snippetSession.active
+    check state.snippetSession.index == 1
+    check state.snippetSession.defaultPending
+    # End of stop 2's default "size_type n1" (col 27 + len 12).
+    check state.cursor == BufferPosition(line: 0, column: 39)
+
+    let backTabKey =
+      KeyCombo(isSpecial: true, special: skBackTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, backTabKey)
+    check state.snippetSession.index == 0
+    check state.cursor == BufferPosition(line: 0, column: 25)
+    # Revisiting a stop re-selects its content (VSCode-style) so the next
+    # keystroke replaces the whole range.
+    check state.snippetSession.defaultPending
+
+  test "Tab onto a final $0 ends the session":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("push(${1:ch});$0")
+    discard handler.commitCompletion(buf, state)
+    check state.snippetSession.active
+
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check not state.snippetSession.active
+    # $0 sits after the ");".
+    check state.cursor == BufferPosition(line: 0, column: 13)
+
+  test "Tab onto a defaulted last stop keeps the session for one more edit":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("insert(${1:idx}, ${2:ch})")
+    discard handler.commitCompletion(buf, state)
+
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    # The last stop still has a default to replace: the session stays alive.
+    check state.snippetSession.active
+    check state.snippetSession.defaultPending
+    # A second Tab past the end finishes the session and falls through to
+    # normal indentation: two spaces (tabStop 2) before the ")".
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check not state.snippetSession.active
+    check buf.getLine(0) == "    insert(idx, ch  )"
+    check state.cursor == BufferPosition(line: 0, column: 20)
+
+  test "Typing replaces the pending default and shifts later stops":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let zKey = KeyCombo(isSpecial: false, char: "z", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, zKey)
+    check buf.getLine(0) == "    replace(z, size_type n1)"
+    check not state.snippetSession.defaultPending
+    # The stop grows to cover the typed text (VSCode-style), so Shift-Tab back
+    # to it re-selects exactly what was typed.
+    check state.snippetSession.stops[0] ==
+      SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 12), len: 1)
+    # Stop 2 shifted left by len("size_type pos") - len("z") = 12.
+    check state.snippetSession.stops[1] ==
+      SnippetStop(num: 2, pos: BufferPosition(line: 0, column: 15), len: 12)
+    check state.cursor == BufferPosition(line: 0, column: 13)
+
+    # A second character extends the typed text in place.
+    discard handler.handleInsertModeKey(buf, state, zKey)
+    check buf.getLine(0) == "    replace(zz, size_type n1)"
+    check state.snippetSession.stops[1].pos.column == 16
+
+    # Tab then lands at the end of stop 2's (shifted) default.
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check state.cursor == BufferPosition(line: 0, column: 28)
+    check state.snippetSession.defaultPending
+
+  test "Backspace deletes the whole pending default":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, bsKey)
+    check buf.getLine(0) == "    replace(, size_type n1)"
+    check state.snippetSession.active
+    check not state.snippetSession.defaultPending
+    check state.cursor == BufferPosition(line: 0, column: 12)
+    check state.snippetSession.stops[1].pos.column == 14
+
+    # A further Backspace is a plain single-character delete.
+    discard handler.handleInsertModeKey(buf, state, bsKey)
+    check buf.getLine(0) == "    replace, size_type n1)"
+    check state.snippetSession.stops[1].pos.column == 13
+
+  test "Backspace inside typed content shrinks the current stop":
+    # Regression: a plain backspace within the text typed into a stop must
+    # shrink that stop's recorded length, or Shift-Tab re-selection and the
+    # highlight overshoot the actual content.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let zKey = KeyCombo(isSpecial: false, char: "z", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, zKey)
+    discard handler.handleInsertModeKey(buf, state, zKey)
+    # Close any popup re-triggered by typing so Backspace reaches the session.
+    handler.completionManager.cancelCompletion()
+    check buf.getLine(0) == "    replace(zz, size_type n1)"
+    check state.snippetSession.stops[0] ==
+      SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 12), len: 2)
+
+    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, bsKey)
+    check buf.getLine(0) == "    replace(z, size_type n1)"
+    # len shrank from 2 to 1 to match the remaining "z"; cursor sits at its end.
+    check state.snippetSession.stops[0] ==
+      SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 12), len: 1)
+    check state.cursor == BufferPosition(line: 0, column: 13)
+
+  test "Auto-close paren inserts the pair in a placeholder and remaps stops":
+    # The pair is a single two-character insertion at the cursor, so it stays
+    # remappable: the stop covers both characters, the cursor sits between
+    # them, and later stops shift by two.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.display.autoCloseParen = true
+    state.display.autoDeleteParen = true
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let parenKey = KeyCombo(isSpecial: false, char: "(", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, parenKey)
+    handler.completionManager.cancelCompletion()
+    check buf.getLine(0) == "    replace((), size_type n1)"
+    check state.cursor == BufferPosition(line: 0, column: 13)
+    check not state.snippetSession.defaultPending
+    check state.snippetSession.stops[0] ==
+      SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 12), len: 2)
+    check state.snippetSession.stops[1].pos.column == 16
+
+    # Backspace between the pair auto-deletes both characters; the stop is
+    # swallowed by the two-column edit (clamped, len zeroed) and stop 2
+    # shifts back.
+    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, bsKey)
+    check buf.getLine(0) == "    replace(, size_type n1)"
+    check state.cursor == BufferPosition(line: 0, column: 12)
+    check state.snippetSession.active
+    check state.snippetSession.stops[0] ==
+      SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 12), len: 0)
+    check state.snippetSession.stops[1].pos.column == 14
+
+  test "Auto-delete pair inside typed content shrinks the stop by two":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.display.autoCloseParen = true
+    state.display.autoDeleteParen = true
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let fKey = KeyCombo(isSpecial: false, char: "f", modifiers: {})
+    let parenKey = KeyCombo(isSpecial: false, char: "(", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, fKey)
+    discard handler.handleInsertModeKey(buf, state, parenKey)
+    handler.completionManager.cancelCompletion()
+    check buf.getLine(0) == "    replace(f(), size_type n1)"
+    check state.snippetSession.stops[0] ==
+      SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 12), len: 3)
+
+    # The pair sits strictly inside the typed content: deleting it must
+    # shrink the stop by both removed columns, not just the one before the
+    # cursor.
+    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, bsKey)
+    check buf.getLine(0) == "    replace(f, size_type n1)"
+    check state.cursor == BufferPosition(line: 0, column: 13)
+    check state.snippetSession.stops[0] ==
+      SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 12), len: 1)
+    check state.snippetSession.stops[1].pos.column == 15
+
+  test "Delete wipes the whole pending default like Backspace":
+    # The default is selected (pending), so Delete clears it wholesale instead
+    # of removing the character past the selection end.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let delKey = KeyCombo(isSpecial: true, special: skDelete, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, delKey)
+    check buf.getLine(0) == "    replace(, size_type n1)"
+    check state.snippetSession.active
+    check not state.snippetSession.defaultPending
+    check state.cursor == BufferPosition(line: 0, column: 12)
+    check state.snippetSession.stops[1].pos.column == 14
+
+  test "Enter on a pending default replaces it before splitting the line":
+    # Enter on a selected default deletes it first (selection semantics), so the
+    # default is not left stranded in the buffer.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, enterKey)
+    # First default gone, the line split where it used to start.
+    check buf.getLine(0) == "    replace("
+    check not state.snippetSession.defaultPending
+    check state.snippetSession.active
+    # Stop 2 followed the split onto the next line.
+    check state.snippetSession.stops[1].pos.line == 1
+
+  test "Enter inside a stop's typed content collapses it to a bare stop":
+    # `len` is a single-line span; a newline inside the typed content would make
+    # it cross lines, so the stop drops to bare (len 0) rather than overshoot.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let zKey = KeyCombo(isSpecial: false, char: "z", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, zKey)
+    discard handler.handleInsertModeKey(buf, state, zKey)
+    handler.completionManager.cancelCompletion()
+    check state.snippetSession.stops[0] ==
+      SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 12), len: 2)
+    # Place the cursor between the two typed chars and split there.
+    state.cursor = BufferPosition(line: 0, column: 13)
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, enterKey)
+    check state.snippetSession.active
+    check state.snippetSession.stops[0].len == 0
+
+  test "A multi-line placeholder default is treated as a bare stop":
+    # `len` is a single-line column span, so a default spanning lines cannot be
+    # selected wholesale: the stop still navigates but is not pending and is
+    # not highlighted.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("wrap(${1:a\nb}, ${2:c})")
+
+    discard handler.commitCompletion(buf, state)
+    check buf.getLine(0) == "    wrap(a"
+    check buf.getLine(1) == "b, c)"
+    check state.snippetSession.active
+    # First default wraps a line, so it is not selectable (len 0, not pending).
+    check not state.snippetSession.defaultPending
+    check state.snippetSession.stops ==
+      @[
+        SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 9), len: 0),
+        SnippetStop(num: 2, pos: BufferPosition(line: 1, column: 3), len: 1),
+      ]
+    # Cursor still lands at the end of the (multi-line) first default.
+    check state.cursor == BufferPosition(line: 1, column: 1)
+
+  test "Escape ends the session and leaves Insert mode":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("push(${1:ch});$0")
+    discard handler.commitCompletion(buf, state)
+
+    let escKey = KeyCombo(isSpecial: true, special: skEscape, fnNum: 0, modifiers: {})
+    let res = handler.handleInsertModeKey(buf, state, escKey)
+    check not state.snippetSession.active
+    check res.kind == imrHandled
+    check res.modeTransition == some(EditorMode.Normal)
+
+  test "Cursor movement keys end the session":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("push(${1:ch});$0")
+    discard handler.commitCompletion(buf, state)
+
+    let leftKey = KeyCombo(isSpecial: true, special: skLeft, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, leftKey)
+    check not state.snippetSession.active
+
+  test "Tab cycles the popup, not the stops, while completion is active":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+    check state.snippetSession.active
+
+    # Reopen a (word) completion popup inside the placeholder.
+    handler.completionManager.menu.entries =
+      @[CompletionEntry(word: "pos_type", matchScore: 100, source: csBuffer)]
+    handler.completionManager.menu.prefix = ""
+    handler.completionManager.menu.triggerLine = state.cursor.line
+    handler.completionManager.menu.triggerCol = state.cursor.column
+    handler.completionManager.state = csActive
+
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    # Popup selection advanced; the snippet session did not move.
+    check handler.completionManager.menu.hasSelection
+    check state.snippetSession.active
+    check state.snippetSession.index == 0
+
+  test "Enter inside a session shifts later stops to the next line":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+    # Type over the default first so Enter splits between the arguments.
+    let zKey = KeyCombo(isSpecial: false, char: "z", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, zKey)
+    check state.cursor == BufferPosition(line: 0, column: 13)
+    # Typing re-triggered the popup ("z" fuzzy-matches "size_type"); close it
+    # so Enter reaches the session instead of dismissing the popup.
+    handler.completionManager.cancelCompletion()
+
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, enterKey)
+    check state.snippetSession.active
+    let stop2 = state.snippetSession.stops[1]
+    check stop2.pos.line == 1
+    # ", " stays on the new line before the stop: the column delta follows
+    # the cursor's landing column (auto-indent included).
+    check stop2.pos.column == state.cursor.column + 2
+
+    # Tab still lands at the end of stop 2's default on the new line.
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check state.cursor == BufferPosition(line: 1, column: stop2.pos.column + stop2.len)
+
+  test "Typing while the popup commits a snippet replaces the first default":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+
+    # The typed character both commits the highlighted snippet and replaces
+    # the first placeholder default in the same keystroke.
+    let zKey = KeyCombo(isSpecial: false, char: "z", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, zKey)
+    check buf.getLine(0) == "    replace(z, size_type n1)"
+    check state.snippetSession.active
+    check not state.snippetSession.defaultPending
+    check state.cursor == BufferPosition(line: 0, column: 13)
+
+  test "Backspace while the completion popup is open still remaps the stops":
+    # Regression: typing into a placeholder re-opens the popup
+    # (AutoTriggerPrefixLength is 1), so Backspace takes the popup branch —
+    # it must remap the session exactly like the session path does.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let zKey = KeyCombo(isSpecial: false, char: "z", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, zKey)
+    # The popup re-opened; leave it open so Backspace goes through it.
+    check handler.completionManager.isActive()
+    check state.snippetSession.stops[1].pos.column == 15
+
+    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, bsKey)
+    check buf.getLine(0) == "    replace(, size_type n1)"
+    # The deleted character was the stop's whole content: it collapses to a
+    # bare stop (not -1), and stop 2 shifted back with the edit.
+    check state.snippetSession.stops[0] ==
+      SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 12), len: 0)
+    check state.snippetSession.stops[1].pos.column == 14
+
+  test "Nested placeholder stops collapse instead of keeping stale lengths":
+    # Regression: in `${1:${2:inner}}` both stops cover the same range.
+    # Replacing stop 1's default must zero stop 2's recorded length, or a
+    # later Tab + keystroke wholesale-deletes unrelated buffer text.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("f(${1:${2:inner}})")
+    discard handler.commitCompletion(buf, state)
+    check buf.getLine(0) == "    f(inner)"
+    check state.snippetSession.defaultPending
+
+    let zKey = KeyCombo(isSpecial: false, char: "z", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, zKey)
+    check buf.getLine(0) == "    f(z)"
+    # Stop 2's range was swallowed by the default replacement: len 0.
+    check state.snippetSession.stops[1].len == 0
+    handler.completionManager.cancelCompletion()
+
+    # Tab onto stop 2 (bare, last) ends the session; the next keystroke is a
+    # plain insertion, not a wholesale delete of the closing paren.
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    check not state.snippetSession.active
+    discard handler.handleInsertModeKey(buf, state, zKey)
+    check buf.getLine(0) == "    f(zz)"
+
+  test "Committing a word inside a placeholder grows the stop over it":
+    # Regression: completing the word typed into a placeholder must resize the
+    # current stop to the inserted text, or Shift-Tab re-selection (and the
+    # wholesale replace that follows) covers a stale, shorter range.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    # Type "si" into the placeholder, then commit a buffer-word completion.
+    let sKey = KeyCombo(isSpecial: false, char: "s", modifiers: {})
+    let iKey = KeyCombo(isSpecial: false, char: "i", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, sKey)
+    discard handler.handleInsertModeKey(buf, state, iKey)
+    check state.snippetSession.stops[0] ==
+      SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 12), len: 2)
+    handler.completionManager.menu.entries =
+      @[CompletionEntry(word: "size_type", matchScore: 100, source: csBuffer)]
+    handler.completionManager.menu.prefix = "si"
+    handler.completionManager.menu.triggerLine = 0
+    handler.completionManager.menu.triggerCol = 12
+    handler.completionManager.menu.selectedIndex = 0
+    handler.completionManager.menu.hasSelection = true
+    handler.completionManager.state = csActive
+    discard handler.commitCompletion(buf, state)
+
+    check buf.getLine(0) == "    replace(size_type, size_type n1)"
+    check state.snippetSession.active
+    check state.snippetSession.stops[0] ==
+      SnippetStop(num: 1, pos: BufferPosition(line: 0, column: 12), len: 9)
+    # Stop 2 shifted right by len("size_type") - len("si") = 7.
+    check state.snippetSession.stops[1].pos.column == 23
+
+    # Shift-Tab back re-selects exactly the committed word.
+    let tabKey = KeyCombo(isSpecial: true, special: skTab, fnNum: 0, modifiers: {})
+    let backTabKey =
+      KeyCombo(isSpecial: true, special: skBackTab, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, tabKey)
+    discard handler.handleInsertModeKey(buf, state, backTabKey)
+    check state.snippetSession.defaultPending
+    check state.cursor == BufferPosition(line: 0, column: 21)
+    let zKey = KeyCombo(isSpecial: false, char: "z", modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, zKey)
+    check buf.getLine(0) == "    replace(z, size_type n1)"
+
+  test "Enter in a session suppresses bracket splitting":
+    # Regression: bracketSplit inserts a second newline past the cursor, which
+    # the session's single-edit remap cannot represent — later stops would
+    # shift one line instead of two. It is suppressed for in-session newlines.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    state.display.bracketSplit = bsmIndent
+    handler.setSnippetEntry("f(${1:x}), ${2:y}")
+    discard handler.commitCompletion(buf, state)
+    check buf.getLine(0) == "    f(x), y"
+
+    # Wipe the pending default: the cursor lands between the bracket pair.
+    let bsKey = KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, bsKey)
+    check buf.getLine(0) == "    f(), y"
+    check state.cursor == BufferPosition(line: 0, column: 6)
+
+    let enterKey = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0, modifiers: {})
+    discard handler.handleInsertModeKey(buf, state, enterKey)
+    # A plain (auto-indented) newline, not a three-line bracket split.
+    check (buf.len - 1) == 1
+    check buf.getLine(1) == "    ), y"
+    check state.snippetSession.stops[1] ==
+      SnippetStop(num: 2, pos: BufferPosition(line: 1, column: 7), len: 1)
+    # The setting itself is restored.
+    check state.display.bracketSplit == bsmIndent
+
+  test "Ctrl+N keeps the session alive":
+    # Manually triggering completion inside a placeholder must not end the
+    # session: the auto-trigger path keeps it, so the manual one does too.
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "    xx")
+    let handler = createTestHandler(buf)
+    let state = createTestState()
+    state.cursor = BufferPosition(line: 0, column: 6)
+    handler.setSnippetEntry("replace(${1:size_type pos}, ${2:size_type n1})")
+    discard handler.commitCompletion(buf, state)
+
+    let ctrlN = KeyCombo(isSpecial: false, char: "n", modifiers: {kmCtrl})
+    discard handler.handleInsertModeKey(buf, state, ctrlN)
+    check state.snippetSession.active
+    check state.snippetSession.index == 0
+    check state.snippetSession.defaultPending
+
 suite "InsertModeHandler - completion selection invalidation":
   test "Backspace clears the selection so the next keystroke does not commit it":
     # Regression: Tab previews item 0 into the buffer ("te" -> "template") and

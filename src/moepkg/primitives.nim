@@ -30,3 +30,10 @@ type
     ## per-line match caching (search highlights, current-word highlights).
     startCol*: int # inclusive
     endCol*: int # exclusive
+
+proc `<`*(a, b: BufferPosition): bool {.inline.} =
+  ## Document order: an earlier line, or the same line and an earlier column.
+  a.line < b.line or (a.line == b.line and a.column < b.column)
+
+proc `<=`*(a, b: BufferPosition): bool {.inline.} =
+  not (b < a)

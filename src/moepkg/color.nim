@@ -293,6 +293,7 @@ type
     replaceText
     parenPair
     currentWord
+    snippetTabStop
     highlightFullWidthSpace
     highlightTrailingSpaces
     reservedWord
@@ -622,6 +623,8 @@ const
     EditorColorPairIndex.replaceText: "Replace command replacement text",
     EditorColorPairIndex.parenPair: "Matching bracket pair highlight",
     EditorColorPairIndex.currentWord: "Other occurrences of the word under cursor",
+    EditorColorPairIndex.snippetTabStop:
+      "Active snippet tabstop placeholder (completion snippet Tab cycling)",
     EditorColorPairIndex.highlightFullWidthSpace: "Full-width space highlight",
     EditorColorPairIndex.highlightTrailingSpaces: "Trailing whitespace highlight",
     EditorColorPairIndex.reservedWord: "Reserved word highlight",

@@ -105,6 +105,11 @@ proc handleInsertMode*(
           kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
         )
 
+      # Leaving Insert mode always ends any snippet tabstop session (some
+      # paths, e.g. Escape while the completion popup is open, return a mode
+      # switch without passing through the session key handling).
+      state.snippetSession.active = false
+
       clearAutoIndentIfUnedited(buffer, state)
 
       # Extract inserted text before committing transaction
@@ -179,6 +184,7 @@ proc handleInsertMode*(
     # so the Command mode command sees a consistent buffer state — otherwise
     # an open transaction could be left dangling across buffer switches
     # performed by `:bdelete` / `:bnext`.
+    state.snippetSession.active = false
     if buffer.inTransaction:
       let transactionResult = buffer.commitTransaction()
       if transactionResult.isErr:

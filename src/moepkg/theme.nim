@@ -303,6 +303,7 @@ const DefaultColors*: ThemeColors = [
   EditorColorPairIndex.replaceText: makeColorPair("#ffffff", "#be5046"),
   EditorColorPairIndex.parenPair: makeColorPair("#ffffff", "#61afef"),
   EditorColorPairIndex.currentWord: makeColorPair("#ffffff", "#808080"),
+  EditorColorPairIndex.snippetTabStop: makeColorPair("#ffffff", "#5c3d6e"),
   EditorColorPairIndex.highlightFullWidthSpace: makeColorPair("#dadada", "#ff0000"),
   EditorColorPairIndex.highlightTrailingSpaces: makeColorPair("#dadada", "#ff0000"),
   EditorColorPairIndex.reservedWord: makeColorPair("#ffffff", "#808080"),

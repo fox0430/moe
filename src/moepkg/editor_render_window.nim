@@ -155,6 +155,23 @@ template matchesVisualSelection(
 ): bool =
   hasSelection and e.state.visualSelection.isPositionInSelection(pos)
 
+template matchesSnippetStop(
+    e: Editor, lineCtx: LineStyleContext, pos: BufferPosition
+): bool =
+  ## The pending (still selected) default range of the active snippet
+  ## tabstop. Anchored to the active window's session; defaults are
+  ## single-line so only the stop's own line is painted. The bounds check
+  ## short-circuits before the indexed access, so an out-of-range index is
+  ## never dereferenced.
+  lineCtx.isActiveWindow and e.state.snippetSession.active and
+    e.state.snippetSession.defaultPending and
+    e.state.snippetSession.index < e.state.snippetSession.stops.len and (
+    block:
+      let stop = e.state.snippetSession.stops[e.state.snippetSession.index]
+      stop.pos.line == pos.line and pos.column >= stop.pos.column and
+        pos.column < stop.pos.column + stop.len
+  )
+
 template matchesMatchingParen(
     e: Editor, lineCtx: LineStyleContext, pos: BufferPosition
 ): bool =
@@ -259,20 +276,23 @@ proc getSelectionStyle*(
     cursorDisplayCol: int = -1,
 ): Style =
   ## Get the appropriate style for a character based on selection state and syntax.
-  ## Priority: visualSelection > matchingParen > findCharMatch > currentWord >
-  ## searchHighlight > baseStyleWithOverlay.
+  ## Priority: visualSelection > snippetTabStop > matchingParen > findCharMatch >
+  ## currentWord > searchHighlight > baseStyleWithOverlay.
+  # Keep the original foreground (syntax highlight) for bg-only overlays.
+  template syntaxBaseStyle(): Style =
+    if e.hasSyntaxHighlight(buffer, windowMode):
+      let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
+      var s = colorIndexToStyle(colorPair)
+      s.modifiers =
+        s.modifiers + buffer.highlight.getSegmentModifiers(pos.line, pos.column)
+      s
+    else:
+      normalStyle()
+
   if e.matchesVisualSelection(hasSelection, pos):
-    # Keep original foreground color (syntax highlight), override only background
-    let baseStyle =
-      if e.hasSyntaxHighlight(buffer, windowMode):
-        let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
-        var s = colorIndexToStyle(colorPair)
-        s.modifiers =
-          s.modifiers + buffer.highlight.getSegmentModifiers(pos.line, pos.column)
-        s
-      else:
-        normalStyle()
-    baseStyle.merge(bgOnly(visualStyle().bg))
+    syntaxBaseStyle().merge(bgOnly(visualStyle().bg))
+  elif e.matchesSnippetStop(lineCtx, pos):
+    syntaxBaseStyle().merge(bgOnly(snippetTabStopStyle().bg))
   elif e.matchesMatchingParen(lineCtx, pos):
     parenPairStyle()
   elif e.matchesFindCharMatch(lineCtx, pos):

@@ -171,6 +171,10 @@ proc currentWordStyle*(): Style =
   ## Get current word highlight style from theme
   getThemeStyle(EditorColorPairIndex.currentWord)
 
+proc snippetTabStopStyle*(): Style =
+  ## Get active snippet tabstop placeholder style from theme
+  getThemeStyle(EditorColorPairIndex.snippetTabStop)
+
 proc codeLensStyle*(): Style =
   ## Get code lens style from theme
   getThemeStyle(EditorColorPairIndex.codeLens)

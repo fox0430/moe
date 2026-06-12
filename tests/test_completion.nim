@@ -331,6 +331,22 @@ suite "Completion - LSP support":
 
     check entry.word == "actualInsert"
 
+  test "lspItemToEntry strips the leading space clangd pads onto labels":
+    # clangd indents labels with a leading space to align an absent return type.
+    # The popup must not show that indent; interior spaces are preserved.
+    let item = CompletionItem(
+      label: " replace(int first, int second)",
+      insertText: some("replace(${1:int first}, ${2:int second})"),
+      insertTextFormat: some(InsertTextFormat.itfSnippet),
+    )
+
+    let entry = lspItemToEntry(item, "rep")
+
+    check entry.label == "replace(int first, int second)"
+    check entry.displayText == "replace(int first, int second)"
+    # filterText/sortText fall back to the trimmed label here (item has none).
+    check entry.filterText == "replace(int first, int second)"
+
 suite "Completion - completionItemKindToString":
   test "Converts common kinds":
     check completionItemKindToString(cikFunction) == "Func"
@@ -1308,6 +1324,23 @@ suite "Completion - resolve support":
 
     check mgr.menu.entries[0].detail.isNone
 
+  test "updateResolvedEntry matches entries built from a padded label":
+    # Regression: lspItemToEntry trims the leading space clangd pads onto
+    # labels when building `word`, so the identity check must trim the
+    # resolve response's raw label the same way or the resolved data is
+    # silently dropped for items without insertText.
+    let mgr = newCompletionManager()
+    let item = CompletionItem(label: " replace(int first, int second)")
+    mgr.menu.entries = @[lspItemToEntry(item, "rep")]
+    mgr.resolvedIndex = 0
+
+    let resolved = CompletionItem(
+      label: " replace(int first, int second)", detail: some("std::string &")
+    )
+    mgr.updateResolvedEntry(resolved)
+
+    check mgr.menu.entries[0].detail == some("std::string &")
+
   test "setLspItems stores raw JSON items":
     let mgr = newCompletionManager()
     mgr.menu.prefix = "te"
@@ -1650,6 +1683,77 @@ suite "Completion - expandSnippet":
   test "An unknown ${VAR} drops to its default or empty":
     check expandSnippet("${TM_SELECTED_TEXT}").text == ""
     check expandSnippet("name: ${UNKNOWN:fallback}").text == "name: fallback"
+
+suite "Completion - expandSnippetWithStops":
+  test "clangd-style multi-parameter placeholders":
+    let (text, stops) = expandSnippetWithStops(
+      "replace(${1:size_type pos}, ${2:size_type n1}, ${3:const char *s})"
+    )
+    check text == "replace(size_type pos, size_type n1, const char *s)"
+    check stops.len == 3
+    check stops[0] == SnippetStopOffset(num: 1, offset: 8, len: 13)
+    check stops[1] == SnippetStopOffset(num: 2, offset: 23, len: 12)
+    check stops[2] == SnippetStopOffset(num: 3, offset: 37, len: 13)
+
+  test "rust-analyzer-style placeholder plus final stop":
+    let (text, stops) = expandSnippetWithStops("push(${1:ch});$0")
+    check text == "push(ch);"
+    check stops ==
+      @[
+        SnippetStopOffset(num: 1, offset: 5, len: 2),
+        SnippetStopOffset(num: 0, offset: 9, len: 0),
+      ]
+
+  test "$0 sorts last even when written first":
+    let (text, stops) = expandSnippetWithStops("$0${2:b}${1:a}")
+    check text == "ba"
+    check stops.len == 3
+    check stops[0].num == 1
+    check stops[1].num == 2
+    check stops[2].num == 0
+
+  test "Bare $n records a zero-length stop":
+    let (text, stops) = expandSnippetWithStops("if $1:")
+    check text == "if :"
+    check stops == @[SnippetStopOffset(num: 1, offset: 3, len: 0)]
+
+  test "Mirror stops keep only the first occurrence":
+    let (text, stops) = expandSnippetWithStops("${1:a} $1 ${1:b}")
+    check text == "a  b"
+    check stops == @[SnippetStopOffset(num: 1, offset: 0, len: 1)]
+
+  test "Nested placeholder stops are lifted to outer coordinates":
+    let (text, stops) = expandSnippetWithStops("${1:${2:inner}}")
+    check text == "inner"
+    check stops ==
+      @[
+        SnippetStopOffset(num: 1, offset: 0, len: 5),
+        SnippetStopOffset(num: 2, offset: 0, len: 5),
+      ]
+
+  test "Multi-line body offsets count the newline as one rune":
+    let (text, stops) = expandSnippetWithStops("for ${1:x} {\n\t$0\n}")
+    check text == "for x {\n\t\n}"
+    check stops ==
+      @[
+        SnippetStopOffset(num: 1, offset: 4, len: 1),
+        SnippetStopOffset(num: 0, offset: 9, len: 0),
+      ]
+
+  test "Wide-rune defaults use rune offsets and lengths":
+    let (text, stops) = expandSnippetWithStops("名前(${1:値})")
+    check text == "名前(値)"
+    check stops == @[SnippetStopOffset(num: 1, offset: 3, len: 1)]
+
+  test "No stops yields an empty list":
+    let (text, stops) = expandSnippetWithStops("abc")
+    check text == "abc"
+    check stops.len == 0
+
+  test "${n} brace form without default records a zero-length stop":
+    let (text, stops) = expandSnippetWithStops("a${1}b")
+    check text == "ab"
+    check stops == @[SnippetStopOffset(num: 1, offset: 1, len: 0)]
 
 suite "Completion - LSP filterText/sortText":
   test "Items are kept by filterText, not insertText":

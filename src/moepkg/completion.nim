@@ -354,11 +354,18 @@ proc matchingBrace(body: string, openIdx: int): int =
     inc j
   return -1
 
-type SnippetParse = object
-  text: string
-  finalStop: int ## rune offset of `$0` (the final stop), or -1 if absent
-  firstStopNum: int ## lowest tabstop number seen (>=1), high(int) if none
-  firstStopOffset: int ## rune offset of that lowest-numbered stop, or -1
+type
+  SnippetStopOffset* = object ## A tabstop located inside the expanded snippet text.
+    num*: int ## Tabstop number; 0 is the final stop.
+    offset*: int ## Rune offset of the stop within the expanded text.
+    len*: int ## Rune length of the placeholder default (0 for bare `$n`).
+
+  SnippetParse = object
+    text: string
+    finalStop: int ## rune offset of `$0` (the final stop), or -1 if absent
+    firstStopNum: int ## lowest tabstop number seen (>=1), high(int) if none
+    firstStopOffset: int ## rune offset of that lowest-numbered stop, or -1
+    stops: seq[SnippetStopOffset] ## every stop in source order (mirrors kept)
 
 proc parseSnippet(body: string): SnippetParse =
   ## Recursive worker for expandSnippet. Walks the snippet body once, building
@@ -398,16 +405,19 @@ proc parseSnippet(body: string): SnippetParse =
         if colonPos >= 0:
           default = inner[colonPos + 1 ..^ 1]
         let pos = result.text.runeLen
-        if k > 0:
-          # Numbered tabstop / placeholder. Guard parseInt against an
-          # overflowing digit run from a malformed snippet (-1 => ignore).
-          let num =
+        # Numbered tabstop / placeholder. Guard parseInt against an
+        # overflowing digit run from a malformed snippet (-1 => ignore).
+        let num =
+          if k > 0:
             try:
               parseInt(inner[0 ..< k])
             except ValueError:
               -1
-          if num >= 0:
-            recordStop(num, pos)
+          else:
+            -1
+        if num >= 0:
+          recordStop(num, pos)
+        var defaultRuneLen = 0
         if default.len > 0:
           # Expand the default, lifting any stop nested inside it to our coords.
           let sub = parseSnippet(default)
@@ -416,7 +426,18 @@ proc parseSnippet(body: string): SnippetParse =
           if sub.firstStopOffset >= 0 and sub.firstStopNum < result.firstStopNum:
             result.firstStopNum = sub.firstStopNum
             result.firstStopOffset = pos + sub.firstStopOffset
+          defaultRuneLen = sub.text.runeLen
+          if num >= 0:
+            result.stops.add(
+              SnippetStopOffset(num: num, offset: pos, len: defaultRuneLen)
+            )
+          for s in sub.stops:
+            result.stops.add(
+              SnippetStopOffset(num: s.num, offset: pos + s.offset, len: s.len)
+            )
           result.text.add(sub.text)
+        elif num >= 0:
+          result.stops.add(SnippetStopOffset(num: num, offset: pos, len: 0))
         i = closeIdx + 1
     elif c == '$' and i + 1 < n and body[i + 1] in {'0' .. '9'}:
       var k = i + 1
@@ -429,6 +450,9 @@ proc parseSnippet(body: string): SnippetParse =
           -1
       if num >= 0:
         recordStop(num, result.text.runeLen)
+        result.stops.add(
+          SnippetStopOffset(num: num, offset: result.text.runeLen, len: 0)
+        )
       i = k
     elif c == '$' and i + 1 < n and
         (body[i + 1] == '_' or body[i + 1] in {'a' .. 'z', 'A' .. 'Z'}):
@@ -469,15 +493,55 @@ proc expandSnippet*(body: string): tuple[text: string, cursorOffset: int] =
       p.text.runeLen
   (p.text, cursorOffset)
 
+proc expandSnippetWithStops*(
+    body: string
+): tuple[text: string, stops: seq[SnippetStopOffset]] =
+  ## Expand an LSP snippet body into plain text plus the full tabstop list for
+  ## Tab-cycling. Same expansion rules as expandSnippet, with stops normalized
+  ## for navigation:
+  ## - Sorted by tabstop number ascending; `$0` (the final stop) always last.
+  ## - Mirror stops (same number appearing more than once) keep only the first
+  ##   occurrence; later ones stay in the text as plain defaults but are not
+  ##   cycled to.
+  let p = parseSnippet(body)
+  var stops: seq[SnippetStopOffset] = @[]
+  var seen: seq[int] = @[]
+  for s in p.stops:
+    if s.num notin seen:
+      seen.add(s.num)
+      stops.add(s)
+  stops.sort(
+    proc(a, b: SnippetStopOffset): int =
+      # $0 sorts after every numbered stop; ties keep source order (stable).
+      let an =
+        if a.num == 0:
+          high(int)
+        else:
+          a.num
+      let bn =
+        if b.num == 0:
+          high(int)
+        else:
+          b.num
+      cmp(an, bn)
+  )
+  (p.text, stops)
+
 proc lspItemToEntry*(
     item: CompletionItem, prefix: string, lspItemIndex: int = -1
 ): CompletionEntry =
   ## Convert an LSP CompletionItem to a CompletionEntry
+  # clangd (and some other servers) pad the label with a leading space to align
+  # an absent return type, e.g. " replace(int first, int second)". Strip leading
+  # whitespace so the popup is not indented; interior spaces (argument
+  # separators) are kept. filterText/sortText prefer the server's own fields and
+  # only fall back to this trimmed label.
+  let label = item.label.strip(trailing = false)
   let word =
     if item.insertText.isSome and item.insertText.get.len > 0:
       item.insertText.get
     else:
-      item.label
+      label
 
   var docText: Option[string] = none(string)
   if item.documentation.isSome:
@@ -500,17 +564,14 @@ proc lspItemToEntry*(
     if item.filterText.isSome and item.filterText.get.len > 0:
       item.filterText.get
     else:
-      item.label
+      label
   let sortText =
-    if item.sortText.isSome and item.sortText.get.len > 0:
-      item.sortText.get
-    else:
-      item.label
+    if item.sortText.isSome and item.sortText.get.len > 0: item.sortText.get else: label
   let isSnippet = item.insertTextFormat == some(InsertTextFormat.itfSnippet)
 
   CompletionEntry(
     word: word,
-    label: item.label,
+    label: label,
     matchScore: matchScore(prefix, filterText),
     source: csLsp,
     kind: item.kind,
@@ -1182,7 +1243,11 @@ proc updateResolvedEntry*(mgr: CompletionManager, resolved: CompletionItem) =
     if resolved.insertText.isSome and resolved.insertText.get.len > 0:
       resolved.insertText.get
     else:
-      resolved.label
+      # Match how lspItemToEntry builds `word`: the label is trimmed of the
+      # leading padding some servers (clangd) add, so the resolve response's
+      # raw label must be trimmed the same way or this check always fails
+      # for those items and the resolved data is silently dropped.
+      resolved.label.strip(trailing = false)
   if mgr.menu.entries[idx].word != resolvedWord:
     return
 
