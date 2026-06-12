@@ -1512,6 +1512,7 @@ Notes:
 | replaceText | Replace command replacement text |
 | parenPair | Matching bracket pair highlight |
 | currentWord | Other occurrences of the word under cursor |
+| snippetTabStop | Active snippet tabstop placeholder (completion snippet Tab cycling) |
 | highlightFullWidthSpace | Full-width space highlight |
 | highlightTrailingSpaces | Trailing whitespace highlight |
 | reservedWord | Reserved word highlight |

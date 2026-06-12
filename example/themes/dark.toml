@@ -223,6 +223,8 @@ parenPair = { fg = "#ffffff", bg = "#61afef" }
 
 currentWord = { fg = "#ffffff", bg = "#808080" }
 
+snippetTabStop = { fg = "#ffffff", bg = "#5c3d6e" }
+
 findCharMatch = { fg = "#ffffff", bg = "#be5046" }
 
 highlightFullWidthSpace = { fg = "#dadada", bg = "#ff0000" }

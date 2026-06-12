@@ -291,6 +291,180 @@ proc handleModeSwitch*(
   handler.signatureHelpManager.hide()
   return InsertModeResult(kind: imrHandled, modeTransition: some(targetMode))
 
+proc runeOffsetToBufferPos(
+    insertText: string, runeOffset: int, startLine, startCol: int
+): BufferPosition =
+  ## Translate a flat rune offset within `insertText` (inserted at
+  ## (startLine, startCol)) into a buffer position, walking newlines.
+  var lineDelta = 0
+  var colInLine = 0
+  var seen = 0
+  for r in insertText.runes:
+    if seen >= runeOffset:
+      break
+    if r == Rune('\n'):
+      inc lineDelta
+      colInLine = 0
+    else:
+      inc colInLine
+    inc seen
+  BufferPosition(
+    line: startLine + lineDelta,
+    column:
+      if lineDelta == 0:
+        startCol + colInLine
+      else:
+        colInLine,
+  )
+
+proc remapAfterEdit*(
+    session: var SnippetSession, editStart, oldEnd, newEnd: BufferPosition
+) =
+  ## Shift the session's tabstop coordinates after a buffer edit that replaced
+  ## the range [editStart, oldEnd) with text ending at newEnd (both ends
+  ## exclusive). Stops before the edit are untouched, stops swallowed by it
+  ## clamp to its start (this keeps the current stop anchored when its own
+  ## default is replaced), and stops after it shift by the size delta (the
+  ## column delta only applies to stops that shared the old end's line).
+  for stop in session.stops.mitems:
+    if stop.pos < editStart:
+      continue
+    if stop.pos < oldEnd:
+      stop.pos = editStart
+      # The content the stop covered was deleted or replaced by this edit; a
+      # stale length would make a later Tab land past the real content and a
+      # wholesale-replace delete unrelated text (e.g. the inner stop of a
+      # nested `${1:${2:x}}` after the outer default is replaced).
+      stop.len = 0
+    else:
+      if stop.pos.line == oldEnd.line:
+        stop.pos.column += newEnd.column - oldEnd.column
+      stop.pos.line += newEnd.line - oldEnd.line
+
+proc deletePendingDefault(buffer: TextBuffer, state: EditorState) =
+  ## Selection-delete the current stop's pending placeholder default: wipe the
+  ## whole range, collapse the stop to zero length and clear the pending flag.
+  ## A no-op when nothing is pending (the stop is already bare or was typed
+  ## into). Shared by the typed-char, Backspace, Delete and Enter paths so they
+  ## all honour the "a selected default is replaced wholesale" semantics.
+  let cur = state.snippetSession.stops[state.snippetSession.index]
+  if state.snippetSession.defaultPending and cur.len > 0:
+    state.cursor = cur.pos
+    for _ in 0 ..< cur.len:
+      discard buffer.deleteChar(state.cursor)
+    # The remap also collapses the stop itself to zero length: its range is
+    # exactly the deleted one.
+    remapAfterEdit(
+      state.snippetSession,
+      cur.pos,
+      BufferPosition(line: cur.pos.line, column: cur.pos.column + cur.len),
+      cur.pos,
+    )
+  state.snippetSession.defaultPending = false
+
+proc insertCharInSession(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState, text: string
+): InsertModeResult =
+  ## Insert a typed character during a snippet session. A pending placeholder
+  ## default is replaced wholesale by the first keystroke (selection
+  ## semantics), and the remaining tabstop coordinates are remapped across
+  ## both edits. Auto-close paren applies as in handleCharacterInsertion: the
+  ## pair is still a single insertion at the cursor, so the remap covers both
+  ## characters while the cursor lands between them.
+  deletePendingDefault(buffer, state)
+
+  # Track paren depth for signature help (same as handleCharacterInsertion).
+  if text.len == 1:
+    if text[0] == '(':
+      handler.signatureHelpManager.incrementParenDepth()
+    elif text[0] == ')':
+      handler.signatureHelpManager.decrementParenDepth()
+
+  let autoClose =
+    state.display.autoCloseParen and text.len == 1 and isOpeningParen(text[0])
+  let toInsert =
+    if autoClose:
+      text & $getClosingChar(text[0])
+    else:
+      text
+
+  let idx = state.snippetSession.index
+  let before = state.cursor
+  # The current stop grows to cover the inserted text instead of being pushed
+  # ahead of it: when it starts at the insertion point the generic remap would
+  # shift it along with the later stops, so restore its start and extend its
+  # length. Cycling back to it then re-selects exactly what was typed.
+  let stopStartsHere = state.snippetSession.stops[idx].pos == before
+  discard buffer.insertText(before, toInsert)
+  let inserted = toInsert.runeLen
+  let insertEnd = BufferPosition(line: before.line, column: before.column + inserted)
+  # The cursor sits between an auto-closed pair, after the text otherwise; the
+  # remap's new end is always the insertion end, not the cursor.
+  state.cursor.column += (if autoClose: 1 else: inserted)
+  remapAfterEdit(state.snippetSession, before, before, insertEnd)
+  if stopStartsHere:
+    state.snippetSession.stops[idx].pos = before
+  state.snippetSession.stops[idx].len += inserted
+  return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+proc backspaceInSession(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
+): InsertModeResult =
+  ## Backspace during a snippet session: a pending placeholder default is
+  ## wiped wholesale (selection semantics); otherwise a plain backspace with
+  ## the stop coordinates remapped. An adjacent-pair auto-delete also removes
+  ## the closing character after the cursor, which the backward-delete shape
+  ## [newCursor, before) cannot describe, so the pair case is detected up
+  ## front and remapped as the two-column range it really deletes. Shared by
+  ## the session key handling and the completion popup's Backspace path,
+  ## which runs before it.
+  template session(): untyped =
+    state.snippetSession
+
+  let cur = session.stops[session.index]
+  if session.defaultPending and cur.len > 0:
+    deletePendingDefault(buffer, state)
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+  let before = state.cursor
+  # Mirrors handleBackspace's own pair check so the remap knows the deleted
+  # range in advance.
+  let pairDeleted =
+    state.display.autoDeleteParen and before.column > 0 and (
+      try:
+        isAdjacentPair(buffer.getLine(before.line), before.column - 1)
+      except IndexDefect, CatchableError:
+        false
+    )
+  let res = handler.handleBackspace(buffer, state)
+  let oldEnd =
+    if pairDeleted:
+      BufferPosition(line: before.line, column: before.column + 1)
+    else:
+      before
+  remapAfterEdit(session, state.cursor, oldEnd, state.cursor)
+  # The generic remap shifts later stops but never resizes the stop the edit
+  # happened inside: shrink the current stop by however many of the deleted
+  # columns sat within its typed content, so its recorded length stays in
+  # sync (Shift-Tab re-selection / highlight). Deleting at the stop's start
+  # lands in the remap's swallowed-stop branch, which already zeroed the
+  # length: the len > 0 guard keeps this from shrinking it again.
+  if before.line == state.cursor.line and cur.pos.line == state.cursor.line and
+      cur.pos.column <= state.cursor.column and session.stops[session.index].len > 0:
+    let overlap = min(oldEnd.column, cur.pos.column + cur.len) - state.cursor.column
+    if overlap > 0:
+      session.stops[session.index].len =
+        max(0, session.stops[session.index].len - overlap)
+  return res
+
+proc landOnCurrentStop(state: EditorState) =
+  ## Place the cursor at the end of the current stop's content (selection-end
+  ## semantics) and re-select the content when there is any: its placeholder
+  ## default, or whatever was typed into it, so the next keystroke replaces
+  ## the whole range (VSCode-style). Bare stops (len 0) just place the cursor.
+  let stop = state.snippetSession.stops[state.snippetSession.index]
+  state.cursor = BufferPosition(line: stop.pos.line, column: stop.pos.column + stop.len)
+  state.snippetSession.defaultPending = stop.len > 0
+
 proc commitCompletion*(
     handler: InsertModeHandler,
     buffer: TextBuffer,
@@ -352,14 +526,32 @@ proc commitCompletion*(
 
   # Expand snippets to plain text plus the in-text cursor offset (in runes). A
   # cycling preview forces the cursor to the end (not $0) so the next cycle's
-  # widen-to-cursor deletion swallows the whole preview.
+  # widen-to-cursor deletion swallows the whole preview. A final commit keeps
+  # the full tabstop list: when there is something to cycle to or a default to
+  # replace, a snippet session starts and the cursor lands at the end of the
+  # first stop's default (selection-end semantics); otherwise the cursor falls
+  # back to $0 / the lowest stop / the end, matching expandSnippet.
+  var snippetStops: seq[SnippetStopOffset] = @[]
   let (insertText, cursorRuneOffset) =
     if entry.isSnippet:
-      let (text, snippetOffset) = expandSnippet(rawText)
       if keepPopupOpen:
+        let (text, _) = expandSnippet(rawText)
         (text, text.runeLen)
       else:
-        (text, snippetOffset)
+        let (text, stops) = expandSnippetWithStops(rawText)
+        snippetStops = stops
+        let offset =
+          if stops.len > 0 and stops[0].num >= 1 and (
+            stops.len >= 2 or stops[0].len > 0
+          ):
+            stops[0].offset + stops[0].len
+          elif stops.len > 0 and stops[^1].num == 0:
+            stops[^1].offset
+          elif stops.len > 0:
+            stops[0].offset
+          else:
+            text.runeLen
+        (text, offset)
     else:
       (rawText, rawText.runeLen)
 
@@ -380,6 +572,11 @@ proc commitCompletion*(
       startLine += lineShift
       endLine += lineShift
       state.cursor.line += lineShift
+      if state.snippetSession.active:
+        # Session stops live at the completion site, below whole-line imports,
+        # so they shift down with it.
+        for stop in state.snippetSession.stops.mitems:
+          stop.pos.line += lineShift
 
   # Widen the deletion end to the cursor when it sits past the textEdit end
   # (characters typed after the request was sent). Positions are compared as
@@ -395,6 +592,9 @@ proc commitCompletion*(
     startLine < delEndLine or (startLine == delEndLine and startCol <= delEndCol)
   let cursorSane =
     not (startLine == state.cursor.line and state.cursor.column < startCol)
+  # The replaced range's old exclusive end, for remapping an active snippet
+  # session's stops across this edit (set per delete path below).
+  var oldEditEnd = BufferPosition(line: delEndLine, column: delEndCol)
   if startNotAfterEnd and cursorSane:
     # Delete the replaced range [(startLine, startCol), (delEndLine, delEndCol)).
     if delEndLine == startLine:
@@ -420,6 +620,7 @@ proc commitCompletion*(
   else:
     # Inconsistent state (cursor before the start, or start past the end): fall
     # back to deleting the tracked prefix backward from the cursor.
+    oldEditEnd = state.cursor
     let prefixLen = menu.prefix.runeLen
     for _ in 0 ..< prefixLen:
       if state.cursor.column == 0:
@@ -434,24 +635,53 @@ proc commitCompletion*(
 
   # Place the cursor at cursorRuneOffset within the inserted text, translating
   # the flat rune offset into a (line, column) delta to support multi-line text.
-  var lineDelta = 0
-  var colInLine = 0
-  var seen = 0
-  for r in insertText.runes:
-    if seen >= cursorRuneOffset:
-      break
-    if r == Rune('\n'):
-      inc lineDelta
-      colInLine = 0
-    else:
-      inc colInLine
-    inc seen
-  state.cursor.line = startLine + lineDelta
-  state.cursor.column =
-    if lineDelta == 0:
-      startCol + colInLine
-    else:
-      colInLine
+  state.cursor =
+    runeOffsetToBufferPos(insertText, cursorRuneOffset, startLine, startCol)
+
+  if state.snippetSession.active:
+    # This commit landed inside an active session (e.g. completing a word in a
+    # placeholder, or a cycling preview): remap the stops across the
+    # replacement. The current default can no longer be pending.
+    let editStart = BufferPosition(line: startLine, column: startCol)
+    let newEnd =
+      runeOffsetToBufferPos(insertText, insertText.runeLen, startLine, startCol)
+    let curBefore = state.snippetSession.stops[state.snippetSession.index]
+    remapAfterEdit(state.snippetSession, editStart, oldEditEnd, newEnd)
+    # The generic remap clamps swallowed stops and shifts later ones, but
+    # never resizes the stop the edit happened inside. When the replaced
+    # range sat within the current stop's content (completing the word typed
+    # into a placeholder), restore the stop over the inserted text so
+    # Shift-Tab re-selection and the highlight match the buffer.
+    if curBefore.pos.line == editStart.line and oldEditEnd.line == editStart.line and
+        newEnd.line == editStart.line and curBefore.pos.column <= editStart.column and
+        oldEditEnd.column <= curBefore.pos.column + curBefore.len:
+      state.snippetSession.stops[state.snippetSession.index] = SnippetStop(
+        num: curBefore.num,
+        pos: curBefore.pos,
+        len: curBefore.len + newEnd.column - oldEditEnd.column,
+      )
+    state.snippetSession.defaultPending = false
+
+  # Start a snippet session when the commit expanded tabstops worth cycling:
+  # more than one stop, or a single placeholder whose default should be
+  # replaced by typing. A lone bare `$n` / `$0` adds nothing over the plain
+  # cursor placement above.
+  if snippetStops.len > 0 and snippetStops[0].num >= 1 and
+      (snippetStops.len >= 2 or snippetStops[0].len > 0):
+    var resolved = newSeq[SnippetStop](snippetStops.len)
+    for i, s in snippetStops:
+      let pos = runeOffsetToBufferPos(insertText, s.offset, startLine, startCol)
+      # `len` is a single-line column span. A default that wraps across lines
+      # cannot be represented that way (pos.column + len would overshoot), so
+      # treat it as a bare stop with no selectable default: the cursor still
+      # lands at its end, but it is not highlighted or replaced wholesale.
+      let endPos =
+        runeOffsetToBufferPos(insertText, s.offset + s.len, startLine, startCol)
+      let lineLen = if endPos.line == pos.line: s.len else: 0
+      resolved[i] = SnippetStop(num: s.num, pos: pos, len: lineLen)
+    state.snippetSession = SnippetSession(
+      active: true, stops: resolved, index: 0, defaultPending: resolved[0].len > 0
+    )
 
   if keepPopupOpen:
     # Cycling preview: keep the popup open and track the inserted text as the
@@ -738,8 +968,16 @@ proc handleInsertModeKey*(
       return handler.handleModeSwitch(EditorMode.Normal)
 
     if keyCombo.isSpecial and keyCombo.special == skBackspace:
-      # Backspace - update filter or cancel if prefix is empty
-      let backspaceResult = handler.handleBackspace(buffer, state)
+      # Backspace - update filter or cancel if prefix is empty. This popup
+      # branch runs before the snippet session block below, so an active
+      # session must remap its stop coordinates across the edit here too
+      # (typing into a placeholder re-opens the popup, making this the
+      # common in-session Backspace path).
+      let backspaceResult =
+        if state.snippetSession.active:
+          handler.backspaceInSession(buffer, state)
+        else:
+          handler.handleBackspace(buffer, state)
       if handler.completionManager.isPathCompletion:
         # Re-check path context after backspace
         let line = buffer.getLine(state.cursor.line)
@@ -770,8 +1008,13 @@ proc handleInsertModeKey*(
         # Path completion keeps filtering as you type, so it is not committed.
         discard handler.commitCompletion(buffer, state)
 
-      # Insert the new character
-      discard handler.handleCharacterInsertion(buffer, state, keyCombo.char)
+      # Insert the new character. When a snippet session is active (possibly
+      # just started by the commit above), the session insert replaces a
+      # pending placeholder default and keeps the stops remapped.
+      if state.snippetSession.active:
+        discard handler.insertCharInSession(buffer, state, keyCombo.char)
+      else:
+        discard handler.handleCharacterInsertion(buffer, state, keyCombo.char)
 
       # Re-trigger completion with new prefix
       let line = buffer.getLine(state.cursor.line)
@@ -788,6 +1031,122 @@ proc handleInsertModeKey*(
         else:
           handler.completionManager.cancelCompletion()
       return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  if state.snippetSession.active:
+    # Snippet tabstop session. The completion popup's keys above take
+    # precedence while it is open; here Tab/Shift-Tab navigate the stops,
+    # typed characters replace a pending placeholder default, and remappable
+    # edits (Backspace, Delete, Enter) keep the stop coordinates in sync. Any
+    # other key ends the session and falls through to the normal handling.
+    template session(): untyped =
+      state.snippetSession
+
+    if keyCombo.isSpecial and keyCombo.special == skTab and
+        kmShift notin keyCombo.modifiers:
+      if session.index + 1 < session.stops.len:
+        inc session.index
+        landOnCurrentStop(state)
+        # Landing on the last stop with nothing left to replace (typically
+        # $0) finishes the snippet; with a default the session stays alive so
+        # the next keystroke can still replace it.
+        if session.index == session.stops.high and session.stops[session.index].len == 0:
+          session.active = false
+        return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+      # No stop left to jump to: end the session and fall through to the
+      # normal Tab handling (indentation), the "jumpable ? jump : tab"
+      # fallback convention of vsnip/LuaSnip-style snippet plugins.
+      session.active = false
+
+    if keyCombo.isSpecial and (
+      keyCombo.special == skBackTab or
+      (keyCombo.special == skTab and kmShift in keyCombo.modifiers)
+    ):
+      if session.index > 0:
+        dec session.index
+        landOnCurrentStop(state)
+      return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+    if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+      discard handler.insertCharInSession(buffer, state, keyCombo.char)
+      # Mirror the normal character path's auto-completion trigger so the
+      # popup keeps working inside placeholders.
+      if handler.autocompleteEnabled:
+        let line = buffer.getLine(state.cursor.line)
+        let pathPrefix = extractPathPrefixBeforeCursor(line, state.cursor.column)
+        if pathPrefix.len > 0:
+          handler.completionManager.triggerPathCompletion(
+            buffer, state.cursor.line, state.cursor.column
+          )
+        else:
+          let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
+          if prefix.len >= AutoTriggerPrefixLength:
+            handler.triggerLspCompletionRequest(buffer, state)
+      return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+    if keyCombo.isSpecial and keyCombo.special == skBackspace:
+      return handler.backspaceInSession(buffer, state)
+
+    if keyCombo.isSpecial and keyCombo.special == skDelete:
+      if session.defaultPending and session.stops[session.index].len > 0:
+        # Selection-delete semantics: Delete on a pending default wipes it,
+        # matching Backspace and the typed-char path.
+        deletePendingDefault(buffer, state)
+        return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+      let oldEnd =
+        if state.cursor.column < buffer.getLine(state.cursor.line).runeLen:
+          BufferPosition(line: state.cursor.line, column: state.cursor.column + 1)
+        else:
+          # Deleting at end of line joins the next line up.
+          BufferPosition(line: state.cursor.line + 1, column: 0)
+      let curBefore = session.stops[session.index]
+      let res = handler.handleDelete(buffer, state)
+      remapAfterEdit(session, state.cursor, oldEnd, state.cursor)
+      # Shrink the current stop if the deleted character sat inside it (see the
+      # backspace path). handleDelete leaves the cursor in place, so the deleted
+      # column is the cursor column itself. The len > 0 guard skips the case
+      # where the remap's swallowed-stop branch already zeroed the length
+      # (deleting at the stop's start).
+      if oldEnd.line == state.cursor.line and oldEnd.column == state.cursor.column + 1 and
+          curBefore.pos.line == state.cursor.line and
+          curBefore.pos.column <= state.cursor.column and
+          state.cursor.column < curBefore.pos.column + curBefore.len and
+          session.stops[session.index].len > 0:
+        dec session.stops[session.index].len
+      return res
+
+    if keyCombo.isSpecial and keyCombo.special == skEnter:
+      # A pending default is selected, so Enter replaces it before splitting
+      # the line (same selection semantics as typing or Backspace).
+      deletePendingDefault(buffer, state)
+      let before = state.cursor
+      let curBefore = session.stops[session.index]
+      # Bracket-pair splitting inserts a second newline past the cursor plus
+      # reindentation on both lines, an edit shape the [before, cursor) remap
+      # below cannot represent: suppress it for this newline.
+      let savedBracketSplit = state.display.bracketSplit
+      state.display.bracketSplit = bsmDisable
+      let res = handler.handleNewline(buffer, state)
+      state.display.bracketSplit = savedBracketSplit
+      remapAfterEdit(session, before, before, state.cursor)
+      # A newline struck inside the current stop's typed content splits it
+      # across lines, which the single-line `len` cannot represent: collapse it
+      # to a bare stop (the same treatment a multi-line default gets at commit).
+      if curBefore.pos.line == before.line and curBefore.pos.column < before.column and
+          before.column < curBefore.pos.column + curBefore.len:
+        session.stops[session.index].len = 0
+      return res
+
+    if keyCombo.isCtrlN:
+      # Manual completion trigger: keep the session alive, matching the
+      # auto-trigger in the typed-char path above — committing the result
+      # remaps the stops. (The popup is not open here: open-popup keys are
+      # handled before this block.)
+      handler.triggerLspCompletionRequest(buffer, state)
+      return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+    # Anything else (Escape, motions, edit commands, mode switches) ends the
+    # session and is handled normally below.
+    session.active = false
 
   if keyCombo.isCtrlN and not completionActive:
     # Ctrl+N - trigger completion (when not active)
