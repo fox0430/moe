@@ -309,6 +309,15 @@ proc main() =
       editor.onLspServerRestart(langId)
   )
 
+  # Apply server-initiated workspace/applyEdit requests (e.g. rust-analyzer
+  # refactors delivered via executeCommand) to the editor's buffers.
+  # applyWorkspaceEditFromServer re-clamps window cursors itself after any edit.
+  editor.lsp.setApplyEditCallback(
+    proc(edit: WorkspaceEdit): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        editor.applyWorkspaceEditFromServer(edit)
+  )
+
   if cmdLineConfig.filePaths.len > 0:
     # Check if first path is a directory
     if cmdLineConfig.filePaths.len == 1 and dirExists(cmdLineConfig.filePaths[0]):

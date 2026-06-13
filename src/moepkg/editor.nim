@@ -1223,8 +1223,15 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   # Update sidebar bookmark marker
   setBookmarkMarker(newConfig.standard.bookmarkMarker)
 
-  # Update LSP enable/disable
+  # Update LSP enable/disable. On a runtime enabled->disabled transition, shut
+  # the servers down rather than leaving them running: poll() is gated on
+  # `enabled`, so a still-running server could otherwise block forever on a
+  # server-initiated request (e.g. workspace/applyEdit) whose event would never
+  # be drained or answered.
+  let lspWasEnabled = e.lsp.enabled
   e.lsp.setEnabled(newConfig.lsp.enable)
+  if lspWasEnabled and not newConfig.lsp.enable:
+    e.lsp.shutdown()
   e.lsp.service.setRequestTimeout(newConfig.lsp.timeout)
 
   # Update mouse capture

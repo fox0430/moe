@@ -242,6 +242,76 @@ suite "types - parseWorkspaceEdit":
     let edit = parseWorkspaceEdit(j)
     check edit.resourceOperations == @["rename"]
 
+  test "empty documentChanges array does not shadow a populated changes map":
+    # A server sending an empty `documentChanges` alongside real `changes` must
+    # not end up with `documentChanges = some(@[])`: applyWorkspaceEdit gives
+    # documentChanges precedence, so the real edits would be silently dropped
+    # while the apply still reports success.
+    let j = %*{
+      "changes": {
+        "file:///a.nim": [
+          {
+            "range":
+              {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}},
+            "newText": "x",
+          }
+        ]
+      },
+      "documentChanges": newJArray(),
+    }
+    let edit = parseWorkspaceEdit(j)
+    check edit.documentChanges.isNone
+    check edit.changes.isSome
+    check edit.changes.get["file:///a.nim"][0].newText == "x"
+
+  test "malformed changes elements are skipped, not fatal":
+    # A null/non-object element inside a changes array must not reach a raw `[]`
+    # accessor (which raises an uncatchable AssertionDefect on the worker
+    # thread). The bad element is skipped; valid siblings still parse.
+    let j = %*{
+      "changes": {
+        "file:///a.nim": [
+          newJNull(),
+          {
+            "range":
+              {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 2}},
+            "newText": "ok",
+          },
+        ]
+      }
+    }
+    let edit = parseWorkspaceEdit(j)
+    check edit.changes.isSome
+    check edit.changes.get["file:///a.nim"].len == 1
+    check edit.changes.get["file:///a.nim"][0].newText == "ok"
+
+  test "null textDocument inside documentChanges does not crash":
+    let j = %*{"documentChanges": [{"textDocument": newJNull()}]}
+    let edit = parseWorkspaceEdit(j)
+    # The element is kept (it had a textDocument key) but its fields default
+    # safely rather than raising.
+    check edit.documentChanges.isSome
+    check edit.documentChanges.get[0].textDocument.uri == ""
+
+suite "types - position/range parsing is defensive":
+  test "parsePosition tolerates missing fields":
+    check parsePosition(%*{}).line == 0
+    check parsePosition(%*{}).character == 0
+
+  test "parsePosition tolerates a null/non-object node":
+    check parsePosition(newJNull()).line == 0
+    check parsePosition(newJString("oops")).character == 0
+
+  test "parseRange tolerates a null range node":
+    let r = parseRange(newJNull())
+    check r.start.line == 0
+    check r.`end`.character == 0
+
+  test "parseTextEdit tolerates a missing range":
+    let e = parseTextEdit(%*{"newText": "x"})
+    check e.newText == "x"
+    check e.range.start.line == 0
+
 suite "types - parseLocations":
   test "parse single location object":
     let j = %*{

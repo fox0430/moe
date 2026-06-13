@@ -919,6 +919,74 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     check "nim" in svc.dynamicRegistrations
     check "r1" in svc.dynamicRegistrations["nim"]
 
+  test "levApplyEdit parses the edit and invokes onApplyWorkspaceEdit":
+    let svc = newLspService()
+    var gotEdit: WorkspaceEdit
+    var called = false
+    svc.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        called = true
+        gotEdit = edit
+      (applied: true, failureReason: none(string))
+    let editJson = $(
+      %*{
+        "changes": {
+          "file:///t.nim": [
+            {
+              "range": {
+                "start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}
+              },
+              "newText": "x",
+            }
+          ]
+        }
+      }
+    )
+    svc.processEvent(
+      "nim",
+      LspEvent(kind: levApplyEdit, applyEditReqIdJson: "7", applyEditEditJson: editJson),
+    )
+    check called
+    check gotEdit.changes.isSome
+    check "file:///t.nim" in gotEdit.changes.get
+
+  test "levApplyEdit with invalid JSON does not invoke onApplyWorkspaceEdit":
+    let svc = newLspService()
+    var called = false
+    svc.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      called = true
+      (applied: true, failureReason: none(string))
+    svc.processEvent(
+      "nim",
+      LspEvent(kind: levApplyEdit, applyEditReqIdJson: "7", applyEditEditJson: "{oops"),
+    )
+    check not called
+
+  test "levApplyEdit swallows a throwing apply callback (server still answerable)":
+    # The server blocks on the ApplyWorkspaceEditResponse, so an exception raised
+    # while applying the edit must NOT escape processEvent (it would otherwise
+    # propagate out of poll() and tear the editor down via emergencySaveAndQuit,
+    # while the server waits forever). processEvent must return normally.
+    let svc = newLspService()
+    var called = false
+    svc.onApplyWorkspaceEdit = proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      {.cast(gcsafe).}:
+        called = true
+      raise newException(ValueError, "apply blew up")
+    let editJson = $(%*{"changes": {"file:///t.nim": []}})
+    # Must not raise.
+    svc.processEvent(
+      "nim",
+      LspEvent(kind: levApplyEdit, applyEditReqIdJson: "7", applyEditEditJson: editJson),
+    )
+    check called
+
   test "first levInitialized records the language but does not fire onServerRestart":
     # Normal startup: the editor already sent didOpen at file-open time, so the
     # restart hook must stay silent.
