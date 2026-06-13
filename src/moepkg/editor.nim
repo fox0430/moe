@@ -968,6 +968,9 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Apply LSP enable setting from config
   result.lsp.setEnabled(result.config.lsp.enable)
 
+  # Apply the user-configured LSP request timeout (config.lsp.timeout, ms).
+  result.lsp.service.setRequestTimeout(result.config.lsp.timeout)
+
   # Propagate per-language server settings from the config ([Lsp.<lang>])
   # into the LSP service. Without this, user overrides for command,
   # extensions, or trace were ignored and only the hardcoded defaults ran.
@@ -1222,6 +1225,7 @@ proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
 
   # Update LSP enable/disable
   e.lsp.setEnabled(newConfig.lsp.enable)
+  e.lsp.service.setRequestTimeout(newConfig.lsp.timeout)
 
   # Update mouse capture
   if not e.app.isNil:

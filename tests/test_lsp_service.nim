@@ -1034,3 +1034,20 @@ suite "LspService - LspPendingRequest":
     check req.langId == "nim"
     check req.methodName == "textDocument/completion"
     check req.timeoutMs == 5000
+
+suite "LspService - request timeout":
+  test "defaults to DefaultRequestTimeoutMs":
+    let svc = newLspService()
+    check svc.requestTimeoutMs == DefaultRequestTimeoutMs
+
+  test "setRequestTimeout applies a positive value":
+    let svc = newLspService()
+    svc.setRequestTimeout(12000)
+    check svc.requestTimeoutMs == 12000
+
+  test "setRequestTimeout ignores non-positive values":
+    let svc = newLspService()
+    svc.setRequestTimeout(8000)
+    svc.setRequestTimeout(0)
+    svc.setRequestTimeout(-1)
+    check svc.requestTimeoutMs == 8000
