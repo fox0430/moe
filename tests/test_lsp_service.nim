@@ -957,6 +957,103 @@ suite "LspService - processEvent (thread-boundary JSON parsing)":
     svc.processEvent("rust", LspEvent(kind: levInitialized))
     check restarts == @["rust"]
 
+suite "LspService - crash recovery scenario":
+  # The lifecycle at the service layer: a server initializes, crashes,
+  # is auto-restarted, re-initializes, and the editor re-syncs its open
+  # documents. The worker is not run as a real thread/process here; it is mocked
+  # as the event stream the service observes (levInitialized on each (re)init),
+  # and the editor's re-sync handler is modeled by a callback that repopulates
+  # the set of documents the live server knows about. This drives the service's
+  # state machine (initializedLangs + onServerRestart) end to end, asserting the
+  # *ordering* of the transitions rather than each branch in isolation.
+  privateAccess(LspService)
+
+  test "initialize -> crash -> auto-restart -> document re-sync":
+    let svc = newLspService()
+    let uri = "file:///proj/main.nim"
+
+    # `serverDocs` models the documents the *current* server process knows. A
+    # crash drops them; the re-sync handler (mirroring renotifyOpenBuffers in
+    # editor_lsp.nim) re-sends didOpen on restart, restoring them.
+    var serverDocs = initHashSet[string]()
+    var resyncCount = 0
+    svc.onServerRestart = proc(langId: string) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        inc resyncCount
+        serverDocs.incl(uri) # editor re-sends didOpen for the open buffer
+
+    # 1. Normal startup. The editor sends didOpen at file-open time; the worker
+    #    queues it and flushes on initialize. The first initialize is NOT a
+    #    crash recovery, so the re-sync hook must stay silent.
+    serverDocs.incl(uri)
+    svc.processEvent("nim", LspEvent(kind: levInitialized))
+    check "nim" in svc.initializedLangs
+    check resyncCount == 0
+    check uri in serverDocs
+
+    # 2. The server crashes (worker -> lwsCrashed). The respawned process starts
+    #    with no open documents.
+    serverDocs.clear()
+
+    # 3. The auto-restart re-initializes. This second initialize for the same
+    #    language is the crash-recovery signal: onServerRestart fires and the
+    #    editor re-opens the buffer.
+    svc.processEvent("nim", LspEvent(kind: levInitialized))
+    check resyncCount == 1
+    check uri in serverDocs # document re-synced to the restarted server
+    check "nim" in svc.initializedLangs # recovery leaves the record intact
+
+    # 4. Every subsequent crash+restart cycle re-syncs again.
+    serverDocs.clear()
+    svc.processEvent("nim", LspEvent(kind: levInitialized))
+    check resyncCount == 2
+    check uri in serverDocs
+
+  test "re-sync is scoped to the crashed language only":
+    # A crash in one language must not re-open another language's buffers.
+    let svc = newLspService()
+    var resynced: seq[string] = @[]
+    svc.onServerRestart = proc(langId: string) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        resynced.add(langId)
+
+    # Both languages start up normally (first init each).
+    svc.processEvent("nim", LspEvent(kind: levInitialized))
+    svc.processEvent("rust", LspEvent(kind: levInitialized))
+    check resynced.len == 0
+
+    # Only nim crashes and restarts.
+    svc.processEvent("nim", LspEvent(kind: levInitialized))
+    check resynced == @["nim"]
+    check "rust" in svc.initializedLangs # rust untouched
+
+  test "explicit restart (stopWorker) is a fresh start, not a crash recovery":
+    # `:lspRestart` stops the worker then starts it again, re-opening buffers
+    # itself. stopWorker clears initializedLangs so the next initialize is
+    # treated as a first init, not a re-sync; otherwise every buffer would be
+    # re-opened twice (once by the explicit restart, once by a bogus recovery).
+    let svc = newLspService()
+    var resyncCount = 0
+    svc.onServerRestart = proc(langId: string) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        inc resyncCount
+
+    # stopWorker only clears bookkeeping when a worker is present. Create one
+    # without starting its thread: stop() skips the join when threadStarted is
+    # false, so no real server/process is involved.
+    svc.workers["nim"] = newLspWorker("nim").get
+
+    svc.processEvent("nim", LspEvent(kind: levInitialized)) # first init
+    check "nim" in svc.initializedLangs
+    check resyncCount == 0
+
+    check svc.stopWorker("nim").isOk # :lspRestart, step 1
+    check "nim" notin svc.initializedLangs
+
+    svc.processEvent("nim", LspEvent(kind: levInitialized)) # restart re-init
+    check resyncCount == 0 # fresh start, NOT a crash recovery
+    check "nim" in svc.initializedLangs
+
 suite "LspService - LspResponseStatus enum":
   test "LspResponseStatus values":
     check lrsPending < lrsSuccess
