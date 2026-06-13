@@ -603,10 +603,14 @@ proc toJson*(params: ExecuteCommandParams): JsonNode =
 
 # JSON parsing helpers
 proc parsePosition*(node: JsonNode): Position =
-  Position(line: node["line"].getInt, character: node["character"].getInt)
+  ## Defensive against malformed server JSON: a server sending null/non-object
+  ## (or omitting a field) where a Position is expected must not crash the
+  ## client. The `{}` accessor and `getInt` return safe defaults (0) instead of
+  ## raising an (uncatchable) Defect on the worker thread.
+  Position(line: node{"line"}.getInt, character: node{"character"}.getInt)
 
 proc parseRange*(node: JsonNode): Range =
-  Range(start: parsePosition(node["start"]), `end`: parsePosition(node["end"]))
+  Range(start: parsePosition(node{"start"}), `end`: parsePosition(node{"end"}))
 
 proc parseLocation*(node: JsonNode): Location =
   Location(uri: node["uri"].getStr, range: parseRange(node["range"]))
@@ -623,17 +627,19 @@ proc locationLinkToLocation*(link: LocationLink): Location =
   Location(uri: link.targetUri, range: link.targetSelectionRange)
 
 proc parseTextEdit*(node: JsonNode): TextEdit =
-  TextEdit(range: parseRange(node["range"]), newText: node["newText"].getStr)
+  TextEdit(range: parseRange(node{"range"}), newText: node{"newText"}.getStr)
 
 proc parseTextDocumentEdit*(node: JsonNode): TextDocumentEdit =
-  let tdoc = node["textDocument"]
-  result.textDocument.uri = tdoc["uri"].getStr
-  if tdoc.hasKey("version") and tdoc["version"].kind != JNull:
-    result.textDocument.version = some(tdoc["version"].getInt)
-  let editsNode = node.getOrDefault("edits")
+  let tdoc = node{"textDocument"}
+  result.textDocument.uri = tdoc{"uri"}.getStr
+  let versionNode = tdoc{"version"}
+  if versionNode != nil and versionNode.kind != JNull:
+    result.textDocument.version = some(versionNode.getInt)
+  let editsNode = node{"edits"}
   if editsNode != nil and editsNode.kind == JArray:
     for edit in editsNode:
-      result.edits.add(parseTextEdit(edit))
+      if edit.kind == JObject:
+        result.edits.add(parseTextEdit(edit))
 
 proc parseWorkspaceEdit*(node: JsonNode): WorkspaceEdit =
   # Both fields are optional and a server may send `null` (e.g. nimlangserver
@@ -651,7 +657,8 @@ proc parseWorkspaceEdit*(node: JsonNode): WorkspaceEdit =
         continue
       var editSeq: seq[TextEdit] = @[]
       for edit in edits:
-        editSeq.add(parseTextEdit(edit))
+        if edit.kind == JObject:
+          editSeq.add(parseTextEdit(edit))
       changes[uri] = editSeq
     result.changes = some(changes)
   let docChangesNode = node.getOrDefault("documentChanges")
@@ -667,7 +674,12 @@ proc parseWorkspaceEdit*(node: JsonNode): WorkspaceEdit =
         # kind so applyWorkspaceEdit can refuse the whole edit rather than
         # silently dropping the file operation and applying only text edits.
         result.resourceOperations.add(docChange["kind"].getStr)
-    result.documentChanges = some(docChanges)
+    # Only treat documentChanges as present when it actually carries something.
+    # An empty (or wholly-skipped) array must NOT shadow a populated `changes`
+    # map: applyWorkspaceEdit gives documentChanges precedence, so `some(@[])`
+    # would silently drop the real edits and still report the apply as success.
+    if docChanges.len > 0 or result.resourceOperations.len > 0:
+      result.documentChanges = some(docChanges)
 
 # Range-checked enum conversions for server-provided integers.
 # A raw `Enum(getInt)` raises RangeDefect on out-of-range values, and a

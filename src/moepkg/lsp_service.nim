@@ -63,6 +63,10 @@ type
     startTime*: float
     timeoutMs*: int
 
+  ApplyWorkspaceEditResult* = tuple[applied: bool, failureReason: Option[string]]
+    ## Outcome of applying a server-initiated workspace/applyEdit on the main
+    ## thread, reported back to the worker so it can answer the blocking server.
+
   LspService* = ref object
     ## Service for managing LSP workers.
     ##
@@ -118,6 +122,11 @@ type
     # uses this to re-send didOpen for every open buffer of that language, since
     # the restarted server starts with no open documents (see initializedLangs).
     onServerRestart*: proc(langId: string) {.gcsafe.}
+    # Apply a server-initiated workspace/applyEdit on the main thread (it
+    # mutates buffers). Returns whether the edit was applied so the worker can
+    # answer the server's blocking request.
+    onApplyWorkspaceEdit*:
+      proc(edit: WorkspaceEdit): ApplyWorkspaceEditResult {.gcsafe.}
 
 proc newLspService*(workspaceRoot: string = ""): LspService =
   ## Create a new LSP service
@@ -157,6 +166,10 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
       discard,
     onServerRestart: proc(langId: string) {.gcsafe.} =
       discard,
+    onApplyWorkspaceEdit: proc(
+        edit: WorkspaceEdit
+    ): ApplyWorkspaceEditResult {.gcsafe.} =
+      (applied: false, failureReason: some("applyEdit not handled")),
   )
 
   # Default language server configurations
@@ -514,6 +527,30 @@ proc processEvent*(svc: LspService, langId: string, evt: LspEvent) =
           )
   of levStatusUpdate:
     svc.onStatusUpdate(langId, evt.statusHealth, evt.statusQuiescent, evt.statusMessage)
+  of levApplyEdit:
+    # A server-initiated workspace/applyEdit. Apply it on the main thread, then
+    # answer the worker so it can unblock the server's request. The server is
+    # blocking on the ApplyWorkspaceEditResponse, so EVERY path must answer:
+    # both the parse and the apply run inside the try, and any CatchableError
+    # becomes a negative response instead of escaping poll() (where it would
+    # strand the server and reach emergencySaveAndQuit). A Defect is deliberately
+    # NOT caught here: the apply path reports errors via Result rather than
+    # raising, so a Defect signals a real bug and stays fatal, as elsewhere.
+    var applied = false
+    var failureReason = ""
+    try:
+      let edit = parseWorkspaceEdit(parseJson(evt.applyEditEditJson))
+      let res = svc.onApplyWorkspaceEdit(edit)
+      applied = res.applied
+      failureReason = res.failureReason.get("")
+    except CatchableError as e:
+      svc.onLogMessage(langId, mtWarning, "Failed to apply applyEdit: " & e.msg)
+      failureReason = "applyEdit failed: " & e.msg
+    let workerOpt = svc.getWorker(langId)
+    if workerOpt.isSome:
+      workerOpt.get.sendApplyEditResponse(
+        evt.applyEditReqIdJson, applied, failureReason, evt.applyEditGeneration
+      )
 
 proc poll*(svc: LspService, timeoutMs: int = 0) =
   ## Poll all workers - process events from worker threads
@@ -523,7 +560,17 @@ proc poll*(svc: LspService, timeoutMs: int = 0) =
   if svc.workers.len == 0:
     return
 
+  # Snapshot the worker set before processing events. processEvent can re-enter
+  # the service — the applyEdit callback runs onBufferChange, which may
+  # notifyDocumentOpened -> startWorker and insert/replace entries in
+  # svc.workers. Mutating the table while its `pairs` iterator is live raises
+  # "the length of the table changed while iterating" (a Defect), so iterate a
+  # copy of the (langId, worker) pairs instead.
+  var snapshot: seq[(string, LspWorker)] = @[]
   for langId, worker in svc.workers:
+    snapshot.add((langId, worker))
+
+  for (langId, worker) in snapshot:
     # Get all pending events from this worker
     for evt in worker.pollEvents():
       svc.processEvent(langId, evt)

@@ -23,7 +23,7 @@ import std/[options, json, os]
 
 import pkg/results
 
-import types/editor_types, lsp_integration
+import types/editor_types, lsp_integration, motion
 import command_handlers/[handler_manager, insert_handler]
 
 proc applyDiagnosticsForUri*(e: Editor, uri: string, diagnostics: seq[Diagnostic]) =
@@ -53,6 +53,98 @@ proc clearAllDiagnostics*(e: Editor) =
   for buf in e.buffers:
     applyDiagnosticsToBuffer(buf, @[])
   e.state.windowDisplay.needsFullRedraw = true
+
+proc syncBufferAfterEdit(e: Editor, buf: TextBuffer, context: string) =
+  ## didChange a buffer we just rewrote so the server's copy doesn't go stale.
+  ## maybeUpdateLsp only covers the active buffer, so non-active buffers would
+  ## otherwise drift on the server side. `context` only tags the degrade log.
+  let syncResult = e.lsp.onBufferChange(buf)
+  if syncResult.isOk:
+    e.lastLspChangeSeqs[buf.id] = buf.changeSeq
+  elif buf.filePath.isSome:
+    logLspDegraded(context & ": didChange " & buf.filePath.get, syncResult.error)
+
+proc clampAllWindowCursors(e: Editor) =
+  ## Re-clamp every window's cursor to its buffer's bounds. A server-initiated
+  ## workspace edit can rewrite — and shrink — a buffer shown in an inactive
+  ## window, leaving its cursor past the new end. Clamping an in-bounds cursor
+  ## is a no-op, so this is safe to call broadly.
+  for window in e.windowManager.windows:
+    let clamped = e.executer.motionController.cursorManager.clampPosition(
+      CursorPosition(x: window.cursor.column, y: window.cursor.line), window.buffer
+    )
+    window.cursor = BufferPosition(line: clamped.y, column: clamped.x)
+
+proc applyWorkspaceEditFromServer*(
+    e: Editor, edit: WorkspaceEdit
+): ApplyWorkspaceEditResult {.gcsafe.} =
+  ## Apply a server-initiated workspace/applyEdit (e.g. a rust-analyzer refactor
+  ## delivered through executeCommand). Mirrors the rename flow: reject stale
+  ## edits, apply to every affected buffer, then sync each modified buffer back
+  ## to the server so it does not go stale. The server blocks on the response,
+  ## so every path returns an `applied` verdict.
+  ##
+  ## After any buffer is rewritten, every window's cursor is re-clamped here (not
+  ## by the caller), so a clamp failure can never flip the already-committed
+  ## edit's verdict, and a shrinking edit cannot leave a cursor — including in an
+  ## inactive split — dangling past the new buffer end.
+  ##
+  ## cast(gcsafe): applyWorkspaceEdit reaches the undo/redo transaction code,
+  ## whose mutual recursion defeats the compiler's gcsafe inference. This runs
+  ## only on the main thread (it is a poll()-time callback), so the cast is safe
+  ## — the same reasoning the rename flow relies on.
+  {.cast(gcsafe).}:
+    if not e.lsp.enabled:
+      return (applied: false, failureReason: some("LSP is disabled"))
+
+    # Reject the edit if any targeted open buffer has local changes the server
+    # has not seen yet: its changeSeq has moved past the changeSeq recorded at
+    # the last didChange we sent (lastLspChangeSeqs). The server positioned its
+    # edit against the text it last received, so applying it onto newer text
+    # would corrupt the buffer. This mirrors the rename flow's staleness guard,
+    # but the baseline is "what the server last saw" rather than a fresh
+    # snapshot, because this request is not one we awaited.
+    for path in collectWorkspaceEditPaths(edit):
+      let absPath = normalizedPath(absolutePath(path))
+      for buf in e.buffers:
+        if buf.filePath.isSome and
+            normalizedPath(absolutePath(buf.filePath.get)) == absPath and
+            buf.changeSeq != e.lastLspChangeSeqs.getOrDefault(buf.id, buf.changeSeq):
+          e.state.statusMessage =
+            "Buffer changed since last sync; server edit discarded"
+          return
+            (applied: false, failureReason: some("buffer changed since last didChange"))
+
+    let applyResult = applyWorkspaceEdit(e.buffers, edit, "LSP Edit")
+    if applyResult.isErr:
+      # applyWorkspaceEdit commits each open buffer as it goes, so a failure
+      # partway through can leave earlier buffers already modified. Re-sync every
+      # target buffer (best effort) so those committed changes don't silently
+      # diverge from the server's copy — an unmodified/rolled-back buffer's
+      # didChange just resends identical text.
+      for path in collectWorkspaceEditPaths(edit):
+        let absPath = normalizedPath(absolutePath(path))
+        for buf in e.buffers:
+          if buf.filePath.isSome and
+              normalizedPath(absolutePath(buf.filePath.get)) == absPath:
+            e.syncBufferAfterEdit(buf, "applyEdit")
+      # A partial apply may have shrunk already-committed buffers.
+      e.clampAllWindowCursors()
+      e.state.windowDisplay.needsFullRedraw = true
+      e.state.statusMessage = "Failed to apply server edit: " & applyResult.error
+      return (applied: false, failureReason: some(applyResult.error))
+
+    # Sync the server with every buffer we just rewrote.
+    for bufferIdx in applyResult.get.modifiedBufferIndexes:
+      e.syncBufferAfterEdit(e.buffers[bufferIdx], "applyEdit")
+
+    e.clampAllWindowCursors()
+    e.state.windowDisplay.needsFullRedraw = true
+    let modifiedCount = applyResult.get.modifiedCount
+    e.state.statusMessage =
+      "Applied server edit (" & $modifiedCount & " file" &
+      (if modifiedCount == 1: "" else: "s") & " modified)"
+    return (applied: true, failureReason: none(string))
 
 proc maybeUpdateLsp*(e: Editor) =
   ## Update LSP if buffer was modified
@@ -241,12 +333,7 @@ proc requestLspRename*(
       # only covers the active buffer, so non-active buffers would otherwise
       # stay stale on the server side.
       for bufferIdx in applyResult.get.modifiedBufferIndexes:
-        let buf = e.buffers[bufferIdx]
-        let syncResult = e.lsp.onBufferChange(buf)
-        if syncResult.isOk:
-          e.lastLspChangeSeqs[buf.id] = buf.changeSeq
-        elif buf.filePath.isSome:
-          logLspDegraded("rename: didChange " & buf.filePath.get, syncResult.error)
+        e.syncBufferAfterEdit(e.buffers[bufferIdx], "rename")
 
       let modifiedCount = applyResult.get.modifiedCount
       e.state.statusMessage =

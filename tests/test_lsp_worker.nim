@@ -207,11 +207,61 @@ suite "LspWorker - LspCommand object":
     check cmd.kind == lcmdCancel
     check cmd.cancelRequestId == 7
 
+  test "LspCommand lcmdApplyEditResponse variant":
+    let cmd = LspCommand(
+      kind: lcmdApplyEditResponse,
+      applyEditReqIdJson: "7",
+      applyEditApplied: false,
+      applyEditFailureReason: "buffer changed",
+    )
+    check cmd.kind == lcmdApplyEditResponse
+    check cmd.applyEditReqIdJson == "7"
+    check not cmd.applyEditApplied
+    check cmd.applyEditFailureReason == "buffer changed"
+
+  test "sendApplyEditResponse is safe without a running server":
+    let workerResult = newLspWorker("nim")
+    check workerResult.isOk
+    let worker = workerResult.get
+    # Nothing is running; this only enqueues a command and must not crash.
+    worker.sendApplyEditResponse("7", true)
+
   test "cancelRequest is safe without a running server":
     let workerResult = newLspWorker("nim")
     check workerResult.isOk
     let worker = workerResult.get
     worker.cancelRequest(123) # Should not crash; nothing is pending
+
+suite "LspWorker - buildApplyEditResponse":
+  test "integer id round-trips as an integer":
+    let resp = buildApplyEditResponse("7", true, "")
+    check resp["jsonrpc"].getStr == "2.0"
+    check resp["id"].kind == JInt
+    check resp["id"].getInt == 7
+    check resp["result"]["applied"].getBool
+    # No failureReason when applied.
+    check not resp["result"].hasKey("failureReason")
+
+  test "string id round-trips as a string":
+    # The server id is captured as `$reqId`, so a string id arrives quoted.
+    let resp = buildApplyEditResponse("\"abc\"", true, "")
+    check resp["id"].kind == JString
+    check resp["id"].getStr == "abc"
+
+  test "refusal carries the failureReason":
+    let resp = buildApplyEditResponse("7", false, "buffer changed")
+    check not resp["result"]["applied"].getBool
+    check resp["result"]["failureReason"].getStr == "buffer changed"
+
+  test "refusal without a reason omits failureReason":
+    let resp = buildApplyEditResponse("7", false, "")
+    check not resp["result"]["applied"].getBool
+    check not resp["result"].hasKey("failureReason")
+
+  test "an unparseable id falls back to null rather than raising":
+    let resp = buildApplyEditResponse("{not json", true, "")
+    check resp["id"].kind == JNull
+    check resp["result"]["applied"].getBool
 
 suite "LspWorker - LspEvent object":
   test "LspEvent levInitialized variant":
@@ -373,6 +423,14 @@ suite "LspWorker - LspEvent object":
     check evt.statusHealth == shWarning
     check not evt.statusQuiescent
     check evt.statusMessage.isNone
+
+  test "LspEvent levApplyEdit variant":
+    let editJson = $(%*{"changes": {"file:///t.nim": []}})
+    let evt =
+      LspEvent(kind: levApplyEdit, applyEditReqIdJson: "7", applyEditEditJson: editJson)
+    check evt.kind == levApplyEdit
+    check evt.applyEditReqIdJson == "7"
+    check parseJson(evt.applyEditEditJson).hasKey("changes")
 
 suite "LspWorker - newLspWorker":
   test "creates worker with language id":

@@ -74,6 +74,7 @@ type
     lcmdRequest # Generic request with response tracking
     lcmdNotification # Generic notification (no response expected)
     lcmdCancel # Cancel a tracked request ($/cancelRequest)
+    lcmdApplyEditResponse # Answer to a server-initiated workspace/applyEdit
 
   LspCommand* = object
     case kind*: LspCommandKind
@@ -108,6 +109,17 @@ type
       notifyParamsJson*: string # JSON-serialized params (see note below)
     of lcmdCancel:
       cancelRequestId*: int # Tracking ID (the service-side id) to cancel
+    of lcmdApplyEditResponse:
+      # The main thread applied (or refused) a server-initiated
+      # workspace/applyEdit; the worker turns this into the ApplyWorkspaceEdit
+      # response the server is still blocking on.
+      applyEditReqIdJson*: string # Serialized server JSON-RPC id (int or string)
+      applyEditApplied*: bool
+      applyEditFailureReason*: string # Empty when applied, or no reason given
+      applyEditGeneration*: int
+        # Server generation the request belonged to. The worker drops the
+        # response if the server has since crashed and been replaced (the new
+        # process never issued this id), see levApplyEdit.
 
   # Messages from worker thread to main thread
   LspEventKind* = enum
@@ -124,6 +136,7 @@ type
     levDynamicRegister # Dynamic capability registration
     levDynamicUnregister # Dynamic capability unregistration
     levStatusUpdate # Server status notification (experimental/serverStatus)
+    levApplyEdit # Server-initiated workspace/applyEdit (answered by main thread)
 
   # Server health status from experimental/serverStatus
   ServerHealth* = enum
@@ -179,6 +192,16 @@ type
       statusHealth*: ServerHealth
       statusQuiescent*: bool
       statusMessage*: Option[string]
+    of levApplyEdit:
+      # The worker defers the response: the WorkspaceEdit is applied on the
+      # main thread, which then sends back an lcmdApplyEditResponse carrying
+      # the same id and generation.
+      applyEditReqIdJson*: string # Serialized server JSON-RPC id for the response
+      applyEditEditJson*: string # Serialized WorkspaceEdit (the request's `edit`)
+      applyEditGeneration*: int
+        # Server generation that issued this request. Echoed back in the
+        # response command so the worker can drop it if the server crashed and
+        # was replaced in the meantime (the replacement never issued this id).
 
   # Thread-safe queues using locks and deques for O(1) operations
   CommandQueue = object
@@ -364,6 +387,23 @@ proc buildClientCapabilities(): JsonNode =
     },
   }
 
+proc buildApplyEditResponse*(
+    reqIdJson: string, applied: bool, failureReason: string
+): JsonNode =
+  ## Build the JSON-RPC response to a server-initiated workspace/applyEdit.
+  ## `reqIdJson` is the server's id serialized as JSON (`$reqId`): parse it back
+  ## so both integer (`7`) and string (`"abc"`) ids round-trip with their
+  ## original type. A `failureReason` is only attached when the edit was refused.
+  var idNode: JsonNode
+  try:
+    idNode = parseJson(reqIdJson)
+  except CatchableError:
+    idNode = newJNull()
+  var resultObj = %*{"applied": applied}
+  if not applied and failureReason.len > 0:
+    resultObj["failureReason"] = %failureReason
+  %*{"jsonrpc": "2.0", "id": idNode, "result": resultObj}
+
 # Worker thread main loop
 proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
   var
@@ -374,6 +414,12 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     # output never corrupts the JSON-RPC stdout stream
     stderrDrainFut: Future[void] = nil
     lastId = 0
+    # Bumped on every (re)start of the server process. A deferred
+    # workspace/applyEdit response is tagged with the generation that issued it
+    # and dropped if the generation has moved on — i.e. the server crashed and
+    # was replaced on this same thread, so the old request id means nothing to
+    # the new process.
+    serverGeneration = 0
     # Pending document notifications to send after initialization
     pendingDidOpen: seq[LspCommand] = @[]
     # Map LSP request ID to (our request ID, timestamp) for response tracking
@@ -437,14 +483,30 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     var evt = LspEvent(kind: levDynamicUnregister, unregistrationsJson: paramsJson)
     ctx.eventQueue[].push(evt)
 
+  proc sendShowMessage(msgType: MessageType, msg: string) =
+    var evt = LspEvent(kind: levShowMessage, msgType: msgType, message: msg)
+    ctx.eventQueue[].push(evt)
+
+  proc sendApplyEdit(reqIdJson, editJson: string) =
+    var evt = LspEvent(
+      kind: levApplyEdit,
+      applyEditReqIdJson: reqIdJson,
+      applyEditEditJson: editJson,
+      applyEditGeneration: serverGeneration,
+    )
+    ctx.eventQueue[].push(evt)
+
   proc handleServerRequest(
       meth: string, reqId: JsonNode, params: JsonNode
-  ): Future[JsonNode] {.async.} =
-    ## Handle server-initiated requests. Returns the response to send.
+  ): Future[Option[JsonNode]] {.async.} =
+    ## Handle server-initiated requests. Returns the response to send, or
+    ## `none` when the response is deferred — workspace/applyEdit is answered
+    ## later, once the main thread has applied the edit, via
+    ## lcmdApplyEditResponse.
     case meth
     of "window/workDoneProgress/create":
       # Accept the progress token creation (respond with null/empty result)
-      return %*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()}
+      return some(%*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()})
     of "client/registerCapability":
       # Dynamic capability registration. Validate here so a malformed
       # request is rejected to the server; the main thread re-parses the
@@ -452,35 +514,84 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
       try:
         discard parseRegistrationParams(params)
         sendDynamicRegister($params)
-        return %*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()}
+        return some(%*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()})
       except CatchableError as e:
         sendLogMessage(mtWarning, "Failed to parse registerCapability: " & e.msg)
-        return %*{
-          "jsonrpc": "2.0",
-          "id": reqId,
-          "error": {"code": -32602, "message": "Invalid params: " & e.msg},
-        }
+        return some(
+          %*{
+            "jsonrpc": "2.0",
+            "id": reqId,
+            "error": {"code": -32602, "message": "Invalid params: " & e.msg},
+          }
+        )
     of "client/unregisterCapability":
       # Dynamic capability unregistration (validated as above)
       try:
         discard parseUnregistrationParams(params)
         sendDynamicUnregister($params)
-        return %*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()}
+        return some(%*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()})
       except CatchableError as e:
         sendLogMessage(mtWarning, "Failed to parse unregisterCapability: " & e.msg)
-        return %*{
-          "jsonrpc": "2.0",
-          "id": reqId,
-          "error": {"code": -32602, "message": "Invalid params: " & e.msg},
-        }
+        return some(
+          %*{
+            "jsonrpc": "2.0",
+            "id": reqId,
+            "error": {"code": -32602, "message": "Invalid params: " & e.msg},
+          }
+        )
+    of "workspace/applyEdit":
+      # Servers (e.g. rust-analyzer) push edits from executeCommand-based
+      # refactors through this request and block on the
+      # ApplyWorkspaceEditResponse. The edit must be applied on the main thread
+      # (it mutates TextBuffers), so forward the `edit` and defer the response;
+      # the main thread answers via lcmdApplyEditResponse once it is applied.
+      #
+      # `params{"edit"}` is nil-safe: it returns nil when params is not a JObject
+      # (e.g. a non-conforming `"params": null`, which would otherwise crash the
+      # worker thread on `hasKey`'s `assert(kind == JObject)`) or when the key is
+      # absent. Reject a null edit value too, rather than forwarding a no-op edit
+      # the main thread would "apply" and report back as success.
+      let editNode = params{"edit"}
+      if editNode.isNil or editNode.kind == JNull:
+        return some(
+          %*{
+            "jsonrpc": "2.0",
+            "id": reqId,
+            "error": {"code": -32602, "message": "applyEdit: missing 'edit' param"},
+          }
+        )
+      sendApplyEdit($reqId, $editNode)
+      return none(JsonNode)
+    of "window/showMessageRequest":
+      # We have no UI to present the action buttons, so surface the message in
+      # the LSP log and answer null (= no action selected). That is
+      # spec-compliant and far friendlier to the server than -32601. Append the
+      # offered action titles to the surfaced text so the user at least sees
+      # that the server asked something with choices (we just can't answer it).
+      let msgType =
+        toEnumOr[MessageType](params.getOrDefault("type").getInt(mtInfo.ord), mtInfo)
+      var msg = params.getOrDefault("message").getStr("")
+      let actions = params.getOrDefault("actions")
+      if not actions.isNil and actions.kind == JArray and actions.len > 0:
+        var titles: seq[string] = @[]
+        for a in actions:
+          let title = a.getOrDefault("title").getStr("")
+          if title.len > 0:
+            titles.add(title)
+        if titles.len > 0:
+          msg = msg & " [actions: " & titles.join(", ") & "]"
+      sendShowMessage(msgType, msg)
+      return some(%*{"jsonrpc": "2.0", "id": reqId, "result": newJNull()})
     else:
       # Unknown server request - respond with method not found error
       sendLogMessage(mtInfo, "Unknown server request: " & meth)
-      return %*{
-        "jsonrpc": "2.0",
-        "id": reqId,
-        "error": {"code": -32601, "message": "Method not found: " & meth},
-      }
+      return some(
+        %*{
+          "jsonrpc": "2.0",
+          "id": reqId,
+          "error": {"code": -32601, "message": "Method not found: " & meth},
+        }
+      )
 
   proc handleNotification(meth: string, params: JsonNode) =
     case meth
@@ -655,6 +766,9 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
 
   proc startServer(cmd: LspCommand): Future[void] {.async.} =
     ctx.sharedState.storeState(lwsStarting)
+    # New server instance: invalidate any deferred applyEdit response still in
+    # flight for the previous one.
+    inc serverGeneration
 
     let commandParts = cmd.command.split(' ')
     let command = commandParts[0]
@@ -814,9 +928,12 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
             response["params"]
           else:
             newJObject()
-        let resp = await handleServerRequest(meth, reqId, params)
-        sendRawJson(ljdSent, resp)
-        discard await serverStreams.input.sendRequest(resp)
+        let respOpt = await handleServerRequest(meth, reqId, params)
+        if respOpt.isSome:
+          sendRawJson(ljdSent, respOpt.get)
+          discard await serverStreams.input.sendRequest(respOpt.get)
+        # else: response deferred (workspace/applyEdit), sent later by the
+        # main thread via lcmdApplyEditResponse
         continue
 
       # Check for error
@@ -991,6 +1108,18 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         pendingRequests.del(lspId)
         if ctx.sharedState.loadState() == lwsRunning:
           await sendNotificationLog("$/cancelRequest", %*{"id": lspId})
+    of lcmdApplyEditResponse:
+      # Deliver the deferred response to a server-initiated workspace/applyEdit.
+      # Drop it if the server is gone (no one to answer) or if it crashed and was
+      # replaced since the request (generation moved on) — sending the old id to
+      # the new process would be protocol garbage it never asked for.
+      if ctx.sharedState.loadState() == lwsRunning and not serverStreams.isNil and
+          cmd.applyEditGeneration == serverGeneration:
+        let resp = buildApplyEditResponse(
+          cmd.applyEditReqIdJson, cmd.applyEditApplied, cmd.applyEditFailureReason
+        )
+        sendRawJson(ljdSent, resp)
+        discard await serverStreams.input.sendRequest(resp)
 
   proc processMessages(): Future[void] {.async.} =
     if outputFuture.isNil:
@@ -1041,9 +1170,12 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
         else:
           newJObject()
 
-      let resp = await handleServerRequest(meth, reqId, params)
-      sendRawJson(ljdSent, resp)
-      discard await serverStreams.input.sendRequest(resp)
+      let respOpt = await handleServerRequest(meth, reqId, params)
+      if respOpt.isSome:
+        sendRawJson(ljdSent, respOpt.get)
+        discard await serverStreams.input.sendRequest(respOpt.get)
+      # else: response deferred (workspace/applyEdit), sent later by the main
+      # thread via lcmdApplyEditResponse
       return
 
     # Check if this is a response (has "id", no "method")
@@ -1330,4 +1462,25 @@ proc cancelRequest*(worker: LspWorker, requestId: int) =
   ## $/cancelRequest; a plain notification cannot do this because the caller
   ## does not know the server-facing ID.
   let cmd = LspCommand(kind: lcmdCancel, cancelRequestId: requestId)
+  worker.commandQueue.pushAndSignal(cmd, worker.signal)
+
+proc sendApplyEditResponse*(
+    worker: LspWorker,
+    reqIdJson: string,
+    applied: bool,
+    failureReason: string = "",
+    generation: int = 0,
+) =
+  ## Answer a server-initiated workspace/applyEdit. `reqIdJson` is the
+  ## serialized JSON-RPC id captured from the levApplyEdit event; the worker
+  ## turns it back into the response the server is blocking on. `generation` is
+  ## the levApplyEdit's `applyEditGeneration`: the worker drops the response if
+  ## the server was replaced since the request was issued.
+  let cmd = LspCommand(
+    kind: lcmdApplyEditResponse,
+    applyEditReqIdJson: reqIdJson,
+    applyEditApplied: applied,
+    applyEditFailureReason: failureReason,
+    applyEditGeneration: generation,
+  )
   worker.commandQueue.pushAndSignal(cmd, worker.signal)

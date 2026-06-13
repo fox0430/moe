@@ -336,6 +336,15 @@ proc setServerRestartCallback*(
   ## without a manual `:lspRestart`.
   lsp.service.onServerRestart = callback
 
+proc setApplyEditCallback*(
+    lsp: LspIntegration,
+    callback: proc(edit: WorkspaceEdit): ApplyWorkspaceEditResult {.gcsafe.},
+) =
+  ## Set callback for server-initiated workspace/applyEdit requests (e.g.
+  ## rust-analyzer refactors delivered through executeCommand). The callback
+  ## applies the edit to the editor's buffers and reports whether it succeeded.
+  lsp.service.onApplyWorkspaceEdit = callback
+
 # Buffer lifecycle operations
 proc onBufferOpen*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string] =
   ## Called when a buffer is opened/loaded
