@@ -307,6 +307,37 @@ suite "QuickRunUtils - rustQuickRunCommand":
     let cmd = rustQuickRunCommand("main.rs", settings)
     check "./main" in cmd.args[1]
 
+suite "QuickRunUtils - command injection (H11 regression)":
+  # A malicious file/dir name must not be able to inject shell commands into the
+  # `/bin/bash -c` string used by the C/C++/Rust runners. Every file-derived
+  # value is passed through quoteShell, so `$(...)`/backticks/`;` stay inert.
+  test "C: malicious file name is shell-quoted":
+    let settings = QuickRunConfig(clangOptions: none(string))
+    let malicious = "/tmp/evil$(touch pwned).c"
+    let cmd = clangQuickRunCommand(malicious, settings)
+    check quoteShell(malicious) in cmd.args[1]
+    # The raw, unquoted name must not appear right after the compiler.
+    check ("gcc " & malicious) notin cmd.args[1]
+
+  test "C++: malicious file name is shell-quoted":
+    let settings = QuickRunConfig(cppOptions: none(string))
+    let malicious = "/tmp/evil`id`.cpp"
+    let cmd = cppQuickRunCommand(malicious, settings)
+    check quoteShell(malicious) in cmd.args[1]
+    check ("g++ " & malicious) notin cmd.args[1]
+
+  test "Rust: malicious name is quoted in both compile and run":
+    let settings = QuickRunConfig()
+    let malicious = "/tmp/ev il$(id).rs"
+    let cmd = rustQuickRunCommand(malicious, settings)
+    check quoteShell(malicious) in cmd.args[1]
+    # The derived output name is used both for `-o` and to execute it.
+    check quoteShell("ev il$(id)") in cmd.args[1]
+    check "$(id)" notin
+      cmd.args[1].replace(quoteShell(malicious), "").replace(
+        quoteShell("ev il$(id)"), ""
+      )
+
 suite "QuickRunUtils - quickRunCommand":
   test "Nim language":
     var buffer = newTextBuffer("echo \"hello\"")
