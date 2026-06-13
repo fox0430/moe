@@ -83,6 +83,10 @@ type
     dynamicRegistrations: Table[string, Table[string, Registration]]
     workspaceRoot: string
     enabled*: bool
+    # Consumer-side per-request timeout (ms), from `config.lsp.timeout`. The
+    # worker keeps its own, deliberately longer RequestTimeoutSec (worker.nim);
+    # the two are not meant to match.
+    requestTimeoutMs*: int
     # Pending request responses (requestId -> response)
     pendingResponses: Table[int, tuple[result: Option[JsonNode], error: Option[string]]]
     # Active pending requests for timeout tracking
@@ -129,6 +133,7 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
       else:
         getCurrentDir(),
     enabled: true,
+    requestTimeoutMs: DefaultRequestTimeoutMs,
     pendingResponses:
       initTable[int, tuple[result: Option[JsonNode], error: Option[string]]](),
     activeRequests: initTable[int, LspPendingRequest](),
@@ -198,6 +203,11 @@ proc newLspService*(workspaceRoot: string = ""): LspService =
     extensions: @["cpp", "hpp", "cc", "hh", "cxx", "hxx"],
     enabled: true,
   )
+
+proc setRequestTimeout*(svc: LspService, timeoutMs: int) =
+  ## Set the per-request timeout (ms). Non-positive values are ignored.
+  if timeoutMs > 0:
+    svc.requestTimeoutMs = timeoutMs
 
 proc setConfig*(svc: LspService, langId: string, config: LanguageServerConfig) =
   ## Set configuration for a language server
@@ -589,11 +599,12 @@ proc cancelRequest*(svc: LspService, requestId: int) =
 
 # Request-response helper (async, non-blocking)
 proc waitForResponse*(
-    svc: LspService, requestId: int, timeoutMs: int = DefaultRequestTimeoutMs
+    svc: LspService, requestId: int, timeoutMs: int = 0
 ): Future[Result[JsonNode, string]] {.async: (raises: [CancelledError]).} =
-  ## Wait for response asynchronously - uses async sleep instead of blocking
+  ## Wait for response asynchronously. timeoutMs <= 0 uses the service default.
   let startTime = epochTime()
-  let timeoutSec = timeoutMs.float / 1000.0
+  let effectiveMs = if timeoutMs > 0: timeoutMs else: svc.requestTimeoutMs
+  let timeoutSec = effectiveMs.float / 1000.0
 
   while true:
     # Poll for new events
@@ -637,9 +648,10 @@ proc startTrackedRequest(
     worker: LspWorker,
     methodName: string,
     params: JsonNode,
-    timeoutMs: int = DefaultRequestTimeoutMs,
+    timeoutMs: int = 0,
 ): int =
-  ## Start a request and track it for timeout checking
+  ## Start a request and track it for timeout checking.
+  ## timeoutMs <= 0 uses the service default.
   ## IDs are allocated from the service-wide counter so requests to
   ## different workers never share an ID in the tracking tables.
   let requestId = svc.nextRequestId
@@ -650,7 +662,7 @@ proc startTrackedRequest(
     langId: worker.languageId,
     methodName: methodName,
     startTime: epochTime(),
-    timeoutMs: timeoutMs,
+    timeoutMs: if timeoutMs > 0: timeoutMs else: svc.requestTimeoutMs,
   )
   return requestId
 
