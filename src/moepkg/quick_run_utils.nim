@@ -123,29 +123,31 @@ proc nimQuickRunCommand(
 proc clangQuickRunCommand(
     path: string, settings: QuickRunConfig
 ): BackgroundProcessCommand {.inline.} =
-  let
-    options =
-      if settings.clangOptions.isSome:
-        settings.clangOptions.get & " "
-      else:
-        ""
-    quotedPath = "\"" & path & "\""
+  let options =
+    if settings.clangOptions.isSome:
+      settings.clangOptions.get & " "
+    else:
+      ""
+  # quoteShell the file-derived path so a malicious file/dir name cannot inject
+  # shell commands into the `/bin/bash -c` string (e.g. `evil$(...).c`).
   BackgroundProcessCommand(
-    cmd: "/bin/bash", args: @["-c", fmt"gcc {options}{quotedPath} -o ./.out && ./.out"]
+    cmd: "/bin/bash",
+    args: @["-c", fmt"gcc {options}{quoteShell(path)} -o ./.out && ./.out"],
   )
 
 proc cppQuickRunCommand(
     path: string, settings: QuickRunConfig
 ): BackgroundProcessCommand {.inline.} =
-  let
-    options =
-      if settings.cppOptions.isSome:
-        settings.cppOptions.get & " "
-      else:
-        ""
-    quotedPath = "\"" & path & "\""
+  let options =
+    if settings.cppOptions.isSome:
+      settings.cppOptions.get & " "
+    else:
+      ""
+  # quoteShell the file-derived path (see clangQuickRunCommand) to prevent
+  # command injection via the source file name.
   BackgroundProcessCommand(
-    cmd: "/bin/bash", args: @["-c", fmt"g++ {options}{quotedPath} -o ./.out && ./.out"]
+    cmd: "/bin/bash",
+    args: @["-c", fmt"g++ {options}{quoteShell(path)} -o ./.out && ./.out"],
   )
 
 proc shQuickRunCommand(
@@ -181,12 +183,14 @@ proc rustQuickRunCommand(
     path: string, settings: QuickRunConfig
 ): BackgroundProcessCommand =
   # rustc <path> -o ./outName && ./outName
+  # quoteShell both the path and the derived output name so a malicious file
+  # name cannot inject shell commands into the `/bin/bash -c` string.
   let
     outName = path.splitFile.name
-    quotedPath = "\"" & path & "\""
+    quotedOut = quoteShell(outName)
   BackgroundProcessCommand(
     cmd: "/bin/bash",
-    args: @["-c", fmt"rustc {quotedPath} -o ./{outName} && ./{outName}"],
+    args: @["-c", fmt"rustc {quoteShell(path)} -o ./{quotedOut} && ./{quotedOut}"],
   )
 
 proc quickRunCommand(
