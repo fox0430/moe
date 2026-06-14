@@ -54,7 +54,7 @@ proc clearAllDiagnostics*(e: Editor) =
     applyDiagnosticsToBuffer(buf, @[])
   e.state.windowDisplay.needsFullRedraw = true
 
-proc syncBufferAfterEdit(e: Editor, buf: TextBuffer, context: string) =
+proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer, context: string) =
   ## didChange a buffer we just rewrote so the server's copy doesn't go stale.
   ## maybeUpdateLsp only covers the active buffer, so non-active buffers would
   ## otherwise drift on the server side. `context` only tags the degrade log.
@@ -64,7 +64,7 @@ proc syncBufferAfterEdit(e: Editor, buf: TextBuffer, context: string) =
   elif buf.filePath.isSome:
     logLspDegraded(context & ": didChange " & buf.filePath.get, syncResult.error)
 
-proc clampAllWindowCursors(e: Editor) =
+proc clampAllWindowCursors*(e: Editor) =
   ## Re-clamp every window's cursor to its buffer's bounds. A server-initiated
   ## workspace edit can rewrite — and shrink — a buffer shown in an inactive
   ## window, leaving its cursor past the new end. Clamping an in-bounds cursor

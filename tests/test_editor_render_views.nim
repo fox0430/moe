@@ -676,8 +676,9 @@ suite "renderSplitView - Viewport adjustment":
 
     # Add content to buffer
     for i in 0 ..< 100:
-      discard
-        e.textBuffer.insertText(BufferPosition(line: i, column: 0), "Line " & $i & "\n")
+      discard e.activeBuffer.insertText(
+        BufferPosition(line: i, column: 0), "Line " & $i & "\n"
+      )
 
     # Move cursor far down (use e.cursor to sync with EditorWindow)
     e.cursor = BufferPosition(line: 50, column: 0)
@@ -698,7 +699,7 @@ suite "renderSplitView - Viewport adjustment":
 
     # Add long line
     let longLine = "x".repeat(200)
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
 
     # Move cursor far right (use e.cursor to sync with EditorWindow)
     e.cursor = BufferPosition(line: 0, column: 150)
@@ -717,8 +718,9 @@ suite "renderSplitView - Viewport adjustment":
     e.viewport.height = 24
 
     for i in 0 ..< 100:
-      discard
-        e.textBuffer.insertText(BufferPosition(line: i, column: 0), "Line " & $i & "\n")
+      discard e.activeBuffer.insertText(
+        BufferPosition(line: i, column: 0), "Line " & $i & "\n"
+      )
 
     # Put the cursor on the bottom visible line and settle the viewport
     e.cursor = BufferPosition(line: 50, column: 0)
@@ -746,8 +748,9 @@ suite "renderSplitView - Viewport adjustment":
     e.viewport.height = 24
 
     for i in 0 ..< 100:
-      discard
-        e.textBuffer.insertText(BufferPosition(line: i, column: 0), "Line " & $i & "\n")
+      discard e.activeBuffer.insertText(
+        BufferPosition(line: i, column: 0), "Line " & $i & "\n"
+      )
 
     e.cursor = BufferPosition(line: 50, column: 0)
     e.renderSplitView(buffer, false)
@@ -767,7 +770,7 @@ suite "renderSplitView - Viewport adjustment":
 
     # Add long line
     let longLine = "x".repeat(200)
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
 
     # Move cursor far right (use e.cursor to sync with EditorWindow)
     e.cursor = BufferPosition(line: 0, column: 150)

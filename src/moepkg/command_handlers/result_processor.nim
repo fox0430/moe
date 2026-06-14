@@ -575,36 +575,65 @@ proc processResult*(e: Editor, r: HandlerResult, activeBuffer: TextBuffer): bool
     let activeWin = e.activeWindow
     if activeWin.modeState.kind == mskBackupManager:
       let bkState = activeWin.modeState.backupManager
-      # Backup current buffer before restore (in case user wants to undo)
-      discard
-        backupBuffer(e.buffer.filePath, e.buffer.getFileContent(), e.config.autoBackup)
-      if bkState.restoreBackup(backupIndex):
-        # Reload the buffer from the restored file
-        if e.buffer.filePath.isSome:
-          let filePath = e.buffer.filePath.get
-          let textResult = e.buffer.loadFile(filePath)
-          if textResult.isOk:
-            # Restore screen notification (controlled by config)
-            if e.config.notification.screenNotifications and
-                e.config.notification.restoreScreenNotify:
-              e.notify("Backup restored: " & filePath)
-            # Restore log notification (controlled by config)
-            if e.config.notification.logNotifications and
-                e.config.notification.restoreLogNotify:
-              logInfo("restore", "Backup restored: " & filePath)
-            # Refresh the backup list to show the new backup
-            bkState.refresh()
-          else:
-            e.state.statusMessage = "Restored but failed to reload: " & textResult.error
+      # The backup manager runs in its own split, so the active buffer is the
+      # backup-list view (no file path), not the file being restored. Operate
+      # on the source buffer located by `bkState.sourceFilePath`.
+      let sourcePath = bkState.sourceFilePath
+      let srcIdx =
+        if sourcePath.len > 0:
+          e.findBufferByPath(sourcePath)
         else:
+          -1
+      if srcIdx < 0:
+        # Without the source buffer we can neither take a pre-restore safety
+        # backup nor reload the new content, so refuse rather than silently
+        # overwrite the file on disk with no undo path.
+        e.state.statusMessage = "Cannot restore: source buffer not found"
+        return true
+      let srcBuf = e.buffers[srcIdx]
+      if bkState.restoreBackup(backupIndex):
+        # Take the pre-restore safety backup *after* the restore copy. Its
+        # cleanup of old backups must not delete the very entry being restored
+        # (which it could, when the backup count is at the cap and the oldest
+        # entry is the selected one). The restore is a disk-only copy, so
+        # srcBuf's in-memory content is still the pre-restore content here and
+        # is captured faithfully for undo.
+        discard
+          backupBuffer(srcBuf.filePath, srcBuf.getFileContent(), e.config.autoBackup)
+        # Reload the source buffer from the restored file on disk
+        let textResult = srcBuf.loadFile(sourcePath)
+        if textResult.isOk:
+          # didChange the source buffer on the server. The periodic LSP sync
+          # (maybeUpdateLsp) only covers the active buffer, but the restored
+          # buffer lives in another split, so without this the server's copy
+          # and its pushed diagnostics stay stale until that window is focused.
+          e.syncBufferAfterEdit(srcBuf, "restore")
+          # The restored file may be shorter than before; re-clamp every
+          # window's cursor (the source buffer is shown in another split) so a
+          # stale out-of-bounds cursor can't be observed before the next motion.
+          e.clampAllWindowCursors()
+          # The restored content differs from before, so refresh the source
+          # buffer's git-diff gutter and conflict markers (it is shown in
+          # another split) the same way the reload paths do.
+          e.refreshBufferGitAndConflicts(srcBuf)
+          e.state.windowDisplay.needsFullRedraw = true
           # Restore screen notification (controlled by config)
           if e.config.notification.screenNotifications and
               e.config.notification.restoreScreenNotify:
-            e.notify("Backup restored successfully")
+            e.notify("Backup restored: " & sourcePath)
           # Restore log notification (controlled by config)
           if e.config.notification.logNotifications and
               e.config.notification.restoreLogNotify:
-            logInfo("restore", "Backup restored successfully")
+            logInfo("restore", "Backup restored: " & sourcePath)
+        else:
+          e.state.statusMessage = "Restored but failed to reload: " & textResult.error
+        # Refresh the backup list and regenerate its view buffer so the new
+        # safety backup is actually visible, mirroring the refresh/delete
+        # handlers (a bare `refresh()` leaves the rendered list stale).
+        bkState.refresh()
+        activeWin.buffer = bkState.createBackupManagerTextBuffer()
+        activeWin.cursor.line = min(bkState.selectedIndex + 1, activeWin.buffer.len - 1)
+        activeWin.cursor.column = 0
       else:
         e.state.statusMessage = "Failed to restore backup"
     return true

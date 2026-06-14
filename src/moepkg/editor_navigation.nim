@@ -80,7 +80,7 @@ proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string
   ## Shared by the LSP/jump/document-link navigation paths so they all open
   ## files into the *active* window's buffer with identical setup. Unlike the
   ## legacy `e.loadFile`, content is loaded into a freshly registered buffer
-  ## rather than mutating the stale initial `e.textBuffer` in place.
+  ## rather than mutating the active buffer in place.
   for i, buf in e.buffers:
     if buf.filePath.isSome and sameFilePath(buf.filePath.get, path):
       e.switchToBufferForLsp(i)

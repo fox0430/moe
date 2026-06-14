@@ -45,11 +45,11 @@ suite "Editor - loadFile":
 
     let result = e.loadFile(testFile)
     check result.isOk
-    check e.textBuffer.filePath.isSome
-    check e.textBuffer.filePath.get == testFile
-    check e.textBuffer.len == 2
-    check e.textBuffer.getLine(0) == "Hello World"
-    check e.textBuffer.getLine(1) == "Line 2"
+    check e.activeBuffer.filePath.isSome
+    check e.activeBuffer.filePath.get == testFile
+    check e.activeBuffer.len == 2
+    check e.activeBuffer.getLine(0) == "Hello World"
+    check e.activeBuffer.getLine(1) == "Line 2"
 
   test "Load file resets cursor position":
     let e = createTestEditor()
@@ -153,7 +153,7 @@ suite "Editor - saveFile":
     discard e.loadFile(testFile)
 
     # Modify buffer
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Modified: ")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Modified: ")
 
     # Save
     let result = e.saveFile()
@@ -171,7 +171,7 @@ suite "Editor - saveFile":
         removeFile(testFile)
 
     # Add content to buffer
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "New content")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "New content")
 
     # Save with explicit path
     let result = e.saveFile(some(testFile))
@@ -186,7 +186,7 @@ suite "Editor - saveFile":
     let e = createTestEditor()
 
     # Buffer has no file path
-    check e.textBuffer.filePath.isNone
+    check e.activeBuffer.filePath.isNone
 
     let result = e.saveFile()
     check result.isErr
@@ -206,7 +206,7 @@ suite "Editor - saveFile":
     writeFile(testFile, "Externally modified")
 
     # Modify buffer
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Buffer: ")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Buffer: ")
 
     # Force save should succeed
     let result = e.saveFile(force = true)
@@ -226,7 +226,7 @@ suite "Editor - saveFile":
     discard e.loadFile(original)
 
     # Simulate external modification of the original file.
-    e.textBuffer.lastFileModTime = some(getTime() - initDuration(seconds = 2))
+    e.activeBuffer.lastFileModTime = some(getTime() - initDuration(seconds = 2))
     writeFile(original, "Externally modified")
 
     # Saving to a different path must succeed without force.
@@ -251,7 +251,7 @@ suite "Editor - saveBufferCursorPosition":
     e.cursor = BufferPosition(line: 0, column: 3)
 
     # Save cursor position
-    e.saveBufferCursorPosition(e.textBuffer)
+    e.saveBufferCursorPosition(e.activeBuffer)
 
     # Verify cursor position was saved
     let absPath = absolutePath(testFile)
@@ -272,7 +272,7 @@ suite "Editor - saveBufferCursorPosition":
     discard e.loadFile(testFile)
     e.cursor = BufferPosition(line: 0, column: 5)
 
-    e.saveBufferCursorPosition(e.textBuffer)
+    e.saveBufferCursorPosition(e.activeBuffer)
 
     # Cursor position should not be saved
     let absPath = absolutePath(testFile)
@@ -284,10 +284,10 @@ suite "Editor - saveBufferCursorPosition":
     let e = createTestEditorWithConfig(config)
 
     # Buffer has no file path
-    check e.textBuffer.filePath.isNone
+    check e.activeBuffer.filePath.isNone
 
     let initialCount = e.cursorPositions.len
-    e.saveBufferCursorPosition(e.textBuffer)
+    e.saveBufferCursorPosition(e.activeBuffer)
 
     # No new cursor position should be added
     check e.cursorPositions.len == initialCount
@@ -306,7 +306,7 @@ suite "Editor - saveBufferCursorPosition":
     discard e.loadFile(testFile)
     e.cursor = BufferPosition(line: 0, column: 3)
 
-    e.saveBufferCursorPosition(e.textBuffer)
+    e.saveBufferCursorPosition(e.activeBuffer)
 
     let absPath = absolutePath(testFile)
     check not e.cursorPositions.hasKey(absPath)
@@ -325,7 +325,7 @@ suite "Editor - saveBufferCursorPosition":
     discard e.loadFile(testFile)
     e.cursor = BufferPosition(line: 0, column: 5)
 
-    e.saveBufferCursorPosition(e.textBuffer)
+    e.saveBufferCursorPosition(e.activeBuffer)
 
     let absPath = absolutePath(testFile)
     check not e.cursorPositions.hasKey(absPath)
@@ -488,7 +488,7 @@ suite "Editor - autoSave":
 
     discard e.loadFile(testFile)
     # Insert text to make buffer modified
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Modified: ")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Modified: ")
 
     # Set last auto save to long ago
     e.state.timing.lastAutoSave = getMonoTime() - initDuration(hours = 1)
@@ -512,7 +512,7 @@ suite "Editor - autoSave":
 
     discard e.loadFile(testFile)
     # Insert text to make buffer modified
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Modified: ")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Modified: ")
 
     # Set last auto save to recent (less than interval)
     e.state.timing.lastAutoSave = getMonoTime()

@@ -21,15 +21,14 @@ proc createTestEditor*(
   ## exercise runtime mappings should pass the manager's own registry here so
   ## the embedded `KeyRouter` sees the same mapping table.
   state.activeWindow.buffer = buf
+  state.activeWindow.viewport = viewport
   let registry =
     if keyBindingRegistry.isNil:
       newKeyBindingRegistry()
     else:
       keyBindingRegistry
   Editor(
-    textBuffer: buf,
     state: state,
-    viewport: viewport,
     windowManager:
       EditorWindowManager(windows: @[state.activeWindow], activeWindowIndex: 0),
     keyBindingRegistry: registry,
