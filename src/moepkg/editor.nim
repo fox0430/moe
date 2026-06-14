@@ -228,6 +228,24 @@ proc closeTerminalBuffer*(e: Editor, bufId: BufferId) =
   # to the last visited window. Re-anchor it to the (restored) active one.
   e.syncActiveWindow()
 
+proc cleanupAllTerminals*(e: Editor) =
+  ## Tear down every live Terminal session's PTY on editor exit/crash.
+  ##
+  ## `closeTerminalBuffer` only runs on an explicit tab close, so any shell
+  ## spawned by `:terminal` and still open when moe quits or crashes would
+  ## otherwise be reaped only via the kernel closing the master fd at process
+  ## exit — which merely raises SIGHUP on the foreground process group. A shell
+  ## (or foreground child) that ignores SIGHUP, was disowned, or sits in its
+  ## own process group survives as an orphan, and the fd/zombie linger.
+  ##
+  ## `cleanup()` closes each PTY's master fd and sends SIGTERM to (and reaps)
+  ## the shell deterministically. Unlike `closeTerminalBuffer` this does not
+  ## rewire windows or buffer lists: the editor is exiting, so only the OS
+  ## resources need releasing. Idempotent and safe on an empty map.
+  for termState in e.terminalStates.values:
+    termState.cleanup()
+  e.terminalStates.clear()
+
 proc switchToNextBuffer*(e: Editor) =
   ## Switch to the next buffer in the active window's tab list (:bnext).
   if e.activeWindow.bufferIds.len <= 1:

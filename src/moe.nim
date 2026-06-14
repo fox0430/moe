@@ -107,6 +107,8 @@ proc emergencySaveAndQuit(
   let savedPaths = editor.emergencySaveBuffers()
 
   editor.cleanupBackgroundProcesses()
+  # Kill + reap terminal shells too, so a crash doesn't orphan them.
+  editor.cleanupAllTerminals()
   editor.shutdown()
   editor.savePersistData()
 
@@ -221,6 +223,11 @@ proc runEditor(
 
     # Cleanup background processes before exiting
     editor.cleanupBackgroundProcesses()
+
+    # Tear down any live terminal PTYs (kill + reap their shells). Terminal
+    # tabs left open at quit never reach closeTerminalBuffer, so without this
+    # their shells would be orphaned instead of cleanly terminated.
+    editor.cleanupAllTerminals()
 
     # Terminate any pending async git diff subprocesses and free their
     # tempfiles. Swallow exceptions so a cache cleanup failure can't block

@@ -200,18 +200,44 @@ proc checkExitStatus*(pty: PtyHandle): Option[int] =
     # waitpid error (e.g. already reaped) — treat as exited
     return some(-1)
 
+proc reap(pty: PtyHandle, flags: cint): cint =
+  ## waitpid that retries on EINTR, so a stray signal can't make us misread a
+  ## live child as gone and skip the kill (WNOHANG: >0 reaped, 0 still running,
+  ## -1 with ECHILD already collected elsewhere).
+  var status: cint
+  result = waitpid(pty.childPid, status, flags)
+  while result == -1 and errno == EINTR:
+    result = waitpid(pty.childPid, status, flags)
+
 proc closePty*(pty: PtyHandle) =
-  ## Close the master fd and clean up.
+  ## Close the master fd and reap the child shell.
+  ##
+  ## Escalates SIGTERM -> SIGKILL with a bounded, non-blocking poll so a child
+  ## that ignores SIGTERM (or the SIGHUP raised by closing the master fd) can
+  ## never wedge editor shutdown. SIGKILL cannot be caught or ignored, so the
+  ## final reap is bounded by the kernel.
   if pty.closed:
     return
+
   pty.closed = true
 
   discard close(pty.masterFd)
 
-  # Check if child is still running and kill if needed
-  var status: cint
-  let r = waitpid(pty.childPid, status, WNOHANG)
-  if r == 0:
-    # Still running — send SIGTERM and wait
-    discard kill(pty.childPid, SIGTERM)
-    discard waitpid(pty.childPid, status, 0)
+  if pty.reap(WNOHANG) != 0:
+    # Exited (reaped here) or already gone — nothing left to signal.
+    return
+
+  # Still running: ask it to terminate, then poll for up to ~200ms without
+  # blocking the shutdown path.
+  discard kill(pty.childPid, SIGTERM)
+  var ts = Timespec(tv_sec: Time(0), tv_nsec: 10_000_000) # 10ms
+  for _ in 0 ..< 20:
+    var remaining: Timespec
+    discard nanosleep(ts, remaining)
+    if pty.reap(WNOHANG) != 0:
+      return
+
+  # Refused SIGTERM: force-kill. SIGKILL is uncatchable, so this final reap is
+  # bounded by the kernel tearing the process down.
+  discard kill(pty.childPid, SIGKILL)
+  discard pty.reap(0)
