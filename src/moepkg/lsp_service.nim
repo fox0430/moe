@@ -127,6 +127,14 @@ type
     # answer the server's blocking request.
     onApplyWorkspaceEdit*:
       proc(edit: WorkspaceEdit): ApplyWorkspaceEditResult {.gcsafe.}
+    # Test seam: when set, overrides hasLiveWorkerForPath so the document-sync
+    # tests can exercise the "a worker would receive this" path without spawning
+    # a real server. nil in production.
+    liveWorkerOverride*: proc(path: string): bool {.gcsafe.}
+    # Test seam: when set, overrides isWorkerRunningForPath. Falls back to
+    # liveWorkerOverride when nil so existing tests that only set the latter
+    # still treat the fake worker as running. nil in production.
+    runningWorkerOverride*: proc(path: string): bool {.gcsafe.}
 
 proc newLspService*(workspaceRoot: string = ""): LspService =
   ## Create a new LSP service
@@ -312,6 +320,16 @@ proc startWorker*(svc: LspService, langId: string): Result[LspWorker, string] =
       return err("LSP server for " & langId & " crashed recently; restart suppressed")
     svc.lastRestartTimes[langId] = now
 
+    # Drop the crashed server's stale capabilities so documentSyncKind is
+    # conservatively Full during the restart window. Otherwise a didChange sent
+    # before the new server re-initializes could be a ranged (incremental) change
+    # for a document the fresh server has not yet been told about. initializedLangs
+    # is intentionally kept so the next initialize is recognized as a restart and
+    # onServerRestart re-opens the buffers.
+    svc.capabilities.del(langId)
+    svc.serverInfo.del(langId)
+    svc.dynamicRegistrations.del(langId)
+
     if worker.isThreadAlive:
       # The worker thread survived (only the server process died); ask it to
       # spawn a new server on the same thread.
@@ -366,6 +384,39 @@ proc isWorkerReady*(svc: LspService, langId: string): bool =
   if langId in svc.workers:
     return svc.workers[langId].isRunning
   return false
+
+proc workerForExistingPath(svc: LspService, path: string): Option[LspWorker] =
+  ## Resolve the already running/starting worker for `path` WITHOUT starting one
+  ## (unlike getWorkerForPath). Shared by the notifyDocument* notifications and
+  ## hasLiveWorkerForPath so they agree on what "deliverable" means.
+  let langIdOpt = svc.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return none(LspWorker)
+  svc.getWorker(langIdOpt.get)
+
+proc hasLiveWorkerForPath*(svc: LspService, path: string): bool =
+  ## Whether a notification for `path` would actually be handed to a worker.
+  ## Mirrors notifyDocument*'s getWorker check: true when the worker is running
+  ## (sends now) or starting (coalesces into the pending didOpen); false when
+  ## the file has no LSP or the worker is absent/crashed, so a change would be
+  ## silently dropped.
+  if svc.liveWorkerOverride != nil:
+    return svc.liveWorkerOverride(path)
+  svc.workerForExistingPath(path).isSome
+
+proc isWorkerRunningForPath*(svc: LspService, path: string): bool =
+  ## Whether the worker for `path` is actually running (lwsRunning), as opposed
+  ## to merely starting/crashed/stopped. The integration layer uses this to
+  ## decide whether incremental didChange can be sent safely: a starting worker
+  ## must receive full sync so the change can coalesce into the pending didOpen.
+  if svc.runningWorkerOverride != nil:
+    return svc.runningWorkerOverride(path)
+  if svc.liveWorkerOverride != nil:
+    return svc.liveWorkerOverride(path)
+  let workerOpt = svc.workerForExistingPath(path)
+  if workerOpt.isNone:
+    return false
+  return workerOpt.get.isRunning
 
 proc stopWorker*(svc: LspService, langId: string): Result[void, string] =
   ## Stop a worker for a language
@@ -763,17 +814,23 @@ proc notifyDocumentChanged*(
     svc: LspService, path: string, version: int, text: string
 ): Result[void, string] =
   ## Notify that a document changed (non-blocking)
-  let langIdOpt = svc.getLanguageIdFromPath(path)
-  if langIdOpt.isNone:
-    return ok() # No LSP for this file type
-
-  let workerOpt = svc.getWorker(langIdOpt.get)
+  let workerOpt = svc.workerForExistingPath(path)
   if workerOpt.isNone:
-    return ok() # Worker not started
+    return ok() # No LSP for this file type, or worker not started
 
-  let worker = workerOpt.get
-  let uri = pathToUri(path)
-  worker.didChange(uri, version, text)
+  workerOpt.get.didChangeFull(pathToUri(path), version, text)
+  return ok()
+
+proc notifyDocumentChangedIncremental*(
+    svc: LspService, path: string, version: int, contentChangesJson: string
+): Result[void, string] =
+  ## Incremental variant of notifyDocumentChanged: sends a serialized
+  ## contentChanges array instead of the full text (non-blocking).
+  let workerOpt = svc.workerForExistingPath(path)
+  if workerOpt.isNone:
+    return ok() # No LSP for this file type, or worker not started
+
+  workerOpt.get.didChangeIncremental(pathToUri(path), version, contentChangesJson)
   return ok()
 
 proc notifyDocumentClosed*(svc: LspService, path: string): Result[void, string] =
@@ -1416,6 +1473,48 @@ proc hasFoldingRangeSupport*(svc: LspService, langId: string): bool =
 proc hasExecuteCommandSupport*(svc: LspService, langId: string): bool =
   ## Check if execute command is supported for a language
   svc.hasCapabilitySupport(langId, "workspace/executeCommand", executeCommandProvider)
+
+proc documentSyncKind*(svc: LspService, path: string): TextDocumentSyncKind =
+  ## Resolution order: dynamic registration > static textDocumentSync > Full.
+  ## The default is Full rather than the spec's None to avoid a regression:
+  ## servers that under-advertise capabilities would otherwise stop receiving
+  ## didChange (breaking diagnostics, etc.).
+  let langIdOpt = svc.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return tdskFull
+  let langId = langIdOpt.get
+
+  let reg = svc.getDynamicRegistration(langId, "textDocument/didChange")
+  if reg.isSome:
+    # A dynamic didChange registration is authoritative: the server explicitly
+    # opted into didChange, so resolve its syncKind here. Fall back to Full (not
+    # the static caps, which could be None) when the options are absent/malformed
+    # so an explicit opt-in is never turned into a silent opt-out.
+    if reg.get.registerOptions.isSome:
+      let opts = reg.get.registerOptions.get
+      if opts.kind == JObject and opts.hasKey("syncKind") and
+          opts["syncKind"].kind == JInt:
+        return toEnumOr(opts["syncKind"].getInt, tdskFull)
+    return tdskFull
+
+  if langId notin svc.capabilities:
+    return tdskFull
+  let tds = svc.capabilities[langId].textDocumentSync
+  if tds.isNone:
+    return tdskFull
+  let node = tds.get
+  case node.kind
+  of JInt:
+    return toEnumOr(node.getInt, tdskFull)
+  of JObject:
+    if node.hasKey("change") and node["change"].kind == JInt:
+      return toEnumOr(node["change"].getInt, tdskFull)
+    # Object without an explicit `change`: default to Full rather than None,
+    # consistent with the "don't under-advertise" default. An explicit
+    # `change: 0` above still opts the server out.
+    return tdskFull
+  else:
+    return tdskFull
 
 proc requestCompletion*(
     svc: LspService, path: string, line, character: int

@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json, options, tables, times, strutils, importutils, deques]
+import
+  std/[unittest, json, options, tables, times, strutils, importutils, deques, random]
 
 import pkg/results
 
@@ -336,7 +337,7 @@ suite "LspIntegration - newLspIntegration":
   test "creates integration with default workspace":
     let lsp = newLspIntegration()
     check lsp.enabled
-    check lsp.documentVersions.len == 0
+    check lsp.documents.len == 0
     check lsp.pendingMessages.len == 0
     check lsp.activeProgress.len == 0
 
@@ -909,7 +910,7 @@ suite "LspIntegration - Shutdown":
 
   test "shutdown clears all state":
     let lsp = newLspIntegration()
-    lsp.documentVersions["/tmp/test.nim"] = 1
+    lsp.documents["/tmp/test.nim"] = (version: 1, shadow: "code")
     lsp.activeProgress["token1"] = LspProgressState(
       token: "token1",
       langId: "nim",
@@ -924,7 +925,7 @@ suite "LspIntegration - Shutdown":
 
     lsp.shutdown()
 
-    check lsp.documentVersions.len == 0
+    check lsp.documents.len == 0
     check lsp.activeProgress.len == 0
     check lsp.serverStatus.len == 0
 
@@ -1351,3 +1352,320 @@ suite "LspIntegration - logLspDegraded":
     logLspDegraded("CodeLens", "failed")
     check getMessageLog().len == 0
     check getLspMessageLog().len == 1
+
+suite "LspIntegration - computeIncrementalChange":
+  # Returns Option[JsonNode]: some([change]) or none (full-sync fallback).
+  proc only(r: Option[JsonNode]): tuple[sl, sc, el, ec: int, text: string] =
+    check r.isSome
+    let c = r.get[0]
+    (
+      c["range"]["start"]["line"].getInt,
+      c["range"]["start"]["character"].getInt,
+      c["range"]["end"]["line"].getInt,
+      c["range"]["end"]["character"].getInt,
+      c["text"].getStr,
+    )
+
+  proc applyChange(oldText: string, sl, sc, el, ec: int, text: string): string =
+    ## Apply an LSP range content change to oldText with the semantics a server
+    ## uses: character offsets are UTF-16 code units, and a line index past the
+    ## last line clamps to end-of-document. Lets a change be checked for actually
+    ## reconstructing newText.
+    let lines = oldText.split('\n')
+    proc off(line, col: int): int =
+      if line >= lines.len:
+        return oldText.len
+      for k in 0 ..< line:
+        result += lines[k].len + 1
+      result += utf16OffsetToUtf8(lines[line], col)
+
+    oldText[0 ..< off(sl, sc)] & text & oldText[off(el, ec) ..< oldText.len]
+
+  proc roundTrip(oldText, newText: string) =
+    ## A produced change must transform oldText into exactly newText. `none`
+    ## (full-sync fallback) is acceptable and not asserted here.
+    let r = computeIncrementalChange(oldText, newText)
+    if r.isSome:
+      let c = only(r)
+      check applyChange(oldText, c.sl, c.sc, c.el, c.ec, c.text) == newText
+
+  test "in-line single char insert":
+    # Single-line edit: only the inserted run is sent, at a UTF-16 column range.
+    let c = only(computeIncrementalChange("abc", "abXc"))
+    check (c.sl, c.sc, c.el, c.ec) == (0, 2, 0, 2)
+    check c.text == "X"
+
+  test "in-line single char delete":
+    let c = only(computeIncrementalChange("abXc", "abc"))
+    check (c.sl, c.sc, c.el, c.ec) == (0, 2, 0, 3)
+    check c.text == ""
+
+  test "whole-line insert in the middle":
+    let c = only(computeIncrementalChange("a\nb", "a\nX\nb"))
+    check (c.sl, c.el) == (1, 1)
+    check c.text == "X\n"
+
+  test "whole-line delete":
+    let c = only(computeIncrementalChange("a\nX\nb", "a\nb"))
+    check (c.sl, c.el) == (1, 2)
+    check c.text == ""
+
+  test "multi-line block replace":
+    let c = only(computeIncrementalChange("a\nb\nc\nd", "a\nY\nZ\nd"))
+    check (c.sl, c.el) == (1, 3)
+    check c.text == "Y\nZ\n"
+
+  test "prepend at start":
+    let c = only(computeIncrementalChange("b\nc", "a\nb\nc"))
+    check (c.sl, c.el) == (0, 0)
+    check c.text == "a\n"
+
+  test "empty -> non-empty":
+    let c = only(computeIncrementalChange("", "hello"))
+    check (c.sl, c.sc, c.el, c.ec) == (0, 0, 0, 0)
+    check c.text == "hello"
+
+  test "non-empty -> empty":
+    let c = only(computeIncrementalChange("hello", ""))
+    check (c.sl, c.sc, c.el, c.ec) == (0, 0, 0, 5)
+    check c.text == ""
+
+  test "surrogate pair line edited with utf-16 column anchors":
+    # The unchanged surrogate-pair prefix/suffix is excluded; columns count
+    # UTF-16 code units (a😀 == 3 units), and only the changed run is sent.
+    let c = only(computeIncrementalChange("a😀b", "a😀X😀b"))
+    check (c.sl, c.sc, c.el, c.ec) == (0, 3, 0, 3)
+    check c.text == "X😀"
+
+  test "single-line edit uses a utf-16 column range":
+    let c = only(computeIncrementalChange("a\nb\nc", "a\nZ\nc"))
+    check (c.sl, c.sc, c.el, c.ec) == (1, 0, 1, 1)
+    check c.text == "Z"
+
+  test "EOF append emits an end-of-document insertion":
+    # oldText is a byte-prefix of newText: insert at the real last position
+    # {lastLine, its UTF-16 length}, empty range, text = the appended tail.
+    let c = only(computeIncrementalChange("a\nb", "a\nb\nc"))
+    check (c.sl, c.sc, c.el, c.ec) == (1, 1, 1, 1)
+    check c.text == "\nc"
+    roundTrip("a\nb", "a\nb\nc")
+
+  test "trailing newline add emits an end-of-document insertion":
+    let c = only(computeIncrementalChange("a", "a\n"))
+    check (c.sl, c.sc, c.el, c.ec) == (0, 1, 0, 1)
+    check c.text == "\n"
+    roundTrip("a", "a\n")
+
+  test "EOF append onto an empty document":
+    let c = only(computeIncrementalChange("", "x\ny"))
+    check (c.sl, c.sc, c.el, c.ec) == (0, 0, 0, 0)
+    check c.text == "x\ny"
+    roundTrip("", "x\ny")
+
+  test "EOF append after a multibyte last line uses utf-16 column":
+    # Last line "café" is 5 UTF-8 bytes but 4 UTF-16 units; the insertion column
+    # must be 4, not 5.
+    let c = only(computeIncrementalChange("a\ncafé", "a\ncafé\nx"))
+    check (c.sl, c.sc, c.el, c.ec) == (1, 4, 1, 4)
+    check c.text == "\nx"
+    roundTrip("a\ncafé", "a\ncafé\nx")
+
+  test "trailing newline remove produces a last-line replace":
+    # Backs the start anchor up one line so the preceding newline is consumed.
+    # The end anchor is the real last position (line 1, the empty trailing line),
+    # not the out-of-range {lineCount, 0}.
+    let c = only(computeIncrementalChange("a\n", "a"))
+    check (c.sl, c.sc, c.el, c.ec) == (0, 0, 1, 0)
+    check c.text == "a"
+
+  test "tail deletion anchors end inside the document, not one past it":
+    # Regression: deleting the last line(s) must not emit end.line == lineCount
+    # (one past the last valid index), which strict servers reject. oldText has
+    # lines 0..2, so the end line must be <= 2.
+    let c = only(computeIncrementalChange("a\nb\nc", "a\nb"))
+    check c.el == 2
+    check (c.sl, c.sc, c.ec) == (1, 0, 1)
+    check c.text == "b"
+
+  test "no-op returns none":
+    check computeIncrementalChange("abc", "abc").isNone
+
+  test "produced changes round-trip to newText":
+    # Trailing-line deletion (no final newline = the normal buffer state) is the
+    # regression these guard against: the produced change must reconstruct
+    # newText exactly, not merely look internally consistent.
+    for pair in [
+      ("a\nb", "a"),
+      ("a\nb\nc", "a\nb"),
+      ("a\nb\nc", "a"),
+      ("foo\nbar", "foo"),
+      ("a\nb\nc\nd", "a\nb"),
+      ("a\na\na", "a\na"),
+      ("a\nb\nb", "a\nb"),
+      ("a\nb", "a\nc"),
+      ("a\n你", "a\n好"),
+      ("a\n", "a"),
+      ("a\nX\nb", "a\nb"),
+      ("a\nb", "a\nX\nb"),
+      ("abc", "abXc"),
+      ("hello", ""),
+      ("", "hello"),
+      ("b\nc", "a\nb\nc"),
+      ("a😀b", "a😀X😀b"), # surrogate pairs around an in-line edit
+      ("héllo", "héXllo"), # 2-byte rune in the common prefix
+      ("café", "cafés"), # multibyte at the line tail
+      ("a\n😀b\nc", "a\n😀Xb\nc"), # in-line edit on a middle multibyte line
+      ("a\nb", "a\nb\nc"), # EOF append
+      ("a", "a\n"), # add a trailing newline
+      ("a\nb", "a\nb\nc\nd"), # multi-line EOF append
+      ("", "x\ny"), # append onto an empty document
+      ("a\ncafé", "a\ncafé\nx"), # EOF append after a multibyte last line
+    ]:
+      roundTrip(pair[0], pair[1])
+
+  test "fuzz: editor-like mutations always round-trip":
+    # Re-verify the diff (including the new EOF-append branch) by applying random
+    # insert/delete/replace/append edits at rune boundaries and checking that any
+    # produced change reconstructs newText exactly. Fixed seed = reproducible.
+    # Built from whole-rune chunks with seq slicing so the generator itself never
+    # splits a multibyte sequence or relies on uncertain seq mutate APIs.
+    var rng = initRand(20260614)
+    const runes = ["a", "b", "c", "\n", "é", "你", "😀"]
+
+    proc randRunes(maxRunes: int): seq[string] =
+      for _ in 0 ..< rng.rand(0 .. maxRunes):
+        result.add(runes[rng.rand(runes.high)])
+
+    for _ in 0 ..< 20000:
+      let old = randRunes(24)
+      let oldText = old.join("")
+      var rs = old
+      case rng.rand(0 .. 4)
+      of 0: # insert at a random rune boundary
+        let a = rng.rand(0 .. rs.len)
+        rs = rs[0 ..< a] & randRunes(4) & rs[a .. ^1]
+      of 1: # delete a random rune span
+        if rs.len > 0:
+          let a = rng.rand(0 ..< rs.len)
+          let b = min(a + rng.rand(0 .. 3), rs.high)
+          rs = rs[0 ..< a] & rs[b + 1 .. ^1]
+      of 2: # replace a random rune span
+        if rs.len > 0:
+          let a = rng.rand(0 ..< rs.len)
+          let b = min(a + rng.rand(0 .. 3), rs.high)
+          rs = rs[0 ..< a] & randRunes(4) & rs[b + 1 .. ^1]
+      of 3: # append at end-of-document (exercises the EOF-append branch)
+        rs = rs & randRunes(6)
+      else: # toggle a trailing newline
+        if rs.len > 0 and rs[^1] == "\n":
+          rs = rs[0 ..< rs.high]
+        else:
+          rs = rs & @["\n"]
+      roundTrip(oldText, rs.join(""))
+
+suite "LspIntegration - incremental didChange":
+  privateAccess(LspIntegration)
+
+  const Path = "/tmp/test.nim"
+
+  # onBufferOpen below spawns a real worker thread (nim is configured by
+  # default), so each test tears the integration down to join that thread and
+  # avoid leaking worker threads / nimlangserver processes across the suite.
+  var lsp: LspIntegration
+  setup:
+    lsp = newLspIntegration()
+  teardown:
+    lsp.shutdown()
+
+  proc setKind(lsp: LspIntegration, syncKind: int) =
+    lsp.service.processEvent(
+      "nim",
+      LspEvent(
+        kind: levCapabilities, capabilitiesJson: $(%*{"textDocumentSync": syncKind})
+      ),
+    )
+
+  proc markReady(lsp: LspIntegration) =
+    ## Force the liveness checks to report a running server so onBufferChange
+    ## sends incremental changes deterministically, independent of the real
+    ## worker onBufferOpen spawned.
+    lsp.service.liveWorkerOverride = proc(path: string): bool =
+      true
+    lsp.service.runningWorkerOverride = proc(path: string): bool =
+      true
+
+  proc markStarting(lsp: LspIntegration) =
+    ## Force "has a worker but not yet lwsRunning" so onBufferChange falls back
+    ## to full sync to coalesce into the pending didOpen.
+    lsp.service.liveWorkerOverride = proc(path: string): bool =
+      true
+    lsp.service.runningWorkerOverride = proc(path: string): bool =
+      false
+
+  proc markNoWorker(lsp: LspIntegration) =
+    ## Force the liveness checks to report no deliverable worker so onBufferChange
+    ## deterministically skips. Without this the real worker onBufferOpen spawned
+    ## could race into lwsStarting and flip the gate, making the test flaky.
+    lsp.service.liveWorkerOverride = proc(path: string): bool =
+      false
+
+  test "onBufferOpen seeds shadow and version 1":
+    check lsp.onBufferOpen(newTextBuffer("abc", some(Path))).isOk
+    check lsp.documents[Path].shadow == "abc"
+    check lsp.documents[Path].version == 1
+
+  test "no-op change leaves version and shadow untouched":
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    check lsp.onBufferChange(newTextBuffer("abc", some(Path))).isOk
+    check lsp.documents[Path].version == 1
+    check lsp.documents[Path].shadow == "abc"
+
+  test "incremental change bumps version and updates shadow":
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markReady()
+    check lsp.onBufferChange(newTextBuffer("abXc", some(Path))).isOk
+    check lsp.documents[Path].version == 2
+    check lsp.documents[Path].shadow == "abXc"
+
+  test "starting worker falls back to full sync; version and shadow advance":
+    # A starting worker cannot receive incremental changes (the worker drops
+    # them), so the integration must send full sync to coalesce into the
+    # pending didOpen. The shadow still advances to the latest text.
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2)
+    lsp.markStarting()
+    check lsp.onBufferChange(newTextBuffer("abXc", some(Path))).isOk
+    check lsp.documents[Path].version == 2
+    check lsp.documents[Path].shadow == "abXc"
+
+  test "no ready worker: change is skipped, version and shadow unchanged":
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(2) # incremental advertised, but no server is ready
+    lsp.markNoWorker() # deterministic: ignore the worker onBufferOpen spawned
+    check lsp.onBufferChange(newTextBuffer("abXc", some(Path))).isOk
+    check lsp.documents[Path].version == 1
+    check lsp.documents[Path].shadow == "abc"
+
+  test "tdskNone skips: no version bump, shadow unchanged":
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    lsp.setKind(0)
+    check lsp.onBufferChange(newTextBuffer("abXc", some(Path))).isOk
+    check lsp.documents[Path].version == 1
+    check lsp.documents[Path].shadow == "abc"
+
+  test "onBufferClose removes shadow":
+    discard lsp.onBufferOpen(newTextBuffer("abc", some(Path)))
+    check lsp.onBufferClose(newTextBuffer("abc", some(Path))).isOk
+    check Path notin lsp.documents
+
+  test "shadow tracks server text across consecutive edits":
+    discard lsp.onBufferOpen(newTextBuffer("a\nb\nc", some(Path)))
+    lsp.setKind(2)
+    lsp.markReady()
+    # The invariant is shadow == buffer.getTextString() (the text actually sent),
+    # not the raw input string, since the buffer normalizes its content.
+    for raw in ["a\nb\nX\nc", "a\nc", "a\nc\nd\ne", "done"]:
+      let buf = newTextBuffer(raw, some(Path))
+      check lsp.onBufferChange(buf).isOk
+      check lsp.documents[Path].shadow == buf.getTextString()

@@ -162,17 +162,31 @@ suite "LspWorker - LspCommand object":
     check cmd.kind == lcmdDidClose
     check cmd.closeUri == "file:///test.nim"
 
-  test "LspCommand lcmdDidChange variant":
+  test "LspCommand lcmdDidChange full variant":
     let cmd = LspCommand(
       kind: lcmdDidChange,
       changeUri: "file:///test.nim",
       changeVersion: 2,
+      changeMode: lcdmFull,
       changeText: "echo \"updated\"",
     )
     check cmd.kind == lcmdDidChange
+    check cmd.changeMode == lcdmFull
     check cmd.changeUri == "file:///test.nim"
     check cmd.changeVersion == 2
     check cmd.changeText == "echo \"updated\""
+
+  test "LspCommand lcmdDidChange incremental variant":
+    let changes = $(%*[{"range": {"start": {"line": 0, "character": 0}}, "text": "x"}])
+    let cmd = LspCommand(
+      kind: lcmdDidChange,
+      changeUri: "file:///test.nim",
+      changeVersion: 3,
+      changeMode: lcdmIncremental,
+      changeContentChangesJson: changes,
+    )
+    check cmd.changeMode == lcdmIncremental
+    check cmd.changeContentChangesJson == changes
 
   test "LspCommand lcmdDidSave variant with text":
     let cmd = LspCommand(
@@ -674,13 +688,13 @@ suite "LspWorker - Document Notification Commands":
     worker.didClose("file:///test.nim")
     worker.stop()
 
-  test "didChange queues command":
+  test "didChangeFull queues command":
     let workerResult = newLspWorker("nim")
     check workerResult.isOk
     let worker = workerResult.get
 
     worker.start()
-    worker.didChange("file:///test.nim", 2, "echo \"updated\"")
+    worker.didChangeFull("file:///test.nim", 2, "echo \"updated\"")
     worker.stop()
 
   test "didSave queues command with text":

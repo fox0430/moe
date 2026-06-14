@@ -54,11 +54,14 @@ type
   LspIntegration* = ref object ## Integration layer between LSP and Editor
     service*: LspService
     enabled*: bool
-    # Open document tracking: path -> last version sent to the server.
-    # LSP requires didChange versions to increase monotonically, so this is
-    # a dedicated counter; buffer.changeSeq cannot be used because undo
-    # rolls it back.
-    documentVersions: Table[string, int]
+    # Open document tracking: path -> per-document sync state, inserted and
+    # removed atomically so version and shadow can never drift apart.
+    #   version: last version sent to the server. LSP requires didChange versions
+    #     to increase monotonically, so this is a dedicated counter;
+    #     buffer.changeSeq cannot be used because undo rolls it back.
+    #   shadow: last full text sent. Invariant: equals the text the server
+    #     currently holds. Used to diff for incremental didChange.
+    documents: Table[string, tuple[version: int, shadow: string]]
     # Pending status messages to display in the editor
     pendingMessages*: seq[string]
     # Active progress operations (token -> state)
@@ -107,7 +110,7 @@ proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
   result = LspIntegration(
     service: svc,
     enabled: true,
-    documentVersions: initTable[string, int](),
+    documents: initTable[string, tuple[version: int, shadow: string]](),
     pendingMessages: @[],
     activeProgress: initTable[string, LspProgressState](),
     lastProgressCleanupTime: 0.0,
@@ -358,7 +361,7 @@ proc onBufferOpen*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string
   let text = buffer.getTextString()
 
   # Track open buffer; didOpen is sent with version 1
-  lsp.documentVersions[path] = 1
+  lsp.documents[path] = (version: 1, shadow: text)
 
   return lsp.service.notifyDocumentOpened(path, text)
 
@@ -373,62 +376,9 @@ proc onBufferClose*(lsp: LspIntegration, buffer: TextBuffer): Result[void, strin
   let path = buffer.filePath.get
 
   # Remove from tracking
-  lsp.documentVersions.del(path)
+  lsp.documents.del(path)
 
   return lsp.service.notifyDocumentClosed(path)
-
-proc onBufferChange*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string] =
-  ## Called when a buffer content changes
-  if not lsp.enabled:
-    return ok()
-
-  if buffer.filePath.isNone:
-    return ok()
-
-  let path = buffer.filePath.get
-
-  # Ensure buffer is tracked as open
-  if path notin lsp.documentVersions:
-    # Send didOpen first (version 1)
-    lsp.documentVersions[path] = 1
-    let text = buffer.getTextString()
-    let openResult = lsp.service.notifyDocumentOpened(path, text)
-    if openResult.isErr:
-      return openResult
-    return ok()
-
-  # LSP requires the version to increase with every change. Use a dedicated
-  # monotonic counter: buffer.changeSeq is unsuitable because undo rolls it
-  # back, and servers ignore didChange notifications with stale versions.
-  inc lsp.documentVersions[path]
-  let text = buffer.getTextString()
-  return lsp.service.notifyDocumentChanged(path, lsp.documentVersions[path], text)
-
-proc sentDocumentVersion*(lsp: LspIntegration, path: string): Option[int] =
-  ## The last didOpen/didChange version sent to the server for `path`,
-  ## or `none` if the document is not tracked as open. Exposed for tests.
-  if path in lsp.documentVersions:
-    some(lsp.documentVersions[path])
-  else:
-    none(int)
-
-proc onBufferSave*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string] =
-  ## Called when a buffer is saved
-  if not lsp.enabled:
-    return ok()
-
-  if buffer.filePath.isNone:
-    return ok()
-
-  let path = buffer.filePath.get
-  let text = some(buffer.getTextString())
-  return lsp.service.notifyDocumentSaved(path, text)
-
-# Polling for server messages
-proc poll*(lsp: LspIntegration, timeoutMs: int = 0) =
-  ## Poll for LSP server messages
-  if lsp.enabled:
-    lsp.service.poll(timeoutMs)
 
 # UTF-16 position conversion helpers
 # LSP uses UTF-16 code units for character positions. Buffer columns are rune
@@ -483,6 +433,327 @@ proc utf8OffsetToUtf16*(line: string, utf8Offset: int): int =
     byteCount += rune.size
 
   return utf16Count
+
+proc runeStartByteBefore(s: string, pos: int): int =
+  ## Byte offset where the rune ending just before `pos` begins, stepping back
+  ## over UTF-8 continuation bytes.
+  result = pos - 1
+  while result > 0 and (s[result].uint8 and 0xC0'u8) == 0x80'u8:
+    dec result
+
+proc commonRunePrefixBytes(a, b: string): int =
+  ## Byte length of the longest common prefix of `a` and `b` ending on a rune
+  ## boundary.
+  while result < a.len and result < b.len:
+    let n = a.runeLenAt(result)
+    # runeLenAt derives n from the lead byte alone; if the claimed rune runs
+    # past either string (truncated/invalid UTF-8) stop here rather than read
+    # out of bounds.
+    if result + n > a.len or result + n > b.len:
+      break
+    if n != b.runeLenAt(result):
+      break
+    var eq = true
+    for k in 0 ..< n:
+      if a[result + k] != b[result + k]:
+        eq = false
+        break
+    if not eq:
+      break
+    result += n
+
+proc commonRuneSuffixBytes(a, b: string, floor: int): int =
+  ## Byte length of the longest common suffix of `a` and `b` ending on a rune
+  ## boundary, without reaching below `floor` bytes in either string.
+  var
+    ai = a.len
+    bi = b.len
+  while ai > floor and bi > floor:
+    let
+      ra = runeStartByteBefore(a, ai)
+      rb = runeStartByteBefore(b, bi)
+    if ai - ra != bi - rb or ra < floor or rb < floor:
+      break
+    var eq = true
+    for k in 0 ..< (ai - ra):
+      if a[ra + k] != b[rb + k]:
+        eq = false
+        break
+    if not eq:
+      break
+    ai = ra
+    bi = rb
+  a.len - ai
+
+proc computeIncrementalChange*(oldText, newText: string): Option[JsonNode] =
+  ## Single contiguous line-range diff using character-0 (line-start) anchors,
+  ## except an in-place single-line edit, which is narrowed to a UTF-16 column
+  ## range so a one-character change on a long line ships only the changed run.
+  ## Returns none when the delta cannot be localized this way (the caller then
+  ## falls back to a full-text sync). Equivalent to a split('\n') line diff, but
+  ## scans the two strings in place instead of allocating a seq[string] per call.
+  let
+    oldLen = oldText.len
+    newLen = newText.len
+    oldLines = oldText.count('\n') + 1 # split('\n') keeps the trailing empty line
+    newLines = newText.count('\n') + 1
+
+  # Longest common run of whole leading lines (p), walking both line by line.
+  var
+    p = 0
+    oldP = 0
+    newP = 0
+  while p < oldLines and p < newLines:
+    var oe = oldP
+    while oe < oldLen and oldText[oe] != '\n':
+      inc oe
+    var ne = newP
+    while ne < newLen and newText[ne] != '\n':
+      inc ne
+    if oe - oldP != ne - newP:
+      break
+    var same = true
+    for t in 0 ..< (oe - oldP):
+      if oldText[oldP + t] != newText[newP + t]:
+        same = false
+        break
+    if not same:
+      break
+    inc p
+    oldP = oe + 1
+    newP = ne + 1
+
+  if p == oldLines:
+    # Every old line is a leading line of new, so oldText is a byte-prefix of
+    # newText: either a no-op (equal) or a pure append at end-of-document. Emit
+    # an empty-range insertion at the real last position {lastLine, its UTF-16
+    # length} instead of falling back to a full re-send (covers EOF append and
+    # adding a trailing newline, both common edits).
+    if newLen == oldLen:
+      return none(JsonNode) # no-op (also caught earlier by the shadow check)
+    var lastStart = oldLen
+    while lastStart > 0 and oldText[lastStart - 1] != '\n':
+      dec lastStart
+    let
+      lastLine = oldText[lastStart ..< oldLen]
+      endCol = utf8OffsetToUtf16(lastLine, lastLine.len)
+    return some(
+      %*[
+        {
+          "range": {
+            "start": {"line": oldLines - 1, "character": endCol},
+            "end": {"line": oldLines - 1, "character": endCol},
+          },
+          "text": newText[oldLen ..< newLen],
+        }
+      ]
+    )
+
+  # Longest common run of whole trailing lines (s), kept from overlapping the
+  # prefix. newEnd tracks the byte offset where the matched suffix begins in
+  # newText, i.e. the end of the replacement span.
+  var
+    s = 0
+    oldEnd = oldLen
+    newEnd = newLen
+  while s < (oldLines - p) and s < (newLines - p):
+    let oldContentEnd = (if s == 0: oldEnd else: oldEnd - 1)
+    var oldStart = oldContentEnd
+    while oldStart > 0 and oldText[oldStart - 1] != '\n':
+      dec oldStart
+    let newContentEnd = (if s == 0: newEnd else: newEnd - 1)
+    var newStart = newContentEnd
+    while newStart > 0 and newText[newStart - 1] != '\n':
+      dec newStart
+    if oldContentEnd - oldStart != newContentEnd - newStart:
+      break
+    var same = true
+    for t in 0 ..< (oldContentEnd - oldStart):
+      if oldText[oldStart + t] != newText[newStart + t]:
+        same = false
+        break
+    if not same:
+      break
+    inc s
+    oldEnd = oldStart
+    newEnd = newStart
+
+  # Single-line edit (exactly one old line replaced by one new line in place):
+  # diff within the line and emit a UTF-16 column range so only the changed run
+  # is sent. oldP/newP still point at line p's start; oldEnd/newEnd at line
+  # (lines - s)'s start, so the '\n' is at *End - 1 unless line p is the last.
+  if oldLines - s == p + 1 and newLines - s == p + 1:
+    let
+      oldLineEnd = (if s > 0: oldEnd - 1 else: oldEnd)
+      newLineEnd = (if s > 0: newEnd - 1 else: newEnd)
+      oldLine = oldText[oldP ..< oldLineEnd]
+      newLine = newText[newP ..< newLineEnd]
+      cp = commonRunePrefixBytes(oldLine, newLine)
+      cs = commonRuneSuffixBytes(oldLine, newLine, cp)
+      startCol = utf8OffsetToUtf16(oldLine, cp)
+      endCol = utf8OffsetToUtf16(oldLine, oldLine.len - cs)
+      replacement = newLine[cp ..< newLine.len - cs]
+    return some(
+      %*[
+        {
+          "range": {
+            "start": {"line": p, "character": startCol},
+            "end": {"line": p, "character": endCol},
+          },
+          "text": replacement,
+        }
+      ]
+    )
+
+  if s == 0 and p > 0:
+    # Deleting/replacing the file tail with no common-suffix line to anchor the
+    # trailing newline: back the start anchor up one already-common line so the
+    # newline preceding the changed tail is consumed inside the range. Keeps
+    # character-0 anchors (no UTF-16 column-encoding hazard).
+    dec p
+
+  proc lineStartByteOffset(text: string, lineIdx, lineCount: int): int =
+    ## Byte offset where line `lineIdx` begins (== text.len for the one-past-last
+    ## line index), mirroring the clamping of the old seq-based lineStartOffset.
+    if lineIdx >= lineCount:
+      return text.len
+    if lineIdx <= 0:
+      return 0
+    var seen = 0
+    for i in 0 ..< text.len:
+      if text[i] == '\n':
+        inc seen
+        if seen == lineIdx:
+          return i + 1
+    text.len
+
+  let
+    # newEnd already equals lineStartByteOffset(newText, newLines - s); only the
+    # start anchor needs the post-dec recompute.
+    replacement = newText[lineStartByteOffset(newText, p, newLines) ..< newEnd]
+
+  # End anchor. For s > 0 the trailing common line gives an in-range character-0
+  # anchor. For s == 0 the replacement runs to end-of-document; emit the real
+  # last position {lastLine, its UTF-16 length} instead of {lineCount, 0} (one
+  # past the last line), which strict servers that do not clamp out-of-range
+  # line indices would reject or mis-apply.
+  var
+    endLine = oldLines - s
+    endCol = 0
+  if s == 0:
+    endLine = oldLines - 1
+    let lastLine =
+      oldText[lineStartByteOffset(oldText, oldLines - 1, oldLines) ..< oldLen]
+    endCol = utf8OffsetToUtf16(lastLine, lastLine.len)
+
+  # Emit the contentChanges entry directly so the optional/deprecated rangeLength
+  # is omitted: a typed TextDocumentContentChangeEvent would serialize its `none`
+  # rangeLength as JSON null, which strict servers reject.
+  return some(
+    %*[
+      {
+        "range": {
+          "start": {"line": p, "character": 0},
+          "end": {"line": endLine, "character": endCol},
+        },
+        "text": replacement,
+      }
+    ]
+  )
+
+proc onBufferChange*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string] =
+  ## Called when a buffer content changes
+  if not lsp.enabled:
+    return ok()
+
+  if buffer.filePath.isNone:
+    return ok()
+
+  let path = buffer.filePath.get
+  let text = buffer.getTextString()
+
+  # Untracked -> didOpen fallback (version 1), seed shadow.
+  if path notin lsp.documents:
+    lsp.documents[path] = (version: 1, shadow: text)
+    let openResult = lsp.service.notifyDocumentOpened(path, text)
+    if openResult.isErr:
+      lsp.documents.del(path)
+      return openResult
+    return ok()
+
+  # no-op: server already holds this exact text (insert+delete bumped changeSeq).
+  # The path is present here (the untracked branch above already returned).
+  if lsp.documents[path].shadow == text:
+    return ok()
+
+  let kind = lsp.service.documentSyncKind(path)
+  if kind == tdskNone:
+    return ok()
+
+  # Resolve running-ness once: it gates incremental below, and a running worker
+  # is live by definition, so the `or` short-circuits the hasLiveWorkerForPath
+  # lookup in the steady-state running path.
+  let running = lsp.service.isWorkerRunningForPath(path)
+
+  # No worker would receive this change (absent/crashed). Skip without bumping
+  # the version or advancing the shadow: nothing is sent or coalesced, so
+  # advancing would desync the shadow from what the server actually holds. After
+  # a server crash that followed a successful init, onServerRestart re-sends
+  # didOpen and re-seeds the shadow, so the skip self-heals (a crash during the
+  # very first init is the exception: the buffer stays unsynced until reopened).
+  # A starting worker still counts because a full change coalesces into the
+  # pending didOpen; incremental is sent only once the worker is running.
+  if not (running or lsp.service.hasLiveWorkerForPath(path)):
+    return ok()
+
+  # LSP requires the version to increase with every change. Use a dedicated
+  # monotonic counter: buffer.changeSeq is unsuitable because undo rolls it
+  # back, and servers ignore didChange notifications with stale versions.
+  inc lsp.documents[path].version
+  let version = lsp.documents[path].version
+
+  # notifyDocumentChanged* are fire-and-forget to a ready worker (they never
+  # return err here), so the shadow advances to the just-sent text.
+  # Only send incremental when the worker is already running. A starting worker
+  # must receive full sync so the change can coalesce into the pending didOpen;
+  # sending incremental to a starting worker drops it and desyncs the shadow.
+  if kind == tdskIncremental and running:
+    let changes = computeIncrementalChange(lsp.documents[path].shadow, text)
+    if changes.isSome:
+      discard lsp.service.notifyDocumentChangedIncremental(path, version, $changes.get)
+      lsp.documents[path].shadow = text
+      return ok()
+
+  # Full sync (tdskFull / diff fallback / starting worker).
+  discard lsp.service.notifyDocumentChanged(path, version, text)
+  lsp.documents[path].shadow = text
+  return ok()
+
+proc sentDocumentVersion*(lsp: LspIntegration, path: string): Option[int] =
+  ## The last didOpen/didChange version sent to the server for `path`,
+  ## or `none` if the document is not tracked as open. Exposed for tests.
+  if path in lsp.documents:
+    some(lsp.documents[path].version)
+  else:
+    none(int)
+
+proc onBufferSave*(lsp: LspIntegration, buffer: TextBuffer): Result[void, string] =
+  ## Called when a buffer is saved
+  if not lsp.enabled:
+    return ok()
+
+  if buffer.filePath.isNone:
+    return ok()
+
+  let path = buffer.filePath.get
+  let text = some(buffer.getTextString())
+  return lsp.service.notifyDocumentSaved(path, text)
+
+# Polling for server messages
+proc poll*(lsp: LspIntegration, timeoutMs: int = 0) =
+  ## Poll for LSP server messages
+  if lsp.enabled:
+    lsp.service.poll(timeoutMs)
 
 proc runeIndexToUtf16*(line: string, runeIndex: int): int =
   ## Convert a rune (character) index to a UTF-16 code unit offset.
@@ -1404,7 +1675,7 @@ proc applyLspFoldingRanges*(
 proc shutdown*(lsp: LspIntegration) =
   ## Shutdown all LSP servers
   lsp.service.stopAll()
-  lsp.documentVersions.clear()
+  lsp.documents.clear()
   lsp.activeProgress.clear()
   lsp.serverStatus.clear()
 
