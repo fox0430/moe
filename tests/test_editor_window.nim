@@ -464,7 +464,7 @@ suite "setActiveWindowScreenCursor":
 suite "vsplitWithBuffer - duplicate buffer handling":
   test "does not add duplicate buffer":
     let e = createTestEditor()
-    let sharedBuffer = e.textBuffer
+    let sharedBuffer = e.activeBuffer
     let initialBufferCount = e.buffers.len
 
     # Split with the same buffer that's already in the list
@@ -476,7 +476,7 @@ suite "vsplitWithBuffer - duplicate buffer handling":
 suite "hsplitWithBuffer - duplicate buffer handling":
   test "does not add duplicate buffer":
     let e = createTestEditor()
-    let sharedBuffer = e.textBuffer
+    let sharedBuffer = e.activeBuffer
     let initialBufferCount = e.buffers.len
 
     # Split with the same buffer that's already in the list
@@ -664,7 +664,7 @@ indent_size = 4
 
   test "does not add a buffer that is already tracked":
     let e = createTestEditor()
-    let existing = e.textBuffer
+    let existing = e.activeBuffer
     let initialCount = e.buffers.len
 
     e.registerSplitBuffer(existing, applyConfig = true, context = "test")
@@ -683,7 +683,7 @@ indent_size = 4
 
   test "leaves an already-tracked buffer untouched (early return)":
     let e = createTestEditor()
-    let existing = e.textBuffer
+    let existing = e.activeBuffer
     existing.setReservedWords(toReservedWords(@["KEEP"]))
     existing.highlightNeedsUpdate = false
     # Config differs from the words currently on the buffer; if the early

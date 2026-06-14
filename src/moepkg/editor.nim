@@ -56,9 +56,12 @@ export
 proc findBufferByPath*(e: Editor, path: string): int =
   ## Find a buffer in the buffer list by its file path
   ## Returns the buffer index (0-based) or -1 if not found
-  let absPath = absolutePath(path)
+  ## Paths are compared by their normalized absolute form so a buffer opened
+  ## under a differently-spelled path (relative, `..` segments, trailing slash)
+  ## still matches — mirrors `sameFilePath` used by the navigation paths.
+  let normPath = normalizedPath(absolutePath(path))
   for i, buf in e.buffers:
-    if buf.filePath.isSome and absolutePath(buf.filePath.get) == absPath:
+    if buf.filePath.isSome and normalizedPath(absolutePath(buf.filePath.get)) == normPath:
       return i
   return -1
 
@@ -545,7 +548,7 @@ proc toggleGitDiff*(e: Editor) =
 
   # Update git diff information when enabled
   if e.state.display.showGitDiff:
-    discard updateBufferWithGitDiff(e.textBuffer)
+    discard updateBufferWithGitDiff(e.activeBuffer)
 
   e.state.windowDisplay.needsFullRedraw = true
 
@@ -555,7 +558,7 @@ proc setGitDiffVisible*(e: Editor, visible: bool) =
 
   # Update git diff information when enabled
   if visible:
-    discard updateBufferWithGitDiff(e.textBuffer)
+    discard updateBufferWithGitDiff(e.activeBuffer)
 
   e.state.windowDisplay.needsFullRedraw = true
 
@@ -732,8 +735,14 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   # Initialize LSP integration with current working directory as workspace root
   let lspIntegration = newLspIntegration(getCurrentDir())
 
+  # The initial buffer and viewport are owned by the default window created
+  # below; the editor has no separate buffer/viewport field, so keep local
+  # handles for the setup wiring.
+  let initialBuffer = newTextBuffer()
+  let initialViewport =
+    ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0)
+
   result = Editor(
-    textBuffer: newTextBuffer(),
     lsp: lspIntegration,
     lastLspChangeSeqs: initTable[BufferId, int](),
     state: EditorState(
@@ -884,7 +893,6 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
       ),
       notificationPopup: newNotificationPopupManager(),
     ),
-    viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     screenSize: ScreenSize(width: 80, height: 20),
     commandRegistry: cmdRegistry,
     keyBindingRegistry: keyRegistry,
@@ -929,21 +937,19 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
     result.state.notificationPopup.position = nppBottomRight
 
   # Add initial buffer to buffer list
-  result.addBuffer(result.textBuffer)
+  result.addBuffer(initialBuffer)
   logDebug("editor", "Initial buffer added, buffers.len: " & $result.buffers.len)
 
   # Set reserved words for syntax highlighting on initial buffer
-  result.textBuffer.setReservedWords(
-    toReservedWords(editorConfig.highlight.reservedWord)
-  )
+  initialBuffer.setReservedWords(toReservedWords(editorConfig.highlight.reservedWord))
 
   # Create default window (always have at least one window)
   result.windowManager.windows.add(
     EditorWindow(
-      buffer: result.textBuffer,
-      bufferIds: @[result.textBuffer.id],
+      buffer: initialBuffer,
+      bufferIds: @[initialBuffer.id],
         # Initialize per-window tabs with the initial buffer
-      viewport: result.viewport,
+      viewport: initialViewport,
       cursor: BufferPosition(line: 0, column: 0),
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
@@ -955,16 +961,16 @@ proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   )
   result.windowManager.activeWindowIndex = 0
   result.state.activeWindow = result.windowManager.windows[0]
-  result.state.windowDisplay.currentBufferId = result.textBuffer.id
+  result.state.windowDisplay.currentBufferId = initialBuffer.id
   logDebug(
     "editor",
     "Default window created, windows.len: " & $result.windowManager.windows.len,
   )
 
   result.executer = newCommandExecutor(
-    result.textBuffer,
+    initialBuffer,
     result.state,
-    result.viewport,
+    initialViewport,
     result.config.clipboard,
     result.config.notification,
     some(cmdRegistry),
@@ -1159,6 +1165,14 @@ proc reloadCurrentFile*(e: Editor): Result[void, string] =
   e.state.timing.lastConflictScan = getMonoTime()
   e.state.timing.lastConflictScanSeq = activeBuffer.changeSeq
   return ok()
+
+proc refreshBufferGitAndConflicts*(e: Editor, buf: TextBuffer) =
+  ## Refresh the git-diff gutter and rescan conflict markers for `buf` after its
+  ## on-disk content was replaced out-of-band (e.g. a backup restore). Operates
+  ## on an arbitrary, possibly non-active buffer, so it deliberately leaves the
+  ## active-buffer conflict-scan throttle (`lastConflictScan*`) untouched.
+  discard updateBufferWithGitDiff(buf, useBuffer = false)
+  buf.refreshConflicts()
 
 proc applyConfigSettings*(e: Editor, newConfig: EditorConfig) =
   ## Apply configuration settings to the editor

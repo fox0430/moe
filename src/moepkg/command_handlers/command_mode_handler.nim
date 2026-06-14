@@ -49,15 +49,6 @@ proc getBufferInfos*(e: Editor): seq[BufferInfo] =
         isActive: buf == currentBuffer,
       )
     )
-  # Fallback if buffer list is empty
-  if result.len == 0:
-    result.add(
-      BufferInfo(
-        filePath: e.textBuffer.filePath,
-        isModified: e.textBuffer.isModified,
-        isActive: true,
-      )
-    )
 
 proc updateViewportForCursor*(e: Editor, pos: BufferPosition) =
   ## Update viewport to follow cursor position
@@ -1143,8 +1134,8 @@ proc handleCommandModeKeyCombo*(e: Editor, keyCombo: KeyCombo): bool =
         # Capture source file path before split (split changes active buffer)
         let baseBackupDir = e.config.autoBackup.getBaseBackupDir()
         var sourceFilePath = ""
-        if e.buffer.filePath.isSome:
-          sourceFilePath = absolutePath(e.buffer.filePath.get)
+        if e.activeBuffer.filePath.isSome:
+          sourceFilePath = absolutePath(e.activeBuffer.filePath.get)
         let bkState = initBackupManagerState(baseBackupDir, sourceFilePath)
         let bkBuffer = bkState.createBackupManagerTextBuffer()
         let splitResult = e.vsplitWithBuffer(bkBuffer)

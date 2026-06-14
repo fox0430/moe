@@ -166,7 +166,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     var buffer = createTestBuffer()
 
     # Add content to text buffer
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -195,7 +195,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Test line")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Test line")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -227,7 +227,7 @@ suite "renderWindowLineWrapped - Basic behavior":
 
     # Create a long line that will wrap
     let longLine = "x".repeat(100)
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 40 # Narrow width to force wrapping
@@ -257,7 +257,7 @@ suite "renderWindowLineWrapped - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Test")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Test")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -309,7 +309,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -333,7 +333,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Test line")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Test line")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -358,7 +358,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     var buffer = createTestBuffer()
 
     let longLine = "x".repeat(100)
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -382,7 +382,7 @@ suite "renderWindowLineNoWrap - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Short")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Short")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -406,7 +406,8 @@ suite "renderWindowLineNoWrap - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Current line")
+    discard
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Current line")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -487,7 +488,7 @@ suite "renderFoldLine - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    discard e.textBuffer.insertText(
+    discard e.activeBuffer.insertText(
       BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3"
     )
 
@@ -505,7 +506,7 @@ suite "renderFoldLine - Basic behavior":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    discard e.textBuffer.insertText(
+    discard e.activeBuffer.insertText(
       BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3"
     )
 
@@ -524,7 +525,7 @@ suite "renderFoldLine - Basic behavior":
     var buffer = createTestBuffer()
 
     discard
-      e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 60
@@ -544,7 +545,7 @@ suite "renderWindow - Basic behavior":
     e.viewport.width = 80
     e.viewport.height = 24
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -561,7 +562,7 @@ suite "renderWindow - Basic behavior":
     e.viewport.width = 80
     e.viewport.height = 24
 
-    discard e.textBuffer.insertText(
+    discard e.activeBuffer.insertText(
       BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
     )
 
@@ -582,7 +583,7 @@ suite "renderWindow - Basic behavior":
     e.state.display.lineWrap = true
 
     let longLine = "x".repeat(100)
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 40
@@ -601,7 +602,7 @@ suite "renderWindow - Basic behavior":
     e.state.display.lineWrap = false
 
     let longLine = "x".repeat(100)
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -620,7 +621,7 @@ suite "renderWindow - Basic behavior":
     e.state.display.showSidebar = true
 
     discard
-      e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -639,7 +640,7 @@ suite "renderWindow - Basic behavior":
     e.state.display.showSidebar = false
 
     discard
-      e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Line 1\nLine 2")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -656,7 +657,7 @@ suite "renderWindow - Basic behavior":
     e.viewport.width = 80
     e.viewport.height = 24
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Content")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Content")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -673,7 +674,7 @@ suite "renderWindow - Basic behavior":
     e.viewport.width = 80
     e.viewport.height = 24
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Content")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Content")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -691,7 +692,7 @@ suite "renderWindow - Basic behavior":
     e.viewport.width = 80
     e.viewport.height = 24
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Content")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Content")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -802,7 +803,7 @@ suite "renderWindow - Visual selection":
     e.state.visualSelection.kind = VisualSelectionKind.vskChar
     e.state.cursor = BufferPosition(line: 0, column: 5)
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hello World")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -826,7 +827,7 @@ suite "renderWindow - Visual selection":
     e.state.visualSelection.kind = VisualSelectionKind.vskLine
     e.state.cursor = BufferPosition(line: 2, column: 0)
 
-    discard e.textBuffer.insertText(
+    discard e.activeBuffer.insertText(
       BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3"
     )
 
@@ -852,7 +853,7 @@ suite "renderWindow - Visual selection":
     e.state.visualSelection.kind = VisualSelectionKind.vskBlock
     e.state.cursor = BufferPosition(line: 2, column: 5)
 
-    discard e.textBuffer.insertText(
+    discard e.activeBuffer.insertText(
       BufferPosition(line: 0, column: 0), "Line 1\nLine 2\nLine 3"
     )
 
@@ -979,7 +980,7 @@ suite "renderWindow - Scrolling":
     var content = ""
     for i in 0 ..< 100:
       content &= "Line " & $i & "\n"
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), content)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), content)
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -999,7 +1000,7 @@ suite "renderWindow - Scrolling":
     e.state.display.lineWrap = false
 
     let longLine = "x".repeat(200)
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -1034,7 +1035,8 @@ suite "renderWindow - Edge cases":
     e.viewport.width = 20
     e.viewport.height = 5
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Small window")
+    discard
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Small window")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 20
@@ -1051,7 +1053,7 @@ suite "renderWindow - Edge cases":
     e.viewport.width = 80
     e.viewport.height = 24
 
-    discard e.textBuffer.insertText(
+    discard e.activeBuffer.insertText(
       BufferPosition(line: 0, column: 0), "こんにちは世界\n日本語テスト"
     )
 
@@ -1070,7 +1072,7 @@ suite "renderWindow - Edge cases":
     e.viewport.width = 80
     e.viewport.height = 24
 
-    discard e.textBuffer.insertText(
+    discard e.activeBuffer.insertText(
       BufferPosition(line: 0, column: 0), "Hello 世界\n  indented\n\ttab"
     )
 
@@ -1088,7 +1090,7 @@ suite "renderWindow - Edge cases":
     e.state.display.showStatusLine = true
     e.state.display.multiStatusLine = true
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello")
 
     let window = e.windowManager.windows[0]
     # Viewport height is smaller than reservedLines + tabLineOffset
@@ -1109,7 +1111,7 @@ suite "Cursor line highlight - Window boundary clipping":
     e.state.display.showCursorLine = true
     e.state.display.lineWrap = false
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
 
     # Simulate a left window in a vertical split: width=40, starting at x=0
     let window = e.windowManager.windows[0]
@@ -1142,7 +1144,7 @@ suite "Cursor line highlight - Window boundary clipping":
     e.state.display.showCursorLine = true
     e.state.display.lineWrap = true
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
 
     # Left window of vertical split
     let window = e.windowManager.windows[0]
@@ -1171,7 +1173,7 @@ suite "Cursor line highlight - Window boundary clipping":
     e.state.display.showCursorLine = true
     e.state.display.lineWrap = false
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
 
     # Right window of vertical split: width=40, starting at x=40
     let window = e.windowManager.windows[0]
@@ -1269,7 +1271,7 @@ suite "Cursor line highlight - Window boundary clipping":
     e.state.display.showCursorLine = true
     e.state.display.showSyntax = false
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "AB")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "AB")
 
     let ctx = RenderContext(
       cursorLine: 0,
@@ -1282,7 +1284,7 @@ suite "Cursor line highlight - Window boundary clipping":
     )
 
     e.renderLineSegmentWithSelection(
-      e.textBuffer, buffer, "AB", 0, 0, 0, 0, ctx, useRunes = false
+      e.activeBuffer, buffer, "AB", 0, 0, 0, 0, ctx, useRunes = false
     )
 
     let hlStyle = cursorLineHighlightStyle()
@@ -1301,7 +1303,7 @@ suite "Cursor line highlight - Window boundary clipping":
     e.state.display.showCursorLine = true
     e.state.display.showSyntax = false
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "AB")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "AB")
 
     # Pre-fill the trailing area with cursor line highlight to simulate
     # a previous frame where this line was the cursor line
@@ -1321,7 +1323,7 @@ suite "Cursor line highlight - Window boundary clipping":
     )
 
     e.renderLineSegmentWithSelection(
-      e.textBuffer, buffer, "AB", 0, 0, 0, 0, ctx, useRunes = false
+      e.activeBuffer, buffer, "AB", 0, 0, 0, 0, ctx, useRunes = false
     )
 
     # Trailing area should be cleared to normalStyle, not cursor highlight
@@ -1338,7 +1340,7 @@ suite "Cursor line highlight - Window boundary clipping":
     e.state.display.showCursorLine = true
     e.state.display.lineWrap = false
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Hi")
 
     # First render: single full-width window, cursor on line 0
     let window = e.windowManager.windows[0]
@@ -1381,7 +1383,8 @@ suite "Cursor line highlight - Window boundary clipping":
     e.state.display.lineWrap = false
 
     # Insert two lines
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "Line1\nLine2")
+    discard
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "Line1\nLine2")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 40
@@ -1532,10 +1535,10 @@ suite "shouldShowIndentationGuide - Detailed":
 suite "getSelectionStyle - Basic":
   test "Returns cursor style at cursor position":
     let e = createTestEditor()
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     discard e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 5),
       cursorLine = 0,
@@ -1549,10 +1552,10 @@ suite "getSelectionStyle - Basic":
     let e = createTestEditor()
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     discard e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 0),
       cursorLine = 0,
@@ -1569,10 +1572,10 @@ suite "getSelectionStyle - Basic":
     e.state.visualSelection.kind = VisualSelectionKind.vskChar
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
     e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = true,
       pos = BufferPosition(line: 0, column: 5),
       cursorLine = 0,
@@ -1595,13 +1598,13 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
 
     # Set up buffer with highlight
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
-    e.textBuffer.language = SourceLanguage.langNim
-    e.textBuffer.highlight =
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
+    e.activeBuffer.language = SourceLanguage.langNim
+    e.activeBuffer.highlight =
       initHighlight(@["let x = 42".toRunes], @[], SourceLanguage.langNim)
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = true,
       pos = BufferPosition(line: 0, column: 0),
       cursorLine = 0,
@@ -1611,7 +1614,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     # Background must be visual selection color
     check style.bg == visualStyle().bg
     # Foreground should come from syntax highlight, not visual selection
-    let expectedFg = colorIndexToStyle(e.textBuffer.highlight.getColorPair(0, 0)).fg
+    let expectedFg = colorIndexToStyle(e.activeBuffer.highlight.getColorPair(0, 0)).fg
     check style.fg == expectedFg
 
   test "VisualLine selection preserves syntax highlight fg":
@@ -1623,13 +1626,13 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
     e.state.visualSelection.current = BufferPosition(line: 0, column: 0)
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
-    e.textBuffer.language = SourceLanguage.langNim
-    e.textBuffer.highlight =
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "let x = 42")
+    e.activeBuffer.language = SourceLanguage.langNim
+    e.activeBuffer.highlight =
       initHighlight(@["let x = 42".toRunes], @[], SourceLanguage.langNim)
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = true,
       pos = BufferPosition(line: 0, column: 0),
       cursorLine = 0,
@@ -1637,7 +1640,7 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
       windowMode = EditorMode.VisualLine,
     )
     check style.bg == visualStyle().bg
-    let expectedFg = colorIndexToStyle(e.textBuffer.highlight.getColorPair(0, 0)).fg
+    let expectedFg = colorIndexToStyle(e.activeBuffer.highlight.getColorPair(0, 0)).fg
     check style.fg == expectedFg
 
   test "Selection without syntax uses normal fg":
@@ -1648,10 +1651,10 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
     e.state.visualSelection.kind = VisualSelectionKind.vskChar
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
     e.state.visualSelection.current = BufferPosition(line: 0, column: 10)
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = true,
       pos = BufferPosition(line: 0, column: 5),
       cursorLine = 0,
@@ -1664,11 +1667,11 @@ suite "getSelectionStyle - Visual selection preserves syntax highlight fg":
 suite "getSelectionStyle - Matching paren":
   test "Returns paren pair style for matching paren":
     let e = createTestEditor()
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "(hello)")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "(hello)")
     e.state.matchingParenPos = some(BufferPosition(line: 0, column: 6))
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 6),
       cursorLine = 0,
@@ -1681,11 +1684,11 @@ suite "getSelectionStyle - Matching paren":
     # matchingParenPos is derived from the active window's cursor; an
     # inactive window showing the same line/column must not be painted.
     let e = createTestEditor()
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "(hello)")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "(hello)")
     e.state.matchingParenPos = some(BufferPosition(line: 0, column: 6))
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 6),
       cursorLine = 0,
@@ -1700,12 +1703,12 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     let e = createTestEditor()
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 2),
       cursorLine = 0,
@@ -1718,12 +1721,12 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     let e = createTestEditor()
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 1),
       cursorLine = 0,
@@ -1737,12 +1740,12 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
     discard
-      e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada\nabacada")
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada\nabacada")
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 1, column: 2),
       cursorLine = 0,
@@ -1757,12 +1760,12 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     let e = createTestEditor()
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 2),
       cursorLine = 0,
@@ -1776,12 +1779,12 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     let e = createTestEditor()
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
     e.state.ui.findCharMatches = @[]
     e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 0),
       cursorLine = 0,
@@ -1798,12 +1801,12 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.state.visualSelection.kind = VisualSelectionKind.vskChar
     e.state.visualSelection.start = BufferPosition(line: 0, column: 0)
     e.state.visualSelection.current = BufferPosition(line: 0, column: 6)
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = true,
       pos = BufferPosition(line: 0, column: 2),
       cursorLine = 0,
@@ -1818,13 +1821,13 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     let e = createTestEditor()
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "(abacada)")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "(abacada)")
     e.state.matchingParenPos = some(BufferPosition(line: 0, column: 8))
     e.state.ui.findCharMatches = @[1, 3, 5, 7]
     e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 8),
       cursorLine = 0,
@@ -1838,12 +1841,12 @@ suite "getSelectionStyle - Find char match highlight (f/F/t/T)":
     e.config.highlight.findCharHighlight = false
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abacada")
     e.state.ui.findCharMatches = @[0, 2, 4, 6]
     e.state.ui.findCharMatchLine = 0
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 2),
       cursorLine = 0,
@@ -1862,10 +1865,10 @@ suite "getSelectionStyle - Search highlight":
     e.state.display.showSyntax = false
     e.state.display.showCursorLine = false
     discard
-      e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
+      e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world hello")
 
     discard e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 0),
       cursorLine = 5, # Cursor on different line
@@ -1881,10 +1884,10 @@ suite "getSelectionStyle - Search highlight":
     e.state.mode = EditorMode.Normal
     e.state.display.showSyntax = false
     e.state.display.showCursorLine = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     discard e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 0),
       cursorLine = 5,
@@ -1899,10 +1902,10 @@ suite "getSelectionStyle - Search highlight":
     e.state.search.hlsearchTempDisabled = true
     e.state.search.lastText = "hello"
     e.state.mode = EditorMode.Normal
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     discard e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 0),
       cursorLine = 5,
@@ -1917,10 +1920,10 @@ suite "getSelectionStyle - Cursor line":
     e.state.display.showCursorLine = true
     e.state.display.showSyntax = false
     e.state.display.showDocumentHighlight = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     discard e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
       cursorLine = 0,
@@ -1933,10 +1936,10 @@ suite "getSelectionStyle - Cursor line":
     let e = createTestEditor()
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     discard e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
       cursorLine = 0,
@@ -1950,11 +1953,11 @@ suite "getSelectionStyle - Cursor line":
     e.state.display.showCursorLine = true
     e.state.display.showSyntax = true
     e.state.display.showDocumentHighlight = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # Set up highlight with searchResult color on columns 0-4
     let searchStyle = colorIndexToStyle(EditorColorPairIndex.searchResult)
-    e.textBuffer.highlight = Highlight(
+    e.activeBuffer.highlight = Highlight(
       colorSegments: @[
         ColorSegment(
           firstRow: 0,
@@ -1968,7 +1971,7 @@ suite "getSelectionStyle - Cursor line":
     )
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
       cursorLine = 0,
@@ -1984,11 +1987,11 @@ suite "getSelectionStyle - Cursor line":
     e.state.display.showCursorLine = true
     e.state.display.showSyntax = true
     e.state.display.showDocumentHighlight = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # Set up highlight with a normal (non-searchResult) color
     let defaultStyle = colorIndexToStyle(EditorColorPairIndex.default)
-    e.textBuffer.highlight = Highlight(
+    e.activeBuffer.highlight = Highlight(
       colorSegments: @[
         ColorSegment(
           firstRow: 0,
@@ -2002,7 +2005,7 @@ suite "getSelectionStyle - Cursor line":
     )
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
       cursorLine = 0,
@@ -2019,10 +2022,10 @@ suite "getSelectionStyle - Cursor column":
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
     e.state.display.showDocumentHighlight = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
       cursorLine = 1,
@@ -2038,10 +2041,10 @@ suite "getSelectionStyle - Cursor column":
     e.state.display.showCursorColumn = false
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
       cursorLine = 1,
@@ -2057,10 +2060,10 @@ suite "getSelectionStyle - Cursor column":
     e.state.display.showCursorColumn = true
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 3),
       cursorLine = 1,
@@ -2077,11 +2080,11 @@ suite "getSelectionStyle - Cursor column":
     e.state.display.showCursorLine = true
     e.state.display.showSyntax = false
     e.state.display.showDocumentHighlight = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # At intersection (same line AND same column): cursorLine wins
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 5),
       cursorLine = 0,
@@ -2097,11 +2100,11 @@ suite "getSelectionStyle - Cursor column":
     e.state.display.showCursorColumn = true
     e.state.display.showCursorLine = false
     e.state.display.showSyntax = false
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "hello world")
 
     # Without displayCol/cursorDisplayCol params (default -1), no column highlight
     let style = e.getSelectionStyleAt(
-      e.textBuffer,
+      e.activeBuffer,
       hasSelection = false,
       pos = BufferPosition(line: 0, column: 5),
       cursorLine = 1,
@@ -3131,7 +3134,7 @@ suite "Empty-line end-of-line virtual text":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abc")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abc")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -3156,7 +3159,7 @@ suite "Empty-line end-of-line virtual text":
     let e = createTestEditor()
     var buffer = createTestBuffer()
 
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), "abc")
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), "abc")
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 80
@@ -3188,7 +3191,7 @@ suite "Empty-line end-of-line virtual text":
     var longLine = ""
     for _ in 0 ..< 100:
       longLine.add "a"
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), longLine)
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 40
@@ -3219,7 +3222,7 @@ suite "Empty-line end-of-line virtual text":
     var cjkLine = ""
     for _ in 0 ..< 10:
       cjkLine.add "あ"
-    discard e.textBuffer.insertText(BufferPosition(line: 0, column: 0), cjkLine)
+    discard e.activeBuffer.insertText(BufferPosition(line: 0, column: 0), cjkLine)
 
     let window = e.windowManager.windows[0]
     window.viewport.width = 40

@@ -53,9 +53,7 @@ type
     prevWidth*, prevHeight*: int
 
   Editor* = ref object
-    textBuffer*: TextBuffer
     state*: EditorState
-    viewport*: ViewPort
     screenSize*: ScreenSize
     executer*: CommandExecutor
     commandRegistry*: CommandRegistry
@@ -109,16 +107,23 @@ type
     hasContent*: bool
 
 # Basic accessor procedures
-proc buffer*(e: Editor): TextBuffer {.inline.} =
-  e.textBuffer
-
-proc activeBuffer*(e: Editor): TextBuffer {.inline.} =
-  ## Get the currently active buffer (always from the active window since we always have at least one window)
-  e.windowManager.windows[e.windowManager.activeWindowIndex].buffer
-
 proc activeWindow*(e: Editor): EditorWindow {.inline.} =
   ## Get the currently active window
   e.windowManager.windows[e.windowManager.activeWindowIndex]
+
+proc activeBuffer*(e: Editor): TextBuffer {.inline.} =
+  ## The active window's buffer. Window-derived (we always have at least one
+  ## window) so there is no separate cached field that could drift out of sync
+  ## after a window switch/split.
+  e.activeWindow.buffer
+
+proc viewport*(e: Editor): ViewPort {.inline.} =
+  ## The active window's viewport. Window-derived, like `activeBuffer`. Because
+  ## `ViewPort` is a `ref object`, the returned handle aliases the active
+  ## window's viewport, so mutating fields through it (e.g.
+  ## `e.viewport.topLine = 0`) updates the window in place — there is no
+  ## separate cached field to keep in sync via `syncActiveWindow`.
+  e.activeWindow.viewport
 
 proc bufferById*(e: Editor, id: BufferId): Option[TextBuffer] =
   ## Look up a buffer by its BufferId. O(1) via `bufferIdIndex`.

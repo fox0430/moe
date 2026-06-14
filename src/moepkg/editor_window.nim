@@ -47,8 +47,6 @@ proc syncActiveWindow*(e: Editor) =
   ## close / resize paths only have to call this hook.
   e.state.activeWindow = e.activeWindow
   e.executer.bindToWindow(e.activeWindow)
-  # Viewport is shared by reference - reassigning shares the active window's viewport
-  e.viewport = e.activeWindow.viewport
   # Keep state.windowDisplay.currentBufferId aligned with the active window's buffer so that
   # window-switch / split / close paths automatically refresh the Jump List
   # anchor without each call site having to remember to update it.
@@ -144,7 +142,7 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   e.saveActiveWindowState()
 
   let bufferResult =
-    e.windowManager.vsplit(e.textBuffer, e.viewport, e.cursor, filename)
+    e.windowManager.vsplit(e.activeBuffer, e.viewport, e.cursor, filename)
   if bufferResult.isErr:
     return err(bufferResult.error)
 
@@ -173,7 +171,7 @@ proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   e.saveActiveWindowState()
 
   let bufferResult =
-    e.windowManager.vsplitWithBuffer(e.textBuffer, e.viewport, e.cursor, buffer)
+    e.windowManager.vsplitWithBuffer(e.activeBuffer, e.viewport, e.cursor, buffer)
   if bufferResult.isErr:
     return err(bufferResult.error)
 
@@ -202,7 +200,7 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   e.saveActiveWindowState()
 
   let bufferResult = e.windowManager.hsplit(
-    e.textBuffer, e.viewport, e.cursor, e.state.display.multiStatusLine, filename
+    e.activeBuffer, e.viewport, e.cursor, e.state.display.multiStatusLine, filename
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
@@ -232,7 +230,7 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
   e.saveActiveWindowState()
 
   let bufferResult = e.windowManager.hsplitWithBuffer(
-    e.textBuffer, e.viewport, e.cursor, e.state.display.multiStatusLine, buffer
+    e.activeBuffer, e.viewport, e.cursor, e.state.display.multiStatusLine, buffer
   )
   if bufferResult.isErr:
     return err(bufferResult.error)

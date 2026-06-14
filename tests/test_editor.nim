@@ -751,8 +751,8 @@ suite "Editor - newEditor":
   test "Editor has initial empty buffer":
     let e = createTestEditor()
 
-    check e.textBuffer != nil
-    check e.textBuffer.len >= 1
+    check e.buffers[0] != nil
+    check e.buffers[0].len >= 1
 
   test "Editor state is properly initialized":
     let e = createTestEditor()
@@ -775,7 +775,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
     let e = createTestEditor()
 
     check e.activeWindow.bufferIds.len == 1
-    check e.activeWindow.bufferIds[0] == e.textBuffer.id
+    check e.activeWindow.bufferIds[0] == e.buffers[0].id
 
   test "addBufferToWindowList adds buffer id to window's list":
     let e = createTestEditor()
@@ -789,7 +789,7 @@ suite "Editor - Window bufferIds (per-window tabs)":
 
   test "addBufferToWindowList does not add duplicate buffer":
     let e = createTestEditor()
-    let existingBuffer = e.textBuffer
+    let existingBuffer = e.buffers[0]
 
     e.addBufferToWindowList(existingBuffer)
 
@@ -992,13 +992,15 @@ suite "Editor - switchToBufferByIndex adds to window bufferIds":
 
     discard e.editFile(testFile)
 
-    # Create a split (new window has e.textBuffer which is the initial buffer)
+    # Create a split: the new window shows the active buffer (testFile = buffers[1]),
+    # not the stale initial buffer.
     discard e.vsplit()
     check e.activeWindow.bufferIds.len == 1
-    check e.activeWindow.buffer == e.textBuffer
+    check e.activeWindow.buffer == e.buffers[1]
 
-    # Switch to buffer index 1 (testFile buffer) - should add to window's bufferIds
-    e.switchToBufferByIndex(1)
+    # Switch to buffer index 0 (the initial buffer) - not yet in this window's
+    # tab list, so it should be added.
+    e.switchToBufferByIndex(0)
     check e.activeWindow.bufferIds.len == 2
 
   test "switchToBufferByIndex does not duplicate in bufferIds":
@@ -1833,7 +1835,7 @@ suite "Editor - openFileInNewRightWindow":
 suite "Editor - BufferId":
   test "BufferId is unique across newly created buffers":
     let e = createTestEditor()
-    let initialId = e.textBuffer.id
+    let initialId = e.buffers[0].id
 
     let testFile = "/tmp/moe_test_bufferid_unique.txt"
     writeFile(testFile, "x")
@@ -1962,8 +1964,8 @@ suite "Editor - bufferIdIndex synchronization":
   test "newEditor initializes bufferIdIndex with the initial buffer":
     let e = createTestEditor()
     check e.bufferIdIndex.len == e.buffers.len
-    check e.bufferIdIndex.hasKey(e.textBuffer.id)
-    check e.bufferIdIndex[e.textBuffer.id] == e.textBuffer
+    check e.bufferIdIndex.hasKey(e.buffers[0].id)
+    check e.bufferIdIndex[e.buffers[0].id] == e.buffers[0]
 
   test "bufferIdIndex stays consistent after editFile + delete cycle":
     let e = createTestEditor()

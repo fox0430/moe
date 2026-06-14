@@ -995,12 +995,11 @@ proc createTestEditorWithBuffer(content: string): Editor =
   let config = newEditorConfig()
   config.standard.mouse = true
   result = newEditor(config)
-  result.textBuffer = newTextBuffer(content)
-  result.windowManager.windows[0].buffer = result.textBuffer
-  result.windowManager.windows[0].bufferIds = @[result.textBuffer.id]
-  result.viewport =
+  let buf = newTextBuffer(content)
+  result.windowManager.windows[0].buffer = buf
+  result.windowManager.windows[0].bufferIds = @[buf.id]
+  result.windowManager.windows[0].viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-  result.windowManager.windows[0].viewport = result.viewport
   result.executer.motionController.viewportManager.viewport = result.viewport
   result.state.mode = EditorMode.Normal
 
@@ -2266,12 +2265,11 @@ proc createTestEditorForMiddleClick(content: string): Editor =
   config.clipboard.enable = true
   config.clipboard.tool = getAvailableClipboardTool()
   result = newEditor(config)
-  result.textBuffer = newTextBuffer(content)
-  result.windowManager.windows[0].buffer = result.textBuffer
-  result.windowManager.windows[0].bufferIds = @[result.textBuffer.id]
-  result.viewport =
+  let buf = newTextBuffer(content)
+  result.windowManager.windows[0].buffer = buf
+  result.windowManager.windows[0].bufferIds = @[buf.id]
+  result.windowManager.windows[0].viewport =
     ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-  result.windowManager.windows[0].viewport = result.viewport
   result.executer.motionController.viewportManager.viewport = result.viewport
   result.state.mode = EditorMode.Normal
 
@@ -2288,12 +2286,12 @@ suite "middleClickPaste":
     let e = createTestEditorForMiddleClick("hello")
     e.config.clipboard.enable = false
     e.state.mode = EditorMode.Insert
-    discard e.textBuffer.beginTransaction("test")
+    discard e.activeBuffer.beginTransaction("test")
 
     e.middleClickPaste()
 
     # Buffer should be unchanged
-    check e.textBuffer.getLine(0) == "hello"
+    check e.activeBuffer.getLine(0) == "hello"
 
   test "Unsupported mode (Visual)":
     let e = createTestEditorForMiddleClick("hello")
@@ -2301,7 +2299,7 @@ suite "middleClickPaste":
 
     e.middleClickPaste()
 
-    check e.textBuffer.getLine(0) == "hello"
+    check e.activeBuffer.getLine(0) == "hello"
 
   test "Insert mode - paste from clipboard":
     if not isClipboardToolAvailable():
@@ -2315,12 +2313,12 @@ suite "middleClickPaste":
 
       let e = createTestEditorForMiddleClick("hello")
       e.state.mode = EditorMode.Insert
-      discard e.textBuffer.beginTransaction("Insert mode edit")
+      discard e.activeBuffer.beginTransaction("Insert mode edit")
       e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 5)
 
       e.middleClickPaste()
 
-      let line = e.textBuffer.getLine(0)
+      let line = e.activeBuffer.getLine(0)
       check $line == "hello" & testText
 
   test "Normal mode - auto enter Insert mode and paste":
@@ -2340,7 +2338,7 @@ suite "middleClickPaste":
       e.middleClickPaste()
 
       check e.state.mode == EditorMode.Insert
-      let line = e.textBuffer.getLine(0)
+      let line = e.activeBuffer.getLine(0)
       check $line == testText & "hello"
 
   test "Insert mode - multiline paste":
@@ -2355,13 +2353,13 @@ suite "middleClickPaste":
 
       let e = createTestEditorForMiddleClick("")
       e.state.mode = EditorMode.Insert
-      discard e.textBuffer.beginTransaction("Insert mode edit")
+      discard e.activeBuffer.beginTransaction("Insert mode edit")
 
       e.middleClickPaste()
 
-      check e.textBuffer.len >= 2
-      check $e.textBuffer.getLine(0) == "line1"
-      check $e.textBuffer.getLine(1) == "line2"
+      check e.activeBuffer.len >= 2
+      check $e.activeBuffer.getLine(0) == "line1"
+      check $e.activeBuffer.getLine(1) == "line2"
       check e.windowManager.windows[0].cursor.line == 1
       check e.windowManager.windows[0].cursor.column == 5
 
@@ -2436,18 +2434,17 @@ suite "middleClickPaste":
       discard e.handleEvent(event)
 
       check e.state.mode == EditorMode.Insert
-      let line = e.textBuffer.getLine(0)
+      let line = e.activeBuffer.getLine(0)
       check ($line).len > 5 # Text was inserted
 
 suite "handlePasteEvent":
   proc createTestEditorForPaste(content: string): Editor =
     let config = newEditorConfig()
     result = newEditor(config)
-    result.textBuffer = newTextBuffer(content)
-    result.windowManager.windows[0].buffer = result.textBuffer
-    result.viewport =
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].buffer = buf
+    result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-    result.windowManager.windows[0].viewport = result.viewport
     result.executer.motionController.viewportManager.viewport = result.viewport
 
   proc makePasteEvent(text: string): Event =
@@ -2456,16 +2453,16 @@ suite "handlePasteEvent":
   test "Insert mode with active transaction - paste succeeds":
     let e = createTestEditorForPaste("hello")
     e.state.mode = EditorMode.Insert
-    discard e.textBuffer.beginTransaction("Insert mode edit")
+    discard e.activeBuffer.beginTransaction("Insert mode edit")
     e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 5)
     e.state.cursor = BufferPosition(line: 0, column: 5)
 
     let event = makePasteEvent(" world")
     discard e.handleEvent(event)
 
-    check $e.textBuffer.getLine(0) == "hello world"
+    check $e.activeBuffer.getLine(0) == "hello world"
     # Transaction should still be active (owned by Insert mode, not paste)
-    check e.textBuffer.inTransaction
+    check e.activeBuffer.inTransaction
 
   test "Insert mode without transaction - paste creates own transaction":
     let e = createTestEditorForPaste("hello")
@@ -2476,22 +2473,22 @@ suite "handlePasteEvent":
     let event = makePasteEvent(" world")
     discard e.handleEvent(event)
 
-    check $e.textBuffer.getLine(0) == "hello world"
+    check $e.activeBuffer.getLine(0) == "hello world"
     # Transaction should have been committed by paste
-    check not e.textBuffer.inTransaction
+    check not e.activeBuffer.inTransaction
 
   test "Insert mode with active transaction - multiline paste":
     let e = createTestEditorForPaste("hello")
     e.state.mode = EditorMode.Insert
-    discard e.textBuffer.beginTransaction("Insert mode edit")
+    discard e.activeBuffer.beginTransaction("Insert mode edit")
     e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 5)
     e.state.cursor = BufferPosition(line: 0, column: 5)
 
     let event = makePasteEvent("\nworld")
     discard e.handleEvent(event)
 
-    check e.textBuffer.len >= 2
-    check e.textBuffer.inTransaction
+    check e.activeBuffer.len >= 2
+    check e.activeBuffer.inTransaction
 
   test "Non-Insert mode - paste shows unsupported message":
     let e = createTestEditorForPaste("hello")
@@ -2547,11 +2544,10 @@ suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
     let config = newEditorConfig()
     config.standard.mouse = true
     result = newEditor(config)
-    result.textBuffer = newTextBuffer(content)
-    result.windowManager.windows[0].buffer = result.textBuffer
-    result.viewport =
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].buffer = buf
+    result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-    result.windowManager.windows[0].viewport = result.viewport
     result.executer.motionController.viewportManager.viewport = result.viewport
     result.state.mode = EditorMode.Normal
 
@@ -2561,14 +2557,14 @@ suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
     e.state.insertNormalMode = true
     e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 3)
     e.state.cursor = BufferPosition(line: 0, column: 3)
-    discard e.textBuffer.beginTransaction("Insert mode edit")
+    discard e.activeBuffer.beginTransaction("Insert mode edit")
     e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
 
     discard e.handleEvent(quitEvent)
 
     check not e.state.insertNormalMode
     check e.state.mode == EditorMode.Normal
-    check not e.textBuffer.inTransaction
+    check not e.activeBuffer.inTransaction
     check e.state.editState.insertModeStartPos.isNone
 
   test "Ctrl-C in Normal mode with insertNormalMode at column 0 stays at 0":
@@ -2577,7 +2573,7 @@ suite "handleEvent - Insert-Normal mode (Ctrl-o) Ctrl-C handling":
     e.state.insertNormalMode = true
     e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
     e.state.cursor = BufferPosition(line: 0, column: 0)
-    discard e.textBuffer.beginTransaction("Insert mode edit")
+    discard e.activeBuffer.beginTransaction("Insert mode edit")
     e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
 
     discard e.handleEvent(quitEvent)
@@ -2629,11 +2625,10 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
     let config = newEditorConfig()
     config.standard.mouse = true
     result = newEditor(config)
-    result.textBuffer = newTextBuffer(content)
-    result.windowManager.windows[0].buffer = result.textBuffer
-    result.viewport =
+    let buf = newTextBuffer(content)
+    result.windowManager.windows[0].buffer = buf
+    result.windowManager.windows[0].viewport =
       ViewPort(x: 0, y: 0, width: 80, height: 24, topLine: 0, leftColumn: 0)
-    result.windowManager.windows[0].viewport = result.viewport
     result.executer.motionController.viewportManager.viewport = result.viewport
     result.state.mode = EditorMode.Normal
 
@@ -2641,7 +2636,7 @@ suite "handleCommandModeKeyCombo - Insert-Normal mode (Ctrl-o)":
     ## Set up: Insert → Ctrl-O → Normal → ':' (command overlay)
     e.state.mode = EditorMode.Normal
     e.state.insertNormalMode = true
-    discard e.textBuffer.beginTransaction("Insert mode edit")
+    discard e.activeBuffer.beginTransaction("Insert mode edit")
     e.state.editState.insertModeStartPos = some(BufferPosition(line: 0, column: 0))
     e.state.enterCommandOverlay()
     e.state.commandText = ""

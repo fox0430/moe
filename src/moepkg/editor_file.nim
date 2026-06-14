@@ -62,7 +62,7 @@ template isPersistCursorPositionFile(lang: SourceLanguage): bool =
 proc loadFile*(e: Editor, path: string): Result[(), string] =
   ## Load text file
   logDebug("editor", "Loading file: " & path)
-  let r = e.textBuffer.loadFile(path)
+  let r = e.activeBuffer.loadFile(path)
   if r.isErr:
     logError("editor", "Failed to load file " & path & ": " & r.error)
     return err r.error
@@ -70,24 +70,24 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   logInfo("editor", "Successfully loaded file: " & path)
 
   # Set reserved words for syntax highlighting from config
-  e.textBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
+  e.activeBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
 
   # Apply EditorConfig settings if enabled
-  applyEditorConfigToBuffer(e.textBuffer, e.config)
-  applyBufferEditorConfig(e.state.display, e.textBuffer, e.config)
+  applyEditorConfigToBuffer(e.activeBuffer, e.config)
+  applyBufferEditorConfig(e.state.display, e.activeBuffer, e.config)
 
   # Restore cursor position if persisted, otherwise reset to file start
   # Don't restore for temporary git files
   let absPath = absolutePath(path)
   if e.config.persist.cursorPosition and
-      isPersistCursorPositionFile(e.textBuffer.language) and
+      isPersistCursorPositionFile(e.activeBuffer.language) and
       e.cursorPositions.hasKey(absPath):
     let savedPos = e.cursorPositions[absPath]
     # Ensure cursor position is within buffer bounds
-    let line = min(savedPos.line, max(0, e.textBuffer.len - 1))
+    let line = min(savedPos.line, max(0, e.activeBuffer.len - 1))
     let col =
-      if line < e.textBuffer.len:
-        min(savedPos.column, max(0, e.textBuffer.getLine(line).charLen - 1))
+      if line < e.activeBuffer.len:
+        min(savedPos.column, max(0, e.activeBuffer.getLine(line).charLen - 1))
       else:
         0
     e.cursor = BufferPosition(line: line, column: col)
@@ -97,7 +97,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   # Restore bookmarks if persisted
   if e.config.persist.bookmarks and e.savedBookmarks.hasKey(absPath):
-    e.textBuffer.bookmarks = e.savedBookmarks[absPath]
+    e.activeBuffer.bookmarks = e.savedBookmarks[absPath]
 
   # Reset viewport to start (will be adjusted by motion controller)
   e.viewport.topLine = 0
@@ -106,7 +106,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   # Update git diff information if sidebar and git diff are enabled
   # Use useBuffer=false to compare disk file with working tree (not buffer with HEAD)
   if e.state.display.showGitDiff:
-    let diffResult = updateBufferWithGitDiff(e.textBuffer, useBuffer = false)
+    let diffResult = updateBufferWithGitDiff(e.activeBuffer, useBuffer = false)
     if diffResult.isErr:
       # Log error but don't fail the file load
       # (file might not be in a git repository)
@@ -114,17 +114,17 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   # Scan for git conflict markers. Run regardless of the highlight config so
   # that `buffer.conflictBlocks` is populated for future navigation commands.
-  e.textBuffer.refreshConflicts()
-  e.state.timing.lastConflictScanSeq = e.textBuffer.changeSeq
+  e.activeBuffer.refreshConflicts()
+  e.state.timing.lastConflictScanSeq = e.activeBuffer.changeSeq
   e.state.timing.lastConflictScan = getMonoTime()
 
   # LSP initialization - non-blocking, will start in background
   if e.lsp.enabled:
-    let lspResult = e.lsp.onBufferOpen(e.textBuffer)
+    let lspResult = e.lsp.onBufferOpen(e.activeBuffer)
     if lspResult.isErr:
       logLspDegraded("didOpen", lspResult.error & " (" & path & ")")
     else:
-      e.lastLspChangeSeqs[e.textBuffer.id] = e.textBuffer.changeSeq
+      e.lastLspChangeSeqs[e.activeBuffer.id] = e.activeBuffer.changeSeq
 
   ok(())
 
