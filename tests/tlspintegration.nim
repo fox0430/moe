@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json, options, tables, times, strutils]
+import std/[unittest, json, options, tables, times, strutils, importutils]
 
 import pkg/results
 
@@ -1585,70 +1585,81 @@ suite "Request Functions - Edge Cases":
     check "empty" in result.error or "not supported" in result.error
 
 suite "Buffer Lifecycle - Edge Cases":
+  privateAccess(LspIntegration)
+
+  # Several tests below call onBufferOpen, which spawns a real worker thread (nim
+  # is configured by default), so each test tears the integration down to join
+  # that thread and avoid leaking worker threads / nimlangserver processes.
+  var lsp: LspIntegration
+  setup:
+    lsp = newLspIntegration("/tmp")
+  teardown:
+    lsp.shutdown()
+
+  proc markReady(lsp: LspIntegration) =
+    ## Pretend a server would receive the change so onBufferChange advances the
+    ## version/shadow without a live worker.
+    lsp.service.liveWorkerOverride = proc(path: string): bool =
+      true
+
   test "onBufferOpen - LSP disabled":
-    let lsp = newLspIntegration("/tmp")
     lsp.setEnabled(false)
     let buffer = newTextBuffer("test", some("/tmp/test.nim"))
     let result = lsp.onBufferOpen(buffer)
     check result.isOk # Returns ok() when disabled
 
   test "onBufferOpen - no file path":
-    let lsp = newLspIntegration("/tmp")
     let buffer = newTextBuffer("test")
     let result = lsp.onBufferOpen(buffer)
     check result.isOk # Returns ok() when no path
 
   test "onBufferClose - LSP disabled":
-    let lsp = newLspIntegration("/tmp")
     lsp.setEnabled(false)
     let buffer = newTextBuffer("test", some("/tmp/test.nim"))
     let result = lsp.onBufferClose(buffer)
     check result.isOk
 
   test "onBufferClose - no file path":
-    let lsp = newLspIntegration("/tmp")
     let buffer = newTextBuffer("test")
     let result = lsp.onBufferClose(buffer)
     check result.isOk
 
   test "onBufferChange - LSP disabled":
-    let lsp = newLspIntegration("/tmp")
     lsp.setEnabled(false)
     let buffer = newTextBuffer("test", some("/tmp/test.nim"))
     let result = lsp.onBufferChange(buffer)
     check result.isOk
 
   test "onBufferSave - LSP disabled":
-    let lsp = newLspIntegration("/tmp")
     lsp.setEnabled(false)
     let buffer = newTextBuffer("test", some("/tmp/test.nim"))
     let result = lsp.onBufferSave(buffer)
     check result.isOk
 
   test "onBufferSave - no file path":
-    let lsp = newLspIntegration("/tmp")
     let buffer = newTextBuffer("test")
     let result = lsp.onBufferSave(buffer)
     check result.isOk
 
   test "document version - didOpen starts at 1":
-    let lsp = newLspIntegration("/tmp")
     let buffer = newTextBuffer("test", some("/tmp/test.nim"))
     check lsp.onBufferOpen(buffer).isOk
     check lsp.sentDocumentVersion("/tmp/test.nim") == some(1)
 
   test "document version - increases monotonically on every change":
-    let lsp = newLspIntegration("/tmp")
+    lsp.markReady()
     let buffer = newTextBuffer("test", some("/tmp/test.nim"))
     check lsp.onBufferOpen(buffer).isOk
     for expected in [2, 3, 4]:
+      # Mutate the content: an unchanged buffer is skipped as a no-op.
+      check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
       check lsp.onBufferChange(buffer).isOk
       check lsp.sentDocumentVersion("/tmp/test.nim") == some(expected)
 
   test "document version - does not regress when changeSeq rolls back":
     # Undo rolls buffer.changeSeq back; the version sent to the server must
     # keep increasing regardless.
-    let lsp = newLspIntegration("/tmp")
+    lsp.markReady()
     let buffer = newTextBuffer("hello", some("/tmp/test.nim"))
     check lsp.onBufferOpen(buffer).isOk
     check buffer.insertText(BufferPosition(line: 0, column: 0), "x").isOk
@@ -1659,25 +1670,25 @@ suite "Buffer Lifecycle - Edge Cases":
     check lsp.sentDocumentVersion("/tmp/test.nim").get > versionBeforeUndo
 
   test "document version - per-document tracking":
-    let lsp = newLspIntegration("/tmp")
+    lsp.markReady()
     let bufferA = newTextBuffer("a", some("/tmp/a.nim"))
     let bufferB = newTextBuffer("b", some("/tmp/b.nim"))
     check lsp.onBufferOpen(bufferA).isOk
     check lsp.onBufferOpen(bufferB).isOk
+    check bufferA.insertText(BufferPosition(line: 0, column: 0), "x").isOk
     check lsp.onBufferChange(bufferA).isOk
+    check bufferA.insertText(BufferPosition(line: 0, column: 0), "y").isOk
     check lsp.onBufferChange(bufferA).isOk
     check lsp.sentDocumentVersion("/tmp/a.nim") == some(3)
     check lsp.sentDocumentVersion("/tmp/b.nim") == some(1)
 
   test "document version - cleared on close":
-    let lsp = newLspIntegration("/tmp")
     let buffer = newTextBuffer("test", some("/tmp/test.nim"))
     check lsp.onBufferOpen(buffer).isOk
     check lsp.onBufferClose(buffer).isOk
     check lsp.sentDocumentVersion("/tmp/test.nim").isNone
 
   test "document version - change without open sends didOpen with version 1":
-    let lsp = newLspIntegration("/tmp")
     let buffer = newTextBuffer("test", some("/tmp/test.nim"))
     check lsp.onBufferChange(buffer).isOk
     check lsp.sentDocumentVersion("/tmp/test.nim") == some(1)

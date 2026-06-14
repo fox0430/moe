@@ -176,7 +176,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
             lastRow: b.len - 1,
             lastColumn: max(0, b.getLine(b.len - 1).len - 1),
             color: EditorColorPairIndex.default,
-            style: defaultStyle,
+            style: highlight.defaultStyle,
           )
         ]
       )

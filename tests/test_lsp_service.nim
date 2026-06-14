@@ -1216,3 +1216,131 @@ suite "LspService - request timeout":
     svc.setRequestTimeout(0)
     svc.setRequestTimeout(-1)
     check svc.requestTimeoutMs == 8000
+
+suite "LspService - documentSyncKind":
+  privateAccess(LspService)
+
+  const NimPath = "/tmp/x.nim"
+
+  proc withCaps(caps: JsonNode): LspService =
+    result = newLspService()
+    result.processEvent("nim", LspEvent(kind: levCapabilities, capabilitiesJson: $caps))
+
+  test "defaults to Full when no capabilities received":
+    # Deliberate divergence from the LSP spec (default None) to avoid a
+    # regression for servers that under-advertise capabilities.
+    let svc = newLspService()
+    check svc.documentSyncKind(NimPath) == tdskFull
+
+  test "static int form: 0/1/2":
+    check withCaps(%*{"textDocumentSync": 0}).documentSyncKind(NimPath) == tdskNone
+    check withCaps(%*{"textDocumentSync": 1}).documentSyncKind(NimPath) == tdskFull
+    check withCaps(%*{"textDocumentSync": 2}).documentSyncKind(NimPath) ==
+      tdskIncremental
+
+  test "static object form: change present":
+    check withCaps(%*{"textDocumentSync": {"change": 2}}).documentSyncKind(NimPath) ==
+      tdskIncremental
+    check withCaps(%*{"textDocumentSync": {"change": 0}}).documentSyncKind(NimPath) ==
+      tdskNone
+
+  test "static object without change -> Full":
+    # An object that omits `change` defaults to Full (don't under-advertise),
+    # not None; only an explicit `change: 0` opts the server out of didChange.
+    check withCaps(%*{"textDocumentSync": {"openClose": true}}).documentSyncKind(
+      NimPath
+    ) == tdskFull
+
+  test "malformed value falls back to Full":
+    check withCaps(%*{"textDocumentSync": 9}).documentSyncKind(NimPath) == tdskFull
+    check withCaps(%*{"textDocumentSync": {"change": 9}}).documentSyncKind(NimPath) ==
+      tdskFull
+
+  test "dynamic registration syncKind overrides static":
+    let svc = withCaps(%*{"textDocumentSync": 0})
+    svc.dynamicRegistrations["nim"] = initTable[string, Registration]()
+    svc.dynamicRegistrations["nim"]["reg-dc"] = Registration(
+      id: "reg-dc",
+      `method`: "textDocument/didChange",
+      registerOptions: some(%*{"syncKind": 2}),
+    )
+    check svc.documentSyncKind(NimPath) == tdskIncremental
+
+  test "unknown file type -> Full":
+    let svc = newLspService()
+    check svc.documentSyncKind("/tmp/x.unknownext") == tdskFull
+
+  test "crash restart clears stale capabilities but keeps initializedLangs":
+    proc waitForState(
+        worker: LspWorker, expected: LspWorkerState, timeoutMs = 5000
+    ): bool =
+      let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+      while getMonoTime() < deadline:
+        if worker.state == expected:
+          return true
+        sleep(10)
+      false
+
+    let svc = newLspService()
+    # A "server" that exits immediately -> initialize fails -> lwsCrashed.
+    svc.setConfig(
+      "crashlang",
+      LanguageServerConfig(
+        command: "true", args: @[], extensions: @["crashext"], enabled: true
+      ),
+    )
+    const Path = "/tmp/x.crashext"
+
+    let started = svc.startWorker("crashlang")
+    check started.isOk
+    let worker = started.get
+    check worker.waitForState(lwsCrashed)
+
+    # Simulate the now-crashed server having advertised incremental sync while
+    # it was alive (capabilities + a completed initialize).
+    svc.processEvent(
+      "crashlang",
+      LspEvent(kind: levCapabilities, capabilitiesJson: $(%*{"textDocumentSync": 2})),
+    )
+    svc.processEvent("crashlang", LspEvent(kind: levInitialized))
+    check svc.documentSyncKind(Path) == tdskIncremental
+    check "crashlang" in svc.initializedLangs
+
+    # Restarting drops the stale capabilities (-> conservative Full during the
+    # window) but keeps initializedLangs so onServerRestart still re-opens
+    # buffers after the next initialize.
+    check svc.startWorker("crashlang").isOk
+    check "crashlang" notin svc.capabilities
+    check svc.documentSyncKind(Path) == tdskFull
+    check "crashlang" in svc.initializedLangs
+
+    worker.stop()
+
+suite "LspService - isWorkerRunningForPath":
+  privateAccess(LspService)
+
+  const NimPath = "/tmp/x.nim"
+
+  test "no worker and no override -> false":
+    let svc = newLspService()
+    check not svc.isWorkerRunningForPath(NimPath)
+
+  test "liveWorkerOverride true without runningWorkerOverride -> true (fallback)":
+    let svc = newLspService()
+    svc.liveWorkerOverride = proc(path: string): bool =
+      true
+    check svc.isWorkerRunningForPath(NimPath)
+
+  test "runningWorkerOverride false overrides liveWorkerOverride true":
+    let svc = newLspService()
+    svc.liveWorkerOverride = proc(path: string): bool =
+      true
+    svc.runningWorkerOverride = proc(path: string): bool =
+      false
+    check not svc.isWorkerRunningForPath(NimPath)
+
+  test "runningWorkerOverride true without a real worker -> true":
+    let svc = newLspService()
+    svc.runningWorkerOverride = proc(path: string): bool =
+      true
+    check svc.isWorkerRunningForPath(NimPath)

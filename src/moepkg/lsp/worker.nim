@@ -76,6 +76,10 @@ type
     lcmdCancel # Cancel a tracked request ($/cancelRequest)
     lcmdApplyEditResponse # Answer to a server-initiated workspace/applyEdit
 
+  LspDidChangeMode* = enum
+    lcdmFull # Full document text (changeText)
+    lcdmIncremental # Serialized contentChanges array (changeContentChangesJson)
+
   LspCommand* = object
     case kind*: LspCommandKind
     of lcmdStart:
@@ -96,7 +100,11 @@ type
     of lcmdDidChange:
       changeUri*: string
       changeVersion*: int
-      changeText*: string
+      case changeMode*: LspDidChangeMode
+      of lcdmFull:
+        changeText*: string # Full document text (also used by coalescing)
+      of lcdmIncremental:
+        changeContentChangesJson*: string # Serialized contentChanges array
     of lcmdDidSave:
       saveUri*: string
       saveText*: Option[string]
@@ -1031,33 +1039,72 @@ proc workerThreadProc(ctx: LspWorkerContext) {.thread.} =
     of lcmdDidChange:
       let changeState = ctx.sharedState.loadState()
       if changeState == lwsRunning:
+        let contentChanges =
+          case cmd.changeMode
+          of lcdmIncremental:
+            try:
+              parseJson(cmd.changeContentChangesJson)
+            except CatchableError:
+              sendLogMessage(
+                mtWarning, "didChange: invalid contentChanges JSON: " & cmd.changeUri
+              )
+              # Defensive only: the integration layer serializes its own JSON, so
+              # this is unreachable in practice. If it ever fired, the change is
+              # lost while the integration shadow has already advanced, so it
+              # would not re-sync until a full sync or server restart.
+              return
+          of lcdmFull:
+            %*[{"text": cmd.changeText}]
         let params = %*{
           "textDocument": {"uri": cmd.changeUri, "version": cmd.changeVersion},
-          "contentChanges": [{"text": cmd.changeText}],
+          "contentChanges": contentChanges,
         }
         await sendNotificationLog("textDocument/didChange", params)
       elif changeState == lwsStarting or changeState == lwsStopped:
-        # Queue as didOpen with latest content (replaces any pending didOpen for same URI)
-        # Also handle lwsStopped because lcmdStart may still be pending in queue
-        var found = false
-        for i in 0 ..< pendingDidOpen.len:
-          if pendingDidOpen[i].openUri == cmd.changeUri:
-            # Update the pending didOpen with new content
-            pendingDidOpen[i] = LspCommand(
-              kind: lcmdDidOpen,
-              openUri: cmd.changeUri,
-              openLangId: pendingDidOpen[i].openLangId,
-              openVersion: cmd.changeVersion,
-              openText: cmd.changeText,
+        # Before the server is running, fold the change into the pending didOpen
+        # so it opens with the latest content (handle lwsStopped too because
+        # lcmdStart may still be queued). Incremental sends only happen after
+        # lwsRunning, so an incremental command here has no full text to coalesce
+        # and is dropped rather than corrupting the pending didOpen.
+        case cmd.changeMode
+        of lcdmFull:
+          var found = false
+          for i in 0 ..< pendingDidOpen.len:
+            if pendingDidOpen[i].openUri == cmd.changeUri:
+              pendingDidOpen[i] = LspCommand(
+                kind: lcmdDidOpen,
+                openUri: cmd.changeUri,
+                openLangId: pendingDidOpen[i].openLangId,
+                openVersion: cmd.changeVersion,
+                openText: cmd.changeText,
+              )
+              found = true
+              break
+          if not found:
+            # No pending didOpen for this URI: can't send didChange without one.
+            sendLogMessage(
+              mtWarning,
+              "didChange received for URI without prior didOpen: " & cmd.changeUri,
             )
-            found = true
-            break
-        if not found:
-          # No pending didOpen for this URI, can't send didChange without prior didOpen
+        of lcdmIncremental:
           sendLogMessage(
             mtWarning,
-            "didChange received for URI without prior didOpen: " & cmd.changeUri,
+            "incremental didChange before server running, dropped: " & cmd.changeUri,
           )
+      else:
+        # lwsCrashed / lwsShuttingDown: no running server to send to and no
+        # pending didOpen to coalesce into. Log rather than drop silently. The
+        # integration shadow has already advanced, so this relies on re-sync at
+        # the next initialize: a crash AFTER a prior successful init fires
+        # onServerRestart, which re-opens the buffer and re-seeds the shadow. A
+        # crash DURING the first init does NOT (the lang never entered
+        # initializedLangs), so that buffer stays unsynced until the file is
+        # reopened or the server is restarted manually.
+        sendLogMessage(
+          mtWarning,
+          "didChange dropped; worker not running (" & $changeState & "): " &
+            cmd.changeUri,
+        )
     of lcmdDidSave:
       if ctx.sharedState.loadState() == lwsRunning:
         var params = %*{"textDocument": {"uri": cmd.saveUri}}
@@ -1386,9 +1433,27 @@ proc didClose*(worker: LspWorker, uri: string) =
     LspCommand(kind: lcmdDidClose, closeUri: uri), worker.signal
   )
 
-proc didChange*(worker: LspWorker, uri: string, version: int, text: string) =
+proc didChangeFull*(worker: LspWorker, uri: string, version: int, text: string) =
+  ## Queue a full-document didChange (contentChanges = [{text}]).
   let cmd = LspCommand(
-    kind: lcmdDidChange, changeUri: uri, changeVersion: version, changeText: text
+    kind: lcmdDidChange,
+    changeUri: uri,
+    changeVersion: version,
+    changeMode: lcdmFull,
+    changeText: text,
+  )
+  worker.commandQueue.pushAndSignal(cmd, worker.signal)
+
+proc didChangeIncremental*(
+    worker: LspWorker, uri: string, version: int, contentChangesJson: string
+) =
+  ## Queue an incremental didChange carrying a serialized contentChanges array.
+  let cmd = LspCommand(
+    kind: lcmdDidChange,
+    changeUri: uri,
+    changeVersion: version,
+    changeMode: lcdmIncremental,
+    changeContentChangesJson: contentChangesJson,
   )
   worker.commandQueue.pushAndSignal(cmd, worker.signal)
 
