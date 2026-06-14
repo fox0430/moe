@@ -44,13 +44,43 @@ proc fakeTerminalState(): TerminalState =
     needsBufferRefresh: false,
   )
 
-proc registerFakeTerminal(e: Editor, command: string = "bash"): TextBuffer =
+proc safeOpenFakeTerminalState(): TerminalState =
+  ## Build a TerminalState whose PTY looks "open" but is safe to tear down
+  ## without a real shell, so a test can observe cleanup()/closePty() actually
+  ## running (the `closed` flag flips false -> true):
+  ## - masterFd is a throwaway /dev/null fd, so closePty()'s close() is harmless.
+  ## - childPid is a positive pid the test never forked, so closePty()'s
+  ##   waitpid() returns ECHILD (-1) and the SIGTERM branch is skipped.
+  ## NEVER use Pid(0) here: waitpid(0)/kill(0) target the whole process group
+  ## and could signal the test runner itself.
+  TerminalState(
+    pty: PtyHandle(
+      masterFd: posix.open("/dev/null".cstring, O_RDONLY),
+      childPid: Pid(999999),
+      closed: false,
+    ),
+    grid: newTerminalGrid(80, 24),
+    subMode: tsmInput,
+    exitCode: none(int),
+    waitingForCtrlN: false,
+    needsBufferRefresh: false,
+  )
+
+proc registerFakeTerminal(
+    e: Editor, command: string = "bash", state: TerminalState = nil
+): TextBuffer =
   ## Mimic enterTerminalInActiveWindow without touching real PTY plumbing.
+  ## `state` defaults to a pre-closed fake (cleanup() is a no-op); pass a
+  ## `safeOpenFakeTerminalState()` to exercise teardown.
   result = newTextBuffer("")
   result.displayName = some("[Terminal: " & command & "]")
   e.addBuffer(result)
   e.addBufferToWindowList(result)
-  e.terminalStates[result.id] = fakeTerminalState()
+  e.terminalStates[result.id] =
+    if state != nil:
+      state
+    else:
+      fakeTerminalState()
   e.activeWindow.buffer = result
   e.activeWindow.modeState =
     ModeState(kind: mskTerminal, terminal: e.terminalStates[result.id])
@@ -160,3 +190,53 @@ suite "Terminal tabs - deleteCurrentBuffer":
     # Active buffer rolled back to the file tab in Normal mode.
     check e.activeWindow.buffer == originalBuf
     check e.activeWindow.mode == EditorMode.Normal
+
+suite "Terminal tabs - cleanupAllTerminals":
+  test "Tears down every live terminal PTY and clears the state map":
+    let e = createTestEditor()
+    # Two "open" terminals plus the seed file buffer in the active window.
+    let t1 = registerFakeTerminal(e, "bash", safeOpenFakeTerminalState())
+    let t2 = registerFakeTerminal(e, "htop", safeOpenFakeTerminalState())
+    let s1 = e.terminalStates[t1.id]
+    let s2 = e.terminalStates[t2.id]
+    check not s1.pty.closed
+    check not s2.pty.closed
+    check e.terminalStates.len == 2
+
+    e.cleanupAllTerminals()
+
+    # cleanup() ran on each session (master fd closed) and the map is empty.
+    check s1.pty.closed
+    check s2.pty.closed
+    check e.terminalStates.len == 0
+    # Unlike closeTerminalBuffer, exit-time teardown only releases the PTYs —
+    # the buffers themselves are left in place (the editor is exiting anyway).
+    check e.bufferIndexById(t1.id) >= 0
+    check e.bufferIndexById(t2.id) >= 0
+
+  test "Is a no-op on an editor with no terminals":
+    let e = createTestEditor()
+    check e.terminalStates.len == 0
+    e.cleanupAllTerminals() # must not raise
+    check e.terminalStates.len == 0
+
+  test "Is idempotent — a second call after teardown stays safe":
+    let e = createTestEditor()
+    discard registerFakeTerminal(e, "bash", safeOpenFakeTerminalState())
+    e.cleanupAllTerminals()
+    check e.terminalStates.len == 0
+    e.cleanupAllTerminals() # second call: still safe, still empty
+    check e.terminalStates.len == 0
+
+  test "Skips cleanup branches safely for an already-closed PTY":
+    # The default fake is pre-closed; cleanupAllTerminals must treat it as a
+    # no-op teardown and still clear the map.
+    let e = createTestEditor()
+    let t = registerFakeTerminal(e, "bash") # pre-closed fake
+    let s = e.terminalStates[t.id]
+    check s.pty.closed
+
+    e.cleanupAllTerminals()
+
+    check s.pty.closed
+    check e.terminalStates.len == 0
