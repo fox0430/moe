@@ -1793,6 +1793,105 @@ suite "Config - saveConfigToToml":
     check "[Notification]" in content
     check "[Lsp]" in content
 
+  test "bookmarkMarker containing a double quote round-trips":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_quote_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.standard.bookmarkMarker = "a\"b"
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.standard.bookmarkMarker == "a\"b"
+
+  test "bookmarkMarker containing a backslash round-trips":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_backslash_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.standard.bookmarkMarker = "a\\b"
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.standard.bookmarkMarker == "a\\b"
+
+  test "bookmarkMarker containing a newline and tab round-trips":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_newline_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    config.standard.bookmarkMarker = "a\n\tb"
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.standard.bookmarkMarker == "a\n\tb"
+
+  test "Saved config with special chars in string is still valid TOML":
+    inc testFileCounter
+    let testFile = "/tmp/moe_test_save_special_" & $testFileCounter & ".toml"
+    defer:
+      removeFile(testFile)
+
+    var config = newEditorConfig()
+    # A pathological value mixing every character class that needs escaping.
+    config.standard.bookmarkMarker = "\"\\\t\n\r"
+    config.theme.kind = tkDefault
+    config.theme.path = ""
+    let saveResult = saveConfigToToml(config, testFile)
+    check saveResult.isOk
+
+    # The whole file must still parse back without errors.
+    let loadResult = loadConfigFromToml(testFile)
+    check loadResult.isOk
+    let (loaded, vr) = loadResult.get
+    check not vr.hasErrors
+    check loaded.standard.bookmarkMarker == "\"\\\t\n\r"
+
+suite "Config - escapeTomlBasicString":
+  test "Leaves ordinary characters untouched":
+    check escapeTomlBasicString("hello world") == "hello world"
+    check escapeTomlBasicString("♥ ") == "♥ "
+
+  test "Escapes double quote and backslash":
+    check escapeTomlBasicString("a\"b") == "a\\\"b"
+    check escapeTomlBasicString("a\\b") == "a\\\\b"
+
+  test "Escapes common control characters":
+    check escapeTomlBasicString("\t") == "\\t"
+    check escapeTomlBasicString("\n") == "\\n"
+    check escapeTomlBasicString("\r") == "\\r"
+    check escapeTomlBasicString("\b") == "\\b"
+    check escapeTomlBasicString("\f") == "\\f"
+
+  test "Escapes other control characters as \\uXXXX":
+    check escapeTomlBasicString("\x00") == "\\u0000"
+    check escapeTomlBasicString("\x01") == "\\u0001"
+    check escapeTomlBasicString("\x7f") == "\\u007F"
+
 suite "Config - saveConfigToToml round-trip completeness":
   # Recursively modify all fields to non-default values via fieldPairs.
   # When a new field is added to any config type, fieldPairs automatically
