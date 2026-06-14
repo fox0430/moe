@@ -33,13 +33,20 @@ proc escapeTomlBasicString*(val: string): string =
   ## value would produce invalid TOML that can no longer be parsed back.
   for c in val:
     case c
-    of '"': result.add "\\\""
-    of '\\': result.add "\\\\"
-    of '\b': result.add "\\b"
-    of '\t': result.add "\\t"
-    of '\n': result.add "\\n"
-    of '\f': result.add "\\f"
-    of '\r': result.add "\\r"
+    of '"':
+      result.add "\\\""
+    of '\\':
+      result.add "\\\\"
+    of '\b':
+      result.add "\\b"
+    of '\t':
+      result.add "\\t"
+    of '\n':
+      result.add "\\n"
+    of '\f':
+      result.add "\\f"
+    of '\r':
+      result.add "\\r"
     else:
       # Other control characters (U+0000..U+001F except those above, and
       # U+007F) are not allowed literally and must use \uXXXX escapes.
