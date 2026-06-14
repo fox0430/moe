@@ -20,15 +20,36 @@
 ## Shared primitives for TOML config serialization: scalar value formatters
 ## and theme color rendering used by every per-section `appendXxxToml`.
 
-import std/options
+import std/[options, strformat]
 
 import ../color
 
 proc toTomlBool*(val: bool): string =
   if val: "true" else: "false"
 
+proc escapeTomlBasicString*(val: string): string =
+  ## Escape a string for use inside a TOML basic string (double-quoted),
+  ## per the TOML spec. Without this, embedding a `"`, `\`, or newline in a
+  ## value would produce invalid TOML that can no longer be parsed back.
+  for c in val:
+    case c
+    of '"': result.add "\\\""
+    of '\\': result.add "\\\\"
+    of '\b': result.add "\\b"
+    of '\t': result.add "\\t"
+    of '\n': result.add "\\n"
+    of '\f': result.add "\\f"
+    of '\r': result.add "\\r"
+    else:
+      # Other control characters (U+0000..U+001F except those above, and
+      # U+007F) are not allowed literally and must use \uXXXX escapes.
+      if c < ' ' or c == '\x7f':
+        result.add &"\\u{ord(c):04X}"
+      else:
+        result.add c
+
 proc toTomlString*(val: string): string =
-  "\"" & val & "\""
+  "\"" & escapeTomlBasicString(val) & "\""
 
 proc toTomlStringArray*(val: seq[string]): string =
   result = "["
