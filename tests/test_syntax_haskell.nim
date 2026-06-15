@@ -1027,7 +1027,7 @@ suite "syntax_haskell - haskellNextToken edge cases":
 
   test "string terminated by carriage return":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"test\x0Dnext")
+    g.initGeneralTokenizer("\"test\rnext")
     g.haskellNextToken()
     check g.kind == gtStringLit
 

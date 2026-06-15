@@ -489,6 +489,66 @@ proc yamlCorpus(): seq[seq[string]] =
     ],
   ]
 
+proc shellCorpus(): seq[seq[string]] =
+  ## Shell snippets exercising the string state machine: multi-line and
+  ## single-line double/single-quoted strings (`gtStringLit`), in-string
+  ## escapes (`gtEscapeSequence`, which parks `gtStringLit` across the
+  ## backslash), backslash line continuation, comments, keywords and the
+  ## numeric bases. The multi-line strings pin the line-bounded string fix:
+  ## a `"`/`'` opened on one line must not become one token spanning the
+  ## newline (its interior boundary state would be `gtNone`, breaking resume).
+  result = @[
+    @[
+      "#!/bin/bash", "echo \"hello world\"", "name='single quoted'",
+      "if [ -f file ]; then", "  echo \"found\"", "fi",
+    ],
+    @["msg=\"this string", "continues on the next line\"", "echo \"$msg\"", "ls -la"],
+    @[
+      "path=\"/usr/local/bin\"", "echo \"tab\\there\"", "printf '%s\\n' \"$path\"",
+      "x=0xFF", "y=017", "z=0b1010",
+    ],
+    @["long=\"part one \\", "part two\"", "for i in 1 2 3; do", "  echo $i", "done"],
+    @["# a comment line", "export VAR='value'", "unset OTHER", "func() { return 0; }"],
+  ]
+
+proc zshCorpus(): seq[seq[string]] =
+  ## Zsh shares the shell string machine; same multi-line string coverage
+  ## plus zsh-only keywords.
+  result = @[
+    @[
+      "autoload -U compinit", "echo \"hello $USER\"", "setopt no_beep",
+      "alias ll='ls -la'",
+    ],
+    @[
+      "greeting=\"line one", "line two\"", "print -r -- \"$greeting\"", "typeset -i n=5"
+    ],
+    @[
+      "local str='single", "spanning'", "zstyle ':completion:*' menu select",
+      "integer x=0xAB",
+    ],
+    @["cont=\"a \\", "b\"", "for f in *.txt; do", "  echo $f", "done"],
+  ]
+
+proc fishCorpus(): seq[seq[string]] =
+  ## Fish strings: double-quoted carry escapes; single-quoted are literal
+  ## (no escape handling). Both must stay line-bounded.
+  result = @[
+    @["function greet", "    echo \"hello $argv\"", "end", "set name 'fish shell'"],
+    @["set msg \"line one", "line two\"", "echo $msg", "set -l n 42"],
+    @["set lit 'raw", "text'", "for i in (seq 1 3)", "    echo $i", "end"],
+    @["# comment", "set x 0xFF", "string join \\n a b c", "test -f file.txt"],
+  ]
+
+proc tclCorpus(): seq[seq[string]] =
+  ## Tcl double-quoted strings (the only quote form here) with escapes and
+  ## multi-line continuation, plus `$var`/`${var}` references and braces.
+  result = @[
+    @["proc greet {name} {", "    puts \"Hello, $name\"", "}", "set x 0xFF"],
+    @["set msg \"line one", "line two\"", "puts $msg", "incr count"],
+    @["set s \"tab\\there\"", "set v ${some_var}", "if {$x > 0} {", "  puts yes", "}"],
+    @["# a comment", "set cont \"a \\", "b\"", "foreach i {1 2 3} {puts $i}"],
+  ]
+
 # Random edits
 
 const PrintableAscii =
@@ -800,6 +860,18 @@ suite "Incremental Highlight Fuzz":
   test "YAML: incremental output matches full reparse under random edits":
     check runFuzz(SourceLanguage.langYaml, yamlCorpus(), iters, baseSeed)
 
+  test "Shell: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langShell, shellCorpus(), iters, baseSeed)
+
+  test "Zsh: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langZsh, zshCorpus(), iters, baseSeed)
+
+  test "Fish: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langFish, fishCorpus(), iters, baseSeed)
+
+  test "Tcl: incremental output matches full reparse under random edits":
+    check runFuzz(SourceLanguage.langTcl, tclCorpus(), iters, baseSeed)
+
 # Deterministic chunk-boundary tests
 #
 # The fuzz corpus buffers all stay well under 100 lines, so the random walk
@@ -880,6 +952,83 @@ suite "Incremental Highlight Chunk Boundary":
       "comment early close",
     )
 
+# Deterministic line-bounded string regression
+#
+# A double-quoted string opened on one line and closed on the next must be
+# two line-bounded tokens, not one multi-line `gtStringLit` whose interior
+# boundary state (gtNone) is wrong for resume. With the multi-line token,
+# editing a line below the continuation reparses it from gtNone as code, so
+# the incremental color (identifier) diverges from full reparse (stringLit).
+# Reverting the `\n`/`\r` break in syntax_shell/zsh/fish/tcl fails this.
+
+suite "Incremental Highlight Line-Bounded Strings":
+  proc checkResumeEquivalence(
+      lines: seq[string],
+      editRow: int,
+      editText: string,
+      lang: SourceLanguage,
+      what: string,
+  ): bool =
+    ## Build the incremental cache, edit one line, then assert the incremental
+    ## colors match a full reparse. `editRow` is chosen >= 2 below the line
+    ## that opens the multi-line construct so the reparse enters the spanned
+    ## lines from their cached boundary state.
+    var buf = lines
+    let (segs0, states0) =
+      initHighlightIncremental(buf, 0, buf.high, TokenizerState(), @[], lang)
+    var ih = IncrementalHighlight(
+      segments: segs0, lineStates: LineStateCache(states: states0, version: 0)
+    )
+
+    buf[editRow] = editText
+    let getLine = proc(i: int): string =
+      buf[i]
+    updateHighlightIncremental(buf.len, getLine, ih, editRow, 1, @[], lang)
+
+    checkChunkEquivalence(
+      buf, Highlight(colorSegments: ih.segments), fullHighlight(buf, lang), what
+    )
+
+  const MultiLineString =
+    @["echo \"first part", "second part\"", "ls -la", "pwd", "echo done"]
+
+  # A string whose last content is an escape sequence ending exactly at EOL
+  # (`"a \6`). The escape parks gtStringLit with pos on the newline; the next
+  # resume must not emit an empty token (it used to trip the empty-token
+  # assert in full and incremental parse alike). The string is line-bounded,
+  # so the lines below resume as code.
+  const EscapeBeforeEol = @["x=\"a \\6", "more\"", "ls -la", "pwd", "echo done"]
+
+  test "Shell: editing below a two-line string resumes line-bounded":
+    check checkResumeEquivalence(MultiLineString, 3, "cd /tmp", langShell, "shell")
+
+  test "Zsh: editing below a two-line string resumes line-bounded":
+    check checkResumeEquivalence(MultiLineString, 3, "cd /tmp", langZsh, "zsh")
+
+  test "Fish: editing below a two-line string resumes line-bounded":
+    check checkResumeEquivalence(MultiLineString, 3, "cd /tmp", langFish, "fish")
+
+  test "Tcl: editing below a two-line string resumes line-bounded":
+    check checkResumeEquivalence(MultiLineString, 3, "cd /tmp", langTcl, "tcl")
+
+  test "Shell: escape ending at EOL does not emit an empty token":
+    check checkResumeEquivalence(EscapeBeforeEol, 3, "cd /tmp", langShell, "shell esc")
+
+  test "Zsh: escape ending at EOL does not emit an empty token":
+    check checkResumeEquivalence(EscapeBeforeEol, 3, "cd /tmp", langZsh, "zsh esc")
+
+  test "Fish: escape ending at EOL does not emit an empty token":
+    check checkResumeEquivalence(EscapeBeforeEol, 3, "cd /tmp", langFish, "fish esc")
+
+  test "Tcl: escape ending at EOL does not emit an empty token":
+    check checkResumeEquivalence(EscapeBeforeEol, 3, "cd /tmp", langTcl, "tcl esc")
+
+  test "Tcl: an unclosed ${ brace reference is line-bounded":
+    # `${some_var` (no closing brace) must not swallow the newline into one
+    # gtSpecialVar token; the lines below resume as code, not variable.
+    let buf = @["set v ${some_var", "set cont value", "puts hi", "incr n", "exit"]
+    check checkResumeEquivalence(buf, 3, "set n 0", langTcl, "tcl brace")
+
 # Monotonic-advance guard (tokenizer.nim getNextToken)
 #
 # A non-EOF token must make progress: consume input (`pos` advances) or, for
@@ -937,6 +1086,10 @@ suite "Monotonic-advance guard":
       (SourceLanguage.langHtml, htmlCorpus()),
       (SourceLanguage.langXml, xmlCorpus()),
       (SourceLanguage.langAstro, astroCorpus()),
+      (SourceLanguage.langShell, shellCorpus()),
+      (SourceLanguage.langZsh, zshCorpus()),
+      (SourceLanguage.langFish, fishCorpus()),
+      (SourceLanguage.langTcl, tclCorpus()),
     ]
     for (lang, corpus) in corpora:
       for buf in corpus:

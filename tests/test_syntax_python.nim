@@ -1030,7 +1030,7 @@ suite "syntax_python - pythonNextToken edge cases":
 
   test "string terminated by carriage return":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"test\x0Dnext")
+    g.initGeneralTokenizer("\"test\rnext")
     g.pythonNextToken()
     check g.kind == gtStringLit
 

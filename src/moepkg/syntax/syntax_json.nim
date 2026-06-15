@@ -104,15 +104,15 @@ proc jsonLikeNextToken*(g: var GeneralTokenizer, allowComments: bool) =
           inc(pos)
   else:
     case g.buf[pos]
-    of ' ', '\x09' .. '\x0D':
+    of ' ', '\t' .. '\r':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+      while g.buf[pos] in {' ', '\t' .. '\r'}:
         inc(pos)
     of '/':
       if allowComments and g.buf[pos + 1] == '/':
         g.kind = gtComment
         inc(pos, 2)
-        while not (g.buf[pos] in {'\0', '\x0A', '\x0D'}):
+        while not (g.buf[pos] in {'\0', '\n', '\r'}):
           inc(pos)
       elif allowComments and g.buf[pos + 1] == '*':
         g.kind = gtLongComment

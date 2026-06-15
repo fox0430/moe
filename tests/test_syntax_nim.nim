@@ -1463,14 +1463,14 @@ suite "syntax_nim - nimNextToken special operator cases":
 suite "syntax_nim - nimNextToken carriage return handling":
   test "string terminated by carriage return":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"test\x0Dnext")
+    g.initGeneralTokenizer("\"test\rnext")
     g.nimNextToken()
     check g.kind == gtStringLit
     # String is terminated at carriage return
 
   test "char terminated by carriage return":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("'x\x0Dnext")
+    g.initGeneralTokenizer("'x\rnext")
     g.nimNextToken()
     check g.kind == gtCharLit
 

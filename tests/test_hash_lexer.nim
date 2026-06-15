@@ -43,7 +43,7 @@ suite "hash_lexer - lexHashLineComment basic hash comments":
 
   test "hash comment ends at carriage return":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("# comment\x0Dnext line")
+    g.initGeneralTokenizer("# comment\rnext line")
     let endPos = g.lexHashLineComment(0, flagsNim)
     check endPos == 9
 

@@ -61,7 +61,7 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
 
   # A single-line string continuation cannot cross a newline; drop the state
   # so the main path can tokenize the newline as whitespace.
-  if g.state == gtStringLit and g.buf[pos] in {'\x0D', '\x0A'}:
+  if g.state == gtStringLit and g.buf[pos] in {'\r', '\n'}:
     g.state = gtNone
     g.commentDepth = 0
 
@@ -115,7 +115,7 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
         else:
           inc(pos)
         break
-      of '\0', '\x0D', '\x0A':
+      of '\0', '\r', '\n':
         g.state = gtNone
         g.commentDepth = 0
         break
@@ -131,9 +131,9 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
         inc(pos)
   else:
     case g.buf[pos]
-    of ' ', '\x09' .. '\x0D':
+    of ' ', '\t' .. '\r':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+      while g.buf[pos] in {' ', '\t' .. '\r'}:
         inc(pos)
     of '#':
       pos = g.lexHash(pos, flagsPython)
@@ -208,7 +208,7 @@ proc pythonNextToken*(g: var GeneralTokenizer) =
         g.kind = gtStringLit
         while true:
           case g.buf[pos]
-          of '\0', '\x0D', '\x0A':
+          of '\0', '\r', '\n':
             break
           of '\"', '\'':
             if g.buf[pos] == quoteChar:
