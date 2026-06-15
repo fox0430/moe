@@ -84,9 +84,9 @@ proc xmlNextToken*(g: var GeneralTokenizer) =
     return
 
   case g.buf[pos]
-  of ' ', '\x09' .. '\x0D':
+  of ' ', '\t' .. '\r':
     g.kind = gtWhitespace
-    while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+    while g.buf[pos] in {' ', '\t' .. '\r'}:
       inc(pos)
   of '<':
     inc(pos)

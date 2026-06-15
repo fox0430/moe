@@ -262,9 +262,9 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
     return
 
   case g.buf[pos]
-  of ' ', '\x09' .. '\x0D':
+  of ' ', '\t' .. '\r':
     g.kind = gtWhitespace
-    while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+    while g.buf[pos] in {' ', '\t' .. '\r'}:
       inc(pos)
   of '<':
     # Check for generic types or JSX tags
@@ -285,7 +285,7 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
     inc(pos)
     if g.buf[pos] == '/':
       g.kind = gtComment
-      while not (g.buf[pos] in {'\0', '\x0A', '\x0D'}):
+      while not (g.buf[pos] in {'\0', '\n', '\r'}):
         inc(pos)
     elif g.buf[pos] == '*':
       g.kind = gtLongComment

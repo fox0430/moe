@@ -47,7 +47,7 @@ proc tclNextToken*(g: var GeneralTokenizer) =
     symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
-  if g.state == gtStringLit:
+  if g.state == gtStringLit and g.buf[pos] notin {'\0', '\r', '\n'}:
     g.kind = gtStringLit
     while true:
       case g.buf[pos]
@@ -69,7 +69,7 @@ proc tclNextToken*(g: var GeneralTokenizer) =
         else:
           inc(pos)
         break
-      of '\0', '\x0D', '\x0A':
+      of '\0', '\r', '\n':
         g.state = gtNone
         break
       of '\"':
@@ -79,10 +79,15 @@ proc tclNextToken*(g: var GeneralTokenizer) =
       else:
         inc(pos)
   else:
+    # A string resume landing directly on EOL/EOF has no content left (an
+    # escape consumed up to the newline). The string is line-bounded, so end
+    # it: reset to gtNone and tokenize the terminator normally instead of
+    # emitting an empty gtStringLit token.
+    g.state = gtNone
     case g.buf[pos]
-    of ' ', '\x09' .. '\x0D':
+    of ' ', '\t' .. '\r':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+      while g.buf[pos] in {' ', '\t' .. '\r'}:
         inc(pos)
     of '#':
       pos = g.lexHash(pos, flagsTcl)
@@ -101,7 +106,9 @@ proc tclNextToken*(g: var GeneralTokenizer) =
       inc(pos)
       if g.buf[pos] == '{':
         inc(pos)
-        while g.buf[pos] notin {'\0', '}'}:
+        # Line-bounded: an unclosed `${` must not swallow newlines into one
+        # token whose interior boundary state breaks incremental resume.
+        while g.buf[pos] notin {'\0', '}', '\r', '\n'}:
           inc(pos)
         if g.buf[pos] == '}':
           inc(pos)
@@ -145,7 +152,10 @@ proc tclNextToken*(g: var GeneralTokenizer) =
       g.kind = gtStringLit
       while true:
         case g.buf[pos]
-        of '\0':
+        of '\0', '\r', '\n':
+          # Line-bounded: the resume path also ends the string at EOL, so a
+          # multi-line string never becomes one token whose interior line
+          # boundary state (gtNone) breaks incremental resume.
           break
         of '\"':
           inc(pos)

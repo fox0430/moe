@@ -234,7 +234,7 @@ proc nimNextToken*(g: var GeneralTokenizer) =
       g.kind = gtStringLit
       while true:
         case g.buf[pos]
-        of '\0', '\x0D', '\x0A':
+        of '\0', '\r', '\n':
           g.state = gtNone
           break
         of '\"':
@@ -264,9 +264,9 @@ proc nimNextToken*(g: var GeneralTokenizer) =
         inc(pos)
   else:
     case g.buf[pos]
-    of ' ', '\x09' .. '\x0D':
+    of ' ', '\t' .. '\r':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+      while g.buf[pos] in {' ', '\t' .. '\r'}:
         inc(pos)
     of '#':
       pos = g.lexHash(pos, flagsNim)
@@ -298,7 +298,7 @@ proc nimNextToken*(g: var GeneralTokenizer) =
         else:
           g.kind = gtRawData
           inc(pos)
-          while not (g.buf[pos] in {'\0', '\x0A', '\x0D'}):
+          while not (g.buf[pos] in {'\0', '\n', '\r'}):
             if g.buf[pos] == '"' and g.buf[pos + 1] != '"':
               break
             inc(pos)
@@ -339,7 +339,7 @@ proc nimNextToken*(g: var GeneralTokenizer) =
       g.kind = gtCharLit
       while true:
         case g.buf[pos]
-        of '\0', '\x0D', '\x0A':
+        of '\0', '\r', '\n':
           break
         of '\'':
           inc(pos)
@@ -369,7 +369,7 @@ proc nimNextToken*(g: var GeneralTokenizer) =
         g.kind = gtStringLit
         while true:
           case g.buf[pos]
-          of '\0', '\x0D', '\x0A':
+          of '\0', '\r', '\n':
             break
           of '\"':
             inc(pos)

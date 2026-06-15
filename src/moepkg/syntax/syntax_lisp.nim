@@ -150,9 +150,9 @@ proc lispNextToken*(g: var GeneralTokenizer) =
           inc(pos)
   else:
     case g.buf[pos]
-    of ' ', '\x09' .. '\x0D':
+    of ' ', '\t' .. '\r':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+      while g.buf[pos] in {' ', '\t' .. '\r'}:
         inc(pos)
     of ';':
       g.kind = gtComment
@@ -197,7 +197,7 @@ proc lispNextToken*(g: var GeneralTokenizer) =
         # Character literal #\x
         inc(pos)
         g.kind = gtCharLit
-        if g.buf[pos] notin {'\0', '\x0D', '\x0A'}:
+        if g.buf[pos] notin {'\0', '\r', '\n'}:
           # Read the character name (e.g., #\space, #\newline)
           if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
             while g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:

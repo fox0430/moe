@@ -943,7 +943,7 @@ suite "syntax_shell - shellNextToken edge cases":
 
   test "string terminated by carriage return":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"test\x0Dnext")
+    g.initGeneralTokenizer("\"test\rnext")
     g.shellNextToken()
     check g.kind == gtStringLit
 

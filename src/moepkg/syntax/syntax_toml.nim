@@ -228,7 +228,7 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
         else:
           inc(pos)
         break
-      of '\0', '\x0D', '\x0A':
+      of '\0', '\r', '\n':
         g.state = gtNone
         break
       of '\"':
@@ -269,9 +269,9 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
         inc(pos)
   else:
     case g.buf[pos]
-    of ' ', '\x09' .. '\x0D':
+    of ' ', '\t' .. '\r':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+      while g.buf[pos] in {' ', '\t' .. '\r'}:
         inc(pos)
     of '#':
       pos = g.lexHash(pos, flagsToml)
@@ -350,7 +350,7 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
         # Single-line basic string
         while true:
           case g.buf[pos]
-          of '\0', '\x0D', '\x0A':
+          of '\0', '\r', '\n':
             break
           of '\"':
             inc(pos)
@@ -384,7 +384,7 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
         # Single-line literal string - no escape processing
         while true:
           case g.buf[pos]
-          of '\0', '\x0D', '\x0A':
+          of '\0', '\r', '\n':
             break
           of '\'':
             inc(pos)

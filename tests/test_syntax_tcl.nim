@@ -817,7 +817,7 @@ suite "syntax_tcl - tclNextToken edge cases":
 
   test "string terminated by carriage return":
     var g: GeneralTokenizer
-    g.initGeneralTokenizer("\"test\x0Dnext")
+    g.initGeneralTokenizer("\"test\rnext")
     g.tclNextToken()
     check g.kind == gtStringLit
 

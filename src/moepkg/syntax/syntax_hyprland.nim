@@ -57,7 +57,7 @@ proc hyprlandNextToken*(g: var GeneralTokenizer) =
         else:
           inc(pos)
         break
-      of '\0', '\x0D', '\x0A':
+      of '\0', '\r', '\n':
         g.state = gtNone
         break
       of '\"':
@@ -68,9 +68,9 @@ proc hyprlandNextToken*(g: var GeneralTokenizer) =
         inc(pos)
   else:
     case g.buf[pos]
-    of ' ', '\x09' .. '\x0D':
+    of ' ', '\t' .. '\r':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+      while g.buf[pos] in {' ', '\t' .. '\r'}:
         inc(pos)
     of '#':
       pos = g.lexHash(pos, flagsHyprland)
@@ -110,7 +110,7 @@ proc hyprlandNextToken*(g: var GeneralTokenizer) =
       g.kind = gtStringLit
       while true:
         case g.buf[pos]
-        of '\0', '\x0D', '\x0A':
+        of '\0', '\r', '\n':
           break
         of '\"':
           inc(pos)
