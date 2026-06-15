@@ -1181,31 +1181,37 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
     result.textDocumentSync = some(node["textDocumentSync"])
   if node.hasKey("completionProvider"):
     let cp = node["completionProvider"]
-    var opts = CompletionOptions()
-    if cp.kind == JObject:
-      if cp.hasKey("triggerCharacters"):
-        var chars: seq[string] = @[]
-        for c in cp["triggerCharacters"]:
-          chars.add(c.getStr)
-        opts.triggerCharacters = some(chars)
-      if cp.hasKey("resolveProvider"):
-        opts.resolveProvider = some(cp["resolveProvider"].getBool)
-    result.completionProvider = some(opts)
+    # A server may advertise a literal `false` to disable the feature. The spec
+    # types this as Options, but be defensive: only a non-`false` value counts
+    # as supported so we never fire requests that hang until the timeout.
+    if cp.kind != JBool or cp.getBool:
+      var opts = CompletionOptions()
+      if cp.kind == JObject:
+        if cp.hasKey("triggerCharacters"):
+          var chars: seq[string] = @[]
+          for c in cp["triggerCharacters"]:
+            chars.add(c.getStr)
+          opts.triggerCharacters = some(chars)
+        if cp.hasKey("resolveProvider"):
+          opts.resolveProvider = some(cp["resolveProvider"].getBool)
+      result.completionProvider = some(opts)
   if node.hasKey("signatureHelpProvider"):
     let sh = node["signatureHelpProvider"]
-    var opts = SignatureHelpOptions()
-    if sh.kind == JObject:
-      if sh.hasKey("triggerCharacters"):
-        var chars: seq[string] = @[]
-        for c in sh["triggerCharacters"]:
-          chars.add(c.getStr)
-        opts.triggerCharacters = some(chars)
-      if sh.hasKey("retriggerCharacters"):
-        var chars: seq[string] = @[]
-        for c in sh["retriggerCharacters"]:
-          chars.add(c.getStr)
-        opts.retriggerCharacters = some(chars)
-    result.signatureHelpProvider = some(opts)
+    # See completionProvider above: skip a literal `false`.
+    if sh.kind != JBool or sh.getBool:
+      var opts = SignatureHelpOptions()
+      if sh.kind == JObject:
+        if sh.hasKey("triggerCharacters"):
+          var chars: seq[string] = @[]
+          for c in sh["triggerCharacters"]:
+            chars.add(c.getStr)
+          opts.triggerCharacters = some(chars)
+        if sh.hasKey("retriggerCharacters"):
+          var chars: seq[string] = @[]
+          for c in sh["retriggerCharacters"]:
+            chars.add(c.getStr)
+          opts.retriggerCharacters = some(chars)
+      result.signatureHelpProvider = some(opts)
   if node.hasKey("hoverProvider"):
     result.hoverProvider = some(node["hoverProvider"])
   if node.hasKey("definitionProvider"):

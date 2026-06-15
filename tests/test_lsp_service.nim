@@ -574,6 +574,10 @@ suite "LspService - Capability Checking (without workers)":
             "hoverProvider": false,
             "definitionProvider": false,
             "referencesProvider": false,
+            # Options-typed capabilities: the parser must drop a literal `false`
+            # so the gate does not fall back to a bare `isSome` check.
+            "completionProvider": false,
+            "signatureHelpProvider": false,
           }
         ),
       ),
@@ -581,6 +585,8 @@ suite "LspService - Capability Checking (without workers)":
     check not svc.hasHoverSupport("nim")
     check not svc.hasDefinitionSupport("nim")
     check not svc.hasReferencesSupport("nim")
+    check not svc.hasCompletionSupport("nim")
+    check not svc.hasSignatureHelpSupport("nim")
 
   test "`true` and object capabilities are treated as supported":
     let svc = newLspService()
@@ -588,12 +594,20 @@ suite "LspService - Capability Checking (without workers)":
       "nim",
       LspEvent(
         kind: levCapabilities,
-        capabilitiesJson:
-          $(%*{"hoverProvider": true, "definitionProvider": {"workDoneProgress": true}}),
+        capabilitiesJson: $(
+          %*{
+            "hoverProvider": true,
+            "definitionProvider": {"workDoneProgress": true},
+            "completionProvider": {"triggerCharacters": ["."]},
+            "signatureHelpProvider": {},
+          }
+        ),
       ),
     )
     check svc.hasHoverSupport("nim")
     check svc.hasDefinitionSupport("nim")
+    check svc.hasCompletionSupport("nim")
+    check svc.hasSignatureHelpSupport("nim")
 
   test "getServerInfo returns none when no workers":
     let svc = newLspService()
