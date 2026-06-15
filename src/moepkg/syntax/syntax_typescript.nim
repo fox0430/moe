@@ -270,21 +270,17 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
     # Check for generic types or JSX tags
     # If preceded by an identifier character, treat as generic type (not JSX)
     let prevIsIdentChar = pos > 0 and g.buf[pos - 1] in symChars
-    if pos + 1 < g.buf.len:
-      if g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'} and not prevIsIdentChar:
-        # This looks like JSX/TSX, switch to JSX mode
-        g.inJsxMode = true
-        htmlNextToken(g)
-        return
-      else:
-        # Generic type <T> or less-than operator
-        g.kind = gtOperator
-        inc(pos)
-        while g.buf[pos] in opChars and g.buf[pos] != '>':
-          inc(pos)
+    if g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'} and not prevIsIdentChar:
+      # This looks like JSX/TSX, switch to JSX mode
+      g.inJsxMode = true
+      htmlNextToken(g)
+      return
     else:
+      # Generic type <T> or less-than operator
       g.kind = gtOperator
       inc(pos)
+      while g.buf[pos] in opChars and g.buf[pos] != '>':
+        inc(pos)
   of '/':
     inc(pos)
     if g.buf[pos] == '/':
@@ -364,15 +360,13 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
     var isKey = false
     var tempPos = pos
     # Skip spaces/tabs after identifier (same line only)
-    while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t'}:
+    while g.buf[tempPos] in {' ', '\t'}:
       inc(tempPos)
     # Check if next non-whitespace character is colon or optional colon (?:)
-    if tempPos < g.buf.len:
-      if g.buf[tempPos] == ':':
-        isKey = true
-      elif g.buf[tempPos] == '?' and tempPos + 1 < g.buf.len and
-          g.buf[tempPos + 1] == ':':
-        isKey = true
+    if g.buf[tempPos] == ':':
+      isKey = true
+    elif g.buf[tempPos] == '?' and g.buf[tempPos + 1] == ':':
+      isKey = true
 
     let kwKind = tsGetKeyword(id)
     if kwKind != gtIdentifier:
@@ -453,7 +447,7 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
     var isKey = false
     var tempPos = pos
     # Scan to the closing quote (same line only) to check for a colon
-    while tempPos < g.buf.len and g.buf[tempPos] != '\0':
+    while g.buf[tempPos] != '\0':
       case g.buf[tempPos]
       of '\r', '\n':
         break
@@ -461,20 +455,20 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
         if g.buf[tempPos] == quote:
           inc(tempPos)
           # Skip spaces/tabs after closing quote (same line only)
-          while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t'}:
+          while g.buf[tempPos] in {' ', '\t'}:
             inc(tempPos)
           # Check if next non-whitespace character is colon or optional colon (?:)
-          if tempPos < g.buf.len:
-            if g.buf[tempPos] == ':':
-              isKey = true
-            elif g.buf[tempPos] == '?' and tempPos + 1 < g.buf.len and
-                g.buf[tempPos + 1] == ':':
-              isKey = true
+          if g.buf[tempPos] == ':':
+            isKey = true
+          elif g.buf[tempPos] == '?' and g.buf[tempPos + 1] == ':':
+            isKey = true
           break
         else:
           inc(tempPos)
       of '\\':
-        if tempPos + 1 < g.buf.len and g.buf[tempPos + 1] in {'\r', '\n'}:
+        # `g.buf[tempPos]` is `\` here, so `tempPos + 1` is at most the NUL
+        # terminator; stop at an escaped EOL or the NUL rather than stepping past it.
+        if g.buf[tempPos + 1] in {'\r', '\n', '\0'}:
           break
         inc(tempPos, 2) # Skip escape sequence
       else:
@@ -610,7 +604,7 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
     else:
       g.kind = gtPunctuation
       # Check if we should return to JSX mode after closing expression
-      if pos < g.buf.len and g.buf[pos] == '<':
+      if g.buf[pos] == '<':
         g.inJsxMode = true
   of '@':
     # Decorator syntax

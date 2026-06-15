@@ -265,7 +265,7 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
       inc(pos)
   of '<':
     # Check for JSX tags outside of template literals
-    if pos + 1 < g.buf.len and g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
+    if g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
       # This looks like JSX/HTML, switch to JSX mode
       g.inJsxMode = true
       htmlNextToken(g)
@@ -356,10 +356,10 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
     var isKey = false
     var tempPos = pos
     # Skip spaces/tabs after identifier (same line only)
-    while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t'}:
+    while g.buf[tempPos] in {' ', '\t'}:
       inc(tempPos)
     # Check if next non-whitespace character is colon
-    if tempPos < g.buf.len and g.buf[tempPos] == ':':
+    if g.buf[tempPos] == ':':
       isKey = true
 
     let kwKind = jsGetKeyword(id)
@@ -423,7 +423,7 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
     var isKey = false
     var tempPos = pos
     # Scan to the closing quote (same line only) to check for a colon
-    while tempPos < g.buf.len and g.buf[tempPos] != '\0':
+    while g.buf[tempPos] != '\0':
       case g.buf[tempPos]
       of '\r', '\n':
         break
@@ -431,16 +431,18 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
         if g.buf[tempPos] == quote:
           inc(tempPos)
           # Skip spaces/tabs after closing quote (same line only)
-          while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t'}:
+          while g.buf[tempPos] in {' ', '\t'}:
             inc(tempPos)
           # Check if next non-whitespace character is colon
-          if tempPos < g.buf.len and g.buf[tempPos] == ':':
+          if g.buf[tempPos] == ':':
             isKey = true
           break
         else:
           inc(tempPos)
       of '\\':
-        if tempPos + 1 < g.buf.len and g.buf[tempPos + 1] in {'\r', '\n'}:
+        # `g.buf[tempPos]` is `\` here, so `tempPos + 1` is at most the NUL
+        # terminator; stop at an escaped EOL or the NUL rather than stepping past it.
+        if g.buf[tempPos + 1] in {'\r', '\n', '\0'}:
           break
         inc(tempPos, 2) # Skip escape sequence
       else:
@@ -550,7 +552,7 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
     else:
       g.kind = gtPunctuation
       # Check if we should return to JSX mode after closing expression
-      if pos < g.buf.len and g.buf[pos] == '<':
+      if g.buf[pos] == '<':
         g.inJsxMode = true
   of '\0':
     g.kind = gtEof
