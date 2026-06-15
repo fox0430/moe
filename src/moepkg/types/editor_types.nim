@@ -37,6 +37,7 @@ import
   ../config,
   ../persist,
   ../background_process,
+  ../quick_run_utils,
   ../virtual_text
 import ../key_bindings except Command
 import ../key_router
@@ -81,6 +82,11 @@ type
     cursorPositions*: Table[string, CursorPositionEntry]
     savedBookmarks*: Table[string, seq[int]]
     runningBackgroundProcesses*: seq[BackgroundProcess]
+    runningQuickRunProcesses*: seq[QuickRunProcess]
+      ## In-flight QuickRun processes, tracked separately from
+      ## `runningBackgroundProcesses` because they own temporary files (temp
+      ## source + build artifacts) that must be removed on editor exit/crash.
+      ## Cleaned up via `cleanupQuickRunProcesses` on shutdown/emergency.
     terminalStates*: Table[BufferId, TerminalState]
       ## Live Terminal sessions keyed by their buffer id. The window's
       ## `modeState` is rebuilt from this table on tab switches so a
