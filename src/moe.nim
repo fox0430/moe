@@ -352,30 +352,13 @@ proc main() =
         if cmdLineConfig.isReadonly:
           editor.activeBuffer().readOnly = true
 
-      # Load additional files with auto-split if enabled
-      if cmdLineConfig.filePaths.len > 1 and editor.config.startUpFileOpen.autoSplit:
-        for i in 1 ..< cmdLineConfig.filePaths.len:
-          let filePath = cmdLineConfig.filePaths[i]
-          if fileExists(filePath):
-            # Split based on config
-            let splitResult =
-              case editor.config.startUpFileOpen.splitType
-              of stVertical:
-                editor.vsplit(some(filePath))
-              of stHorizontal:
-                editor.hsplit(some(filePath))
-            if splitResult.isErr:
-              logError("moe", fmt"Failed to split for {filePath}: {splitResult.error}")
-            elif cmdLineConfig.isReadonly:
-              editor.activeBuffer().readOnly = true
-      elif cmdLineConfig.filePaths.len > 1:
-        # No auto-split, just load files into buffer list
-        for i in 1 ..< cmdLineConfig.filePaths.len:
-          let filePath = cmdLineConfig.filePaths[i]
-          if fileExists(filePath):
-            discard editor.loadFile(filePath)
-            if cmdLineConfig.isReadonly:
-              editor.activeBuffer().readOnly = true
+      # Open any additional files (after the first). The auto-split vs no-split
+      # decision and the per-file loop live in openAdditionalStartupFiles so the
+      # two paths stay in sync and the behaviour is unit-testable.
+      if cmdLineConfig.filePaths.len > 1:
+        editor.openAdditionalStartupFiles(
+          cmdLineConfig.filePaths, cmdLineConfig.isReadonly
+        )
 
   # Run the async editor main loop
   waitFor runEditor(editor, app, cmdLineConfig, log)

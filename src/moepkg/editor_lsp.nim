@@ -64,6 +64,20 @@ proc syncBufferAfterEdit*(e: Editor, buf: TextBuffer, context: string) =
   elif buf.filePath.isSome:
     logLspDegraded(context & ": didChange " & buf.filePath.get, syncResult.error)
 
+proc openBufferWithLsp*(e: Editor, buf: TextBuffer) =
+  ## didOpen a freshly registered buffer and record its synced changeSeq so the
+  ## next didChange delta is computed against the right baseline. No-op when LSP
+  ## is disabled or the buffer has no path (onBufferOpen guards both). Callers
+  ## that register a buffer without going through `loadFile` (loadOrCreateBuffer)
+  ## must call this, otherwise the server never learns about the document.
+  if not e.lsp.enabled:
+    return
+  let openResult = e.lsp.onBufferOpen(buf)
+  if openResult.isOk:
+    e.lastLspChangeSeqs[buf.id] = buf.changeSeq
+  elif buf.filePath.isSome:
+    logLspDegraded("didOpen " & buf.filePath.get, openResult.error)
+
 proc clampAllWindowCursors*(e: Editor) =
   ## Re-clamp every window's cursor to its buffer's bounds. A server-initiated
   ## workspace edit can rewrite — and shrink — a buffer shown in an inactive
