@@ -597,6 +597,25 @@ proc loadOrCreateBuffer*(e: Editor, path: string): Result[TextBuffer, string] =
   applyEditorConfigToBuffer(newBuffer, e.config)
   newBuffer.setReservedWords(toReservedWords(e.config.highlight.reservedWord))
   e.addBuffer(newBuffer)
+
+  # Mirror loadFile's per-buffer initialisation so files reached via :e, the
+  # FileTree opener and multi-file startup get the same setup as the first file.
+  # Cursor restore is intentionally omitted: these buffers are not the displayed
+  # buffer and a later switch resets the cursor to the top.
+  if newBuffer.filePath.isSome:
+    let absPath = absolutePath(newBuffer.filePath.get)
+    if e.config.persist.bookmarks and e.savedBookmarks.hasKey(absPath):
+      newBuffer.bookmarks = e.savedBookmarks[absPath]
+    if e.state.display.showGitDiff:
+      discard updateBufferWithGitDiff(newBuffer, useBuffer = false)
+  # Scan conflict markers regardless of the highlight config (like loadFile) so
+  # conflict-navigation works as soon as this buffer becomes active.
+  newBuffer.refreshConflicts()
+
+  # Announce the new document to the language server. Unlike `loadFile`,
+  # this path is reached by :e, the FileTree opener and multi-file startup,
+  # all of which previously left the buffer invisible to LSP.
+  e.openBufferWithLsp(newBuffer)
   ok(newBuffer)
 
 proc editFile*(e: Editor, path: string): Result[(), string] =
@@ -677,6 +696,40 @@ proc openFileInNewRightWindow*(e: Editor, path: string): Result[(), string] =
 
   e.state.windowDisplay.needsFullRedraw = true
   ok(())
+
+proc openAdditionalStartupFiles*(
+    e: Editor, filePaths: openArray[string], readonly: bool
+) =
+  ## Open the extra command-line files (everything after the first, which
+  ## loadFile already loaded into the active buffer). With auto-split each file
+  ## opens in its own split window; otherwise each is registered as a separate
+  ## buffer (like :badd) and joins the active window's tab list so :bnext/:bprev
+  ## can reach it without switching away from the first file. Missing files are
+  ## skipped. Sharing one loop keeps the split and no-split startup paths in sync.
+  for i in 1 ..< filePaths.len:
+    let filePath = filePaths[i]
+    if not fileExists(filePath):
+      continue
+
+    if e.config.startUpFileOpen.autoSplit:
+      let splitResult =
+        case e.config.startUpFileOpen.splitType
+        of stVertical:
+          e.vsplit(some(filePath))
+        of stHorizontal:
+          e.hsplit(some(filePath))
+      if splitResult.isErr:
+        logError("moe", fmt"Failed to split for {filePath}: {splitResult.error}")
+      elif readonly:
+        e.activeBuffer().readOnly = true
+    else:
+      let bufResult = e.loadOrCreateBuffer(filePath)
+      if bufResult.isErr:
+        logError("moe", fmt"Failed to open {filePath}: {bufResult.error}")
+      else:
+        e.addBufferToWindowList(bufResult.get)
+        if readonly:
+          bufResult.get.readOnly = true
 
 proc newEditor*(editorConfig: EditorConfig, vr: ValidationResult): Editor =
   ## Create a new Editor with the given configuration and validation result.

@@ -140,6 +140,163 @@ suite "Editor - loadFile":
     check e.state.cursor.line == 0
     check e.state.cursor.column <= "Short".len
 
+suite "Editor - multi-file startup (no auto-split)":
+  test "Each extra file becomes its own buffer":
+    # Regression: `moe a b c` without auto-split used to call loadFile for
+    # every path, overwriting the active buffer in place so only the last
+    # file survived. The startup path now registers the extra files via
+    # loadOrCreateBuffer (like :badd). This drives the real startup entry
+    # point (openAdditionalStartupFiles), not a hand-rolled copy of it.
+    let e = createTestEditor()
+    e.config.startUpFileOpen.autoSplit = false
+    let
+      fileA = getTempDir() / "moe_test_multi_a.txt"
+      fileB = getTempDir() / "moe_test_multi_b.txt"
+      fileC = getTempDir() / "moe_test_multi_c.txt"
+    writeFile(fileA, "A")
+    writeFile(fileB, "B")
+    writeFile(fileC, "C")
+    defer:
+      removeFile(fileA)
+      removeFile(fileB)
+      removeFile(fileC)
+
+    # First file loads into the initial (active) buffer, exactly as main() does.
+    check e.loadFile(fileA).isOk
+    # Then the real startup helper registers the remaining files.
+    e.openAdditionalStartupFiles(@[fileA, fileB, fileC], readonly = false)
+
+    check e.buffers.len == 3
+    check e.activeBuffer.filePath.get == fileA
+
+    check e.findBufferByPath(fileA) >= 0
+    check e.findBufferByPath(fileB) >= 0
+    check e.findBufferByPath(fileC) >= 0
+
+    # All three are reachable from the active window's tab list, so :bnext/:bprev
+    # can cycle to them instead of reporting "only one buffer".
+    check e.activeWindow.bufferIds.len == 3
+
+  test "Missing extra files are skipped without aborting the rest":
+    # A nonexistent path in the middle must not stop later files from opening.
+    let e = createTestEditor()
+    e.config.startUpFileOpen.autoSplit = false
+    let
+      fileA = getTempDir() / "moe_test_multi_skip_a.txt"
+      missing = getTempDir() / "moe_test_multi_does_not_exist.txt"
+      fileC = getTempDir() / "moe_test_multi_skip_c.txt"
+    writeFile(fileA, "A")
+    writeFile(fileC, "C")
+    removeFile(missing)
+    defer:
+      removeFile(fileA)
+      removeFile(fileC)
+
+    check e.loadFile(fileA).isOk
+    e.openAdditionalStartupFiles(@[fileA, missing, fileC], readonly = false)
+
+    check e.buffers.len == 2
+    check e.findBufferByPath(missing) < 0
+    check e.findBufferByPath(fileC) >= 0
+
+  test "Re-opening the same path reuses its buffer":
+    let e = createTestEditor()
+    let fileA = getTempDir() / "moe_test_multi_reuse.txt"
+    writeFile(fileA, "A")
+    defer:
+      removeFile(fileA)
+
+    check e.loadFile(fileA).isOk
+    check e.loadOrCreateBuffer(fileA).isOk
+    # No duplicate buffer for the already-open file.
+    check e.buffers.len == 1
+
+  test "Readonly flag applies to each extra buffer, not the active one":
+    # Regression: the fix sets readonly on the buffer returned by
+    # loadOrCreateBuffer. The old in-place loadFile left the active buffer as
+    # the just-loaded file, so the readonly flag landed on the wrong target
+    # once loadOrCreateBuffer kept the first file active. Each extra file must
+    # become readonly while this call leaves the active buffer untouched
+    # (main() applies the first file's readonly separately).
+    let e = createTestEditor()
+    e.config.startUpFileOpen.autoSplit = false
+    let
+      fileA = getTempDir() / "moe_test_multi_ro_a.txt"
+      fileB = getTempDir() / "moe_test_multi_ro_b.txt"
+      fileC = getTempDir() / "moe_test_multi_ro_c.txt"
+    writeFile(fileA, "A")
+    writeFile(fileB, "B")
+    writeFile(fileC, "C")
+    defer:
+      removeFile(fileA)
+      removeFile(fileB)
+      removeFile(fileC)
+
+    check e.loadFile(fileA).isOk
+    e.openAdditionalStartupFiles(@[fileA, fileB, fileC], readonly = true)
+
+    check e.buffers[e.findBufferByPath(fileB)].readOnly
+    check e.buffers[e.findBufferByPath(fileC)].readOnly
+    # The active (first) buffer is left alone: the flag was applied to the
+    # returned extra buffers, not the active one.
+    check not e.activeBuffer.readOnly
+
+suite "Editor - multi-file startup (auto-split)":
+  test "Each extra file opens in its own split window":
+    # With auto-split every extra path opens in a new split window (and its own
+    # buffer), unlike the no-split path which only registers buffers in the
+    # active window's tab list.
+    let e = createTestEditor()
+    e.syncActiveWindow()
+    e.config.startUpFileOpen.autoSplit = true
+    e.config.startUpFileOpen.splitType = stVertical
+    let
+      fileA = getTempDir() / "moe_test_split_a.txt"
+      fileB = getTempDir() / "moe_test_split_b.txt"
+      fileC = getTempDir() / "moe_test_split_c.txt"
+    writeFile(fileA, "A")
+    writeFile(fileB, "B")
+    writeFile(fileC, "C")
+    defer:
+      removeFile(fileA)
+      removeFile(fileB)
+      removeFile(fileC)
+
+    check e.loadFile(fileA).isOk
+    e.openAdditionalStartupFiles(@[fileA, fileB, fileC], readonly = false)
+
+    # One window and one buffer per file.
+    check e.windowManager.windows.len == 3
+    check e.buffers.len == 3
+    check e.findBufferByPath(fileA) >= 0
+    check e.findBufferByPath(fileB) >= 0
+    check e.findBufferByPath(fileC) >= 0
+
+  test "Missing extra files are skipped without spawning a window":
+    # A nonexistent path must not create a split window or a buffer.
+    let e = createTestEditor()
+    e.syncActiveWindow()
+    e.config.startUpFileOpen.autoSplit = true
+    e.config.startUpFileOpen.splitType = stVertical
+    let
+      fileA = getTempDir() / "moe_test_split_skip_a.txt"
+      missing = getTempDir() / "moe_test_split_does_not_exist.txt"
+      fileC = getTempDir() / "moe_test_split_skip_c.txt"
+    writeFile(fileA, "A")
+    writeFile(fileC, "C")
+    removeFile(missing)
+    defer:
+      removeFile(fileA)
+      removeFile(fileC)
+
+    check e.loadFile(fileA).isOk
+    e.openAdditionalStartupFiles(@[fileA, missing, fileC], readonly = false)
+
+    # Only fileA (already active) and fileC get a window; the missing path is skipped.
+    check e.windowManager.windows.len == 2
+    check e.findBufferByPath(missing) < 0
+    check e.findBufferByPath(fileC) >= 0
+
 suite "Editor - saveFile":
   test "Save file to existing path":
     let e = createTestEditor()

@@ -24,7 +24,12 @@ import std/options
 import pkg/results
 
 import
-  types/editor_types, logger, render_utils, editorconfig_helper, editor_window_layout
+  types/editor_types,
+  logger,
+  render_utils,
+  editorconfig_helper,
+  editor_window_layout,
+  editor_lsp
 
 # Window state management procedures
 
@@ -134,6 +139,12 @@ proc registerSplitBuffer(
   # Apply EditorConfig settings to the new buffer
   if applyConfig:
     applyEditorConfigToBuffer(newBuffer, e.config)
+    # A freshly loaded split file: announce it to the LSP (didOpen) like
+    # loadOrCreateBuffer does, so split-opened files — including the
+    # auto-split multi-file startup path — are visible to the language
+    # server. WithBuffer splits (applyConfig = false) show an existing or
+    # synthetic buffer and must not re-open it.
+    e.openBufferWithLsp(newBuffer)
   logDebug("editor", context & ": buffer added, buffers.len: " & $e.buffers.len)
 
 proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =

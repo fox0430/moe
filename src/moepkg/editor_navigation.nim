@@ -30,6 +30,7 @@ import
   types/editor_types,
   editor_window,
   editor_window_state,
+  editor_lsp,
   lsp_service,
   lsp_integration,
   references_viewer,
@@ -96,12 +97,11 @@ proc openFileInActiveWindow*(e: Editor, path: string): Result[TextBuffer, string
   e.addBuffer(newBuffer)
   e.switchToBufferForLsp(e.buffers.high)
 
-  # Notify LSP about the newly opened file (best-effort; failure is non-fatal,
-  # but record it so the resulting feature degradation is not silent)
-  if e.lsp.enabled:
-    let openResult = e.lsp.onBufferOpen(newBuffer)
-    if openResult.isErr:
-      logLspDegraded("didOpen", openResult.error)
+  # Notify the LSP about the newly opened file and record its synced baseline
+  # so the next didChange delta is computed against the right changeSeq.
+  # Best-effort: openBufferWithLsp is a no-op when LSP is disabled / the buffer
+  # has no path, and logs a degraded notice on failure.
+  e.openBufferWithLsp(newBuffer)
 
   ok(newBuffer)
 
