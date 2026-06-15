@@ -345,6 +345,9 @@ import
   syntax_jsonc, syntax_typescript, syntax_log, syntax_xml, syntax_zsh
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
+  let
+    startPos = g.pos
+    startState = g.state
   case lang
   of langAstro: g.astroNextToken
   of langC: g.cNextToken
@@ -378,3 +381,11 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langXml: g.xmlNextToken
   of langZsh: g.zshNextToken
   else: discard
+
+  if g.kind != gtEof and g.pos <= startPos and g.state == startState:
+    # Monotonic-advance guard: a non-EOF token must make progress, by consuming
+    # input (`pos` advances) or changing `state` (YAML's zero-consume document
+    # transitions). When it does neither the tokenizer is stuck; the per-tokenizer
+    # `assert` that catches this is compiled out under `-d:danger`, where the
+    # consumer loops would spin forever. Force EOF to terminate them.
+    g.kind = gtEof
