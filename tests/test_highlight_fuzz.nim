@@ -879,3 +879,68 @@ suite "Incremental Highlight Chunk Boundary":
       fullHighlight(buf, lang),
       "comment early close",
     )
+
+# Monotonic-advance guard (tokenizer.nim getNextToken)
+#
+# A non-EOF token must make progress: consume input (`pos` advances) or, for
+# YAML's zero-consume document/scalar transitions, change `state`. The guard
+# forces gtEof when it does neither, so the consumer loops cannot spin under
+# `-d:danger`, where the per-tokenizer empty-token `assert` is compiled out.
+# These pin both halves: the guard must NOT fire on legitimate state-only
+# progress, and progress must be monotonic so the loop always terminates.
+
+proc tokenizesMonotonically(lang: SourceLanguage, src: string, maxSteps: int): bool =
+  ## Drive getNextToken to gtEof, checking forward progress at every step
+  ## (`pos` advanced or `state` changed). Returns whether it terminated within
+  ## `maxSteps`; a guard regression fails this finite bound instead of hanging.
+  var g: GeneralTokenizer
+  g.initGeneralTokenizer(src)
+  for _ in 0 ..< maxSteps:
+    let
+      prevPos = g.pos
+      prevState = g.state
+    g.getNextToken(lang)
+    if g.kind == gtEof:
+      return true
+    check (g.pos > prevPos or g.state != prevState)
+  false
+
+suite "Monotonic-advance guard":
+  test "YAML zero-consume advances by state change, not pos (guard does not fire)":
+    # The document-start arm emits gtNone with length 0 and flips gtEof->gtOther
+    # (syntax_yaml.nim). The guard must let it through on the state change; a
+    # length-only guard would force gtEof here and drop the rest of the line.
+    var g: GeneralTokenizer
+    g.initGeneralTokenizer("key: value")
+    g.getNextToken(langYaml)
+    check g.kind == gtNone # not gtEof: the guard did not fire
+    check g.length == 0 # zero-consume
+    check g.state == gtOther # progress came from the state flip
+    # The next call now advances `pos` and parses the key.
+    let before = g.pos
+    g.getNextToken(langYaml)
+    check g.pos > before
+
+  test "every tokenizer makes monotonic progress over the corpus (terminates)":
+    let corpora: seq[(SourceLanguage, seq[seq[string]])] = @[
+      (SourceLanguage.langYaml, yamlCorpus()),
+      (SourceLanguage.langRust, rustCorpus()),
+      (SourceLanguage.langNim, nimCorpus()),
+      (SourceLanguage.langJavaScript, javascriptCorpus()),
+      (SourceLanguage.langTypeScript, typescriptCorpus()),
+      (SourceLanguage.langMarkdown, markdownCorpus()),
+      (SourceLanguage.langPython, pythonCorpus()),
+      (SourceLanguage.langLatex, latexCorpus()),
+      (SourceLanguage.langLisp, lispCorpus()),
+      (SourceLanguage.langC, cCorpus()),
+      (SourceLanguage.langCpp, cppCorpus()),
+      (SourceLanguage.langHtml, htmlCorpus()),
+      (SourceLanguage.langXml, xmlCorpus()),
+      (SourceLanguage.langAstro, astroCorpus()),
+    ]
+    for (lang, corpus) in corpora:
+      for buf in corpus:
+        let src = buf.join("\n")
+        # `2 * len` headroom for the few zero-consume steps; a true infinite
+        # loop blows any finite bound.
+        check tokenizesMonotonically(lang, src, 2 * src.len + 64)
