@@ -107,8 +107,19 @@ proc emergencySaveAndQuit(
   let savedPaths = editor.emergencySaveBuffers()
 
   editor.cleanupBackgroundProcesses()
+  # Kill in-flight QuickRun processes and remove their temp files so a crash
+  # doesn't orphan them or leave temp source/build artifacts behind.
+  editor.cleanupQuickRunProcesses()
   # Kill + reap terminal shells too, so a crash doesn't orphan them.
   editor.cleanupAllTerminals()
+  # Terminate any pending async git diff subprocesses and free their
+  # tempfiles. Swallow exceptions so a cache cleanup failure can't block
+  # the rest of the emergency shutdown sequence.
+  try:
+    cleanupGitDiffCache()
+  except CatchableError as e:
+    logError("moe", "cleanupGitDiffCache failed: " & e.msg)
+
   editor.shutdown()
   editor.savePersistData()
 
@@ -223,6 +234,10 @@ proc runEditor(
 
     # Cleanup background processes before exiting
     editor.cleanupBackgroundProcesses()
+
+    # Kill any in-flight QuickRun processes and remove their temp files (temp
+    # source + build artifacts) so they don't outlive moe.
+    editor.cleanupQuickRunProcesses()
 
     # Tear down any live terminal PTYs (kill + reap their shells). Terminal
     # tabs left open at quit never reach closeTerminalBuffer, so without this

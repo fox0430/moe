@@ -48,6 +48,23 @@ proc cleanupBackgroundProcesses*(e: Editor) =
       p.kill()
   e.runningBackgroundProcesses = @[]
 
+proc addRunningQuickRun*(e: Editor, p: QuickRunProcess) =
+  e.runningQuickRunProcesses.add(p)
+
+proc removeRunningQuickRun*(e: Editor, p: QuickRunProcess) =
+  let idx = e.runningQuickRunProcesses.find(p)
+  if idx >= 0:
+    e.runningQuickRunProcesses.delete(idx)
+
+proc cleanupQuickRunProcesses*(e: Editor) =
+  ## Kill any in-flight QuickRun processes and remove their temporary files
+  ## (temp source + build artifacts). Call on editor exit/crash so QuickRun
+  ## never orphans a process or leaves temp files behind. Mirrors the git diff
+  ## shutdown cleanup (`cleanupGitDiffCache`).
+  for p in e.runningQuickRunProcesses:
+    abandonQuickRunProcess(p)
+  e.runningQuickRunProcesses = @[]
+
 proc handleRenameModeEvent(e: Editor, event: Event): bool =
   ## Handle Rename mode events - for LSP rename symbol input
   ##
@@ -1248,9 +1265,12 @@ proc runQuickRunAsync(
         editor.state.statusMessage = "QuickRun error: " & quickRunResult.error
       else:
         let qrProcess = quickRunResult.get
-        editor.addRunningProcess(qrProcess.process)
+        # Track the full QuickRunProcess (not just its BackgroundProcess) so
+        # editor exit/crash can also remove its temp files, not only kill the
+        # process. See cleanupQuickRunProcesses.
+        editor.addRunningQuickRun(qrProcess)
         let outputResult = await qrProcess.waitForResultAsync()
-        editor.removeRunningProcess(qrProcess.process)
+        editor.removeRunningQuickRun(qrProcess)
         if outputResult.isErr:
           editor.state.statusMessage = "QuickRun error: " & outputResult.error
         else:

@@ -896,3 +896,47 @@ suite "QuickRunUtils - cancel and kill":
 
     let finished = waitFor runTest()
     check finished
+
+suite "QuickRunUtils - abandonQuickRunProcess":
+  test "Removes temp source file":
+    let tempPath = getTempDir() / "moe_test_quickrun_abandon.txt"
+    writeFile(tempPath, "echo 1")
+    # nil process: kill() is a no-op, so this exercises temp-file cleanup only.
+    let p = QuickRunProcess(filePath: tempPath, isTempFile: true)
+    abandonQuickRunProcess(p)
+    check not fileExists(tempPath)
+
+  test "Leaves non-temp files untouched":
+    let path = getTempDir() / "moe_test_quickrun_keep.txt"
+    writeFile(path, "echo 1")
+    let p = QuickRunProcess(filePath: path, isTempFile: false)
+    abandonQuickRunProcess(p)
+    check fileExists(path)
+    removeFile(path)
+
+  test "Safe to call multiple times":
+    let tempPath = getTempDir() / "moe_test_quickrun_multi.txt"
+    writeFile(tempPath, "echo 1")
+    let p = QuickRunProcess(filePath: tempPath, isTempFile: true)
+    abandonQuickRunProcess(p)
+    abandonQuickRunProcess(p)
+    check not fileExists(tempPath)
+
+  test "Kills a running process and removes temp file":
+    proc runTest(): Future[bool] {.async.} =
+      let tempPath = getTempDir() / "moe_test_quickrun_kill.txt"
+      writeFile(tempPath, "")
+      let cmd = BackgroundProcessCommand(
+        cmd: "sleep", args: @["10"], workingDir: getCurrentDir()
+      )
+      let r = await startBackgroundProcess(cmd)
+      if not r.isOk:
+        return false
+      let qp = QuickRunProcess(
+        command: cmd, filePath: tempPath, isTempFile: true, process: r.get
+      )
+      abandonQuickRunProcess(qp)
+      await sleepAsync(100.milliseconds)
+      return qp.isFinish and not fileExists(tempPath)
+
+    check waitFor runTest()

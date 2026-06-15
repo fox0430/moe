@@ -323,6 +323,17 @@ proc cleanupTempFiles(p: QuickRunProcess) =
     except OSError:
       discard
 
+proc abandonQuickRunProcess*(p: QuickRunProcess) =
+  ## Kill a running QuickRun process and remove its temporary files (temp
+  ## source + build artifacts) without waiting for completion. Used on editor
+  ## shutdown/crash so an in-flight QuickRun never orphans its process or
+  ## leaves temp files behind. Safe to call multiple times and with a nil
+  ## process; `cleanupTempFiles` swallows OS errors so it can run from
+  ## shutdown paths. Mirrors `git_diff.abandonGitDiffProcess`.
+  if not p.process.isNil:
+    p.kill()
+  p.cleanupTempFiles()
+
 proc waitForResultAsync*(
     p: QuickRunProcess
 ): Future[Result[seq[string], string]] {.async: (raises: []).} =
