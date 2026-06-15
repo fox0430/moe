@@ -1247,8 +1247,9 @@ template isCapabilityEnabled(cap: Option[JsonNode]): bool =
   cap.isSome and (cap.get.kind != JBool or cap.get.getBool)
 
 template isCapabilityEnabled[T](cap: Option[T]): bool =
-  ## Capabilities typed as `Options` only (e.g. CompletionOptions) cannot be a
-  ## bare boolean per the LSP spec, so presence alone means supported.
+  ## Capabilities typed as `Options` (e.g. CompletionOptions) carry no boolean,
+  ## so presence means supported. `parseServerCapabilities` is responsible for
+  ## leaving the field `none` when a server advertises a literal `false`.
   cap.isSome
 
 # Template for standard capability checks (dynamic registration + static capability)

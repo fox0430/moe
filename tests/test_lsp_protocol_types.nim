@@ -312,6 +312,37 @@ suite "types - position/range parsing is defensive":
     check e.newText == "x"
     check e.range.start.line == 0
 
+suite "types - parseServerCapabilities":
+  test "completionProvider object is supported":
+    let caps = parseServerCapabilities(%*{"completionProvider": {}})
+    check caps.completionProvider.isSome
+
+  test "completionProvider: false is treated as unsupported":
+    # A server may advertise a literal `false` to disable completion; treating
+    # it as supported fires requests that hang until the timeout.
+    let caps = parseServerCapabilities(%*{"completionProvider": false})
+    check caps.completionProvider.isNone
+
+  test "completionProvider: true is supported":
+    let caps = parseServerCapabilities(%*{"completionProvider": true})
+    check caps.completionProvider.isSome
+
+  test "signatureHelpProvider object is supported":
+    let caps = parseServerCapabilities(%*{"signatureHelpProvider": {}})
+    check caps.signatureHelpProvider.isSome
+
+  test "signatureHelpProvider: false is treated as unsupported":
+    let caps = parseServerCapabilities(%*{"signatureHelpProvider": false})
+    check caps.signatureHelpProvider.isNone
+
+  test "completionProvider options are still parsed":
+    let caps = parseServerCapabilities(
+      %*{"completionProvider": {"resolveProvider": true, "triggerCharacters": ["."]}}
+    )
+    check caps.completionProvider.isSome
+    check caps.completionProvider.get.resolveProvider == some(true)
+    check caps.completionProvider.get.triggerCharacters == some(@["."])
+
 suite "types - parseLocations":
   test "parse single location object":
     let j = %*{
