@@ -75,8 +75,7 @@ proc astroNextToken*(g: var GeneralTokenizer) =
     g.astroFirstLine = false
 
     # Check if we're starting an HTML tag
-    if g.buf[g.pos] == '<' and g.pos + 1 < g.buf.len and
-        g.buf[g.pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
+    if g.buf[g.pos] == '<' and g.buf[g.pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
       # Use HTML tokenizer for HTML content
       htmlNextToken(g)
       return
