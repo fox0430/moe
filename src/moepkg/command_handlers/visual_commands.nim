@@ -1050,8 +1050,7 @@ proc visualPaste*(buffer: TextBuffer, state: EditorState) =
       else:
         '"' # Default unnamed register
 
-    let pasteText = state.registers.getRegisterContent(regName)
-    let isLinewise = state.registers.isRegisterLinewise(regName)
+    let pasteText = state.registers.getRegisterContent(regName).normalizeNewlines()
 
     if pasteText.len == 0:
       # Nothing to paste, just exit visual mode
@@ -1095,19 +1094,14 @@ proc visualPaste*(buffer: TextBuffer, state: EditorState) =
       for _ in startLine .. endLine:
         discard buffer.deleteLine(startLine)
 
-      # Insert paste content
-      if isLinewise:
-        # Insert as new lines
-        let lines = pasteText.split('\n')
-        for i, line in lines:
-          discard buffer.insert(startLine + i, line)
-        state.cursor.line = startLine
-        state.cursor.column = 0
-      else:
-        # Insert paste text as a single line
-        discard buffer.insert(startLine, pasteText)
-        state.cursor.line = startLine
-        state.cursor.column = 0
+      # Insert paste content. Split on \n so multi-line content (linewise, or a
+      # charwise register pasted over a line selection) is inserted as separate
+      # lines and never stores a raw \n inside one line.
+      let lines = pasteText.split('\n')
+      for i, line in lines:
+        discard buffer.insert(startLine + i, line)
+      state.cursor.line = startLine
+      state.cursor.column = 0
     of vskChar:
       # Get normalized selection range
       let (selStart, selEnd) = state.visualSelection.getSelectionRange()

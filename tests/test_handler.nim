@@ -2490,6 +2490,32 @@ suite "handlePasteEvent":
     check e.activeBuffer.len >= 2
     check e.activeBuffer.inTransaction
 
+  test "Insert mode - cursor advances by runes, not bytes, for multibyte paste":
+    let e = createTestEditorForPaste("")
+    e.state.mode = EditorMode.Insert
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+
+    let event = makePasteEvent("café")
+    discard e.handleEvent(event)
+
+    # 4 runes (c, a, f, é); cursor must land at rune column 4, not byte 5.
+    check e.windowManager.windows[0].cursor.column == 4
+
+  test "Insert mode - CRLF paste advances cursor by one line, no raw CR":
+    let e = createTestEditorForPaste("")
+    e.state.mode = EditorMode.Insert
+    e.windowManager.windows[0].cursor = BufferPosition(line: 0, column: 0)
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+
+    let event = makePasteEvent("ab\r\ncd")
+    discard e.handleEvent(event)
+
+    check e.windowManager.windows[0].cursor.line == 1
+    check e.windowManager.windows[0].cursor.column == 2
+    check '\r' notin e.activeBuffer.getLine(0)
+    check '\r' notin e.activeBuffer.getLine(1)
+
   test "Non-Insert mode - paste shows unsupported message":
     let e = createTestEditorForPaste("hello")
     e.state.mode = EditorMode.Normal

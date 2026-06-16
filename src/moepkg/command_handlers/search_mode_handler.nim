@@ -286,15 +286,15 @@ proc handleSearchCharacterInput(e: Editor, ch: string) =
 proc insertPastedTextInSearch*(e: Editor, text: string) =
   ## Insert pasted text at the cursor position in the search text.
   ## The search line is single-line: only the first line of the paste is used
-  ## (everything up to the first newline, with a trailing CR stripped).
+  ## (everything up to the first newline). A stray CR is stripped defensively so
+  ## a raw \r can never leak into the field even if a caller skips normalizing.
   let nlIdx = text.find('\n')
-  var insertText =
+  let firstLine =
     if nlIdx >= 0:
       text[0 ..< nlIdx]
     else:
       text
-  if insertText.len > 0 and insertText[^1] == '\r':
-    insertText = insertText[0 ..< ^1]
+  let insertText = firstLine.replace("\r", "")
   if insertText.len == 0:
     return
 
