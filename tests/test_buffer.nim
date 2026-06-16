@@ -166,6 +166,41 @@ suite "Buffer - Editing Operations":
     let result = buf.insertText(BufferPosition(line: 5, column: 0), "X")
     check result.isErr
 
+  test "insertText normalizes CRLF to LF":
+    let buf = newTextBuffer("")
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\r\nb\r\nc")
+    check buf.len == 3
+    check buf[0] == "a"
+    check buf[1] == "b"
+    check buf[2] == "c"
+
+  test "insertText normalizes lone CR to LF":
+    let buf = newTextBuffer("")
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\rb\rc")
+    check buf.len == 3
+    check buf[0] == "a"
+    check buf[1] == "b"
+    check buf[2] == "c"
+
+  test "insertText keeps no raw CR in line content":
+    let buf = newTextBuffer("")
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "x\r\ny")
+    check '\r' notin buf[0]
+    check '\r' notin buf[1]
+
+  test "insertText undo/redo never reintroduces CR":
+    let buf = newTextBuffer("")
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "a\r\nb")
+    discard buf.undo()
+    discard buf.redo()
+    check buf.len == 2
+    check '\r' notin buf[0]
+    check '\r' notin buf[1]
+
+  test "normalizeNewlines leaves CR-free text untouched":
+    check normalizeNewlines("plain text\nwith lf") == "plain text\nwith lf"
+    check normalizeNewlines("") == ""
+
   test "deleteChar single character":
     let buf = newTextBuffer("Hello")
     discard buf.deleteChar(BufferPosition(line: 0, column: 0))
@@ -202,6 +237,19 @@ suite "Buffer - Editing Operations":
     check buf.len == 2
     check buf[0] == "Line1"
     check buf[1] == "Line2"
+
+  test "insert strips stray CR from line content":
+    let buf = newTextBuffer("Line1")
+    discard buf.insert(1, "Line2\r")
+    check buf.len == 2
+    check buf[1] == "Line2"
+    check '\r' notin buf[1]
+
+  test "replaceLine strips stray CR from line content":
+    let buf = newTextBuffer("Line1\nLine2")
+    discard buf.replaceLine(0, "New\rLine")
+    check buf[0] == "NewLine"
+    check '\r' notin buf[0]
 
   test "deleteLine":
     let buf = newTextBuffer("Line1\nLine2\nLine3")

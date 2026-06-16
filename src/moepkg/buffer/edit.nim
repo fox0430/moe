@@ -22,6 +22,8 @@
 
 import std/[options, unicode]
 
+from std/strutils import replace, contains
+
 import pkg/results
 
 import ../[primitives, unicode_utils]
@@ -42,12 +44,15 @@ proc insertLineNoUndo*(b: TextBuffer, lineNumber: int, content: string) =
 
 proc replaceLine*(b: TextBuffer, lineNumber: int, content: string): Result[(), string] =
   ## Replace line content with undo recording.
+  ## Line content must not contain line separators; any stray CR is stripped
+  ## defensively so it cannot corrupt terminal rendering.
   if lineNumber < 0 or lineNumber >= b.len:
     return err("Line index out of bounds: " & $lineNumber)
   let oldContent = b.getLine(lineNumber)
+  let normalizedContent = content.replace("\r", "")
   b.captureSnapshotIfNeeded()
   try:
-    b.backendReplaceLine(lineNumber, content)
+    b.backendReplaceLine(lineNumber, normalizedContent)
   except CatchableError as e:
     b.discardPendingSnapshot()
     return err("Failed to replace line: " & e.msg)
@@ -56,15 +61,28 @@ proc replaceLine*(b: TextBuffer, lineNumber: int, content: string): Result[(), s
       kind: ckReplaceLine,
       replaceLineIdx: lineNumber,
       replaceLineOldText: oldContent,
-      replaceLineNewText: content,
+      replaceLineNewText: normalizedContent,
     )
   )
   return ok(())
+
+proc normalizeNewlines*(text: string): string =
+  ## Normalize CRLF and lone CR to LF so a stray \r never reaches line content.
+  ## Backends treat only \n as a line separator (an embedded \r corrupts
+  ## terminal rendering). Note this converts CR into a line break, unlike the
+  ## line-level replaceLine/insert which strip it (line content must hold no
+  ## separator). Returns the input untouched when it has no \r (the common
+  ## per-keystroke case) to avoid allocating.
+  if '\r' notin text:
+    return text
+  text.replace("\r\n", "\n").replace("\r", "\n")
 
 # Editing operations
 proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), string] =
   ## Insert text at the specified position
   ## Handles newlines by splitting lines as needed
+  ## CRLF / lone CR in `text` are normalized to LF (matching loadFile) so pasted
+  ## or LSP-supplied content never embeds a raw \r in line content.
   ## Returns error if position is out of bounds
   if text.len == 0:
     return ok(())
@@ -75,19 +93,23 @@ proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), s
   if pos.column < 0:
     return err("Column position cannot be negative: " & $pos.column)
 
+  let normalized = normalizeNewlines(text)
+
   b.captureSnapshotIfNeeded()
 
   case b.backendKind
   of GapBuffer, SqrtDecomp, Rope, PieceTable:
     try:
       # Use insertTextWithNewlines to handle newlines correctly
-      b.insertTextWithNewlines(pos, text)
+      b.insertTextWithNewlines(pos, normalized)
     except IndexDefect as e:
       b.discardPendingSnapshot()
       return err("Failed to insert text: " & e.msg)
 
-  # Record change for undo
-  b.pushUndoChange(BufferChange(kind: ckInsertText, insertPos: pos, insertText: text))
+  # Record normalized text for undo so redo never reintroduces a raw \r
+  b.pushUndoChange(
+    BufferChange(kind: ckInsertText, insertPos: pos, insertText: normalized)
+  )
 
   return ok(())
 
@@ -133,15 +155,19 @@ proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
 proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string] =
   ## Insert a new line at the specified index
   ## Returns error if lineIndex is out of valid range [0..len]
+  ## Line content must not contain line separators; any stray CR is stripped
+  ## defensively so it cannot corrupt terminal rendering.
   if lineIndex < 0 or lineIndex > b.len:
     return err("Line index out of valid range [0.." & $b.len & "]: " & $lineIndex)
+
+  let normalizedContent = content.replace("\r", "")
 
   b.captureSnapshotIfNeeded()
 
   case b.backendKind
   of GapBuffer, SqrtDecomp, Rope, PieceTable:
     try:
-      b.backendInsertLine(lineIndex, content)
+      b.backendInsertLine(lineIndex, normalizedContent)
     except IndexDefect as e:
       b.discardPendingSnapshot()
       return err("Failed to insert line: " & e.msg)
@@ -160,7 +186,9 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
 
   # Record change for undo
   b.pushUndoChange(
-    BufferChange(kind: ckInsertLine, insertLineIdx: lineIndex, insertLineText: content)
+    BufferChange(
+      kind: ckInsertLine, insertLineIdx: lineIndex, insertLineText: normalizedContent
+    )
   )
 
   # Adjust fold and bookmark positions

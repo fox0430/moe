@@ -293,7 +293,10 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
   if event.kind != EventKind.Paste:
     return true
 
-  let pastedText = event.pastedText
+  # Normalize CRLF / lone CR to LF up front (matching loadFile) so a stray \r
+  # never reaches line content and the cursor advance below counts line breaks
+  # correctly. insertText normalizes again defensively for non-paste callers.
+  let pastedText = event.pastedText.normalizeNewlines()
   if pastedText.len == 0:
     return true
 
@@ -324,11 +327,13 @@ proc handlePasteEvent*(e: Editor, event: Event): bool =
     var pos = e.cursor
     discard activeBuffer.insertText(pos, pastedText)
 
-    # Calculate new cursor position after paste
+    # Calculate new cursor position after paste. Iterate by rune: cursor.column
+    # is a rune index everywhere (insertTextWithNewlines/deleteChar), so byte
+    # iteration would over-advance on multibyte text.
     var newLine = pos.line
     var newColumn = pos.column
-    for ch in pastedText:
-      if ch == '\n':
+    for r in pastedText.runes:
+      if r == Rune('\n'):
         newLine += 1
         newColumn = 0
       else:
@@ -446,7 +451,9 @@ proc middleClickPaste(e: Editor) =
     let readResult = readFromPrimarySelectionSync(e.config.clipboard.tool)
     if readResult.isErr:
       return
-    let pastedText = readResult.get()
+    # Normalize so an embedded CR-only break can't leak a raw \r into the
+    # single-line command / search field (matching the bracketed-paste path).
+    let pastedText = readResult.get().normalizeNewlines()
     if pastedText.len == 0:
       return
     if e.state.isCommandOverlay:
@@ -471,7 +478,9 @@ proc middleClickPaste(e: Editor) =
   if readResult.isErr:
     return
 
-  let pastedText = readResult.get()
+  # Normalize CRLF / lone CR to LF (matching loadFile) before insert and the
+  # cursor advance below, so embedded \r never corrupts line content.
+  let pastedText = readResult.get().normalizeNewlines()
   if pastedText.len == 0:
     return
 
@@ -489,11 +498,13 @@ proc middleClickPaste(e: Editor) =
   var pos = e.cursor
   discard activeBuffer.insertText(pos, pastedText)
 
-  # Calculate new cursor position after paste
+  # Calculate new cursor position after paste. Iterate by rune: cursor.column
+  # is a rune index everywhere (insertTextWithNewlines/deleteChar), so byte
+  # iteration would over-advance on multibyte text.
   var newLine = pos.line
   var newColumn = pos.column
-  for ch in pastedText:
-    if ch == '\n':
+  for r in pastedText.runes:
+    if r == Rune('\n'):
       newLine += 1
       newColumn = 0
     else:

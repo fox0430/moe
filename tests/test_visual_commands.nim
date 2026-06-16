@@ -1272,6 +1272,55 @@ suite "Visual Commands - Block Selection":
     check buf.getLine(0) == "new line A"
     check buf.getLine(1) == "new line B"
 
+  test "Paste linewise content normalizes CRLF to LF":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "old line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 10), "\nold line 2")
+    let state = createTestState()
+    state.registers.setYankedRegister("new line A\r\nnew line B", true)
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.len == 3
+    check buf.getLine(0) == "new line A"
+    check buf.getLine(1) == "new line B"
+    check buf.getLine(2) == "old line 2"
+    # No raw CR should leak into line content.
+    check '\r' notin buf.getLine(0)
+    check '\r' notin buf.getLine(1)
+
+  test "Paste charwise multi-line content over line selection splits into lines":
+    let buf = newTextBuffer()
+    discard buf.insertText(BufferPosition(line: 0, column: 0), "old line 1")
+    discard buf.insertText(BufferPosition(line: 0, column: 10), "\nold line 2")
+    let state = createTestState()
+    # Charwise register (isLine = false) whose content still spans lines.
+    state.registers.setYankedRegister("frag A\nfrag B", false)
+    state.mode = EditorMode.VisualLine
+    state.visualSelection = VisualSelection(
+      start: BufferPosition(line: 0, column: 0),
+      current: BufferPosition(line: 0, column: 5),
+      active: true,
+      kind: vskLine,
+    )
+
+    visualPaste(buf, state)
+
+    check buf.len == 3
+    check buf.getLine(0) == "frag A"
+    check buf.getLine(1) == "frag B"
+    check buf.getLine(2) == "old line 2"
+    # No raw \n should be stored inside a single line.
+    check '\n' notin buf.getLine(0)
+    check '\n' notin buf.getLine(1)
+
 suite "Visual Commands - Edge Cases":
   test "Yank with inactive selection (no-op)":
     let buf = newTextBuffer()
