@@ -477,3 +477,251 @@ suite "Sidebar - Session Modified/Inserted Markers":
     )
 
     check sidebar.buffer[0][0].kind.isNone
+
+# The PieceTable backend stores modifiedLines as a bidirectional delta in each
+# ckSnapshot undo entry (instead of a full per-edit copy). These tests drive
+# that delta path directly, covering same-length, growing, and shrinking edits.
+proc ptBuf(content: string): TextBuffer =
+  newTextBuffer(content, backend = PieceTable)
+
+suite "ModifiedLines - PieceTable snapshot delta undo/redo":
+  test "single edit undo then redo":
+    let b = ptBuf("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    check b.modifiedLines[0] == lmkModified
+    discard b.undo()
+    check b.modifiedLines[0] == lmkUnmodified
+    discard b.redo()
+    check b.modifiedLines[0] == lmkModified
+
+  test "edit on a later line targets the right index":
+    let b = ptBuf("line1\nline2\nline3")
+    discard b.insertText(BufferPosition(line: 2, column: 5), "X")
+    check b.modifiedLines[0] == lmkUnmodified
+    check b.modifiedLines[1] == lmkUnmodified
+    check b.modifiedLines[2] == lmkModified
+    discard b.undo()
+    check b.modifiedLines[2] == lmkUnmodified
+    discard b.redo()
+    check b.modifiedLines[0] == lmkUnmodified
+    check b.modifiedLines[1] == lmkUnmodified
+    check b.modifiedLines[2] == lmkModified
+
+  test "multi-line insert (grow) undo/redo":
+    let b = ptBuf("start")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "\nline2\nline3")
+    check b.len == 3
+    check b.modifiedLines[0] == lmkModified
+    check b.modifiedLines[1] == lmkInserted
+    check b.modifiedLines[2] == lmkInserted
+    discard b.undo()
+    check b.len == 1
+    check b.modifiedLines.len == 1
+    check b.modifiedLines[0] == lmkUnmodified
+    discard b.redo()
+    check b.len == 3
+    check b.modifiedLines.len == 3
+    check b.modifiedLines[0] == lmkModified
+    check b.modifiedLines[1] == lmkInserted
+    check b.modifiedLines[2] == lmkInserted
+
+  test "deleteLine (shrink) undo/redo restores length and markers":
+    let b = ptBuf("line1\nline2\nline3")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    b.markSaved()
+    discard b.deleteLine(2)
+    check b.len == 2
+    let afterDelete = @[b.modifiedLines[0], b.modifiedLines[1]]
+    discard b.undo()
+    check b.len == 3
+    # line0 was modified before save; after save it is unmodified, and deleting
+    # line2 then undoing must not resurrect a stale marker.
+    check b.modifiedLines.len == 3
+    check b.modifiedLines[0] == lmkUnmodified
+    check b.modifiedLines[1] == lmkUnmodified
+    check b.modifiedLines[2] == lmkUnmodified
+    discard b.redo()
+    check b.len == 2
+    check b.modifiedLines.len == 2
+    # redo must reproduce the exact post-delete markers, not just the length.
+    check b.modifiedLines[0] == afterDelete[0]
+    check b.modifiedLines[1] == afterDelete[1]
+
+  test "multiple undo/redo cycles reuse one bidirectional delta":
+    let b = ptBuf("test")
+    discard b.insertText(BufferPosition(line: 0, column: 4), "A")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "B")
+    for _ in 0 ..< 3:
+      discard b.undo()
+      discard b.undo()
+      check b.modifiedLines[0] == lmkUnmodified
+      discard b.redo()
+      discard b.redo()
+      check b.modifiedLines[0] == lmkModified
+
+  test "transaction collapses to one snapshot delta":
+    let b = ptBuf("line1\nline2")
+    discard b.beginTransaction("test")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "A")
+    discard b.insertText(BufferPosition(line: 1, column: 5), "B")
+    discard b.commitTransaction()
+    check b.modifiedLines[0] == lmkModified
+    check b.modifiedLines[1] == lmkModified
+    discard b.undo()
+    check b.modifiedLines[0] == lmkUnmodified
+    check b.modifiedLines[1] == lmkUnmodified
+    discard b.redo()
+    check b.modifiedLines[0] == lmkModified
+    check b.modifiedLines[1] == lmkModified
+
+  test "undo to saved state clears markers (PieceTable)":
+    let b = ptBuf("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    check b.modifiedLines[0] == lmkModified
+    discard b.undo()
+    check b.modifiedLines[0] == lmkUnmodified
+
+  test "per-line modified state is preserved independently":
+    let b = ptBuf("aaa\nbbb\nccc")
+    discard b.insertText(BufferPosition(line: 0, column: 3), "X")
+    discard b.insertText(BufferPosition(line: 2, column: 3), "Y")
+    check b.modifiedLines[0] == lmkModified
+    check b.modifiedLines[1] == lmkUnmodified
+    check b.modifiedLines[2] == lmkModified
+    discard b.undo() # undo line2 edit only
+    check b.modifiedLines[0] == lmkModified
+    check b.modifiedLines[1] == lmkUnmodified
+    check b.modifiedLines[2] == lmkUnmodified
+
+  test "applyUndo/applyRedo restore values without the saved-state force-clear":
+    # The single-edit tests above undo back to savedSeq(=0), so undo()'s
+    # saved-state clear (sets every line lmkUnmodified) produces the asserted
+    # state and would pass even if applyUndo were a no-op. Two edits keep
+    # savedSeq at 0 while we undo only the second, so changeSeq != savedSeq and
+    # the restored markers come solely from the delta apply, not the clear.
+    let b = ptBuf("aaa\nbbb\nccc\nddd")
+    discard b.insertText(BufferPosition(line: 1, column: 3), "X") # edit1: line1
+    discard b.deleteLine(3) # edit2: shrink to 3 lines
+    check b.len == 3
+    check b.modifiedLines[1] == lmkModified
+    discard b.undo() # undo edit2 only; changeSeq != savedSeq, no force-clear
+    check b.len == 4
+    check b.modifiedLines.len == 4
+    check b.modifiedLines[1] == lmkModified # grow path must keep line1 modified
+    check b.modifiedLines[3] == lmkUnmodified
+    discard b.redo()
+    check b.len == 3
+    check b.modifiedLines.len == 3
+    check b.modifiedLines[1] == lmkModified
+
+  test "edit -> save -> undo -> redo does not leave a stale modified marker":
+    # Regression: redo() must reconcile markers when it lands back on the saved
+    # sequence. The bidirectional delta re-applies lmkModified on redo; without
+    # the saved-state clear the line shows modified while isModified() is false.
+    let b = ptBuf("hello")
+    discard b.insertText(BufferPosition(line: 0, column: 5), "!")
+    b.markSaved()
+    discard b.undo()
+    discard b.redo()
+    check b.isModified() == false
+    check b.modifiedLines[0] == lmkUnmodified
+
+  test "two edits -> save -> undo -> redo back to saved clears all markers":
+    let b = ptBuf("aaa\nbbb")
+    discard b.insertText(BufferPosition(line: 0, column: 3), "X")
+    discard b.insertText(BufferPosition(line: 1, column: 3), "Y")
+    b.markSaved()
+    discard b.undo()
+    discard b.redo()
+    check b.isModified() == false
+    check b.modifiedLines[0] == lmkUnmodified
+    check b.modifiedLines[1] == lmkUnmodified
+
+  test "replaceLine undo/redo uses the PieceTable snapshot delta path":
+    # replaceLine still creates a ckSnapshot entry on PieceTable; its delta must
+    # restore both content and modifiedLines correctly.
+    let b = ptBuf("hello\nworld")
+    discard b.replaceLine(1, "WORLD")
+    check b.getLine(1) == "WORLD"
+    check b.modifiedLines[1] == lmkModified
+    discard b.undo()
+    check b.getLine(1) == "world"
+    check b.modifiedLines[1] == lmkUnmodified
+    discard b.redo()
+    check b.getLine(1) == "WORLD"
+    check b.modifiedLines[1] == lmkModified
+
+suite "LineMarkers - PieceTable snapshot (CowSeq) undo/redo":
+  test "snapshot does not alias the live lineMarkers array":
+    # setLineMarker after the snapshot was captured must not bleed into the
+    # stored (frozen) snapshot, and undo must restore the pre-edit markers.
+    let b = ptBuf("a\nb\nc")
+    b.setLineMarker(0, SyntaxError)
+    discard b.insertText(BufferPosition(line: 2, column: 1), "Z") # captures markers
+    b.setLineMarker(1, GitChanged) # mutate live AFTER capture
+    discard b.undo()
+    check b.getLineMarker(0) == some(SyntaxError)
+    check b.getLineMarker(1).isNone # post-capture mutation must not survive undo
+    discard b.redo()
+    check b.getLineMarker(0) == some(SyntaxError)
+
+  test "mutating live markers between undo and redo does not corrupt the snapshot":
+    let b = ptBuf("a\nb")
+    b.setLineMarker(0, SyntaxError)
+    discard b.insertText(BufferPosition(line: 0, column: 1), "X")
+    discard b.undo()
+    b.setLineMarker(1, Bookmark) # live now shares a frozen node with redo entry
+    discard b.redo()
+    check b.getLineMarker(0) == some(SyntaxError)
+
+  test "clearAllMarkers after snapshot does not corrupt the undo snapshot":
+    # clearAllMarkers creates a fresh all-none CowSeq node. It must not mutate
+    # the frozen snapshot node that the undo entry references.
+    let b = ptBuf("a\nb\nc")
+    b.setLineMarker(0, SyntaxError)
+    b.setLineMarker(1, GitChanged)
+    discard b.insertText(BufferPosition(line: 2, column: 1), "Z") # captures markers
+    b.clearAllMarkers() # mutate live AFTER capture
+    check b.getLineMarker(0).isNone
+    check b.getLineMarker(1).isNone
+    discard b.undo()
+    check b.getLineMarker(0) == some(SyntaxError)
+    check b.getLineMarker(1) == some(GitChanged)
+    check b.getLineMarker(2).isNone
+
+  test "transaction preserves lineMarkers across undo and redo":
+    # setLineMarker inside a transaction mutates a node that shares a frozen
+    # snapshot with pendingSnapshotMarkers; undo must restore the pre-transaction
+    # marker state, not drop the marker set during the transaction.
+    let b = ptBuf("a\nb\nc")
+    b.setLineMarker(0, SyntaxError)
+    discard b.beginTransaction("marker-txn")
+    b.setLineMarker(1, Bookmark)
+    discard b.insertText(BufferPosition(line: 2, column: 1), "Z")
+    discard b.commitTransaction()
+    check b.getLineMarker(0) == some(SyntaxError)
+    check b.getLineMarker(1) == some(Bookmark)
+    check b.getLine(2) == "cZ"
+    discard b.undo()
+    check b.getLineMarker(0) == some(SyntaxError)
+    check b.getLineMarker(1).isNone
+    check b.getLine(2) == "c"
+    discard b.redo()
+    check b.getLineMarker(0) == some(SyntaxError)
+    check b.getLineMarker(1) == some(Bookmark)
+    check b.getLine(2) == "cZ"
+
+suite "Transaction - rollback then edit (no stale delta base)":
+  test "rollbackTransaction then a fresh edit + undo restores cleanly":
+    let b = ptBuf("a\nb")
+    discard b.beginTransaction("t")
+    discard b.insertText(BufferPosition(line: 0, column: 1), "X")
+    discard b.rollbackTransaction()
+    check b.getLine(0) == "a"
+    # A later edit must compute its delta against the rolled-back base, not stale
+    # pending-snapshot state.
+    discard b.insertText(BufferPosition(line: 1, column: 1), "Z")
+    check b.modifiedLines[1] == lmkModified
+    discard b.undo()
+    check b.modifiedLines.len == b.len
+    check b.modifiedLines[1] == lmkUnmodified

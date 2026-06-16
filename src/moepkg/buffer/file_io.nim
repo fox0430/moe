@@ -132,7 +132,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   b.savedSeq = 0
 
   # Reset markers and modification tracking for new file content
-  b.lineMarkers = newSeq[Option[LineMarkerKind]](b.len)
+  b.lineMarkers = initCowSeq[Option[LineMarkerKind]](b.len)
   b.modifiedLines = newSeq[LineModificationKind](b.len)
 
   # Initialize syntax highlighting based on file extension

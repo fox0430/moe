@@ -23,6 +23,9 @@ import std/[algorithm, deques, hashes, options, times, unicode]
 
 import ../[encoding, highlight, primitives, unicode_utils]
 import ../buffer_backends/[gap_buffer, sqrt_decomp, rope, piece_table]
+import cow_seq, seq_delta
+
+export cow_seq, seq_delta
 
 export
   CharacterEncoding, encodingToString, detectCharacterEncoding, BufferPosition,
@@ -165,8 +168,13 @@ type
     of ckSnapshot:
       snapshotData*: PieceTableSnapshot
       snapshotCursorPos*: BufferPosition
-      snapshotLineMarkers*: seq[Option[LineMarkerKind]]
-      snapshotModifiedLines*: seq[LineModificationKind]
+      snapshotLineMarkers*: CowSeq[Option[LineMarkerKind]]
+        ## COW-shared so a long undo history of snapshots that don't touch
+        ## markers references one frozen array instead of a per-edit copy.
+      modifiedLinesDelta*: SeqDelta[LineModificationKind]
+        ## Bidirectional per-line delta vs the pre-mutation state, so the entry
+        ## keeps O(changed lines) instead of a full O(lines) copy. The piece
+        ## tree restore is absolute; only this side array is delta-encoded.
       snapshotFoldState*: FoldState
 
   BufferTransaction* = object ## Transaction for grouping multiple changes
@@ -210,12 +218,12 @@ type
 
     # PieceTable snapshot support for O(1) undo/redo
     pendingSnapshot*: Option[PieceTableSnapshot]
-    pendingSnapshotMarkers*: seq[Option[LineMarkerKind]]
+    pendingSnapshotMarkers*: CowSeq[Option[LineMarkerKind]]
     pendingSnapshotModifiedLines*: seq[LineModificationKind]
     pendingSnapshotFolds*: FoldState
 
     # Sidebar markers (line-based markers for git diff, syntax errors, etc.)
-    lineMarkers*: seq[Option[LineMarkerKind]] # Each line can have at most one marker
+    lineMarkers*: CowSeq[Option[LineMarkerKind]] # Each line can have at most one marker
 
     # Git merge conflict ranges (populated by git_conflict.scanBufferForConflicts)
     conflictBlocks*: seq[ConflictBlock]
@@ -483,7 +491,7 @@ proc newTextBuffer*(
   result.endOfLine = true # Default to POSIX text file standard
   result.undoStack = initDeque[BufferChange]()
   result.redoStack = initDeque[BufferChange]()
-  result.lineMarkers = newSeq[Option[LineMarkerKind]](lineCount)
+  result.lineMarkers = initCowSeq[Option[LineMarkerKind]](lineCount)
   result.modifiedLines = newSeq[LineModificationKind](lineCount)
   result.language = SourceLanguage.langNone
   # Invalid-state cache (line=-1 forces a recompute on first lookup)
@@ -664,15 +672,11 @@ proc recordChangePosition*(b: TextBuffer, pos: BufferPosition) =
     b.changeListIndex = b.changeList.len - 1
 
 proc ensureMarkersSize*(b: TextBuffer) =
-  ## Ensure lineMarkers array matches buffer length
-  let bufferLen = b.len
-  if b.lineMarkers.len < bufferLen:
-    # Extend with none values
-    for i in b.lineMarkers.len ..< bufferLen:
-      b.lineMarkers.add(none(LineMarkerKind))
-  elif b.lineMarkers.len > bufferLen:
-    # Truncate
-    b.lineMarkers.setLen(bufferLen)
+  ## Ensure lineMarkers length matches buffer length; grown slots default to none.
+  ## One setLen clones a frozen/shared node at most once (vs an add-loop that also
+  ## reallocates per element).
+  if b.lineMarkers.len != b.len:
+    b.lineMarkers.setLen(b.len)
 
 proc ensureModifiedLinesSize*(b: TextBuffer) =
   ## Ensure modifiedLines array matches buffer length
@@ -689,11 +693,14 @@ proc captureSnapshotIfNeeded*(b: TextBuffer) {.inline.} =
   ## For all backends: captures modifiedLines once per undo entry.
   if b.backendKind == PieceTable and b.pendingSnapshot.isNone:
     b.pendingSnapshot = some(b.pieceTable.takeSnapshot())
+    # COW-share markers: snapshots that don't touch lineMarkers reference one
+    # frozen array (O(1)). A line-count-changing edit resizes lineMarkers right
+    # after this and clones once; same-line edits never clone.
     b.pendingSnapshotMarkers = b.lineMarkers
     b.pendingSnapshotModifiedLines = b.modifiedLines
     b.pendingSnapshotFolds = b.foldState
-  # Capture modifiedLines snapshot for non-PieceTable backends (once per undo entry)
-  # PieceTable uses snapshotModifiedLines in ckSnapshot instead
+  # Capture modifiedLines snapshot for non-PieceTable backends (once per undo entry).
+  # PieceTable diffs pendingSnapshotModifiedLines into a ckSnapshot delta instead.
   if b.backendKind != PieceTable and not b.hasPendingModifiedLinesSnapshot:
     b.pendingModifiedLinesSnapshot = b.modifiedLines
     b.hasPendingModifiedLinesSnapshot = true
@@ -704,7 +711,7 @@ proc discardPendingSnapshot*(b: TextBuffer) {.inline.} =
   ## inverse of captureSnapshotIfNeeded; keeps the next pushUndoChange from
   ## attaching stale data.
   b.pendingSnapshot = none(PieceTableSnapshot)
-  b.pendingSnapshotMarkers.setLen(0)
+  b.pendingSnapshotMarkers.clear()
   b.pendingSnapshotModifiedLines.setLen(0)
   b.pendingSnapshotFolds = initFoldState()
   b.hasPendingModifiedLinesSnapshot = false
@@ -771,12 +778,13 @@ proc pushUndoChange*(b: TextBuffer, change: BufferChange) =
         snapshotData: b.pendingSnapshot.get,
         snapshotCursorPos: getChangePosition(change),
         snapshotLineMarkers: b.pendingSnapshotMarkers,
-        snapshotModifiedLines: b.pendingSnapshotModifiedLines,
+        modifiedLinesDelta:
+          computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
         snapshotFoldState: b.pendingSnapshotFolds,
       )
     )
-    b.pendingSnapshot = none(PieceTableSnapshot)
-    b.hasPendingModifiedLinesSnapshot = false
+    # Pending snapshot state is now consumed into the entry; reset it all.
+    b.discardPendingSnapshot()
   else:
     # Add directly to undo stack
     b.undoStack.addLast(changeWithSnapshot)

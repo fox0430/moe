@@ -91,9 +91,9 @@ proc findPrevGitChange*(b: TextBuffer, startLine: int): Option[int] =
   return none(int)
 
 proc clearAllMarkers*(b: TextBuffer) =
-  ## Clear all sidebar markers and diagnostics
-  for i in 0 ..< b.lineMarkers.len:
-    b.lineMarkers[i] = none(LineMarkerKind)
+  ## Clear all sidebar markers and diagnostics. A fresh (all-none) CowSeq node
+  ## avoids cloning a shared/frozen array only to overwrite every slot.
+  b.lineMarkers = initCowSeq[Option[LineMarkerKind]](b.lineMarkers.len)
   b.diagnostics.setLen(0)
 
 proc clearGitMarkers*(b: TextBuffer) =

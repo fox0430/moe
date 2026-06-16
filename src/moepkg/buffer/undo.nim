@@ -94,7 +94,8 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckSnapshot:
       b.pieceTable.restoreSnapshot(change.snapshotData)
       b.lineMarkers = change.snapshotLineMarkers
-      b.modifiedLines = change.snapshotModifiedLines
+      # b.modifiedLines currently holds the post-mutation state; reverse it.
+      applyUndo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
       b.lastChangedLines = 0
 
@@ -113,6 +114,32 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     let e = getCurrentException()
     logError("buffer", "Undo operation failed: " & e.msg)
     return err("Failed to undo change: " & e.msg)
+
+proc makeInverseSnapshotEntry(b: TextBuffer, change: BufferChange): BufferChange =
+  ## Build the inverse ckSnapshot entry for undo()/redo(). The piece tree,
+  ## markers and folds are captured from the CURRENT (pre-restore) buffer; the
+  ## bidirectional modifiedLinesDelta is shared as-is so the same delta drives
+  ## both directions.
+  BufferChange(
+    startSeq: change.startSeq,
+    endSeq: change.endSeq,
+    kind: ckSnapshot,
+    snapshotData: b.pieceTable.takeSnapshot(),
+    snapshotCursorPos: change.snapshotCursorPos,
+    snapshotLineMarkers: b.lineMarkers,
+    modifiedLinesDelta: change.modifiedLinesDelta,
+    snapshotFoldState: b.foldState,
+  )
+
+proc clearMarkersIfAtSavedState(b: TextBuffer) {.inline.} =
+  ## After undo/redo lands on the saved sequence the buffer matches disk, so no
+  ## line is session-modified. The pre-delta code restored this implicitly via
+  ## the wholesale modifiedLines copy; the delta-based restore must make it
+  ## explicit on BOTH paths (redo() previously lacked this, leaving a stale
+  ## lmkModified marker after edit -> save -> undo -> redo).
+  if b.changeSeq == b.savedSeq:
+    for i in 0 ..< b.modifiedLines.len:
+      b.modifiedLines[i] = lmkUnmodified
 
 proc beginTransaction*(
     b: TextBuffer,
@@ -173,12 +200,13 @@ proc commitTransaction*(b: TextBuffer): Result[(), string] =
             else:
               getChangePosition(transaction.changes[0]),
           snapshotLineMarkers: b.pendingSnapshotMarkers,
-          snapshotModifiedLines: b.pendingSnapshotModifiedLines,
+          modifiedLinesDelta:
+            computeDelta(b.pendingSnapshotModifiedLines, b.modifiedLines),
           snapshotFoldState: b.pendingSnapshotFolds,
         )
       )
-      b.pendingSnapshot = none(PieceTableSnapshot)
-      b.hasPendingModifiedLinesSnapshot = false
+      # Pending snapshot state is now consumed into the entry; reset it all.
+      b.discardPendingSnapshot()
     else:
       let transactionChange = BufferChange(
         startSeq: preTxnSeq,
@@ -223,7 +251,9 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
     b.lineMarkers = b.pendingSnapshotMarkers
     b.modifiedLines = b.pendingSnapshotModifiedLines
     b.foldState = b.pendingSnapshotFolds
-    b.pendingSnapshot = none(PieceTableSnapshot)
+    # Drop every pending-snapshot artifact, matching commit/push cleanup, so a
+    # later ckSnapshot delta is never computed against a rolled-back base.
+    b.discardPendingSnapshot()
   else:
     for i in countdown(transaction.changes.len - 1, 0):
       let r = b.undoChange(transaction.changes[i])
@@ -265,27 +295,17 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     let change = b.undoStack.popLast()
 
-    # Capture current modifiedLines before undo (for redo to restore)
-    let currentModifiedLines = b.modifiedLines
-
-    # For snapshot undo: capture current state before restoring
+    # For snapshot undo: capture current (post) tree/markers/folds before
+    # restoring. modifiedLinesDelta is bidirectional, so the same delta drives
+    # the redo entry — no full-array recapture needed.
     var redoEntry =
       if change.kind == ckSnapshot:
-        BufferChange(
-          startSeq: change.startSeq,
-          endSeq: change.endSeq,
-          kind: ckSnapshot,
-          snapshotData: b.pieceTable.takeSnapshot(),
-          snapshotCursorPos: change.snapshotCursorPos,
-          snapshotLineMarkers: b.lineMarkers,
-          snapshotModifiedLines: currentModifiedLines,
-          snapshotFoldState: b.foldState,
-        )
+        b.makeInverseSnapshotEntry(change)
       else:
         change
     # For non-snapshot: save current modifiedLines so redo can undo back
     if change.kind != ckSnapshot:
-      redoEntry.savedModifiedLines = currentModifiedLines
+      redoEntry.savedModifiedLines = b.modifiedLines
 
     let r = b.undoChange(change)
     if r.isErr:
@@ -334,9 +354,7 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       b.lastChangedLines = minLine
 
   # If undo brought us back to saved state, clear all modification markers
-  if b.changeSeq == b.savedSeq:
-    for i in 0 ..< b.modifiedLines.len:
-      b.modifiedLines[i] = lmkUnmodified
+  b.clearMarkersIfAtSavedState()
 
   # Return suggested cursor position for the last undone change (Vim behavior)
   if undoneChanges.len > 0:
@@ -402,7 +420,8 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     of ckSnapshot:
       b.pieceTable.restoreSnapshot(change.snapshotData)
       b.lineMarkers = change.snapshotLineMarkers
-      b.modifiedLines = change.snapshotModifiedLines
+      # b.modifiedLines currently holds the pre-mutation state; re-apply it.
+      applyRedo(b.modifiedLines, change.modifiedLinesDelta)
       b.foldState = change.snapshotFoldState
       b.lastChangedLines = 0
 
@@ -438,27 +457,17 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 
     let change = b.redoStack.popLast()
 
-    # Capture current modifiedLines before redo (for undo to restore)
-    let currentModifiedLines = b.modifiedLines
-
-    # For snapshot redo: capture current state before restoring
+    # For snapshot redo: capture current (pre) tree/markers/folds before
+    # re-applying. modifiedLinesDelta is bidirectional, so the same delta drives
+    # the undo entry — no full-array recapture needed.
     var undoEntry =
       if change.kind == ckSnapshot:
-        BufferChange(
-          startSeq: change.startSeq,
-          endSeq: change.endSeq,
-          kind: ckSnapshot,
-          snapshotData: b.pieceTable.takeSnapshot(),
-          snapshotCursorPos: change.snapshotCursorPos,
-          snapshotLineMarkers: b.lineMarkers,
-          snapshotModifiedLines: currentModifiedLines,
-          snapshotFoldState: b.foldState,
-        )
+        b.makeInverseSnapshotEntry(change)
       else:
         change
     # For non-snapshot: save current modifiedLines so undo can restore
     if change.kind != ckSnapshot:
-      undoEntry.savedModifiedLines = currentModifiedLines
+      undoEntry.savedModifiedLines = b.modifiedLines
 
     let r = b.redoChange(change)
     if r.isErr:
@@ -502,6 +511,10 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       findMinLine(change)
     if minLine != int.high:
       b.lastChangedLines = minLine
+
+  # If redo landed back on the saved state, clear all modification markers
+  # (symmetric with undo(); the delta restore otherwise leaves stale markers).
+  b.clearMarkersIfAtSavedState()
 
   # Return suggested cursor position for the last redone change (Vim behavior)
   if redoneChanges.len > 0:
