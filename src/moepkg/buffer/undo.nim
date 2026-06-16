@@ -40,6 +40,13 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string]
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Apply the inverse of a single change (internal helper)
   ## Returns error if the operation fails
+  # Invalidate the char->byte cache before every inverse edit. Undo/redo holds
+  # changeSeq constant across a transaction's inner edits (so the whole group
+  # collapses to one seq step), but those edits still shift bytes and line
+  # numbers. A cache keyed on (line, changeSeq) would survive stale and hand
+  # back a mid-rune byte offset on multibyte lines. Recursion re-invalidates per
+  # inner change, so this also covers ckTransaction members.
+  b.cursorCache.line = -1
   try:
     case change.kind
     of ckInsertText:
@@ -365,6 +372,9 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
 proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Re-apply a single change (internal helper)
   ## Returns error if the operation fails
+  # See undoChange: invalidate the char->byte cache before every replayed edit
+  # so a stale (line, changeSeq) hit cannot return a mid-rune byte offset.
+  b.cursorCache.line = -1
   try:
     case change.kind
     of ckInsertText:

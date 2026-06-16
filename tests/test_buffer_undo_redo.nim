@@ -1134,3 +1134,33 @@ suite "Buffer - Transaction Partial Failure Recovery":
     # Roll-back removed the "X" that inner[0] had inserted.
     check b.getLine(0) == preLine
     check b.redoStack.len == stackLenBefore
+
+suite "Buffer - Transaction Cursor Cache Staleness":
+  test "redo of a transaction does not reuse a stale char->byte cache":
+    # Default backend is GapBuffer, so a committed transaction is stored as a
+    # ckTransaction with inner edits replayed under a constant changeSeq. Mixing
+    # a text edit (populates the cursor cache for line 0) with a whole-line
+    # replace (changes line 0's bytes WITHOUT touching the cache) leaves a cache
+    # whose (line, changeSeq) still matches but whose bytePos is stale. A later
+    # forward text edit on the same line would then scan from a mid-rune / past
+    # the end byte offset on the multibyte original. Normal editing bumps
+    # changeSeq per edit so it self-heals; only undo/redo holds changeSeq fixed.
+    let b = newTextBuffer("あいうえおかきくけこ")
+    discard b.beginTransaction("stale-cache")
+    discard b.deleteChar(BufferPosition(line: 0, column: 7)) # populate cache @ ku
+    discard b.replaceLine(0, "ABCDEFGHIJKLMN") # rewrite bytes, cache untouched
+    discard b.deleteChar(BufferPosition(line: 0, column: 9)) # delete 'J'
+    discard b.commitTransaction()
+    # Forward editing self-heals via changeSeq bumps, so the commit is correct.
+    check b.getLine(0) == "ABCDEFGHIKLMN"
+
+    let u = b.undo()
+    check u.isOk
+    check b.getLine(0) == "あいうえおかきくけこ"
+
+    # Redo replays the inner edits with changeSeq held constant: without cache
+    # invalidation the final deleteChar reads a stale byte offset and corrupts
+    # the line (or fails and rolls the whole redo back).
+    let r = b.redo()
+    check r.isOk
+    check b.getLine(0) == "ABCDEFGHIKLMN"
