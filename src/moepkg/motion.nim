@@ -2719,11 +2719,11 @@ proc calculateTextObjectRange*(
     # only the final segment as inner.
     var endAround = toRange.endPos
     var lastStart = toRange.start
-    block:
+    block sentenceCount:
       let firstAround =
         calculateBaseTextObjectRange(buffer, toRange.start, kind, tomAround)
       if firstAround.isErr:
-        break
+        break sentenceCount
       endAround = firstAround.value.endPos
       var reached = 1
       while reached < count:
