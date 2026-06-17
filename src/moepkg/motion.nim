@@ -26,7 +26,7 @@ import std/[options, unicode, monotimes, times]
 
 import pkg/results
 
-import buffer, types, unicode_utils, logger, render_utils, config
+import buffer, types, unicode_utils, logger, render_utils, config, modes
 
 type
   # Motion command with count
@@ -58,6 +58,15 @@ type
 proc newMotionExecutor*(buffer: buffer.TextBuffer): MotionExecutor =
   MotionExecutor(buffer: buffer)
 
+proc maxCursorColumn(lineCharLen: int, mode: EditorMode): int =
+  ## Rightmost column the cursor may occupy on a line of `lineCharLen`
+  ## characters. Insert/Replace let it rest one past the last character (end of
+  ## line); other modes stop on the last character.
+  if mode in {EditorMode.Insert, EditorMode.Replace}:
+    lineCharLen
+  else:
+    max(0, lineCharLen - 1)
+
 proc moveLeft(
     e: MotionExecutor, currentPos: CursorPosition, count: int
 ): CursorPosition =
@@ -74,7 +83,10 @@ proc moveLeft(
     result.x = newX
 
 proc moveRight(
-    e: MotionExecutor, currentPos: CursorPosition, count: int
+    e: MotionExecutor,
+    currentPos: CursorPosition,
+    count: int,
+    mode: EditorMode = EditorMode.Normal,
 ): CursorPosition =
   result = currentPos
   logDebug(
@@ -93,9 +105,9 @@ proc moveRight(
         $lineByteLen,
     )
 
-    # Move right by character count, not byte count
-    # In normal mode, don't allow cursor to go beyond the last character
-    let maxPos = max(0, lineCharLen - 1)
+    # Move right by character count, not byte count. Insert/Replace may rest one
+    # past the last character (end of line); other modes stop on it.
+    let maxPos = maxCursorColumn(lineCharLen, mode)
     let newX = min(currentPos.x + count, maxPos)
     logDebug(
       "motion",
@@ -215,13 +227,14 @@ proc moveLastNonBlank(e: MotionExecutor, currentPos: CursorPosition): CursorPosi
         result.x = i
         break
 
-proc moveEnd(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
+proc moveEnd(
+    e: MotionExecutor, currentPos: CursorPosition, mode: EditorMode = EditorMode.Normal
+): CursorPosition =
   result = currentPos
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
-    let line = e.buffer.getLine(currentPos.y)
-    let lineCharLen = line.charLen
-    # In normal mode, cursor should be on the last character, not after it
-    result.x = max(0, lineCharLen - 1)
+    let lineCharLen = e.buffer.getLine(currentPos.y).charLen
+    # Insert/Replace land at end of line; other modes on the last character.
+    result.x = maxCursorColumn(lineCharLen, mode)
 
 proc moveNextLineFirstNonBlank(
     e: MotionExecutor, currentPos: CursorPosition, count: int
@@ -826,13 +839,15 @@ proc calculateNewPosition*(
     viewportHeight: int = 24,
     viewportTopLine: int = 0,
     reservedLines: int = steadyBottomAreaHeight(),
+    mode: EditorMode = EditorMode.Normal,
 ): CursorPosition =
-  ## Calculate new cursor position after motion, without modifying state
+  ## Calculate new cursor position after motion, without modifying state.
+  ## `mode` lets Insert/Replace rest one past the last character (end of line).
   case cmd.motion
   of Motion.Left:
     e.moveLeft(currentPos, cmd.count)
   of Motion.Right:
-    e.moveRight(currentPos, cmd.count)
+    e.moveRight(currentPos, cmd.count, mode)
   of Motion.Up:
     e.moveUp(currentPos, cmd.count)
   of Motion.Down:
@@ -852,7 +867,7 @@ proc calculateNewPosition*(
   of Motion.LastNonBlank:
     e.moveLastNonBlank(currentPos)
   of Motion.End:
-    e.moveEnd(currentPos)
+    e.moveEnd(currentPos, mode)
   of Motion.FirstLine:
     e.moveFirstLine(currentPos)
   of Motion.LastLine:
@@ -923,14 +938,12 @@ proc clampPosition*(
 
   # Clamp column - ensure line index is valid before accessing
   if result.y >= 0 and result.y < buf.len:
-    let line = buf.getLine(result.y)
-    let lineCharLen = line.charLen # Use character count, not byte count
-    # Normal mode keeps cursor on last character, not after it
-    if lineCharLen == 0:
-      result.x = 0
-    elif result.x >= lineCharLen:
-      # Clamp to last valid character position
-      result.x = max(0, lineCharLen - 1)
+    let lineCharLen = buf.getLine(result.y).charLen # character count, not bytes
+    # Insert/Replace may rest one past the last character (end of line); other
+    # modes keep the cursor on the last character.
+    let maxCol = maxCursorColumn(lineCharLen, mgr.state.mode)
+    if result.x > maxCol:
+      result.x = maxCol
     elif result.x < 0:
       result.x = 0
 
@@ -1306,6 +1319,7 @@ proc executeMotion*(
   var newPos = controller.executor.calculateNewPosition(
     currentPos, cmd, controller.viewportManager.viewport.height,
     controller.viewportManager.viewport.topLine, actualReservedLines,
+    controller.cursorManager.state.mode,
   )
 
   # Clamp to valid buffer bounds
