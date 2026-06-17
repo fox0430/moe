@@ -671,6 +671,59 @@ suite "executeCommand - Repeat command (.)":
     check registry.executeCommand(ctx, repeatCmd).isOk
     check buffer[0] == "test end"
 
+  test "repeat delete-find reproduces the target char":
+    # dfx then . must delete through the NEXT 'x', not collapse to one char.
+    let buffer = newTextBuffer("axbxc") # 'x' at cols 1 and 3
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    # dfx: delete from col 0 through the first 'x' (inclusive) -> "bxc"
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let findCmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "find",
+      reverse: false,
+      targetChar: "x",
+      count: 1,
+    )
+    check registry.executeCommand(ctx, findCmd).isOk
+    check buffer[0] == "bxc"
+
+    # . repeats dfx from col 0 -> deletes through the next 'x' -> "c"
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let repeatCmd = Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    check registry.executeCommand(ctx, repeatCmd).isOk
+    check buffer[0] == "c"
+
+  test "repeat delete-find with no target on the new line is a no-op":
+    # dfx then . on a line with no 'x' must NOT delete a spurious character.
+    let buffer = newTextBuffer("axb\nyyy")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    let findCmd = Command(
+      kind: ctOperatorPending,
+      operatorType: "find",
+      reverse: false,
+      targetChar: "x",
+      count: 1,
+    )
+    check registry.executeCommand(ctx, findCmd).isOk
+    check buffer[0] == "b" # "ax" deleted through the first x
+
+    # Move to a line with no 'x' and repeat: the find fails, so . does nothing.
+    ctx.cursor = BufferPosition(line: 1, column: 0)
+    let repeatCmd = Command(kind: ctAction, commandId: "edit.repeat", count: 1)
+    check registry.executeCommand(ctx, repeatCmd).isOk
+    check buffer[1] == "yyy" # unchanged - no phantom delete
+
 suite "executeCommand - Record last edit":
   test "operator motion is recorded for repeat":
     let buffer = newTextBuffer("hello world")
@@ -1887,6 +1940,166 @@ suite "Handler - Text Object operations":
     check registry.execute(ctx, custom("textobject.word")).isOk
     # "world " should be deleted (including surrounding space)
     check "world" notin buffer[0]
+
+  test "textobject tag (dit) deletes inner tag content":
+    let buffer = newTextBuffer("<a>hello</a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 4) # inside "hello"
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    check buffer[0] == "<a></a>"
+
+  test "textobject tag (dat) deletes the whole tag":
+    let buffer = newTextBuffer("x<a>hi</a>y")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 5) # inside "hi"
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.around"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    check buffer[0] == "xy"
+
+  test "textobject paragraph (dap) deletes the paragraph linewise":
+    let buffer = newTextBuffer("aaa\nbbb\n\nccc")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.around"))
+    check registry.execute(ctx, custom("textobject.paragraph")).isOk
+    # "aaa", "bbb" and the trailing blank line are gone; only "ccc" remains.
+    check buffer.len == 1
+    check buffer[0] == "ccc"
+
+  test "textobject sentence (dis) deletes the sentence":
+    let buffer = newTextBuffer("One two. Three four.")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1) # inside "One"
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.sentence")).isOk
+    # Inner sentence "One two." removed, trailing space kept.
+    check buffer[0] == " Three four."
+
+  test "textobject paragraph with count (2dap) deletes two paragraphs":
+    let buffer = newTextBuffer("aaa\n\nbbb\n\nccc")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.around"))
+    check registry.execute(ctx, custom("textobject.paragraph")).isOk
+    # First two paragraphs (with their trailing blank lines) gone; "ccc" remains.
+    check buffer.len == 1
+    check buffer[0] == "ccc"
+
+  test "textobject sentence with count (2dis) deletes two sentences":
+    let buffer = newTextBuffer("One two. Three four. Five six.")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 1) # inside "One"
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.sentence")).isOk
+    # Inner of the first two sentences removed; " Five six." remains.
+    check buffer[0] == " Five six."
+
+  test "textobject tag (dit) on multi-line content removes the content line":
+    let buffer = newTextBuffer("<div>\ncontent\n</div>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 1, column: 2)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    # vim removes the content line entirely (linewise), not just its text.
+    check buffer.len == 2
+    check buffer[0] == "<div>"
+    check buffer[1] == "</div>"
+
+  test "textobject paragraph count 3 (3dap) leaves no stray blank line":
+    let buffer = newTextBuffer("p1\n\np2\n\np3\n\np4")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 3, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.around"))
+    check registry.execute(ctx, custom("textobject.paragraph")).isOk
+    # Three paragraphs and their trailing blanks gone; only "p4" remains (no
+    # leftover blank line).
+    check buffer.len == 1
+    check buffer[0] == "p4"
+
+  test "textobject tag count (2dat) deletes the enclosing tag":
+    let buffer = newTextBuffer("<a><b>x</b></a>")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 6) # on 'x'
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 2, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.around"))
+    check registry.execute(ctx, custom("textobject.tag")).isOk
+    # 2at reaches the outer <a>...</a>; the whole thing is removed.
+    check buffer[0] == ""
+
+  test "failed text object (dit outside a tag) clears the pending operator":
+    let buffer = newTextBuffer("hello world\nsecond line")
+    let ctx = createTestContext(buffer)
+    ctx.cursor = BufferPosition(line: 0, column: 0)
+    ctx.state.mode = EditorMode.Normal
+    let registry = createTestRegistry()
+
+    ctx.state.editState.pendingOperator = some(
+      PendingOperator(operatorType: OpDelete, operatorCount: 1, startPos: ctx.cursor)
+    )
+    discard registry.execute(ctx, custom("textobject.inner"))
+    # dit on plain text errors; the operator must not survive armed.
+    check registry.execute(ctx, custom("textobject.tag")).isErr
+    check ctx.state.editState.pendingOperator.isNone
+    # A following motion must therefore be a plain move, not a stray delete.
+    check registry.executeCommand(
+      ctx, Command(kind: ctMotion, motion: Motion.Down, count: 1)
+    ).isOk
+    check buffer.len == 2
+    check buffer[0] == "hello world"
 
 suite "Handler - Clipboard operations":
   test "clipboard copy when disabled returns error":

@@ -1633,7 +1633,29 @@ proc registerEditCommands*(registry: CommandRegistry) =
 
         # Execute the motion with combined count (motionCount * operatorCount)
         let effectiveCount = lastCmd.motionCount * lastCmd.operatorCount
-        let motionCmd = MotionCommand(motion: lastCmd.motion, count: effectiveCount)
+
+        # f/F/t/T motions need the same no-move / till-adjacency guards as the
+        # live df{char}/dt{char} path; without them a repeat whose target is
+        # missing from the new cursor position would delete a spurious char.
+        if lastCmd.motion in {
+          Motion.FindChar, Motion.FindCharBackward, Motion.TillChar,
+          Motion.TillCharBackward,
+        }:
+          ctx.state.editState.pendingOperator = none(PendingOperator)
+          let endOpt = findTillOperatorEndPos(
+            ctx, lastCmd.motion, lastCmd.targetChar, effectiveCount, ctx.cursor
+          )
+          if endOpt.isNone:
+            # Target not found from here - the repeat is a no-op.
+            return ok(())
+          return applyOperatorOverMotion(
+            ctx, lastCmd.operator, lastCmd.operatorCount, ctx.cursor, endOpt.get,
+            lastCmd.motion,
+          )
+
+        let motionCmd = MotionCommand(
+          motion: lastCmd.motion, targetChar: lastCmd.targetChar, count: effectiveCount
+        )
         let r = ctx.motionController.executeMotion(
           motionCmd, ctx.cursor, updateViewport = false
         )
@@ -1641,15 +1663,12 @@ proc registerEditCommands*(registry: CommandRegistry) =
           ctx.state.editState.pendingOperator = none(PendingOperator)
           return err(r.error)
 
-        # Calculate the range
-        let range =
-          calculateOperatorRange(ctx.buffer, ctx.cursor, r.value, lastCmd.motion)
-
-        # Execute the operator on the range
+        # Apply the operator over the motion span (shared pipeline).
         let op = ctx.state.editState.pendingOperator.get
         ctx.state.editState.pendingOperator = none(PendingOperator)
-        let execResult =
-          executeOperatorOnRange(ctx, op.operatorType, range, op.operatorCount)
+        let execResult = applyOperatorOverMotion(
+          ctx, op.operatorType, op.operatorCount, ctx.cursor, r.value, lastCmd.motion
+        )
         if execResult.isErr:
           return err(execResult.error)
 
@@ -2074,40 +2093,21 @@ proc registerEditCommands*(registry: CommandRegistry) =
         let textObj = ctx.state.editState.pendingTextObject.get
         ctx.state.editState.pendingTextObject = none(PendingTextObject)
 
-        # Calculate text object range
-        let rangeResult =
-          calculateTextObjectRange(ctx.buffer, ctx.cursor, kind, textObj.modifier)
+        # Calculate the text object range, extended over the operator count
+        # (d2iw, 2dap, d3is, 2dat). textObj.operatorCount already holds the
+        # pending operator's count.
+        let effectiveCount = max(textObj.operatorCount, 1)
+        let rangeResult = calculateTextObjectRange(
+          ctx.buffer, ctx.cursor, kind, textObj.modifier, effectiveCount
+        )
         if rangeResult.isErr:
+          # The object could not be resolved (e.g. dit outside a tag, dis on a
+          # blank line). Discard the pending operator too so a following motion
+          # is not silently consumed by a still-armed operator (a stray delete).
+          ctx.state.editState.pendingOperator = none(PendingOperator)
           return err(rangeResult.error)
 
-        var toRange = rangeResult.value
-
-        # Count extension for word/WORD text objects (e.g., d2iw, d3aw)
-        # textObj.operatorCount already contains the count from the pending operator
-        let effectiveCount = max(textObj.operatorCount, 1)
-
-        if effectiveCount > 1 and kind in {toWord, toWideWord}:
-          for i in 1 ..< effectiveCount:
-            # Move cursor past current range end
-            var nextLine = toRange.endPos.line
-            var nextCol = toRange.endPos.column + 1
-            let lineRunes = ctx.buffer.getLine(nextLine).toRunes()
-            if nextCol >= lineRunes.len:
-              # Move to next line
-              nextLine.inc
-              nextCol = 0
-              if nextLine >= ctx.buffer.len:
-                break
-
-            # Use inner for intermediate words, original modifier for last
-            let modifier = if i == effectiveCount - 1: textObj.modifier else: tomInner
-
-            let nextCursor = BufferPosition(line: nextLine, column: nextCol)
-            let nextResult =
-              calculateTextObjectRange(ctx.buffer, nextCursor, kind, modifier)
-            if nextResult.isErr:
-              break
-            toRange.endPos = nextResult.value.endPos
+        let toRange = rangeResult.value
 
         # Convert TextObjectRange to OperatorRange
         let opRange = OperatorRange(
@@ -2169,4 +2169,15 @@ proc registerEditCommands*(registry: CommandRegistry) =
   registerTextObjectKind(
     registry, "textobject.angle", "Angle Bracket Text Object", "Angle brackets (i</a<)",
     toAngleBracket,
+  )
+  registerTextObjectKind(
+    registry, "textobject.tag", "Tag Text Object", "HTML/XML tag (it/at)", toTag
+  )
+  registerTextObjectKind(
+    registry, "textobject.sentence", "Sentence Text Object", "Sentence (is/as)",
+    toSentence,
+  )
+  registerTextObjectKind(
+    registry, "textobject.paragraph", "Paragraph Text Object", "Paragraph (ip/ap)",
+    toParagraph,
   )

@@ -187,6 +187,8 @@ const NormalBindings: seq[tuple[key, cmd: string]] = @[
   ("F", "find-char-backward"),
   ("t", "till-char"),
   ("T", "till-char-backward"),
+  (";", "repeat-find"),
+  (",", "repeat-find-reverse"),
   ("r", "replace-char"),
   # Buffer switching
   ("g t", "buffer-next-tab"),

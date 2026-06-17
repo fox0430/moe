@@ -354,6 +354,53 @@ proc findAllCharPositions*(
         result.add(charIdx)
       charIdx.inc
 
+proc findTillOperatorEndPos*(
+    ctx: CommandContext,
+    motion: Motion,
+    targetChar: string,
+    count: int,
+    startPos: BufferPosition,
+): Option[BufferPosition] =
+  ## Inclusive end position for an operator applied over an f/F/t/T motion
+  ## (df{char}, dt{char}, and the `.` repeat thereof). Returns none() when the
+  ## target is not found from startPos -- the operator must then be a no-op and
+  ## never delete a spurious character. For t/T the target may be adjacent
+  ## (tillChar returns startPos), so this re-probes with findChar to tell
+  ## "found adjacent" from "not found". Shared so the live find/till path and
+  ## the `.` repeat path apply the same guards.
+  let
+    isTill = motion in {Motion.TillChar, Motion.TillCharBackward}
+    reverse = motion in {Motion.FindCharBackward, Motion.TillCharBackward}
+    motionCmd = MotionCommand(motion: motion, targetChar: targetChar, count: count)
+
+  let r =
+    ctx.motionController.executeMotion(motionCmd, startPos, updateViewport = false)
+  if r.isErr:
+    return none(BufferPosition)
+  if not (r.value.line == startPos.line and r.value.column == startPos.column):
+    return some(r.value)
+
+  # Motion didn't move.
+  if not isTill:
+    return none(BufferPosition) # find: character not found
+
+  # till: re-probe with findChar to distinguish an adjacent target from no match.
+  let findMotion = if reverse: Motion.FindCharBackward else: Motion.FindChar
+  let fr = ctx.motionController.executeMotion(
+    MotionCommand(motion: findMotion, targetChar: targetChar, count: count),
+    startPos,
+    updateViewport = false,
+  )
+  if fr.isErr or (fr.value.line == startPos.line and fr.value.column == startPos.column):
+    return none(BufferPosition)
+
+  var endPos = fr.value
+  if not reverse and endPos.column > startPos.column:
+    endPos.column -= 1
+  elif reverse and endPos.column < startPos.column:
+    endPos.column += 1
+  return some(endPos)
+
 # Helper function to parse count from arguments safely
 proc parseCount*(
     args: seq[string], default: int = 1, minVal: int = 1, maxVal: int = 999999

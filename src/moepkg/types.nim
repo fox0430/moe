@@ -211,9 +211,15 @@ type
     pendingCount*: int # Numeric prefix for macro playback
     playbackDepth*: int # Current macro recursion depth
 
+  LastFindChar* = object
+    ## Last f/F/t/T motion, replayed by ; (same direction) and , (reversed)
+    motion*: Motion # FindChar / FindCharBackward / TillChar / TillCharBackward
+    targetChar*: string
+
   EditState* = object ## Edit operation state grouped together
     lastMotion*: Option[Motion] # Last motion for repeat
     lastEditCommand*: Option[LastEditCommand] # Last change command for . (repeat)
+    lastFindChar*: Option[LastFindChar] # Last f/F/t/T for ; and , repeat
     pendingOperator*: Option[PendingOperator] # Operator waiting for motion/text object
     pendingTextObject*: Option[PendingTextObject]
       # Text object modifier waiting for object kind
@@ -411,6 +417,8 @@ type
     FindCharBackward
     TillChar
     TillCharBackward
+    RepeatFind # ; - repeat last f/F/t/T
+    RepeatFindReverse # , - repeat last f/F/t/T in the opposite direction
     WordForward # w - move to start of next word
     WordBackward # b - move to start of previous word
     WordEnd # e - move to end of next word
@@ -516,6 +524,7 @@ type
       motion*: Motion # h, j, k, l, w, b, e, etc.
       motionCount*: int # Count for motion (3 in "d3w")
       operatorCount*: int # Count for operator (2 in "2dd")
+      targetChar*: string # Target char for f/F/t/T motions (empty otherwise)
     of lecInsertText:
       insertedText*: string # Text that was inserted
       insertPosition*: BufferPosition # Where insertion started
